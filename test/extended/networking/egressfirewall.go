@@ -208,6 +208,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			template:  egressFWTemplate,
 		}
 		egressFW1.createEgressFW2Object(oc)
+		defer egressFW1.deleteEgressFW2Object(oc)
 
 		g.By("5. Generate egress traffic which will hit the egressfirewall. \n")
 		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
@@ -237,7 +238,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod2.createPingPodNode(oc)
 		waitPodReady(oc, ns2, pod2.name)
 
-		g.By("9. Create an EgressFirewall in ns2 \n")
+		g.By("9. Generate egress traffic in ns2. \n")
+		_, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s www.redhat.com --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("10. Verify no acl logs for egressfirewall generated in ns2. \n")
+		egressFwRegexNs2 := fmt.Sprintf("egressFirewall_%s_.*", ns2)
+		o.Consistently(func() int {
+			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			r2 := regexp.MustCompile(egressFwRegexNs2)
+			matches2 := r2.FindAllString(aclLogs2, -1)
+			return len(matches2)
+		}, 10*time.Second, 5*time.Second).Should(o.Equal(0))
+
+		g.By("11. Create an EgressFirewall in ns2 \n")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns2,
@@ -246,19 +261,20 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			template:  egressFWTemplate,
 		}
 		egressFW2.createEgressFW2Object(oc)
+		defer egressFW2.deleteEgressFW2Object(oc)
 
-		g.By("10. Generate egress traffic which will hit the egressfirewall in ns2. \n")
+		g.By("12. Generate egress traffic which will hit the egressfirewall in ns2. \n")
 		_, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("11. Verify no acl logs for egressfirewall generated in ns2. \n")
-		egressFwRegexNs2 := fmt.Sprintf("egressFirewall_%s_.*", ns2)
-		aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		r2 := regexp.MustCompile(egressFwRegexNs2)
-		matches2 := r2.FindAllString(aclLogs2, -1)
-		o.Expect(len(matches2) == 0).To(o.BeTrue())
-
+		g.By("13. Verify no acl logs for egressfirewall generated in ns2. \n")
+		o.Consistently(func() int {
+			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			r2 := regexp.MustCompile(egressFwRegexNs2)
+			matches2 := r2.FindAllString(aclLogs2, -1)
+			return len(matches2)
+		}, 10*time.Second, 5*time.Second).Should(o.Equal(0))
 	})
 
 	// author: huirwang@redhat.com
@@ -483,5 +499,45 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			return strings.Count(podlogs, `SIGSEGV: segmentation violation`)
 		}, 60*time.Second, 10*time.Second).Should(o.Equal(0))
 
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-37778-EgressFirewall can be deleted after the project deleted.", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressFWTemplate1   = filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
+		)
+
+		g.By("Obtain the namespace \n")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+
+		g.By("Create egressfirewall rules under same namespace \n")
+		egressFW := egressFirewall1{
+			name:      "default",
+			namespace: ns1,
+			template:  egressFWTemplate1,
+		}
+		egressFW.createEgressFWObject1(oc)
+		defer egressFW.deleteEgressFWObject1(oc)
+		exutil.AssertWaitPollNoErr(waitEgressFirewallApplied(oc, egressFW.name, ns1), fmt.Sprintf("Wait for the  egressFW/%s applied successfully timeout", egressFW.name))
+
+		g.By("Delete namespace .\n")
+		errNs := oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns1).Execute()
+		o.Expect(errNs).NotTo(o.HaveOccurred())
+
+		g.By("Verify no egressfirewall object  ")
+		outPut, errFW := oc.AsAdmin().Run("get").Args("egressfirewall", egressFW.name, "-n", ns1).Output()
+		o.Expect(errFW).To(o.HaveOccurred())
+		o.Expect(outPut).NotTo(o.ContainSubstring(egressFW.name))
+
+		g.By("Check ovn db, corresponding egressfirewall acls were deleted.")
+		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids=egressFirewall=%s", ns1)
+		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The egressfirewall rules after project deleted: \n %s", listOutput)
+		o.Expect(listOutput).NotTo(o.ContainSubstring("allow"))
+		o.Expect(listOutput).NotTo(o.ContainSubstring("drop"))
 	})
 })
