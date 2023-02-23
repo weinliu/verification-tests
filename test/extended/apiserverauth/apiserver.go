@@ -4158,8 +4158,8 @@ EOF`, dcpolicyrepo)
 		endpointIP, epGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "endpoints", "api", "-o", fmt.Sprintf(`jsonpath={.subsets[*].addresses[?(@.targetRef.name=="%v")].ip}`, podName)).Output()
 		o.Expect(epGetErr).NotTo(o.HaveOccurred())
 
+		g.By("2. Check openshift-apiserver https api metrics endpoint URL")
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			g.By("2. Check openshift-apiserver https api metrics endpoint URL")
 			metricsUrl := fmt.Sprintf(`https://%v:8443/metrics`, string(endpointIP))
 			metricsOut, metricsErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-apiserver", podName, "-c", "openshift-apiserver", "--", "curl", "-k", "--connect-timeout", "5", "--retry", "2", "-N", "-s", metricsUrl).Output()
 			if metricsErr == nil {
@@ -4442,5 +4442,48 @@ spec:
 		} else {
 			e2e.Logf("Test case Failed:: Unknown field is not pruned in crontab object\n :: %v", crontabOutput)
 		}
+	})
+
+	// author : dpunia@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-High-53229-[Apiserver] Test Arbitrary path injection via type field in CNI configuration", func() {
+		g.By("1) Create new project")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		g.By("2) Create NetworkAttachmentDefinition with name nefarious-conf using nefarious.yaml")
+		nefariousConfTemplate := getTestDataFilePath("ocp53229-nefarious.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", namespace, "-f", nefariousConfTemplate).Execute()
+		nefariousConfErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "-f", nefariousConfTemplate).Execute()
+		o.Expect(nefariousConfErr).NotTo(o.HaveOccurred())
+
+		g.By("3) Create Pod by using created NetworkAttachmentDefinition in annotations")
+		nefariousPodTemplate := getTestDataFilePath("ocp53229-nefarious-pod.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", namespace, "-f", nefariousPodTemplate).Execute()
+		nefariousPodErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "-f", nefariousPodTemplate).Execute()
+		o.Expect(nefariousPodErr).NotTo(o.HaveOccurred())
+
+		g.By("4) Check pod should be in creating or failed status and event should show error message invalid plugin")
+		podStatus, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "-f", nefariousPodTemplate, "-o", "jsonpath={.status.phase}").Output()
+		o.Expect(podErr).NotTo(o.HaveOccurred())
+		o.Expect(podStatus).ShouldNot(o.ContainSubstring("Running"))
+
+		err := wait.Poll(2*time.Second, 2*time.Minute, func() (bool, error) {
+			podEvent, podEventErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", namespace, "-f", nefariousPodTemplate).Output()
+			o.Expect(podEventErr).NotTo(o.HaveOccurred())
+			matched, _ := regexp.MatchString("error adding pod.*to CNI network.*invalid plugin name: ../../../../usr/sbin/reboot", podEvent)
+			if matched {
+				e2e.Logf("Step 4. Test Passed")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Detected event CNI network invalid plugin")
+
+		g.By("5) Check pod created on node should not be rebooting and appear offline")
+		nodeName, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "-f", nefariousPodTemplate, "-o", "jsonpath={.spec.nodeName}").Output()
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		nodeStatus, nodeStatusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "--no-headers").Output()
+		o.Expect(nodeStatusErr).NotTo(o.HaveOccurred())
+		o.Expect(nodeStatus).Should(o.ContainSubstring("Ready"))
 	})
 })
