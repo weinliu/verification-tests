@@ -4042,7 +4042,8 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: kewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:kewang-Medium-57243-[Apiserver] Viewing audit logs", func() {
+	// This case cannot be executed on ROSA and OSD cluster, detail see Jira issue: https://issues.redhat.com/browse/OCPQE-14061
+	g.It("NonHyperShiftHOST-ARO-Author:kewang-Medium-57243-[Apiserver] Viewing audit logs", func() {
 		var (
 			apiservers    = []string{"openshift-apiserver", "kube-apiserver", "oauth-apiserver"}
 			caseID        = "OCP-57243"
