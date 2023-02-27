@@ -51,9 +51,6 @@ else:
 
 commands = 'cd frontend; ./console-test-frontend.sh --spec ' + testsToRun
 process = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE)
-cases, err = process.communicate()
-process = subprocess.Popen(
-    commands, shell=True, stdout=subprocess.PIPE)
 out, err = process.communicate()
 print("output:")
 for line in str(out).split("\\n"):
