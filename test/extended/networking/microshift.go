@@ -6,11 +6,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -252,5 +253,51 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
 
+	})
+
+	// author: qiowang@redhat.com
+	g.It("MicroShiftOnly-Author:qiowang-High-60290-Idling/Unidling services", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testSvcFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			namespace           = "test-60290"
+		)
+
+		g.By("create namespace")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(namespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(namespace)
+
+		g.By("create test pods with rc and service")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", testSvcFile, "-n", namespace).Execute()
+		createResourceFromFile(oc, namespace, testSvcFile)
+		waitForPodWithLabelReady(oc, namespace, "name=test-pods")
+		svcOutput, svcErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace).Output()
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		o.Expect(svcOutput).To(o.ContainSubstring("test-service"))
+
+		g.By("idle test-service")
+		idleOutput, idleErr := oc.AsAdmin().WithoutNamespace().Run("idle").Args("-n", namespace, "test-service").Output()
+		o.Expect(idleErr).NotTo(o.HaveOccurred())
+		o.Expect(idleOutput).To(o.ContainSubstring("The service \"%v/test-service\" has been marked as idled", namespace))
+
+		g.By("check test pods are terminated")
+		getPodOutput := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			output, getPodErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace).Output()
+			o.Expect(getPodErr).NotTo(o.HaveOccurred())
+			e2e.Logf("pods status: %s", output)
+			if strings.Contains(output, "No resources found") {
+				return true, nil
+			}
+			e2e.Logf("pods are not terminated, try again")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(getPodOutput, fmt.Sprintf("Fail to terminate pods:%s", getPodOutput))
+
+		// for micorshift: unidling is not supported now, and manual re-scaling the replicas is required
+		// https://issues.redhat.com/browse/USHIFT-503
+		g.By("re-scaling the replicas")
+		_, rescaleErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("replicationcontroller/test-rc", "-n", namespace, "-p", "{\"spec\":{\"replicas\":2}}", "--type=merge").Output()
+		o.Expect(rescaleErr).NotTo(o.HaveOccurred())
+		waitForPodWithLabelReady(oc, namespace, "name=test-pods")
 	})
 })
