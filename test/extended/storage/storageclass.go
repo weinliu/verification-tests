@@ -238,4 +238,73 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(describePersistentVolumeClaim(oc, pvc2.namespace, pvc2.name)).ShouldNot(o.ContainSubstring("Successfully provisioned volume"))
 
 	})
+
+	// author: ropatil@redhat.com
+	// [Dynamic PV][Filesystem] Multiple default storageClass setting should also provision volume successfully without specified the storageClass name [Serial]
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-High-60191-[Dynamic PV][Filesystem] Multiple default storageClass setting should also provision volume successfully without specified the storageClass name [Serial]", func() {
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+		)
+
+		// Get the cluster default sc, skip if we do not get any default sc ex: baremetal
+		defaultsc := getClusterDefaultStorageclassByPlatform(cloudProvider)
+		if defaultsc == "" {
+			g.Skip("Skip for non supportable platform")
+		}
+
+		g.By("#. Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Get the provisioner from the cluster
+		provisioner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc/"+defaultsc, "-o", "jsonpath={.provisioner}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		allSCRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defaultSCRes := gjson.Get(allSCRes, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true)#.metadata.name")
+		e2e.Logf("The default storageclass list: %s", defaultSCRes)
+		defaultSCNub := len(defaultSCRes.Array())
+
+		storageClass1 := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+		storageClass2 := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+
+		g.By("# Create csi storageclass")
+		if defaultSCNub == 0 {
+			storageClass1.create(oc)
+			defer storageClass1.deleteAsAdmin(oc)
+			storageClass2.create(oc)
+			defer storageClass2.deleteAsAdmin(oc)
+
+			g.By("# Setting storageClass1 as default storageClass")
+			setSpecifiedStorageClassAsDefault(oc, storageClass1.name)
+			defer setSpecifiedStorageClassAsDefault(oc, storageClass1.name)
+
+		} else {
+			storageClass2.create(oc)
+			defer storageClass2.deleteAsAdmin(oc)
+		}
+
+		g.By("# Setting storageClass2 as default storageClass")
+		setSpecifiedStorageClassAsDefault(oc, storageClass2.name)
+		defer setSpecifiedStorageClassAsDefault(oc, storageClass2.name)
+
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+
+		g.By("# Create pvc without mentioning storageclass name")
+		pvc.createWithoutStorageclassname(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("# Check the pvc status to Bound")
+		pvc.waitStatusAsExpected(oc, "Bound")
+
+		g.By("Check the PV's storageclass should be newly create storageclass")
+		volName := pvc.getVolumeName(oc)
+		scFromPV, err := getScNamesFromSpecifiedPv(oc, volName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(scFromPV).To(o.Equal(storageClass2.name))
+	})
 })

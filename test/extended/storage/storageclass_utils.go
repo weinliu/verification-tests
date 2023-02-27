@@ -192,6 +192,7 @@ func getClusterPreDefinedStorageclassByPlatform(cloudProvider string) []string {
 	for _, v := range sc {
 		preDefinedStorageclass = append(preDefinedStorageclass, v.Str)
 	}
+	e2e.Logf("The pre-defined storageclass list is: %v", preDefinedStorageclass)
 	return preDefinedStorageclass
 }
 
