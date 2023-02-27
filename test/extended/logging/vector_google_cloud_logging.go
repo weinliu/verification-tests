@@ -34,54 +34,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Critical-53691-Forward logs to Google Cloud Logging using Service Account authentication.[Serial]", func() {
-		g.By("Create log producer")
-		appProj := oc.Namespace()
-		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		projectID, err := exutil.GetGcpProjectID(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		gcl := googleCloudLogging{
-			projectID: projectID,
-			logName:   getInfrastructureName(oc) + "-53691",
-		}
-		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53691", "openshift-logging"}
-		defer gcpSecret.clear(oc)
-		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-google-cloud-logging.yaml")
-		clf := resource{"clusterlogforwarder", "instance", "openshift-logging"}
-		defer clf.clear(oc)
-		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+gcpSecret.name, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "NAMESPACE="+clf.namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Deploy collector pods")
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-		cl := resource{"clusterlogging", "instance", "openshift-logging"}
-		defer cl.deleteClusterLogging(oc)
-		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-
-		for _, logType := range []string{"infrastructure", "audit", "application"} {
-			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-				logs, err := gcl.getLogByType(logType)
-				if err != nil {
-					return false, err
-				}
-				return len(logs) > 0, nil
-			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
-		}
-		appLogs, err := gcl.getLogByNamespace(appProj)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(appLogs) > 0).Should(o.BeTrue())
-	})
-
-	//author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Critical-53731-Forward logs to Google Cloud Logging using different logName for each log type and using Service Account authentication.[Serial]", func() {
 		g.By("Create log producer")
 		appProj := oc.Namespace()

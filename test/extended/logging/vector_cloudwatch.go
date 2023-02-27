@@ -50,37 +50,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cw.deleteGroups()
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Critical-51974-Vector Forward logs to Cloudwatch by logtype [Serial]", func() {
-			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
-
-			g.By("Create log producer")
-			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Create clusterlogforwarder/instance")
-			s := resource{"secret", cw.secretName, cw.secretNamespace}
-			defer s.clear(oc)
-			cw.createClfSecret(oc)
-
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+cw.secretName, "-p", "REGION="+cw.awsRegion)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
-
-			g.By("Check logs in Cloudwatch")
-			o.Expect(cw.logsFound()).To(o.BeTrue())
-		})
-
 		g.It("CPaasrunOnly-Author:ikanse-Critical-51977-Vector logs to Cloudwatch group by namespaceName and groupPrefix [Serial]", func() {
 			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
 			cw.groupPrefix = "vectorcw" + getInfrastructureName(oc)

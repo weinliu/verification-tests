@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -16,13 +17,16 @@ import (
 
 var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	defer g.GinkgoRecover()
-	var oc = exutil.NewCLI("logging-acceptance", exutil.KubeConfigPath())
+	var (
+		cloNS = "openshift-logging"
+		oc    = exutil.NewCLI("logging-acceptance", exutil.KubeConfigPath())
+	)
 
 	g.BeforeEach(func() {
 		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
 		CLO := SubscriptionObjects{
 			OperatorName:  "cluster-logging-operator",
-			Namespace:     "openshift-logging",
+			Namespace:     cloNS,
 			PackageName:   "cluster-logging",
 			Subscription:  subTemplate,
 			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")}
@@ -68,7 +72,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 		g.By("deploy loki stack")
 		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-		ls := lokiStack{"loki-53817", "openshift-logging", "1x.extra-small", s, "storage-secret", sc, "logging-loki-53817-" + getInfrastructureName(oc), lokiStackTemplate}
+		ls := lokiStack{"loki-53817", cloNS, "1x.extra-small", s, "storage-secret", sc, "logging-loki-53817-" + getInfrastructureName(oc), lokiStackTemplate}
 		defer ls.removeObjectStorage(oc)
 		err = ls.prepareResourcesForLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -80,7 +84,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		// deploy cluster logging
 		g.By("deploy cluster logging")
 		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-		cl := resource{"clusterlogging", "instance", "openshift-logging"}
+		cl := resource{"clusterlogging", "instance", cloNS}
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector", "LOKISTACKNAME="+ls.name)
 		resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
@@ -177,6 +181,147 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			o.Expect(len(result) > 0).Should(o.BeTrue())
 		}
 
+	})
+
+	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-Critical-43443-Fluentd Forward logs to Cloudwatch by logtype [Serial]", func() {
+		platform := exutil.CheckPlatform(oc)
+		if platform != "aws" {
+			g.Skip("Skip for the platform is not AWS!!!")
+		}
+		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
+		}
+
+		var cw cloudwatchSpec
+		g.By("init Cloudwatch test spec")
+		cw = cw.init(oc)
+		cw.awsKeyID, cw.awsKey = getAWSKey(oc)
+		defer cw.deleteGroups()
+
+		g.By("create log producer")
+		appProj := oc.Namespace()
+		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("create clusterlogforwarder/instance")
+		s := resource{"secret", cw.secretName, cw.secretNamespace}
+		defer s.clear(oc)
+		cw.createClfSecret(oc)
+
+		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml")
+		clf := resource{"clusterlogforwarder", "instance", cloNS}
+		defer clf.clear(oc)
+		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+cw.secretName, "-p", "REGION="+cw.awsRegion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("deploy collector pods")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+		cl := resource{"clusterlogging", "instance", cloNS}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=fluentd", "-p", "NAMESPACE="+cl.namespace)
+		WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+		g.By("check logs in Cloudwatch")
+		o.Expect(cw.logsFound()).To(o.BeTrue())
+	})
+
+	g.It("CPaasrunBoth-ConnectedOnly-Author:ikanse-Critical-51974-Vector Forward logs to Cloudwatch by logtype [Serial]", func() {
+		platform := exutil.CheckPlatform(oc)
+		if platform != "aws" {
+			g.Skip("Skip for the platform is not AWS!!!")
+		}
+		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
+		}
+
+		var cw cloudwatchSpec
+		g.By("init Cloudwatch test spec")
+		cw = cw.init(oc)
+		cw.awsKeyID, cw.awsKey = getAWSKey(oc)
+		defer cw.deleteGroups()
+
+		g.By("Create log producer")
+		appProj := oc.Namespace()
+		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create clusterlogforwarder/instance")
+		s := resource{"secret", cw.secretName, cw.secretNamespace}
+		defer s.clear(oc)
+		cw.createClfSecret(oc)
+
+		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml")
+		clf := resource{"clusterlogforwarder", "instance", cloNS}
+		defer clf.clear(oc)
+		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+cw.secretName, "-p", "REGION="+cw.awsRegion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Deploy collector pods")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+		cl := resource{"clusterlogging", "instance", cloNS}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+		WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+		g.By("Check logs in Cloudwatch")
+		o.Expect(cw.logsFound()).To(o.BeTrue())
+	})
+
+	//author qitang@redhat.com
+	g.It("CPaasrunBoth-ConnectedOnly-Author:qitang-Critical-53691-Forward logs to Google Cloud Logging using Service Account authentication.[Serial]", func() {
+		platform := exutil.CheckPlatform(oc)
+		if platform != "gcp" {
+			g.Skip("Skip for the platform is not GCP!!!")
+		}
+
+		g.By("Create log producer")
+		appProj := oc.Namespace()
+		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		gcl := googleCloudLogging{
+			projectID: projectID,
+			logName:   getInfrastructureName(oc) + "-53691",
+		}
+		defer gcl.removeLogs()
+		gcpSecret := resource{"secret", "gcp-secret-53691", "openshift-logging"}
+		defer gcpSecret.clear(oc)
+		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-google-cloud-logging.yaml")
+		clf := resource{"clusterlogforwarder", "instance", "openshift-logging"}
+		defer clf.clear(oc)
+		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+gcpSecret.name, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "NAMESPACE="+clf.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Deploy collector pods")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+		cl := resource{"clusterlogging", "instance", "openshift-logging"}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+		for _, logType := range []string{"infrastructure", "audit", "application"} {
+			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+				logs, err := gcl.getLogByType(logType)
+				if err != nil {
+					return false, err
+				}
+				return len(logs) > 0, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+		}
+		appLogs, err := gcl.getLogByNamespace(appProj)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(appLogs) > 0).Should(o.BeTrue())
 	})
 
 })
