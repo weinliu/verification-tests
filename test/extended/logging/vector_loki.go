@@ -3,6 +3,8 @@ package logging
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -857,4 +859,549 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	})
 
+})
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLI("lokistack-tlssecurity", exutil.KubeConfigPath())
+
+	g.Context("ClusterLogging LokiStack tlsSecurityProfile tests", func() {
+		g.BeforeEach(func() {
+			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
+			}
+			s := getStorageType(oc)
+			if len(s) == 0 {
+				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
+			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  subTemplate,
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			LO := SubscriptionObjects{
+				OperatorName:  "loki-operator-controller-manager",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "loki-operator",
+				Subscription:  subTemplate,
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			}
+			g.By("deploy CLO and LO")
+			CLO.SubscribeOperator(oc)
+			LO.SubscribeOperator(oc)
+			oc.SetupProject()
+		})
+
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54523-LokiStack Cluster Logging comply with the intermediate TLS security profile when global API Server has no tlsSecurityProfile defined[Serial][Slow][Disruptive]", func() {
+
+			var (
+				cloNS       = "openshift-logging"
+				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Remove any tlsSecurityProfile config")
+			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			if ogTLS == "" {
+				ogTLS = "null"
+			}
+			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
+			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": null}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Loki as logstore")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			e2e.Logf("waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("checking app, audit and infra logs in loki")
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			for _, logType := range []string{"application", "infrastructure", "audit"} {
+				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+					res, err := lc.searchByKey(logType, "log_type", logType)
+					if err != nil {
+						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
+						return false, err
+					}
+					if len(res.Data.Result) > 0 {
+						e2e.Logf("%s logs found: \n", logType)
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+			}
+
+			appLog, err := lc.searchByNamespace("application", appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+			e2e.Logf("App log count check complete with Success!")
+
+			g.By("Check that the LokiStack gateway is using the Intermediate tlsSecurityProfile")
+			server := fmt.Sprintf("%s-gateway-http:8081", ls.name)
+			checkTLSProfile(oc, "intermediate", "RSA", server, "/run/secrets/kubernetes.io/serviceaccount/service-ca.crt", cl.namespace, 2)
+
+			g.By("Check the LokiStack config for the intermediate TLS security profile ciphers and TLS version")
+			dirname := "/tmp/" + oc.Namespace() + "-lkcnf"
+			defer os.RemoveAll(dirname)
+			err = os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", cl.namespace, "--confirm", "--to="+dirname).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			expectedConfigs := []string{"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256", "VersionTLS12"}
+			for i := 0; i < len(expectedConfigs); i++ {
+				count := strings.Count(string(lokiStackConf), expectedConfigs[i])
+				o.Expect(count).To(o.Equal(8), fmt.Sprintf("Unexpected number of occurrences of %s", expectedConfigs[i]))
+			}
+
+			g.By("Check the LokiStack pods have mounted the Loki config.yaml")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/managed-by=lokistack-controller"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			gatewayPod := ls.name + "-gateway-"
+			for _, pod := range podList.Items {
+				if !strings.HasPrefix(pod.Name, gatewayPod) {
+					output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", pod.Name, "-n", cl.namespace).Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(output, "/etc/loki/config/config.yaml")).Should(o.BeTrue())
+					vl := ls.name + "-config"
+					o.Expect(strings.Contains(output, vl)).Should(o.BeTrue())
+				}
+			}
+		})
+
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54525-LokiStack Cluster Logging comply with the old tlsSecurityProfile when configured in the global API server configuration[Serial][Slow][Disruptive]", func() {
+
+			var (
+				cloNS       = "openshift-logging"
+				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Configure the global tlsSecurityProfile to use old profile")
+			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			if ogTLS == "" {
+				ogTLS = "null"
+			}
+			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
+			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"old":{},"type":"Old"}}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Loki as logstore")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			e2e.Logf("waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("checking app, audit and infra logs in loki")
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			for _, logType := range []string{"application", "infrastructure", "audit"} {
+				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+					res, err := lc.searchByKey(logType, "log_type", logType)
+					if err != nil {
+						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
+						return false, err
+					}
+					if len(res.Data.Result) > 0 {
+						e2e.Logf("%s logs found: \n", logType)
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+			}
+
+			appLog, err := lc.searchByNamespace("application", appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+			e2e.Logf("App log count check complete with Success!")
+
+			g.By("Check that the LokiStack gateway is using the Old tlsSecurityProfile")
+			server := fmt.Sprintf("%s-gateway-http:8081", ls.name)
+			checkTLSProfile(oc, "old", "RSA", server, "/run/secrets/kubernetes.io/serviceaccount/service-ca.crt", cl.namespace, 2)
+
+			g.By("Check the LokiStack config for the Old TLS security profile ciphers and TLS version")
+			dirname := "/tmp/" + oc.Namespace() + "-lkcnf"
+			defer os.RemoveAll(dirname)
+			err = os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", cl.namespace, "--confirm", "--to="+dirname).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			expectedConfigs := []string{"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,TLS_RSA_WITH_AES_128_GCM_SHA256,TLS_RSA_WITH_AES_256_GCM_SHA384,TLS_RSA_WITH_AES_128_CBC_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA,TLS_RSA_WITH_AES_256_CBC_SHA,TLS_RSA_WITH_3DES_EDE_CBC_SHA", "VersionTLS10"}
+			for i := 0; i < len(expectedConfigs); i++ {
+				count := strings.Count(string(lokiStackConf), expectedConfigs[i])
+				o.Expect(count).To(o.Equal(8), fmt.Sprintf("Unexpected number of occurrences of %s", expectedConfigs[i]))
+			}
+
+			g.By("Check the LokiStack pods have mounted the Loki config.yaml")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/managed-by=lokistack-controller"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			gatewayPod := ls.name + "-gateway-"
+			for _, pod := range podList.Items {
+				if !strings.HasPrefix(pod.Name, gatewayPod) {
+					output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", pod.Name, "-n", cl.namespace).Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(output, "/etc/loki/config/config.yaml")).Should(o.BeTrue())
+					vl := ls.name + "-config"
+					o.Expect(strings.Contains(output, vl)).Should(o.BeTrue())
+				}
+			}
+		})
+
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54526-LokiStack Cluster Logging comply with the custom tlsSecurityProfile when configured in the global API server configuration[Serial][Slow][Disruptive]", func() {
+
+			var (
+				cloNS       = "openshift-logging"
+				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Configure the global tlsSecurityProfile to use custom profile")
+			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			if ogTLS == "" {
+				ogTLS = "null"
+			}
+			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
+			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS12"},"type":"Custom"}}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Loki as logstore")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			e2e.Logf("waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("checking app, audit and infra logs in loki")
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			for _, logType := range []string{"application", "infrastructure", "audit"} {
+				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+					res, err := lc.searchByKey(logType, "log_type", logType)
+					if err != nil {
+						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
+						return false, err
+					}
+					if len(res.Data.Result) > 0 {
+						e2e.Logf("%s logs found: \n", logType)
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+			}
+
+			appLog, err := lc.searchByNamespace("application", appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+			e2e.Logf("App log count check complete with Success!")
+
+			g.By("Check that the LokiStack gateway is using the Custom tlsSecurityProfile")
+			server := fmt.Sprintf("%s-gateway-http:8081", ls.name)
+			checkTLSProfile(oc, "custom", "RSA", server, "/run/secrets/kubernetes.io/serviceaccount/service-ca.crt", cl.namespace, 2)
+
+			g.By("Check the LokiStack config for the Custom TLS security profile ciphers and TLS version")
+			dirname := "/tmp/" + oc.Namespace() + "-lkcnf"
+			defer os.RemoveAll(dirname)
+			err = os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", cl.namespace, "--confirm", "--to="+dirname).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			expectedConfigs := []string{"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256", "VersionTLS12"}
+			for i := 0; i < len(expectedConfigs); i++ {
+				count := strings.Count(string(lokiStackConf), expectedConfigs[i])
+				o.Expect(count).To(o.Equal(8), fmt.Sprintf("Unexpected number of occurrences of %s", expectedConfigs[i]))
+			}
+
+			g.By("Check the LokiStack pods have mounted the Loki config.yaml")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/managed-by=lokistack-controller"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			gatewayPod := ls.name + "-gateway-"
+			for _, pod := range podList.Items {
+				if !strings.HasPrefix(pod.Name, gatewayPod) {
+					output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", pod.Name, "-n", cl.namespace).Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(output, "/etc/loki/config/config.yaml")).Should(o.BeTrue())
+					vl := ls.name + "-config"
+					o.Expect(strings.Contains(output, vl)).Should(o.BeTrue())
+				}
+			}
+		})
+
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54527-LokiStack Cluster Logging comply with the global tlsSecurityProfile - old to intermediate[Serial][Slow][Disruptive]", func() {
+
+			var (
+				cloNS       = "openshift-logging"
+				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Configure the global tlsSecurityProfile to use old profile")
+			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			if ogTLS == "" {
+				ogTLS = "null"
+			}
+			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
+			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"old":{},"type":"Old"}}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Loki as logstore")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			e2e.Logf("waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("checking app, audit and infra logs in loki")
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			for _, logType := range []string{"application", "infrastructure", "audit"} {
+				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+					res, err := lc.searchByKey(logType, "log_type", logType)
+					if err != nil {
+						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
+						return false, err
+					}
+					if len(res.Data.Result) > 0 {
+						e2e.Logf("%s logs found: \n", logType)
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+			}
+
+			appLog, err := lc.searchByNamespace("application", appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+			e2e.Logf("App log count check complete with Success!")
+
+			g.By("Check that the LokiStack gateway is using the Old tlsSecurityProfile")
+			server := fmt.Sprintf("%s-gateway-http:8081", ls.name)
+			checkTLSProfile(oc, "old", "RSA", server, "/run/secrets/kubernetes.io/serviceaccount/service-ca.crt", cl.namespace, 2)
+
+			g.By("Check the LokiStack config for the Old TLS security profile ciphers and TLS version")
+			dirname := "/tmp/" + oc.Namespace() + "-lkcnf"
+			defer os.RemoveAll(dirname)
+			err = os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", cl.namespace, "--confirm", "--to="+dirname).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			expectedConfigs := []string{"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,TLS_RSA_WITH_AES_128_GCM_SHA256,TLS_RSA_WITH_AES_256_GCM_SHA384,TLS_RSA_WITH_AES_128_CBC_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA,TLS_RSA_WITH_AES_256_CBC_SHA,TLS_RSA_WITH_3DES_EDE_CBC_SHA", "VersionTLS10"}
+			for i := 0; i < len(expectedConfigs); i++ {
+				count := strings.Count(string(lokiStackConf), expectedConfigs[i])
+				o.Expect(count).To(o.Equal(8), fmt.Sprintf("Unexpected number of occurrences of %s", expectedConfigs[i]))
+			}
+
+			g.By("Check the LokiStack pods have mounted the Loki config.yaml")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/managed-by=lokistack-controller"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			gatewayPod := ls.name + "-gateway-"
+			for _, pod := range podList.Items {
+				if !strings.HasPrefix(pod.Name, gatewayPod) {
+					output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", pod.Name, "-n", cl.namespace).Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(output, "/etc/loki/config/config.yaml")).Should(o.BeTrue())
+					vl := ls.name + "-config"
+					o.Expect(strings.Contains(output, vl)).Should(o.BeTrue())
+				}
+			}
+
+			g.By("Configure the global tlsSecurityProfile to use Intermediate profile")
+			patch = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"intermediate":{},"type":"Intermediate"}}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			//Sleep for 3 minutes to allow LokiStack to reconcile and use the changed tlsSecurityProfile config.
+			time.Sleep(3 * time.Minute)
+			ls.waitForLokiStackToBeReady(oc)
+
+			g.By("checking app, audit and infra logs in loki")
+			bearerToken = getSAToken(oc, "logcollector", cl.namespace)
+			route = "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc = newLokiClient(route).withToken(bearerToken).retry(5)
+			for _, logType := range []string{"application", "infrastructure", "audit"} {
+				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+					res, err := lc.searchByKey(logType, "log_type", logType)
+					if err != nil {
+						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
+						return false, err
+					}
+					if len(res.Data.Result) > 0 {
+						e2e.Logf("%s logs found: \n", logType)
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+			}
+
+			appLog, err = lc.searchByNamespace("application", appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+			e2e.Logf("App log count check complete with Success!")
+
+			g.By("Check that the LokiStack gateway is using the intermediate tlsSecurityProfile")
+			server = fmt.Sprintf("%s-gateway-http:8081", ls.name)
+			checkTLSProfile(oc, "intermediate", "RSA", server, "/run/secrets/kubernetes.io/serviceaccount/service-ca.crt", cl.namespace, 2)
+
+			g.By("Check the LokiStack config for the intermediate TLS security profile ciphers and TLS version")
+			os.RemoveAll(dirname)
+			dirname = "/tmp/" + oc.Namespace() + "-lkcnf"
+			err = os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", cl.namespace, "--confirm", "--to="+dirname).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackConf, err = os.ReadFile(dirname + "/config.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			expectedConfigs = []string{"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256", "VersionTLS12"}
+			for i := 0; i < len(expectedConfigs); i++ {
+				count := strings.Count(string(lokiStackConf), expectedConfigs[i])
+				o.Expect(count).To(o.Equal(8), fmt.Sprintf("Unexpected number of occurrences of %s", expectedConfigs[i]))
+			}
+
+			g.By("Check the LokiStack pods have mounted the Loki config.yaml")
+			podList, err = oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/managed-by=lokistack-controller"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			gatewayPod = ls.name + "-gateway-"
+			for _, pod := range podList.Items {
+				if !strings.HasPrefix(pod.Name, gatewayPod) {
+					output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", pod.Name, "-n", cl.namespace).Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(output, "/etc/loki/config/config.yaml")).Should(o.BeTrue())
+					vl := ls.name + "-config"
+					o.Expect(strings.Contains(output, vl)).Should(o.BeTrue())
+				}
+			}
+
+		})
+
+	})
 })

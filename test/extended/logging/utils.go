@@ -2186,3 +2186,152 @@ func getExtLokiSecret(oc *exutil.CLI) (string, string, error) {
 	}
 	return glokiUser, glokiPwd, nil
 }
+
+func checkCiphers(oc *exutil.CLI, tlsVer string, ciphers []string, server string, caFile string, cloNS string, timeInSec int) error {
+	delay := time.Duration(timeInSec) * time.Second
+	for _, cipher := range ciphers {
+		e2e.Logf("Testing %s...", cipher)
+
+		clPod, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
+		if err != nil {
+			return fmt.Errorf("failed to get pods: %w", err)
+		}
+
+		cmd := fmt.Sprintf("openssl s_client -%s -cipher %s -CAfile %s -connect %s", tlsVer, cipher, caFile, server)
+		result, err := e2e.RunHostCmdWithRetries(cloNS, clPod.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
+
+		if err != nil {
+			return fmt.Errorf("failed to run command: %w", err)
+		}
+
+		if strings.Contains(string(result), ":error:") {
+			errorStr := strings.Split(string(result), ":")[5]
+			e2e.Logf("NOT SUPPORTED (%s)\n", errorStr)
+			return fmt.Errorf(errorStr)
+		} else if strings.Contains(string(result), fmt.Sprintf("Cipher is %s", cipher)) || strings.Contains(string(result), "Cipher    :") {
+			e2e.Logf("SUPPORTED")
+		} else {
+			e2e.Logf("UNKNOWN RESPONSE")
+			errorStr := string(result)
+			return fmt.Errorf(errorStr)
+		}
+
+		time.Sleep(delay)
+	}
+
+	return nil
+}
+
+func checkTLSVer(oc *exutil.CLI, tlsVer string, server string, caFile string, cloNS string) error {
+
+	e2e.Logf("Testing TLS %s ", tlsVer)
+
+	clPod, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
+	if err != nil {
+		return fmt.Errorf("failed to get pods: %w", err)
+	}
+
+	cmd := fmt.Sprintf("openssl s_client -%s -CAfile %s -connect %s", tlsVer, caFile, server)
+	result, err := e2e.RunHostCmdWithRetries(cloNS, clPod.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
+
+	if err != nil {
+		return fmt.Errorf("failed to run command: %w", err)
+	}
+
+	if strings.Contains(string(result), ":error:") {
+		errorStr := strings.Split(string(result), ":")[5]
+		e2e.Logf("NOT SUPPORTED (%s)\n", errorStr)
+		return fmt.Errorf(errorStr)
+	} else if strings.Contains(string(result), "Cipher is ") || strings.Contains(string(result), "Cipher    :") {
+		e2e.Logf("SUPPORTED")
+	} else {
+		e2e.Logf("UNKNOWN RESPONSE")
+		errorStr := string(result)
+		return fmt.Errorf(errorStr)
+	}
+
+	return nil
+}
+
+func checkTLSProfile(oc *exutil.CLI, profile string, algo string, server string, caFile string, cloNS string, timeInSec int) bool {
+	var ciphers []string
+	var tlsVer string
+	switch profile {
+	case "old":
+		e2e.Logf("Checking old profile with TLS v1.3")
+		tlsVer = "tls1_3"
+		err := checkTLSVer(oc, tlsVer, server, caFile, cloNS)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Checking old profile with TLS v1.2")
+		if algo == "ECDSA" {
+			ciphers = []string{"ECDHE-ECDSA-AES128-GCM-SHA256", "ECDHE-ECDSA-AES256-GCM-SHA384", "ECDHE-ECDSA-CHACHA20-POLY1305", "ECDHE-ECDSA-AES128-SHA256", "ECDHE-ECDSA-AES128-SHA", "ECDHE-ECDSA-AES256-SHA384", "ECDHE-ECDSA-AES256-SHA"}
+		} else if algo == "RSA" {
+			ciphers = []string{"ECDHE-RSA-AES128-GCM-SHA256", "ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-CHACHA20-POLY1305", "ECDHE-RSA-AES128-SHA256", "ECDHE-RSA-AES128-SHA", "ECDHE-RSA-AES256-SHA", "AES128-GCM-SHA256", "AES256-GCM-SHA384", "AES128-SHA256", "AES128-SHA", "AES256-SHA", "DES-CBC3-SHA"}
+		}
+		tlsVer = "tls1_2"
+		err = checkCiphers(oc, tlsVer, ciphers, server, caFile, cloNS, timeInSec)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Checking old profile with TLS v1.1")
+		if algo == "ECDSA" {
+			ciphers = []string{"ECDHE-ECDSA-AES128-SHA", "ECDHE-ECDSA-AES256-SHA"}
+		} else if algo == "RSA" {
+			ciphers = []string{"ECDHE-RSA-AES128-SHA", "ECDHE-RSA-AES256-SHA"}
+		}
+		tlsVer = "tls1_1"
+		err = checkCiphers(oc, tlsVer, ciphers, server, caFile, cloNS, timeInSec)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	case "intermediate":
+		e2e.Logf("Setting alogorith to %s", algo)
+		if algo == "ECDSA" {
+			ciphers = []string{"ECDHE-ECDSA-AES128-GCM-SHA256", "ECDHE-ECDSA-AES256-GCM-SHA384", "ECDHE-ECDSA-CHACHA20-POLY1305"}
+		} else if algo == "RSA" {
+			ciphers = []string{"ECDHE-RSA-AES128-GCM-SHA256", "ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-CHACHA20-POLY1305"}
+		}
+
+		e2e.Logf("Checking intermediate profile with TLS v1.3")
+		tlsVer = "tls1_3"
+		err := checkTLSVer(oc, tlsVer, server, caFile, cloNS)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Checking intermediate profile with TLS v1.2")
+		tlsVer = "tls1_2"
+		err = checkCiphers(oc, tlsVer, ciphers, server, caFile, cloNS, timeInSec)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Checking intermediate profile with TLS v1.1")
+		tlsVer = "tls1_1"
+		err = checkCiphers(oc, tlsVer, ciphers, server, caFile, cloNS, timeInSec)
+		o.Expect(err).To(o.HaveOccurred())
+
+	case "custom":
+		e2e.Logf("Setting alogorith to %s", algo)
+		if algo == "ECDSA" {
+			ciphers = []string{"ECDHE-ECDSA-CHACHA20-POLY1305", "ECDHE-ECDSA-AES128-GCM-SHA256"}
+		} else if algo == "RSA" {
+			ciphers = []string{"ECDHE-RSA-CHACHA20-POLY1305", "ECDHE-RSA-AES128-GCM-SHA256"}
+		}
+
+		e2e.Logf("Checking custom profile with TLS v1.3")
+		tlsVer = "tls1_3"
+		err := checkTLSVer(oc, tlsVer, server, caFile, cloNS)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Checking custom profile with TLS v1.2")
+		tlsVer = "tls1_2"
+		err = checkCiphers(oc, tlsVer, ciphers, server, caFile, cloNS, timeInSec)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Checking custom profile with TLS v1.1")
+		tlsVer = "tls1_1"
+		err = checkCiphers(oc, tlsVer, ciphers, server, caFile, cloNS, timeInSec)
+		o.Expect(err).To(o.HaveOccurred())
+
+	case "modern":
+		e2e.Logf("Modern profile is currently not supported, please select from old, intermediate, custom")
+		return false
+	}
+	return true
+}
