@@ -20,13 +20,13 @@ type egressQosResource struct {
 	kind      string
 }
 
-//delete egressqos resource
+// delete egressqos resource
 func (rs *egressQosResource) delete(oc *exutil.CLI) {
 	e2e.Logf("delete %s %s in namespace %s", rs.kind, rs.name, rs.namespace)
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args(rs.kind, rs.name, "-n", rs.namespace, "--ignore-not-found=true").Execute()
 }
 
-//create egressqos resource
+// create egressqos resource
 func (rs *egressQosResource) create(oc *exutil.CLI, parameters ...string) {
 
 	paras := []string{"-f", rs.tempfile, "--ignore-unknown-parameters=true", "-p"}
@@ -36,7 +36,7 @@ func (rs *egressQosResource) create(oc *exutil.CLI, parameters ...string) {
 	exutil.ApplyNsResourceFromTemplate(oc, rs.namespace, paras...)
 }
 
-//create egressqos resource with output
+// create egressqos resource with output
 func (rs *egressQosResource) createWithOutput(oc *exutil.CLI, parameters ...string) (string, error) {
 	var configFile string
 	cmd := []string{"-f", rs.tempfile, "--ignore-unknown-parameters=true", "-p"}
@@ -66,10 +66,8 @@ func runSSHCmdOnAWS(host string, cmd string) (string, error) {
 	if user == "" {
 		user = "core"
 	}
-	sshkey := os.Getenv("SSH_CLOUD_PRIV_KEY")
-	if sshkey == "" {
-		sshkey = "../internal/config/keys/openshift-qe.pem"
-	}
+	sshkey, err := exutil.GetPrivateKey()
+	o.Expect(err).NotTo(o.HaveOccurred())
 
 	sshClient := exutil.SshClient{User: user, Host: host, Port: 22, PrivateKey: sshkey}
 	return sshClient.RunOutput(cmd)

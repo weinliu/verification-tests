@@ -375,7 +375,8 @@ func replaceInFile(file string, old string, new string) error {
 
 func execCMDOnWorkNodeByBastion(showInfo bool, nodeIP, bastionIP, exec string) string {
 	var bashClient = NewCmdClient().WithShowInfo(showInfo)
-	privateKey := getPrivateKey()
+	privateKey, err := exutil.GetPrivateKey()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	cmd := `chmod 600 ` + privateKey + `; ssh -i ` + privateKey + ` -o StrictHostKeyChecking=no -o ProxyCommand="ssh -i ` + privateKey + " -o StrictHostKeyChecking=no -W %h:%p ec2-user@" + bastionIP + `" core@` + nodeIP + ` '` + exec + `'`
 	log, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
@@ -386,20 +387,4 @@ func getAllByFile(filePath string) string {
 	con, err := ioutil.ReadFile(filePath)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	return string(con)
-}
-
-func getPrivateKey() string {
-	privateKey := os.Getenv("SSH_CLOUD_PRIV_KEY")
-	if privateKey == "" {
-		privateKey = "../internal/config/keys/openshift-qe.pem"
-	}
-	return privateKey
-}
-
-func getPublicKey() string {
-	publicKey := os.Getenv("SSH_CLOUD_PUB_KEY")
-	if publicKey == "" {
-		publicKey = "../internal/config/keys/openshift-qe.pub"
-	}
-	return publicKey
 }

@@ -31,7 +31,6 @@ var (
 	defaultNamespace = "winc-test"
 	windowsWorkloads = "win-webserver"
 	linuxWorkloads   = "linux-webserver"
-	bastionKey       = "../internal/config/keys/openshift-qe.pem"
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
@@ -214,6 +213,8 @@ func getBastionSSHUser(iaasPlatform string) (user string) {
 
 func runPSCommand(bastionHost string, windowsHost string, command string, privateKey string, iaasPlatform string) (result string, err error) {
 	windowsUser := getAdministratorNameByPlatform(iaasPlatform)
+	bastionKey, err := exutil.GetPrivateKey()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	os.Chmod(bastionKey, 0600)
 	os.Chmod(privateKey, 0600)
 	command = "\"" + command + "\""

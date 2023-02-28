@@ -119,10 +119,8 @@ func installIPEchoServiceOnAWS(a *exutil.AwsClient, oc *exutil.CLI) (string, err
 		user = "core"
 	}
 
-	sshkey := os.Getenv("SSH_CLOUD_PRIV_KEY")
-	if sshkey == "" {
-		sshkey = "../internal/config/keys/openshift-qe.pem"
-	}
+	sshkey, err := exutil.GetPrivateKey()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	command := "sudo netstat -ntlp | grep 9095 || sudo podman run --name ipecho -d -p 9095:80 quay.io/openshifttest/ip-echo:1.2.0"
 	e2e.Logf("Run command", command)
 
@@ -137,7 +135,7 @@ func installIPEchoServiceOnAWS(a *exutil.AwsClient, oc *exutil.CLI) (string, err
 	}
 
 	sshClient := exutil.SshClient{User: user, Host: publicIP, Port: 22, PrivateKey: sshkey}
-	err := sshClient.Run(command)
+	err = sshClient.Run(command)
 	if err != nil {
 		e2e.Logf("Failed to run %v: %v", command, err)
 		return "", err
@@ -606,10 +604,8 @@ func getAzureIntSvcVMPublicIP(oc *exutil.CLI, sess *exutil.AzureSession, rg stri
 
 func installIPEchoServiceOnAzure(oc *exutil.CLI, sess *exutil.AzureSession, rg string) (string, error) {
 	user := "core"
-	sshkey := os.Getenv("SSH_CLOUD_PRIV_KEY")
-	if sshkey == "" {
-		sshkey = "../internal/config/keys/openshift-qe.pem"
-	}
+	sshkey, err := exutil.GetPrivateKey()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	command := "sudo netstat -ntlp | grep 9095 || sudo podman run --name ipecho -d -p 9095:80 quay.io/openshifttest/ip-echo:1.2.0"
 	e2e.Logf("Run command, %s \n", command)
 
@@ -623,7 +619,7 @@ func installIPEchoServiceOnAzure(oc *exutil.CLI, sess *exutil.AzureSession, rg s
 	}
 
 	sshClient := exutil.SshClient{User: user, Host: publicIP, Port: 22, PrivateKey: sshkey}
-	err := sshClient.Run(command)
+	err = sshClient.Run(command)
 	if err != nil {
 		e2e.Logf("Failed to run %v: %v", command, err)
 		return "", err
@@ -640,10 +636,8 @@ func accessEgressNodeFromIntSvcInstanceOnAzure(sess *exutil.AzureSession, oc *ex
 		user = "core"
 	}
 
-	sshkey := os.Getenv("SSH_CLOUD_PRIV_KEY")
-	if sshkey == "" {
-		sshkey = "../internal/config/keys/openshift-qe.pem"
-	}
+	sshkey, err := exutil.GetPrivateKey()
+	o.Expect(err).NotTo(o.HaveOccurred())
 
 	publicIP, publicIPErr := getAzureIntSvcVMPublicIP(oc, sess, rg)
 	if publicIPErr != nil || publicIP == "" {
@@ -652,7 +646,7 @@ func accessEgressNodeFromIntSvcInstanceOnAzure(sess *exutil.AzureSession, oc *ex
 
 	cmd := fmt.Sprintf(`timeout 5 bash -c "</dev/tcp/%v/22"`, IPaddr)
 	sshClient := exutil.SshClient{User: user, Host: publicIP, Port: 22, PrivateKey: sshkey}
-	err := sshClient.Run(cmd)
+	err = sshClient.Run(cmd)
 	if err != nil {
 		e2e.Logf("Failed to run %v: %v", cmd, err)
 

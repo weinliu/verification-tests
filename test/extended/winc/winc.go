@@ -29,8 +29,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		mcoNamespace     = "openshift-machine-api"
 		wmcoNamespace    = "openshift-windows-machine-config-operator"
 		wmcoDeployment   = "windows-machine-config-operator"
-		privateKey       = "../internal/config/keys/openshift-qe.pem"
-		publicKey        = "../internal/config/keys/openshift-qe.pub"
+		privateKey       = ""
+		publicKey        = ""
 		windowsWorkloads = "win-webserver"
 		linuxWorkloads   = "linux-webserver"
 		defaultWindowsMS = "windows"
@@ -65,6 +65,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		output, _ := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		iaasPlatform = strings.ToLower(output)
 		zone, _ = oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		var err error
+		privateKey, err = exutil.GetPrivateKey()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		publicKey, err = exutil.GetPublicKey()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	// author: sgao@redhat.com

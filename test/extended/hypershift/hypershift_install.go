@@ -18,6 +18,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	var (
 		oc           = exutil.NewCLI("hypershift-install", exutil.KubeConfigPath())
 		iaasPlatform string
+		publicKey    = ""
 	)
 
 	g.BeforeEach(func() {
@@ -27,6 +28,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
+		var err error
+		publicKey, err = exutil.GetPublicKey()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	// author: liangli@redhat.com
@@ -432,7 +436,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			withName(clusterName).
 			withNodePoolReplicas(1).
 			withInfraID(clusterName).
-			withSSHKey(getPublicKey())
+			withSSHKey(publicKey)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClustersRender(createCluster, func(filename string) error {
 			return replaceInFile(filename, "endpointAccess: Public", "endpointAccess: Private")
@@ -446,7 +450,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 
 		g.By("create aws Bastion")
-		awsBastion := &bastion{AWSCreds: installHelper.dir + "/credentials", InfraID: clusterName, Region: installHelper.region, SSHKeyFile: getPublicKey()}
+		awsBastion := &bastion{AWSCreds: installHelper.dir + "/credentials", InfraID: clusterName, Region: installHelper.region, SSHKeyFile: publicKey}
 		defer installHelper.destroyAWSBastion(awsBastion)
 		bastionIP := installHelper.createAWSBastion(awsBastion)
 		o.Expect(bastionIP).ShouldNot(o.BeEmpty())

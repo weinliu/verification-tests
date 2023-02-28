@@ -3,11 +3,14 @@ package util
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"net"
+	"os"
+	"path/filepath"
+
 	o "github.com/onsi/gomega"
 	"golang.org/x/crypto/ssh"
-	"io/ioutil"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	"net"
 )
 
 type SshClient struct {
@@ -91,4 +94,26 @@ func (sshClient *SshClient) RunOutput(cmd string) (string, error) {
 		return "", err
 	}
 	return stdoutBuf.String(), err
+}
+
+func GetPrivateKey() (string, error) {
+	privateKey := os.Getenv("SSH_CLOUD_PRIV_KEY")
+	if privateKey == "" {
+		privateKey = filepath.Join("../internal/config/keys/", "openshift-qe.pem")
+	}
+	if _, err := os.Stat(privateKey); os.IsNotExist(err) {
+		return "", fmt.Errorf("private key file not found: %s", privateKey)
+	}
+	return privateKey, nil
+}
+
+func GetPublicKey() (string, error) {
+	publicKey := os.Getenv("SSH_CLOUD_PUB_KEY")
+	if publicKey == "" {
+		publicKey = filepath.Join("../internal/config/keys/", "openshift-qe.pub")
+	}
+	if _, err := os.Stat(publicKey); os.IsNotExist(err) {
+		return "", fmt.Errorf("public key file not found: %s", publicKey)
+	}
+	return publicKey, nil
 }
