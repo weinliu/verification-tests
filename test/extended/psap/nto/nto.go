@@ -1450,14 +1450,26 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
-		//Get NTO Operator Pod Name
-		ntoOperatorPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ntoNamespace, "-l", "name=cluster-node-tuning-operator", "-o=jsonpath={.items[].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//get metric information that require ssl auth
+		sslKey := "/etc/prometheus/secrets/metrics-client-certs/tls.key"
+		sslCrt := "/etc/prometheus/secrets/metrics-client-certs/tls.crt"
 
 		//Get NTO metrics data
-		g.By("Get NTO metrics informaton ...")
-		metricsOutput, err := exutil.RemoteShPod(oc, ntoNamespace, ntoOperatorPod, "curl", "--insecure", "https://localhost:60000/metrics")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Get NTO metrics informaton without ssl, should be denied access, throw error...")
+		metricsOutput, metricsError := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "sts/prometheus-k8s", "-c", "prometheus", "--", "curl", "-k", "https://node-tuning-operator.openshift-cluster-node-tuning-operator.svc:60000/metrics").Output()
+		o.Expect(metricsError).Should(o.HaveOccurred())
+		o.Expect(metricsOutput).NotTo(o.BeEmpty())
+		o.Expect(metricsOutput).To(o.Or(
+			o.ContainSubstring("bad certificate"),
+			o.ContainSubstring("errno = 104"),
+			o.ContainSubstring("errno = 32")))
+
+		g.By("Get NTO metrics informaton with ssl key and crt, should be access, get the metric information...")
+		metricsOutput, metricsError = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "sts/prometheus-k8s", "-c", "prometheus", "--", "curl", "-k", "--key", sslKey, "--cert", sslCrt, "https://node-tuning-operator.openshift-cluster-node-tuning-operator.svc:60000/metrics").Output()
+		o.Expect(metricsOutput).NotTo(o.BeEmpty())
+		o.Expect(metricsError).NotTo(o.HaveOccurred())
+
 		e2e.Logf("The metrics information of NTO as below: \n%v", metricsOutput)
 
 		//Assert the key metrics
@@ -1467,7 +1479,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			o.ContainSubstring("nto_pod_labels_used_info"),
 			o.ContainSubstring("nto_degraded_info"),
 			o.ContainSubstring("nto_profile_calculated_total")))
-
 	})
 
 	g.It("NonPreRelease-Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
