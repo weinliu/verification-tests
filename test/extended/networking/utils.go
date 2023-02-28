@@ -1467,8 +1467,8 @@ func isValueInList(value string, list []string) bool {
 // getPodMultiNetwork is designed to get both v4 and v6 addresses from pod's secondary interface(net1) which is not in the cluster's SDN or OVN network
 // currently the v4 address of pod's secondary interface is always displyed before v6 address no matter the order configred in the net-attach-def YAML file
 func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (string, string) {
-	cmd1 := "ip a sho net1 | awk 'NR==3{print $2}' |grep -Po '((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])'"
-	cmd2 := "ip a sho net1 | awk 'NR==5{print $2}' |grep -Po '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
+	cmd1 := "ip a sho net1 | awk 'NR==3{print $2}' |grep -Eo '((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])'"
+	cmd2 := "ip a sho net1 | awk 'NR==5{print $2}' |grep -Eo '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
 	podIPv4, err := e2e.RunHostCmd(namespace, podName, cmd1)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	pod2ns1IPv4 := strings.TrimSpace(podIPv4)
