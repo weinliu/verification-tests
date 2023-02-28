@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 
 	})
 
-	g.It("NonHyperShiftHOST-Author:qiowang-High-47088-NMState Operator installation ", func() {
+	g.It("NonHyperShiftHOST-StagerunBoth-Author:qiowang-High-47088-NMState Operator installation ", func() {
 		g.By("Checking nmstate operator installation")
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		e2e.Logf("SUCCESS - NMState operator installed")
