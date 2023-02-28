@@ -325,15 +325,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 
 		g.By("Check seccompprofile generated !!!")
 		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"seccompprofile", ns1, "--all"})
-		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"seccompprofile", ns1, "--all"})
-		//sleep 60s so the seccompprofiles of the worklod could be recorded
-		time.Sleep(60 * time.Second)
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"seccompprofile", ns2, "--all"})
+		//sleep 120s so the seccompprofiles of the worklod could be recorded
+		time.Sleep(120 * time.Second)
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("daemonset", daemonsetHello.name, "-n", ns1, "--ignore-not-found").Execute()
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", deployHello.name, "-n", ns2, "--ignore-not-found").Execute()
 		checkPrfolieStatus(oc, "seccompprofile", ns1, "Installed")
 		checkPrfolieStatus(oc, "seccompprofile", ns2, "Installed")
-		checkPrfolieNumbers(oc, "seccompprofile", ns1, linuxWorkerCount*3)
-		checkPrfolieNumbers(oc, "seccompprofile", ns2, 9)
+		checkPrfolieNumbers(oc, "seccompprofile", ns1, linuxWorkerCount*2)
+		checkPrfolieNumbers(oc, "seccompprofile", ns2, 6)
 	})
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
@@ -448,7 +448,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 
 		g.By("Check seccompprofile generated !!!")
 		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SelinuxProfile", ns1, "--all"})
-		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SelinuxProfile", ns1, "--all"})
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SelinuxProfile", ns2, "--all"})
 		//sleep 60s so the selinuxprofiles of the worklod could be recorded
 		time.Sleep(60 * time.Second)
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("daemonset", daemonsetHello.name, "-n", ns1, "--ignore-not-found").Execute()

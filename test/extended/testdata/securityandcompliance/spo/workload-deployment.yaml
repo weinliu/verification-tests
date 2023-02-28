@@ -19,10 +19,6 @@ objects:
           "${LABELKEY}": "${LABELVALUE}"
       spec:
         serviceAccountName: "${SANAME}"
-        initContainers:
-        - name: wait
-          image: quay.io/openshifttest/centos:centos7
-          command: ["/bin/sh", "-c", "env"]
         containers:
         - name: nginx
           image: quay.io/security-profiles-operator/test-nginx-unprivileged:1.21

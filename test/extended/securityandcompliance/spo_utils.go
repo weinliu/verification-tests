@@ -57,15 +57,16 @@ func lableNamespace(oc *exutil.CLI, parameters ...string) {
 }
 
 func checkPrfolieNumbers(oc *exutil.CLI, profileKind string, namespace string, expectedNumber int) {
+	var intProfileNumber int
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		profileNameString, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(profileKind, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-		intProfileNumber := len(strings.Fields(profileNameString))
+		intProfileNumber = len(strings.Fields(profileNameString))
 		if intProfileNumber == expectedNumber {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "Profile number is not expted ")
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Profile number %v not equals the expted number %v", intProfileNumber, expectedNumber))
 }
 
 func checkPrfolieStatus(oc *exutil.CLI, profileKind string, namespace string, expected string) {
