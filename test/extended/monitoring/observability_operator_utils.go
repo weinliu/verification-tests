@@ -116,38 +116,74 @@ func getClusterDetails(oc *exutil.CLI) (clusterID string, region string) {
 }
 func createMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, secD monitoringStackSecretDescription) {
 	g.By("Creating Monitoring Stack")
-	createStack(oc, msD, secD)
+	createStack(oc, msD, secD, "rosa_mc", "")
 
 }
-func createStack(oc *exutil.CLI, msD monitoringStackDescription, secD monitoringStackSecretDescription) {
-	g.By("Creating Secret")
-	secFile, err := oc.AsAdmin().Run("process").Args("-f", secD.template, "-p", "NAME="+secD.name, "NAMESPACE="+secD.namespace).OutputToFile(getRandomString() + "ms-secret.json")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", secFile).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
+func createStack(oc *exutil.CLI, msD monitoringStackDescription, secD monitoringStackSecretDescription, stack, oboBaseDir string) {
+	stack = strings.ToLower(stack)
+	if stack == "rosa_mc" {
+		g.By("Creating Secret")
+		secFile, err := oc.AsAdmin().Run("process").Args("-f", secD.template, "-p", "NAME="+secD.name, "NAMESPACE="+secD.namespace).OutputToFile(getRandomString() + "ms-secret.json")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", secFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-	g.By("Install Monitoring Stack")
-	msFile, err := oc.AsAdmin().Run("process").Args("-f", msD.template, "-p", "CLUSTERID="+msD.clusterID, "REGION="+msD.region, "NAME="+msD.name, "NAMESPACE="+msD.namespace, "SECRETNAME="+msD.secretName, "TOKENURL="+msD.tokenURL, "URL="+msD.url).OutputToFile(getRandomString() + "ms.json")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", msFile).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	out, err := checkMonitoringStack(oc, msD)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("Output: %v", out)
+		g.By("Install Monitoring Stack")
+		msFile, err := oc.AsAdmin().Run("process").Args("-f", msD.template, "-p", "CLUSTERID="+msD.clusterID, "REGION="+msD.region, "NAME="+msD.name, "NAMESPACE="+msD.namespace, "SECRETNAME="+msD.secretName, "TOKENURL="+msD.tokenURL, "URL="+msD.url).OutputToFile(getRandomString() + "ms.json")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", msFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	if stack == "monitor_example_app" {
+		g.By("Install Monitoring Stack")
+		msTemplate := filepath.Join(oboBaseDir, "example-app-monitoring-stack.yaml")
+		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", msTemplate).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	g.By("Check MonitoringStack status")
+	checkMonitoringStack(oc, msD, stack)
+	g.By("Check MonitoringStack Prometheus pods status")
+	checkMonitoringStackPods(oc, stack)
 }
-func checkMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription) (out string, err error) {
+func checkMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, stack string) {
+	var name string
+	stack = strings.ToLower(stack)
+	if stack == "rosa_mc" {
+		name = msD.name
+	}
+	if stack == "monitor_example_app" {
+		name = "example-app-monitoring-stack"
+	}
 	g.By("Check the state of MonitoringStack")
 	errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", msD.name, "-n", msD.namespace, "-o=jsonpath={.status.conditions[*].reason}").Output()
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", name, "-n", namespace, "-o=jsonpath={.status.conditions[*].reason}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(out, "MonitoringStackAvailable") {
 			return true, nil
 		}
 		return false, err
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Monitoring Stack %v doesnot contain the correct status in namespace %v", msD.name, msD.namespace))
-	out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", msD.namespace, "-l", "app.kubernetes.io/part-of=hypershift-monitoring-stack").Output()
-	return out, err
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Monitoring Stack %v doesnot contain the correct status in namespace %v", name, namespace))
+}
+func checkMonitoringStackPods(oc *exutil.CLI, stack string) {
+	g.By("Check " + namespace + " namespace monitoringstack pods liveliness")
+	var name string
+	if stack == "rosa_mc" {
+		name = "hypershift-monitoring-stack"
+	}
+	if stack == "monitor_example_app" {
+		name = "example-app-monitoring-stack"
+	}
+	errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "prometheus="+name, "-o=jsonpath={.items[*].status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(out, "Running Running") == 0 {
+			return true, nil
+		}
+		return false, err
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v namespace monitoringstack pods are not in healthy state", namespace))
+
 }
 func checkOperatorPods(oc *exutil.CLI) {
 	g.By("Check " + namespace + " namespace pods liveliness")
@@ -201,35 +237,51 @@ func checkRemoteWriteConfig(oc *exutil.CLI, msD monitoringStackDescription) {
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Remote write config is not correct in monitoringstack %v in %v namespace", msD.name, msD.namespace))
 
 }
-func checkMonitoringStackDetails(oc *exutil.CLI, msD monitoringStackDescription) {
-	g.By("Get clusterID and region")
-	errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", msD.name, "-n", msD.namespace, "-o=jsonpath={.spec.prometheusConfig.externalLabels.hypershift_cluster_id}{.spec.prometheusConfig.externalLabels.region}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(out, msD.clusterID+msD.region) == 0 {
-			return true, nil
-		}
-		return false, err
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("ClusterID and region did not match. Expected: %v %v", msD.clusterID, msD.region))
+func checkMonitoringStackDetails(oc *exutil.CLI, msD monitoringStackDescription, stack string) {
+	var name string
+	stack = strings.ToLower(stack)
+	if stack == "rosa_mc" {
+		name = msD.name
+		g.By("Get clusterID and region")
+		errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", msD.name, "-n", msD.namespace, "-o=jsonpath={.spec.prometheusConfig.externalLabels.hypershift_cluster_id}{.spec.prometheusConfig.externalLabels.region}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Compare(out, msD.clusterID+msD.region) == 0 {
+				return true, nil
+			}
+			return false, err
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("ClusterID and region did not match. Expected: %v %v", msD.clusterID, msD.region))
+	}
+	if stack == "custom" {
+		name = "hypershift-monitoring-stack"
+	}
 	g.By("Check status of MonitoringStack")
-	errCheck = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", msD.name, "-n", msD.namespace, "-o=jsonpath={.status.conditions[*].status}").Output()
+	errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", name, "-n", namespace, "-o=jsonpath={.status.conditions[*].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(out, "False") {
 			return false, err
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("MonitoringStack %v reports invalid status in namespace %v", msD.name, msD.namespace))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("MonitoringStack %v reports invalid status in namespace %v", name, namespace))
 }
-func deleteMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, secD monitoringStackSecretDescription) {
-	g.By("Removing MonitoringStack " + msD.name)
-	errStack := oc.AsAdmin().WithoutNamespace().Run("delete").Args("monitoringstack", msD.name, "-n", msD.namespace).Execute()
-	g.By("Removing MonitoringStack Secret " + secD.name)
-	errSecret := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", secD.name, "-n", secD.namespace).Execute()
-	o.Expect(errStack).NotTo(o.HaveOccurred())
-	o.Expect(errSecret).NotTo(o.HaveOccurred())
+func deleteMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, secD monitoringStackSecretDescription, stack string) {
+	stack = strings.ToLower(stack)
+	if stack == "rosa_mc" {
+		g.By("Removing MonitoringStack " + msD.name)
+		errStack := oc.AsAdmin().WithoutNamespace().Run("delete").Args("monitoringstack", msD.name, "-n", msD.namespace).Execute()
+		g.By("Removing MonitoringStack Secret " + secD.name)
+		errSecret := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", secD.name, "-n", secD.namespace).Execute()
+		o.Expect(errStack).NotTo(o.HaveOccurred())
+		o.Expect(errSecret).NotTo(o.HaveOccurred())
+	}
+	if stack == "monitor_example_app" {
+		g.By("Removing MonitoringStack hypershift-monitoring-stack")
+		errStack := oc.AsAdmin().WithoutNamespace().Run("delete").Args("monitoringstack", "example-app-monitoring-stack", "-n", "openshift-observability-operator").Execute()
+		o.Expect(errStack).NotTo(o.HaveOccurred())
+	}
 
 }
 func deleteOperator(oc *exutil.CLI) {
@@ -408,6 +460,12 @@ func checkHCPTargets(oc *exutil.CLI) {
 	}
 
 }
+func checkExampleAppTarget(oc *exutil.CLI) {
+	g.By("Get SA token")
+	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+	g.By("Check whether the scrape targets are present")
+	checkMetric(oc, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=prometheus_sd_discovered_targets{config=~".*%s.*"}' `, "example-app-monitoring-stack-prometheus", namespace, "prometheus-example-monitor"), token, "prometheus-example-monitor", platformLoadTime)
+}
 func checkIfMetricValueExists(oc *exutil.CLI, token, url string, timeout time.Duration) {
 	var (
 		res string
@@ -425,9 +483,50 @@ func checkIfMetricValueExists(oc *exutil.CLI, token, url string, timeout time.Du
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metric %s doesnot contain any value", res))
 
 }
-func checkMetricValue(oc *exutil.CLI) {
+func checkMetricValue(oc *exutil.CLI, clusterType string) {
 	g.By("Get SA token")
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	g.By("Check the metrics exists and contain value")
-	checkIfMetricValueExists(oc, token, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=topk(1,cluster_version{type="cluster"})' `, monSvcName, namespace), platformLoadTime)
+	if clusterType == "rosa_mc" {
+		checkIfMetricValueExists(oc, token, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=topk(1,cluster_version{type="cluster"})' `, monSvcName, namespace), platformLoadTime)
+	} else {
+		checkIfMetricValueExists(oc, token, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=version' `, "example-app-monitoring-stack-prometheus", namespace), platformLoadTime)
+	}
+
+}
+func createCustomMonitoringStack(oc *exutil.CLI, oboBaseDir string) {
+	g.By("Create Clustom Monitoring Stack")
+	createStack(oc, monitoringStackDescription{}, monitoringStackSecretDescription{}, "monitor_example_app", oboBaseDir)
+}
+func checkExampleAppStatus(oc *exutil.CLI, ns string) {
+	g.By("Check the status of Example App")
+	errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		g.By("Get the pod name")
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", "app=prometheus-example-app", "-oname").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check the status of pod")
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, "-n", ns, "-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check service is present")
+		svcName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, "-l", "app=prometheus-example-app", "-oname").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Service: %v", svcName)
+		g.By("Check service monitor is present")
+		svMonName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("servicemonitor.monitoring.rhobs", "-n", ns, "-l", "k8s-app=prometheus-example-monitor", "-oname").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Service Monitor: %v", svMonName)
+		if status != "Running" {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Example app status is not healthy in %s namespace", ns))
+
+}
+
+func createExampleApp(oc *exutil.CLI, oboBaseDir, ns string) {
+	appTemplate := filepath.Join(oboBaseDir, "example-app.yaml")
+	g.By("Install Example App")
+	createResourceFromYaml(oc, ns, appTemplate)
+	checkExampleAppStatus(oc, ns)
 }

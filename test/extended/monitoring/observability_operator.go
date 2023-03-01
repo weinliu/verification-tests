@@ -39,7 +39,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 			namespace: "openshift-observability-operator",
 			template:  filepath.Join(oboBaseDir, "monitoringstack-secret.yaml"),
 		}
-		defer deleteMonitoringStack(oc, msD, secD)
+		defer deleteMonitoringStack(oc, msD, secD, "rosa_mc")
 		g.By("Check observability operator pods liveliness")
 		checkOperatorPods(oc)
 		if !exutil.IsROSA() {
@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		g.By("Check remote write config")
 		checkRemoteWriteConfig(oc, msD)
 		g.By("Check monitoringStack has correct clusterID region and status")
-		checkMonitoringStackDetails(oc, msD)
+		checkMonitoringStackDetails(oc, msD, "rosa_mc")
 
 	})
 
@@ -75,8 +75,21 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 			g.By("Check scrape targets")
 			checkHCPTargets(oc)
 			g.By("Check metric along with value")
-			checkMetricValue(oc)
+			checkMetricValue(oc, "rosa_mc")
 		}
+	})
+	g.It("Author:Vibhu-Critical-59384-High-59674-create monitoringstack to discover any target and verify observability operator discovered target and collected metrics of example APP", func() {
+		defer deleteMonitoringStack(oc, monitoringStackDescription{}, monitoringStackSecretDescription{}, "monitor_example_app")
+		g.By("Create monitoring stack")
+		createCustomMonitoringStack(oc, oboBaseDir)
+		g.By("Create example app")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		createExampleApp(oc, oboBaseDir, ns)
+		g.By("Check scrape target")
+		checkExampleAppTarget(oc)
+		g.By("Check metric along with value")
+		checkMetricValue(oc, "monitor_example_app")
 	})
 
 })
