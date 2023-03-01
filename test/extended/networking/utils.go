@@ -2407,6 +2407,8 @@ func getOVNKMasterPod(oc *exutil.CLI) string {
 	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.items[*].spec.holderIdentity}").Output()
 	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
 	var ovnKMasterPod string
+	readyErr := waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+	exutil.AssertWaitPollNoErr(readyErr, "ovnkube-master pods are not ready")
 	ovnMasterPods := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
 	for _, ovnPod := range ovnMasterPods {
 		getNodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ovn-kubernetes", "pod", ovnPod, "-o=jsonpath={.spec.nodeName}").Output()
