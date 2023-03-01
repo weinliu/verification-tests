@@ -21,67 +21,69 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                   = exutil.NewCLI("kata", exutil.KubeConfigPath())
-		opNamespace          = "openshift-sandboxed-containers-operator"
-		commonKataConfigName = "example-kataconfig"
-		testDataDir          = exutil.FixturePath("testdata", "kata")
-		iaasPlatform         string
-		kcTemplate           = filepath.Join(testDataDir, "kataconfig.yaml")
-		defaultDeployment    = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
-		defaultPod           = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
-		subTemplate          = filepath.Join(testDataDir, "subscription_template.yaml")
-		kcMonitorImageName   = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
-		mustGatherImage      = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.0"
-		icspName             = "kata-brew-registry"
-		icspFile             = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
-		testrunInitial       testrunConfigmap
-		clusterVersion       string
-		ocpMajorVer          string
-		ocpMinorVer          string
-		operatorVer          = "1.2.0"
-		testrun              testrunConfigmap
-		workload             = "have securityContext"
-		podRunState          = "Running"
-		featureLabel         = "feature.node.kubernetes.io/runtime.kata=true"
-		workerLabel          = "node-role.kubernetes.io/worker"
-		customLabel          = "custom-label=test"
-		runtimeClassName     = "kata"
-		enablePeerPods       = "false"
-		// runtimeClassName     = "kata-remote-cc" // DEBUG
-		// enablePeerPods       = "true" // DEBUG
-
+		oc                 = exutil.NewCLI("kata", exutil.KubeConfigPath())
+		opNamespace        = "openshift-sandboxed-containers-operator"
+		testDataDir        = exutil.FixturePath("testdata", "kata")
+		iaasPlatform       string
+		kcTemplate         = filepath.Join(testDataDir, "kataconfig.yaml")
+		defaultDeployment  = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
+		defaultPod         = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
+		subTemplate        = filepath.Join(testDataDir, "subscription_template.yaml")
+		nsFile             = filepath.Join(testDataDir, "namespace.yaml")
+		ogFile             = filepath.Join(testDataDir, "operatorgroup.yaml")
+		kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.3.3"
+		mustGatherImage    = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
+		icspName           = "kata-brew-registry"
+		icspFile           = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
+		testrunInitial     TestrunConfigmap
+		testrun            TestrunConfigmap
+		clusterVersion     string
+		ocpMajorVer        string
+		ocpMinorVer        string
+		operatorVer        = "1.3.0"
+		workload           = "have securityContext"
+		podRunState        = "Running"
+		featureLabel       = "feature.node.kubernetes.io/runtime.kata=true"
+		workerLabel        = "node-role.kubernetes.io/worker"
+		customLabel        = "custom-label=test"
 	)
 
-	subscription := subscriptionDescription{
+	subscription := SubscriptionDescription{
 		subName:                "sandboxed-containers-operator",
 		namespace:              opNamespace,
 		catalogSourceName:      "redhat-operators",
 		catalogSourceNamespace: "openshift-marketplace",
-		channel:                "stable-1.2",
+		channel:                "stable-1.3",
 		ipApproval:             "Automatic",
 		operatorPackage:        "sandboxed-containers-operator",
 		template:               subTemplate,
 	}
 
 	kataconfig := KataconfigDescription{
-		name:                 commonKataConfigName,
+		name:                 "example-kataconfig",
 		template:             kcTemplate,
 		kataMonitorImageName: kcMonitorImageName,
 		logLevel:             "info",
 		eligibility:          false,
+		runtimeClassName:     "kata",
+		enablePeerPods:       false,
 	}
 	testrunInitial.exists = false // no overrides yet
 
-	testrunDefault := testrunConfigmap{
-		exists:            false,
-		catalogSourceName: subscription.catalogSourceName,
-		channel:           subscription.channel,
-		icspNeeded:        false,
-		mustgatherImage:   mustGatherImage,
-		katamonitorImage:  kcMonitorImageName,
-		eligibility:       false,
-		labelSingleNode:   false,
-		eligbleSingleNode: false,
+	// if you change this, modify both getTestRunConfigmap() and getTestRunEnvVars()
+	testrunDefault := TestrunConfigmap{
+		exists:             false,
+		operatorVer:        operatorVer,
+		catalogSourceName:  subscription.catalogSourceName,
+		channel:            subscription.channel,
+		icspNeeded:         false,
+		mustgatherImage:    mustGatherImage,
+		katamonitorImage:   kcMonitorImageName,
+		eligibility:        false,
+		labelSingleNode:    false,
+		eligibleSingleNode: false,
+		runtimeClassName:   kataconfig.runtimeClassName,
+		enablePeerPods:     kataconfig.enablePeerPods,
 	}
 
 	g.BeforeEach(func() {
@@ -111,12 +113,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				workload = "do not have securityContext settings"
 			}
 		}
-		g.By(fmt.Sprintf("The current platform is %v. \nOCP is %v.%v on: %v\n Workloads %v", iaasPlatform, ocpMajorVer, ocpMinorVer, clusterVersion, workload))
-
-		if checkKataInstalled(oc, subscription, commonKataConfigName) {
-			g.By(fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, commonKataConfigName))
-			return
-		}
+		g.By(fmt.Sprintf("The current platform is %v. OCP %v.%v: %v\n Workloads %v", iaasPlatform, ocpMajorVer, ocpMinorVer, clusterVersion, workload))
 
 		// check if there is a CM override
 		testrunInitial, _, _ = getTestRunConfigmap(oc, testrunDefault, "default", "osc-config")
@@ -124,33 +121,56 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			subscription.catalogSourceName = testrunInitial.catalogSourceName
 			subscription.channel = testrunInitial.channel
 			mustGatherImage = testrunInitial.mustgatherImage
-			kataconfig.kataMonitorImageName = testrunInitial.katamonitorImage
 			operatorVer = testrunInitial.operatorVer
+			kataconfig.kataMonitorImageName = testrunInitial.katamonitorImage
 			kataconfig.eligibility = testrunInitial.eligibility
-			e2e.Logf("subscription after testrun cm osc-config: %v", subscription)
+			kataconfig.runtimeClassName = testrunInitial.runtimeClassName
+			kataconfig.enablePeerPods = testrunInitial.enablePeerPods
+			e2e.Logf("cm osc-config found: %v", testrunInitial)
 		}
 
-		operatorVer, sub := getVersionInfo(oc, subscription, operatorVer)
-		if os.Getenv("cmMsg") != "" { //env var cmMsg will have no value if configmap is not found
-			subscription.catalogSourceName = sub.catalogSourceName
-			subscription.channel = sub.channel
-			kataconfig.kataMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
-			e2e.Logf("subscription after Jenkins cm example-config-env: %v", subscription)
-			e2e.Logf("operatorVer : %s", operatorVer)
-			e2e.Logf("monitor : %s", kcMonitorImageName)
-		}
-
-		// check env to override defaults or CM
+		// check if there are environment variable overrides
 		testrun, _ = getTestRunEnvVars("OSCS", testrunDefault)
 		// change subscription to match testrun.  env options override default and CM values
 		if testrun.exists {
 			testrunInitial = testrun
 			subscription.catalogSourceName = testrunInitial.catalogSourceName
 			subscription.channel = testrunInitial.channel
+			operatorVer = testrunInitial.operatorVer
 			mustGatherImage = testrunInitial.mustgatherImage
 			kataconfig.kataMonitorImageName = testrunInitial.katamonitorImage
-			operatorVer = testrunInitial.operatorVer
-			e2e.Logf("environment OSCS found. subscription: %v, operator version: %v", subscription, operatorVer)
+			kataconfig.eligibility = testrunInitial.eligibility
+			kataconfig.runtimeClassName = testrunInitial.runtimeClassName
+			kataconfig.enablePeerPods = testrunInitial.enablePeerPods
+			e2e.Logf("environment OSCS found: %v", testrunInitial)
+		}
+
+		// ensure ns is installed and install if not
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", subscription.namespace, "--no-headers").Output()
+		if err != nil || strings.Contains(msg, "Error from server (NotFound)") {
+			msg, err = oc.AsAdmin().Run("apply").Args("-f", nsFile).Output()
+			if err != nil {
+				e2e.Logf("namespace issue %v %v", msg, err)
+			} else {
+				g.By("(0.1) Created namespace " + msg)
+			}
+		}
+
+		// ensure og is installed and install if not
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", subscription.namespace, "--no-headers").Output()
+		if err != nil || strings.Contains(msg, "No resources found in") {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile, "-n", subscription.namespace).Output()
+			if err != nil {
+				e2e.Logf("og issue %v %v", msg, err)
+			} else {
+				g.By("(0.2) Created operatorgroup " + msg)
+			}
+		}
+
+		// We need the testrun values from the CM or env further down even if OSC is already installed
+		if checkKataInstalled(oc, subscription, kataconfig.name) {
+			g.By(fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, kataconfig.name))
+			return
 		}
 
 		if testrunInitial.icspNeeded {
@@ -161,40 +181,37 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			}
 		}
 
-		ns := filepath.Join(testDataDir, "namespace.yaml")
-		og := filepath.Join(testDataDir, "operatorgroup.yaml")
-
-		_, err = subscribeFromTemplate(oc, subscription, subTemplate, ns, og)
+		_, err = subscribeFromTemplate(oc, subscription, subTemplate)
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
 		//label all worker nodes for checkNodeEligibility
 		if kataconfig.eligibility {
-			if testrunInitial.eligbleSingleNode {
-				workerList, _, _ := getNodeListByLabel(oc, sub.namespace, workerLabel)
+			if testrunInitial.eligibleSingleNode {
+				workerList, _, _ := getNodeListByLabel(oc, subscription.namespace, workerLabel)
 				o.Expect(len(workerList)).NotTo(o.Equal(0))
-				LabelNode(oc, sub.namespace, workerList[0], featureLabel)
+				LabelNode(oc, subscription.namespace, workerList[0], featureLabel)
 			} else {
-				labelSelectedNodes(oc, sub.namespace, workerLabel, featureLabel)
+				labelSelectedNodes(oc, subscription.namespace, workerLabel, featureLabel)
 			}
 		}
 
 		//check and label nodes (or single node for custom label)
-		nodeCustomList, _, err := getNodeListByLabel(oc, sub.namespace, customLabel)
+		nodeCustomList, _, err := getNodeListByLabel(oc, subscription.namespace, customLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeCustomList) > 0 {
 			e2e.Logf("labeled nodes found %v", nodeCustomList)
 		} else {
 			if testrunInitial.labelSingleNode {
-				workerList, _, _ := getNodeListByLabel(oc, sub.namespace, workerLabel)
+				workerList, _, _ := getNodeListByLabel(oc, subscription.namespace, workerLabel)
 				o.Expect(len(workerList)).NotTo(o.Equal(0))
-				LabelNode(oc, sub.namespace, workerList[0], customLabel)
+				LabelNode(oc, subscription.namespace, workerList[0], customLabel)
 			} else {
-				labelSelectedNodes(oc, sub.namespace, workerLabel, customLabel)
+				labelSelectedNodes(oc, subscription.namespace, workerLabel, customLabel)
 			}
 		}
 
-		msg, err = createKataConfig(oc, kataconfig, subscription, enablePeerPods)
-		e2e.Logf("---------- kataconfig %v create succeeded %v\n %v %v", commonKataConfigName, msg, err)
+		msg, err = createKataConfig(oc, kataconfig, subscription)
+		e2e.Logf("---------- kataconfig %v create succeeded %v %v", kataconfig.name, msg, err)
 	})
 
 	g.It("Author:abhbaner-High-39499-Operator installation", func() {
@@ -212,21 +229,21 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			completedListJsonpath = "-o=jsonpath={.status.installationStatus.completed.completedNodesList}"
 		)
 		g.By("Install Common kataconfig and verify it")
-		e2e.Logf("common kataconfig %v is installed", commonKataConfigName)
+		e2e.Logf("common kataconfig %v is installed", kataconfig.name)
 
 		nodeKataList, _, err := getNodeListByLabel(oc, subscription.namespace, customLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeKataCount := fmt.Sprintf("%d", len(nodeKataList))
 
-		totalCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", commonKataConfigName, totalNodesJsonpath).Output()
+		totalCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconfig.name, totalNodesJsonpath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(totalCount).To(o.Equal(nodeKataCount))
 
-		completeCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", commonKataConfigName, completedNodeJsonpath).Output()
+		completeCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconfig.name, completedNodeJsonpath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(totalCount).To(o.Equal(completeCount))
 
-		completededList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", commonKataConfigName, completedListJsonpath).Output()
+		completededList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconfig.name, completedListJsonpath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(completededList)).NotTo(o.Equal(0))
 		e2e.Logf("Completed nodes are %v", completededList[0])
@@ -244,7 +261,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
 		defer deleteKataPod(oc, podNs, newPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
@@ -255,7 +272,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	// author: tbuskey@redhat.com
 	g.It("Author:tbuskey-High-43238-Operator prohibits creation of multiple kataconfigs", func() {
 		var (
-			kataConfigName2 = commonKataConfigName + "2"
+			kataConfigName2 = kataconfig.name + "2"
 			configFile      string
 			msg             string
 			err             error
@@ -294,7 +311,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
 		defer deleteKataPod(oc, podNs, newPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 
@@ -322,7 +339,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
 		defer deleteKataPod(oc, podNs, newPodName)
 
 		/* checkKataPodStatus prints the pods with the podNs and validates if
@@ -351,7 +368,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
 		defer deleteKataPod(oc, podNs, newPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
@@ -381,7 +398,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		)
 
 		g.By("Deploy a pod with kata runtime")
-		podName = createKataPod(oc, podNs, defaultPod, "admtop", runtimeClassName)
+		podName = createKataPod(oc, podNs, defaultPod, "admtop", kataconfig.runtimeClassName)
 		defer deleteKataPod(oc, podNs, podName)
 		checkKataPodStatus(oc, podNs, podName, podRunState)
 
@@ -421,12 +438,12 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 	g.It("Longduration-NonPreRelease-Author:abhbaner-High-43523-Monitor Kataconfig deletion[Disruptive][Serial][Slow]", func() {
 		g.By("Delete kataconfig and verify it")
-		msg, err := deleteKataConfig(oc, commonKataConfigName)
-		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", commonKataConfigName, msg, err)
+		msg, err := deleteKataConfig(oc, kataconfig.name)
+		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", kataconfig.name, msg, err)
 
 		g.By("Recreating kataconfig in 43523 for the remaining test cases")
-		msg, err = createKataConfig(oc, kataconfig, subscription, enablePeerPods)
-		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
+		msg, err = createKataConfig(oc, kataconfig, subscription)
+		e2e.Logf("recreated kataconfig %v: %v %v", kataconfig.name, msg, err)
 
 		g.By("SUCCESS")
 	})
@@ -439,19 +456,19 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 		deleteKataPod(oc, podNs, newPodName)
 		g.By("Kata Pod deleted - now deleting kataconfig")
 
-		msg, err := deleteKataConfig(oc, commonKataConfigName)
-		e2e.Logf("common kataconfig %v was deleted %v %v", commonKataConfigName, msg, err)
+		msg, err := deleteKataConfig(oc, kataconfig.name)
+		e2e.Logf("common kataconfig %v was deleted %v %v", kataconfig.name, msg, err)
 		g.By("SUCCESSS - build acceptance passed")
 
 		g.By("Recreating kataconfig for the remaining test cases")
-		msg, err = createKataConfig(oc, kataconfig, subscription, enablePeerPods)
-		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
+		msg, err = createKataConfig(oc, kataconfig, subscription)
+		e2e.Logf("recreated kataconfig %v: %v %v", kataconfig.name, msg, err)
 	})
 
 	// author: tbuskey@redhat.com
@@ -475,7 +492,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				}
 			}
 		}
-		o.Expect(strings.Contains(msg, "openshift.io/cluster-monitoring")).To(o.BeTrue())
 		e2e.Logf("Label is %v", label)
 		o.Expect(hasMetrics).To(o.BeTrue())
 
@@ -494,7 +510,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		)
 
 		g.By("Create deployment config from template")
-		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
 		if err != nil {
 			e2e.Logf("Could not create configFile %v %v", configFile, err)
 		}
@@ -640,7 +656,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("Applied ContainerRuntimeConfig %v: %v, %v", crioFile, msg, err)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("containerruntimeconfig", crioRuntimeConfigName, "-n", subscription.namespace, "--ignore-not-found").Execute()
 		// 4.12 needs the loglevel
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kataconfig", commonKataConfigName, "-n", subscription.namespace, "--type", "merge", "--patch", kcLogLevel).Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kataconfig", kataconfig.name, "-n", subscription.namespace, "--type", "merge", "--patch", kcLogLevel).Output()
 		e2e.Logf("kcLogLevel patched: %v %v", msg, err)
 
 		// oc patch kataconfig example-kataconfig --type merge --patch '{"spec":{"logLevel":"debug"}}'
@@ -658,7 +674,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		exit status 1
 		*/
 		errCheck := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
-			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount), "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(deploymentFile)
+			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(deploymentFile)
 			if strings.Contains(deployConfigFile, deploymentFile) {
 				return true, nil
 			}
@@ -832,8 +848,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	// author: tbuskey@redhat.com
 	g.It("Longduration-Author:tbuskey-High-53583-upgrade osc operator [Disruptive][Serial]", func() {
 		var (
-			testrunUpgrade testrunConfigmap
-			testrun        testrunConfigmap
+			testrunUpgrade TestrunConfigmap
+			testrun        TestrunConfigmap
 			cmNs           = "default"
 			cmName         = "osc-config-upgrade"
 			subUpgrade     = subscription
@@ -843,11 +859,12 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			podsChanged    = false
 		)
 
+		// start with testrunInitial, not testrunDefault
 		g.By("Checking for configmap " + cmName)
-		testrunUpgrade, _, err = getTestRunConfigmap(oc, testrunDefault, cmNs, cmName)
+		testrunUpgrade, _, err = getTestRunConfigmap(oc, testrunInitial, cmNs, cmName)
 
 		g.By("Checking for OSCU environment vars") // env options override default and CM values
-		testrun, msg = getTestRunEnvVars("OSCU", testrunDefault)
+		testrun, msg = getTestRunEnvVars("OSCU", testrunInitial)
 		if testrun.exists {
 			testrunUpgrade = testrun
 			e2e.Logf("environment OSCU found. subscription: %v", subscription)
@@ -926,7 +943,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				}
 				oldpods := strings.Fields(msg)
 
-				msg, err = changeKataMonitorImage(oc, subUpgrade, testrunUpgrade, commonKataConfigName)
+				msg, err = changeKataMonitorImage(oc, subUpgrade, testrunUpgrade, kataconfig.name)
 				if err != nil || msg == "" {
 					logErrorAndFail(oc, "Error: cannot patch kataconfig with monitor image", msg, err)
 				}

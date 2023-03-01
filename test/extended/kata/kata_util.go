@@ -16,7 +16,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-type subscriptionDescription struct {
+type SubscriptionDescription struct {
 	subName                string `json:"name"`
 	namespace              string `json:"namespace"`
 	channel                string `json:"channel"`
@@ -32,20 +32,32 @@ type KataconfigDescription struct {
 	kataMonitorImageName string `json:"kataMonitorImage"`
 	logLevel             string `json:"logLevel"`
 	eligibility          bool   `json:"checkNodeEligibility"`
+	runtimeClassName     string `json:"runtimeClassName"`
+	enablePeerPods       bool   `json:"enablePeerPods"`
 	template             string
 }
 
-type testrunConfigmap struct {
-	exists            bool
-	catalogSourceName string
-	channel           string
-	icspNeeded        bool
-	mustgatherImage   string
-	katamonitorImage  string
-	operatorVer       string
-	eligibility       bool
-	labelSingleNode   bool
-	eligbleSingleNode bool
+// if you change TestrunConfigmap, modify:
+// getTestRunConfigmap()
+// getTestRunEnvVars()
+// testrun-cm-template.yaml
+// kata.go:
+//
+//	testrunDefault
+//	53583
+type TestrunConfigmap struct {
+	exists             bool
+	catalogSourceName  string
+	channel            string
+	icspNeeded         bool
+	mustgatherImage    string
+	katamonitorImage   string
+	operatorVer        string
+	eligibility        bool
+	labelSingleNode    bool
+	eligibleSingleNode bool
+	runtimeClassName   string
+	enablePeerPods     bool
 }
 
 var (
@@ -55,25 +67,11 @@ var (
 )
 
 // author: tbuskey@redhat.com,abhbaner@redhat.com
-func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTemplate, nsFile, ogFile string) (msg string, err error) {
+func subscribeFromTemplate(oc *exutil.CLI, sub SubscriptionDescription, subTemplate string) (msg string, err error) {
 	g.By(" (1) INSTALLING sandboxed-operator in '" + sub.namespace + "' namespace")
 	subFile := ""
 
-	g.By("(1.1) Applying namespace yaml")
-	msg, err = oc.AsAdmin().Run("apply").Args("-f", nsFile).Output()
-	if err != nil || msg == "" {
-		e2e.Logf("namespace issue %v %v", msg, err)
-	}
-	g.By("(1.2)  Applying operatorgroup yaml if needed")
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", sub.namespace, "--no-headers").Output()
-	if strings.Contains(msg, "No resources found in") {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile, "-n", sub.namespace).Output()
-	}
-	if err != nil || msg == "" {
-		e2e.Logf("operator group issue %v %v", msg, err)
-	}
-
-	g.By("(1.3) Creating subscription yaml from template")
+	g.By("(1.1) Creating subscription yaml from template")
 	subFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
 		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace, "-n", sub.namespace).OutputToFile(getRandomString() + "subscriptionFile.json")
 	// o.Expect(err).NotTo(o.HaveOccurred())
@@ -86,14 +84,14 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 		}
 	}
 
-	g.By("(1.4) Applying subscription yaml")
+	g.By("(1.2) Applying subscription yaml")
 	// no need to check for an existing subscription
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
 	if err != nil || msg == "" {
 		e2e.Logf(" issue applying subscription %v: %v, %v", subFile, msg, err)
 	}
 
-	g.By("(1.5) Verify the operator finished subscribing")
+	g.By("(1.3) Verify the operator finished subscribing")
 	msg, err = subscriptionIsFinished(oc, sub)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(msg).NotTo(o.BeEmpty())
@@ -102,7 +100,7 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 }
 
 // author: tbuskey@redhat.com, abhbaner@redhat.com
-func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscriptionDescription, enablePeerPods string) (msg string, err error) {
+func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub SubscriptionDescription) (msg string, err error) {
 	// If this is used, label the caller with [Disruptive][Serial][Slow]
 	// If kataconfig already exists, this must not error
 	var (
@@ -111,11 +109,11 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscr
 
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "--no-headers", "-n", sub.namespace).Output()
 	if err == nil {
-		g.By("(2) kataconfig is previously installed")
+		g.By("(3) kataconfig is previously installed")
 		return msg, err // no need to go through the rest
 	}
 
-	g.By("Make sure subscription has finished before kataconfig")
+	g.By("(3) Make sure subscription has finished before kataconfig")
 	msg, err = subscriptionIsFinished(oc, sub)
 	if err != nil {
 		e2e.Logf("The subscription has not finished: %v %v", msg, err)
@@ -123,9 +121,9 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscr
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(msg).NotTo(o.BeEmpty())
 
-	g.By("(2) Create kataconfig file")
+	g.By("(3.1) Create kataconfig file")
 	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kataconf.template,
-		"-p", "NAME="+kataconf.name, "MONITOR="+kataconf.kataMonitorImageName, "LOGLEVEL="+kataconf.logLevel, "PEERPODS="+enablePeerPods, "ELIGIBILITY="+strconv.FormatBool(kataconf.eligibility),
+		"-p", "NAME="+kataconf.name, "MONITOR="+kataconf.kataMonitorImageName, "LOGLEVEL="+kataconf.logLevel, "PEERPODS="+strconv.FormatBool(kataconf.enablePeerPods), "ELIGIBILITY="+strconv.FormatBool(kataconf.eligibility),
 		"-n", sub.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
 	if err != nil || configFile == "" {
 		_, configFileExists := os.Stat(configFile)
@@ -134,19 +132,19 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscr
 		}
 	}
 
-	g.By("(2.1) Apply kataconfig file")
-	errCheck := wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
-		if err == nil {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("applying kataconfig %v failed: %v %v", configFile, msg, err))
-	// -o=jsonpath={.status.installationStatus.IsInProgress} "" at this point
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "controller-manager-service", "-n", sub.namespace).Output()
+	e2e.Logf("Controller-manager-service: %v %v", msg, err)
 
-	g.By("(2.2) Check kataconfig creation has started")
-	errCheck = wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
+	g.By("(3.2) Apply kataconfig file")
+	// -o=jsonpath={.status.installationStatus.IsInProgress} "" at this point
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+	if err != nil {
+		e2e.Logf("Error: applying kataconfig %v failed: %v %v", configFile, msg, err)
+	}
+	// If it is already applied by a parallel test there will be an err
+
+	g.By("(3.3) Check kataconfig creation has started")
+	errCheck := wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "--no-headers").Output()
 		if strings.Contains(msg, kataconf.name) {
 			return true, nil
@@ -155,7 +153,7 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscr
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get created: %v %v", kataconf.name, msg, err))
 
-	g.By("(2.3) Wait for kataconfig to finish install")
+	g.By("(3.4) Wait for kataconfig to finish install")
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
 	msg, err = waitForKataconfig(oc, kataconf.name)
 	return msg, err
@@ -244,7 +242,7 @@ func getRandomString() string {
 }
 
 func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
-	g.By("(3.1) Trigger kataconfig deletion")
+	g.By("(4.1) Trigger kataconfig deletion")
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("kataconfig", kcName).Output()
 	if err != nil || msg == "" {
 		e2e.Logf("Unexpected error while trying to delete kataconfig: %v\nerror: %v", msg, err)
@@ -252,7 +250,7 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	//SNO could become unavailable while restarting
 	//o.Expect(err).NotTo(o.HaveOccurred())
 
-	g.By("(3.2) Wait for kataconfig to be deleted")
+	g.By("(4.2) Wait for kataconfig to be deleted")
 	errCheck := wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig").Output()
 		if strings.Contains(msg, "No resources found") {
@@ -262,58 +260,11 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get deleted: %v %v", kcName, msg, err))
 
-	g.By("(3.3) kataconfig is gone")
+	g.By("(4.3) kataconfig is gone")
 	return msg, err
 }
 
-func getVersionInfo(oc *exutil.CLI, subscription subscriptionDescription, opVer string) (operatorVer string, sub subscriptionDescription) {
-	// set default values
-	operatorVer = opVer
-	sub = subscription
-	var (
-		ocpMajorVer = "4"
-		ocpMinorVer = "10"
-		catsrcName  = "kataci-index"
-		msg         string
-		err         error
-	)
-
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/example-config-env", "-n", "default").Output()
-	if err != nil { // no configmap, return with the default versions
-		e2e.Logf("Jenkins Configmap is not found: %v %v", msg, err)
-		return operatorVer, sub
-	}
-
-	os.Setenv("cmMsg", "True") // If CM exists it means its a Jenkins CI
-	e2e.Logf("configmap example-config-env was found")
-	sub.catalogSourceName = catsrcName // for CI runs - catsrcName set
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "example-config-env", "-o=jsonpath={.data.ocpMajorVer}", "-n", "default").Output()
-	if err == nil && msg != "" {
-		ocpMajorVer = msg
-	}
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "example-config-env", "-o=jsonpath={.data.ocpMinorVer}", "-n", "default").Output()
-	if err == nil && msg != "" {
-		ocpMinorVer = msg
-	}
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "example-config-env", "-o=jsonpath={.data.operatorChannel}", "-n", "default").Output()
-	if err == nil && msg != "" {
-		sub.channel = msg
-	}
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "example-config-env", "-o=jsonpath={.data.operatorVer}", "-n", "default").Output()
-	if err == nil && msg != "" {
-		operatorVer = msg
-	}
-
-	e2e.Logf("ocpMajorVer : %s", ocpMajorVer)
-	e2e.Logf("ocpMinorVer : %s", ocpMinorVer)
-	e2e.Logf("operatorVer : %s", operatorVer)
-	e2e.Logf("Channel : %s", sub.channel)
-	e2e.Logf("catalogSourceName : %s", catsrcName)
-
-	return operatorVer, sub
-}
-
-func checkKataInstalled(oc *exutil.CLI, sub subscriptionDescription, kcName string) bool {
+func checkKataInstalled(oc *exutil.CLI, sub SubscriptionDescription, kcName string) bool {
 	var (
 		jsonpathSubState   = "-o=jsonpath={.status.state}"
 		jsonpathCsv        = "-o=jsonpath={.status.installedCSV}"
@@ -346,11 +297,13 @@ func checkKataInstalled(oc *exutil.CLI, sub subscriptionDescription, kcName stri
 	return false
 }
 
-func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg string, err error) {
+func subscriptionIsFinished(oc *exutil.CLI, sub SubscriptionDescription) (msg string, err error) {
 	var (
-		csvName string
-		v       string
+		csvName    string
+		v          string
+		controlPod string
 	)
+	g.By("(2) Subscription checking")
 	errCheck := wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
 		// o.Expect(err).NotTo(o.HaveOccurred())
@@ -372,7 +325,7 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
 
-	g.By("Check that the csv '" + csvName + "' has finished")
+	g.By("(2.1) Check that the csv '" + csvName + "' has finished")
 	errCheck = wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status.phase}{.status.reason}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -387,6 +340,37 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		e2e.Logf("issue with csv finish %v: %v %v", csvName, msg, err)
 	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
+
+	// need controller-manager-service and controller-manager-* pod running before kataconfig
+	// oc get pod -o=jsonpath={.items..metadata.name} && find one w/ controller-manager
+	g.By("(2.2) Wait for controller manager pod to start")
+	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", sub.namespace).Output()
+		if strings.Contains(msg, "controller-manager") {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Controller manger pod did not start: %v: %v %v", msg, err))
+
+	// what is the pod name?
+	for _, controlPod = range strings.Fields(msg) {
+		if strings.Contains(controlPod, "controller-manager") {
+			break // no need to check the rest
+		}
+	}
+
+	// controller-podname -o=jsonpath={.status.containerStatuses} && !strings.Contains("false")
+	g.By("(2.3) Check that " + controlPod + " is ready")
+	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", controlPod, "-o=jsonpath={.status.containerStatuses}", "-n", sub.namespace).Output()
+		if !strings.Contains(msg, "false") {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v pod did not become ready: %v: %v %v", controlPod, msg, err))
+
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	return msg, err
 }
@@ -477,13 +461,19 @@ func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, er
 	return msg, err
 }
 
-func getTestRunConfigmap(oc *exutil.CLI, testrunDefault testrunConfigmap, cmNs, cmName string) (testrun testrunConfigmap, msg string, err error) {
+func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, cmName string) (testrun TestrunConfigmap, msg string, err error) {
 	// set defaults
 	testrun = testrunDefault
 
 	// icspNeeded is set if either of the Images has "brew.registry.redhat.io" in it
 
-	// is a configmap there?
+	// is a configmap there?  IFF not, don't put an error in the log!
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs).Output()
+	if err != nil || !strings.Contains(msg, cmName) {
+		testrun.exists = false
+		return testrun, msg, err
+	}
+
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
 	if err != nil {
 		e2e.Logf("Configmap is not found: msg %v err: %v", msg, err)
@@ -530,9 +520,9 @@ func getTestRunConfigmap(oc *exutil.CLI, testrunDefault testrunConfigmap, cmNs, 
 		if err == nil {
 			testrun.eligibility, err = strconv.ParseBool(msg)
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.eligbleSingleNode}", "-n", cmNs).Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.eligibleSingleNode}", "-n", cmNs).Output()
 		if err == nil {
-			testrun.eligbleSingleNode, err = strconv.ParseBool(msg)
+			testrun.eligibleSingleNode, err = strconv.ParseBool(msg)
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.labelsinglenode}", "-n", cmNs).Output()
 		if err == nil {
@@ -541,6 +531,14 @@ func getTestRunConfigmap(oc *exutil.CLI, testrunDefault testrunConfigmap, cmNs, 
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.operatorVer }", "-n", cmNs).Output()
 		if err == nil {
 			testrun.operatorVer = msg
+		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.runtimeClassName }", "-n", cmNs).Output()
+		if err == nil {
+			testrun.runtimeClassName = msg
+		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.enablePeerPods }", "-n", cmNs).Output()
+		if err == nil {
+			testrun.enablePeerPods, err = strconv.ParseBool(msg)
 		}
 	}
 	return testrun, msg, err
@@ -583,20 +581,20 @@ func waitForKataconfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	return msg, err
 }
 
-func changeSubscriptionCatalog(oc *exutil.CLI, subscription subscriptionDescription, testrun testrunConfigmap) (msg string, err error) {
+func changeSubscriptionCatalog(oc *exutil.CLI, subscription SubscriptionDescription, testrun TestrunConfigmap) (msg string, err error) {
 	// check for catsrc existence before calling
 	patch := fmt.Sprintf("{\"spec\":{\"source\":\"%v\"}}", testrun.catalogSourceName)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub", subscription.subName, "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
 	return msg, err
 }
 
-func changeSubscriptionChannel(oc *exutil.CLI, subscription subscriptionDescription, testrun testrunConfigmap) (msg string, err error) {
+func changeSubscriptionChannel(oc *exutil.CLI, subscription SubscriptionDescription, testrun TestrunConfigmap) (msg string, err error) {
 	patch := fmt.Sprintf("{\"spec\":{\"channel\":\"%v\"}}", testrun.channel)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub", subscription.subName, "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
 	return msg, err
 }
 
-func changeKataMonitorImage(oc *exutil.CLI, subscription subscriptionDescription, testrun testrunConfigmap, kcName string) (msg string, err error) {
+func changeKataMonitorImage(oc *exutil.CLI, subscription SubscriptionDescription, testrun TestrunConfigmap, kcName string) (msg string, err error) {
 	patch := fmt.Sprintf("{\"spec\":{\"kataMonitorImage\":\"%v\"}}", testrun.katamonitorImage)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kataconfig", kcName, "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
 	return msg, err
@@ -609,7 +607,7 @@ func logErrorAndFail(oc *exutil.CLI, logMsg, msg string, err error) {
 
 }
 
-func getTestRunEnvVars(envPrefix string, testrunDefault testrunConfigmap) (testrunEnv testrunConfigmap, msg string) {
+func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testrunEnv TestrunConfigmap, msg string) {
 
 	var (
 		err error
@@ -671,6 +669,49 @@ func getTestRunEnvVars(envPrefix string, testrunDefault testrunConfigmap) (testr
 		testrunEnv.operatorVer = val
 		testrunEnv.exists = true
 	}
+
+	val = os.Getenv(envPrefix + "RUNTIMECLASSNAME")
+	if val != "" {
+		testrunEnv.runtimeClassName = val
+		testrunEnv.exists = true
+	}
+
+	val = os.Getenv(envPrefix + "ENABLEPEERPODS")
+	if val != "" {
+		testrunEnv.enablePeerPods, err = strconv.ParseBool(val)
+		if err != nil {
+			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ENABLEPEERPODS")
+		}
+		testrunEnv.exists = true
+	}
+
+	val = os.Getenv(envPrefix + "ELIGIBILITY")
+	if val != "" {
+		testrunEnv.eligibility, err = strconv.ParseBool(msg)
+		if err != nil {
+			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ELIGIBILITY")
+		}
+		testrunEnv.exists = true
+	}
+
+	val = os.Getenv(envPrefix + "ELIGIBLESINGLENODE")
+	if val != "" {
+		testrunEnv.eligibleSingleNode, err = strconv.ParseBool(msg)
+		if err != nil {
+			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ELIGIBLESINGLENODE")
+		}
+		testrunEnv.exists = true
+	}
+
+	val = os.Getenv(envPrefix + "LABELSINGLENODE")
+	if val != "" {
+		testrunEnv.labelSingleNode, err = strconv.ParseBool(msg)
+		if err != nil {
+			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"LABELSINGLENODE")
+		}
+		testrunEnv.exists = true
+	}
+
 	return testrunEnv, msg
 }
 

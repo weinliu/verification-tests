@@ -20,9 +20,9 @@ parameters:
     value: "example kataconfig"
   - name: ELIGIBILITY
     type: boolean
-    value: 'false'
+    value: "false"
   - name: MONITOR
-    value: "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
+    value: "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.3.3"
   - name: LOGLEVEL
     value: "info"
   - name: PEERPODS
