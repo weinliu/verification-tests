@@ -796,6 +796,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		g.By("Scale up the MachineSet")
 		windowsMachineSetName := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
+		defer waitWindowsNodesReady(oc, 2, time.Second*1000)
 		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
 		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3, true)
 		g.By("Scale up WMCO")
@@ -1009,6 +1010,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			e2e.Failf("Service monitor %v did not restart, bigger than %v new service monitor age", serviceMonitorAge1, serviceMonitorAge2)
 		}
 		g.By("Scale down nodes")
+		defer waitWindowsNodesReady(oc, 2, time.Second*3000)
 		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 20, 2, false)
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 5, 0, false)
 		g.By("Test endpoints IP are deleted after scalling down")
@@ -1208,6 +1210,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Scalling machines to 3")
+		defer waitWindowsNodesReady(oc, 2, time.Second*1000)
 		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 18, 2, false)
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 18, 3, false)
 		// Wait for the added node to be in Ready state, otherwise workloads won't get
