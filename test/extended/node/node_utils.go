@@ -856,7 +856,19 @@ func overrideWkloadCpu(oc *exutil.CLI, cpuset string, cpushare string, namespace
 		cpuShare, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", namespace, "--", "cat", "/sys/fs/cgroup/cpu/cpu.shares").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The cpushare is : %s", cpuShare)
-		if cpuSet == cpuset && cpuShare == cpushare {
+		if cpuset == "" {
+			//if cpuset == "", the pod will keep default value as the /sys/fs/cgroup/cpuset/cpuset.cpus on node
+			nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", namespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The nodename is %v", nodename)
+			cpusetDeft, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/sys/fs/cgroup/cpuset/cpuset.cpus")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The cpuset of host is : %s", cpusetDeft)
+			if strings.Contains(cpusetDeft, cpuSet) && cpuShare == cpushare {
+				e2e.Logf("the pod only override cpushares but not cpuset")
+				return true, nil
+			}
+		} else if cpuSet == cpuset && cpuShare == cpushare {
 			e2e.Logf("the pod override the default workload setting")
 			return true, nil
 		}

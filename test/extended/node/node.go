@@ -37,6 +37,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			template:    podWkloadCpuTemp,
 		}
 
+		podWkloadCpu52328 = podWkloadCpuDescription{
+			name:        "",
+			namespace:   "",
+			workloadcpu: "",
+			template:    podWkloadCpuTemp,
+		}
+
 		podWkloadCpu52329 = podWkloadCpuNoAnotation{
 			name:        "",
 			namespace:   "",
@@ -457,6 +464,50 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Check pod run in user namespace")
 		err = podUserNS47663.podRunInUserNS(oc)
 		exutil.AssertWaitPollNoErr(err, "pod not run in user namespace")
+	})
+
+	// author: minmli@redhat.com
+	g.It("NonPreRelease-Longduration-Author:minmli-High-52328-set workload resource usage from pod level : pod should not take effect if not defaulted or specified in workload [Disruptive][Slow]", func() {
+		oc.SetupProject()
+		g.By("Test for case OCP-52328")
+
+		g.By("Create a machine config for workload setting")
+		mcCpuOverride := filepath.Join(buildPruningBaseDir, "machineconfig-cpu-override-52328.yaml")
+		mcpName := "worker"
+		defer func() {
+			err := checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + mcCpuOverride).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + mcCpuOverride).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check mcp finish rolling out")
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		g.By("Check workload setting is as expected")
+		wkloadConfig := []string{"crio.runtime.workloads.management", "activation_annotation = \"io.openshift.manager\"", "annotation_prefix = \"io.openshift.workload.manager\"", "crio.runtime.workloads.management.resources", "cpushares = 512"}
+		configPath := "/etc/crio/crio.conf.d/01-workload.conf"
+		err = crioConfigExist(oc, wkloadConfig, configPath)
+		exutil.AssertWaitPollNoErr(err, "workload setting is not set as expected")
+
+		g.By("Create a pod only override the default cpushares in workload setting by annotation")
+		defer podWkloadCpu52328.delete(oc)
+		podWkloadCpu52328.name = "wkloadcpu-52328"
+		podWkloadCpu52328.namespace = oc.Namespace()
+		podWkloadCpu52328.workloadcpu = "{\"cpuset\": \"\", \"cpushares\": 1024}"
+		podWkloadCpu52328.create(oc)
+
+		g.By("Check pod status")
+		err = podStatus(oc)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		g.By("Check the pod only override cpushares")
+		cpuset := ""
+		cpushare := "1024"
+		err = overrideWkloadCpu(oc, cpuset, cpushare, podWkloadCpu52328.namespace)
+		exutil.AssertWaitPollNoErr(err, "the pod not only override cpushares in workload setting")
 	})
 
 	// author: minmli@redhat.com
