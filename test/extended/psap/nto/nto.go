@@ -1,6 +1,7 @@
 package nto
 
 import (
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -22,7 +23,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		hPPerformanceProfileFile      = exutil.FixturePath("testdata", "psap", "nto", "hp-performanceprofile.yaml")
 		hpPerformanceProfilePatchFile = exutil.FixturePath("testdata", "psap", "nto", "hp-performanceprofile-patch.yaml")
 		customTunedProfileile         = exutil.FixturePath("testdata", "psap", "nto", "custom-tuned-profiles.yaml")
-		affineDefaultCpusetFile       = exutil.FixturePath("testdata", "psap", "nto", "affine-default-cpuset.yaml")
+		cgroupSchedulerBacklist       = exutil.FixturePath("testdata", "psap", "nto", "cgroup-scheduler-blacklist.yaml")
+		cgroupSchedulerBestEffortPod  = exutil.FixturePath("testdata", "psap", "nto", "cgroup-scheduler-besteffor-pod.yaml")
 		ntoTunedDebugFile             = exutil.FixturePath("testdata", "psap", "nto", "nto-tuned-debug.yaml")
 		ntoIRQSMPFile                 = exutil.FixturePath("testdata", "psap", "nto", "default-irq-smp-affinity.yaml")
 		ntoRealtimeFile               = exutil.FixturePath("testdata", "psap", "nto", "realtime.yaml")
@@ -506,7 +508,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	})
 
-	g.It("NonPreRelease-Author:liqcui-Medium-43173-POD should be affined to the default cpuset [Disruptive]", func() {
+	g.It("NonPreRelease-Author:liqcui-Medium-43173-NTO Cgroup Blacklist Pod should affine to default cpuset.[Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -515,34 +517,59 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Get the tuned pod name that run on first worker node
 		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+
+		//Get how many cpus on the specified worker node
+		g.By("Get how many cpus cores on the labeled worker node")
+		nodeCPUCores, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.capacity.cpu}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeCPUCores).NotTo(o.BeEmpty())
+
+		nodeCPUCoresInt, err := strconv.Atoi(nodeCPUCores)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if nodeCPUCoresInt <= 1 {
+			g.Skip("the worker node don't have enough cpus - skipping test ...")
+		}
+
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
 
 		g.By("Remove custom profile (if not already removed) and remove node label")
-		defer exutil.CleanupOperatorResourceByYaml(oc, ntoNamespace, affineDefaultCpusetFile)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "-n", ntoNamespace, "cgroup-scheduler-affinecpuset").Execute()
 
 		defer func() {
-			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "affine-default-cpuset-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "tuned-scheduler-node-").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
-		g.By("Label the node with affine-default-cpuset ")
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "affine-default-cpuset=", "--overwrite").Execute()
+		g.By("Label the specified linux node with label tuned-scheduler-node")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "tuned-scheduler-node=", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create new NTO profile")
-		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, affineDefaultCpusetFile)
+		// setting cgroup_ps_blacklist=/kubepods\.slice/
+		// the process belong the /kubepods\.slice/ can consume all cpuset
+		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
+		// the process doesn't belong the /kubepods\.slice/ can consume all cpuset
+		// The expected Cpus_allowed_list in /proc/$PID/status should be 0 or 0,2-N
 
-		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "affine-default-cpuset-profile")
+		g.By("Create NTO custom tuned profile cgroup-scheduler-affinecpuset")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cgroupSchedulerBacklist, "-p", "PROFILE_NAME=cgroup-scheduler-affinecpuset", `CGROUP_BLACKLIST=/kubepods\.slice/`)
+
+		g.By("Check if NTO custom tuned profile cgroup-scheduler-affinecpuset was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "cgroup-scheduler-affinecpuset")
 
 		g.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
-		g.By("Verified test case results ...")
-		finalResult := assertAffineDefaultCPUSets(oc, tunedPodName, ntoNamespace)
-		o.Expect(finalResult).To(o.Equal(true))
+		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
+		g.By("Verified the cpu allow list in cgroup black list for openshift-tuned ...")
+		o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "openshift-tuned", nodeCPUCoresInt)).To(o.Equal(true))
+
+		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
+		g.By("Verified the cpu allow list in cgroup black list for chronyd ...")
+		o.Expect(assertProcessNOTInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "chronyd", nodeCPUCoresInt)).To(o.Equal(true))
 
 	})
 
@@ -562,6 +589,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		oc.SetupProject()
 		ntoTestNS := oc.Namespace()
+
+		is3CPNoWorker := exutil.Is3MasterNoDedicatedWorkerNode(oc)
 		//Clean up the custom profile user-max-mnt-namespaces and unlabel the nginx pod
 		defer ntoRes.delete(oc)
 
@@ -619,7 +648,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Check if restore to default profile.
 		isSNO := exutil.IsSNOCluster(oc)
-		if isSNO {
+		if isSNO || is3CPNoWorker {
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-control-plane")
 			assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "openshift-control-plane")
 			profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -1483,13 +1512,16 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	g.It("NonPreRelease-Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
 		// test requires NTO to be installed
-		if !isNTO {
-			g.Skip("NTO is not installed - skipping test ...")
+		is3CPNoWorker := exutil.Is3MasterNoDedicatedWorkerNode(oc)
+
+		if !isNTO || is3CPNoWorker {
+			g.Skip("NTO is not installed or No need to test on compact cluster - skipping test ...")
 		}
 
 		//Use the last worker node as labeled node
 		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 		e2e.Logf("The tuned node name is: \n%v", tunedNodeName)
 
 		//Get NTO operator pod name
@@ -2397,5 +2429,81 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Assert NTO logs to match key words  Node 'worker-does-not-exist-openshift-node' not found")
 		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoOperatorPod, "4", 120, " Node \"worker-does-not-exist-openshift-node\" not found")
 
+	})
+
+	g.It("NonPreRelease-Author:liqcui-Medium-59884-NTO Cgroup Blacklist multiple regular expression. [Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		oc.SetupProject()
+		ntoTestNS := oc.Namespace()
+
+		//Get the tuned pod name that run on first worker node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+
+		//Get how many cpus on the specified worker node
+		g.By("Get how many cpus cores on the labeled worker node")
+		nodeCPUCores, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.capacity.cpu}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeCPUCores).NotTo(o.BeEmpty())
+
+		nodeCPUCoresInt, err := strconv.Atoi(nodeCPUCores)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if nodeCPUCoresInt <= 1 {
+			g.Skip("the worker node don't have enough cpus - skipping test ...")
+		}
+
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
+
+		g.By("Remove custom profile (if not already removed) and remove node label")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "-n", ntoNamespace, "cgroup-scheduler-blacklist").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "tuned-scheduler-node-").Execute()
+
+		g.By("Label the specified linux node with label tuned-scheduler-node")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "tuned-scheduler-node=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// setting cgroup_ps_blacklist=/kubepods\.slice/kubepods-burstable\.slice/;/system\.slice/
+		// the process belong the /kubepods\.slice/kubepods-burstable\.slice/ or /system\.slice/ can consume all cpuset
+		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
+		// the process doesn't belong the /kubepods\.slice/kubepods-burstable\.slice/ or /system\.slice/ can consume all cpuset
+		// The expected Cpus_allowed_list in /proc/$PID/status should be 0 or 0,2-N
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", ntoTestNS, "app-web", "--ignore-not-found").Execute()
+
+		g.By("Create best effort pod ...")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoTestNS, cgroupSchedulerBestEffortPod)
+
+		//Check if nginx pod is ready
+		g.By("Check if best effort pod is ready...")
+		exutil.AssertPodToBeReady(oc, "app-web", ntoTestNS)
+
+		g.By("Create NTO custom tuned profile cgroup-scheduler-blacklist")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cgroupSchedulerBacklist, "-p", "PROFILE_NAME=cgroup-scheduler-blacklist", `CGROUP_BLACKLIST=/kubepods\.slice/kubepods-burstable\.slice/;/system\.slice/`)
+
+		g.By("Check if NTO custom tuned profile cgroup-scheduler-blacklist was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "cgroup-scheduler-blacklist")
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
+		g.By("Verified the cpu allow list in cgroup black list for openshift-tuned ...")
+		o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "openshift-tuned", nodeCPUCoresInt)).To(o.Equal(true))
+
+		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
+		g.By("Verified the cpu allow list in cgroup black list for chronyd ...")
+		o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "chronyd", nodeCPUCoresInt)).To(o.Equal(true))
+
+		// The expected Cpus_allowed_list in /proc/$PID/status should be 0 or 0,2-N
+		g.By("Verified the cpu allow list in cgroup black list for nginx process...")
+		o.Expect(assertProcessNOTInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "nginx| tail -1", nodeCPUCoresInt)).To(o.Equal(true))
 	})
 })

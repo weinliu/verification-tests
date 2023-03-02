@@ -326,48 +326,6 @@ func assertNTOOperatorLogs(oc *exutil.CLI, namespace string, ntoOperatorPod stri
 	o.Expect(ntoOperatorLogs).To(o.ContainSubstring(profileName))
 }
 
-// isOneMasterNode
-func isOneMasterNode(oc *exutil.CLI) bool {
-
-	masterNodes, _ := exutil.GetClusterNodesBy(oc, "master")
-	if len(masterNodes) == 1 {
-		return true
-	}
-	return false
-}
-
-// assertAffineDefaultCPUSets
-func assertAffineDefaultCPUSets(oc *exutil.CLI, tunedPodName, namespace string) bool {
-
-	tunedCpusAllowedList, err := exutil.RemoteShPodWithBash(oc, namespace, tunedPodName, "grep ^Cpus_allowed_list /proc/`pgrep openshift-tuned`/status")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("Tuned's Cpus_allowed_list is: \n%v", tunedCpusAllowedList)
-
-	chronyCpusAllowedList, err := exutil.RemoteShPodWithBash(oc, namespace, tunedPodName, "grep Cpus_allowed_list /proc/`pidof chronyd`/status")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("Chrony's Cpus_allowed_list is: \n%v", chronyCpusAllowedList)
-
-	regTunedCpusAllowedList0, err := regexp.Compile(`.*0-.*`)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	regChronyCpusAllowedList1, err := regexp.Compile(`.*0$`)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	regChronyCpusAllowedList2, err := regexp.Compile(`.*0,2-.*`)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	isMatch0 := regTunedCpusAllowedList0.MatchString(tunedCpusAllowedList)
-	isMatch1 := regChronyCpusAllowedList1.MatchString(chronyCpusAllowedList)
-	isMatch2 := regChronyCpusAllowedList2.MatchString(chronyCpusAllowedList)
-
-	if isMatch0 && (isMatch1 || isMatch2) {
-		e2e.Logf("assert affine default cpusets result: %v", true)
-		return true
-	}
-	e2e.Logf("assert affine default cpusets result: %v", false)
-	return false
-}
-
 // assertDebugSettings
 func assertDebugSettings(oc *exutil.CLI, tunedNodeName string, ntoNamespace string, isDebug string) bool {
 
@@ -885,4 +843,60 @@ func switchThrottlectlOnOff(oc *exutil.CLI, tunedNodeName string, throttlectlSta
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "throttlectl status isn't correct, retry")
+}
+
+// assertCProccessNOTInCgroupSchedulerBlacklist
+func assertProcessNOTInCgroupSchedulerBlacklist(oc *exutil.CLI, tunedNodeName string, namespace string, processFilter string, nodeCPUCores int) bool {
+
+	//pIDCpusAllowedList, err := exutil.RemoteShPodWithBash(oc, namespace, tunedPodName, "grep ^Cpus_allowed_list /proc/`pgrep "+processFilter+"`/status")
+	pIDCpusAllowedList, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "/bin/bash", "-c", "grep ^Cpus_allowed_list /proc/`pgrep "+processFilter+"`/status").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Actually Process's Cpus_allowed_list in /proc/$PID/status on worker nodes is: \n%v", pIDCpusAllowedList)
+
+	//CPU = 2
+	//The CPU Allow List of Process In Cgroup Blacklist is 0-1(N is CPU Cores -1 )
+	//The CPU Allow List of Process Not In Cgroup Blacklist is 0
+
+	//CPU > 2
+	//The CPU Allow List of Process In Cgroup Blacklist is 0-N(N is CPU Cores -1 )
+	//The CPU Allow List of Process Not In Cgroup Blacklist is 0,2-N
+	nodeCPUCores = nodeCPUCores - 1
+	e2e.Logf("Expected Process's Cpus_allowed_list in /proc/$PID/status on worker nodes is: \n%v", "Cpus_allowed_list:	0 or 0,2-"+strconv.Itoa(nodeCPUCores))
+
+	regPIDCpusAllowedList0, err := regexp.Compile(`.*0$`)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	regPIDCpusAllowedList1, err := regexp.Compile(`.*0,2-.*`)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	isMatch0 := regPIDCpusAllowedList0.MatchString(pIDCpusAllowedList)
+	isMatch1 := regPIDCpusAllowedList1.MatchString(pIDCpusAllowedList)
+
+	e2e.Logf("Match cgroup Cpus_allowed_list for process %v is: %v", processFilter, isMatch0 || isMatch1)
+	return isMatch0 || isMatch1
+}
+
+// assertCpusAllowedListNOTInCgroupSchedulerBlacklist
+func assertProcessInCgroupSchedulerBlacklist(oc *exutil.CLI, tunedNodeName string, namespace string, processFilter string, nodeCPUCores int) bool {
+
+	pIDCpusAllowedList, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "/bin/bash", "-c", "grep ^Cpus_allowed_list /proc/`pgrep "+processFilter+"`/status").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Actually Process's Cpus_allowed_list in /proc/$PID/status on worker nodes is: \n%v", pIDCpusAllowedList)
+
+	//CPU = 2
+	//The CPU Allow List of Process In Cgroup Blacklist is 0-1
+	//The CPU Allow List of Process Not In Cgroup Blacklist is 0
+
+	//CPU > 2
+	//The CPU Allow List of Process In Cgroup Blacklist is 0-N(N is CPU Cores -1 )
+	//The CPU Allow List of Process Not In Cgroup Blacklist is 0,2-N(N is CPU Cores -1 )
+	nodeCPUCores = nodeCPUCores - 1
+	e2e.Logf("Expected Process's Cpus_allowed_list in /proc/$PID/status on worker nodes is: \n%v", "Cpus_allowed_list:	0-"+strconv.Itoa(nodeCPUCores))
+	regPIDCpusAllowedList, err := regexp.Compile(".*0-" + strconv.Itoa(nodeCPUCores))
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	isMatch := regPIDCpusAllowedList.MatchString(pIDCpusAllowedList)
+
+	e2e.Logf("Match cgroup Cpus_allowed_list for process %v is: %v", processFilter, isMatch)
+	return isMatch
 }
