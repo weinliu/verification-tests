@@ -607,4 +607,132 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		status4 := fetchJSONPathValue(oc, "openshift-ingress", "co/ingress", ".status.conditions[?(@.type==\"Upgradeable\")].reason}")
 		o.Expect(status4).To(o.ContainSubstring("IngressControllersNotUpgradeable"))
 	})
+
+	// author: shudili@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Medium-60012-matchExpressions for routeSelector defined in an ingress-controller", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			srvName             = "service-unsecure"
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp60012",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontroller/" + ingctrl.name
+		)
+
+		g.By("Create one custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Create an unsecure service and its backend pod")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		createResourceFromFile(oc, project1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+
+		g.By("Create 4 routes for the testing")
+		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-1", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-2", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-3", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-4", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForOutput(oc, project1, "route/unsrv-1", ".metadata.name", "unsrv-1")
+		waitForOutput(oc, project1, "route/unsrv-2", ".metadata.name", "unsrv-2")
+		waitForOutput(oc, project1, "route/unsrv-3", ".metadata.name", "unsrv-3")
+		waitForOutput(oc, project1, "route/unsrv-4", ".metadata.name", "unsrv-4")
+
+		g.By("Add labels to 3 routes")
+		err = oc.WithoutNamespace().Run("label").Args("route", "unsrv-1", "test=aaa", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("label").Args("route", "unsrv-2", "test=bbb", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("label").Args("route", "unsrv-3", "test=ccc", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Patch the custom ingresscontroller with routeSelector specified by In matchExpressions routeSelector")
+		routerpod := getRouterPod(oc, ingctrl.name)
+		g.By("Patch the custom ingress-controllers with In matchExpressions routeSelector")
+		patchRouteSelector := "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"In\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		g.By("Check if route unsrv-1 and unsrv-2 are admitted by the custom IC with In matchExpressions routeSelector, while route unsrv-3 and unsrv-4 not")
+		jsonPath := ".status.ingress[?(@.routerName==\"" + ingctrl.name + "\")].conditions[?(@.type==\"Admitted\")].status"
+		waitForOutput(oc, project1, "route/unsrv-1", jsonPath, "True")
+		value := fetchJSONPathValue(oc, project1, "route/unsrv-2", jsonPath)
+		o.Expect(value).To(o.ContainSubstring("True"))
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-3", jsonPath)
+		o.Expect(value).To(o.BeEmpty())
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-4", jsonPath)
+		o.Expect(value).To(o.BeEmpty())
+
+		g.By("Patch the custom ingresscontroller with routeSelector specified by NotIn matchExpressions routeSelector")
+		routerpod = getRouterPod(oc, ingctrl.name)
+		g.By("Patch the custom ingress-controllers with NotIn matchExpressions routeSelector")
+		patchRouteSelector = "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"NotIn\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		g.By("Check if route unsrv-3 and unsrv-4 are admitted by the custom IC with NotIn matchExpressions routeSelector, while route unsrv-1 and unsrv-2 not")
+		waitForOutput(oc, project1, "route/unsrv-3", jsonPath, "True")
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-1", jsonPath)
+		o.Expect(value).To(o.BeEmpty())
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-2", jsonPath)
+		o.Expect(value).To(o.BeEmpty())
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-4", jsonPath)
+		o.Expect(value).To(o.ContainSubstring("True"))
+
+		g.By("Patch the custom ingresscontroller with routeSelector specified by Exists matchExpressions routeSelector")
+		routerpod = getRouterPod(oc, ingctrl.name)
+		g.By("Patch the custom ingress-controllers with Exists matchExpressions routeSelector")
+		patchRouteSelector = "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"Exists\"}]}}}"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		g.By("Check if route unsrv-1, unsrv-2 and unsrv-3 are admitted by the custom IC with Exists matchExpressions routeSelector, while route unsrv-4 not")
+		waitForOutput(oc, project1, "route/unsrv-1", jsonPath, "True")
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-2", jsonPath)
+		o.Expect(value).To(o.ContainSubstring("True"))
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-3", jsonPath)
+		o.Expect(value).To(o.ContainSubstring("True"))
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-4", jsonPath)
+		o.Expect(value).To(o.BeEmpty())
+
+		g.By("Patch the custom ingresscontroller with routeSelector specified by DoesNotExist matchExpressions routeSelector")
+		routerpod = getRouterPod(oc, ingctrl.name)
+		g.By("Patch the custom ingress-controllers with DoesNotExist matchExpressions routeSelector")
+		patchRouteSelector = "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"DoesNotExist\"}]}}}"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		g.By("Check if route unsrv-4 is admitted by the custom IC with DoesNotExist matchExpressions routeSelector, while route unsrv-1, unsrv-2 and unsrv-3 not")
+		waitForOutput(oc, project1, "route/unsrv-4", jsonPath, "True")
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-1", jsonPath)
+		o.Expect(value).To(o.BeEmpty())
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-2", jsonPath)
+		o.Expect(value).To(o.BeEmpty())
+		value = fetchJSONPathValue(oc, project1, "route/unsrv-3", jsonPath)
+		o.Expect(value).To(o.BeEmpty())
+	})
 })
