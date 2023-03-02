@@ -450,6 +450,37 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("****** AWS EFS test phase finished ******")
 	})
+
+	// author: ropatil@redhat.com
+	// OCP-60580 - [AWS-EFS-CSI Driver][Dynamic PV][Filesystem][Stage] EFS csi operator is installed and provision volume successfully
+	g.It("StagerunOnly-Author:ropatil-Critical-60580-[AWS-EFS-CSI Driver][Dynamic PV][Filesystem][Stage] EFS csi operator is installed and provision volume successfully", func() {
+
+		// Set the resource definition
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		g.By("****** AWS EFS test phase start ******")
+
+		g.By("# Create a pvc with the csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("# Create deployment with the created pvc and wait ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		g.By("# Check the pod volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("# Check the pod volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		g.By("****** AWS EFS test phase finished ******")
+	})
 })
 
 // Test steps for Encryption in transit feature
