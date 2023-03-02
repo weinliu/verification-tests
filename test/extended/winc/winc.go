@@ -62,9 +62,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	}
 
 	g.BeforeEach(func() {
-		output, _ := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		iaasPlatform = strings.ToLower(output)
-		zone, _ = oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		zone, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 		var err error
 		privateKey, err = exutil.GetPrivateKey()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -75,16 +75,16 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author: sgao@redhat.com
 	g.It("Smokerun-Author:sgao-Critical-33612-Windows node basic check", func() {
 		g.By("Check Windows worker nodes run the same kubelet version as other Linux worker nodes")
-		linuxKubeletVersion, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=linux", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
+		linuxKubeletVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=linux", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		windowsKubeletVersion, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=windows", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
+		windowsKubeletVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=windows", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if windowsKubeletVersion[0:7] != linuxKubeletVersion[0:7] {
 			e2e.Failf("Failed to check Windows %s and Linux %s kubelet version should be the same", windowsKubeletVersion, linuxKubeletVersion)
 		}
 
 		g.By("Check worker label is applied to Windows nodes")
-		msg, err := oc.WithoutNamespace().Run("get").Args("nodes", "--no-headers", "-l=kubernetes.io/os=windows").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers", "-l=kubernetes.io/os=windows").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, node := range strings.Split(msg, "\n") {
 			if !strings.Contains(node, "worker") {
@@ -136,7 +136,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		for _, checkFolder := range checkFolders {
 			g.By("Check required files in" + checkFolder.folder)
 			command := []string{"exec", "-n", wmcoNamespace, "deployment.apps/windows-machine-config-operator", "--", "ls", checkFolder.folder}
-			msg, err := oc.WithoutNamespace().Run(command...).Args().Output()
+			msg, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			actual := strings.ReplaceAll(msg, "\n", " ")
 			if actual != checkFolder.expected {
@@ -163,7 +163,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		output, err := exec.Command("bash", "-c", "cat "+publicKey+"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		publicKeyContent := strings.Split(string(output), " ")[1]
-		msg, err := oc.WithoutNamespace().Run("get").Args("secret", "windows-user-data", "-n", mcoNamespace, "-o=jsonpath={.data.userData}").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "windows-user-data", "-n", mcoNamespace, "-o=jsonpath={.data.userData}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		decodedUserData, _ := base64.StdEncoding.DecodeString(msg)
 		if !strings.Contains(string(decodedUserData), publicKeyContent) {
@@ -171,17 +171,17 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 		g.By("Check delete secret windows-user-data")
 		// May fail other cases in parallel, so run it in serial
-		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "windows-user-data", "-n", mcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "windows-user-data", "-n", mcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		pollErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			msg, err := oc.WithoutNamespace().Run("get").Args("secret", "-n", mcoNamespace).Output()
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", mcoNamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(msg, "windows-user-data") {
 				e2e.Logf("Secret windows-user-data does not exist yet and wait up to 1 minute ...")
 				return false, nil
 			}
 			e2e.Logf("Secret windows-user-data exist now")
-			msg, err = oc.WithoutNamespace().Run("get").Args("secret", "windows-user-data", "-o=jsonpath={.data.userData}", "-n", mcoNamespace).Output()
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "windows-user-data", "-o=jsonpath={.data.userData}", "-n", mcoNamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			decodedUserData, _ := base64.StdEncoding.DecodeString(msg)
 			if !strings.Contains(string(decodedUserData), publicKeyContent) {
@@ -195,10 +195,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check update secret windows-user-data")
 		// May fail other cases in parallel, so run it in serial
 		// Update userData to "aW52YWxpZAo=" which is base64 encoded "invalid"
-		_, err = oc.WithoutNamespace().Run("patch").Args("secret", "windows-user-data", "-p", `{"data":{"userData":"aW52YWxpZAo="}}`, "-n", mcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "windows-user-data", "-p", `{"data":{"userData":"aW52YWxpZAo="}}`, "-n", mcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		pollErr = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			msg, err := oc.WithoutNamespace().Run("get").Args("secret", "windows-user-data", "-o=jsonpath={.data.userData}", "-n", mcoNamespace).Output()
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "windows-user-data", "-o=jsonpath={.data.userData}", "-n", mcoNamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			decodedUserData, _ := base64.StdEncoding.DecodeString(msg)
 			if !strings.Contains(string(decodedUserData), publicKeyContent) {
@@ -218,7 +218,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		winInternalIP := getWindowsInternalIPs(oc)[0]
 		curlDest := winInternalIP + ":22"
 		command := []string{"exec", "-n", wmcoNamespace, "deployment.apps/windows-machine-config-operator", "--", "curl", curlDest}
-		msg, _ := oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		if !strings.Contains(msg, "SSH-2.0-OpenSSH") {
 			e2e.Failf("Failed to check WMCO run in a pod with HostNetwork: %s", msg)
 		}
@@ -237,13 +237,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		linuxPodIPs, err := getWorkloadsIP(oc, linuxWorkloads, defaultNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		command := []string{"exec", "-n", defaultNamespace, winPodNames[0], "--", "curl", linuxPodIPs[0] + ":8080"}
-		msg, err := oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Linux Container Web Server") {
 			e2e.Failf("Failed to curl Linux web server from Windows pod")
 		}
 		command = []string{"exec", "-n", defaultNamespace, linuxPodNames[0], "--", "curl", windPodIPs[0]}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Linux pod")
@@ -283,7 +283,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createProject(oc, namespace)
 
 		machinesetName := getWindowsMachineSetName(oc, "winc", iaasPlatform, zone)
-		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
 
 		g.By("Creating Windows machineset with 1")
 		setMachineset(oc, iaasPlatform, machinesetName)
@@ -329,7 +329,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		machinesetMultiOSFileName := iaasPlatform + "_windows_machineset.yaml"
 		machinesetFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, machinesetName, machinesetMultiOSFileName, "secondary")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
 		defer os.Remove(machinesetFileName)
 		createMachineset(oc, machinesetFileName)
 		// here we provision 1 webservers with a runtime class ID, up to 20 minutes due to pull image on AWS
@@ -368,11 +368,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
 		address := setBYOH(oc, iaasPlatform, "InternalDNS", byohMachineSetName)
-		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
-		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
 		// removing the config map
 		g.By("Delete the BYOH congigmap for node deconfiguration")
-		oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
 		// here we need to add 2 status change values since the log is indicating
 		// log entry 'instance has been deconfigured' after removing services
 		waitUntilWMCOStatusChanged(oc, "removing directories")
@@ -400,28 +400,28 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-42516"
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
 		defer waitWindowsNodesReady(oc, 2, 15*time.Minute)
-		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
-		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
 		defer deleteProject(oc, namespace)
 
 		byohIP := setBYOH(oc, iaasPlatform, "InternalIP", byohMachineSetName)
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
-		msg, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
 
 		byohNode := getNodeNameFromIP(oc, byohIP[0], iaasPlatform)
 
 		// change version annotation on node
-		oc.WithoutNamespace().Run("annotate").Args("node", byohNode, "--overwrite", "windowsmachineconfig.openshift.io/version=invalidVersion").Output()
+		oc.AsAdmin().WithoutNamespace().Run("annotate").Args("node", byohNode, "--overwrite", "windowsmachineconfig.openshift.io/version=invalidVersion").Output()
 		waitVersionAnnotationReady(oc, byohNode, 30*time.Second, 600*time.Second)
 		waitUntilWMCOStatusChanged(oc, "instance has been deconfigured")
 		waitWindowsNodeReady(oc, byohNode, 15*time.Minute)
 
 		// deleting the BYOH node
-		oc.WithoutNamespace().Run("delete").Args("node", byohNode).Output()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("node", byohNode).Output()
 		// wait the byoh node is back
 		waitUntilWMCOStatusChanged(oc, "transferring files")
 		waitWindowsNodeReady(oc, byohNode, 5*time.Minute)
@@ -449,14 +449,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		//we query the Linux ClusterIP by a windows pod
 		command := []string{"exec", "-n", namespace, winPodArray[0], "--", "curl", linuxClusterIP + ":8080"}
 
-		msg, err := oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Linux Container Web Server") {
 			e2e.Failf("Failed to curl Linux ClusterIP from a windows pod")
 		}
 		e2e.Logf("***** Now testing Windows node from a linux host : ****")
 		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows ClusterIP from a linux pod")
@@ -470,14 +470,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		winPodArray, err = getWorkloadsNames(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows ClusterIP from a Linux pod")
 		}
 
 		command = []string{"exec", "-n", namespace, winPodArray[1], "--", "curl", linuxClusterIP + ":8080"}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Linux Container Web Server") {
 			e2e.Failf("Failed to curl Linux ClusterIP from a windows pod")
@@ -491,21 +491,21 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		waitWindowsNodesReady(oc, 3, 1200*time.Second)
 		// Testing the Windows server is reachable via Linux pod
 		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows ClusterIP from a Linux pod")
 		}
 		// Testing the Linux server is reachable with the second windows pod created
 		command = []string{"exec", "-n", namespace, winPodArray[1], "--", "curl", linuxClusterIP + ":8080"}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Linux Container Web Server") {
 			e2e.Failf("Failed to curl Linux ClusterIP from a windows pod")
 		}
 		// Testing the Linux server is reachable with the first Windows pod created.
 		command = []string{"exec", "-n", namespace, winPodArray[0], "--", "curl", linuxClusterIP + ":8080"}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Linux Container Web Server") {
 			e2e.Failf("Failed to curl Linux ClusterIP from a windows pod")
@@ -534,14 +534,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		linuxPodIPArray, err := getWorkloadsIP(oc, linuxWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		command := []string{"exec", "-n", namespace, linuxPodNameArray[0], "--", "curl", winPodIPArray[0]}
-		msg, err := oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Linux pod")
 		}
 		linuxSVC := linuxPodIPArray[0] + ":8080"
 		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", linuxSVC}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Linux Container Web Server") {
 			e2e.Failf("Failed to curl Linux web server from Windows pod")
@@ -552,13 +552,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			e2e.Failf("Failed to get Windows pod in the same node")
 		}
 		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", winPodIPArray[0]}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Windows pod in the same node")
 		}
 		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", winPodIPArray[1]}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Windows pod in the same node")
@@ -571,14 +571,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 		lastIP := winPodIPArray[len(winPodIPArray)-1]
 		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", lastIP}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Windows pod across different Windows nodes")
 		}
 		lastPodName := winPodNameArray[len(winPodNameArray)-1]
 		command = []string{"exec", "-n", namespace, lastPodName, "--", "curl", winPodIPArray[0]}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Windows pod across different Windows nodes")
@@ -589,12 +589,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Author:sgao-Medium-33768-NodeWithoutOVNKubeNodePodRunning alert ignore Windows nodes", func() {
 		g.By("Check NodeWithoutOVNKubeNodePodRunning alert ignore Windows nodes")
 		// Retrieve the Prometheus' pod id
-		prometheusPod, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l=app.kubernetes.io/name=prometheus", "-o", "jsonpath='{.items[0].metadata.name}'").Output()
+		prometheusPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l=app.kubernetes.io/name=prometheus", "-o", "jsonpath='{.items[0].metadata.name}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Run locally, in the Prometheus container the API query to /api/v1/rules
 		// saving us from having to perform port-forwarding, which does not work
 		// with intermediate bastion hosts.
-		getAlertCMD, err := oc.WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", strings.Trim(prometheusPod, `'`), "--", "curl", "localhost:9090/api/v1/rules").Output()
+		getAlertCMD, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", strings.Trim(prometheusPod, `'`), "--", "curl", "localhost:9090/api/v1/rules").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Search for required string in the rules output
 		if !strings.Contains(string(getAlertCMD), "kube_node_labels{label_kubernetes_io_os=\\\"windows\\\"}") {
@@ -608,7 +608,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		windowsHostNames := getWindowsHostNames(oc)
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve kubelet log on: " + winHostName)
-			msg, err := oc.WithoutNamespace().Run("adm").Args("node-logs", winHostName, "--path=kubelet/kubelet.log").Output()
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", winHostName, "--path=kubelet/kubelet.log").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(string(msg), "Running kubelet as a Windows service!") {
 				e2e.Failf("Failed to retrieve kubelet log on: " + winHostName)
@@ -618,7 +618,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check a cluster-admin can retrieve kube-proxy logs")
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve kube-proxy log on: " + winHostName)
-			msg, err := oc.WithoutNamespace().Run("adm").Args("node-logs", winHostName, "--path=kube-proxy/kube-proxy.log").Output()
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", winHostName, "--path=kube-proxy/kube-proxy.log").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(string(msg), "Running kube-proxy as a Windows service!") {
 				e2e.Failf("Failed to retrieve kube-proxy log on: " + winHostName)
@@ -626,7 +626,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Check a cluster-admin can retrieve hybrid-overlay logs")
-		msg, err := oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=hybrid-overlay/hybrid-overlay.log").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=hybrid-overlay/hybrid-overlay.log").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve hybrid-overlay log on: " + winHostName)
@@ -636,7 +636,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Check a cluster-admin can retrieve container runtime logs")
-		msg, err = oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=containerd/containerd.log").Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=containerd/containerd.log").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Retrieve container runtime logs")
 		if !strings.Contains(string(msg), "starting containerd") {
@@ -644,7 +644,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Check a cluster-admin can retrieve wicd runtime logs")
-		msg, err = oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=wicd/windows-instance-config-daemon.exe.INFO").Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=wicd/windows-instance-config-daemon.exe.INFO").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve wicd runtime log on: " + winHostName)
@@ -658,7 +658,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Smokerun-Author:sgao-NonPreRelease-Critical-33783-Enable must gather on Windows node [Slow][Disruptive]", func() {
 		g.By("Check must-gather on Windows node")
 		// Note: Marked as [Disruptive] in case of /tmp folder full
-		msg, err := oc.WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-33783").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-33783").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-33783").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -697,10 +697,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
 
 		g.By("Deleting the private key and user data")
-		defer oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
-		_, err := oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "windows-user-data", "-n", mcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "windows-user-data", "-n", mcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Scale WMCO to 1")
@@ -708,13 +708,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		g.By("Creating Windows machineset with 1")
 		machinesetName := getWindowsMachineSetName(oc, "winc", iaasPlatform, zone)
-		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
 		setMachineset(oc, iaasPlatform, machinesetName)
 
 		g.By("Check Windows machine should be in Provisioning phase and not reconciled without cloud-private-key and windows-user-data")
 		pollErr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-			events, _ := oc.WithoutNamespace().Run("get").Args("events", "-n", mcoNamespace).Output()
-			status, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.phase}", "-n", "openshift-machine-api").Output()
+			events, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", mcoNamespace).Output()
+			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.phase}", "-n", "openshift-machine-api").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(events, "Secret \"windows-user-data\" not found") && strings.EqualFold(status, "Provisioning") {
 				return true, nil
@@ -726,7 +726,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Create the private key so machine can be reconciled with a valid secret")
-		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
 		waitForMachinesetReady(oc, machinesetName, 25, 1)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -734,12 +734,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		scaleWindowsMachineSet(oc, machinesetName, 5, 0, false)
 
 		g.By("Delete the existing private key secret")
-		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create a new secret with a wrong key name.")
-		defer oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
-		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=wrong-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=wrong-key.pem="+privateKey, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Scale up the machinset that the number of the existing Windows machines will be 1")
@@ -748,9 +748,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		waitUntilWMCOStatusChanged(oc, "cloud-private-key missing")
 
 		g.By("Replace private key during Windows machine configuration")
-		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForMachinesetReady(oc, machinesetName, 25, 1)
 	})
@@ -762,7 +762,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		windowsHostName := getWindowsHostNames(oc)[0]
-		oc.WithoutNamespace().Run("annotate").Args("node", windowsHostName, "windowsmachineconfig.openshift.io/version-").Output()
+		oc.AsAdmin().WithoutNamespace().Run("annotate").Args("node", windowsHostName, "windowsmachineconfig.openshift.io/version-").Output()
 
 		g.By("Check after reconciled Windows node should be Ready")
 		waitVersionAnnotationReady(oc, windowsHostName, 60*time.Second, 1200*time.Second)
@@ -818,7 +818,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		e2e.Logf("Golang version is: %s", s)
 		e2e.Logf("Golang version truncated is: %s", tVersion)
 		g.By("Compare fetched version with WMCO log version")
-		msg, err := oc.WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace).Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, tVersion) {
 			e2e.Failf("Unmatching golang version")
@@ -865,7 +865,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
 		g.By("Check Windows node have a taint 'os=Windows:NoSchedule'")
-		msg, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=windows", "-o=jsonpath={.items[0].spec.taints[0].key}={.items[0].spec.taints[0].value}:{.items[0].spec.taints[0].effect}").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=windows", "-o=jsonpath={.items[0].spec.taints[0].key}={.items[0].spec.taints[0].value}:{.items[0].spec.taints[0].effect}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if msg != "os=Windows:NoSchedule" {
 			e2e.Failf("Failed to check Windows node have taint os=Windows:NoSchedule")
@@ -873,7 +873,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check deployment without tolerations would not land on Windows nodes")
 		createWindowsWorkload(oc, namespace, "windows_web_server_no_taint.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, false)
 		poolErr := wait.Poll(20*time.Second, 60*time.Second, func() (bool, error) {
-			msg, err = oc.WithoutNamespace().Run("get").Args("pod", "-l=app=win-webserver", "-o=jsonpath={.items[].status.conditions[].message}", "-n", namespace).Output()
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l=app=win-webserver", "-o=jsonpath={.items[].status.conditions[].message}", "-n", namespace).Output()
 			if strings.Contains(msg, "had untolerated taint") {
 				return true, nil
 			}
@@ -886,7 +886,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check none of core/optional operators/operands would land on Windows nodes")
 		for _, winHostName := range getWindowsHostNames(oc) {
 			e2e.Logf("Check pods running on Windows node: " + winHostName)
-			msg, err = oc.WithoutNamespace().Run("get").Args("pods", "--all-namespaces", "-o=jsonpath={.items[*].metadata.namespace}", "-l=app=win-webserver", "--field-selector", "spec.nodeName="+winHostName, "--no-headers").Output()
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--all-namespaces", "-o=jsonpath={.items[*].metadata.namespace}", "-l=app=win-webserver", "--field-selector", "spec.nodeName="+winHostName, "--no-headers").Output()
 			for _, namespace := range strings.Split(msg, " ") {
 				e2e.Logf("Found pods running in namespace: " + namespace)
 				if namespace != "" && !strings.Contains(namespace, "winc") {
@@ -911,9 +911,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer os.Remove("password-42204.txt")
 
 		g.By("Create username and password secrets")
-		_, err := oc.WithoutNamespace().Run("create").Args("secret", "generic", "user", "--from-file=username=username-42204.txt", "-n", namespace).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "user", "--from-file=username=username-42204.txt", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "pass", "--from-file=password=password-42204.txt", "-n", namespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "pass", "--from-file=password=password-42204.txt", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create Windows Pod with Projected Volume")
@@ -929,17 +929,17 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check in Windows pod, the projected-volume directory contains your projected sources")
 		command := []string{"exec", winpod[0], "-n", namespace, "--", "powershell.exe", " ls .\\projected-volume", ";", "ls C:\\var\\run\\secrets\\kubernetes.io\\serviceaccount"}
-		msg, err := oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Projected volume output is:\n %v", msg)
 
 		g.By("Check username and password exist on projected volume pod")
 		command = []string{"exec", winpod[0], "-n", namespace, "--", "powershell.exe", "cat C:\\projected-volume\\username"}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Username output is:\n %v", msg)
 		command = []string{"exec", winpod[0], "-n", namespace, "--", "powershell.exe", "cat C:\\projected-volume\\password"}
-		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Password output is:\n %v", msg)
 	})
@@ -969,7 +969,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		g.By("Get Endpoints and service monitor values")
 		// need to fetch service monitor age
-		serviceMonitorAge1, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
+		serviceMonitorAge1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// here we fetch a list of endpoints
 		endpointsIPsBefore := getEndpointsIPs(oc, wmcoNamespace)
@@ -977,10 +977,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Restart WMCO pod by deleting")
 		wmcoID, err := getWorkloadsNames(oc, wmcoDeployment, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		wmcoStartTime, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.status.StartTime}").Output()
+		wmcoStartTime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.status.StartTime}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("WMCO start time before restart", wmcoStartTime)
-		oc.WithoutNamespace().Run("delete").Args("pod", wmcoID[0], "-n", wmcoNamespace).Output()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", wmcoID[0], "-n", wmcoNamespace).Output()
 		// checking that the WMCO has no errors and restarted properly
 		poolErr := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
 			return checkWorkloadCreated(oc, wmcoDeployment, wmcoNamespace, 1), nil
@@ -1000,7 +1000,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			e2e.Failf("Endpoints list mismatch after WMCO restart %v, %v", endpointsIPsBeforeArray, endpointsIPsAfterArray)
 		}
 		g.By("Test service-monitor restarted")
-		serviceMonitorAge2, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
+		serviceMonitorAge2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		timeOriginal, err := time.Parse(time.RFC3339, serviceMonitorAge1)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1024,24 +1024,24 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Smokerun-Author:jfrancoa-Critical-50924-Windows instances react to kubelet CA rotation [Disruptive]", func() {
 
 		// Retrieve previous certificate which will get rotated.
-		certToExpire, err := oc.WithoutNamespace().Run("get").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
+		certToExpire, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Force the kubelet CA rotation")
 
-		initialCertNotBefore, err := oc.WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
+		initialCertNotBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		initialCertNotBeforeParsed, err := time.Parse(time.RFC3339, strings.Trim(initialCertNotBefore, `'`))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// CA rotation
-		err = oc.WithoutNamespace().Run("patch").Args("secret", "-p", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`, "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "-p", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`, "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Confirm that the rotation has taken place by
 		// comparing initial certificate-not-before with the certificate-not-before annotation
 		// after forcing the rotation
-		rotatedCertNotBefore, err := oc.WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
+		rotatedCertNotBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		rotatedCertNotBeforeParsed, err := time.Parse(time.RFC3339, strings.Trim(rotatedCertNotBefore, `'`))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1051,7 +1051,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		// Force the expired certificate deletion from kubelet's client CA
 		// First we get the current content on kubelet's client CA
-		cmOutput, err := oc.WithoutNamespace().Run("get").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
+		cmOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Delete the expired certificate (stored at the beggining of test) by using ReplaceAll
 		formattedCertToExpire := strings.Trim(strings.TrimSpace(certToExpire), "'")
@@ -1059,7 +1059,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		formattedcmWithoutExpired := strings.ReplaceAll(strings.Trim(strings.TrimSpace(cmWithoutExpired), "'"), "\n", "\\n")
 		// Patch the data.ca-bundle.crt field with the new config map content
 		// without the expired certificate
-		_, err = oc.WithoutNamespace().Run("patch").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-p", `{"data":{"ca-bundle.crt": "`+formattedcmWithoutExpired+`"}}`).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-p", `{"data":{"ca-bundle.crt": "`+formattedcmWithoutExpired+`"}}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Verify kubelet client CA is updated in Windows workers")
@@ -1072,7 +1072,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 			poolErr := wait.Poll(15*time.Second, 10*time.Minute, func() (bool, error) {
 				// Get kubelet client CA content from confimap
-				kubeletCA, err := oc.WithoutNamespace().Run("get").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
+				kubeletCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
 				if err != nil {
 					e2e.Logf("error getting kubelet client CA from ConfigMap: %v", err)
 					return false, nil
@@ -1118,7 +1118,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check configmap services running on Windows workers")
 		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		payload, err := oc.WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
+		payload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		var services []Service
@@ -1148,7 +1148,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		g.By("Check windowsmachineconfig/desired-version annotation")
 		for _, winHostName := range getWindowsHostNames(oc) {
-			desiredVersion, err := oc.WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
+			desiredVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Trim(desiredVersion, `'`) != wmcoLogVersion {
 				e2e.Failf("desired-version annotation missmatch, expected %v and got %v for host %v", wmcoLogVersion, desiredVersion, winHostName)
@@ -1156,23 +1156,23 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Check that windows-instance-config-daemon serviceaccount exists")
-		_, err = oc.WithoutNamespace().Run("get").Args("serviceaccount", "windows-instance-config-daemon", "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("serviceaccount", "windows-instance-config-daemon", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Delete windows-services configmap and wait for its recreation")
-		_, err = oc.WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForServicesCM(oc, windowsServicesCM)
 
 		g.By("Attempt to modify the windows-services configmap")
-		_, err = oc.WithoutNamespace().Run("patch").Args("configmap", windowsServicesCM, "-p", `{"data":{"services":"[]"}}`, "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", windowsServicesCM, "-p", `{"data":{"services":"[]"}}`, "-n", wmcoNamespace).Output()
 		if err == nil {
 			e2e.Failf("It should not be possible to modify configmap %v", windowsServicesCM)
 		}
 		// Try to modify the inmutable field in the configmap should not have effect
-		_, err = oc.WithoutNamespace().Run("patch").Args("configmap", windowsServicesCM, "-p", `{"inmutable":false}`, "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", windowsServicesCM, "-p", `{"inmutable":false}`, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmInmutable, err := oc.WithoutNamespace().Run("get").Args("configmap", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath='{.immutable}").Output()
+		cmInmutable, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath='{.immutable}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Trim(cmInmutable, `'`) != "true" {
 			e2e.Failf("Inmutable field inside %v configmap has been modified when it should not be possible", windowsServicesCM)
@@ -1181,7 +1181,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Stop WMCO, delete existing windows-services configmap and create new dummy ones. WMCO should delete all and leave only the valid one")
 		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
-		_, err = oc.WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = createManifestFile(oc, "wicd_configmap.yaml", map[string]string{"<version>": "8.8.8-55657c8"})
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1226,13 +1226,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		err := scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, node := range getWindowsHostNames(oc) {
-			oc.WithoutNamespace().Run("annotate").Args("node", node, "--overwrite", "windowsmachineconfig.openshift.io/version=invalidVersion").Output()
+			oc.AsAdmin().WithoutNamespace().Run("annotate").Args("node", node, "--overwrite", "windowsmachineconfig.openshift.io/version=invalidVersion").Output()
 			waitVersionAnnotationReady(oc, node, 30*time.Second, 600*time.Second)
 		}
 		// scaling WMCO back to 1 we can expect to have 3 new nodes instead of wrong version annotated nodes
 		err = scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		msg, err := oc.WithoutNamespace().Run("get").Args("pods", "-owide", "-n", defaultNamespace).Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-owide", "-n", defaultNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
 		for ok := true; ok; ok = (getNumNodesWithAnnotation(oc, "invalidVersion") > 0) {
@@ -1258,7 +1258,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check configmap services running on Windows workers")
 		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		payload, err := oc.WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
+		payload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		var services []Service
@@ -1346,7 +1346,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			g.By(fmt.Sprintf("Check that the metric %s is exposed to telemetry", metricQuery))
 
 			expectedExposedMetric := fmt.Sprintf(`{__name__=\"%s\"}`, metricQuery)
-			telemetryConfig, err := oc.WithoutNamespace().Run("get").Args("configmap", "-n", "openshift-monitoring", "telemetry-config", "-o=jsonpath={.data}").Output()
+			telemetryConfig, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", "openshift-monitoring", "telemetry-config", "-o=jsonpath={.data}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(telemetryConfig).To(o.ContainSubstring(expectedExposedMetric),
 				"Metric %s, is not exposed to telemetry", metricQuery)
@@ -1393,8 +1393,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By(" Replacing the private key with a newly created key during machine scale up ")
-		defer oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
-		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Scalling up the machineset to 2")
@@ -1405,8 +1405,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		cmd := "ssh-keygen  -N '' -C 'test key' -f mykey"
 		_, err = exec.Command("bash", "-c", cmd).CombinedOutput()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
-		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem=mykey", "-n", wmcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem=mykey", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// scaling WMCO back to 1 we can expect to have 2 new nodes instead of wrong version annotated nodes
@@ -1425,15 +1425,15 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		waitWindowsNodesReady(oc, 2, 3000*time.Second)
 		defer waitForMachinesetReady(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 45, 2)
-		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
-		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
 		byohMachine := setBYOH(oc, iaasPlatform, "InternalIP", byohMachineSetName)
 		waitWindowsNodesReady(oc, 3, 1000*time.Second)
 		defer os.Remove("mykey")
 		defer os.Remove("mykey.pub")
-		oldPubKey, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
+		oldPubKey, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		oldUsernameHash, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
+		oldUsernameHash, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By(" Creating new SSL keys ")
 		cmd := "ssh-keygen  -N '' -C 'test' -f mykey"
@@ -1450,22 +1450,22 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By(" Deleting the private key ")
-		defer oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
-		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By(" Replacing the private key with the a new one previously created ")
-		defer oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
-		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem=mykey", "-n", wmcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem=mykey", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if iaasPlatform != "vsphere" {
 			waitUntilWMCOStatusChanged(oc, "\"unhealthy\":0")
 		}
 		g.By(" Comparing username public keys hash changed ")
-		newPubkey, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
+		newPubkey, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newUsernameHash, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
+		newUsernameHash, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(oldPubKey).ShouldNot(o.Equal(newPubkey), "Content of old pub key is similar as new pub key")
 		o.Expect(oldUsernameHash).ShouldNot(o.Equal(newUsernameHash), "Old username hash is similiar as new username hash")
@@ -1494,7 +1494,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 30, 2, false)
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 20, 0, false)
 
-		subsSource, err := oc.WithoutNamespace().Run("get").Args("subscription", "-n", wmcoNamespace, "-o=jsonpath={.items[?(@.spec.name=='"+wmcoDeployment+"')].spec.source}").Output()
+		subsSource, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", "-n", wmcoNamespace, "-o=jsonpath={.items[?(@.spec.name=='"+wmcoDeployment+"')].spec.source}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("Uninstall WMCO from current namespace %v", wmcoNamespace))

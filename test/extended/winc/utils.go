@@ -34,30 +34,30 @@ var (
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
-	_, err := oc.WithoutNamespace().Run("new-project").Args(namespace).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("new-project").Args(namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	/* turn off the automatic label synchronization required for PodSecurity admission
 	   set pods security profile to privileged. See
 	   https://kubernetes.io/docs/concepts/security/pod-security-admission/#pod-security-levels */
-	_, err = oc.WithoutNamespace().Run("label").Args("namespace", namespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite").Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", namespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // this function delete a workspace, we intend to do it after each test case run
 func deleteProject(oc *exutil.CLI, namespace string) {
-	_, err := oc.WithoutNamespace().Run("delete").Args("project", namespace).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func getConfigMapData(oc *exutil.CLI, dataKey string) string {
-	dataValue, err := oc.WithoutNamespace().Run("get").Args("configmap", "winc-test-config", "-o=jsonpath='{.data."+dataKey+"}'", "-n", defaultNamespace).Output()
+	dataValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "winc-test-config", "-o=jsonpath='{.data."+dataKey+"}'", "-n", defaultNamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return dataValue
 }
 
 func waitWindowsNodesReady(oc *exutil.CLI, expectedNodes int, timeout time.Duration) {
 	pollErr := wait.Poll(10*time.Second, timeout, func() (bool, error) {
-		out, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath='{.items[*].status.conditions[?(@.type==\"Ready\")].status}'").Output()
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath='{.items[*].status.conditions[?(@.type==\"Ready\")].status}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		return (!strings.Contains(out, "False") && !strings.Contains(out, "Unknown") && len(strings.Fields(out)) == expectedNodes), nil
 	})
@@ -96,7 +96,7 @@ func waitWindowsNodeReady(oc *exutil.CLI, windowsNodeName string, timeout time.D
 
 // This function returns the windows build e.g windows-build: '10.0.19041'
 func getWindowsBuildID(oc *exutil.CLI, nodeID string) (string, error) {
-	build, err := oc.WithoutNamespace().Run("get").Args("node", nodeID, "-o=jsonpath={.metadata.labels.node\\.kubernetes\\.io\\/windows-build}").Output()
+	build, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeID, "-o=jsonpath={.metadata.labels.node\\.kubernetes\\.io\\/windows-build}").Output()
 	return build, err
 }
 
@@ -127,7 +127,7 @@ func waitVersionAnnotationReady(oc *exutil.CLI, windowsNodeName string, interval
 }
 
 func checkVersionAnnotationReady(oc *exutil.CLI, windowsNodeName string) (bool, error) {
-	msg, err := oc.WithoutNamespace().Run("get").Args("nodes", windowsNodeName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/version}'").Output()
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", windowsNodeName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/version}'").Output()
 	if msg == "" {
 		return false, err
 	}
@@ -139,7 +139,7 @@ func checkVersionAnnotationReady(oc *exutil.CLI, windowsNodeName string) (bool, 
 func getNumNodesWithAnnotation(oc *exutil.CLI, annotationValue string) int {
 	accum := 0
 	for _, node := range getWindowsHostNames(oc) {
-		msg, err := oc.WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/version}'").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/version}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Trim(msg, "'") == annotationValue {
 			accum++
@@ -154,7 +154,7 @@ func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, 
 		machinesetName = "winworker"
 	}
 	if iaasPlatform == "aws" || iaasPlatform == "gcp" {
-		infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		infrastructureID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if iaasPlatform == "aws" {
 			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
@@ -167,7 +167,7 @@ func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, 
 }
 
 func getWindowsHostNames(oc *exutil.CLI) []string {
-	winHostNames, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.addresses[?(@.type==\"Hostname\")].address}").Output()
+	winHostNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.addresses[?(@.type==\"Hostname\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if winHostNames == "" {
 		return []string{}
@@ -176,7 +176,7 @@ func getWindowsHostNames(oc *exutil.CLI) []string {
 }
 
 func getWindowsInternalIPs(oc *exutil.CLI) []string {
-	winInternalIPs, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.addresses[?(@.type==\"InternalIP\")].address}").Output()
+	winInternalIPs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.addresses[?(@.type==\"InternalIP\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if winInternalIPs == "" {
 		return []string{}
@@ -189,7 +189,7 @@ func getSSHBastionHost(oc *exutil.CLI, iaasPlatform string) string {
 	if iaasPlatform == "vsphere" {
 		return "bastion.vmc.ci.openshift.org"
 	}
-	msg, err := oc.WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(msg).NotTo(o.BeEmpty())
 	msg = removeOuterQuotes(msg)
@@ -244,7 +244,7 @@ func getWindowsNodesUptime(oc *exutil.CLI, privateKey string, iaasPlatform strin
 func createLinuxWorkload(oc *exutil.CLI, namespace string) {
 	linuxWebServer := filepath.Join(exutil.FixturePath("testdata", "winc"), "linux_web_server.yaml")
 	// Wait up to 3 minutes for Linux workload ready
-	oc.WithoutNamespace().Run("create").Args("-f", linuxWebServer, "-n", namespace).Output()
+	oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", linuxWebServer, "-n", namespace).Output()
 	poolErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		return checkWorkloadCreated(oc, linuxWorkloads, namespace, 1), nil
 	})
@@ -254,7 +254,7 @@ func createLinuxWorkload(oc *exutil.CLI, namespace string) {
 }
 
 func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace string, replicas int) bool {
-	msg, err := oc.WithoutNamespace().Run("get").Args("deployment", deploymentName, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deploymentName, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	numberOfWorkloads, _ := strconv.Atoi(msg)
 	if (msg == "" && replicas == 0) || numberOfWorkloads == replicas {
@@ -279,7 +279,7 @@ func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string
 	tempFileName := namespace + "-windows-workload"
 	defer os.Remove(namespace + "-windows-workload")
 	os.WriteFile(tempFileName, []byte(windowsWebServer), 0644)
-	oc.WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
+	oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
 	// Wait up to 15 minutes for Windows workload ready in case of Windows image is not pre-pulled
 	if waitBool {
 		poolErr := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
@@ -295,10 +295,10 @@ func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string
 func getExternalIP(iaasPlatform string, oc *exutil.CLI, deploymentName string, namespace string) (extIP string, err error) {
 	pollErr := wait.Poll(2*time.Second, 60*time.Second, func() (bool, error) {
 		if iaasPlatform == "azure" || iaasPlatform == "gcp" {
-			extIP, err = oc.WithoutNamespace().Run("get").Args("service", deploymentName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}", "-n", namespace).Output()
+			extIP, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", deploymentName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}", "-n", namespace).Output()
 			e2e.Logf("%v ExternalIP is %v", iaasPlatform, extIP)
 		} else {
-			extIP, err = oc.WithoutNamespace().Run("get").Args("service", deploymentName, "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}", "-n", namespace).Output()
+			extIP, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", deploymentName, "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}", "-n", namespace).Output()
 			e2e.Logf("%v ExternalIP is %v", iaasPlatform, extIP)
 		}
 		if err != nil || extIP == "" {
@@ -314,7 +314,7 @@ func getExternalIP(iaasPlatform string, oc *exutil.CLI, deploymentName string, n
 
 // we retrieve the ClusterIP from a pod according to it's OS
 func getServiceClusterIP(oc *exutil.CLI, deploymentName string, namespace string) (clusterIP string, err error) {
-	clusterIP, err = oc.WithoutNamespace().Run("get").Args("service", deploymentName, "-o=jsonpath={.spec.clusterIP}", "-n", namespace).Output()
+	clusterIP, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", deploymentName, "-o=jsonpath={.spec.clusterIP}", "-n", namespace).Output()
 	return clusterIP, err
 }
 
@@ -334,7 +334,7 @@ func getFileContent(baseDir string, name string) (fileContent string) {
 
 // this function scale the deployment workloads
 func scaleDeployment(oc *exutil.CLI, deploymentName string, replicas int, namespace string) error {
-	_, err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "deployment", deploymentName, "-n", namespace).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "deployment", deploymentName, "-n", namespace).Output()
 	poolErr := wait.Poll(20*time.Second, 30*time.Minute, func() (bool, error) {
 		return checkWorkloadCreated(oc, deploymentName, namespace, replicas), nil
 	})
@@ -345,7 +345,7 @@ func scaleDeployment(oc *exutil.CLI, deploymentName string, replicas int, namesp
 }
 
 func scaleWindowsMachineSet(oc *exutil.CLI, windowsMachineSetName string, deadTime int, replicas int, skipWait bool) {
-	err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), exutil.MapiMachineset, windowsMachineSetName, "-n", "openshift-machine-api").Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), exutil.MapiMachineset, windowsMachineSetName, "-n", "openshift-machine-api").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if !skipWait {
 		waitForMachinesetReady(oc, windowsMachineSetName, deadTime, replicas)
@@ -358,21 +358,21 @@ func getWorkloadsNames(oc *exutil.CLI, deploymentName string, namespace string) 
 	if deploymentName == "windows-machine-config-operator" {
 		workloadName = "name=" + deploymentName
 	}
-	workloads, err := oc.WithoutNamespace().Run("get").Args("pod", "--selector", workloadName, "--sort-by=.status.hostIP", "-o=jsonpath={.items[*].metadata.name}", "-n", namespace).Output()
+	workloads, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", workloadName, "--sort-by=.status.hostIP", "-o=jsonpath={.items[*].metadata.name}", "-n", namespace).Output()
 	pods := strings.Split(workloads, " ")
 	return pods, err
 }
 
 // this function returns an array of workloads IP's by their OS type
 func getWorkloadsIP(oc *exutil.CLI, deploymentName string, namespace string) ([]string, error) {
-	workloads, err := oc.WithoutNamespace().Run("get").Args("pod", "--selector", "app="+deploymentName, "--sort-by=.status.hostIP", "-o=jsonpath={.items[*].status.podIP}", "-n", namespace).Output()
+	workloads, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+deploymentName, "--sort-by=.status.hostIP", "-o=jsonpath={.items[*].status.podIP}", "-n", namespace).Output()
 	ips := strings.Split(workloads, " ")
 	return ips, err
 }
 
 // this function returns an array of workloads host IP's by their OS type
 func getWorkloadsHostIP(oc *exutil.CLI, deploymentName string, namespace string) ([]string, error) {
-	workloads, err := oc.WithoutNamespace().Run("get").Args("pod", "--selector", "app="+deploymentName, "--sort-by=.status.hostIP", "-o=jsonpath={.items[*].status.hostIP}", "-n", namespace).Output()
+	workloads, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+deploymentName, "--sort-by=.status.hostIP", "-o=jsonpath={.items[*].status.hostIP}", "-n", namespace).Output()
 	ips := strings.Split(workloads, " ")
 	return ips, err
 }
@@ -395,18 +395,18 @@ func truncatedVersion(s string) string {
 	return strings.Join(str[:], ".")
 }
 func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetName string, fileName string, imageOrder string) (machinesetFileName string, err error) {
-	infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+	infrastructureID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 	windowsMachineSet := getFileContent("winc", fileName)
 	// imageOrder parameter stores if we request the primary or secondary image/container
 	imageID := getConfigMapData(oc, imageOrder+"_windows_image")
 
 	if iaasPlatform == "aws" {
-		region, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		if err != nil {
 			e2e.Logf("Using default AWS region: us-east-2")
 			region = "us-east-2"
 		}
-		zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 		if err != nil {
 			e2e.Logf("Using default AWS zone: us-east-2a")
 			zone = "us-east-2a"
@@ -418,7 +418,7 @@ func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, mach
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<zone>", zone)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<windows_image_with_container_runtime_installed>", imageID)
 	} else if iaasPlatform == "azure" {
-		location, err := oc.WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath=\"{.items[0].metadata.labels.topology\\.kubernetes\\.io\\/region}\"").Output()
+		location, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath=\"{.items[0].metadata.labels.topology\\.kubernetes\\.io\\/region}\"").Output()
 		if err != nil {
 			e2e.Logf("Using default Azure region: southcentralus")
 			location = "southcentralus"
@@ -435,9 +435,9 @@ func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, mach
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
 	} else if iaasPlatform == "gcp" {
 
-		zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		region, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.gcp.region}").Output()
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.gcp.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<infrastructureID>", infrastructureID)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<zone>", zone)
@@ -455,13 +455,13 @@ func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, mach
 }
 
 func createMachineset(oc *exutil.CLI, file string) error {
-	_, err := oc.WithoutNamespace().Run("create").Args("-f", file).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file).Output()
 	return err
 }
 
 func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int, expectedReplicas int) {
 	pollErr := wait.Poll(30*time.Second, time.Duration(deadTime)*time.Minute, func() (bool, error) {
-		msg, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachineset, machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", "openshift-machine-api").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachineset, machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", "openshift-machine-api").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		numberOfMachines := 0
 		if msg != "" {
@@ -485,7 +485,7 @@ func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) strin
 	if iaasPlatform == "azure" || iaasPlatform == "vsphere" {
 		index = "1"
 	}
-	nodeName, err := oc.WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[?(@.status.addresses["+index+"].address==\""+nodeIP+"\")].metadata.name}").Output()
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[?(@.status.addresses["+index+"].address==\""+nodeIP+"\")].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return nodeName
@@ -535,7 +535,7 @@ func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []s
 	machineAddresses := ""
 	pollErr := wait.Poll(5*time.Second, 200*time.Second, func() (bool, error) {
 		var err error
-		machineAddresses, err = oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
+		machineAddresses, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
 		if err != nil || machineAddresses == "" {
 			e2e.Logf("Did not get address, trying next round")
 			return false, nil
@@ -577,7 +577,7 @@ func createManifestFile(oc *exutil.CLI, manifestFile string, replacement map[str
 	manifestFileName := splitFileName[0] + strings.Replace(ts, ":", "", -1) + "." + splitFileName[1] // get rid of offensive colons
 	defer os.Remove(manifestFileName)
 	os.WriteFile(manifestFileName, []byte(manifest), 0644)
-	_, err := oc.WithoutNamespace().Run("create").Args("-f", manifestFileName).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFileName).Output()
 	return err
 }
 
@@ -645,7 +645,7 @@ func checkFoldersDoNotExist(bastionHost string, winInternalIP string, folder str
 
 func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
 	waitLogErr := wait.Poll(10*time.Second, 25*time.Minute, func() (bool, error) {
-		msg, err := oc.WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace, "--since=10s").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace, "--since=10s").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, message) {
 			return false, nil
@@ -657,7 +657,7 @@ func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
 }
 
 func getWMCOVersionFromLogs(oc *exutil.CLI) string {
-	wmcoLog, err := oc.WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace).Output()
+	wmcoLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// match everything after "version":"(7.0.0-802f3e0)"
 	// only in the lines that include the word "operator"
@@ -668,7 +668,7 @@ func getWMCOVersionFromLogs(oc *exutil.CLI) string {
 
 func waitForEndpointsReady(oc *exutil.CLI, namespace string, waitTime int, numberOfEndpoints int) {
 	waitLogErr := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Minute, func() (bool, error) {
-		msg, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-ojsonpath={.items[*].subsets[*].addresses[*].ip}").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-ojsonpath={.items[*].subsets[*].addresses[*].ip}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if (msg == "" && numberOfEndpoints == 0) || len(strings.Split(msg, " ")) == numberOfEndpoints {
 			return true, nil
@@ -687,7 +687,7 @@ func getRandomString(len int) string {
 }
 
 func getEndpointsIPs(oc *exutil.CLI, namespace string) string {
-	endpoints, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].subsets[].addresses[*].ip}").Output()
+	endpoints, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].subsets[].addresses[*].ip}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return endpoints
 }
@@ -727,23 +727,23 @@ func setMachineset(oc *exutil.CLI, iaasPlatform string, machinesetName string) {
 
 func createWindowsAutoscaller(oc *exutil.CLI, machineSetName, namespace string) {
 	clusterAutoScaller := filepath.Join(exutil.FixturePath("testdata", "winc"), "cluster_autoscaler.yaml")
-	_, err := oc.WithoutNamespace().Run("create").Args("-f", clusterAutoScaller).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterAutoScaller).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer os.Remove("machine-autoscaler.yaml")
 	machineAutoscaller := getFileContent("winc", "machine-autoscaler.yaml")
 	machineAutoscaller = strings.ReplaceAll(machineAutoscaller, "<windows_machineset_name>", machineSetName)
 	os.WriteFile("machine-autoscaler.yaml", []byte(machineAutoscaller), 0644)
-	_, err = oc.WithoutNamespace().Run("create").Args("-f", "machine-autoscaler.yaml", "-n", "openshift-machine-api").Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", "machine-autoscaler.yaml", "-n", "openshift-machine-api").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func destroyWindowsAutoscaller(oc *exutil.CLI) {
-	oc.WithoutNamespace().Run("delete").Args("machineautoscaler", "winc-default-machineautoscaler", "-n", "openshift-machine-api").Output()
-	oc.WithoutNamespace().Run("delete").Args("clusterautoscalers.autoscaling.openshift.io", "default").Output()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineautoscaler", "winc-default-machineautoscaler", "-n", "openshift-machine-api").Output()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterautoscalers.autoscaling.openshift.io", "default").Output()
 }
 
 func popItemFromList(oc *exutil.CLI, value string, keywordSearch string, namespace string) (string, error) {
-	rawList, err := oc.WithoutNamespace().Run("get").Args(value, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	rawList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(value, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	retValue := ""
 	if err != nil {
 		e2e.Logf("Search value %v not found", keywordSearch)
@@ -780,19 +780,19 @@ func waitForServicesCM(oc *exutil.CLI, cmName string) {
 // the desired-version annotation.
 func forceWicdReconciliation(oc *exutil.CLI, winHostName string) {
 
-	initialDV, err := oc.WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
+	initialDV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// Set the desired-version annotation to any string, for example: "anything"
-	_, err = oc.WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "anything"}}}`).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "anything"}}}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// Give time to WMCO to assimilate the change.
 	time.Sleep(15 * time.Second)
 	// And now, replace it back to the original value initalDV
-	_, err = oc.WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "`+strings.Trim(strings.TrimSpace(initialDV), "'")+`"}}}`).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "`+strings.Trim(strings.TrimSpace(initialDV), "'")+`"}}}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	// Make sure that the annotation was properly restored
-	afterChangeDV, err := oc.WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
+	afterChangeDV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(afterChangeDV).Should(o.Equal(initialDV))
 
@@ -821,13 +821,13 @@ func getMetricsFromCluster(oc *exutil.CLI, metric string) string {
 	retValue := 0
 	if strings.Contains(metric, "node_instance_type_count") {
 		// Get the number of Windows nodes into an array and give the lenght of array
-		output, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "node.openshift.io/os_id=Windows", "-o=jsonpath={.items[*].metadata.name}").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node.openshift.io/os_id=Windows", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		retValue = len(strings.Split(output, " "))
 
 	} else if strings.Contains(metric, "capacity_cpu_cores") {
 		// Obtain the cpus per Windows node and add up all cpu values
-		output, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "node.openshift.io/os_id=Windows", "-o=jsonpath={.items[*].status.capacity.cpu}").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node.openshift.io/os_id=Windows", "-o=jsonpath={.items[*].status.capacity.cpu}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cpusSlice := strings.Split(output, " ")
 		accum := 0
@@ -846,20 +846,20 @@ func getMetricsFromCluster(oc *exutil.CLI, metric string) string {
 func uninstallWMCO(oc *exutil.CLI, namespace string) {
 
 	defer func() {
-		oc.WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
 		// do not assert the above deletions, and depends on the finally getting deployment to assert the result.
 		// check that the deployment does not exist anymore
-		err := oc.WithoutNamespace().Run("get").Args("deployment", wmcoDeployment, "-n", namespace).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", wmcoDeployment, "-n", namespace).Execute()
 		o.Expect(err).To(o.HaveOccurred())
 	}()
 	// Make sure CSV exists
-	csvName, err := oc.WithoutNamespace().Run("get").Args("subscription", wmcoDeployment, "-n", namespace, "-o=jsonpath={.status.installedCSV}").Output()
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", wmcoDeployment, "-n", namespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	//  do not assert the following deletions, and depends on the finally getting deployment to assert the result.
-	oc.WithoutNamespace().Run("delete").Args("subscription", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
-	oc.WithoutNamespace().Run("delete").Args("csv", "-n", namespace, csvName).Execute()
-	oc.WithoutNamespace().Run("delete").Args("operatorgroup", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("subscription", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "-n", namespace, csvName).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
 
 }
 
@@ -869,7 +869,7 @@ func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey str
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	// add private key to new namespace
-	_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", namespace).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	// create new operatorgroup
