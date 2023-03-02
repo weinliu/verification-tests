@@ -733,6 +733,31 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusScrapeBodySizeLimitHit"}'`, token, `"result":[]`, 5*uwmLoadTime)
 	})
 
+	//author: tagao@redhat.com
+	g.It("Author:tagao-High-60485-check On/Off switch of netdev Collector in Node Exporter [Serial]", func() {
+		var (
+			disableNetdev = filepath.Join(monitoringBaseDir, "disableNetdev.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("check netdev Collector is enabled by default")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--collector.netdev"))
+
+		g.By("check netdev metrics in prometheus k8s pod")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="netdev"}'`, token, `"collector":"netdev"`, uwmLoadTime)
+
+		g.By("disable netdev in CMO")
+		createResourceFromYaml(oc, "openshift-monitoring", disableNetdev)
+
+		g.By("check netdev metrics in prometheus k8s pod again, should not have related metrics")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="netdev"}'`, token, `"result":[]`, 3*uwmLoadTime)
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
