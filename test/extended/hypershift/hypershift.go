@@ -3,6 +3,7 @@ package hypershift
 import (
 	"encoding/base64"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -823,5 +824,42 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("Check if the nodepool name is propagated from machine to node label")
 		o.Expect(strings.Count(doOcpReq(oc, OcpGet, true, "node", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile, `-ojsonpath={.items[*].metadata.labels.hypershift\.openshift\.io/nodePool}`), nodepoolName)).Should(o.Equal(replicasIntNew))
+	})
+
+	// author: mihuang@redhat.com
+	g.It("HyperShiftMGMT-Author:mihuang-Critical-49108-Critical-60490-Separate client certificate trust from the global Hypershift CA", func() {
+		g.By("Check metric works well for the hosted control plane component.")
+		checkSubstring(doOcpReq(oc, OcpGet, true, "servicemonitor", "-n", hostedcluster.namespace+"-"+hostedcluster.name), []string{"etcd", "cluster-version-operator", "catalog-operator", "kube-apiserver", "kube-controller-manager", "monitor-multus-admission-controller", "monitor-ovn-master-metrics", "node-tuning-operator", "olm-operator", "openshift-apiserver", "openshift-controller-manager", "openshift-route-controller-manager"})
+		checkSubstring(doOcpReq(oc, OcpGet, true, "podmonitor", "-n", hostedcluster.namespace+"-"+hostedcluster.name), []string{"cluster-image-registry-operator", "controlplane-operator", "hosted-cluster-config-operator", "ignition-server", "ingress-operator"})
+		o.Expect(doOcpReq(oc, OcpGet, true, "ns", hostedcluster.namespace+"-"+hostedcluster.name, "--show-labels")).Should(o.ContainSubstring("openshift.io/cluster-monitoring=true"))
+
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(doOcpReq(oc, OcpExec, true, "-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "sh", "-c", fmt.Sprintf(" curl -k -g -H \"Authorization: Bearer %s\" https://thanos-querier.openshift-monitoring.svc:9091/api/v1/alerts", token))).Should(o.ContainSubstring(`"status":"success"`))
+		metricsCmd := fmt.Sprintf("curl -sS --cacert /etc/prometheus/certs/configmap_%s_root-ca_ca.crt --key /etc/prometheus/certs/secret_%s_metrics-client_tls.key --cert /etc/prometheus/certs/secret_%s_metrics-client_tls.crt https://openshift-apiserver.%s.svc/metrics", hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name)
+		o.Expect(doOcpReq(oc, OcpExec, true, "-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "sh", "-c", metricsCmd)).Should(o.ContainSubstring("# HELP aggregator_openapi_v2_regeneration_count [ALPHA] Counter of OpenAPI v2 spec regeneration count broken down by causing APIService name and reason."))
+
+		g.By("Verify that cert files not been modified")
+		dirname := "/tmp/kube-root-60490"
+		defer os.RemoveAll(dirname)
+		err = os.MkdirAll(dirname, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		doOcpReq(oc, "cp", true, "-n", "openshift-console", doOcpReq(oc, OcpGet, true, "pod", "-n", "openshift-console", "-o", "jsonpath={.items[0].metadata.name}")+":"+fmt.Sprintf("/var/run/secrets/kubernetes.io/serviceaccount/..data/ca.crt"), dirname+"/serviceaccount_ca.crt")
+		doOcpReq(oc, "extract", true, "cm/kube-root-ca.crt", "-n", "openshift-console", "--to="+dirname, "--confirm")
+		var bashClient = NewCmdClient().WithShowInfo(true)
+		md5Value1, err := bashClient.Run(fmt.Sprintf("md5sum %s | awk '{print $1}'", dirname+"/serviceaccount_ca.crt")).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		md5Value2, err := bashClient.Run(fmt.Sprintf("md5sum %s | awk '{print $1}'", dirname+"/ca.crt")).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(md5Value1).Should(o.Equal(md5Value2))
+
+		g.By("Verify that client certificate trust is separated from the global Hypershift CA")
+		o.Expect(bashClient.Run(fmt.Sprintf("grep client-certificate-data %s | grep -Eo \"[^ ]+$\" | base64 -d > %s", os.Getenv("KUBECONFIG"), dirname+"/system-admin_client.crt")).Output()).Should(o.BeEmpty())
+		res1, err := bashClient.Run(fmt.Sprintf("openssl verify -CAfile %s %s", dirname+"/serviceaccount_ca.crt", dirname+"/system-admin_client.crt")).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(res1).Should(o.ContainSubstring(fmt.Sprintf("error %s: verification failed", dirname+"/system-admin_client.crt")))
+		res2, err := bashClient.Run(fmt.Sprintf("openssl verify -CAfile %s %s", dirname+"/ca.crt", dirname+"/system-admin_client.crt")).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(res2).Should(o.ContainSubstring(fmt.Sprintf("error %s: verification failed", dirname+"/system-admin_client.crt")))
 	})
 })
