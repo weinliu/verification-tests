@@ -3016,8 +3016,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			if provisioner == "vpc.block.csi.ibm.io" {
-				// Added deployment because of IBM limitation
+			if provisioner == "vpc.block.csi.ibm.io" || provisioner == "diskplugin.csi.alibabacloud.com" {
+				// Added deployment because of IBM/Alicloud limitation
 				// It does not support offline snapshots or resize. Volume must be attached to a running pod.
 				g.By("# Create deployment with the created pvc and wait ready")
 				dep.create(oc)
@@ -3111,8 +3111,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			if provisioner == "vpc.block.csi.ibm.io" {
-				// Added deployment because of IBM limitation
+			if provisioner == "vpc.block.csi.ibm.io" || provisioner == "diskplugin.csi.alibabacloud.com" {
+				// Added deployment because of IBM/Ali limitation
 				// It does not support offline snapshots or resize. Volume must be attached to a running pod.
 				g.By("# Create deployment with the created pvc and wait ready")
 				dep.create(oc)

@@ -100,7 +100,7 @@ func (vs *volumeSnapshot) checkVsStatusReadyToUse(oc *exutil.CLI) (bool, error) 
 
 // Waiting the volumesnapshot to ready_to_use
 func (vs *volumeSnapshot) waitReadyToUse(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		status, err1 := vs.checkVsStatusReadyToUse(oc)
 		if err1 != nil {
 			e2e.Logf("The err:%v, wait for volumesnapshot %v to become ready_to_use.", err1, vs.name)
