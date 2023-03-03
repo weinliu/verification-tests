@@ -2870,6 +2870,36 @@ nulla pariatur.`
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-25819-enable FIPS by MCO not supported [Disruptive]", func() {
+		var (
+			mcTemplate = "change-fips.yaml"
+			mcName     = "mco-tc-25819-master-fips"
+			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+
+			expectedNDMessage = regexp.QuoteMeta("detected change to FIPS flag; refusing to modify FIPS on a running cluster")
+			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+		)
+
+		g.By("Try to enable FIPS in master pool")
+
+		mMc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolMaster).SetMCOTemplate(mcTemplate)
+		mMc.parameters = []string{"FIPS=true"}
+		mMc.skipWaitForMcp = true
+
+		validateMcpNodeDegraded(mMc, mMcp, expectedNDMessage, expectedNDReason)
+		logger.Infof("OK!\n")
+
+		g.By("Try to enable FIPS in worker pool")
+		wMc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
+		wMc.parameters = []string{"FIPS=true"}
+		wMc.skipWaitForMcp = true
+
+		validateMcpNodeDegraded(wMc, wMcp, expectedNDMessage, expectedNDReason)
+		logger.Infof("OK!\n")
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason
