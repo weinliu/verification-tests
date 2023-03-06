@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("ensure no route is created from the ingress")
 		output, err := oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).NotTo(o.ContainSubstring("ingress-with-clalss"))
+		o.Expect(output).NotTo(o.ContainSubstring("ingress-with-class"))
 
 		g.By("patch the ingress to use default ingressclass")
 		patchResourceAsUser(oc, oc.Namespace(), "ingress/ingress-with-class", "{\"spec\":{\"ingressClassName\": \"openshift-default\"}}")
