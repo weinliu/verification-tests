@@ -487,32 +487,21 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-55485-[CPMS] Implement update logic for RollingUpdate CPMS strategy with non-standard indexes - Delete/Add a failureDomain [Disruptive]", func() {
-		g.Skip("Skip for inactive for now")
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-55485-[CPMS] Implement update logic for RollingUpdate CPMS strategy - Delete/Add a failureDomain [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
-		g.By("Test delete/add a failureDoamin to trigger RollingUpdate right with non-standard indexes")
-		g.By("Get failureDomains")
+		g.By("Check failureDomains")
 		availabilityZones := getCPMSAvailabilityZones(oc, iaasPlatform)
 		if len(availabilityZones) <= 1 {
 			g.Skip("Skip for the failureDomains is no more than 1")
 		}
 
-		g.By("Replace the master machine which will be updated later with non-standard index")
-		_, _, machineName := getZoneAndMachineFromCPMSZones(oc, availabilityZones)
-		defer activeControlPlaneMachineSet(oc)
-		deleteControlPlaneMachineSet(oc)
-		suffix, newMasterMachineName := randomMasterMachineName(machineName)
-		e2e.Logf("newMasterMachineName:%s", newMasterMachineName)
-		replaceOneMasterMachine(oc, machineName, newMasterMachineName)
-		waitForClusterStable(oc)
-		activeControlPlaneMachineSet(oc)
-
 		g.By("Pick the failureDomain which has only one master machine")
 		availabilityZones = getCPMSAvailabilityZones(oc, iaasPlatform)
-		key, value, _ := getZoneAndMachineFromCPMSZones(oc, availabilityZones)
+		key, value, machineName := getZoneAndMachineFromCPMSZones(oc, availabilityZones)
+		suffix := getMachineSuffix(oc, machineName)
 		var getMachineAvailabilityZoneJSON, getCPMSAvailabilityZonesJSON string
 		switch iaasPlatform {
 		case "aws":
