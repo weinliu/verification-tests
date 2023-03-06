@@ -4375,7 +4375,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("ConnectedOnly-NonPreRelease-PstChkUpgrade-Author:xzha-High-22618-Post check the catalogsource status of catalogsource", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		ns := "olm-upgrade-22618"
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "olm-upgrade-22618").Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns).Output()
+
+		g.By("0) update catsrc cs-22618 ")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", "cs-22618", "-n", ns, "--type=merge", "-p", `{"spec":{"grpcPodConfig":{"securityContextConfig":"restricted"}}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("1) check status of marketplace operator")
 		catalogstrings := map[string]string{"certified-operators": "Certified Operators",
@@ -4384,9 +4388,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			"redhat-marketplace":  "Red Hat Marketplace",
 			"cs-22618":            "22618 Operators"}
 
-		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
-			catsrcS, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-A").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
+			catsrcS, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-A").Output()
 			if catsrcS == "" {
 				e2e.Logf("get catsrc failed")
 				return false, nil
@@ -4397,8 +4400,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 					return false, nil
 				}
 			}
-			packages, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-A").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			packages, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-A").Output()
 			if packages == "" {
 				e2e.Logf("get catsrc or packagemanifests failed")
 				return false, nil
@@ -4412,7 +4414,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			return true, nil
 		})
 		if err != nil {
-			getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace")
+			getResource(oc, asAdmin, withoutNamespace, "catsrc", "certified-operators", "-n", "openshift-marketplace", "-o=jsonpath-as-json={.status}")
+			getResource(oc, asAdmin, withoutNamespace, "catsrc", "community-operators", "-n", "openshift-marketplace", "-o=jsonpath-as-json={.status}")
+			getResource(oc, asAdmin, withoutNamespace, "catsrc", "redhat-operators", "-n", "openshift-marketplace", "-o=jsonpath-as-json={.status}")
+			getResource(oc, asAdmin, withoutNamespace, "catsrc", "redhat-marketplace", "-n", "openshift-marketplace", "-o=jsonpath-as-json={.status}")
+			getResource(oc, asAdmin, withoutNamespace, "catsrc", "cs-22618", "-n", ns, "-o=jsonpath-as-json={.status}")
 			getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
 			getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", ns)
 			getResource(oc, asAdmin, withoutNamespace, "pod", "-n", ns)
