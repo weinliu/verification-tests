@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pod.deleteAsAdmin(oc)
 			pod.waitReady(oc)
 
-			g.By("Check the pod volume can be read and write")
+			g.By("Check the pod volume has the read and write access right")
 			pod.checkMountedVolumeCouldRW(oc)
 
 			g.By("Check the pv.spec.csi.volumeAttributes.skuname")
@@ -140,7 +140,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pod.deleteAsAdmin(oc)
 			pod.waitReady(oc)
 
-			g.By("Check the pod volume can be read and write")
+			g.By("Check the pod volume has the read and write access right")
 			pod.checkMountedVolumeCouldRW(oc)
 
 			g.By("Check the pv.spec.csi.volumeAttributes.skuname")
@@ -246,5 +246,130 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		_, err = execCommandInSpecificPod(oc, dep.namespace, podList[1], "/bin/dd if="+dep.mpath+" of=/tmp/testfile bs=512 count=1 conv=fsync")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(execCommandInSpecificPod(oc, dep.namespace, podList[1], "cat /tmp/testfile | grep 'test data' ")).To(o.ContainSubstring("matches"))
+	})
+
+	// author: wduan@redhat.com
+	// OCP-60224 - [Azure-Disk-CSI-Driver] support skuName:PremiumV2_LRS in storageclass
+	g.It("ARO-Author:wduan-High-60224-[Azure-Disk-CSI-Driver] support skuName:PremiumV2_LRS in storageclass", func() {
+		// Get the region info
+		region := getClusterRegion(oc)
+		// See https://learn.microsoft.com/en-us/azure/virtual-machines/disks-deploy-premium-v2?tabs=azure-cli#regional-availability
+		supportRegions := []string{"eastus", "westeurope"}
+		if !contains(supportRegions, region) {
+			g.Skip("Current region doesn't support PremiumV2_LRS storage")
+		}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+		)
+
+		// Set up a specified project share for all the phases
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Define the supported skuname
+		skuname := "PremiumV2_LRS"
+
+		// Set the resource definition for the scenario
+		storageClassParameters := map[string]string{
+			"skuname":     skuname,
+			"cachingMode": "None",
+		}
+		extraParameters := map[string]interface{}{
+			"parameters": storageClassParameters,
+		}
+
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("disk.csi.azure.com"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		g.By("Create csi storageclass with skuname")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc)
+
+		g.By("Create a pvc with the csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("Create pod with the created pvc and wait for the pod ready")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		g.By("Check the pod volume has the read and write access right")
+		pod.checkMountedVolumeCouldRW(oc)
+
+		g.By("Check the pv.spec.csi.volumeAttributes.skuname")
+		pvName := pvc.getVolumeName(oc)
+		skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The skuname in PV is: %v.", skunamePv)
+		o.Expect(skunamePv).To(o.Equal(skuname))
+	})
+
+	// author: wduan@redhat.com
+	// OCP-60228 - [Azure-Disk-CSI-Driver] support location in storageclass
+	g.It("ARO-Author:wduan-High-60228-[Azure-Disk-CSI-Driver] support location in storageclass", func() {
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+		)
+
+		// Get the region info
+		region := getClusterRegion(oc)
+
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Set the resource definition for the scenario
+		storageClassParameters := map[string]string{
+			"location": region,
+		}
+		extraParameters := map[string]interface{}{
+			"parameters": storageClassParameters,
+		}
+
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("disk.csi.azure.com"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		g.By("Create csi storageclass with location")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc)
+
+		g.By("Create a pvc with the csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		// create pod make sure the pv is really in expected region and could be attached into the pod
+		g.By("Create pod with the created pvc and wait for the pod ready")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		g.By("Check the pod volume has the read and write access right")
+		pod.checkMountedVolumeCouldRW(oc)
+
+		g.By("Check the pv.spec.csi.volumeAttributes.location")
+		pvName := pvc.getVolumeName(oc)
+		locationPv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.location}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The location in PV is: %v.", locationPv)
+		o.Expect(locationPv).To(o.Equal(region))
+
+		g.By("Check the pv.nodeAffinity.required.nodeSelectorTerms")
+		if checkNodeZoned(oc) {
+			nodeSelectorTerms, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.nodeAffinity.required.nodeSelectorTerms}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The nodeSelectorTerms in PV is: %v.", nodeSelectorTerms)
+			o.Expect(nodeSelectorTerms).To(o.ContainSubstring(region))
+		}
 	})
 })
