@@ -491,4 +491,146 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dep.mpath = mountPath2
 		dep.checkPodMountedVolumeContain(oc, "xfs")
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-59664-[MicroShift] Can not exceed storage and pvc quota in specific namespace
+	g.It("MicroShiftOnly-Author:rdeore-Critical-59664-[MicroShift] Can not exceed storage and pvc quota in specific namespace", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID           = "59664"
+			e2eTestNamespace = "e2e-ushift-storage-resourcequota-namespace-" + caseID + "-" + getRandomString()
+			pvcTemplate      = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			resourceQuota    = ResourceQuota{
+				Name:         "namespace-resourcequota-" + getRandomString(),
+				Type:         "storage",
+				HardRequests: "6Gi",
+				PvcLimits:    "2",
+				Template:     filepath.Join(storageMicroshiftBaseDir, "pvc-resourcequota-template.yaml"),
+			}
+		)
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.SetNamespace(e2eTestNamespace)
+
+		g.By("#. Define storage resources")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimStorageClassName("topolvm-provisioner"), setPersistentVolumeClaimCapacity("2Gi"))
+		pvc2 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimStorageClassName("topolvm-provisioner"), setPersistentVolumeClaimCapacity("2Gi"))
+		pvc3 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimStorageClassName("topolvm-provisioner"), setPersistentVolumeClaimCapacity("2Gi"))
+
+		g.By("#. Create namespace specific storage ResourceQuota")
+		resourceQuota.Create(oc.AsAdmin())
+		defer resourceQuota.DeleteAsAdmin(oc)
+
+		g.By("#. Create a pvc-1 successfully")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("#. Create a pvc-2 successfully")
+		pvc2.create(oc)
+		defer pvc2.deleteAsAdmin(oc)
+
+		g.By("#. Create a pvc-3 and expect pvc quota exceeds error")
+		pvcQuotaErr := pvc3.createToExpectError(oc)
+		defer pvc3.deleteAsAdmin(oc)
+		o.Expect(pvcQuotaErr).Should(o.ContainSubstring("is forbidden: exceeded quota: " + resourceQuota.Name + ", requested: persistentvolumeclaims=1, used: persistentvolumeclaims=2, limited: persistentvolumeclaims=2"))
+
+		g.By("#. Delete pvc-2")
+		pvc2.delete(oc)
+
+		g.By("#. Create a pvc-2 with increased storage capacity and expect storage request quota exceeds error")
+		pvc2.capacity = "5Gi"
+		storageQuotaErr := pvc2.createToExpectError(oc)
+		defer pvc2.deleteAsAdmin(oc)
+		o.Expect(storageQuotaErr).Should(o.ContainSubstring("is forbidden: exceeded quota: " + resourceQuota.Name + ", requested: requests.storage=5Gi, used: requests.storage=2Gi, limited: requests.storage=6Gi"))
+
+		g.By("#. Create a pvc-2 successfully with storage request within resource max limit")
+		pvc2.capacity = "4Gi"
+		pvc2.create(oc)
+		defer pvc2.deleteAsAdmin(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-59663-[MicroShift] Can not exceed storage and pvc quota in specific storageClass
+	g.It("MicroShiftOnly-Author:rdeore-Critical-59663-[MicroShift] Can not exceed storage and pvc quota in specific storageClass", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID               = "59663"
+			e2eTestNamespace     = "e2e-ushift-storage-resourcequota-namespace-" + caseID + "-" + getRandomString()
+			pvcTemplate          = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			storageClassTemplate = filepath.Join(storageMicroshiftBaseDir, "storageclass-template.yaml")
+			resourceQuota        = ResourceQuota{
+				Name:         "namespace-resourcequota-" + getRandomString(),
+				Type:         "storage",
+				HardRequests: "6Gi",
+				PvcLimits:    "2",
+				Template:     filepath.Join(storageMicroshiftBaseDir, "storageclass-resourcequota-template.yaml"),
+			}
+		)
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.SetNamespace(e2eTestNamespace)
+
+		g.By("#. Define storage resources")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimCapacity("2Gi"))
+		pvc2 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimCapacity("2Gi"))
+		pvc3 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimCapacity("2Gi"))
+		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(topolvmProvisioner), setStorageClassVolumeBindingMode("WaitForFirstConsumer"))
+
+		g.By("#. Create a storage class")
+		sc.create(oc)
+		defer sc.deleteAsAdmin(oc)
+
+		g.By("# Create storageClass specific ResourceQuota")
+		resourceQuota.StorageClassName = sc.name
+		resourceQuota.Create(oc.AsAdmin())
+		defer resourceQuota.DeleteAsAdmin(oc)
+
+		g.By("#. Create a pvc-1 successfully")
+		pvc.scname = sc.name
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("#. Create a pvc-2 successfully")
+		pvc2.scname = sc.name
+		pvc2.create(oc)
+		defer pvc2.deleteAsAdmin(oc)
+
+		g.By("#. Create a pvc-3 and expect pvc quota exceeds error")
+		pvc3.scname = sc.name
+		pvcQuotaErr := pvc3.createToExpectError(oc)
+		defer pvc3.deleteAsAdmin(oc)
+		o.Expect(pvcQuotaErr).Should(o.ContainSubstring("is forbidden: exceeded quota: " + resourceQuota.Name + ", requested: " + sc.name + ".storageclass.storage.k8s.io/persistentvolumeclaims=1, used: " + sc.name + ".storageclass.storage.k8s.io/persistentvolumeclaims=2, limited: " + sc.name + ".storageclass.storage.k8s.io/persistentvolumeclaims=2"))
+
+		g.By("#. Delete pvc-2")
+		pvc2.delete(oc)
+
+		g.By("#. Create a pvc-2 with increased storage capacity and expect storage request quota exceeds error")
+		pvc2.scname = sc.name
+		pvc2.capacity = "5Gi"
+		storageQuotaErr := pvc2.createToExpectError(oc)
+		defer pvc2.deleteAsAdmin(oc)
+		o.Expect(storageQuotaErr).Should(o.ContainSubstring("is forbidden: exceeded quota: " + resourceQuota.Name + ", requested: " + sc.name + ".storageclass.storage.k8s.io/requests.storage=5Gi, used: " + sc.name + ".storageclass.storage.k8s.io/requests.storage=2Gi, limited: " + sc.name + ".storageclass.storage.k8s.io/requests.storage=6Gi"))
+
+		g.By("#. Create a pvc-2 successfully with storage request within resource max limit")
+		pvc2.capacity = "4Gi"
+		pvc2.scname = sc.name
+		pvc2.create(oc)
+		defer pvc2.deleteAsAdmin(oc)
+
+		g.By("#. Create a pvc-3 using other storage-class successfully as storage quota is not set on it")
+		pvc3.scname = "topolvm-provisioner"
+		pvc3.capacity = "8Gi"
+		pvc3.create(oc)
+		defer pvc3.deleteAsAdmin(oc)
+	})
 })

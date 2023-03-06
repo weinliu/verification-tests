@@ -36,12 +36,14 @@ func (lr *LimitRange) DeleteAsAdmin(oc *exutil.CLI) {
 
 // ResourceQuota struct definition
 type ResourceQuota struct {
-	Name         string
-	Namespace    string
-	Type         string
-	HardRequests string
-	HardLimits   string
-	Template     string
+	Name             string
+	Namespace        string
+	Type             string
+	HardRequests     string
+	HardLimits       string
+	PvcLimits        string
+	StorageClassName string
+	Template         string
 }
 
 // Create creates new ResourceQuota with customized parameters
@@ -50,7 +52,7 @@ func (rq *ResourceQuota) Create(oc *exutil.CLI) {
 		rq.Namespace = oc.Namespace()
 	}
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", rq.Template, "-p", "RESOURCEQUOTA_NAME="+rq.Name, "RESOURCEQUOTA_NAMESPACE="+rq.Namespace,
-		"RESOURCE_TYPE="+rq.Type, "HARD_REQUESTS="+rq.HardRequests, "HARD_LIMITS="+rq.HardLimits)
+		"RESOURCE_TYPE="+rq.Type, "HARD_REQUESTS="+rq.HardRequests, "HARD_LIMITS="+rq.HardLimits, "PVC_LIMITS="+rq.PvcLimits, "STORAGECLASS_NAME="+rq.StorageClassName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
