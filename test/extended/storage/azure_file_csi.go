@@ -428,6 +428,75 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		e2e.Logf("The protocol is: %v.", protocol)
 		o.Expect(protocol).To(o.ContainSubstring("nfs"))
 	})
+
+	// author: chaoyang@redhat.com
+	// OCP-60540&60578 - [Azure-File-CSI-Driver]Support fsgroup for nfs and smb file share protocol
+	protocolTestSuite := map[string][]string{
+		"60540": {"smb", "cifs_t"},
+		"60578": {"nfs", "nfs_t"},
+	}
+
+	caseIds_fsgroup := []string{"60540", "60578"}
+
+	for i := 0; i < len(caseIds_fsgroup); i++ {
+		protocolType := protocolTestSuite[caseIds_fsgroup[i]]
+
+		g.It("ARO-Author:chaoyang-High-"+caseIds_fsgroup[i]+"-[Azure-File-CSI-Driver]Support fsgroup for "+protocolType[0]+" file share protocol", func() {
+
+			g.By("Create new project for the scenario")
+			oc.SetupProject()
+
+			g.By("Start to test fsgroup for protoclol " + protocolType[0])
+			storageClassParameters := map[string]string{
+				"protocol": protocolType[0],
+			}
+			extraParameters_sc := map[string]interface{}{
+				"parameters": storageClassParameters,
+			}
+
+			sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			extraParameters_pod := map[string]interface{}{
+				"jsonPath":  `items.0.spec.securityContext.`,
+				"fsGroup":   10000,
+				"runAsUser": 12345,
+			}
+			g.By("Create storageclass")
+			sc.createWithExtraParameters(oc, extraParameters_sc)
+			defer sc.deleteAsAdmin(oc)
+
+			g.By("Create PVC")
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			g.By("Create pod")
+			pod.createWithExtraParameters(oc, extraParameters_pod)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			g.By("Check pod security--uid")
+			outputUID, err := pod.execCommandAsAdmin(oc, "id -u")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("%s", outputUID)
+			o.Expect(outputUID).To(o.ContainSubstring("12345"))
+
+			g.By("Check pod security--fsGroup")
+			outputGid, err := pod.execCommandAsAdmin(oc, "id -G")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("%s", outputGid)
+			o.Expect(outputGid).To(o.ContainSubstring("10000"))
+
+			_, err = pod.execCommandAsAdmin(oc, "touch "+pod.mountPath+"/testfile")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			outputTestfile, err := pod.execCommandAsAdmin(oc, "ls -lZ "+pod.mountPath+"/testfile")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("%s", outputTestfile)
+			o.Expect(outputTestfile).To(o.ContainSubstring("10000"))
+			o.Expect(outputTestfile).To(o.ContainSubstring("system_u:object_r:" + protocolType[1]))
+
+		})
+	}
 })
 
 // Get resourceGroup/account/share name by creating a new azure-file volume
