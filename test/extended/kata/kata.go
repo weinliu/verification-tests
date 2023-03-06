@@ -127,6 +127,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			kataconfig.runtimeClassName = testrunInitial.runtimeClassName
 			kataconfig.enablePeerPods = testrunInitial.enablePeerPods
 			e2e.Logf("cm osc-config found: %v", testrunInitial)
+			testrunDefault = testrunInitial // incorporate any changes into default
 		}
 
 		// check if there are environment variable overrides

@@ -18,7 +18,7 @@ objects:
       mustgatherimage: "${MUSTGATHERIMAGE}"
       runtimeClassName: "${RUNTIMECLASSNAME}"
       enablePeerPods: "${ENABLEPEERPODS}"
-      eligbileSingleNode: "${ELIGIBLESINGLENODE}"
+      eligibleSingleNode: "${ELIGIBLESINGLENODE}"
       eligibility: "${ELIGIBILITY}"
       labelSingleNode: "${LABELSINGLENODE}"
 
