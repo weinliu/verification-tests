@@ -64,7 +64,7 @@ func checkSubscription(oc *exutil.CLI) (out string, err error) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Check that ClusterServiceVersion " + csvName + " is finished")
-	errCheck = wait.PollImmediate(3*time.Second, 30*time.Second, func() (bool, error) {
+	errCheck = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterserviceversions", csvName, "-n", namespace, "-o=jsonpath={.status.phase}{.status.reason}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(out, "SucceededInstallSucceeded") == 0 {
