@@ -35,7 +35,7 @@ describe('Operator Hub tests', () => {
         });
     });
 
-    it('(OCP-54544,yapei) Check OperatorHub filter to use nodeArchitectures instead of GOARCH', {tags: ['e2e','admin']}, () => {
+    it('(OCP-54544,yapei) Check OperatorHub filter to use nodeArchitectures instead of GOARCH', {tags: ['e2e','admin','@osd-ccs']}, () => {
         // in ocp54544--catalogsource, we have 
         // etcd: operatorframework.io/arch.arm64: supported only  
         // argocd: didn't define operatorframework.io in CSV, but by default operatorframework.io/arch.amd64 will be added 

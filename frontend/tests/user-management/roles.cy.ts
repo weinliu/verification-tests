@@ -27,7 +27,7 @@ describe('Roles and RoleBindings tests', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user_two}`);
   });
 
-  it('(OCP-54744,yapei) Roles and RoleBindings basic function checks',{tags: ['e2e']}, () => {
+  it('(OCP-54744,yapei) Roles and RoleBindings basic function checks',{tags: ['e2e','@osd-ccs']}, () => {
     const params = {
       'rolebinding_name': 'ns-rb-test',
       'rb_namespace': testName,

@@ -12,7 +12,7 @@ describe('Administration pages pesudo translation', () => {
   	cy.logout;
   });
 
-  it('(OCP-35766,yapei) administration pages pesudo translation', {tags: ['e2e','admin']}, () => {
+  it('(OCP-35766,yapei) administration pages pesudo translation', {tags: ['e2e','admin','@osd-ccs']}, () => {
     cy.log('cluster settings details pesudo translation');
     cy.visit('/settings/cluster?pseudolocalization=true&lng=en');
     cy.get('.co-cluster-settings__section', {timeout: 10000});

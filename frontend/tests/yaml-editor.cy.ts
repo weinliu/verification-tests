@@ -18,7 +18,7 @@ describe("yaml editor tests", () => {
     cy.adminCLI(`oc delete project ${testName}`);
   });
 
-  it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page", {tags: ['e2e','admin']}, () => {
+  it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page", {tags: ['e2e']}, () => {
     cy.visit(`/k8s/ns/${testName}/import`)
       .contains('[data-test-id="resource-title"]', "Import YAML");
     importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");  
@@ -31,7 +31,7 @@ describe("yaml editor tests", () => {
     });
   });
 
-  it("(OCP-42019,yapei) Create multiple resources by importing yaml", () => {
+  it("(OCP-42019,yapei) Create multiple resources by importing yaml",{tags: ['e2e','@osd-ccs']},() => {
     // import multiple resources
     // and check successful creation result on import yaml status page
     cy.byTestID('import-yaml').click();

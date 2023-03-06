@@ -32,7 +32,7 @@ describe('Dynamic Plugins notification features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   })
 
-  it('(OCP-55427,yapei) Improve information for Pending or Failed plugins', {tags: ['e2e', 'admin']}, () => {
+  it('(OCP-55427,yapei) Improve information for Pending or Failed plugins', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
     cy.adminCLI(`oc get cm console-config -n openshift-console -o yaml`)
       .its('stdout')
       .should('include', 'console-customization')
