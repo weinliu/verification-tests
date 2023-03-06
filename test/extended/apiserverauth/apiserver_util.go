@@ -1,9 +1,12 @@
 package apiserverauth
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -767,4 +770,44 @@ func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error
 	}
 	exutil.AssertWaitPollNoErr(errNode, "Abnormality found in nodes.")
 	return errNode
+}
+
+// apiserverReadinessProbe use for microshift to check apiserver readiness
+func apiserverReadinessProbe(tokenValue string, apiserverName string) string {
+	timeoutDuration := 3 * time.Second
+	var bodyString string
+	url := fmt.Sprintf(`%s/apis`, apiserverName)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		e2e.Failf("error creating request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tokenValue)
+	req.Header.Set("X-OpenShift-Internal-If-Not-Ready", "reject")
+
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   timeoutDuration,
+	}
+	errCurl := wait.PollImmediate(1*time.Second, 300*time.Second, func() (bool, error) {
+		resp, err := client.Do(req)
+		if err != nil {
+			e2e.Logf("Error while making curl request :: %v", err)
+			return false, nil
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == 429 {
+			bodyBytes, _ := ioutil.ReadAll(resp.Body)
+			bodyString = string(bodyBytes)
+			return strings.Contains(bodyString, "The apiserver hasn't been fully initialized yet, please try again later"), nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCurl, fmt.Sprintf("error waiting for API server readiness: %v", errCurl))
+	return bodyString
 }

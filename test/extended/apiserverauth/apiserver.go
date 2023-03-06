@@ -3,6 +3,7 @@ package apiserverauth
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -4592,5 +4593,73 @@ spec:
 		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", namespace).Execute()
 		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(templateErr).NotTo(o.HaveOccurred())
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Author:rgangwar-High-55728-[Apiserver] Clients (including internal clients) must not use an unready Kubernetes apiserver [Disruptive]", func() {
+		// set the varaibles
+		var (
+			caseID           = "55728"
+			e2eTestNamespace = "e2e-ushift-apiserver-" + caseID + "-" + exutil.GetRandomString()
+		)
+
+		g.By("1. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("2. Get the clustername")
+		clusterName, clusterErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[0].name}`).Output()
+		o.Expect(clusterErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Cluster Name :: %v", clusterName)
+
+		g.By("3. Point to the API server referring the cluster name")
+		apiserverName, apiErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[?(@.name=="`+clusterName+`")].cluster.server}`).Output()
+		o.Expect(apiErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Server Name :: %v", apiserverName)
+
+		g.By("4. Create a secret to hold a token for the default service account.")
+		saSecretYaml := tmpdir + "/sa-secret-ocp55728.yaml"
+		saSecrettmpYaml := `apiVersion: v1
+kind: Secret
+metadata:
+  name: default-token-ocp55728
+  annotations:
+    kubernetes.io/service-account.name: default
+type: kubernetes.io/service-account-token`
+		f, err := os.Create(saSecretYaml)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		_, err = fmt.Fprintf(w, "%s", saSecrettmpYaml)
+		w.Flush()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete", "-f", saSecretYaml, "-n", e2eTestNamespace).Args().Execute()
+		saSecretErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", saSecretYaml, "-n", e2eTestNamespace).Args().Execute()
+		o.Expect(saSecretErr).NotTo(o.HaveOccurred())
+
+		g.By("4. Get the token value")
+		token, tokenerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/default-token-ocp55728", "-n", e2eTestNamespace, "-o", `jsonpath={.data.token}`).Output()
+		o.Expect(tokenerr).NotTo(o.HaveOccurred())
+		tokenValue, tokenValueErr := base64.StdEncoding.DecodeString(token)
+		o.Expect(tokenValueErr).NotTo(o.HaveOccurred())
+		o.Expect(tokenValue).ShouldNot(o.BeEmpty())
+
+		g.By("5. Restart master node")
+		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(masterErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNode).ShouldNot(o.BeEmpty())
+		defer clusterNodesHealthcheck(oc, 600, tmpdir+"/ocp55728")
+		_, rebooterr := exutil.DebugNodeWithChroot(oc, masterNode, "shutdown", "-r", "+1", "-t", "30")
+		o.Expect(rebooterr).NotTo(o.HaveOccurred())
+
+		g.By("6. Check apiserver readiness msg")
+		apiserverRetrymsg := apiserverReadinessProbe(string(tokenValue), apiserverName)
+		o.Expect(apiserverRetrymsg).ShouldNot(o.BeEmpty())
+		e2e.Logf("Get retry msg from apiserver during master node restart :: %v", apiserverRetrymsg)
+		nodeHealthErr := clusterNodesHealthcheck(oc, 600, tmpdir+"/ocp55728")
+		if nodeHealthErr != nil {
+			e2e.Failf("Cluster nodes health check failed")
+		}
 	})
 })
