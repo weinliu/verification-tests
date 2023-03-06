@@ -9,6 +9,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -56,17 +57,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
-			msg, err := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg, err := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err1 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			_, err1 := e2eoutput.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
 			o.Expect(err1).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
-			msg1, err1 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg1, err1 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err1).NotTo(o.HaveOccurred())
 			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
@@ -81,16 +82,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
-			msg, err := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg, err := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			e2eoutput.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
-			msg1, err1 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg1, err1 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err1).NotTo(o.HaveOccurred())
 			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
@@ -145,17 +146,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
-			msg, err2 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg, err2 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err2).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err3 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv4+" 30102 --sctp; }")
+			_, err3 := e2eoutput.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv4+" 30102 --sctp; }")
 			o.Expect(err3).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
-			msg1, err4 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg1, err4 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err4).NotTo(o.HaveOccurred())
 			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
@@ -177,17 +178,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
-			msg, err2 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg, err2 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err2).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err3 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv6+" 30102 --sctp; }")
+			_, err3 := e2eoutput.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv6+" 30102 --sctp; }")
 			o.Expect(err3).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
-			msg1, err4 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg1, err4 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err4).NotTo(o.HaveOccurred())
 			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
@@ -210,17 +211,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
-			msg, err2 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg, err2 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err2).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err3 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv4+" 30102 --sctp; }")
+			_, err3 := e2eoutput.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv4+" 30102 --sctp; }")
 			o.Expect(err3).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
-			msg1, err4 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg1, err4 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err4).NotTo(o.HaveOccurred())
 			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 
@@ -230,16 +231,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
-			msg, err5 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg, err5 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err5).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv6+" 30102 --sctp; }")
+			e2eoutput.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv6+" 30102 --sctp; }")
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
-			msg1, err6 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+			msg1, err6 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err6).NotTo(o.HaveOccurred())
 			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
@@ -288,18 +289,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			g.By("check sctp process enabled in the sctp server pod")
 			o.Eventually(func() string {
-				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				msg, err := e2eoutput.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				return msg
 			}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No sctp process running on sctp server pod")
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err1 := e2e.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			_, err1 := e2eoutput.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
 			o.Expect(err1).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			o.Eventually(func() string {
-				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				msg, err := e2eoutput.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				return msg
 			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")
@@ -317,18 +318,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			g.By("check sctp process enabled in the sctp server pod")
 			o.Eventually(func() string {
-				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				msg, err := e2eoutput.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				return msg
 			}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No sctp process running on sctp server pod")
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err1 := e2e.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			_, err1 := e2eoutput.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
 			o.Expect(err1).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			o.Eventually(func() string {
-				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				msg, err := e2eoutput.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				return msg
 			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")
@@ -377,18 +378,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			g.By("check sctp process enabled in the sctp server pod")
 			o.Eventually(func() string {
-				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				msg, err := e2eoutput.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				return msg
 			}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No sctp process running on sctp server pod")
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err1 := e2e.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			_, err1 := e2eoutput.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
 			o.Expect(err1).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			o.Eventually(func() string {
-				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				msg, err := e2eoutput.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				return msg
 			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")
@@ -406,18 +407,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			g.By("check sctp process enabled in the sctp server pod")
 			o.Eventually(func() string {
-				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				msg, err := e2eoutput.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				return msg
 			}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No sctp process running on sctp server pod")
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err1 := e2e.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			_, err1 := e2eoutput.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
 			o.Expect(err1).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			o.Eventually(func() string {
-				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				msg, err := e2eoutput.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				return msg
 			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")

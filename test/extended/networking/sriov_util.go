@@ -11,9 +11,10 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
-//struct for sriovnetworknodepolicy and sriovnetwork
+// struct for sriovnetworknodepolicy and sriovnetwork
 type sriovNetResource struct {
 	name      string
 	namespace string
@@ -48,7 +49,7 @@ type sriovTestPod struct {
 	template    string
 }
 
-//struct for sriov pod
+// struct for sriov pod
 type sriovPod struct {
 	name         string
 	tempfile     string
@@ -59,13 +60,13 @@ type sriovPod struct {
 	intfresource string
 }
 
-//delete sriov resource
+// delete sriov resource
 func (rs *sriovNetResource) delete(oc *exutil.CLI) {
 	e2e.Logf("delete %s %s in namespace %s", rs.kind, rs.name, rs.namespace)
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args(rs.kind, rs.name, "-n", rs.namespace).Execute()
 }
 
-//create sriov resource
+// create sriov resource
 func (rs *sriovNetResource) create(oc *exutil.CLI, parameters ...string) {
 	var configFile string
 	cmd := []string{"-f", rs.tempfile, "--ignore-unknown-parameters=true", "-p"}
@@ -89,7 +90,7 @@ func (rs *sriovNetResource) create(oc *exutil.CLI, parameters ...string) {
 	o.Expect(err1).NotTo(o.HaveOccurred())
 }
 
-//porcess sriov pod template and get a configuration file
+// porcess sriov pod template and get a configuration file
 func (pod *sriovPod) processPodTemplate(oc *exutil.CLI) string {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -107,7 +108,7 @@ func (pod *sriovPod) processPodTemplate(oc *exutil.CLI) string {
 	return configFile
 }
 
-//create pod
+// create pod
 func (pod *sriovPod) createPod(oc *exutil.CLI) string {
 	configFile := pod.processPodTemplate(oc)
 	podsLog, err1 := oc.AsAdmin().WithoutNamespace().Run("create").Args("--loglevel=10", "-f", configFile, "-n", pod.namespace).Output()
@@ -115,7 +116,7 @@ func (pod *sriovPod) createPod(oc *exutil.CLI) string {
 	return podsLog
 }
 
-//delete pod
+// delete pod
 func (pod *sriovPod) deletePod(oc *exutil.CLI) {
 	e2e.Logf("delete pod %s in namespace %s", pod.name, pod.namespace)
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
@@ -143,7 +144,7 @@ func chkPodsStatus(oc *exutil.CLI, ns, lable string) {
 	e2e.Logf("All pods with lable %s in namespace %s are Running", lable, ns)
 }
 
-//clear specified sriovnetworknodepolicy
+// clear specified sriovnetworknodepolicy
 func rmSriovNetworkPolicy(oc *exutil.CLI, policyname, ns string) {
 	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("SriovNetworkNodePolicy", policyname, "-n", ns, "--ignore-not-found").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -151,7 +152,7 @@ func rmSriovNetworkPolicy(oc *exutil.CLI, policyname, ns string) {
 	waitForSriovPolicyReady(oc, ns)
 }
 
-//clear specified sriovnetwork
+// clear specified sriovnetwork
 func rmSriovNetwork(oc *exutil.CLI, netname, ns string) {
 	sriovNetList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("SriovNetwork", "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -210,7 +211,7 @@ func waitForSriovPolicyReady(oc *exutil.CLI, ns string) {
 	exutil.AssertWaitPollNoErr(err, "sriovnetworknodestates is not ready")
 }
 
-//check interface on pod
+// check interface on pod
 func (pod *sriovPod) getSriovIntfonPod(oc *exutil.CLI) string {
 	msg, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(pod.name, "-n", pod.namespace, "-i", "--", "ip", "address").Output()
 	if err != nil {
@@ -222,7 +223,7 @@ func (pod *sriovPod) getSriovIntfonPod(oc *exutil.CLI) string {
 	return msg
 }
 
-//create pod via HTTP request
+// create pod via HTTP request
 func (pod *sriovPod) sendHTTPRequest(oc *exutil.CLI, user, cmd string) {
 	//generate token for service acount
 	testToken, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", user, "-n", pod.namespace).Output()
@@ -276,9 +277,9 @@ func (sriovTestPod *sriovTestPod) createSriovTestPod(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create test pod %v", sriovTestPod.name))
 }
 
-//get the pciAddress pod is used
+// get the pciAddress pod is used
 func getPciAddress(namespace string, podName string) string {
-	pciAddressEnv, err := e2e.RunHostCmd(namespace, podName, "env | grep PCIDEVICE_OPENSHIFT_IO")
+	pciAddressEnv, err := e2eoutput.RunHostCmd(namespace, podName, "env | grep PCIDEVICE_OPENSHIFT_IO")
 	e2e.Logf("Get the pci address env is: %s", pciAddressEnv)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(pciAddressEnv).NotTo(o.BeEmpty())
@@ -287,7 +288,7 @@ func getPciAddress(namespace string, podName string) string {
 	return strings.TrimSuffix(pciAddress[1], "\n")
 }
 
-//Get the sriov worker which the policy is used
+// Get the sriov worker which the policy is used
 func getSriovNode(oc *exutil.CLI, namespace string, label string) string {
 	sriovNodeName := ""
 	nodeNamesAll, err := oc.AsAdmin().Run("get").Args("-n", namespace, "node", "-l", label, "-ojsonpath={.items..metadata.name}").Output()
@@ -306,7 +307,7 @@ func getSriovNode(oc *exutil.CLI, namespace string, label string) string {
 	return sriovNodeName
 }
 
-//checkDeviceIDExist will check the worker node contain the network card according to deviceID
+// checkDeviceIDExist will check the worker node contain the network card according to deviceID
 func checkDeviceIDExist(oc *exutil.CLI, namespace string, deviceID string) bool {
 	allDeviceID, err := oc.AsAdmin().Run("get").Args("sriovnetworknodestates", "-n", namespace, "-ojsonpath={.items[*].status.interfaces[*].deviceID}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

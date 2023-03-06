@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 	netutils "k8s.io/utils/net"
 )
 
@@ -1307,12 +1308,12 @@ func getPodIP(oc *exutil.CLI, namespace string, podName string) (string, string)
 func CurlPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string) {
 	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
 	if podIP2 != "" {
-		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP2, "8080"))
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP2, "8080"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
-		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
@@ -1321,12 +1322,12 @@ func CurlPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, nam
 func CurlPod2PodFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string) {
 	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
 	if podIP2 != "" {
-		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
-		_, err = e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP2, "8080"))
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 	} else {
-		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 	}
 }
@@ -1387,12 +1388,12 @@ func CurlNode2SvcFail(oc *exutil.CLI, nodeName string, namespace string, svcName
 func CurlPod2SvcPass(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, podNameSrc string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespaceSvc, svcName)
 	if svcIP2 != "" {
-		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
-		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
@@ -1401,12 +1402,12 @@ func CurlPod2SvcPass(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, p
 func CurlPod2SvcFail(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, podNameSrc string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespaceSvc, svcName)
 	if svcIP2 != "" {
-		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).To(o.HaveOccurred())
-		_, err = e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
 		o.Expect(err).To(o.HaveOccurred())
 	} else {
-		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).To(o.HaveOccurred())
 	}
 }
@@ -1469,10 +1470,10 @@ func isValueInList(value string, list []string) bool {
 func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (string, string) {
 	cmd1 := "ip a sho net1 | awk 'NR==3{print $2}' |grep -Eo '((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])'"
 	cmd2 := "ip a sho net1 | awk 'NR==5{print $2}' |grep -Eo '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
-	podIPv4, err := e2e.RunHostCmd(namespace, podName, cmd1)
+	podIPv4, err := e2eoutput.RunHostCmd(namespace, podName, cmd1)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	pod2ns1IPv4 := strings.TrimSpace(podIPv4)
-	podIPv6, err1 := e2e.RunHostCmd(namespace, podName, cmd2)
+	podIPv6, err1 := e2eoutput.RunHostCmd(namespace, podName, cmd2)
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	pod2ns1IPv6 := strings.TrimSpace(podIPv6)
 	return pod2ns1IPv4, pod2ns1IPv6
@@ -1481,7 +1482,7 @@ func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (strin
 // Pinging pod's secondary interfaces should pass
 func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
 	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
-		msg, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
+		msg, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
 		if !strings.Contains(msg, "Hello OpenShift!") {
 			e2e.Logf("The curl should pass but fail, and try next round")
 			return false, nil
@@ -1489,14 +1490,14 @@ func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc
 		return true, nil
 	})
 	//MultiNetworkPolicy not support ipv6 yet, disabel ipv6 curl right now
-	//msg1, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
+	//msg1, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
 }
 
 // Pinging pod's secondary interfaces should fail
 func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
 	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
-		msg, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
+		msg, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
 		if strings.Contains(msg, "Hello OpenShift!") {
 			e2e.Logf("The curl should fail but pass, and try next round")
 			return false, nil
@@ -1504,7 +1505,7 @@ func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc
 		return true, nil
 	})
 	//MultiNetworkPolicy not support ipv6 yet, disabel ipv6 curl right now
-	//msg1, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
+	//msg1, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
 }
 
@@ -2378,7 +2379,7 @@ func getOVNEgressIPObject(oc *exutil.CLI) []string {
 // getPodMultiNetworkIPv6 will defined to get ipv6 only address.
 func getPodMultiNetworkIPv6(oc *exutil.CLI, namespace string, podName string) string {
 	cmd1 := "ip a sho net1 | awk 'NR==3{print $2}' |grep -Eo '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
-	podIPv6, err1 := e2e.RunHostCmd(namespace, podName, cmd1)
+	podIPv6, err1 := e2eoutput.RunHostCmd(namespace, podName, cmd1)
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	MultiNetworkIPv6 := strings.TrimSpace(podIPv6)
 	return MultiNetworkIPv6

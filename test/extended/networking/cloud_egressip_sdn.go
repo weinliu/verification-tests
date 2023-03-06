@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 
 	"github.com/vmware/govmomi"
 )
@@ -202,8 +203,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, freeIPs[0])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -243,11 +244,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch flag {
 		case "ipecho":
 			g.By("9.Check source IP again from first project, curl command should not succeed, error is expected")
-			_, egressErr1 := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			_, egressErr1 := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			o.Expect(egressErr1).To(o.HaveOccurred())
 
 			g.By("10.Check source IP again from second project, curl command should not succeed, error is expected")
-			_, egressErr2 := e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			_, egressErr2 := e2eoutput.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			o.Expect(egressErr2).To(o.HaveOccurred())
 		case "tcpdump":
 			g.By("9. From first netnamespace, verify from tcpDump that EgressIP is not in tcpDump log")
@@ -409,8 +410,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
 			primaryInf, infErr := getSnifPhyInf(oc, egressNode1)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost := nslookDomainName("ifconfig.me")
@@ -478,8 +479,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, freeIPs[0])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -600,10 +601,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				o.ContainSubstring(freeIPs[1])))
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump", "true")
 
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode1)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
@@ -715,10 +716,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[1]))
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1", "true")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2", "true")
 
 			primaryInf1, infErr = getSnifPhyInf(oc, egressNode1)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
@@ -810,8 +811,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIPs[1]))
 		case "tcpdump":
 			g.By(" Using tcpDump to check source IP is egressIP.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
 			primaryInf, infErr := getSnifPhyInf(oc, egressNode1)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost := nslookDomainName("ifconfig.me")
@@ -959,8 +960,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, podns.namespace, podns.name, ipEchoURL, true, ip[0])
 		case "tcpdump":
 			g.By(" Using tcpDump to check source IP is egressIP.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, hostLeft[0], "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, hostLeft[0], "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, hostLeft[0], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, hostLeft[0], "tcpdump", "true")
 			primaryInf, infErr := getSnifPhyInf(oc, hostLeft[0])
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost := nslookDomainName("ifconfig.me")
@@ -1048,12 +1049,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs3[0]))
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump", "true")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump", "true")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[2], "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[2], "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[2], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[2], "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNodes[0])
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -1096,7 +1097,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\n Get the egressNode that did not have egressIP address previously: %v\n", hostLeft)
 
 		// remove the tcpdump label before shutting down the egressNode that has the first egressIP
-		e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, foundHost, "tcpdump")
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, foundHost, "tcpdump")
 
 		g.By("5. Get the zone info for the host, shutdown the host that has the first egressIP address")
 		var instance []string
@@ -1307,12 +1308,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs3[0]))
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump", "true")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump", "true")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[2], "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[2], "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[2], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[2], "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNodes[0])
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -1355,7 +1356,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\n Get the egressNode that did not have egressIP address previously: %v\n", hostLeft)
 
 		// remove the tcpdump label before shutting down the egressNode that has the first egressIP
-		e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, foundHost, "tcpdump")
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, foundHost, "tcpdump")
 
 		g.By("5. Get the zone info for the host, shutdown the host that has the first egressIP address")
 		var instance []string
@@ -1541,7 +1542,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP.")
 			sourceIPErr := wait.Poll(5*time.Second, timer, func() (bool, error) {
-				sourceIP, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+				sourceIP, err = e2eoutput.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 				if !contains(freeIPs, sourceIP) || err != nil {
 					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, freeIPs[0], err)
 					return false, nil
@@ -1556,8 +1557,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
 			e2e.Logf("\n Expected to find %v in tcpdump log\n", freeIPs[0])
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -1582,7 +1583,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch flag {
 		case "ipecho":
 			sourceIPErr := wait.Poll(5*time.Second, timer, func() (bool, error) {
-				sourceIP, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+				sourceIP, err = e2eoutput.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 				if sourceIP != nodeIP || err != nil {
 					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, nodeIP, err)
 					return false, nil
@@ -1593,8 +1594,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.Equal(nodeIP))
 		case "tcpdump":
 			e2e.Logf("\n ***** Expected to find %v in tcpdump log *****\n", nodeIP)
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump2")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump2", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump2")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump2", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, PodNodeName)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -1619,7 +1620,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch flag {
 		case "ipecho":
 			sourceIPErr := wait.Poll(5*time.Second, timer, func() (bool, error) {
-				sourceIP, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+				sourceIP, err = e2eoutput.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 				if sourceIP != freeIPs[1] || err != nil {
 					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, nodeIP, err)
 					return false, nil
@@ -1649,7 +1650,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch flag {
 		case "ipecho":
 			sourceIPErr := wait.Poll(5*time.Second, timer, func() (bool, error) {
-				sourceIP, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+				sourceIP, err = e2eoutput.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 				if sourceIP != freeIPs[2] || err != nil {
 					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, nodeIP, err)
 					return false, nil
@@ -1694,7 +1695,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch flag {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP.")
-			_, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			_, err = e2eoutput.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			o.Expect(err).To(o.HaveOccurred())
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, the out of CIDR IP should not be in tcpdump log, should get some timeout error message.")
@@ -1762,8 +1763,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, pod.namespace, pod.name, ipEchoURL, true, freeIPs1[0])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode1)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -1807,8 +1808,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
 			g.By(" Create a new tcpdumpDS for the second node.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode2)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			defer deleteTcpdumpDS(oc, "tcpdump-47456-2", ns)
@@ -1834,8 +1835,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
 			g.By(" Create a new tcpdumpDS for the pod's node.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump3")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump3", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump3")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump3", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, PodNodeName)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			defer deleteTcpdumpDS(oc, "tcpdump-47456-3", ns)
@@ -1912,8 +1913,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
 			g.By(" Create a new tcpdumpDS for the egressNode.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -1939,8 +1940,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, nodeIP)
 		case "tcpdump":
 			g.By(" Create a new tcpdumpDS for the node that the pod of first namespace resides on.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump2")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump2", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump2")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump2", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, PodNodeName)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			defer deleteTcpdumpDS(oc, "tcpdump-47458-2", ns1)
@@ -1976,8 +1977,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, pod2.namespace, pod2.name, ipEchoURL, true, freeIPs[0])
 		case "tcpdump":
 			g.By(" Create a new tcpdumpDS for the egressNode in the second namespace")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump3")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump3", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump3")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump3", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			defer deleteTcpdumpDS(oc, "tcpdump-47458-3", ns2)
@@ -2002,8 +2003,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, pod2.namespace, pod2.name, ipEchoURL, true, nodeIP)
 		case "tcpdump":
 			g.By(" Create a new tcpdumpDS for the pod's node in second namespace.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump4")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump4", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump4")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, PodNodeName, "tcpdump4", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, PodNodeName)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			defer deleteTcpdumpDS(oc, "tcpdump-47458-4", ns2)
@@ -2094,7 +2095,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP.")
 			sourceIPErr := wait.Poll(5*time.Second, timer, func() (bool, error) {
-				sourceIP, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+				sourceIP, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 				if sourceIP != nodeIP1 || err != nil {
 					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, nodeIP1, err)
 					return false, nil
@@ -2107,8 +2108,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
 			g.By(" Create a new tcpdumpDS for the egressNode.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump1", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -2129,7 +2130,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch flag {
 		case "ipecho":
 			sourceIPErr := wait.Poll(5*time.Second, timer, func() (bool, error) {
-				sourceIP, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+				sourceIP, err = e2eoutput.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 				if sourceIP != nodeIP2 || err != nil {
 					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, nodeIP2, err)
 					return false, nil
@@ -2141,8 +2142,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIPs[0]))
 		case "tcpdump":
 			g.By(" Create a new tcpdumpDS for the non-egress node where the test pod resides, its nodeIP is expected in the tcpdump log but egressIP is expected not in the tcpdump log.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nonEgressNode, "tcpdump2")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nonEgressNode, "tcpdump2", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nonEgressNode, "tcpdump2")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nonEgressNode, "tcpdump2", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, nonEgressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -2208,15 +2209,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch flag {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP, curl from the test pod should not succeed, error is expected.")
-			_, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			_, err = e2eoutput.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			o.Expect(err).To(o.HaveOccurred())
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, egressIP should not be in tcpdump log.")
 			g.By(" Create a new tcpdumpDS for the egressNode.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1", "true")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2", "true")
 			primaryInf1, infErr1 := getSnifPhyInf(oc, egressNode1)
 			o.Expect(infErr1).NotTo(o.HaveOccurred())
 			dstHost := nslookDomainName("ifconfig.me")
@@ -2299,8 +2300,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, pod2.namespace, pod2.name, ipEchoURL, true, freeIPs[0])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP in first namespace.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -2310,8 +2311,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, freeIPs[0], dstHost, ns1, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nonEgressNode, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nonEgressNode, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nonEgressNode, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nonEgressNode, "tcpdump", "true")
 			egressErr = verifyEgressIPinTCPDump(oc, pod2.name, pod2.namespace, freeIPs[0], dstHost, ns1, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 		default:
@@ -2396,10 +2397,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("11. Curl from test pods of the third namespace, verify they can not access external because there is no node hosts the egressIP, even though it is assigned to third netnamespace, error is expected for curl command")
 		switch flag {
 		case "ipecho":
-			_, CurlErr := e2e.RunHostCmd(pod5.namespace, pod5.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			_, CurlErr := e2eoutput.RunHostCmd(pod5.namespace, pod5.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			o.Expect(CurlErr).To(o.HaveOccurred())
 
-			_, CurlErr = e2e.RunHostCmd(pod6.namespace, pod6.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			_, CurlErr = e2eoutput.RunHostCmd(pod6.namespace, pod6.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			o.Expect(CurlErr).To(o.HaveOccurred())
 		case "tcpdump":
 			// note: The 6th parameter for verifyEgressIPinTCPDump function should be the namespace where tcpdumpDS is, not the namespace of test pod
@@ -2482,7 +2483,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("5. Curl the externalIP service from test pod of 2nd namespace")
 		curlURL := freeIPs[0] + ":27017"
-		output, CurlErr := e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+curlURL+" --connect-timeout 5")
+		output, CurlErr := e2eoutput.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+curlURL+" --connect-timeout 5")
 		o.Expect(CurlErr).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`Hello OpenShift!`))
 
@@ -2500,7 +2501,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, pod3.namespace, pod3.name)
 
 		g.By("7. Curl the externalIP service from test pod of 3rd namespace")
-		output, CurlErr = e2e.RunHostCmd(pod3.namespace, pod3.name, "curl -s "+curlURL+" --connect-timeout 5")
+		output, CurlErr = e2eoutput.RunHostCmd(pod3.namespace, pod3.name, "curl -s "+curlURL+" --connect-timeout 5")
 		o.Expect(CurlErr).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`Hello OpenShift!`))
 	})
@@ -2657,12 +2658,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch flag {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP.")
-			_, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			_, err = e2eoutput.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			o.Expect(err).To(o.HaveOccurred())
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -2863,8 +2864,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[0]))
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, foundHost, "tcpdump1")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, foundHost, "tcpdump1", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, foundHost, "tcpdump1")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, foundHost, "tcpdump1", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, foundHost)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -2961,8 +2962,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[0]))
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, newFoundHost, "tcpdump2")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, newFoundHost, "tcpdump2", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, newFoundHost, "tcpdump2")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, newFoundHost, "tcpdump2", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, newFoundHost)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -3053,8 +3054,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, ns, helloPodname[0], ipEchoURL, true, freeIPs[0])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
@@ -3099,8 +3100,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, ns, helloPodname[0], ipEchoURL, true, expectedEIP[0])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")

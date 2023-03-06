@@ -25,6 +25,7 @@ import (
 	db "github.com/openshift/openshift-tests-private/test/extended/util/db"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-operators] OLM should", func() {
@@ -1932,8 +1933,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("3) Add app label")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, firstNode, "app_54038")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, firstNode, "app_54038", "dev")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, firstNode, "app_54038")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, firstNode, "app_54038", "dev")
 
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--show-labels", "--no-headers").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

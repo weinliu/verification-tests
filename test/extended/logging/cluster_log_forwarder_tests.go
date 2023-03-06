@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
@@ -238,7 +239,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			podIP := ovnPods.Items[0].Status.PodIP
 			e2e.Logf("Pod IP is %s ", podIP)
 			ovnCurl := "curl " + podIP + ":8080"
-			_, err = e2e.RunHostCmdWithRetries(ovnProj, ovnPods.Items[1].Name, ovnCurl, 3*time.Second, 30*time.Second)
+			_, err = e2eoutput.RunHostCmdWithRetries(ovnProj, ovnPods.Items[1].Name, ovnCurl, 3*time.Second, 30*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check for the generated OVN audit logs on the OpenShift cluster nodes")
@@ -249,7 +250,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check for the generated OVN audit logs in Elasticsearch")
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				cmd := "es_util --query=audit*/_search?format=JSON -d '{\"query\":{\"query_string\":{\"query\":\"verdict=allow AND severity=alert AND tcp,vlan_tci AND tcp_flags=ack\",\"default_field\":\"message\"}}}'"
-				stdout, err := e2e.RunHostCmdWithRetries(cloNS, esPods.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
+				stdout, err := e2eoutput.RunHostCmdWithRetries(cloNS, esPods.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
 				if err != nil {
 					return false, err
 				}

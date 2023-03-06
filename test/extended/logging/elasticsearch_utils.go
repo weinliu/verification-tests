@@ -15,12 +15,12 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 func getESIndices(ns string, pod string) ([]ESIndex, error) {
 	cmd := "es_util --query=_cat/indices?format=JSON"
-	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 3*time.Second, 9*time.Second)
+	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 3*time.Second, 9*time.Second)
 	indices := []ESIndex{}
 	json.Unmarshal([]byte(stdout), &indices)
 	return indices, err
@@ -28,7 +28,7 @@ func getESIndices(ns string, pod string) ([]ESIndex, error) {
 
 func getESIndicesByName(ns string, pod string, indexName string) ([]ESIndex, error) {
 	cmd := "es_util --query=_cat/indices/" + indexName + "*?format=JSON"
-	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
+	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	indices := []ESIndex{}
 	json.Unmarshal([]byte(stdout), &indices)
 	return indices, err
@@ -56,7 +56,7 @@ func waitForIndexAppear(ns string, pod string, indexName string) {
 
 func getDocCountByQuery(ns string, pod string, indexName string, queryString string) (int64, error) {
 	cmd := "es_util --query=" + indexName + "*/_count?format=JSON -d '" + queryString + "'"
-	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
+	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	res := CountResult{}
 	json.Unmarshal([]byte(stdout), &res)
 	return res.Count, err
@@ -82,7 +82,7 @@ func searchDocByQuery(ns string, pod string, indexName string, queryString strin
 	if len(queryString) > 0 {
 		cmd += " -d '" + queryString + "'"
 	}
-	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
+	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	res := SearchResult{}
 	//data := bytes.NewReader([]byte(stdout))
@@ -94,7 +94,7 @@ func searchDocByQuery(ns string, pod string, indexName string, queryString strin
 func queryInES(ns, pod, queryString string) (SearchResult, error) {
 	cmd := "es_util --query=" + queryString
 	res := SearchResult{}
-	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
+	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	if err != nil {
 		return res, err
 	}
@@ -272,7 +272,7 @@ func (es externalES) baseCurlString() string {
 
 func (es externalES) getIndices(oc *exutil.CLI) ([]ESIndex, error) {
 	cmd := es.baseCurlString() + "_cat/indices?format=JSON"
-	stdout, err := e2e.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 3*time.Second, 9*time.Second)
+	stdout, err := e2eoutput.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 3*time.Second, 9*time.Second)
 	indices := []ESIndex{}
 	json.Unmarshal([]byte(stdout), &indices)
 	return indices, err
@@ -300,7 +300,7 @@ func (es externalES) waitForIndexAppear(oc *exutil.CLI, indexName string) {
 
 func (es externalES) getDocCount(oc *exutil.CLI, indexName string, queryString string) (int64, error) {
 	cmd := es.baseCurlString() + indexName + "*/_count?format=JSON -d '" + queryString + "'"
-	stdout, err := e2e.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 5*time.Second, 30*time.Second)
+	stdout, err := e2eoutput.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 5*time.Second, 30*time.Second)
 	res := CountResult{}
 	json.Unmarshal([]byte(stdout), &res)
 	return res.Count, err
@@ -323,7 +323,7 @@ func (es externalES) waitForProjectLogsAppear(oc *exutil.CLI, projectName string
 
 func (es externalES) searchDocByQuery(oc *exutil.CLI, indexName string, queryString string) SearchResult {
 	cmd := es.baseCurlString() + indexName + "*/_search?format=JSON -d '" + queryString + "'"
-	stdout, err := e2e.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 3*time.Second, 30*time.Second)
+	stdout, err := e2eoutput.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 3*time.Second, 30*time.Second)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	res := SearchResult{}
 	//data := bytes.NewReader([]byte(stdout))

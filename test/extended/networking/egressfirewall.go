@@ -15,6 +15,7 @@ import (
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -69,11 +70,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressFW1.createEgressFWObject1(oc)
 
 		g.By("5. Check www.test.com is blocked \n")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.test.com --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.test.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("6. Check www.redhat.com is allowed \n")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).ToNot(o.HaveOccurred())
 
 		g.By("7. Verify acl logs for egressfirewall generated. \n")
@@ -130,7 +131,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressFW2.createEgressFW2Object(oc)
 
 		g.By("5. Generate egress traffic which will hit the egressfirewall. \n")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("6. Verify acl logs for egressfirewall generated. \n")
@@ -146,7 +147,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		disableACLOnNamespace(oc, ns1)
 
 		g.By("8. Generate egress traffic which will hit the egressfirewall. \n")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("9. Verify no incremental acl logs. \n")
@@ -160,7 +161,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		enableACLOnNamespace(oc, ns1, "alert", "alert")
 
 		g.By("11. Generate egress traffic which will hit the egressfirewall. \n")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("12. Verify new acl logs for egressfirewall generated. \n")
@@ -211,7 +212,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer egressFW1.deleteEgressFW2Object(oc)
 
 		g.By("5. Generate egress traffic which will hit the egressfirewall. \n")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("6. Verify acl logs for egressfirewall generated. \n")
@@ -239,7 +240,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, ns2, pod2.name)
 
 		g.By("9. Generate egress traffic in ns2. \n")
-		_, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s www.redhat.com --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod2.namespace, pod2.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("10. Verify no acl logs for egressfirewall generated in ns2. \n")
@@ -264,7 +265,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer egressFW2.deleteEgressFW2Object(oc)
 
 		g.By("12. Generate egress traffic which will hit the egressfirewall in ns2. \n")
-		_, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s www.redhat.com --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod2.namespace, pod2.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("13. Verify no acl logs for egressfirewall generated in ns2. \n")
@@ -438,9 +439,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer pod1.deletePingPod(oc)
 
 		g.By("Check both ipv6 and ipv4 are blocked")
-		_, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -6 www.google.com --connect-timeout 5 -I")
+		_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -6 www.google.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -4 www.google.com --connect-timeout 5 -I")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -4 www.google.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("Remove egressfirewall object")
@@ -461,9 +462,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
 		g.By("Check both ipv4 and ipv6 destination can be accessed")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -6 www.google.com --connect-timeout 5 -I")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -6 www.google.com --connect-timeout 5 -I")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -4 www.google.com --connect-timeout 5 -I")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -4 www.google.com --connect-timeout 5 -I")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 

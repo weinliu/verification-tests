@@ -13,6 +13,7 @@ import (
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -52,14 +53,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("check hellosdn pods can reolsve the dns after apply the networkplicy")
 		helloSdnName := getPodName(oc, oc.Namespace(), "name=hellosdn")
-		digOutput, err := e2e.RunHostCmd(oc.Namespace(), helloSdnName[0], "dig kubernetes.default")
+		digOutput, err := e2eoutput.RunHostCmd(oc.Namespace(), helloSdnName[0], "dig kubernetes.default")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(digOutput).Should(o.ContainSubstring("Got answer"))
 		o.Expect(digOutput).ShouldNot(o.ContainSubstring("connection timed out"))
 
 		g.By("check test-pods can reolsve the dns after apply the networkplicy")
 		testPodName := getPodName(oc, oc.Namespace(), "name=test-pods")
-		digOutput, err = e2e.RunHostCmd(oc.Namespace(), testPodName[0], "dig kubernetes.default")
+		digOutput, err = e2eoutput.RunHostCmd(oc.Namespace(), testPodName[0], "dig kubernetes.default")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(digOutput).Should(o.ContainSubstring("Got answer"))
 		o.Expect(digOutput).ShouldNot(o.ContainSubstring("connection timed out"))
@@ -111,10 +112,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		testPodIP2 := getPodIPv4(oc, ns2, testPodName[1])
 
 		g.By("7. Check networkpolicy works.")
-		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP1, "8080"))
+		output, err = e2eoutput.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP1, "8080"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
-		_, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(testPodIP2, "8080"))
+		_, err = e2eoutput.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(testPodIP2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
 
@@ -127,10 +128,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		g.By("9. Again checking networkpolicy works.")
-		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP1, "8080"))
+		output, err = e2eoutput.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP1, "8080"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
-		_, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP2, "8080"))
+		_, err = e2eoutput.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
 
@@ -205,10 +206,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		hellopodIP2Ns2 := getPodIPv4(oc, ns2, helloPodNameNs2[1])
 
 		g.By("4. Curl both ns2 pods from ns1.")
-		_, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP1Ns2, "8080"))
+		_, err = e2eoutput.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP1Ns2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
-		_, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP2Ns2, "8080"))
+		_, err = e2eoutput.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP2Ns2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
 	})
@@ -436,7 +437,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		hellosdnPodIP1Ns2 := getPodIPv4(oc, ns2, hellosdnPodNameNs2[0])
 
 		g.By("curl from ns1 hellosdn pod to ns2 pod")
-		_, err = e2e.RunHostCmd(ns1, hellosdnPodNameNs1[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(hellosdnPodIP1Ns2, "8080"))
+		_, err = e2eoutput.RunHostCmd(ns1, hellosdnPodNameNs1[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(hellosdnPodIP1Ns2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
 

@@ -97,12 +97,27 @@ do
         if [[ -n "${version_check_result}" ]]; then
             bad_ginkgorep_files="$bad_ginkgorep_files $f";
         fi
+        version_check_result=$(echo $f | xargs grep -E 'e2e.RunHostCmd|e2e.AddOrUpdateLabelOnNode|e2e.RemoveLabelOffNode' || true)
+        if [[ -n "${version_check_result}" ]]; then
+            bad_ginkgorep_files="$bad_ginkgorep_files $f";
+        fi
     fi 
 done
 
 if [[ -n "${bad_ginkgover_files}" ]]||[[ -n "${bad_ginkgorep_files}" ]]; then
     echo -e "from 4.12, please use github.com/onsi/ginkgo/v2 and CurrentSpecReport, not github.com/onsi/ginkgo and CurrentGinkgoTestDescription"
     echo -e "before 4.12, please use github.com/onsi/ginkgo and CurrentGinkgoTestDescription, not github.com/onsi/ginkgo/v2 and CurrentSpecReport"
+
+    echo -e "from 4.13, please use e2eoutput \"k8s.io/kubernetes/test/e2e/framework/pod/output\" and e2eoutput.RunHostCmd, related e2eoutput.RunHostCmdXXX"
+    echo -e "not e2e \"k8s.io/kubernetes/test/e2e/framework\" and e2e.RunHostCmd and related e2e.RunHostCmdXXXX because they are moved from framework to framework/pod/output"
+    echo -e "from 4.13, please use e2enode \"k8s.io/kubernetes/test/e2e/framework/node\" and e2enode.AddOrUpdateLabelOnNode, e2enode.RemoveLabelOffNode"
+    echo -e "not e2e \"k8s.io/kubernetes/test/e2e/framework\" and e2e.AddOrUpdateLabelOnNode and e2e.RemoveLabelOffNode because they are moved from framework to framework/node"
+
+    echo -e "before 4.13, please use e2e \"k8s.io/kubernetes/test/e2e/framework\" and e2e.RunHostCmd, related e2e.RunHostCmdXXX"
+    echo -e "not e2eoutput \"k8s.io/kubernetes/test/e2e/framework/pod/output\" and e2eoutput.RunHostCmd and related e2eoutput.RunHostCmdXXXX"
+    echo -e "before 4.13, please use e2e \"k8s.io/kubernetes/test/e2e/framework\" and e2e.AddOrUpdateLabelOnNode, e2e.RemoveLabelOffNode"
+    echo -e "not e2enode \"k8s.io/kubernetes/test/e2e/framework/node\" and e2enode.AddOrUpdateLabelOnNode and e2enode.RemoveLabelOffNode"
+
     echo "ERROR:"
 	echo "ginkgo version check detected following problems:"
     test -n "${bad_ginkgover_files}" && echo "please use github.com/onsi/ginkgo/v2 in ${bad_ginkgover_files}" || true

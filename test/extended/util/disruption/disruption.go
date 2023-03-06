@@ -16,8 +16,6 @@ import (
 
 	"k8s.io/kubernetes/test/e2e/chaosmonkey"
 	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/e2e/framework/ginkgowrapper"
-	e2eskipper "k8s.io/kubernetes/test/e2e/framework/skipper"
 	"k8s.io/kubernetes/test/e2e/upgrades"
 	"k8s.io/kubernetes/test/utils/junit"
 )
@@ -128,21 +126,11 @@ func finalizeTest(start time.Time, tc *junit.TestCase) {
 	}
 
 	switch r := r.(type) {
-	case ginkgowrapper.FailurePanic:
-		tc.Failures = []*junit.Failure{
-			{
-				Message: r.Message,
-				Type:    "Failure",
-				Value:   fmt.Sprintf("%s\n\n%s", r.Message, r.FullStackTrace),
-			},
-		}
-	case e2eskipper.SkipPanic:
-		tc.Skipped = fmt.Sprintf("%s:%d %q", r.Filename, r.Line, r.Message)
 	default:
 		tc.Errors = []*junit.Error{
 			{
 				Message: fmt.Sprintf("%v", r),
-				Type:    "Panic",
+				Type:    "Failure",
 				Value:   fmt.Sprintf("%v\n\n%s", r, debug.Stack()),
 			},
 		}
@@ -161,8 +149,7 @@ func createTestFrameworks(tests []upgrades.Test) map[string]*framework.Framework
 			ns = "e2e-k8s-" + ns
 		}
 		testFrameworks[t.Name()] = &framework.Framework{
-			BaseName:                 ns,
-			AddonResourceConstraints: make(map[string]framework.ResourceConstraint),
+			BaseName: ns,
 			Options: framework.Options{
 				ClientQPS:   20,
 				ClientBurst: 50,

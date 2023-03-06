@@ -10,6 +10,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -747,7 +748,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
 
 		g.By("6. curl should pass before applying policy")
-		_, curl1Err := e2e.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
+		_, curl1Err := e2eoutput.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
 		o.Expect(curl1Err).NotTo(o.HaveOccurred())
 
 		g.By("7. Create tcpport policy in ns1")
@@ -758,7 +759,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(policyCreOutput).To(o.ContainSubstring("tcp-port"))
 
 		g.By("8. One curl should fail before applying policy")
-		_, curl2Err := e2e.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
+		_, curl2Err := e2eoutput.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
 		o.Expect(curl2Err).To(o.HaveOccurred())
 
 		g.By("9. Delete tcp-port policy in ns1")
@@ -769,7 +770,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(policyDelOutput).NotTo(o.ContainSubstring("tcp-port"))
 
 		g.By("10. curl should pass after deleting policy")
-		_, curl3Err := e2e.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
+		_, curl3Err := e2eoutput.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
 		o.Expect(curl3Err).NotTo(o.HaveOccurred())
 	})
 

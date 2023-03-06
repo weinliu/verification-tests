@@ -12,6 +12,7 @@ import (
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-apps] Workloads", func() {
@@ -110,6 +111,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	g.It("Author:knarra-High-44049-DefaultPodTopologySpread doesn't work in non-CloudProvider env in OpenShift 4.7 [Disruptive][Flaky]", func() {
 		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("workernodeList is %v", workerNodeList)
 		// Create test project
 		g.By("Create test project")
@@ -146,10 +148,10 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Label Node1 & Node2")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workerNodeList[0], "topology.kubernetes.io/zone")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workerNodeList[0], "topology.kubernetes.io/zone", "ocp44049zoneA")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workerNodeList[1], "topology.kubernetes.io/zone")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workerNodeList[1], "topology.kubernetes.io/zone", "ocp44049zoneB")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workerNodeList[0], "topology.kubernetes.io/zone")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workerNodeList[0], "topology.kubernetes.io/zone", "ocp44049zoneA")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workerNodeList[1], "topology.kubernetes.io/zone")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workerNodeList[1], "topology.kubernetes.io/zone", "ocp44049zoneB")
 
 		// Test starts here
 		// Test for Large pods
@@ -242,6 +244,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 		//Get the kube-scheduler pod name & check logs
 		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-kube-scheduler", "pods", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		schedulerLogs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args(podName, "-n", "openshift-kube-scheduler").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -288,6 +291,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 		//Get the kube-scheduler pod name and check logs
 		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-kube-scheduler", "pods", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		schedulerLogs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args(podName, "-n", "openshift-kube-scheduler").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 

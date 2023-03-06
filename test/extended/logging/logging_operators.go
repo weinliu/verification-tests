@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-logging-operator should", func() {
@@ -199,9 +200,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		createFile := "dd if=/dev/urandom of=/elasticsearch/persistent/file.txt bs=1048576 count=19000"
-		_, _ = e2e.RunHostCmd(cloNS, podList.Items[0].Name, createFile)
+		_, _ = e2eoutput.RunHostCmd(cloNS, podList.Items[0].Name, createFile)
 		checkDiskUsage := "es_util --query=_cat/nodes?h=h,disk.used_percent"
-		stdout, err := e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, checkDiskUsage, 3*time.Second, 30*time.Second)
+		stdout, err := e2eoutput.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, checkDiskUsage, 3*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		diskUsage1, _ := strconv.ParseFloat(strings.TrimSuffix(stdout, "\n"), 32)
 		fmt.Printf("\n\ndisk usage is: %f\n\n", diskUsage1)
@@ -210,7 +211,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		g.By("check indices settings, should have \"index.blocks.read_only_allow_delete\": \"true\"")
 		indicesSettings := "es_util --query=app*/_settings/index.blocks.read_only_allow_delete?pretty"
 		err = wait.Poll(5*time.Second, 120*time.Second, func() (done bool, err error) {
-			output, err := e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, indicesSettings, 3*time.Second, 30*time.Second)
+			output, err := e2eoutput.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, indicesSettings, 3*time.Second, 30*time.Second)
 			if err != nil {
 				return false, err
 			}
@@ -223,9 +224,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 		g.By("release ES node disk")
 		removeFile := "rm -rf /elasticsearch/persistent/file.txt"
-		_, err = e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, removeFile, 3*time.Second, 30*time.Second)
+		_, err = e2eoutput.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, removeFile, 3*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		stdout2, err := e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, checkDiskUsage, 3*time.Second, 30*time.Second)
+		stdout2, err := e2eoutput.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, checkDiskUsage, 3*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		diskUsage2, _ := strconv.ParseFloat(strings.TrimSuffix(stdout2, "\n"), 32)
 		fmt.Printf("\n\ndisk usage is: %f\n\n", diskUsage2)
@@ -233,7 +234,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 		g.By("check indices settings again, should not have \"index.blocks.read_only_allow_delete\": \"true\"")
 		err = wait.Poll(5*time.Second, 120*time.Second, func() (done bool, err error) {
-			output, err := e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, indicesSettings, 3*time.Second, 30*time.Second)
+			output, err := e2eoutput.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, indicesSettings, 3*time.Second, 30*time.Second)
 			if err != nil {
 				return false, err
 			}
@@ -283,7 +284,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		for _, index := range []string{"app", "infra", "audit"} {
 			cmd := "es_util --query=" + index + "*/_settings?pretty -XPUT -d'{\"index\": {\"number_of_replicas\": 1}}'"
-			_, err = e2e.RunHostCmd(cloNS, masterPods.Items[0].Name, cmd)
+			_, err = e2eoutput.RunHostCmd(cloNS, masterPods.Items[0].Name, cmd)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
@@ -504,11 +505,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 		g.By("test if kibana and collector pods can connect to ES again")
 		collectorPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "component=collector"})
-		output, err := e2e.RunHostCmdWithRetries(cloNS, collectorPODs.Items[0].Name, "curl --cacert /var/run/ocp-collector/secrets/collector/ca-bundle.crt --cert /var/run/ocp-collector/secrets/collector/tls.crt --key /var/run/ocp-collector/secrets/collector/tls.key "+esSVC, 5*time.Second, 30*time.Second)
+		output, err := e2eoutput.RunHostCmdWithRetries(cloNS, collectorPODs.Items[0].Name, "curl --cacert /var/run/ocp-collector/secrets/collector/ca-bundle.crt --cert /var/run/ocp-collector/secrets/collector/tls.crt --key /var/run/ocp-collector/secrets/collector/tls.key "+esSVC, 5*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
 		kibanaPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "component=kibana"})
-		output, err = e2e.RunHostCmdWithRetries(cloNS, kibanaPods.Items[0].Name, "curl -s --cacert /etc/kibana/keys/ca --cert /etc/kibana/keys/cert --key /etc/kibana/keys/key "+esSVC, 5*time.Second, 30*time.Second)
+		output, err = e2eoutput.RunHostCmdWithRetries(cloNS, kibanaPods.Items[0].Name, "curl -s --cacert /etc/kibana/keys/ca --cert /etc/kibana/keys/cert --key /etc/kibana/keys/key "+esSVC, 5*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
 	})

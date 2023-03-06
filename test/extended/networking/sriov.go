@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN sriov", func() {
@@ -210,7 +211,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		g.By("Check testpmd running well")
 		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
 		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
-		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
@@ -319,7 +320,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		g.By("Check testpmd running well")
 		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
 		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
-		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
 
@@ -387,7 +388,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		g.By("Check test pod have second interface with assigned ip")
 		command := "ip a show net1"
-		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("10.56.217"))
 
@@ -455,7 +456,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		g.By("Check test pod have second interface with assigned ip")
 		command := "ip a show net1"
-		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("10.56.217"))
 
@@ -523,7 +524,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		g.By("Check testpmd running well")
 		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
 		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
-		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
 
@@ -651,7 +652,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		g.By("Check test pod have second interface with assigned ip")
 		command := "ip a show net1"
-		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("10.56.217"))
 
@@ -719,7 +720,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		g.By("Check testpmd running well")
 		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
 		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
-		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
 

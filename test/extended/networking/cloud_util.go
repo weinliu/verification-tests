@@ -23,6 +23,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 
 	"github.com/vmware/govmomi"
 )
@@ -886,7 +887,7 @@ func nslookDomainName(domainName string) string {
 func verifyEgressIPinTCPDump(oc *exutil.CLI, pod, podNS, expectedEgressIP, dstHost, tcpdumpNS, tcpdumpName string, expectedOrNot bool) error {
 	egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 		randomStr, url := getRequestURL(dstHost)
-		_, err := e2e.RunHostCmd(podNS, pod, url)
+		_, err := e2eoutput.RunHostCmd(podNS, pod, url)
 		if checkMatchedIPs(oc, tcpdumpNS, tcpdumpName, randomStr, expectedEgressIP, expectedOrNot) != nil || err != nil {
 			e2e.Logf("Expected to find egressIP in tcpdump is: %v, did not get expected result in tcpdump log, try next round.", expectedOrNot)
 			return false, nil
@@ -1048,7 +1049,7 @@ func verifyEgressIPWithIPEcho(oc *exutil.CLI, podNS, podName, ipEchoURL string, 
 	timeout := estimateTimeoutForEgressIP(oc)
 	if hit {
 		egressErr := wait.Poll(5*time.Second, timeout, func() (bool, error) {
-			sourceIP, err := e2e.RunHostCmd(podNS, podName, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			sourceIP, err := e2eoutput.RunHostCmd(podNS, podName, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			if err != nil {
 				e2e.Logf("error,%v", err)
 				return false, nil
@@ -1063,7 +1064,7 @@ func verifyEgressIPWithIPEcho(oc *exutil.CLI, podNS, podName, ipEchoURL string, 
 		exutil.AssertWaitPollNoErr(egressErr, fmt.Sprintf("sourceIP was not included in %v", expectedIPs))
 	} else {
 		egressErr := wait.Poll(5*time.Second, timeout, func() (bool, error) {
-			sourceIP, err := e2e.RunHostCmd(podNS, podName, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			sourceIP, err := e2eoutput.RunHostCmd(podNS, podName, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			if err != nil {
 				e2e.Logf("error,%v", err)
 				return false, nil

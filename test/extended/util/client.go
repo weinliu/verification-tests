@@ -25,6 +25,8 @@ import (
 	o "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 
+	e2edebug "k8s.io/kubernetes/test/e2e/framework/debug"
+
 	kubeauthorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -379,7 +381,7 @@ func (c *CLI) CreateProject() string {
 func (c *CLI) TeardownProject() {
 	e2e.TestContext.DumpLogsOnFailure = os.Getenv("DUMP_EVENTS_ON_FAILURE") != "false"
 	if len(c.Namespace()) > 0 && g.CurrentSpecReport().Failed() && e2e.TestContext.DumpLogsOnFailure {
-		e2e.DumpAllNamespaceInfo(c.kubeFramework.ClientSet, c.Namespace())
+		e2edebug.DumpAllNamespaceInfo(c.kubeFramework.ClientSet, c.Namespace())
 	}
 
 	if len(c.configPath) > 0 {

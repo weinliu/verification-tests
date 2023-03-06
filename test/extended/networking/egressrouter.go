@@ -12,6 +12,7 @@ import (
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -104,11 +105,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		svcIPv4, _ := getSvcIP(oc, ns1, "ovn-egressrouter-multidst-svc")
 
 		g.By("8. Check result,the svc for egessrouter can be accessed \n")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":5000 --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":5000 --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:5000 with error:%v", svcIPv4, err))
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":6000 --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":6000 --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:6000 with error:%v", svcIPv4, err))
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":80 --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":80 --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:80 with error:%v", svcIPv4, err))
 	})
 })

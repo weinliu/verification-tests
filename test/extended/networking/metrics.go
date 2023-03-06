@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -261,8 +262,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				e2e.Logf("Unexpected error occurred: %v", err)
 			}
 			g.By("Apply EgressLabel Key on one node.")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel, "true")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel)
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel, "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel)
 
 			g.By("Apply label to namespace")
 			_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name=test").Output()
@@ -377,16 +378,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		//after 0 ms: Connection refused\ncommand terminated with exit code 7\n\nerror:\nexit status 7"
 		if ipStackType == "ipv6single" {
 			for i := 0; i < 6; i++ {
-				e2e.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
+				e2eoutput.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
 			}
-			_, svcerr := e2e.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
+			_, svcerr := e2eoutput.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
 			o.Expect(svcerr).NotTo(o.HaveOccurred())
 		}
 		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
 			for i := 0; i < 6; i++ {
-				e2e.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
+				e2eoutput.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
 			}
-			_, svcerr := e2e.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
+			_, svcerr := e2eoutput.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
 			o.Expect(svcerr).NotTo(o.HaveOccurred())
 		}
 
@@ -399,15 +400,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		//after 0 ms: Connection refused\ncommand terminated with exit code 7\n\nerror:\nexit status 7"
 		if ipStackType == "ipv6single" {
 			for i := 0; i < 6; i++ {
-				e2e.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
+				e2eoutput.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
 			}
-			_, svcerr := e2e.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
+			_, svcerr := e2eoutput.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
 			o.Expect(svcerr).NotTo(o.HaveOccurred())
 		} else {
 			for i := 0; i < 6; i++ {
-				e2e.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
+				e2eoutput.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
 			}
-			_, svcerr := e2e.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
+			_, svcerr := e2eoutput.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
 			o.Expect(svcerr).NotTo(o.HaveOccurred())
 		}
 

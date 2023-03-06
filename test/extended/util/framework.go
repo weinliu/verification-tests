@@ -42,6 +42,7 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/pod"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 	"k8s.io/kubernetes/test/e2e/framework/statefulset"
 	"k8s.io/kubernetes/test/utils/image"
 
@@ -505,7 +506,7 @@ func DumpPodsCommand(c kubernetes.Interface, ns string, selector labels.Selector
 
 	values := make(map[string]string)
 	for _, pod := range podList.Items {
-		stdout, err := e2e.RunHostCmdWithRetries(pod.Namespace, pod.Name, cmd, statefulset.StatefulSetPoll, statefulset.StatefulPodTimeout)
+		stdout, err := e2eoutput.RunHostCmdWithRetries(pod.Namespace, pod.Name, cmd, statefulset.StatefulSetPoll, statefulset.StatefulPodTimeout)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		values[pod.Name] = stdout
 	}
@@ -1457,7 +1458,7 @@ func FetchURL(oc *CLI, url string, retryTimeout time.Duration) (string, error) {
 		e2e.Logf("Waiting up to %v to wget %s", retryTimeout, url)
 		//cmd := fmt.Sprintf("wget -T 30 -O- %s", url)
 		cmd := fmt.Sprintf("curl -vvv %s", url)
-		response, err = e2e.RunHostCmd(execPod.Namespace, execPod.Name, cmd)
+		response, err = e2eoutput.RunHostCmd(execPod.Namespace, execPod.Name, cmd)
 		if err != nil {
 			e2e.Logf("got err: %v, retry until timeout", err)
 			return false, nil

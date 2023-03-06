@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -989,7 +990,7 @@ func (r rsyslog) getPodName(oc *exutil.CLI) string {
 func (r rsyslog) checkData(oc *exutil.CLI, expect bool, filename string) {
 	cmd := "ls -l /var/log/clf/" + filename
 	err := wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
-		stdout, err := e2e.RunHostCmdWithRetries(r.namespace, r.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
+		stdout, err := e2eoutput.RunHostCmdWithRetries(r.namespace, r.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
 			return false, err
 		}
@@ -1133,7 +1134,7 @@ func (f fluentdServer) getPodName(oc *exutil.CLI) string {
 func (f fluentdServer) checkData(oc *exutil.CLI, expect bool, filename string) {
 	cmd := "ls -l /fluentd/log/" + filename
 	err := wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
-		stdout, err := e2e.RunHostCmdWithRetries(f.namespace, f.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
+		stdout, err := e2eoutput.RunHostCmdWithRetries(f.namespace, f.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
 			return false, err
 		}
@@ -1190,7 +1191,7 @@ func (l logstash) checkData(oc *exutil.CLI, expect bool, filename string) {
 
 	cmd := "ls -l /usr/share/logstash/data/" + filename
 	err = wait.Poll(15*time.Second, 60*time.Second, func() (done bool, err error) {
-		stdout, err := e2e.RunHostCmdWithRetries(l.namespace, pods.Items[0].Name, cmd, 3*time.Second, 15*time.Second)
+		stdout, err := e2eoutput.RunHostCmdWithRetries(l.namespace, pods.Items[0].Name, cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
 			return false, err
 		}
@@ -2198,7 +2199,7 @@ func checkCiphers(oc *exutil.CLI, tlsVer string, ciphers []string, server string
 		}
 
 		cmd := fmt.Sprintf("openssl s_client -%s -cipher %s -CAfile %s -connect %s", tlsVer, cipher, caFile, server)
-		result, err := e2e.RunHostCmdWithRetries(cloNS, clPod.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
+		result, err := e2eoutput.RunHostCmdWithRetries(cloNS, clPod.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
 
 		if err != nil {
 			return fmt.Errorf("failed to run command: %w", err)
@@ -2232,7 +2233,7 @@ func checkTLSVer(oc *exutil.CLI, tlsVer string, server string, caFile string, cl
 	}
 
 	cmd := fmt.Sprintf("openssl s_client -%s -CAfile %s -connect %s", tlsVer, caFile, server)
-	result, err := e2e.RunHostCmdWithRetries(cloNS, clPod.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
+	result, err := e2eoutput.RunHostCmdWithRetries(cloNS, clPod.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
 
 	if err != nil {
 		return fmt.Errorf("failed to run command: %w", err)

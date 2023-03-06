@@ -505,8 +505,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("label the node1")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "e2e-az-NorthSouth", "e2e-az-North")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "e2e-az-NorthSouth")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "e2e-az-NorthSouth", "e2e-az-North")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "e2e-az-NorthSouth")
 
 		g.By("Check all the pods should running on node1")
 		waitErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
@@ -526,12 +526,12 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		e2e.ExpectEqual(nodeList.Items[0].Name, pod37463nodename)
 
 		g.By("Remove the label from node1 and label node2 ")
-		e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "e2e-az-NorthSouth")
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "e2e-az-NorthSouth")
 		g.By("label removed from node1")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "e2e-az-NorthSouth", "e2e-az-South")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "e2e-az-NorthSouth", "e2e-az-South")
 		g.By("label Added to node2")
 
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "e2e-az-NorthSouth")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "e2e-az-NorthSouth")
 
 		g.By("Check the descheduler deploy logs, should see evict logs")
 		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(`reason=""`)+".*"+regexp.QuoteMeta(`strategy="RemovePodsViolatingNodeAffinity"`))
@@ -618,7 +618,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", testd.dName, "-n", testd.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "e2e-az-NorthSouth")
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "e2e-az-NorthSouth")
 
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", testd4.dName, "-n", testd4.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -700,10 +700,10 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Label Node1 & Node2")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "ocp40055-zone", "ocp40055zoneA")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "ocp40055-zone")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp40055-zone", "ocp40055zoneB")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp40055-zone")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "ocp40055-zone", "ocp40055zoneA")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "ocp40055-zone")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp40055-zone", "ocp40055zoneB")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp40055-zone")
 
 		g.By("Uncordon Node1")
 		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
@@ -891,10 +891,10 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Label Node1 & Node2")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "ocp43283-zone", "ocp43283zoneA")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "ocp43283-zone")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp43283-zone", "ocp43283zoneB")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp43283-zone")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "ocp43283-zone", "ocp43283zoneA")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "ocp43283-zone")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp43283-zone", "ocp43283zoneB")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp43283-zone")
 
 		g.By("Uncordon Node1")
 		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()

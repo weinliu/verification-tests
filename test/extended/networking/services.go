@@ -10,6 +10,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -267,7 +268,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will LB after curl sleep more than 10s
 			g.By("Traffic will LB to two endpoints with sleep 15s in curl")
-			trafficoutput, trafficerr := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 11; done")
+			trafficoutput, trafficerr := e2eoutput.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 11; done")
 			o.Expect(trafficerr).NotTo(o.HaveOccurred())
 			if strings.Contains(trafficoutput, "Hello Blue Pod-1") && strings.Contains(trafficoutput, "Hello Blue Pod-2") {
 				e2e.Logf("Pass : Traffic LB to two endpoints when curl sleep more than 10s")
@@ -277,7 +278,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will not LB after curl sleep less than 10s
 			g.By("Traffic will not LB to two endpoints without sleep 15s in curl")
-			trafficoutput1, trafficerr1 := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 9; done")
+			trafficoutput1, trafficerr1 := e2eoutput.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 9; done")
 			o.Expect(trafficerr1).NotTo(o.HaveOccurred())
 			if (strings.Contains(trafficoutput1, "Hello Blue Pod-1") && !strings.Contains(trafficoutput1, "Hello Blue Pod-2")) || (strings.Contains(trafficoutput1, "Hello Blue Pod-2") && !strings.Contains(trafficoutput1, "Hello Blue Pod-1")) {
 				e2e.Logf("Pass : Traffic does not LB to two endpoints when curl sleep less than 10s")
@@ -301,7 +302,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			// Test ipv4 traffic in dualstack cluster
 			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will LB after curl sleep more than 10s
 			g.By("Traffic will LB to two endpoints with sleep 15s in curl")
-			trafficoutput, trafficerr := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 11; done")
+			trafficoutput, trafficerr := e2eoutput.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 11; done")
 			o.Expect(trafficerr).NotTo(o.HaveOccurred())
 			if strings.Contains(trafficoutput, "Hello Blue Pod-1") && strings.Contains(trafficoutput, "Hello Blue Pod-2") {
 				e2e.Logf("Pass : Traffic LB to two endpoints when curl sleep more than 10s")
@@ -311,7 +312,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will not LB after curl sleep less than 10s
 			g.By("Traffic will not LB to two endpoints without sleep 15s in curl")
-			trafficoutput1, trafficerr1 := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 9; done")
+			trafficoutput1, trafficerr1 := e2eoutput.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 9; done")
 			o.Expect(trafficerr1).NotTo(o.HaveOccurred())
 			if (strings.Contains(trafficoutput1, "Hello Blue Pod-1") && !strings.Contains(trafficoutput1, "Hello Blue Pod-2")) || (strings.Contains(trafficoutput1, "Hello Blue Pod-2") && !strings.Contains(trafficoutput1, "Hello Blue Pod-1")) {
 				e2e.Logf("Pass : Traffic does not LB to two endpoints when curl sleep less than 10s")
@@ -322,7 +323,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			// Tes ipv6 traffic in dualstack cluster
 			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will LB after curl sleep more than 10s
 			g.By("Traffic will LB to two endpoints with sleep 15s in curl")
-			v6trafficoutput, v6trafficerr := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl -g -6 ["+serviceIPv6+"]:8080; sleep 11; done")
+			v6trafficoutput, v6trafficerr := e2eoutput.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl -g -6 ["+serviceIPv6+"]:8080; sleep 11; done")
 			o.Expect(v6trafficerr).NotTo(o.HaveOccurred())
 			if strings.Contains(v6trafficoutput, "Hello Blue Pod-1") && strings.Contains(v6trafficoutput, "Hello Blue Pod-2") {
 				e2e.Logf("Pass : Traffic LB to two endpoints when curl sleep more than 10s")
@@ -332,7 +333,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will not LB after curl sleep less than 10s
 			g.By("Traffic will not LB to two endpoints without sleep 15s in curl")
-			v6trafficoutput1, v6trafficerr1 := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl -g -6 ["+serviceIPv6+"]:8080; sleep 9; done")
+			v6trafficoutput1, v6trafficerr1 := e2eoutput.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl -g -6 ["+serviceIPv6+"]:8080; sleep 9; done")
 			o.Expect(v6trafficerr1).NotTo(o.HaveOccurred())
 			if (strings.Contains(v6trafficoutput1, "Hello Blue Pod-1") && !strings.Contains(v6trafficoutput1, "Hello Blue Pod-2")) || (strings.Contains(v6trafficoutput1, "Hello Blue Pod-2") && !strings.Contains(v6trafficoutput1, "Hello Blue Pod-1")) {
 				e2e.Logf("Pass : Traffic does not LB to two endpoints when curl sleep less than 10s")
