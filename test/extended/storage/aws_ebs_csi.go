@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/service/iam"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -154,12 +153,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer scheduleAwsKmsKeyDeletionByID(awsKmsClient, *myKmsKey.KeyMetadata.KeyId)
 			myKmsKeyArn = *myKmsKey.KeyMetadata.Arn
 		}
-
-		g.By("# Add ebs-csi-driver user to test customer managed kms key")
-		oriKeyPolicy, getKeyPolicyErr := getAwsKmsKeyPolicy(awsKmsClient, myKmsKeyArn)
-		o.Expect(getKeyPolicyErr).ShouldNot(o.HaveOccurred())
-		defer updateAwsKmsKeyPolicy(awsKmsClient, myKmsKeyArn, *oriKeyPolicy.Policy)
-		addAwsKmsKeyUser(awsKmsClient, myKmsKeyArn, getAwsEbsCsiDriverUserArn(oc, iam.New(myAwsSession)))
 
 		g.By("# Create new project for the scenario")
 		oc.SetupProject()
