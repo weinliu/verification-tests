@@ -648,6 +648,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		err := checkEventsForErr(oc)
 		exutil.AssertWaitPollNoErr(err, "Found error: MountVolume.SetUp failed for volume ... not registered ")
 	})
+	//author: asahay@redhat.com
+	g.It("Author:asahay-Medium-55033-check KUBELET_LOG_LEVEL is 2", func() {
+		g.By("Test for OCP-55033")
+		g.By("check Kubelet Log Level\n")
+		assertKubeletLogLevel(oc)
+	})
+
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {
