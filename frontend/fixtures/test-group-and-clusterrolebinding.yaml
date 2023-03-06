@@ -1,0 +1,19 @@
+kind: Group
+apiVersion: user.openshift.io/v1
+metadata:
+ name: testgroup-OCP54744
+users:
+ - testuser-0-54744
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+ name: testRBgroup
+subjects:
+ - kind: Group
+   apiGroup: rbac.authorization.k8s.io
+   name: testgroup-OCP54744
+roleRef:
+ apiGroup: rbac.authorization.k8s.io
+ kind: ClusterRole
+ name: cluster-admin
