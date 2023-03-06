@@ -3,11 +3,12 @@ package util
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/hc-install/checkpoint"
 	"github.com/hashicorp/hc-install/product"
-	"github.com/hashicorp/hc-install/releases"
 	"github.com/hashicorp/terraform-exec/tfexec"
 
 	tfjson "github.com/hashicorp/terraform-json"
@@ -17,32 +18,44 @@ import (
 // TerraformExec structure which stores all atributes
 // about the Terraform installation and templates location.
 type TerraformExec struct {
-	tfinstaller *releases.LatestVersion
-	tfbin       *tfexec.Terraform
+	tfbin *tfexec.Terraform
 }
 
-// InstallTerraform function takes care of settin up and installing Terraform
-// in the system so that it can be used during the execution of the
+// NewTerraform function takes care of finding out the terraform binary to use
+// or setting up and installing Terraform (if not already installed) in the
+// system so that it can be used during the execution of the
 // tfexec.Terraform struct.
 // Inputs:
-//   - installDir: Directory where Terraform will be installed, if
-//     empty then a new directory will be created in /tmp where the
-//     binaries will be installed.
 //   - workingDir: Directory where the Terraform scripts are located
 //
 // Returns:
 //   - A TerraformExec struct which can be used to invoke other Terraform
 //     methods.
-func InstallTerraform(installDir string, workingDir string) (*TerraformExec, error) {
+func NewTerraform(workingDir string) (*TerraformExec, error) {
 
-	installer := &releases.LatestVersion{
-		Product:    product.Terraform,
-		InstallDir: installDir,
-	}
-	execPath, err := installer.Install(context.Background())
-	if err != nil {
-		e2e.Logf("terraform installation in directory %v failed", installDir)
-		return nil, err
+	var execPath string
+	var err error
+
+	// Look for terraform directory intalled in $PATH
+	if execPath, err = exec.LookPath("terraform"); err != nil {
+
+		files, _ := filepath.Glob("/tmp/terraform_*/terraform")
+		if len(files) > 0 {
+			// If a /tmp/terraform_*/terraform binary exist use it
+			execPath = files[0]
+			e2e.Logf("using existing terraform binary from %v", execPath)
+		} else {
+			// If not, install terraform in /tmp
+			installer := &checkpoint.LatestVersion{
+				Product: product.Terraform,
+			}
+			execPath, err = installer.Install(context.Background())
+			if err != nil {
+				e2e.Logf("terraform installation in /tmp %v failed", err)
+				return nil, err
+			}
+			e2e.Logf("terraform installed in %v", execPath)
+		}
 	}
 
 	tfinit, err := tfexec.NewTerraform(workingDir, execPath)
@@ -51,8 +64,7 @@ func InstallTerraform(installDir string, workingDir string) (*TerraformExec, err
 		return nil, err
 	}
 	return &TerraformExec{
-		tfinstaller: installer,
-		tfbin:       tfinit,
+		tfbin: tfinit,
 	}, nil
 }
 
@@ -166,30 +178,6 @@ func (tf *TerraformExec) TerraformDestroy(vars ...string) error {
 		}
 		e2e.Logf("error in terraform destroy: %s", err)
 		return err
-	}
-
-	return nil
-}
-
-// RemoveTerraform uninstalls terraform from the location passed (installDir)
-// in the InstallTerraform method. If empty string was passed in InstallTerraform
-// then it will uninstall it from the temporary directory created
-// under /tmp
-func (tf *TerraformExec) RemoveTerraform() error {
-
-	err := tf.tfinstaller.Remove(context.Background())
-	if err != nil {
-		e2e.Logf("removal of terraform in directory %v failed", tf.tfbin.ExecPath())
-		return err
-	}
-
-	// Remove also the compressed file downloaded during installation in /tmp
-	files, _ := filepath.Glob("/tmp/terraform*zip*")
-	for _, file := range files {
-		if err := os.Remove(file); err != nil {
-			e2e.Logf("Error removing file %v", file)
-			return err
-		}
 	}
 
 	return nil

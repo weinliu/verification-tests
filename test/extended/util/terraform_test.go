@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 	tfjson "github.com/hashicorp/terraform-json"
 )
 
-func TestInstallTerraform(t *testing.T) {
+func TestNewTerraform(t *testing.T) {
 
 	tfDir, err := ioutil.TempDir("", "tfTemp")
 	if err != nil {
@@ -20,33 +21,27 @@ func TestInstallTerraform(t *testing.T) {
 	defer os.RemoveAll(tfDir)
 
 	var tf *TerraformExec
-	tf, err = InstallTerraform(tfDir, tfDir)
+	tf, err = NewTerraform(tfDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := os.Stat(filepath.Join(tfDir, "/terraform")); os.IsNotExist(err) {
-		t.Fatalf("Terraform binary was not downloaded")
+	t.Logf("Using terraform binary from: %v", tf.tfbin.ExecPath())
+
+	if _, err := exec.LookPath("terraform"); err != nil {
+		// If the system where the test has run doesn't have terraform
+		// installed in $PATH then ensure it has been downloaded
+		files, _ := filepath.Glob("/tmp/terraform_*/terraform")
+		if _, err := os.Stat(files[0]); os.IsNotExist(err) {
+			t.Fatalf("Terraform binary was not downloaded")
+		}
+
+		zipFiles, _ := filepath.Glob("/tmp/terraform*zip*")
+		if len(zipFiles) == 0 {
+			t.Fatalf("Terraform zip file was not downloaded")
+		}
 	}
 
-	files, _ := filepath.Glob("/tmp/terraform*zip*")
-	if len(files) == 0 {
-		t.Fatalf("Terraform zip file was not downloaded")
-	}
-
-	err = tf.RemoveTerraform()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := os.Stat(filepath.Join(tfDir, "/terraform")); os.IsExist(err) {
-		t.Fatalf("Terraform binary was not cleaned up")
-	}
-
-	files, _ = filepath.Glob("/tmp/terraform*zip*")
-	if len(files) != 0 {
-		t.Fatalf("Terraform zip file was not cleaned up")
-	}
 }
 
 func TestRunAndDestroyTerraform(t *testing.T) {
@@ -79,10 +74,12 @@ func TestRunAndDestroyTerraform(t *testing.T) {
 	tfFile.Close()
 
 	var tf *TerraformExec
-	tf, err = InstallTerraform(tfDir, tfDir)
+	tf, err = NewTerraform(tfDir)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Logf("Using terraform binary from: %v", tf.tfbin.ExecPath())
 
 	err = tf.TerraformInit()
 	if err != nil {
@@ -118,10 +115,6 @@ func TestRunAndDestroyTerraform(t *testing.T) {
 		t.Fatalf("Terraform local_file /temp was not cleaned up")
 	}
 
-	err = tf.RemoveTerraform()
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestOutputAndShowTerraform(t *testing.T) {
@@ -162,10 +155,12 @@ func TestOutputAndShowTerraform(t *testing.T) {
 	tfFile.Close()
 
 	var tf *TerraformExec
-	tf, err = InstallTerraform(tfDir, tfDir)
+	tf, err = NewTerraform(tfDir)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Logf("Using terraform binary from: %v", tf.tfbin.ExecPath())
 
 	err = tf.TerraformInitWithUpgrade()
 	if err != nil {
@@ -219,8 +214,4 @@ func TestOutputAndShowTerraform(t *testing.T) {
 		t.Fatalf("Terraform local_file /temp was not cleaned up")
 	}
 
-	err = tf.RemoveTerraform()
-	if err != nil {
-		t.Fatal(err)
-	}
 }
