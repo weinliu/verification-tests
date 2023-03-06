@@ -2473,9 +2473,13 @@ nulla pariatur.`
 			kernelArg2         = "test2"
 			usbguardMCTemplate = "change-worker-extension-usbguard.yaml"
 
-			expectedLogArg1 = fmt.Sprintf("Running rpm-ostree [kargs --append=%s]", kernelArg1)
-			expectedLogArg2 = fmt.Sprintf("Running rpm-ostree [kargs --delete=%s --append=%s --append=%s]",
-				kernelArg1, kernelArg1, kernelArg2)
+			expectedLogArg1Regex = regexp.QuoteMeta("Running rpm-ostree [kargs") + ".*" + regexp.QuoteMeta(fmt.Sprintf("--append=%s", kernelArg1)) +
+				".*" + regexp.QuoteMeta("]")
+			expectedLogArg2Regex = regexp.QuoteMeta("Running rpm-ostree [kargs") + ".*" + regexp.QuoteMeta(fmt.Sprintf("--delete=%s", kernelArg1)) +
+				".*" + regexp.QuoteMeta(fmt.Sprintf("--append=%s", kernelArg1)) +
+				".*" + regexp.QuoteMeta(fmt.Sprintf("--append=%s", kernelArg2)) +
+				".*" + regexp.QuoteMeta("]")
+
 			// Expr: "kargs .*--append|kargs .*--delete"
 			// We need to scape the "--" characters
 			expectedNotLogExtesionRegex = "kargs .*" + regexp.QuoteMeta("--") + "append|kargs .*" + regexp.QuoteMeta("--") + "delete"
@@ -2502,7 +2506,7 @@ nulla pariatur.`
 		timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
 		logger.Infof("waiting time: %s", timeToWait.String())
 		o.Expect(workerNode.CaptureMCDaemonLogsUntilRestartWithTimeout(timeToWait.String())).To(
-			o.ContainSubstring(expectedLogArg1),
+			o.MatchRegexp(expectedLogArg1Regex),
 			"A log line reporting new kernel arguments should be present in the MCD logs when we add a kernel argument via MC")
 		logger.Infof("OK!\n")
 
@@ -2530,7 +2534,7 @@ nulla pariatur.`
 		// the same time we would wait for the mcp to be updated. Aprox.
 		logger.Infof("waiting time: %s", timeToWait.String())
 		o.Expect(workerNode.CaptureMCDaemonLogsUntilRestartWithTimeout(timeToWait.String())).To(
-			o.ContainSubstring(expectedLogArg2),
+			o.MatchRegexp(expectedLogArg2Regex),
 			"A log line reporting the new kernel arguments configuration should be present in MCD logs")
 		logger.Infof("OK!\n")
 
