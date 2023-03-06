@@ -3642,7 +3642,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 	})
 
-	g.It("Author:xiuwang-VMonly-Critical-59415-Low-59418-Could push manifest list image to internal registry	", func() {
+	g.It("Author:xiuwang-Critical-59415-Low-59418-Could push manifest list image to internal registry", func() {
 		var (
 			internalRegistry = "image-registry.openshift-image-registry.svc:5000"
 			multiArchImage   = "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"
@@ -3682,5 +3682,44 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Can't pull image from other project without rights")
 		oc.SetupProject()
 		createSimpleRunPod(oc, targetImage, "authentication required")
+	})
+
+	g.It("Author:xiuwang-High-56905-Medium-56925-Retrieve and describe image manifest list", func() {
+		g.By("Create manifest imagestream")
+		var object imageObject
+		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "ruby56905:latest", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "ruby56905", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Retrieve and describe image manifest list")
+		outputMan, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestreamimage", "ruby56905@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		object.getManifestObject(oc, "imagestreamtag", "ruby56905:latest", oc.Namespace())
+		if len(object.architecture) > 0 && len(object.digest) > 0 {
+			for i, dg := range object.digest {
+				outputSub, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestreamimage", "ruby56905@"+dg, "-n", oc.Namespace()).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if !strings.Contains(outputSub, object.architecture[i]) || !strings.Contains(outputMan, object.architecture[i]) {
+					e2e.Failf("manifest object goes wrong")
+				}
+			}
+		} else {
+			e2e.Failf("Don't get the manifest object")
+		}
+		g.By("Negative test")
+		g.By("Check an nonexist image object")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagestreamimage", "ruby56905@sha256:nonexist", "-n", oc.Namespace()).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		if !strings.Contains(output, "Error from server (NotFound)") {
+			e2e.Failf("Shouldn't get the non-exist image")
+		}
+		// Will add user right check when https://issues.redhat.com/browse/OCPQE-10622 finished
+		g.By("Check an image object without right")
+		oc.SetupProject()
+		outputNoRight, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagestreamimage", "ruby56905@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "-n", oc.Namespace()).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		if !strings.Contains(outputNoRight, `"ruby56905" not found`) {
+			e2e.Failf("Shouldn't get image without rights")
+		}
 	})
 })

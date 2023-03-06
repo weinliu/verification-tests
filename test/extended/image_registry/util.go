@@ -1234,3 +1234,22 @@ func copyFile(source string, dest string) {
 	err = ioutil.WriteFile(dest, bytesRead, 0644)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+
+type imageObject struct {
+	architecture []string
+	digest       []string
+	os           []string
+}
+
+func (c *imageObject) getManifestObject(oc *exutil.CLI, resource, name, namespace string) *imageObject {
+	archList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, name, "-n", namespace, "-ojsonpath={..dockerImageManifests[*].architecture}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	c.architecture = strings.Split(archList, " ")
+	digestList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, name, "-n", namespace, "-ojsonpath={..dockerImageManifests[*].digest}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	c.digest = strings.Split(digestList, " ")
+	osList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, name, "-n", namespace, "-ojsonpath={..dockerImageManifests[*].os}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	c.os = strings.Split(osList, " ")
+	return c
+}
