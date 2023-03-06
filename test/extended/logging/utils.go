@@ -685,7 +685,8 @@ func checkAlert(oc *exutil.CLI, token, alertName, status string, timeInMinutes i
 			return false, err
 		}
 		for _, alert := range alerts {
-			if alert.State == status {
+			s, _ := regexp.Compile(status)
+			if s.MatchString(alert.State) {
 				return true, nil
 			}
 		}

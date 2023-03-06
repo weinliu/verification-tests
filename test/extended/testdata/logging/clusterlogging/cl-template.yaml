@@ -24,7 +24,7 @@ objects:
         redundancyPolicy: ${REDUNDANCY_POLICY}
         resources:
           requests:
-            memory: "2Gi"
+            memory: ${ES_REQUEST_MEMORY}
         storage: {}
     visualization:
       type: "kibana"
@@ -48,6 +48,8 @@ parameters:
     value: "1"
   - name: REDUNDANCY_POLICY
     value: "ZeroRedundancy"
+  - name: ES_REQUEST_MEMORY
+    value: "2Gi"
   - name: APP_LOG_MAX_AGE
     value: "3h"
   - name: INFRA_LOG_MAX_AGE

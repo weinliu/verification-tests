@@ -739,6 +739,44 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 		o.Expect(reflect.DeepEqual(flatLabelsInES, flatLabelsInLoki)).Should(o.BeTrue())
 	})
 
+	//author qitang@redhat.com
+	g.It("CPaasrunOnly-Author:qitang-Low-49210-Fluentd alert rule: FluentdQueueLengthIncreasing[Serial][Slow]", func() {
+		oc.SetupProject()
+		app := oc.Namespace()
+		logTemplate := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
+		err := oc.WithoutNamespace().Run("new-app").Args("-f", logTemplate, "-n", app).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// create clusterlogging instance
+		g.By("deploy clusterlogging and make ES pod in CrashLoopBackOff status")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
+		cl := resource{"clusterlogging", "instance", "openshift-logging"}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=fluentd", "-p", "STORAGE_CLASS="+sc, "-p", "ES_REQUEST_MEMORY=600Mi")
+		g.By("wait for collector pods to be ready")
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		resource{"servicemonitor", "collector", cl.namespace}.WaitForResourceToAppear(oc)
+		resource{"prometheusrule", "collector", cl.namespace}.WaitForResourceToAppear(oc)
+
+		g.By("set clusterlogging to managementStatus to Unmanaged")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cl/instance", "-n", cl.namespace, "-p", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("update alert rule FluentdQueueLengthIncreasing to make it easier to appear for automation testing")
+		patch := `[{"op": "replace", "path": "/spec/groups/0/rules/1/for", "value":"2m"}]`
+		er := oc.AsAdmin().WithoutNamespace().Run("patch").Args("prometheusrules", "collector", "--type=json", "-p", patch, "-n", cloNS).Execute()
+		o.Expect(er).NotTo(o.HaveOccurred())
+		patch = `[{"op": "replace", "path": "/spec/groups/0/rules/1/expr", "value":"sum by (pod,plugin_id) ( 0 * (deriv(fluentd_output_status_emit_records[1m] offset 1m)))  + on(pod,plugin_id)  ( deriv(fluentd_output_status_buffer_queue_length[1m]) > 0 and delta(fluentd_output_status_buffer_queue_length[1m]) > 1 )"}]`
+		er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("prometheusrules", "collector", "--type=json", "-p", patch, "-n", cloNS).Execute()
+		o.Expect(er).NotTo(o.HaveOccurred())
+
+		g.By("Check the alert CollectorNodeDown is in state firing")
+		checkAlert(oc, getSAToken(oc, "prometheus-k8s", "openshift-monitoring"), "FluentdQueueLengthIncreasing", "pending|firing", 10)
+
+	})
+
 })
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Kibana should", func() {

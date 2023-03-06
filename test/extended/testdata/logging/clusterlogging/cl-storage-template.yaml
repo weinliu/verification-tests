@@ -24,7 +24,7 @@ objects:
         tolerations: ${{TOLERATIONS}}
         resources:
           requests:
-            memory: 2Gi
+            memory: ${ES_REQUEST_MEMORY}
         storage:
           storageClassName: ${STORAGE_CLASS}
           size: ${PVC_SIZE}
@@ -44,6 +44,8 @@ parameters:
     value: "openshift-logging"
   - name: ES_NODE_COUNT
     value: "1"
+  - name: ES_REQUEST_MEMORY
+    value: "2Gi"
   - name: STORAGE_CLASS
     value: "gp2"
   - name: PVC_SIZE
