@@ -20,6 +20,8 @@ objects:
           files: ${{FILES}}
         systemd:
           units: ${{UNITS}}
+        passwd:
+          users: ${{PWDUSERS}}
 parameters:
   - name: NAME
   - name: POOL
@@ -32,6 +34,8 @@ parameters:
   - name: KERNEL_ARGS
     value: "[]"
   - name: EXTENSIONS
+    value: "[]"
+  - name: PWDUSERS
     value: "[]"
   - name: OS_IMAGE
     value: ""

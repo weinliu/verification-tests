@@ -2942,15 +2942,25 @@ func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expected
 
 	//
 	g.By("Get co machine config to verify status and reason for Upgradeable type")
-	mcDataMap, err := getStatusCondition(oc, "co/machine-config", "Upgradeable")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(mcDataMap).NotTo(o.BeNil())
+	var mcDataMap map[string]interface{}
 
 	// If the degraded node is true, then co/machine-config should not be upgradeable
-	o.Expect(mcDataMap["status"].(string)).Should(
+	// It's unlikely, but it can happen that the MCP is degraded, but the CO has not been already updated with the right error message.
+	// So we need to poll for the right reason
+	o.Eventually(func() string {
+		var err error
+		mcDataMap, err = getStatusCondition(oc, "co/machine-config", "Upgradeable")
+		if err != nil {
+			return ""
+		}
+		return mcDataMap["reason"].(string)
+	}, "5m", "10s").Should(o.Equal("DegradedPool"),
+		"co/machine-config Upgradeable condition reason is not the expected one: %s", mcDataMap)
+
+	o.ExpectWithOffset(1, mcDataMap["status"].(string)).Should(
 		o.Equal("False"),
 		"co/machine-config Upgradeable condition status is not the expected one: %s", mcDataMap)
-	o.Expect(mcDataMap["message"].(string)).Should(
+	o.ExpectWithOffset(1, mcDataMap["message"].(string)).Should(
 		o.ContainSubstring("One or more machine config pools are degraded, please see `oc get mcp` for further details and resolve before upgrading"),
 		"co/machine-config Upgradeable condition message is not the expected one: %s", mcDataMap)
 

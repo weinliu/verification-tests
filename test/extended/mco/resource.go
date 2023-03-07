@@ -289,10 +289,16 @@ func (l ResourceList) GetAll() ([]Resource, error) {
 		l.itemsFilter = "*"
 	}
 
+	// silently look for the elements in order not to create a dirty log
+	// TODO: Improve this. There is no method to get the current showInfo value, so we can't restore it
+	l.oc.NotShowInfo()
+	defer l.oc.SetShowInfo()
+
 	allItemsNames, err := l.Get("{.items["+l.itemsFilter+"].metadata.name}", l.extraParams...)
 	if err != nil {
 		return nil, err
 	}
+
 	allNames := strings.Split(strings.Trim(allItemsNames, " "), " ")
 
 	allResources := []Resource{}

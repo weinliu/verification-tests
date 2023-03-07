@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	expect "github.com/google/goexpect"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
@@ -44,7 +45,7 @@ func (n *Node) DebugNodeWithChroot(cmd ...string) (string, error) {
 
 // DebugNodeWithChrootStd creates a debugging session of the node with chroot and only returns separated stdout and stderr
 func (n *Node) DebugNodeWithChrootStd(cmd ...string) (string, string, error) {
-	setErr := exutil.SetNamespacePrivileged(n.oc, n.oc.Namespace())
+	setErr := quietSetNamespacePrivileged(n.oc, n.oc.Namespace())
 	if setErr != nil {
 		return "", "", setErr
 	}
@@ -54,7 +55,7 @@ func (n *Node) DebugNodeWithChrootStd(cmd ...string) (string, string, error) {
 
 	stdout, stderr, err := n.oc.Run("debug").Args(cargs...).Outputs()
 
-	recErr := exutil.RecoverNamespaceRestricted(n.oc, n.oc.Namespace())
+	recErr := quietRecoverNamespaceRestricted(n.oc, n.oc.Namespace())
 	if recErr != nil {
 		return "", "", recErr
 	}
@@ -505,6 +506,59 @@ func (n *Node) RpmIsInstalled(rpmName string) bool {
 	return err == nil
 }
 
+// ExecuteExpectBatch run a command and executes an interactive batch sequence using expect
+func (n *Node) ExecuteDebugExpectBatch(timeout time.Duration, batch []expect.Batcher) ([]expect.BatchRes, error) {
+
+	setErr := quietSetNamespacePrivileged(n.oc, n.oc.Namespace())
+	if setErr != nil {
+		return nil, setErr
+	}
+
+	debugCommand := fmt.Sprintf("oc --kubeconfig=%s -n %s debug node/%s",
+		exutil.KubeConfigPath(), n.oc.Namespace(), n.GetName())
+
+	logger.Infof("Expect spawning command: %s", debugCommand)
+	e, _, err := expect.Spawn(debugCommand, -1, expect.Verbose(true))
+	defer func() { _ = e.Close() }()
+	if err != nil {
+		logger.Errorf("Error spawning process %s. Error: %s", debugCommand, err)
+		return nil, err
+	}
+
+	bresps, err := e.ExpectBatch(batch, timeout)
+	if err != nil {
+		logger.Errorf("Error executing batch: %s", err)
+	}
+
+	recErr := quietRecoverNamespaceRestricted(n.oc, n.oc.Namespace())
+	if recErr != nil {
+		return nil, err
+	}
+
+	return bresps, err
+}
+
+// UserAdd creates a user in the node
+func (n *Node) UserAdd(userName string) error {
+	logger.Infof("Create user %s in node %s", userName, n.GetName())
+	_, err := n.DebugNodeWithChroot("useradd", userName)
+	return err
+}
+
+// UserDel deletes a user in the node
+func (n *Node) UserDel(userName string) error {
+	logger.Infof("Delete user %s in node %s", userName, n.GetName())
+	_, err := n.DebugNodeWithChroot("userdel", "-f", userName)
+	return err
+}
+
+// UserExists returns true if the user exists in the node
+func (n *Node) UserExists(userName string) bool {
+	_, err := n.DebugNodeWithChroot("grep", "-E", fmt.Sprintf("^%s:", userName), "/etc/shadow")
+
+	return err == nil
+}
+
 // GetAll returns a []Node list with all existing nodes
 func (nl *NodeList) GetAll() ([]Node, error) {
 	allNodeResources, err := nl.ResourceList.GetAll()
@@ -623,4 +677,22 @@ func (nl NodeList) GetAllDegraded() ([]Node, error) {
 // the output is like `Working Done Done`
 func (nl NodeList) McStateSnapshot() string {
 	return nl.GetOrFail(`{.items[*].metadata.annotations.machineconfiguration\.openshift\.io/state}`)
+}
+
+// quietSetNamespacePrivileged invokes exutil.SetNamespacePrivileged but disable the logs output to avoid noise in the logs
+func quietSetNamespacePrivileged(oc *exutil.CLI, namespace string) error {
+	oc.NotShowInfo()
+	defer oc.SetShowInfo()
+
+	logger.Debugf("Setting namespace %s as privileged", namespace)
+	return exutil.SetNamespacePrivileged(oc, namespace)
+}
+
+// quietRecoverNamespaceRestricted invokes exutil.RecoverNamespaceRestricted but disable the logs output to avoid noise in the logs
+func quietRecoverNamespaceRestricted(oc *exutil.CLI, namespace string) error {
+	oc.NotShowInfo()
+	defer oc.SetShowInfo()
+
+	logger.Debugf("Recovering namespace %s from privileged", namespace)
+	return exutil.RecoverNamespaceRestricted(oc, namespace)
 }
