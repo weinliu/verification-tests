@@ -671,4 +671,29 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n2-standard-4","onHostMaintenance":"Terminate","confidentialCompute":"Enabled"}}}}}}`, "--type=merge").Output()
 		o.Expect(strings.Contains(out, "Invalid value: \"n2-standard-4\": ConfidentialCompute require machine type in the following series: n2d,c2d")).To(o.BeTrue())
 	})
+
+	//author miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-Medium-57438-Add support to Shielded VMs on GCP [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-57438"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset with shieldedInstanceConfig compute options Enabled")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"shieldedInstanceConfig": {"secureBoot": "Enabled","integrityMonitoring": "Enabled","virtualizedTrustedPlatformModule": "Enabled"}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with shieldedInstanceConfig options enabled")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.shieldedInstanceConfig}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("{\"integrityMonitoring\":\"Enabled\",\"secureBoot\":\"Enabled\",\"virtualizedTrustedPlatformModule\":\"Enabled\"}"))
+
+		g.By("Validate the webhooks warns with invalid values of shieldedVM config")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"shieldedInstanceConfig": {"secureBoot": "nabled","integrityMonitoring": "Enabled","virtualizedTrustedPlatformModule": "Enabled"}}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Error from server (providerSpec.shieldedInstanceConfig")).To(o.BeTrue())
+	})
 })
