@@ -497,6 +497,76 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		})
 	}
+
+	// author: wduan@redhat.com
+	// Author:wdaun-[Azure-File-CSI-Driver] support different shareAccessTier in storageclass
+	var azureShareAccessTierCaseIDMap = map[string]string{
+		"60195": "Hot",                  // Medium-60195-[Azure-File-CSI-Driver] suport specify shareAccessTier:Hot in storageclass
+		"60196": "Cool",                 // Medium-60196-[Azure-File-CSI-Driver] suport specify shareAccessTier:Cool in storageclass
+		"60197": "TransactionOptimized", // Medium-60197-[Azure-File-CSI-Driver] suport specify shareAccessTier:TransactionOptimized in storageclass
+		"60856": "Premium",              // Medium-60856-[Azure-File-CSI-Driver] suport specify shareAccessTier:Premium in storageclass
+	}
+	atCaseIds := []string{"60195", "60196", "60197", "60856"}
+	for i := 0; i < len(atCaseIds); i++ {
+		shareAccessTier := azureShareAccessTierCaseIDMap[atCaseIds[i]]
+
+		g.It("ARO-Author:wduan-Medium-"+atCaseIds[i]+"-[Azure-File-CSI-Driver] support shareAccessTier in storageclass with "+shareAccessTier, func() {
+
+			// Set the resource template for the scenario
+			var (
+				podTemplate = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+				provisioner = "file.csi.azure.com"
+			)
+
+			// Set up a specified project share for all the phases
+			g.By("#. Create new project for the scenario")
+			oc.SetupProject()
+
+			// Set the resource definition for the scenario
+			storageClassParameters := map[string]string{
+				"shareAccessTier": shareAccessTier,
+			}
+			if shareAccessTier == "Premium" {
+				storageClassParameters = map[string]string{
+					"shareAccessTier": shareAccessTier,
+					"skuName":         "Premium_LRS",
+				}
+			}
+
+			extraParameters := map[string]interface{}{
+				"parameters": storageClassParameters,
+			}
+
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+			g.By("#. Create csi storageclass with shareAccessTier: " + shareAccessTier)
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
+
+			g.By("#. Create a pvc with the csi storageclass")
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			g.By("#. Create pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			g.By("#. Check the pod volume has the read and write access right")
+			pod.checkMountedVolumeCouldRW(oc)
+
+			g.By("#. Check the pv.spec.csi.volumeAttributes.shareAccessTier")
+			pvName := pvc.getVolumeName(oc)
+			shareAccessTierPv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.shareAccessTier}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The shareAccessTier in PV is: %v.", shareAccessTierPv)
+			o.Expect(shareAccessTierPv).To(o.Equal(shareAccessTier))
+
+			// Todo: Add check from the back end
+		})
+	}
 })
 
 // Get resourceGroup/account/share name by creating a new azure-file volume
