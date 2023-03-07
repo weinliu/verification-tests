@@ -640,4 +640,35 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(strings.Contains(bootType, "Legacy") && strings.Contains(categories, "Kubernetes") && strings.Contains(categories, "Testing") && strings.Contains(projectName, "test")).To(o.BeTrue())
 	})
 
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-59760-Create confidential compute VMs on GCP [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-59760"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset with confidential compute options")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n2d-standard-4","onHostMaintenance":"Terminate","confidentialCompute":"Enabled"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with confidentialCompute enabled")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.confidentialCompute}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("Enabled"))
+
+		g.By("Validate onHostMaintenance should  be set to terminate in case confidential compute is enabled")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n2d-standard-4","onHostMaintenance":"invalid","confidentialCompute":"Enabled"}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Invalid value: \"invalid\": onHostMaintenance must be either Migrate or Terminate")).To(o.BeTrue())
+
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n2d-standard-4","onHostMaintenance":"Migrate","confidentialCompute":"Enabled"}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Invalid value: \"Migrate\": ConfidentialCompute require OnHostMaintenance to be set to Terminate, the current value is: Migrate")).To(o.BeTrue())
+
+		g.By("Validate the instance type support confidential computing")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n2-standard-4","onHostMaintenance":"Terminate","confidentialCompute":"Enabled"}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Invalid value: \"n2-standard-4\": ConfidentialCompute require machine type in the following series: n2d,c2d")).To(o.BeTrue())
+	})
 })
