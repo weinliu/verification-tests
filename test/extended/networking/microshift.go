@@ -333,4 +333,74 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(curlOutput).To(o.ContainSubstring("Hello Hostport Pod"))
 	})
+
+	// author: anusaxen@redhat.com
+	g.It("MicroShiftOnly-Author:anusaxen-High-60746-Check nodeport service works well on Microshift", func() {
+		var (
+			caseID           = "60746"
+			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+		)
+
+		g.By("Create a namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		pod_pmtrs := map[string]string{
+			"$podname":   "hello-pod",
+			"$namespace": e2eTestNamespace,
+			"$label":     "hello-pod",
+		}
+
+		g.By("creating hello pod in namespace")
+		createPingPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, "hello-pod")
+
+		//ipFamilyPolicy, externalTrafficPolicy and internalTrafficPolicy are left blank which would get default values, ETP will be Cluster type in that case
+		svc_pmtrs := map[string]string{
+			"$servicename":           "test-service-etp-cluster",
+			"$namespace":             e2eTestNamespace,
+			"$label":                 "test-service",
+			"$internalTrafficPolicy": "",
+			"$externalTrafficPolicy": "",
+			"$ipFamilyPolicy":        "",
+			"$selector":              "hello-pod",
+			"$serviceType":           "NodePort",
+		}
+		createServiceforUshift(oc, svc_pmtrs)
+
+		g.By("Get service NodePort and NodeIP value")
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "test-service-etp-cluster", "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod", "-o=jsonpath={.spec.nodeName}").Output()
+		o.Expect(podErr).NotTo(o.HaveOccurred())
+		nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeName)
+		svcURL := net.JoinHostPort(nodeIP, nodePort)
+		g.By("curl NodePort Service")
+		_, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Delete test-service-etp-cluster from ns and rec-reate it with ETP type Local")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "test-service-etp-cluster", "-n", e2eTestNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		svc_pmtrs = map[string]string{
+			"$servicename":           "test-service-etp-local",
+			"$namespace":             e2eTestNamespace,
+			"$label":                 "test-service",
+			"$internalTrafficPolicy": "",
+			"$externalTrafficPolicy": "Local",
+			"$ipFamilyPolicy":        "",
+			"$selector":              "hello-pod",
+			"$serviceType":           "NodePort",
+		}
+		createServiceforUshift(oc, svc_pmtrs)
+		g.By("Get new service's NodePort")
+		nodePort, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "test-service-etp-local", "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		svcURL = net.JoinHostPort(nodeIP, nodePort)
+		g.By("curl NodePort Service")
+		_, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
 })
