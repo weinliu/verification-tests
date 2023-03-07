@@ -13,6 +13,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
@@ -300,5 +301,36 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		_, rescaleErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("replicationcontroller/test-rc", "-n", namespace, "-p", "{\"spec\":{\"replicas\":2}}", "--type=merge").Output()
 		o.Expect(rescaleErr).NotTo(o.HaveOccurred())
 		waitForPodWithLabelReady(oc, namespace, "name=test-pods")
+	})
+
+	// author: weliang@redhat.com
+	g.It("MicroShiftOnly-Author:weliang-Medium-60550-Pod should be accessible via node ip and host port", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "hostport-pod.yaml")
+			ns                  = "test-ocp-60550"
+		)
+
+		g.By("create a test namespace")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(ns)
+		oc.CreateSpecifiedNamespaceAsAdmin(ns)
+
+		g.By("create a test pod")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", testPodFile, "-n", ns).Execute()
+		createResourceFromFile(oc, ns, testPodFile)
+		waitForPodWithLabelReady(oc, ns, "name=hostport-pod")
+
+		g.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+
+		g.By("Get the IP address from the worker node")
+		nodeIP := getNodeIPv4(oc, ns, nodeList.Items[0].Name)
+
+		g.By("Verify the pod should be accessible via nodeIP:hostport")
+		ipv4URL := net.JoinHostPort(nodeIP, "9500")
+		curlOutput, err := exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", ipv4URL, "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(curlOutput).To(o.ContainSubstring("Hello Hostport Pod"))
 	})
 })
