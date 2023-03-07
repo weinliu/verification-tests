@@ -33,6 +33,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("create new namespace")
 		oc.SetupProject()
+		defer exutil.RecoverNamespaceRestricted(oc, oc.Namespace())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
 		g.By("create sctpClientPod")
 		createResourceFromFile(oc, oc.Namespace(), sctpClientPod)
@@ -116,6 +118,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("create new namespace")
 		oc.SetupProject()
+		defer exutil.RecoverNamespaceRestricted(oc, oc.Namespace())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
 		g.By("create sctpClientPod")
 		createResourceFromFile(oc, oc.Namespace(), sctpClientPod)
