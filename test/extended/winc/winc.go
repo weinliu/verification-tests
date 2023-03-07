@@ -1041,6 +1041,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// Confirm that the rotation has taken place by
 		// comparing initial certificate-not-before with the certificate-not-before annotation
 		// after forcing the rotation
+		waitUntilWMCOStatusChanged(oc, "updating kubelet CA client certificates in")
 		rotatedCertNotBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		rotatedCertNotBeforeParsed, err := time.Parse(time.RFC3339, strings.Trim(rotatedCertNotBefore, `'`))
