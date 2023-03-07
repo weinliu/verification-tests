@@ -110,7 +110,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	})
 
-	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-57345-[GCP-Filestore-CSI Driver][Dynamic PV] [Filesystem]Dynamic provision standard volume", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-StagerunBoth-Author:chaoyang-Medium-57345-[GCP-Filestore-CSI Driver][Dynamic PV] [Filesystem]Dynamic provision standard volume", func() {
 		var (
 			storageClassParameters = map[string]string{
 				"network": network,
