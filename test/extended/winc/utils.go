@@ -885,3 +885,26 @@ func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey str
 		e2e.Failf("WMCO deployment did not start up after waiting up to 5 minutes ...")
 	}
 }
+
+func getContainerdVersion(oc *exutil.CLI, nodeIP string) string {
+
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeIP, "-o=jsonpath={.status.nodeInfo.containerRuntimeVersion}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	out := strings.Split(string(msg), "containerd://")
+	return "v" + out[1]
+}
+
+// this function return a search value after parsing it from a text file
+func getValueFromText(body []byte, searchVal string) string {
+
+	s := ""
+	lines := strings.Split(string(body), "\n")
+	for _, field := range lines {
+		if strings.Contains(field, searchVal) {
+			s = field
+			break
+		}
+	}
+	return strings.TrimSpace(strings.Split(s, searchVal)[1])
+
+}

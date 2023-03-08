@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1513,6 +1515,29 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Scalling workloads to 10")
 		defer scaleDeployment(oc, windowsWorkloads, 5, defaultNamespace)
 		scaleDeployment(oc, windowsWorkloads, 10, defaultNamespace)
+	})
+
+	g.It("Smokerun-Author:rrasouli-Medium-60814-Check containerd version is properly reported", func() {
+
+		// get the latest version hash from WMCO logs
+		versionHash := strings.Split(getWMCOVersionFromLogs(oc), "-")[1]
+		resp, err := http.Get("https://raw.githubusercontent.com/openshift/windows-machine-config-operator/" + versionHash + "/Makefile")
+		if err != nil {
+			e2e.Failf("unable to get http with error: %v", err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		if err != nil {
+			e2e.Failf("unable to parse the http result with error: %v", err)
+		}
+
+		submoduleContainerdVersion := getValueFromText(body, "CONTAINERD_GIT_VERSION=")
+		for _, winhost := range getWindowsHostNames(oc) {
+			if strings.Compare(string(submoduleContainerdVersion), getContainerdVersion(oc, winhost)) != 0 {
+				e2e.Failf("Containerd version mismatch expected %s actual %s", submoduleContainerdVersion, getContainerdVersion(oc, winhost))
+			}
+		}
+
 	})
 
 })
