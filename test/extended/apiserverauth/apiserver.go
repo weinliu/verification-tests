@@ -829,13 +829,16 @@ spec:
 		}
 
 		g.By("Checking KAS logs")
-		masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		kasPods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n openshif-kube-apiserver", "-l apiserver", "-o=jsonpath='{.items[*].metadata.name}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		masterName := strings.Fields(masterNode)
-		for i := 0; i < len(masterName); i++ {
-			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+masterName[i]).OutputToFile("OCP-40667/kas.log." + masterName[i])
-			o.Expect(errlog).NotTo(o.HaveOccurred())
+		for _, kasPod := range kasPods {
+			kasPodName := string(kasPod)
+			_, errLog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", kasPodName).OutputToFile("OCP-40667/kas.log." + kasPodName)
+			if errLog != nil {
+				e2e.Logf("%s", errLog)
+			}
 		}
+
 		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
 		noRouteLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -959,13 +962,16 @@ spec:
 		}
 
 		g.By("Checking KAS logs")
-		masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		kasPods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n openshif-kube-apiserver", "-l apiserver", "-o=jsonpath='{.items[*].metadata.name}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		masterName := strings.Fields(masterNode)
-		for i := 0; i < len(masterName); i++ {
-			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+masterName[i]).OutputToFile("OCP-40667/kas.log." + masterName[i])
-			o.Expect(errlog).NotTo(o.HaveOccurred())
+		for _, kasPod := range kasPods {
+			kasPodName := string(kasPod)
+			_, errLog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", kasPodName).OutputToFile("OCP-40667/kas.log." + kasPodName)
+			if errLog != nil {
+				e2e.Logf("%s", errLog)
+			}
 		}
+
 		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
 		noRouteLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
