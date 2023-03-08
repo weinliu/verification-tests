@@ -23,11 +23,6 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 	)
 
 	g.BeforeEach(func() {
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
-			g.Skip("These cases can only be run on networking team's private RDU2 cluster , skip for other envrionment!!!")
-		}
 
 		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
 		operatorGroupTemplate := filepath.Join(testDataDir, "operatorgroup-template.yaml")
@@ -56,7 +51,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:asood-High-43074-MetalLB-Operator installation ", func() {
+	g.It("StagerunBoth-Author:asood-High-43074-MetalLB-Operator installation ", func() {
 		g.By("Checking metalLB operator installation")
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		g.By("SUCCESS - MetalLB operator installed")
@@ -64,6 +59,11 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 	})
 
 	g.It("Author:asood-High-46560-MetalLB-CR All Workers Creation [Serial]", func() {
+
+		g.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private BM RDU clusters , skip for other envrionment!!!")
+		}
 
 		g.By("Creating metalLB CR on all the worker nodes in cluster")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
@@ -87,6 +87,11 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	g.It("Author:asood-High-43075-Create L2 LoadBalancer Service [Serial]", func() {
 		var ns string
+
+		g.By("0. Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU2 cluster , skip for other envrionment!!!")
+		}
 
 		g.By("1. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
@@ -171,6 +176,10 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 	g.It("Author:asood-High-53333-Verify for the service IP address of NodePort or LoadBalancer service ARP requests gets response from one interface only. [Serial]", func() {
 		var ns string
 		g.By("Test case for bug ID 2054225")
+		g.By("0. Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU2 cluster , skip for other envrionment!!!")
+		}
 		g.By("1. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{

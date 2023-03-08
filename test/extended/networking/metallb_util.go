@@ -280,3 +280,15 @@ func getNodeAnnouncingL2Service(oc *exutil.CLI, svcName string, namespace string
 	return strings.Trim(allEvents[len(allEvents)-1], "\"")
 
 }
+
+func isPlatformSuitable(oc *exutil.CLI) bool {
+
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
+		return false
+
+	}
+	return true
+
+}
