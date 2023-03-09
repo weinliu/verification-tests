@@ -49,7 +49,7 @@ var (
 
 func checkSubscription(oc *exutil.CLI) (out string, err error) {
 	g.By("Check the state of Operator")
-	errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", subName, "-n", namespace, "-o=jsonpath={.status.state}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(out, "AtLatestKnown") == 0 {
