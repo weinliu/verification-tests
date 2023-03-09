@@ -209,7 +209,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
 
 		g.By("Check testpmd running well")
-		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
+		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name, sriovPolicy.resourceName)
 		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
 		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 
@@ -318,7 +318,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
 
 		g.By("Check testpmd running well")
-		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
+		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name, sriovPolicy.resourceName)
 		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
 		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -522,7 +522,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
 
 		g.By("Check testpmd running well")
-		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
+		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name, sriovPolicy.resourceName)
 		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
 		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -718,7 +718,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
 
 		g.By("Check testpmd running well")
-		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
+		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name, sriovPolicy.resourceName)
 		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
 		testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
 		o.Expect(err).NotTo(o.HaveOccurred())

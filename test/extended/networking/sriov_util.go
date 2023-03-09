@@ -278,14 +278,12 @@ func (sriovTestPod *sriovTestPod) createSriovTestPod(oc *exutil.CLI) {
 }
 
 // get the pciAddress pod is used
-func getPciAddress(namespace string, podName string) string {
-	pciAddressEnv, err := e2eoutput.RunHostCmd(namespace, podName, "env | grep PCIDEVICE_OPENSHIFT_IO")
-	e2e.Logf("Get the pci address env is: %s", pciAddressEnv)
+func getPciAddress(namespace string, podName string, policyName string) string {
+	pciAddress, err := e2eoutput.RunHostCmd(namespace, podName, "printenv PCIDEVICE_OPENSHIFT_IO_"+strings.ToUpper(policyName))
+	e2e.Logf("Get the pci address env is: %s", pciAddress)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(pciAddressEnv).NotTo(o.BeEmpty())
-	pciAddress := strings.Split(pciAddressEnv, "=")
-	e2e.Logf("Get the pciAddress is: %s", pciAddress[1])
-	return strings.TrimSuffix(pciAddress[1], "\n")
+	o.Expect(pciAddress).NotTo(o.BeEmpty())
+	return strings.TrimSuffix(pciAddress, "\n")
 }
 
 // Get the sriov worker which the policy is used
