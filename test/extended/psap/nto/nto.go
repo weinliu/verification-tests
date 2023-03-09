@@ -888,33 +888,65 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
+		g.By("Check kernel version of worker nodes ...")
+		kernelVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.nodeInfo.kernelVersion}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(kernelVersion).NotTo(o.BeEmpty())
+
 		g.By("Check default tuned profile list, should contain openshift-control-plane and openshift-node")
 		defaultTunedOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned", "default", "-ojsonpath={.spec.recommend}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(defaultTunedOutput).NotTo(o.BeEmpty())
 		o.Expect(defaultTunedOutput).To(o.And(
 			o.ContainSubstring("openshift-control-plane"),
 			o.ContainSubstring("openshift-node")))
 
-		g.By("Check content of tuned file /usr/lib/tuned/openshift/tuned.conf to match cgroup_ps_blacklist")
+		g.By("Check content of tuned file /usr/lib/tuned/openshift/tuned.conf to match default NTO settings")
 		openshiftTunedConf, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/usr/lib/tuned/openshift/tuned.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(openshiftTunedConf).To(o.Or(
-			o.ContainSubstring("net.ipv4.ip_forward"),
-			o.ContainSubstring("cgroup_ps_blacklist")))
+		o.Expect(openshiftTunedConf).NotTo(o.BeEmpty())
+		o.Expect(openshiftTunedConf).To(o.And(
+			o.ContainSubstring("avc_cache_threshold=8192"),
+			o.ContainSubstring("nf_conntrack_hashsize=1048576"),
+			o.ContainSubstring("kernel.pid_max=>4194304"),
+			o.ContainSubstring("fs.aio-max-nr=>1048576"),
+			o.ContainSubstring("net.netfilter.nf_conntrack_max=1048576"),
+			o.ContainSubstring("net.ipv4.conf.all.arp_announce=2"),
+			o.ContainSubstring("net.ipv4.neigh.default.gc_thresh1=8192"),
+			o.ContainSubstring("net.ipv4.neigh.default.gc_thresh2=32768"),
+			o.ContainSubstring("net.ipv4.neigh.default.gc_thresh3=65536"),
+			o.ContainSubstring("net.ipv6.neigh.default.gc_thresh1=8192"),
+			o.ContainSubstring("net.ipv6.neigh.default.gc_thresh2=32768"),
+			o.ContainSubstring("net.ipv6.neigh.default.gc_thresh3=65536"),
+			o.ContainSubstring("vm.max_map_count=262144"),
+			o.ContainSubstring("/sys/module/nvme_core/parameters/io_timeout=4294967295"),
+			o.ContainSubstring(`cgroup_ps_blacklist=/kubepods\.slice/`),
+			o.ContainSubstring("runtime=0")))
 
-		g.By("Check content of tuned file /usr/lib/tuned/openshift-control-plane/tuned.conf to match sched_min_granularity_ns")
+		g.By("Check content of tuned file /usr/lib/tuned/openshift-control-plane/tuned.conf to match default NTO settings")
 		openshiftControlPlaneTunedConf, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/usr/lib/tuned/openshift-control-plane/tuned.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(openshiftControlPlaneTunedConf).To(o.And(
-			o.ContainSubstring("include=openshift"),
-			o.ContainSubstring("sched_min_granularity_ns")))
+		o.Expect(openshiftControlPlaneTunedConf).NotTo(o.BeEmpty())
+		o.Expect(openshiftControlPlaneTunedConf).To(o.ContainSubstring("include=openshift"))
 
-		g.By("Check content of tuned file /usr/lib/tuned/openshift-node/tuned.conf to match fs.inotify.max_user_watches")
+		if strings.Contains(kernelVersion, "el8") {
+			o.Expect(openshiftControlPlaneTunedConf).To(o.And(
+				o.ContainSubstring("sched_wakeup_granularity_ns=4000000"),
+				o.ContainSubstring("sched_migration_cost_ns=5000000")))
+		} else {
+			o.Expect(openshiftControlPlaneTunedConf).NotTo(o.And(
+				o.ContainSubstring("sched_wakeup_granularity_ns=4000000"),
+				o.ContainSubstring("sched_migration_cost_ns=5000000")))
+		}
+
+		g.By("Check content of tuned file /usr/lib/tuned/openshift-node/tuned.conf to match default NTO settings")
 		openshiftNodeTunedConf, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/usr/lib/tuned/openshift-node/tuned.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(openshiftNodeTunedConf).To(o.And(
 			o.ContainSubstring("include=openshift"),
-			o.ContainSubstring("fs.inotify.max_user_watches")))
+			o.ContainSubstring("net.ipv4.tcp_fastopen=3"),
+			o.ContainSubstring("fs.inotify.max_user_watches=65536"),
+			o.ContainSubstring("fs.inotify.max_user_instances=8192")))
 	})
 
 	g.It("NonPreRelease-Author:liqcui-Medium-33238-Test NTO support for operatorapi Removed state [Disruptive]", func() {
