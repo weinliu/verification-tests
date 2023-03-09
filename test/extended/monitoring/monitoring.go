@@ -820,6 +820,35 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output2).To(o.ContainSubstring("--collector.tcpstat"))
 	})
 
+	//author: tagao@redhat.com
+	g.It("Author:tagao-High-60582-check On/Off switch of buddyinfo Collector in Node Exporter [Serial]", func() {
+		var (
+			enableBuddyinfo = filepath.Join(monitoringBaseDir, "enableBuddyinfo.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("check buddyinfo Collector is disabled by default")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--no-collector.buddyinfo"))
+
+		g.By("check buddyinfo metrics in prometheus k8s pod, should not have related metrics")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="buddyinfo"}'`, token, `"result":[]`, uwmLoadTime)
+
+		g.By("enable buddyinfo in CMO")
+		createResourceFromYaml(oc, "openshift-monitoring", enableBuddyinfo)
+
+		g.By("check buddyinfo metrics in prometheus k8s pod again")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="buddyinfo"}'`, token, `"collector":"buddyinfo"`, 3*uwmLoadTime)
+
+		g.By("check buddyinfo in daemonset")
+		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output2).To(o.ContainSubstring("--collector.buddyinfo"))
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
