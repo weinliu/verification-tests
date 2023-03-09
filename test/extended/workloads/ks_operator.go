@@ -299,4 +299,65 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			e2e.Failf("Enabling NoScoring Profile failed: %v", err)
 		}
 	})
+
+	// author: knarra@redhat.com
+	g.It("NonPreRelease-PstChkUpgrade-Author:knarra-High-60542-Guard controller set the readiness probe endpoint explicitly", func() {
+		// Check if openshift-kube-apiserver guard pod endpoint has been set to readyz
+		g.By("Check if all guard pods in openshift-kube-apiserver namespace are running fine")
+		guardPodName, guardPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=app=guard", `-ojsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
+		o.Expect(guardPodError).NotTo(o.HaveOccurred())
+
+		guardPodNames := strings.Fields(guardPodName)
+		if len(guardPodNames) != 3 {
+			e2e.Failf("All guard pods inside openshift-kube-apiserver namespace are not running fine")
+		}
+
+		g.By("Check if guard pod path is set to readyz instead of healthz")
+
+		guardPodOutput, guardPodOutputError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", guardPodNames[0], "-n", "openshift-kube-apiserver", "-o", "yaml").Output()
+		o.Expect(guardPodOutputError).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("readyz", guardPodOutput); !match {
+			e2e.Failf("Openshift api server guard pod probe endpoint has not been set to readyz")
+		}
+
+		// Check if openshift-kube-scheduler guard pod endpoint has been set to healthz
+		g.By("Check if all guard pods in openshift-kube-scheduler namespace are running fine")
+		guardPodName, guardPodError = oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-kube-scheduler", "-l=app=guard", `-ojsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
+		o.Expect(guardPodError).NotTo(o.HaveOccurred())
+
+		guardPodNames = strings.Fields(guardPodName)
+		if len(guardPodNames) != 3 {
+			e2e.Failf("All guard pods inside openshift-kube-apiserver namespace are not running fine")
+		}
+
+		g.By("Check if guard pod path in openshift-kube-scheduler namespace is set to healthz")
+
+		guardPodOutput, guardPodOutputError = oc.WithoutNamespace().AsAdmin().Run("get").Args("po", guardPodNames[0], "-n", "openshift-kube-scheduler", "-o", "yaml").Output()
+		o.Expect(guardPodOutputError).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("healthz", guardPodOutput); !match {
+			e2e.Failf("Openshift kube scheduler guard pod probe endpoint has not been set to healthz")
+		}
+
+		// Check if openshift-kube-controller-manager guard pod endpoint has been set to healthz
+		g.By("Check if all guard pods in openshift-kube-controller-manager namespace are running fine")
+		guardPodName, guardPodError = oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-kube-controller-manager", "-l=app=guard", `-ojsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
+		o.Expect(guardPodError).NotTo(o.HaveOccurred())
+
+		guardPodNames = strings.Fields(guardPodName)
+		if len(guardPodNames) != 3 {
+			e2e.Failf("All guard pods inside openshift-kube-apiserver namespace are not running fine")
+		}
+
+		g.By("Check if guard pod path in openshift-controller-manager namespace is set to healthz")
+
+		guardPodOutput, guardPodOutputError = oc.WithoutNamespace().AsAdmin().Run("get").Args("po", guardPodNames[0], "-n", "openshift-kube-controller-manager", "-o", "yaml").Output()
+		o.Expect(guardPodOutputError).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("healthz", guardPodOutput); !match {
+			e2e.Failf("Openshift kube controller manager guard pod probe endpoint has not been set to healthz")
+		}
+
+	})
 })
