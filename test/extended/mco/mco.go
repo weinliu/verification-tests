@@ -68,15 +68,17 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		defer mc.delete()
 
-		startTime, _ := workerNode.GetDate()
+		_, _ = workerNode.GetDate() // For debugging purposes. It will print the date in the logs.
+		o.Expect(workerNode.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+			"Error getting the latest event in node %s", workerNode.GetName())
 
 		mc.create()
 
 		g.By("verify that drain and reboot events were triggered")
-		nodeEvents, eErr := workerNode.GetAllEventsSince(startTime)
+		nodeEvents, eErr := workerNode.GetEvents()
 		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", workerNode.GetName())
 		o.Expect(nodeEvents).To(HaveEventsSequence("Cordon", "Drain",
-			"Reboot", "Rebooted", "Uncordon"))
+			"Reboot", "Uncordon"))
 
 		g.By("get one worker node to verify the config changes")
 		stdout, err := workerNode.DebugNodeWithChroot("cat", "/etc/chrony.conf")
@@ -2105,6 +2107,12 @@ nulla pariatur.`
 		startTime, dErr := firstUpdatedMaster.GetDate()
 		o.Expect(dErr).ShouldNot(o.HaveOccurred(), "Error getting date in node %s", firstUpdatedMaster.GetName())
 
+		o.Expect(firstUpdatedWorker.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+			"Error getting the last event in node %s", firstUpdatedWorker.GetName())
+
+		o.Expect(firstUpdatedMaster.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+			"Error getting the last event in node %s", firstUpdatedMaster.GetName())
+
 		patchErr := ic.Patch("merge", `{"spec": {"registrySources": {"containerRuntimeSearchRegistries":["quay.io"]}}}`)
 		o.Expect(patchErr).ShouldNot(o.HaveOccurred(), "Error while partching the image.config cluster resource")
 
@@ -2137,13 +2145,18 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 
 		g.By("Verify that a drain and reboot events were triggered for worker node")
-		wEvents, weErr := firstUpdatedWorker.GetAllEventsSince(startTime)
+		wEvents, weErr := firstUpdatedWorker.GetEvents()
+
+		logger.Infof("All events for  node %s since: %s", firstUpdatedWorker.GetName(), firstUpdatedWorker.eventCheckpoint)
+		for _, event := range wEvents {
+			logger.Infof("-         %s", event)
+		}
 		o.Expect(weErr).ShouldNot(o.HaveOccurred(), "Error getting events for node %s", firstUpdatedWorker.GetName())
 		o.Expect(wEvents).To(HaveEventsSequence("Drain", "Reboot"),
 			"Error, the expected sequence of events is not found in node %s", firstUpdatedWorker.GetName())
 
 		g.By("Verify that a drain and reboot events were triggered for master node")
-		mEvents, meErr := firstUpdatedMaster.GetAllEventsSince(startTime)
+		mEvents, meErr := firstUpdatedMaster.GetEvents()
 		o.Expect(meErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", firstUpdatedMaster.GetName())
 		o.Expect(mEvents).To(HaveEventsSequence("Drain", "Reboot"),
 			"Error, the expected sequence of events is not found in node %s", firstUpdatedWorker.GetName())

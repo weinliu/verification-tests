@@ -16,6 +16,7 @@ import (
 // Node is used to handle node OCP resources
 type Node struct {
 	Resource
+	eventCheckpoint *Event
 }
 
 // NodeList handles list of nodes
@@ -25,7 +26,7 @@ type NodeList struct {
 
 // NewNode construct a new node struct
 func NewNode(oc *exutil.CLI, name string) *Node {
-	return &Node{*NewResource(oc, "node", name)}
+	return &Node{*NewResource(oc, "node", name), nil}
 }
 
 // NewNodeList construct a new node list struct to handle all existing nodes
@@ -374,6 +375,37 @@ func (n Node) GetAllEventsSince(since time.Time) ([]Event, error) {
 	eventList.ByFieldSelector(`involvedObject.name=` + n.GetName())
 
 	return eventList.GetAllSince(since)
+}
+
+// GetAllEventsSinceEvent returns a list of all the events related to this node that occurred after the provided event
+func (n Node) GetAllEventsSinceEvent(since *Event) ([]Event, error) {
+	eventList := NewEventList(n.oc, "default")
+	eventList.ByFieldSelector(`involvedObject.name=` + n.GetName())
+
+	return eventList.GetAllEventsSinceEvent(since)
+}
+
+// GetLatestEvent returns the latest event occurred in the node
+func (n Node) GetLatestEvent() (*Event, error) {
+	eventList := NewEventList(n.oc, "default")
+	eventList.ByFieldSelector(`involvedObject.name=` + n.GetName())
+
+	return eventList.GetLatest()
+}
+
+// GetEvents retunrs all the events that happened in this node since IgnoreEventsBeforeNow()() method was called.
+//
+//	If IgnoreEventsBeforeNow() is not called, it returns all existing events for this node.
+func (n *Node) GetEvents() ([]Event, error) {
+	return n.GetAllEventsSinceEvent(n.eventCheckpoint)
+}
+
+func (n *Node) IgnoreEventsBeforeNow() error {
+	var err error
+	n.eventCheckpoint, err = n.GetLatestEvent()
+	logger.Infof("Latest event that occurred in node %s was: %s", n.GetName(), n.eventCheckpoint)
+	logger.Infof("Ignoring all previous events!")
+	return err
 }
 
 // GetDateWithDelta returns the date in the node +delta

@@ -29,6 +29,9 @@ func NewEvent(oc *exutil.CLI, namespace, name string) *Event {
 
 // String implements the Stringer interface
 func (e Event) String() string {
+	e.oc.NotShowInfo()
+	defer e.oc.SetShowInfo()
+
 	description, err := e.Get(`{.metadata.creationTimestamp} Type: {.type} Reason: {.reason} Namespace: {.metadata.namespace} Involves: {.involvedObject.kind}/{.involvedObject.name}`)
 	if err != nil {
 		logger.Errorf("Event %s/%s does not exist anymore", e.GetNamespace(), e.GetName())
@@ -60,6 +63,44 @@ func (el *EventList) GetAll() ([]Event, error) {
 	allEvents = reverseEventsList(allEvents)
 
 	return allEvents, nil
+}
+
+// GetLatest returns the latest event that occurred. Nil if no event exists.
+func (el *EventList) GetLatest() (*Event, error) {
+
+	allEvents, lerr := el.GetAll()
+	if lerr != nil {
+		logger.Errorf("Error getting events %s", lerr)
+		return nil, lerr
+	}
+	if len(allEvents) == 0 {
+		return nil, nil
+	}
+
+	return &(allEvents[0]), nil
+}
+
+// GetAllEventsSinceEvent returns all events that occurred since a given event (not included)
+func (el *EventList) GetAllEventsSinceEvent(sinceEvent *Event) ([]Event, error) {
+	allEvents, lerr := el.GetAll()
+	if lerr != nil {
+		logger.Errorf("Error getting events %s", lerr)
+		return nil, lerr
+	}
+
+	if sinceEvent == nil {
+		return allEvents, nil
+	}
+
+	returnEvents := []Event{}
+	for _, event := range allEvents {
+		if event.name == sinceEvent.name {
+			break
+		}
+		returnEvents = append(returnEvents, event)
+	}
+
+	return returnEvents, nil
 }
 
 // GetAllSince return a list of the events that happened since the provided duration
@@ -132,6 +173,7 @@ type haveEventsSequenceMatcher struct {
 }
 
 func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success bool, err error) {
+
 	logger.Infof("Start verifying events sequence: %s", matcher.sequence)
 	events, ok := actual.([]Event)
 	if !ok {
@@ -140,7 +182,12 @@ func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success boo
 
 	// To avoid too many "oc" executions we store the events information in a cached struct list with "creationTimestamp" and "reason" fields.
 	tmpEvents := []tmpEvent{}
-	for _, event := range events {
+	for _, loopEvent := range events {
+		event := loopEvent // this is to make sure that we execute defer in all events, and not only in the last one
+
+		event.oc.NotShowInfo()
+		defer event.oc.SetShowInfo()
+
 		reason, err := event.Get(`{.reason}`)
 		if err != nil {
 			return false, err

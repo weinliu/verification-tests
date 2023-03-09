@@ -59,7 +59,9 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		logger.Infof("OK!\n")
 
 		g.By("Configure a password for 'core' user")
-		startTime, _ := workerNode.GetDate()
+		_, _ = workerNode.GetDate() // for debugging purposes, it prints the node's current time in the logs
+		o.Expect(workerNode.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+			"Error getting the latest event in node %s", workerNode.GetName())
 
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
 		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, user, passwordHash)}
@@ -82,7 +84,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		logger.Infof("OK!\n")
 
 		g.By("Check events to make sure that drain and reboot events were not triggered")
-		nodeEvents, eErr := workerNode.GetAllEventsSince(startTime)
+		nodeEvents, eErr := workerNode.GetEvents()
 		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", workerNode.GetName())
 		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Drain"), "Error, a Drain event was triggered but it shouldn't")
 		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Reboot"), "Error, a Reboot event was triggered but it shouldn't")
