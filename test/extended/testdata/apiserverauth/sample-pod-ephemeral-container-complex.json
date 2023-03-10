@@ -1,0 +1,29 @@
+{
+    "kind": "Pod",
+    "apiVersion": "v1",
+    "metadata": {
+      "name": "hello-openshift"
+    },
+    "spec": {
+      "ephemeralContainers": [
+        {
+          "name": "ephemeral-pod-debugger",
+          "image": "gcr.io/google-samples/node-hello:1.0",
+          "command": [
+            "bash",
+            "-ec"
+          ],
+          "args": [
+            "echo 'Printing whoami:'\nwhoami\nsleep 360d\n"
+          ],
+          "targetContainerName": "hello-openshift",
+          "tty": true,
+          "stdin": true,
+          "securityContext": {
+            "privileged": true,
+            "runAsUser": 0
+          }
+        }
+      ]
+    }
+}

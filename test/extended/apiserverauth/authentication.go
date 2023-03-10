@@ -271,6 +271,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 		// Delete secret signing-key in openshift-service-ca project
 		podOldUID, err := oc.AsAdmin().Run("get").WithoutNamespace().Args("po", "-n", "openshift-service-ca", "-o=jsonpath={.items[0].metadata.uid}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().Run("delete").WithoutNamespace().Args("-n", "openshift-service-ca", "secret", "signing-key").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -344,7 +345,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		err = ioutil.WriteFile(path, []byte(output), 0644)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.Remove(path)
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			g.By("Restoring the restricted SCC before exiting the scenario")
@@ -366,14 +367,14 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Restore the SCC successfully.")
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = oc.Run("delete").Args("po", "busybox").Output()
+		err = oc.Run("delete").Args("po", "busybox").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("create").Args("-f", podYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Execute()
 		o.Expect(err).To(o.HaveOccurred())
 		e2e.Logf("oc patch scc failed, this is expected.")
 
@@ -381,9 +382,9 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Restore the SCC successfully.")
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.shm_rmid_forced"]}`, "--type=merge").Output()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.shm_rmid_forced"]}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = oc.Run("delete").Args("po", "busybox").Output()
+		err = oc.Run("delete").Args("po", "busybox").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output, err = oc.Run("create").Args("-f", podYaml).Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -414,14 +415,14 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(output).To(o.ContainSubstring(`unsafe sysctl "kernel.msgmax" is not allowed`))
 		e2e.Logf("Failed to create pod, this is expected.")
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", `--type=json`, `-p=[{"op": "add", "path": "/allowedUnsafeSysctls", "value":["kernel.msg*"]}]`).Output()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", `--type=json`, `-p=[{"op": "add", "path": "/allowedUnsafeSysctls", "value":["kernel.msg*"]}]`).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			g.By("Restoring the restricted SCC before exiting the scenario")
 			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", path).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		output, err = oc.Run("create").Args("-f", podYaml).Output()
+		err = oc.Run("create").Args("-f", podYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -635,6 +636,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		userOauthAccessTokenName1, err := oc.Run("get").Args("useroauthaccesstokens", "-ojsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		userOauthAccessTokenYaml, err := oc.Run("get").Args("useroauthaccesstokens", userOauthAccessTokenName1, "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = ioutil.WriteFile(userOauthAccessTokenYamlPath+"/"+userOauthAccessTokenYamlName, []byte(userOauthAccessTokenYaml), 0644)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("create").Args("-f", userOauthAccessTokenYamlPath+"/"+userOauthAccessTokenYamlName).Execute()
@@ -917,5 +919,75 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "After add member to group, hit err, member right is broken")
+	})
+
+	// author: dmukherj@redhat.com
+	g.It("Author:dmukherj-High-47941-User should not be allowed to create privileged ephemeral container without required privileges", func() {
+		g.By("1. Create a namespace as normal user")
+		oc.SetupProject()
+		testNamespace := oc.Namespace()
+		username := oc.Username()
+
+		g.By("2. Changing the pod security profile to privileged")
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", testNamespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Adding label to namespace failed")
+
+		g.By("3. Creating new role for ephemeral containers")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("role", "role-ephemeralcontainers", "--verb=get,list,watch,update,patch", "--resource=pods/ephemeralcontainers", "-n", testNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "role role-ephemeralcontainers creation failed")
+
+		g.By("4. Adding role to the user")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "role-ephemeralcontainers", username, "--role-namespace", testNamespace, "-n", testNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "policy addition of role-ephemeralcontainers to testuser failed")
+
+		g.By("5. Running the hello-openshift image")
+		output, err := oc.Run("run").Args("-n", testNamespace, "hello-openshift", "--image=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("Warning"))
+		e2e.Logf("Waiting for hello-openshift pod to be ready ...")
+		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, testNamespace, 30*time.Second, 10*time.Minute)
+
+		baseDir := exutil.FixturePath("testdata", "apiserverauth")
+		podJson := filepath.Join(baseDir, "sample-pod-ephemeral-container-complex.json")
+
+		//It should fail, currently there is a bug (https://issues.redhat.com/browse/OCPBUGS-7181) associated with it
+		// err = oc.Run("replace").Args("--raw", "/api/v1/namespaces/"+testNamespace+"/pods/hello-openshift/ephemeralcontainers", "-f", podJson).Execute()
+		// o.Expect(err).To(o.HaveOccurred(), "Addition of privileged ephemeral containers without required privileges must fail")
+
+		g.By("6. Adding scc to the user")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default", "-n", testNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "policy addition of scc as privileged in the namespace failed")
+
+		err = oc.Run("replace").Args("--raw", "/api/v1/namespaces/"+testNamespace+"/pods/hello-openshift/ephemeralcontainers", "-f", podJson).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Addition of privileged ephemeral containers failed")
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			output, err := oc.Run("get").Args("po", "-o", "jsonpath={.items[*].status.ephemeralContainerStatuses}").Output()
+			if err != nil {
+				e2e.Logf("Fail to describe the container status, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("running", output); matched {
+				e2e.Logf("Ephemeral Container is in Running state:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Failed to check the ephemeral container status")
+
+		output, err = oc.Run("rsh").Args("-n", testNamespace, "-c", "ephemeral-pod-debugger", "hello-openshift", "ps", "-eF").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to rsh into the ephemeral container")
+		o.Expect(output).To(o.ContainSubstring("sleep 360d"))
+		o.Expect(output).To(o.ContainSubstring("/hello_openshift"))
+
+		output, err = oc.Run("logs").Args("-n", testNamespace, "-c", "ephemeral-pod-debugger", "hello-openshift").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "logging of container ephemeral-pod-debugger failed")
+		o.Expect(output).To(o.ContainSubstring("root"))
+
+		g.By("7. Removing scc from the user")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-scc-from-user", "privileged", "-z", "default", "-n", testNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "policy removal of scc as privileged in the namespace failed")
+
+		err = oc.Run("rsh").Args("-n", testNamespace, "-c", "ephemeral-pod-debugger", "hello-openshift").Execute()
+		o.Expect(err).To(o.HaveOccurred(), "rsh into ephemeral containers without required privileges should fail")
 	})
 })
