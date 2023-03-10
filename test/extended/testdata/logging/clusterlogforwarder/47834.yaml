@@ -19,6 +19,8 @@ objects:
       url: ${ES_URL}
       secret:
         name: ${ES_SECRET}
+      elasticsearch:
+        version: ${{ES_VERSION}}
     pipelines:
     - inputRefs:
       - audit
@@ -42,3 +44,5 @@ parameters:
   value: "kubernetes.namespace_name"
 - name: TYPE_NAME
   value: "nologformat"
+- name: ES_VERSION
+  value: "6"

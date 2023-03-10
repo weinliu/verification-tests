@@ -73,6 +73,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			pl.checkLogsFromRs(oc, "Healthcheck: Passed", "collector")
 			pl.checkLogsFromRs(oc, "Vector has started", "collector")
 
+			g.By("Check priorityClass in ds/collector")
+			pri, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/collector", "-n", cl.namespace, "-ojsonpath={.spec.template.spec.priorityClassName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(pri, "system-node-critical")).To(o.BeTrue(), "the priorityClass in ds/collector is: "+pri)
+
 			g.By("Check app indices in ES pod")
 			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())

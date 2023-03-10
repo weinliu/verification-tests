@@ -841,7 +841,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Medium-47834-Forward logs to both external ES and outputDefault using json and enable structure[Serial]", func() {
+		g.It("CPaasrunOnly-Author:qitang-Medium-47834-Medium-60489-Forward logs to both external ES 8.x and outputDefault using json and enable structure[Serial]", func() {
 			app := oc.Namespace()
 			logTemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", logTemplate, "-n", app).Execute()
@@ -851,7 +851,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			esProj := oc.Namespace()
 			ees := externalES{
 				namespace:  esProj,
-				version:    "7",
+				version:    "8",
 				serverName: "external-es",
 				httpSSL:    true,
 				clientAuth: true,
@@ -866,7 +866,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "47834.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-f", clfTemplate, "-p", "ES_URL="+eesURL, "ES_SECRET="+ees.secretName)
+			err = clf.applyFromTemplate(oc, "-f", clfTemplate, "-p", "ES_URL="+eesURL, "ES_SECRET="+ees.secretName, "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			// create clusterlogging instance
@@ -883,7 +883,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(cloNS, esPods.Items[0].Name, "infra")
 			waitForIndexAppear(cloNS, esPods.Items[0].Name, "audit")
 
-			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "app-write")
 			ees.waitForIndexAppear(oc, "infra")
 			ees.waitForIndexAppear(oc, "audit")
 		})
