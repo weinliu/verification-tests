@@ -283,3 +283,15 @@ func checkAlertmangerConfig(oc *exutil.CLI, ns string, podName string, checkValu
 	})
 	exutil.AssertWaitPollNoErr(envCheck, "failed to check alertmanager config")
 }
+
+// check configuration in the pod in the given time for specific container
+func checkConfigInPod(oc *exutil.CLI, namespace string, podName string, containerName string, cmd string, checkValue string) {
+	podCheck := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+		Output, err := exutil.RemoteShPodWithBashSpecifyContainer(oc, namespace, podName, containerName, cmd)
+		if err != nil || !strings.Contains(Output, checkValue) {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(podCheck, "failed to check configuration in the pod")
+}

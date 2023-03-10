@@ -849,6 +849,44 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output2).To(o.ContainSubstring("--collector.buddyinfo"))
 	})
 
+	//author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-59986-Allow to configure secrets in alertmanager component [Serial]", func() {
+		var (
+			alertmanagerSecret      = filepath.Join(monitoringBaseDir, "alertmanager-secret.yaml")
+			alertmanagerSecretCM    = filepath.Join(monitoringBaseDir, "alertmanager-secret-cm.yaml")
+			alertmanagerSecretUwmCM = filepath.Join(monitoringBaseDir, "alertmanager-secret-uwm-cm.yaml")
+		)
+		g.By("delete secrets/user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "test-secret", "-n", "openshift-monitoring").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "slack-api-token", "-n", "openshift-monitoring").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "test-secret", "-n", "openshift-user-workload-monitoring").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "slack-api-token", "-n", "openshift-user-workload-monitoring").Execute()
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("create alertmanager secret in openshift-monitoring")
+		createResourceFromYaml(oc, "openshift-monitoring", alertmanagerSecret)
+
+		g.By("enabled UWM and configure alertmanager secret setting in cluster-monitoring-config configmap")
+		createResourceFromYaml(oc, "openshift-monitoring", alertmanagerSecretCM)
+
+		g.By("check if the sercrets are mounted to alertmanager pod")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		checkConfigInPod(oc, "openshift-monitoring", "alertmanager-main-0", "alertmanager", "ls /etc/alertmanager/secrets/", "test-secret")
+		checkConfigInPod(oc, "openshift-monitoring", "alertmanager-main-0", "alertmanager", "ls /etc/alertmanager/secrets/", "slack-api-token")
+
+		g.By("create the same alertmanager secret in openshift-user-workload-monitoring")
+		createResourceFromYaml(oc, "openshift-user-workload-monitoring", alertmanagerSecret)
+
+		g.By("configure alertmanager secret setting in user-workload-monitoring-config configmap")
+		createResourceFromYaml(oc, "openshift-user-workload-monitoring", alertmanagerSecretUwmCM)
+
+		g.By("check if the sercrets are mounted to UWM alertmanager pod")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
+		checkConfigInPod(oc, "openshift-user-workload-monitoring", "alertmanager-user-workload-0", "alertmanager", "ls /etc/alertmanager/secrets/", "test-secret")
+		checkConfigInPod(oc, "openshift-user-workload-monitoring", "alertmanager-user-workload-0", "alertmanager", "ls /etc/alertmanager/secrets/", "slack-api-token")
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
