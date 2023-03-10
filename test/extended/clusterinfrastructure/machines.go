@@ -696,4 +696,29 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"shieldedInstanceConfig": {"secureBoot": "nabled","integrityMonitoring": "Enabled","virtualizedTrustedPlatformModule": "Enabled"}}}}}}}`, "--type=merge").Output()
 		o.Expect(strings.Contains(out, "Error from server (providerSpec.shieldedInstanceConfig")).To(o.BeTrue())
 	})
+
+	//author miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-48464-Dedicated tenancy should be exposed on aws providerspec [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-48464"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset to have dedicated tenancy ")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placement": {"tenancy": "dedicated"}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine available with dedicated tenancy ")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.placement.tenancy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("dedicated"))
+
+		g.By("Validate the webhooks warns with invalid values of tenancy config")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placement": {"tenancy": "invalid"}}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Invalid providerSpec.tenancy, the only allowed options are: default, dedicated, host")).To(o.BeTrue())
+	})
 })
