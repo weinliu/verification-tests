@@ -1346,6 +1346,11 @@ spec:
 	//For simplicity, replace --simulate-bootstrap-failure with give an invalid root secret to make install failed
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23289"|./bin/extended-platform-tests run --timeout 15m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-High-23289-Medium-39813-Test hive reports install restarts in CD and Metric[Serial]", func() {
+		// Expose Hive metrics, and neutralize the effect after finishing the test case
+		needRecover, prevConfig := false, ""
+		defer recoverClusterMonitoring(oc, &needRecover, &prevConfig)
+		exposeMetrics(oc, testDataDir, &needRecover, &prevConfig)
+
 		testCaseID := "23289"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
@@ -1407,13 +1412,12 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installRestarts}"}).check(oc)
 		o.Expect(checkResourceNumber(oc, cdName, []string{"pods", "-A"})).To(o.Equal(3))
 
-		g.By("OCP-39813: CHeck provision metric reporting number of install restarts...")
+		g.By("OCP-39813: Check provision metric reporting number of install restarts...")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
 		query := "hive_cluster_deployment_provision_underway_install_restarts"
-		checkResourcesMetricValue(oc, cdName, oc.Namespace(), "3", token, PrometheusURL, query)
-
+		checkResourcesMetricValue(oc, cdName, oc.Namespace(), "3", token, thanosQuerierURL, query)
 	})
 
 	//author: mihuang@redhat.com
@@ -1490,6 +1494,11 @@ spec:
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "44477"|./bin/extended-platform-tests run --timeout 30m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-44477-Medium-44474-Medium-44476-[AWS]Change fields of a steady pool, all unclaimed clusters will be recreated[Serial]", func() {
+		// Expose Hive metrics, and neutralize the effect after finishing the test case
+		needRecover, prevConfig := false, ""
+		defer recoverClusterMonitoring(oc, &needRecover, &prevConfig)
+		exposeMetrics(oc, testDataDir, &needRecover, &prevConfig)
+
 		testCaseID := "44477"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -1605,7 +1614,7 @@ spec:
 			if v == "imageSetRef" {
 				newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedResultTemp, ok, DefaultTimeout, []string{"ClusterDeployment", "-A", jsonPathTemp}).check(oc)
 			}
-			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, 2*DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 		}
 		g.By("Check Metrics for ClusterPool...")
 		token, err := exutil.GetSAToken(oc)
@@ -1613,6 +1622,6 @@ spec:
 		o.Expect(token).NotTo(o.BeEmpty())
 		query := "hive_clusterpool_stale_clusterdeployments_deleted"
 		e2e.Logf("Check metric %s Value equal to 6", query)
-		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "6", token, PrometheusURL, query)
+		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "6", token, thanosQuerierURL, query)
 	})
 })

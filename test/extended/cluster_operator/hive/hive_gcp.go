@@ -878,6 +878,11 @@ spec:
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "45279"|./bin/extended-platform-tests run --timeout 15m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-45279-Test Metric for ClusterClaim[Serial]", func() {
+		// Expose Hive metrics, and neutralize the effect after finishing the test case
+		needRecover, prevConfig := false, ""
+		defer recoverClusterMonitoring(oc, &needRecover, &prevConfig)
+		exposeMetrics(oc, testDataDir, &needRecover, &prevConfig)
+
 		testCaseID := "45279"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -960,9 +965,9 @@ spec:
 		query3 := "hive_clusterclaim_assignment_delay_seconds_bucket"
 		query := []string{query1, query2, query3}
 		g.By("Check hive metrics for clusterclaim exist")
-		checkMetricExist(oc, ok, token, PrometheusURL, query)
+		checkMetricExist(oc, ok, token, thanosQuerierURL, query)
 		e2e.Logf("Check metric %s Value is 1", query2)
-		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "1", token, PrometheusURL, query2)
+		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "1", token, thanosQuerierURL, query2)
 
 		g.By("Create another ClusterClaim...")
 		claimName2 := poolName + "-claim-2"
@@ -977,12 +982,17 @@ spec:
 		e2e.Logf("Check if ClusterClaim %s created successfully", claimName2)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName2, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace(), "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		e2e.Logf("Check metric %s Value change to 2", query2)
-		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "2", token, PrometheusURL, query2)
+		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "2", token, thanosQuerierURL, query2)
 	})
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "54463"|./bin/extended-platform-tests run --timeout 35m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54463-Add cluster install success/fail metrics[Serial]", func() {
+		// Expose Hive metrics, and neutralize the effect after finishing the test case
+		needRecover, prevConfig := false, ""
+		defer recoverClusterMonitoring(oc, &needRecover, &prevConfig)
+		exposeMetrics(oc, testDataDir, &needRecover, &prevConfig)
+
 		testCaseID := "54463"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
@@ -1064,9 +1074,9 @@ spec:
 					queryFailBucket := "hive_cluster_deployment_install_failure_total_bucket"
 					queryFail := []string{queryFailSum, queryFailCount, queryFailBucket}
 					g.By("Check hive metrics for cd install fail")
-					checkMetricExist(oc, ok, token, PrometheusURL, queryFail)
+					checkMetricExist(oc, ok, token, thanosQuerierURL, queryFail)
 					e2e.Logf("Check metric %s with install_attempt = 2", queryFailCount)
-					checkResourcesMetricValue(oc, GCPRegion, HiveNamespace, "2", token, PrometheusURL, queryFailCount)
+					checkResourcesMetricValue(oc, GCPRegion, HiveNamespace, "2", token, thanosQuerierURL, queryFailCount)
 					e2e.Logf("delete cd and create a success case")
 				} else {
 					g.By("Check GCP ClusterDeployment installed flag is true")
@@ -1076,9 +1086,9 @@ spec:
 					querySuccBucket := "hive_cluster_deployment_install_success_total_bucket"
 					querySuccess := []string{querySuccSum, querySuccCount, querySuccBucket}
 					g.By("Check hive metrics for cd installed successfully")
-					checkMetricExist(oc, ok, token, PrometheusURL, querySuccess)
+					checkMetricExist(oc, ok, token, thanosQuerierURL, querySuccess)
 					e2e.Logf("Check metric %s with with install_attempt = 0", querySuccCount)
-					checkResourcesMetricValue(oc, GCPRegion, HiveNamespace, "0", token, PrometheusURL, querySuccCount)
+					checkResourcesMetricValue(oc, GCPRegion, HiveNamespace, "0", token, thanosQuerierURL, querySuccCount)
 				}
 			}()
 		}

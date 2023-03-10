@@ -20,6 +20,12 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+type clusterMonitoringConfig struct {
+	enableUserWorkload bool
+	namespace          string
+	template           string
+}
+
 type hiveNameSpace struct {
 	name     string
 	template string
@@ -288,6 +294,7 @@ const (
 	HiveNamespace           = "hive" //Hive Namespace
 	PullSecret              = "pull-secret"
 	PrometheusURL           = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
+	thanosQuerierURL        = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query?query="
 	ClusterInstallTimeout   = 3600
 	DefaultTimeout          = 120
 	ClusterResumeTimeout    = 1200
@@ -349,6 +356,11 @@ func getRandomString() string {
 		buffer[index] = chars[seed.Intn(len(chars))]
 	}
 	return string(buffer)
+}
+
+func (cmc *clusterMonitoringConfig) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cmc.template, "-p", "ENABLEUSERWORKLOAD="+strconv.FormatBool(cmc.enableUserWorkload), "NAMESPACE="+cmc.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create hive namespace if not exist
@@ -933,6 +945,125 @@ const (
 	enable  = true
 	disable = false
 )
+
+// Expose Hive metrics as a user-defined project
+// The cluster's status of monitoring before running this function is stored for recoverability.
+// *needRecoverPtr: whether recovering is needed
+// *prevConfigPtr: data stored in ConfigMap/cluster-monitoring-config before running this function
+func exposeMetrics(oc *exutil.CLI, testDataDir string, needRecoverPtr *bool, prevConfigPtr *string) {
+	// Look for cluster-level monitoring configuration
+	getOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ConfigMap", "cluster-monitoring-config", "-n", "openshift-monitoring", "--ignore-not-found").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Enable user workload monitoring
+	if len(getOutput) > 0 {
+		e2e.Logf("ConfigMap cluster-monitoring-config exists, extracting cluster-monitoring-config ...")
+		extractOutput, _, _ := oc.AsAdmin().WithoutNamespace().Run("extract").Args("ConfigMap/cluster-monitoring-config", "-n", "openshift-monitoring", "--to=-").Outputs()
+
+		if strings.Contains(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(extractOutput, "'", ""), "\"", ""), " ", ""), "enableUserWorkload:true") {
+			e2e.Logf("User workload is enabled, doing nothing ... ")
+			*needRecoverPtr, *prevConfigPtr = false, ""
+		} else {
+			e2e.Logf("User workload is not enabled, enabling ...")
+			*needRecoverPtr, *prevConfigPtr = true, strings.ReplaceAll(extractOutput, "\n", "\\n")
+
+			extractOutputParts := strings.Split(extractOutput, "\n")
+			containKeyword := false
+			for idx, part := range extractOutputParts {
+				if strings.Contains(part, "enableUserWorkload") {
+					e2e.Logf("Keyword \"enableUserWorkload\" found in cluster-monitoring-config, setting enableUserWorkload to true ...")
+					extractOutputParts[idx] = "enableUserWorkload: true"
+					containKeyword = true
+					break
+				}
+			}
+			if !containKeyword {
+				e2e.Logf("Keyword \"enableUserWorkload\" not found in cluster-monitoring-config, adding ...")
+				extractOutputParts = append(extractOutputParts, "enableUserWorkload: true")
+			}
+			modifiedExtractOutput := strings.Join(extractOutputParts, "\\n")
+
+			e2e.Logf("Patching ConfigMap cluster-monitoring-config to enable user workload monitoring ...")
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ConfigMap", "cluster-monitoring-config", "-n", "openshift-monitoring", "--type", "merge", "-p", fmt.Sprintf("{\"data\":{\"config.yaml\": \"%s\"}}", modifiedExtractOutput)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	} else {
+		e2e.Logf("ConfigMap cluster-monitoring-config does not exist, creating ...")
+		*needRecoverPtr, *prevConfigPtr = true, ""
+
+		clusterMonitoringConfigTemp := clusterMonitoringConfig{
+			enableUserWorkload: true,
+			namespace:          "openshift-monitoring",
+			template:           filepath.Join(testDataDir, "cluster-monitoring-config.yaml"),
+		}
+		clusterMonitoringConfigTemp.create(oc)
+	}
+
+	// Check monitoring-related pods are created in the openshift-user-workload-monitoring namespace
+	newCheck("expect", "get", asAdmin, withoutNamespace, contain, "prometheus-operator", ok, DefaultTimeout, []string{"pod", "-n", "openshift-user-workload-monitoring"}).check(oc)
+	newCheck("expect", "get", asAdmin, withoutNamespace, contain, "prometheus-user-workload", ok, DefaultTimeout, []string{"pod", "-n", "openshift-user-workload-monitoring"}).check(oc)
+	newCheck("expect", "get", asAdmin, withoutNamespace, contain, "thanos-ruler-user-workload", ok, DefaultTimeout, []string{"pod", "-n", "openshift-user-workload-monitoring"}).check(oc)
+
+	// Check if ServiceMonitors and PodMonitors are created
+	e2e.Logf("Checking if ServiceMonitors and PodMonitors exist ...")
+	getOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceMonitor", "hive-clustersync", "-n", HiveNamespace, "--ignore-not-found").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if len(getOutput) == 0 {
+		e2e.Logf("Creating PodMonitor for hive-operator ...")
+		podMonitorYaml := filepath.Join(testDataDir, "hive-operator-podmonitor.yaml")
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", podMonitorYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Creating ServiceMonitor for hive-controllers ...")
+		serviceMonitorControllers := filepath.Join(testDataDir, "hive-controllers-servicemonitor.yaml")
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", serviceMonitorControllers).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Creating ServiceMonitor for hive-clustersync ...")
+		serviceMonitorClustersync := filepath.Join(testDataDir, "hive-clustersync-servicemonitor.yaml")
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", serviceMonitorClustersync).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+// Recover cluster monitoring state, neutralizing the effect of exposeMetrics.
+func recoverClusterMonitoring(oc *exutil.CLI, needRecoverPtr *bool, prevConfigPtr *string) {
+	if *needRecoverPtr {
+		e2e.Logf("Recovering cluster monitoring configurations ...")
+		if len(*prevConfigPtr) == 0 {
+			e2e.Logf("ConfigMap/cluster-monitoring-config did not exist before calling exposeMetrics, deleting ...")
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ConfigMap", "cluster-monitoring-config", "-n", "openshift-monitoring", "--ignore-not-found").Execute()
+			if err != nil {
+				e2e.Logf("Error occurred when deleting ConfigMap/cluster-monitoring-config: %v", err)
+			}
+		} else {
+			e2e.Logf("Reverting changes made to ConfigMap/cluster-monitoring-config ...")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ConfigMap", "cluster-monitoring-config", "-n", "openshift-monitoring", "--type", "merge", "-p", fmt.Sprintf("{\"data\":{\"config.yaml\": \"%s\"}}", *prevConfigPtr)).Execute()
+			if err != nil {
+				e2e.Logf("Error occurred when patching ConfigMap/cluster-monitoring-config: %v", err)
+			}
+		}
+
+		e2e.Logf("Deleting ServiceMonitors and PodMonitors in the hive namespace ...")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ServiceMonitor", "hive-clustersync", "-n", HiveNamespace, "--ignore-not-found").Execute()
+		if err != nil {
+			e2e.Logf("Error occurred when deleting ServiceMonitor/hive-clustersync: %v", err)
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ServiceMonitor", "hive-controllers", "-n", HiveNamespace, "--ignore-not-found").Execute()
+		if err != nil {
+			e2e.Logf("Error occurred when deleting ServiceMonitor/hive-controllers: %v", err)
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("PodMonitor", "hive-operator", "-n", HiveNamespace, "--ignore-not-found").Execute()
+		if err != nil {
+			e2e.Logf("Error occurred when deleting PodMonitor/hive-operator: %v", err)
+		}
+
+		return
+	}
+
+	e2e.Logf("No recovering needed for cluster monitoring configurations. ")
+}
 
 // If enable hive exportMetric
 func exportMetric(oc *exutil.CLI, action bool) {

@@ -1,7 +1,6 @@
 package hive
 
 import (
-	"path/filepath"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -71,34 +70,14 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "44914"|./bin/extended-platform-tests run --timeout 15m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-44914-View Hive Metrics with OpenShift Cluster Monitoring [Serial]", func() {
-		g.By("Verify hive metrics can get from prometheus...")
-		token, err := exutil.GetSAToken(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(token).NotTo(o.BeEmpty())
-		e2e.Logf("Check hive metrics can be query from promethues")
-		query := []string{"hive_clustersync_first_success_duration_seconds_count"}
-		checkMetricExist(oc, ok, token, PrometheusURL, query)
-
-		g.By("Disabled exportedMetric in HiveConfig, Check hive metrics disappear from prometheus...")
-		defer exportMetric(oc, enable)
-		exportMetric(oc, disable)
-		e2e.Logf("Check hive metrics can't be query from promethues after exportedMetric disabled in HiveConfig")
-		checkMetricExist(oc, nok, token, PrometheusURL, query)
-	})
-
-	//author: lwan@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41932"|./bin/extended-platform-tests run --timeout 15m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-41932-Add metric for hive-operator[Serial]", func() {
-		g.By("Create PodMonitor for HiveConfig...")
-		podMonitorYaml := filepath.Join(testDataDir, "hive-operator-podmonitor.yaml")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", podMonitorYaml, "--ignore-not-found").Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", podMonitorYaml).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		// Expose Hive metrics, and neutralize the effect after finishing the test case
+		needRecover, prevConfig := false, ""
+		defer recoverClusterMonitoring(oc, &needRecover, &prevConfig)
+		exposeMetrics(oc, testDataDir, &needRecover, &prevConfig)
 
-		g.By("Check hive-operator metrics can be query from promethues")
+		g.By("Check hive-operator metrics can be queried from thanos-querier")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
@@ -107,15 +86,15 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		query3 := "hive_operator_reconcile_seconds_bucket"
 		query4 := "hive_hiveconfig_conditions"
 		query := []string{query1, query2, query3, query4}
-		checkMetricExist(oc, ok, token, PrometheusURL, query)
+		checkMetricExist(oc, ok, token, thanosQuerierURL, query)
 
 		g.By("Check HiveConfig status from Metric...")
 		expectedType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.status.conditions[0].type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		expectedReason, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.status.conditions[0].reason}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		checkHiveConfigMetric(oc, "condition", expectedType, token, PrometheusURL, query4)
-		checkHiveConfigMetric(oc, "reason", expectedReason, token, PrometheusURL, query4)
+		checkHiveConfigMetric(oc, "condition", expectedType, token, thanosQuerierURL, query4)
+		checkHiveConfigMetric(oc, "reason", expectedReason, token, thanosQuerierURL, query4)
 	})
 
 	//author: mihuang@redhat.com
