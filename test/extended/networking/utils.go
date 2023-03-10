@@ -942,7 +942,7 @@ func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
 }
 
 func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType string) string {
-	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "-n", namespace, "-o=jsonpath={.items[*].spec.holderIdentity}").Output()
+	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "-n", namespace, "-o=jsonpath={.spec.holderIdentity}").Output()
 	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
 	if networkType == "ovnkubernetes" {
 		_, leaderNodeIP := getNodeIP(oc, leaderNodeName)
