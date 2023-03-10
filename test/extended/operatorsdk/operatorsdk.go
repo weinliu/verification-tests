@@ -4487,9 +4487,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get metrics samples in %s", nsOperator))
 		metricsToken, _ := exutil.GetSAToken(oc)
 		o.Expect(metricsToken).NotTo(o.BeEmpty())
+
 		promeEp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ep", "ansiblemetrics-controller-manager-metrics-service", "-o=jsonpath={.subsets[0].addresses[0].ip}", "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		metricsMsg, err := exec.Command("bash", "-c", "oc exec deployment/ansiblemetrics-controller-manager -n "+nsOperator+" -- curl -k -H \"Authorization: Bearer "+metricsToken+"\" 'https://"+promeEp+":8443/metrics'").Output()
+
+		metricsMsg, err := exec.Command("bash", "-c", "oc exec deployment/ansiblemetrics-controller-manager -n "+nsOperator+" -- curl -k -H \"Authorization: Bearer "+metricsToken+"\" 'https://["+promeEp+"]:8443/metrics'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var strMetricsMsg string
 		strMetricsMsg = string(metricsMsg)
