@@ -1335,12 +1335,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		}
 
 		g.By("Try to create another custom IC with the same http/https/stat port numbers as the first custom IC")
-		jpath = ".status.conditions[?(@.type==\"PodsScheduled\")].message"
-		ingctrl2Resource := "ingresscontrollers/" + ingctrlhp2.name
 		defer ingctrlhp2.delete(oc)
 		ingctrlhp2.create(oc)
-		value := fetchJSONPathValue(oc, ingctrlhp2.namespace, ingctrl2Resource, jpath)
-		o.Expect(value).To(o.ContainSubstring("node(s) didn't have free ports for the requested pod ports"))
+		customICRouterPod := getPodName(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=ocp50819two")
+		checkPodEvent := describePodResource(oc, customICRouterPod[0], "openshift-ingress")
+		o.Expect(checkPodEvent).To(o.ContainSubstring("node(s) didn't have free ports for the requested pod ports"))
 	})
 
 	// author: shudili@redhat.com
