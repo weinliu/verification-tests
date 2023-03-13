@@ -36,16 +36,6 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-/*
-// TBD: a common receiver interface
-type logReceiver interface {
-	infrastructureLogsFound() bool
-	auditLogsFound() bool
-	applicationLogsFound() bool
-	logsFound() bool
-}
-*/
-
 // SubscriptionObjects objects are used to create operators via OLM
 type SubscriptionObjects struct {
 	OperatorName  string
@@ -149,7 +139,7 @@ func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSo
 		e2e.Logf("Waiting for packagemanifest/%s to appear", so.PackageName)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Packagemanifest %s is not availabile", so.PackageName))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Packagemanifest %s is not available", so.PackageName))
 }
 
 // setCatalogSourceObjects set the default values of channel, source namespace and source name if they're not specified
@@ -290,7 +280,7 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not available", name))
 }
 
 func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
@@ -310,7 +300,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 		e2e.Logf("Waiting for full availability of %s statefulset (%d/%d)\n", name, ss.Status.ReadyReplicas, *ss.Spec.Replicas)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("statefulset %s is not availabile", name))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("statefulset %s is not available", name))
 }
 
 // WaitForDaemonsetPodsToBeReady waits for all the pods controlled by the ds to be ready
@@ -331,7 +321,7 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 		e2e.Logf("Waiting for full availability of %s daemonset (%d/%d)\n", name, daemonset.Status.NumberReady, daemonset.Status.DesiredNumberScheduled)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset %s is not availabile", name))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset %s is not available", name))
 }
 
 func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
@@ -358,7 +348,7 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 		}
 		return ready, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The pod with label %s is not availabile", label))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The pod with label %s is not available", label))
 }
 
 // GetDeploymentsNameByLabel retruns a list of deployment name which have specific labels
@@ -377,7 +367,7 @@ func GetDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment with label %s is not availabile", label))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment with label %s is not available", label))
 	if err == nil {
 		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -471,14 +461,18 @@ func (r resource) deleteClusterLogging(oc *exutil.CLI) {
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("could not delete %s/%s", r.kind, r.name))
 	//make sure other resources are removed
-	resources := []resource{{"elasticsearches.logging.openshift.io", "elasticsearch", r.namespace}, {"kibanas.logging.openshift.io", "kibana", r.namespace}, {"daemonset", "collector", r.namespace}}
-	for i := 0; i < len(resources); i++ {
-		err = resources[i].WaitUntilResourceIsGone(oc)
-		if err != nil {
-			e2e.Logf("%s/%s is not deleted", resources[i].kind, resources[i].name)
+	crdResources := []resource{{"elasticsearches.logging.openshift.io", "elasticsearch", r.namespace}, {"kibanas.logging.openshift.io", "kibana", r.namespace}}
+	for _, rs := range crdResources {
+		//check if the crd exist before get it
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", rs.kind).Execute()
+		if err == nil {
+			err = rs.WaitUntilResourceIsGone(oc)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s is not deleted", rs.kind, rs.name))
 		}
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s is not deleted", resources[i].kind, resources[i].name))
 	}
+	ds := resource{"daemonset", "collector", r.namespace}
+	err = ds.WaitUntilResourceIsGone(oc)
+	exutil.AssertWaitPollNoErr(err, "ds/collector is not deleted")
 	// remove all the pvcs in the namespace
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
 }
@@ -524,7 +518,7 @@ func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cronjob %s is not availabile", name))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cronjob %s is not available", name))
 }
 
 func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
@@ -650,7 +644,12 @@ func queryPrometheus(oc *exutil.CLI, token string, path string, query string, ac
 	}
 
 	var p prometheusQueryResult
-	if err = doHTTPRequest(h, address, path, params.Encode(), action, false, 5, &p); err != nil {
+	resp, err := doHTTPRequest(h, address, path, params.Encode(), action, false, 5, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(resp, &p)
+	if err != nil {
 		return nil, err
 	}
 	return &p, nil
@@ -842,6 +841,21 @@ func getDomain(oc *exutil.CLI) (string, error) {
 
 	domain := strings.Split(apiServerURL, "api.")[1]
 	return strings.Split(domain, ":")[0], nil
+}
+
+func getAppDomain(oc *exutil.CLI) (string, error) {
+	subDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingresses.config/cluster", "-ojsonpath={.spec.domain}").Output()
+	if err != nil {
+		return "", err
+	}
+	return subDomain, nil
+}
+
+func getTmpPath() string {
+	keysPath := filepath.Join("/tmp/logging" + getRandomString())
+	err := os.MkdirAll(keysPath, 0755)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return keysPath
 }
 
 type certsConf struct {

@@ -666,7 +666,12 @@ func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) 
 		return err
 	}
 
-	return doHTTPRequest(h, c.address, path, query, "GET", quiet, c.retries, out)
+	resp, err := doHTTPRequest(h, c.address, path, query, "GET", quiet, c.retries, nil)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(resp, out)
+
 }
 
 func (c *lokiClient) doQuery(path string, query string, quiet bool) (*lokiQueryResponse, error) {
@@ -832,18 +837,18 @@ func (c *lokiClient) listLabels(logType, labelName string, start, end time.Time)
 	return labelResponse.Data
 }
 
-func doHTTPRequest(header http.Header, address, path, query, method string, quiet bool, attempts int, out interface{}) error {
+func doHTTPRequest(header http.Header, address, path, query, method string, quiet bool, attempts int, requestBody io.Reader) ([]byte, error) {
 	us, err := buildURL(address, path, query)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !quiet {
 		e2e.Logf(us)
 	}
 
-	req, err := http.NewRequest(strings.ToUpper(method), us, nil)
+	req, err := http.NewRequest(strings.ToUpper(method), us, requestBody)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req.Header = header
@@ -868,6 +873,18 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 	var resp *http.Response
 	success := false
 
+	var expectedStatusCode int
+	switch strings.ToUpper(method) {
+	case "GET":
+		{
+			expectedStatusCode = 200
+		}
+	case "POST":
+		{
+			expectedStatusCode = 201
+		}
+	}
+
 	for attempts > 0 {
 		attempts--
 
@@ -876,7 +893,7 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 			e2e.Logf("error sending request %v", err)
 			continue
 		}
-		if resp.StatusCode/100 != 2 {
+		if resp.StatusCode != expectedStatusCode {
 			buf, _ := io.ReadAll(resp.Body) // nolint
 			e2e.Logf("Error response from server: %s (%v) attempts remaining: %d", string(buf), err, attempts)
 			if err := resp.Body.Close(); err != nil {
@@ -888,7 +905,7 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 		break
 	}
 	if !success {
-		return fmt.Errorf("run out of attempts while querying the server")
+		return nil, fmt.Errorf("run out of attempts while querying the server")
 	}
 
 	defer func() {
@@ -896,7 +913,7 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 			e2e.Logf("error closing body", err)
 		}
 	}()
-	return json.NewDecoder(resp.Body).Decode(out)
+	return io.ReadAll(resp.Body)
 }
 
 // buildURL concats a url `http://foo/bar` with a path `/buzz`.

@@ -197,7 +197,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/collector", "-n", cloNS, "-ojsonpath={.status}").Output()
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset collector is not availabile with output:\n %s", output))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset collector is not available with output:\n %s", output))
 
 			g.By("Set OCP node label to vector: deploy")
 			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("nodes", "--selector=kubernetes.io/os=linux", "vector=deploy", "--overwrite").Execute()
@@ -231,7 +231,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/collector", "-n", cloNS, "-ojsonpath={.status}").Output()
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset collector is not availabile with output:\n %s", output))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset collector is not available with output:\n %s", output))
 
 			g.By("Patch Cluster Logging instance to use nodeSelector vector: deploy1")
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging", "instance", "--type=merge", "-p", "{\"spec\":{\"collection\":{\"nodeSelector\":{\"vector\":\"deploy1\"}}}}", "-n", cloNS).Execute()

@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"encoding/xml"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -893,4 +894,73 @@ type alert struct {
 	State    string `json:"state,omitempty"`
 	ActiveAt string `json:"activeAt,omitempty"`
 	Value    string `json:"value,omitempty"`
+}
+
+/* TBD logSever interface, intent to define command functions for all support log receivers
+type logSever interface {
+	deploy()
+	destroy()
+	infraSystemdLogFound(query string, quiet bool) bool
+	infraContainerLogFound(query string, quiet bool) bool
+	appContainerLogFound(query string, bool, quiet bool) bool
+	auditK8sLogFound(query string, quiet bool) bool
+	auditOpenshiftLogFound(query string, quiet bool) bool
+	auditOvnLogFound(query string, quiet bool) bool
+	auditLinuxLogFound(query string, quiet bool) bool
+	anyLogFound() bool
+	allLogsFound() bool
+}
+*/
+
+// The splunkPod search which deploy on same Openshift Server
+type splunkPodServer struct {
+	name          string // The splunk name, default: splunk-s1-standalone
+	namespace     string // The namespace where splunk is deployed in, default: splunk-aosqe
+	authType      string // http(insecure http),tls_mutual,tls_serveronly. Note: when authType==http, you can still access splunk via https://${splunk_route}
+	version       string // The splunk version: 8.2 or 9.0, default: 9.0
+	hecToken      string // hec_token
+	adminUser     string // admin user
+	adminPassword string // admin password
+	serviceName   string // http service name
+	hecRoute      string // hec route
+	splunkdRoute  string // splunkd Route
+	caFile        string // the ca File
+	keyFile       string // the Key File
+	certFile      string // the cert File
+	passphrase    string // the passphase
+}
+
+// The splunk response  for a search request.  It includes batch id which can be used to fetch log records
+type splunkSearchResp struct {
+	XMLName xml.Name `xml:"response"`
+	Sid     string   `xml:"sid"`
+}
+
+// The log Record in splunk server which is sent out by collector
+type splunkLogRecord struct {
+	Bkt           string   `json:"_bkt"`
+	Cd            string   `json:"_cd"`
+	IndexTime     string   `json:"_indextime"`
+	Raw           string   `json:"_raw"`
+	Serial        string   `json:"_serial"`
+	Si            []string `json:"_si"`
+	TagSourceType string   `json:"_sourcetype"`
+	SubSecond     string   `json:"_subsecond"`
+	Time          string   `json:"_time"`
+	Host          string   `json:"host"`
+	Index         string   `json:"index"`
+	LineCount     string   `json:"lincount"`
+	LogType       string   `json:"log_type"`
+	Source        string   `json:"source"`
+	SourceType    string   `json:"souretype"`
+	SplunkServer  string   `json:"splunk_sever"`
+}
+
+// The splunk search result
+type splunkSearchResult struct {
+	Preview    bool              `json:"preview"`
+	InitOffset float64           `json:"init_offset"`
+	Fields     []interface{}     `json:"fields"`
+	Messages   []interface{}     `json:"messages"`
+	Results    []splunkLogRecord `json:"results"`
 }

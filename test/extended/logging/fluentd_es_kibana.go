@@ -819,7 +819,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Kibana should"
 		g.By("check kibana status")
 		kibanaRoute := "https://" + getRouteAddress(oc, cloNS, "kibana")
 		kStatus := kibanaStatus{}
-		err = doHTTPRequest(nil, kibanaRoute, "/api/status", "", "GET", false, 6, &kStatus)
+		resp, err := doHTTPRequest(nil, kibanaRoute, "/api/status", "", "GET", false, 6, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = json.Unmarshal(resp, &kStatus)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, s := range kStatus.Status.Statuses {
 			o.Expect(s.State == "green").Should(o.BeTrue(), "%s is not in green status: %s", s.ID, s.Message)
