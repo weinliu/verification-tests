@@ -9,7 +9,7 @@ describe('console configs features', () => {
     cy.logout;
   });
 
-  it('(OCP-53787,yanpzhan) Backend changes to add nodeArchitectures value to console-config file', {tags: ['e2e','admin']}, () => {
+  it('(OCP-53787,yanpzhan) Backend changes to add nodeArchitectures value to console-config file', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     let $architectureType;
     cy.exec(`oc get nodes -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | awk '/architecture:/ {print $2}' | sort | uniq`, { failOnNonZeroExit: false }).then((result) => {
       $architectureType = result.stdout;

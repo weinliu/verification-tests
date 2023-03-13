@@ -15,7 +15,7 @@ describe('logs related features', () => {
     cy.cliLogout();
   });
 
-  it('(OCP-54875,yanpzhan) Configure default behavior for "Wrap lines" in log viewers by pod annotation', {tags: ['e2e']}, () => {
+  it('(OCP-54875,yanpzhan) Configure default behavior for "Wrap lines" in log viewers by pod annotation', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
     cy.exec(`oc create -f ./fixtures/example-pod.yaml -n ${testName}`);
     cy.exec(`oc create -f ./fixtures/example-pod-with-wrap-annotation.yaml -n ${testName}`);
     cy.visit(`/k8s/ns/${testName}/pods/examplepod/logs`);

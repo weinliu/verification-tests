@@ -43,7 +43,7 @@ describe('Workload Secrets test', () => {
       .should('eq', '')
   });
 
-  it('(OCP-54213,yanpzhan) Trim whitespace to form inputs when create image pull secret', {tags: ['e2e','admin']}, () => {
+  it('(OCP-54213,yanpzhan) Trim whitespace to form inputs when create image pull secret', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     guidedTour.close();
     Secrets.gotoSecretsPage(testName);
     Secrets.createImagePullSecret('secrettest','  quay.io  ','  testuser  ','  testpassword  ','  test@redhat.com  ');

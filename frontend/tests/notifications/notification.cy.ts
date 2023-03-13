@@ -33,7 +33,7 @@ describe('Notification drawer tests', () => {
     cy.logout;
   })
 
-  it('(OCP-45305,yanpzhan) check alert on overview page and notification drawer list', {tags: ['e2e','admin']}, () => {
+  it('(OCP-45305,yanpzhan) check alert on overview page and notification drawer list', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     preferNotifications.goToNotificationsTab();
     preferNotifications.setHideNotifications();
     Overview.goToDashboard();
