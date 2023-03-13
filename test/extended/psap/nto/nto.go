@@ -62,8 +62,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ManualPickup = true
 	})
 
-	// author: nweinber@redhat.com
-	g.It("Author:liqcui-Medium-29789-Sysctl parameters set by tuned can not be overwritten by parameters set via /etc/sysctl [Flaky]", func() {
+	// author: liqcui@redhat.com
+	g.It("Author:liqcui-Medium-29789-Sysctl parameters that set by tuned can be overwritten by parameters set via /etc/sysctl [Flaky]", func() {
 
 		// test requires NTO to be installed
 		if !isNTO {
@@ -72,14 +72,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Pick one worker node and one tuned pod on same node")
 		workerNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(workerNodeName).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 		e2e.Logf("Worker Node: %v", workerNodeName)
 		tunedPodName, err := exutil.GetPodName(oc, ntoNamespace, "openshift-app=tuned", workerNodeName)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Tuned Pod: %v", tunedPodName)
 
 		g.By("Check values set by /etc/sysctl on node and store the values")
-		inotify, err := exutil.DebugNodeWithChroot(oc, workerNodeName, "cat", "/etc/sysctl.d/inotify.conf")
+		inotify, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, workerNodeName, []string{"-q"}, "cat", "/etc/sysctl.d/inotify.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(inotify).To(o.And(
 			o.ContainSubstring("fs.inotify.max_user_watches"),
@@ -94,42 +97,81 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check sysctl kernel.pid_max on node and store the value")
-		kernel, err := exutil.DebugNodeWithChroot(oc, workerNodeName, "sysctl", "kernel.pid_max")
+		kernel, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, workerNodeName, []string{"-q"}, "sysctl", "kernel.pid_max")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(kernel).To(o.ContainSubstring("kernel.pid_max"))
 		pidMaxValue := getKernelPidMaxValue(kernel)
 		e2e.Logf("kernel.pid_max has value of: %v", pidMaxValue)
 
-		defer func() {
-			g.By("Removed tuned override and label after test completion")
-			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoNamespace, "tuneds.tuned.openshift.io", "override").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", workerNodeName, "tuned.openshift.io/override-").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoNamespace, "tuneds.tuned.openshift.io", "override").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", workerNodeName, "tuned.openshift.io/override-").Execute()
 
-		g.By("Create new CR and label the node")
-		exutil.CreateNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", overrideFile)
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", workerNodeName, "tuned.openshift.io/override=").Execute()
+		//tuned can not override parameters set via /etc/sysctl{.conf,.d} when reapply_sysctl=true
+		//  The settings in /etc/sysctl.d/inotify.conf as below
+		//      fs.inotify.max_user_watches = 65536     =>Try to override to 163840 by tuned, expect the old value 65536
+		//      fs.inotify.max_user_instances = 8192    =>Not override by tuned, expect the old value 8192
+		//      kernel.pid_max = 4194304                =>Default value is 4194304
+		//  The settings in custom tuned profile as below
+		//      fs.inotify.max_user_watches = 163840    =>Try to override to 163840 by tuned, expect the old value 65536
+		//      kernel.pid_max = 1048576                =>Override by tuned, expect the new value 1048576
+		g.By("Create new NTO CR with reapply_sysctl=true and label the node")
+		//reapply_sysctl=true tuned can not override parameters set via /etc/sysctl{.conf,.d}
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", workerNodeName, "tuned.openshift.io/override=", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", overrideFile, "REAPPLY_SYSCTL=true")
 
 		g.By("Check if new NTO profile was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "override")
 
-		g.By("Check value of fs.inotify.max_user_instances on node (set by sysctl, should be the same as before)")
-		instanceCheck, err := exutil.DebugNodeWithChroot(oc, workerNodeName, "sysctl", "fs.inotify.max_user_instances")
+		g.By("Check value of fs.inotify.max_user_instances on node (set by sysctl, should be the same as before), expected value is 8192")
+		maxUserInstanceCheck, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, workerNodeName, []string{"-q"}, "sysctl", "fs.inotify.max_user_instances")
+		e2e.Logf("fs.inotify.max_user_instances has value of: %v", maxUserInstanceCheck)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(instanceCheck).To(o.ContainSubstring(maxUserInstancesValue))
+		o.Expect(maxUserInstanceCheck).To(o.ContainSubstring(maxUserInstancesValue))
 
-		g.By("Check value of fs.inotify.max_user_watches on node (set by sysctl, should be the same as before)")
-		watchesCheck, err := exutil.DebugNodeWithChroot(oc, workerNodeName, "sysctl", "fs.inotify.max_user_watches")
+		g.By("Check value of fs.inotify.max_user_watches on node (set by sysctl, should be the same as before),expected value is 65536")
+		maxUserWatchesCheck, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, workerNodeName, []string{"-q"}, "sysctl", "fs.inotify.max_user_watches")
+		e2e.Logf("fs.inotify.max_user_watches has value of: %v", maxUserWatchesCheck)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(watchesCheck).To(o.ContainSubstring(maxUserWatchesValue))
+		o.Expect(maxUserWatchesCheck).To(o.ContainSubstring(maxUserWatchesValue))
 
-		g.By("Check value of kernel.pid_max on node (set by override tuned, should be different than before)")
-		pidCheck, err := exutil.DebugNodeWithChroot(oc, workerNodeName, "sysctl", "kernel.pid_max")
+		g.By("Check value of kernel.pid_max on node (set by override tuned, should be the same value of override custom profile), expected value is 1048576")
+		pidMaxCheck, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, workerNodeName, []string{"-q"}, "sysctl", "kernel.pid_max")
+		e2e.Logf("kernel.pid_max has value of: %v", pidMaxCheck)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(pidCheck).To(o.ContainSubstring("kernel.pid_max = 1048576"))
+		o.Expect(pidMaxCheck).To(o.ContainSubstring("kernel.pid_max = 1048576"))
+
+		//tuned can override parameters set via /etc/sysctl{.conf,.d} when reapply_sysctl=false
+		//  The settings in /etc/sysctl.d/inotify.conf as below
+		//      fs.inotify.max_user_watches = 65536     =>Try to override to 163840 by tuned, expect the old value 163840
+		//      fs.inotify.max_user_instances = 8192    =>Not override by tuned, expect the old value 8192
+		//      kernel.pid_max = 4194304                =>Default value is 4194304
+		//  The settings in custom tuned profile as below
+		//      fs.inotify.max_user_watches = 163840    =>Try to override to 163840 by tuned, expect the old value 163840
+		//      kernel.pid_max = 1048576                =>Override by tuned, expect the new value 1048576
+
+		g.By("Create new CR with reapply_sysctl=true")
+		//reapply_sysctl=true tuned can not override parameters set via /etc/sysctl{.conf,.d}
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", overrideFile, "REAPPLY_SYSCTL=false")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check value of fs.inotify.max_user_instances on node (set by sysctl, should be the same as before),expected value is 8192")
+		maxUserInstanceCheck, _, err = exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, workerNodeName, []string{"-q"}, "sysctl", "fs.inotify.max_user_instances")
+		e2e.Logf("fs.inotify.max_user_instances has value of: %v", maxUserInstanceCheck)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(maxUserInstanceCheck).To(o.ContainSubstring(maxUserInstanceCheck))
+
+		g.By("Check value of fs.inotify.max_user_watches on node (set by sysctl, should be the same value of override custom profile), expected value is 163840")
+		maxUserWatchesCheck, _, err = exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, workerNodeName, []string{"-q"}, "sysctl", "fs.inotify.max_user_watches")
+		e2e.Logf("fs.inotify.max_user_watches has value of: %v", maxUserWatchesCheck)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(maxUserWatchesCheck).To(o.ContainSubstring("fs.inotify.max_user_watches = 163840"))
+
+		g.By("Check value of kernel.pid_max on node (set by override tuned, should be the same value of override custom profile), expected value is 1048576")
+		pidMaxCheck, _, err = exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, workerNodeName, []string{"-q"}, "sysctl", "kernel.pid_max")
+		e2e.Logf("kernel.pid_max has value of: %v", pidMaxCheck)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(pidMaxCheck).To(o.ContainSubstring("kernel.pid_max = 1048576"))
 
 	})
 

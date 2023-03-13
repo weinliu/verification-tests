@@ -15,10 +15,15 @@ objects:
           summary=Testing no-override of /etc/sysctl.d/*.conf parameters
           [sysctl]
           kernel.pid_max=1048576
-          fs.inotify.max_user_watches=16384
+          fs.inotify.max_user_watches=163840
         name: override
       recommend:
       - match:
         - label: tuned.openshift.io/override
         priority: 20
         profile: override
+        operand:
+          tunedConfig:
+            reapply_sysctl: ${{REAPPLY_SYSCTL}}
+parameters:
+- name: REAPPLY_SYSCTL
