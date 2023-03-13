@@ -413,3 +413,14 @@ func pingIpaddr(oc *exutil.CLI, ns string, podName string, cmd string) error {
 		return false, nil
 	})
 }
+
+func checkProxy(oc *exutil.CLI) bool {
+	httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	httpsProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpsProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if httpProxy != "" || httpsProxy != "" {
+		return true
+	}
+	return false
+}
