@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			if !registryDegrade {
 				return true, nil
 			}
-			message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
+			message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}{.status.conditions[?(@.type==\"Progressing\")].message}").Output()
 			e2e.Logf("Wait for image-registry coming ready")
 			return false, nil
 		})
