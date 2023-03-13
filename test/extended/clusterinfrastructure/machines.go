@@ -721,4 +721,26 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placement": {"tenancy": "invalid"}}}}}}}`, "--type=merge").Output()
 		o.Expect(strings.Contains(out, "Invalid providerSpec.tenancy, the only allowed options are: default, dedicated, host")).To(o.BeTrue())
 	})
+
+	//author miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-39639-host-based disk encryption at VM on Azure platform	[Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-39639"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset to have encryption at host enabled ")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"securityProfile": {"encryptionAtHost": true}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine available with encrytption enabled ")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.securityProfile}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("{\"encryptionAtHost\":true}"))
+
+	})
 })
