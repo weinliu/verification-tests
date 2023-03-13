@@ -1,0 +1,13 @@
+apiVersion: app.kiegroup.org/v2
+kind: KieApp
+metadata:
+  name: rhpam-trial1
+spec:
+  environment: rhpam-trial
+---
+apiVersion: app.kiegroup.org/v2
+kind: KieApp
+metadata:
+  name: rhpam-trial2
+spec:
+  environment: rhpam-trial
