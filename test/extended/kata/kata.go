@@ -232,7 +232,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Install Common kataconfig and verify it")
 		e2e.Logf("common kataconfig %v is installed", kataconfig.name)
 
-		nodeKataList, _, err := getNodeListByLabel(oc, subscription.namespace, customLabel)
+		nodeKataList, _, err := getAllKataNodes(oc, testrunInitial.eligibility, subscription.namespace, featureLabel, customLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeKataCount := fmt.Sprintf("%d", len(nodeKataList))
 
@@ -248,8 +248,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(completededList)).NotTo(o.Equal(0))
 		e2e.Logf("Completed nodes are %v", completededList[0])
-		e2e.Logf("Nodes with custom label are %v", nodeKataList[0])
-		// o.Expect(nodeKataList).To(o.Equal(completededList))
 
 		g.By("SUCCESSS - kataconfig installed and it's structure is verified")
 
@@ -504,7 +502,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		oc.SetupProject()
 		var (
 			podNs      = oc.Namespace()
-			deployName = "dep-43524"
+			deployName = "dep-43524-" + getRandomString()
 			msg        string
 			podName    string
 			newPodName string
@@ -590,7 +588,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			crioRuntimeLogLevel   = "debug"
 			crioTemplate          = filepath.Join(testDataDir, "containerruntimeconfig_template.yaml")
 			deployConfigFile      = ""
-			deployName            = "mg-42167"
+			deployName            = "mg-42167-" + getRandomString()
 			deploymentFile        = getRandomString() + "dep-common.json"
 			err                   error
 			fails                 = 0
@@ -979,5 +977,134 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		}
 
 		g.By("SUCCESS")
+	})
+
+	g.It("Author:vvoronko-High-60231-Scale-up deployment [Serial]", func() {
+
+		oc.SetupProject()
+		var (
+			podNs        = oc.Namespace()
+			deployName   = "dep-60231-" + getRandomString()
+			initReplicas = 5
+			maxReplicas  = 10
+			numOfVMs     int
+			msg          string
+		)
+
+		g.By("Verify no instaces exists before the test")
+		kataNodes, msg, err := getAllKataNodes(oc, testrunInitial.eligibility, subscription.namespace, featureLabel, customLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
+		numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
+		o.Expect(numOfVMs == 0).To(o.BeTrue())
+
+		g.By("Create deployment config from template")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "REPLICAS="+strconv.Itoa(initReplicas), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
+		if err != nil {
+			e2e.Logf("Could not create configFile %v %v", configFile, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Applying deployment file " + configFile)
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+		if err != nil {
+			e2e.Logf("Could not apply configFile %v %v", msg, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for deployment to be ready")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		msg, err = waitForDeployment(oc, podNs, deployName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// If the deployment is ready, pod will be.  Might not need this
+		g.By("Wait for pods to be ready")
+		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+			if !strings.Contains(msg, "No resources found") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for pods %v %v", msg, err))
+
+		g.By("Verifying actual number of VM instances")
+		numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
+		o.Expect(numOfVMs == initReplicas).To(o.BeTrue())
+
+		g.By(fmt.Sprintf("Scaling deployment from %v to %v", initReplicas, maxReplicas))
+		err = oc.AsAdmin().Run("scale").Args("deployment", deployName, "--replicas="+strconv.Itoa(maxReplicas), "-n", podNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		msg, err = waitForDeployment(oc, podNs, deployName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
+		o.Expect(numOfVMs == maxReplicas).To(o.BeTrue())
+
+		g.By("SUCCESSS - deployment scale-up finished successfully")
+	})
+
+	g.It("Author:vvoronko-High-60233-Scale-down deployment [Serial]", func() {
+		oc.SetupProject()
+		var (
+			podNs        = oc.Namespace()
+			deployName   = "dep-60233-" + getRandomString()
+			initReplicas = 10
+			updReplicas  = 2
+			numOfVMs     int
+			msg          string
+		)
+
+		g.By("Verify no instaces exists before the test")
+		kataNodes, msg, err := getAllKataNodes(oc, testrunInitial.eligibility, subscription.namespace, featureLabel, customLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
+		numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
+		o.Expect(numOfVMs == 0).To(o.BeTrue())
+
+		g.By("Create deployment config from template")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "REPLICAS="+strconv.Itoa(initReplicas), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
+		if err != nil {
+			e2e.Logf("Could not create configFile %v %v", configFile, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Applying deployment file " + configFile)
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+		if err != nil {
+			e2e.Logf("Could not apply configFile %v %v", msg, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for deployment to be ready")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		msg, err = waitForDeployment(oc, podNs, deployName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// If the deployment is ready, pod will be.  Might not need this
+		g.By("Wait for pods to be ready")
+		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+			if !strings.Contains(msg, "No resources found") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for pods %v %v", msg, err))
+
+		g.By("Verifying actual number of VM instances")
+		numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
+		o.Expect(numOfVMs == initReplicas).To(o.BeTrue())
+
+		g.By(fmt.Sprintf("Scaling deployment from %v to %v", initReplicas, updReplicas))
+		err = oc.AsAdmin().Run("scale").Args("deployment", deployName, "--replicas="+strconv.Itoa(updReplicas), "-n", podNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		msg, err = waitForDeployment(oc, podNs, deployName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
+		o.Expect(numOfVMs == updReplicas).To(o.BeTrue())
+
+		g.By("SUCCESSS - deployment scale-down finished successfully")
 	})
 })

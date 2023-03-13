@@ -732,3 +732,36 @@ func LabelNode(oc *exutil.CLI, opNamespace, node, customLabel string) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
+
+func getInstancesOnNode(oc *exutil.CLI, opNamespace, node string) (instances int, err error) {
+
+	cmd := fmt.Sprintf("ps -ef | grep uuid | grep -v grep | wc -l")
+	msg, err := exutil.DebugNodeWithOptionsAndChroot(oc, node, []string{"-q"}, "bin/sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	instances, err = strconv.Atoi(strings.TrimSpace(msg))
+	if err != nil {
+		instances = 0
+	}
+	return instances, err
+}
+
+func getTotalInstancesOnNodes(oc *exutil.CLI, opNamespace string, nodeList []string) (total int) {
+	total = 0
+	count := 0
+	for _, node := range nodeList {
+		count, _ = getInstancesOnNode(oc, opNamespace, node)
+		e2e.Logf("found %v VMs on node %v", count, node)
+		total += count
+	}
+	e2e.Logf("Total %v VMs on all nodes", total)
+	return total
+}
+
+func getAllKataNodes(oc *exutil.CLI, eligibility bool, opNamespace, featureLabel, customLabel string) (nodeNameList []string, msg string, err error) {
+	actLabel := customLabel
+	if eligibility {
+		actLabel = featureLabel
+	}
+	nodeList, msg, err := getNodeListByLabel(oc, opNamespace, actLabel)
+	return nodeList, msg, err
+}
