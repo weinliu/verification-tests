@@ -80,3 +80,9 @@ export namespace OperatorHubSelector {
   ]);
   export const CUSTOM_CATALOG = "custom-auto-source"
 }
+
+export const Operand = {
+  switchToFormView: () =>{
+    cy.get('#form').click()
+  }
+}

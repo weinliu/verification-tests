@@ -1,0 +1,241 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mock-resources.test.tectonic.com
+spec:
+  group: test.tectonic.com
+  scope: Namespaced
+  names:
+    plural: mock-resources
+    singular: mock-resource
+    kind: MockResource
+    listKind: MockResources
+  versions:
+    - name: v1
+      storage: true
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            status:
+              type: object
+              properties:
+                statuses:
+                  type: object
+                  properties:
+                    status1:
+                      type: string
+                    status2:
+                      type: string
+                podStatuses:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+                otherStatuses:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+                customConditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                      lastUpdateTime:
+                        type: string
+                      message:
+                        type: string
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                otherCustomConditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                      lastUpdateTime:
+                        type: string
+                      message:
+                        type: string
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+              additionalProperties: true
+            spec:
+              type: object
+              required:
+                - password
+                - select
+                - requiredText
+                - optionalRequiredText
+              properties:
+                password:
+                  type: string
+                  minLength: 1
+                  maxLength: 25
+                  pattern: "^[a-zA-Z0-9._\\-%]*$"
+                number:
+                  type: integer
+                  minimum: 2
+                  maximum: 4
+                select:
+                  type: string
+                optionalRequiredText:
+                  type: string
+                requiredText:
+                  type: string
+                fieldGroup:
+                  type: object
+                  description: "[SCHEMA] field group - Quis cupidatat in sint occaecat quis dolore irure ea minim sint aliquip nisi aliquip."
+                  title: "[SCHEMA] Field Group"
+                  properties:
+                    itemOne:
+                      type: string
+                    itemTwo:
+                      type: integer
+                arrayFieldGroup:
+                  type: array
+                  title: "[SCHEMA] Array Field Group"
+                  description: "[SCHEMA] array field group - Quis excepteur nostrud qui sunt reprehenderit reprehenderit deserunt eu aute laboris id aliqua."
+                  items:
+                    type: object
+                    properties:
+                      itemOne:
+                        type: string
+                      itemTwo:
+                        type: integer
+                hiddenFieldGroup:
+                  type: object
+                  properties:
+                    hiddenItem:
+                      type: object
+                podCount:
+                  type: integer
+                endpointList:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+                resourceRequirements:
+                  type: object
+                  additionalProperties: true
+                k8sResourcePrefix:
+                  type: string
+                booleanSwitch:
+                  type: boolean
+                checkbox:
+                  type: boolean
+                imagePullPolicy:
+                  type: string
+                updateStrategy:
+                  type: object
+                  additionalProperties: true
+                text:
+                  type: string
+                nodeAffinity:
+                  type: object
+                  additionalProperties: true
+                podAffinity:
+                  type: object
+                  additionalProperties: true
+                podAntiAffinity:
+                  type: object
+                  additionalProperties: true
+                advanced:
+                  type: string
+                fieldDependencyControl:
+                  type: boolean
+                fieldDependency:
+                  type: string
+                nestedFieldDependency:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    settings:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                arrayFieldDependency:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                      dependent:
+                        type: string
+                hidden:
+                  type: string
+                objectWithArray:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    tags:
+                      type: array
+                      items:
+                        type: string
+                    birthday:
+                      type: object
+                      properties:
+                        month:
+                          type: number
+                        day:
+                          type: number
+                        year:
+                          type: number
+                arrayWithObject:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      organization:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          address:
+                            type: object
+                            properties:
+                              street:
+                                type: string
+                              city:
+                                type: string
+                              state:
+                                type: string
+                      current:
+                        type: boolean
+                      resourceRequirements:
+                        type: object
+                        properties: {}
+                deeplyNested:
+                  type: object
+                  properties:
+                    foo:
+                      type: object
+                      properties:
+                        bar:
+                          type: object
+                          properties:
+                            baz:
+                              type: object
+                              properties:
+                                bat:
+                                  type: object
+                                  additionalProperties: true
