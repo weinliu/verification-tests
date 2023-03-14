@@ -295,3 +295,15 @@ func checkConfigInPod(oc *exutil.CLI, namespace string, podName string, containe
 	})
 	exutil.AssertWaitPollNoErr(podCheck, "failed to check configuration in the pod")
 }
+
+// check specific pod logs in container
+func checkLogsInContainer(oc *exutil.CLI, namespace string, podName string, containerName string, checkValue string) {
+	err := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+		Output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, podName, "-c", containerName).Output()
+		if err != nil || !strings.Contains(Output, checkValue) {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to find \"%s\" in the pod logs", checkValue))
+}

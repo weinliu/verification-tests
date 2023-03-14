@@ -887,6 +887,27 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkConfigInPod(oc, "openshift-user-workload-monitoring", "alertmanager-user-workload-0", "alertmanager", "ls /etc/alertmanager/secrets/", "slack-api-token")
 	})
 
+	//author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-60532-TechPreview feature is not enabled and collectionProfile is set to valid value [Serial]", func() {
+		var (
+			collectionProfileminimal = filepath.Join(monitoringBaseDir, "collectionProfile_minimal.yaml")
+		)
+		g.By("delete user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("make sure TechPreview feature is not enabled")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("FeatureGate/cluster", "-ojsonpath={.spec.featureSet}").Output()
+		o.Expect(output).NotTo(o.ContainSubstring("TechPreviewNoUpgrade"))
+
+		g.By("set collectionProfile to minimal in cluster-monitoring-config configmap")
+		createResourceFromYaml(oc, "openshift-monitoring", collectionProfileminimal)
+
+		g.By("should see error in CMO logs which indicate collectionProfiles is a TechPreview feature")
+		CMOPodName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=cluster-monitoring-operator", "-ojsonpath={.items[].metadata.name}").Output()
+		checkLogsInContainer(oc, "openshift-monitoring", CMOPodName, "cluster-monitoring-operator", "collectionProfiles is a TechPreview feature")
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
