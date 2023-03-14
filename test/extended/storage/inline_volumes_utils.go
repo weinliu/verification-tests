@@ -1,6 +1,6 @@
 package storage
 
-// GenericEphemeralVolume struct deination
+// GenericEphemeralVolume struct definition
 type GenericEphemeralVolume struct {
 	VolumeClaimTemplate struct {
 		Metadata struct {
@@ -67,4 +67,35 @@ func newGenericEphemeralVolume(opts ...GenericEphemeralVolumeOption) GenericEphe
 		o(&defaultGenericEphemeralVolume)
 	}
 	return defaultGenericEphemeralVolume
+}
+
+// CsiSharedresourceInlineVolume struct definiti
+type CsiSharedresourceInlineVolume struct {
+	ReadOnly         bool   `json:"readOnly"`
+	Driver           string `json:"driver"`
+	VolumeAttributes struct {
+		SharedConfigMap string `json:"sharedConfigMap,omitempty"`
+		SharedSecret    string `json:"sharedSecret,omitempty"`
+	} `json:"volumeAttributes"`
+}
+
+// CsiSharedresourceInlineVolumeOption function mode options
+type CsiSharedresourceInlineVolumeOption func(*CsiSharedresourceInlineVolume)
+
+// Replace the default value of CsiSharedresourceInlineVolume shared configMap
+func setCsiSharedresourceInlineVolumeSharedCM(cmName string) CsiSharedresourceInlineVolumeOption {
+	return func(this *CsiSharedresourceInlineVolume) {
+		this.VolumeAttributes.SharedConfigMap = cmName
+	}
+}
+
+// Create a new csi shared resource inline volume
+func newCsiSharedresourceInlineVolume(opts ...CsiSharedresourceInlineVolumeOption) CsiSharedresourceInlineVolume {
+	var defaultCsiSharedresourceInlineVolume CsiSharedresourceInlineVolume
+	defaultCsiSharedresourceInlineVolume.Driver = "csi.sharedresource.openshift.io"
+	defaultCsiSharedresourceInlineVolume.ReadOnly = true
+	for _, o := range opts {
+		o(&defaultCsiSharedresourceInlineVolume)
+	}
+	return defaultCsiSharedresourceInlineVolume
 }

@@ -691,6 +691,11 @@ func (dep *deployment) createWithMultiExtraParameters(oc *exutil.CLI, jsonPathsA
 
 // Create new Deployment with InlineVolume
 func (dep *deployment) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume) {
+	o.Expect(dep.createWithInlineVolumeWithOutAssert(oc, inVol)).Should(o.ContainSubstring("created"))
+}
+
+// Create new Deployment with InlineVolume without assert returns msg and error info
+func (dep *deployment) createWithInlineVolumeWithOutAssert(oc *exutil.CLI, inVol InlineVolume) (string, error) {
 	if dep.namespace == "" {
 		dep.namespace = oc.Namespace()
 	}
@@ -701,22 +706,22 @@ func (dep *deployment) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume
 	switch inVol.Kind {
 	case "genericEphemeralVolume", "csiEphemeralVolume":
 		extraParameters = map[string]interface{}{
-			"jsonPath":  jsonPath,
 			"ephemeral": inVol.VolumeDefinition,
 		}
 	case "emptyDir":
 		extraParameters = map[string]interface{}{
-			"jsonPath": jsonPath,
 			"emptyDir": map[string]string{},
+		}
+	case "csiSharedresourceInlineVolume":
+		extraParameters = map[string]interface{}{
+			"csi": inVol.VolumeDefinition,
 		}
 	default:
 		extraParameters = map[string]interface{}{
-			"jsonPath": jsonPath,
 			inVol.Kind: map[string]string{},
 		}
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	return applyResourceFromTemplateWithMultiExtraParameters(oc, []map[string]string{{jsonPath: "set"}}, []map[string]interface{}{extraParameters}, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
 }
 
 // Create new deployment with extra parameters for topologySpreadConstraints

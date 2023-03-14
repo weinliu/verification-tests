@@ -18,6 +18,10 @@ objects:
         labels:
           app: ${DLABEL}
       spec:
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
         terminationGracePeriodSeconds: 30
         containers:
         - name: ${DNAME}
@@ -27,6 +31,11 @@ objects:
           ${VOLUMETYPE}:
           - name: inline-volume
             ${TYPEPATH}: ${MPATH}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL 
         volumes:
         - name: inline-volume  
 parameters:

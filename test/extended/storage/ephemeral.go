@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -365,5 +366,104 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			180*time.Second, 10*time.Second).Should(o.Equal("0"))
 		o.Eventually(ephemeralStorageResourceQuota.GetValueByJSONPath(oc, `{.status.used.limits\.ephemeral-storage}`),
 			180*time.Second, 10*time.Second).Should(o.Equal("0"))
+	})
+
+	// author: pewang@redhat.com
+	// OCP-60915-[CSI Inline Volume] [Admission plugin] should deny pods with inline volumes when the driver uses the privileged label
+	g.It("ROSA-OSD_CCS-Author:pewang-High-60915-[CSI Inline Volume] [Admission plugin] should deny pods with inline volumes when the driver uses the privileged label [Disruptive]", func() {
+
+		// Currently only sharedresource csi driver support csi inline volume which is still TP in 4.13, it will auto installed on TechPreviewNoUpgrade clusters
+		if !checkCSIDriverInstalled(oc, []string{"csi.sharedresource.openshift.io"}) {
+			g.Skip("Skip for support inline volume csi driver is not installed on the test cluster !!!")
+		}
+
+		// Set the resource objects definition for the scenario
+		var (
+			caseID                  = "60915"
+			sharedResourceCsiDriver = "csidriver/csi.sharedresource.openshift.io"
+			deploymentTemplate      = filepath.Join(storageTeamBaseDir, "deployment-with-inline-volume-template.yaml")
+			dep                     = newDeployment(setDeploymentTemplate(deploymentTemplate))
+			cm                      = newConfigMap(setConfigMapTemplate(filepath.Join(storageTeamBaseDir, "configmap-template.yaml")))
+			mySharedConfigMap       = sharedConfigMap{
+				name:     "my-sharedconfigmap-" + caseID,
+				refCm:    &cm,
+				template: filepath.Join(storageTeamBaseDir, "csi-sharedconfigmap-template.yaml"),
+			}
+			myCsiSharedresourceInlineVolume = InlineVolume{
+				Kind:             "csiSharedresourceInlineVolume",
+				VolumeDefinition: newCsiSharedresourceInlineVolume(setCsiSharedresourceInlineVolumeSharedCM(mySharedConfigMap.name)),
+			}
+			shareCmRoleName                                  = "shared-cm-role-" + caseID
+			clusterVersionOperator                           = newDeployment(setDeploymentName("cluster-version-operator"), setDeploymentNamespace("openshift-cluster-version"), setDeploymentApplabel("k8s-app=cluster-version-operator"))
+			clusterStorageOperator                           = newDeployment(setDeploymentName("cluster-storage-operator"), setDeploymentNamespace("openshift-cluster-storage-operator"), setDeploymentApplabel("name=cluster-storage-operator"))
+			sharedResourceCsiDriverOperator                  = newDeployment(setDeploymentName("shared-resource-csi-driver-operator"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("name=shared-resource-csi-driver-operator"))
+			clusterVersionOperatorOriginReplicasNum          = clusterVersionOperator.getReplicasNum(oc.AsAdmin())
+			clusterStorageOperatorOriginReplicasNum          = clusterStorageOperator.getReplicasNum(oc.AsAdmin())
+			sharedResourceCsiDriverOperatorOriginReplicasNum = sharedResourceCsiDriverOperator.getReplicasNum(oc.AsAdmin())
+		)
+
+		g.By("# Scale down CVO,CSO,SharedResourceCsiDriverOperator and add privileged label to the sharedresource csi driver")
+		defer waitCSOhealthy(oc.AsAdmin())
+		defer clusterVersionOperator.waitReady(oc.AsAdmin())
+		defer clusterStorageOperator.waitReady(oc.AsAdmin())
+		defer sharedResourceCsiDriverOperator.waitReady(oc.AsAdmin())
+
+		clusterVersionOperator.scaleReplicas(oc.AsAdmin(), "0")
+		defer clusterVersionOperator.scaleReplicas(oc.AsAdmin(), clusterVersionOperatorOriginReplicasNum)
+		clusterStorageOperator.scaleReplicas(oc.AsAdmin(), "0")
+		defer clusterStorageOperator.scaleReplicas(oc.AsAdmin(), clusterStorageOperatorOriginReplicasNum)
+		sharedResourceCsiDriverOperator.scaleReplicas(oc.AsAdmin(), "0")
+		defer sharedResourceCsiDriverOperator.scaleReplicas(oc.AsAdmin(), sharedResourceCsiDriverOperatorOriginReplicasNum)
+
+		admissionStandards, getInfoError := exutil.GetResourceSpecificLabelValue(oc.AsAdmin(), sharedResourceCsiDriver, "", "security\\.openshift\\.io/csi-ephemeral-volume-profile")
+		o.Expect(getInfoError).ShouldNot(o.HaveOccurred())
+		defer exutil.AddLabelsToSpecificResource(oc.AsAdmin(), sharedResourceCsiDriver, "", "security.openshift.io/csi-ephemeral-volume-profile="+admissionStandards)
+		o.Expect(exutil.AddLabelsToSpecificResource(oc.AsAdmin(), sharedResourceCsiDriver, "", "security.openshift.io/csi-ephemeral-volume-profile=privileged")).Should(o.ContainSubstring("labeled"))
+
+		g.By("# Create new project for the scenario")
+		oc.SetupProject()
+
+		g.By("# Create test configmap")
+		cm.create(oc)
+		defer cm.deleteAsAdmin(oc)
+
+		g.By("# Create test sharedconfigmap")
+		mySharedConfigMap.create(oc.AsAdmin())
+		defer mySharedConfigMap.deleteAsAdmin(oc)
+
+		g.By("# Create sharedconfigmap role and add the role to default sa ans project user under the test project")
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", cm.namespace, "role", shareCmRoleName, "--verb=get", "--resource=sharedconfigmaps").Execute()).ShouldNot(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", cm.namespace, "role", shareCmRoleName).Execute()
+		patchResourceAsAdmin(oc, cm.namespace, "role/"+shareCmRoleName, `[{"op":"replace","path":"/rules/0/verbs/0","value":"use"}]`, "json")
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("policy").Args("-n", cm.namespace, "add-role-to-user", shareCmRoleName, "-z", "default", "--role-namespace="+cm.namespace).Execute()).ShouldNot(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("-n", cm.namespace, "remove-role-from-user", shareCmRoleName, "-z", "default", "--role-namespace="+cm.namespace).Execute()
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("policy").Args("-n", cm.namespace, "add-role-to-user", shareCmRoleName, cm.namespace+"-user", "--role-namespace="+cm.namespace).Execute()).ShouldNot(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("-n", cm.namespace, "remove-role-from-user", shareCmRoleName, cm.namespace+"-user", "--role-namespace="+cm.namespace).Execute()
+
+		g.By("# Create deployment with csi sharedresource volume should be denied")
+		defer dep.deleteAsAdmin(oc)
+		msg, err := dep.createWithInlineVolumeWithOutAssert(oc, myCsiSharedresourceInlineVolume)
+		o.Expect(err).Should(o.HaveOccurred())
+		// TODO: when https://issues.redhat.com/browse/OCPBUGS-8220 fixed enhance the check info contains the pod name
+		keyMsg := fmt.Sprintf("uses an inline volume provided by CSIDriver csi.sharedresource.openshift.io and namespace %s has a pod security enforce level that is lower than privileged", cm.namespace)
+		o.Expect(msg).Should(o.ContainSubstring(keyMsg))
+
+		g.By(`# Add label "pod-security.kubernetes.io/enforce=privileged", "security.openshift.io/scc.podSecurityLabelSync=false" to the test namespace`)
+		o.Expect(exutil.AddLabelsToSpecificResource(oc.AsAdmin(), "ns/"+cm.namespace, "", "pod-security.kubernetes.io/enforce=privileged", "security.openshift.io/scc.podSecurityLabelSync=false")).Should(o.ContainSubstring("labeled"))
+
+		g.By("# Create deployment with csi sharedresource volume should be successful")
+		keyMsg = fmt.Sprintf("uses an inline volume provided by CSIDriver csi.sharedresource.openshift.io and namespace %s has a pod security warn level that is lower than privileged", cm.namespace)
+		defer dep.deleteAsAdmin(oc)
+		msg, err = dep.createWithInlineVolumeWithOutAssert(oc, myCsiSharedresourceInlineVolume)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		// As the ns has default pod-security.kubernetes.io/audit=restricted label the deployment could create successfully but still with a warning info
+		o.Expect(msg).Should(o.ContainSubstring(keyMsg))
+		dep.waitReady(oc)
+
+		g.By("# Check the audit log record the csi inline volume used in the test namespace")
+		keyMsg = fmt.Sprintf("uses an inline volume provided by CSIDriver csi.sharedresource.openshift.io and namespace %s has a pod security audit level that is lower than privileged", cm.namespace)
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role=master", "--path=kube-apiserver/audit.log").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(strings.Count(msg, keyMsg) > 0).Should(o.BeTrue())
 	})
 })
