@@ -194,6 +194,13 @@ func (h *hostedCluster) checkHCConditions() bool {
 	}
 }
 
+func (h *hostedCluster) checkNodepoolAllConditions(npName string) func() bool {
+	return func() bool {
+		res := doOcpReq(h.oc, OcpGet, true, "nodepools", "-n", h.namespace, npName, `-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}`)
+		return checkSubstringWithNoExit(res, []string{"AutoscalingEnabled False", "UpdateManagementEnabled True", "ValidReleaseImage True", "ValidPlatformImage True", "AWSSecurityGroupAvailable True", "ValidMachineConfig True", "ValidGeneratedPayload True", "ReachedIgnitionEndpoint True", "ValidTuningConfig True", "ReconciliationActive True", "AllMachinesReady True", "AllNodesHealthy True", "Ready True"})
+	}
+}
+
 // getHostedclusterConsoleInfo returns console url and password
 // the first return is console url
 // the second return is password of kubeadmin
@@ -423,11 +430,24 @@ func (h *hostedCluster) checkAllNodepoolReady() bool {
 	return true
 }
 
+type nodePoolCondition struct {
+	conditionsType         string
+	conditionsTypeReq      string
+	expectConditionsResult string
+}
+
+func (h *hostedCluster) checkNodePoolConditions(npName string, conditions []nodePoolCondition) bool {
+	o.Expect(doOcpReq(h.oc, OcpGet, true, "nodepools", "-n", h.namespace, "-ojsonpath={.items[*].metadata.name}")).Should(o.ContainSubstring(npName))
+	for _, condition := range conditions {
+		res := doOcpReq(h.oc, OcpGet, true, "nodepools", npName, "-n", h.namespace, fmt.Sprintf(`-ojsonpath={.status.conditions[?(@.type=="%s")].%s}`, condition.conditionsType, condition.conditionsTypeReq))
+		e2e.Logf("checkNodePoolStatus: %s, %s, %s", condition.conditionsType, condition.conditionsTypeReq, res)
+		o.Expect(res).Should(o.ContainSubstring(condition.expectConditionsResult))
+	}
+	return true
+}
+
 func (h *hostedCluster) getNodepoolPayload(name string) string {
-	payloadCond := `-ojsonpath={.spec.release.image}`
-	payload, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--ignore-not-found", "np", name, "-n", h.namespace, payloadCond).Output()
-	o.Expect(err).ShouldNot(o.HaveOccurred())
-	return payload
+	return doOcpReq(h.oc, OcpGet, true, "nodepools", name, "-n", h.namespace, `-ojsonpath={.spec.release.image}`)
 }
 
 func (h *hostedCluster) getNodepoolStatusPayloadVersion(name string) string {
@@ -437,16 +457,11 @@ func (h *hostedCluster) getNodepoolStatusPayloadVersion(name string) string {
 	return version
 }
 
-func (h *hostedCluster) upgradeNodepoolPayloadInPlace(name, payload string) {
-	inplacePatchCond := `-p=[{"op": "replace", "path": "/spec/management/upgradeType", "value": "InPlace"}]`
-	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "np", name,
-		"--type=json", inplacePatchCond).Output()
-	o.Expect(err).ShouldNot(o.HaveOccurred())
-
-	patchOption := fmt.Sprintf(`-p=[{"op": "replace", "path": "/spec/release/image","value": "%s"}]`, payload)
-	_, err = h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "np", name,
-		"--type=json", patchOption).Output()
-	o.Expect(err).ShouldNot(o.HaveOccurred())
+func (h *hostedCluster) upgradeNodepoolPayloadInPlace(name, payload string, inPlace bool) {
+	if inPlace {
+		doOcpReq(h.oc, OcpPatch, true, "nodepools", name, "-n", h.namespace, "--type=json", `-p=[{"op": "replace", "path": "/spec/management/upgradeType", "value": "InPlace"}]`)
+	}
+	doOcpReq(h.oc, OcpPatch, true, "nodepools", name, "-n", h.namespace, "--type=json", fmt.Sprintf(`-p=[{"op": "replace", "path": "/spec/release/image","value": "%s"}]`, payload))
 }
 
 func (h *hostedCluster) pollCheckUpgradeNodepoolPayload(name, expectPayload, version string) func() bool {
