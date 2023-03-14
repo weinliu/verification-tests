@@ -264,6 +264,7 @@ func (so *SubscriptionObjects) getInstalledCSV(oc *exutil.CLI) string {
 
 // WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
 func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
+	var selectors map[string]string
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
 		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
@@ -273,6 +274,7 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 			}
 			return false, err
 		}
+		selectors = deployment.Spec.Selector.MatchLabels
 		if deployment.Status.AvailableReplicas == *deployment.Spec.Replicas && deployment.Status.UpdatedReplicas == *deployment.Spec.Replicas {
 			e2e.Logf("Deployment %s available (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
 			return true, nil
@@ -280,10 +282,20 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
 		return false, nil
 	})
+	if err != nil && len(selectors) > 0 {
+		var labels []string
+		for k, v := range selectors {
+			labels = append(labels, k+"="+v)
+		}
+		label := strings.Join(labels, ",")
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
+		e2e.Failf("deployment %s is not ready: \n%v", name, podStatus)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not available", name))
 }
 
 func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
+	var selectors map[string]string
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
 		ss, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
@@ -293,6 +305,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 			}
 			return false, err
 		}
+		selectors = ss.Spec.Selector.MatchLabels
 		if ss.Status.ReadyReplicas == *ss.Spec.Replicas && ss.Status.UpdatedReplicas == *ss.Spec.Replicas {
 			e2e.Logf("statefulset %s available (%d/%d)\n", name, ss.Status.ReadyReplicas, *ss.Spec.Replicas)
 			return true, nil
@@ -300,6 +313,15 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 		e2e.Logf("Waiting for full availability of %s statefulset (%d/%d)\n", name, ss.Status.ReadyReplicas, *ss.Spec.Replicas)
 		return false, nil
 	})
+	if err != nil && len(selectors) > 0 {
+		var labels []string
+		for k, v := range selectors {
+			labels = append(labels, k+"="+v)
+		}
+		label := strings.Join(labels, ",")
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
+		e2e.Failf("statefulset %s is not ready: \n%v", name, podStatus)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("statefulset %s is not available", name))
 }
 
@@ -336,6 +358,10 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 		}
 		ready := true
 		for _, pod := range pods.Items {
+			if pod.Status.Phase != "Running" {
+				ready = false
+				break
+			}
 			for _, containerStatus := range pod.Status.ContainerStatuses {
 				if !containerStatus.Ready {
 					ready = false
@@ -348,7 +374,10 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 		}
 		return ready, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The pod with label %s is not available", label))
+	if err != nil {
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
+		e2e.Failf("pod with label %s is not ready: \n%v", label, podStatus)
+	}
 }
 
 // GetDeploymentsNameByLabel retruns a list of deployment name which have specific labels
@@ -849,13 +878,6 @@ func getAppDomain(oc *exutil.CLI) (string, error) {
 		return "", err
 	}
 	return subDomain, nil
-}
-
-func getTmpPath() string {
-	keysPath := filepath.Join("/tmp/logging" + getRandomString())
-	err := os.MkdirAll(keysPath, 0755)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return keysPath
 }
 
 type certsConf struct {

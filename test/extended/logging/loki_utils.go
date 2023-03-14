@@ -496,10 +496,10 @@ func (l lokiStack) deployLokiStack(oc *exutil.CLI, optionalParameters ...string)
 }
 
 func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) {
-	for _, deploy := range []string{l.name + "-distributor", l.name + "-gateway", l.name + "-querier", l.name + "-query-frontend"} {
+	for _, deploy := range []string{l.name + "-gateway", l.name + "-distributor", l.name + "-querier", l.name + "-query-frontend"} {
 		WaitForDeploymentPodsToBeReady(oc, l.namespace, deploy)
 	}
-	for _, ss := range []string{l.name + "-compactor", l.name + "-index-gateway", l.name + "-ingester", l.name + "-ruler"} {
+	for _, ss := range []string{l.name + "-index-gateway", l.name + "-compactor", l.name + "-ruler", l.name + "-ingester"} {
 		waitForStatefulsetReady(oc, l.namespace, ss)
 	}
 }
@@ -735,7 +735,7 @@ func (c *lokiClient) queryRange(logType string, queryStr string, limit int, star
 }
 
 func (c *lokiClient) searchLogsInLoki(logType, query string) (*lokiQueryResponse, error) {
-	res, err := c.queryRange(logType, query, 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+	res, err := c.queryRange(logType, query, 5, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
 	return res, err
 }
 
@@ -823,18 +823,17 @@ func (c *lokiClient) listLabelNames(logType string, start, end time.Time) (*labe
 }
 
 // listLabels gets the label names or values
-func (c *lokiClient) listLabels(logType, labelName string, start, end time.Time) []string {
+func (c *lokiClient) listLabels(logType, labelName string) ([]string, error) {
 	var labelResponse *labelResponse
 	var err error
+	start := time.Now().Add(time.Duration(-2) * time.Hour)
+	end := time.Now()
 	if len(labelName) > 0 {
 		labelResponse, err = c.listLabelValues(logType, labelName, start, end)
 	} else {
 		labelResponse, err = c.listLabelNames(logType, start, end)
 	}
-	if err != nil {
-		e2e.Failf("Error doing request: %+v", err)
-	}
-	return labelResponse.Data
+	return labelResponse.Data, err
 }
 
 func doHTTPRequest(header http.Header, address, path, query, method string, quiet bool, attempts int, requestBody io.Reader) ([]byte, error) {
