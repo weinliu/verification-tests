@@ -1,13 +1,12 @@
 package monitoring
 
 import (
-	"path/filepath"
-
 	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"path/filepath"
 )
 
-var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operator", func() {
+var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operator ConnectedOnly", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc         = exutil.NewCLI("obo-"+getRandomString(), exutil.KubeConfigPath())
