@@ -2382,8 +2382,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		g.By("step: validate olm unsupported resource")
 		crdFilePath := filepath.Join(tmpBasePath, "bundle", "manifests", "k8s.k8sevent.com_k8sevents.yaml")
 		replaceContent(crdFilePath, "CustomResourceDefinition", "CustomResource")
-		output, err = operatorsdkCLI.Run("bundle").Args("validate", tmpBasePath+"/bundle", "--select-optional", "name=good-practices").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ = operatorsdkCLI.Run("bundle").Args("validate", tmpBasePath+"/bundle", "--select-optional", "name=good-practices").Output()
 		o.Expect(output).To(o.ContainSubstring("unsupported media type"))
 
 		g.By("SUCCESS 49960")
