@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -4077,6 +4079,189 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: pewang@redhat.com
+	// OCP-60598 - [BYOK] Pre-defined storageclass should contain the user-managed encryption key which specified when installation
+	// OCP-60599 - [BYOK] storageclass without specifying user-managed encryption key or other key should work well
+	// https://issues.redhat.com/browse/OCPBU-13
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-60598-High-60599-[CSI Driver] [BYOK] Pre-defined storageclass and user defined storageclass should provision volumes as expected", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Skipped for test clusters not installed with the BYOK
+		byokKeyID := getByokKeyIDFromClusterCSIDriver(oc, supportProvisioners[0])
+		if byokKeyID == "" {
+			g.Skip("Skipped: the cluster not satisfy the test scenario, no key settings in clustercsidriver/" + supportProvisioners[0])
+		}
+
+		g.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		for _, provisioner = range supportProvisioners {
+			func() {
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+				// Set the resource objects definition for the scenario
+				var (
+					storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+					storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+					pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+					podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+					myStorageClass       = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+					myPvcA               = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+					myPodA               = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(myPvcA.name))
+					myPvcB               = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(myStorageClass.name))
+					presetStorageclasses = getPresetStorageClassListByProvisioner(oc, cloudProvider, provisioner)
+					scKeyJSONPath        = map[string]string{
+						"ebs.csi.aws.com":       "{.parameters.kmsKeyId}",
+						"disk.csi.azure.com":    "{.parameters.diskEncryptionSetID}",
+						"pd.csi.storage.gke.io": "{.parameters.disk-encryption-kms-key}",
+					}
+				)
+
+				g.By("# Check all the preset storageClasses have been injected with kms key")
+				o.Expect(len(presetStorageclasses) > 0).Should(o.BeTrue())
+				for _, presetSc := range presetStorageclasses {
+					sc := newStorageClass(setStorageClassName(presetSc))
+					o.Expect(sc.getFieldByJSONPath(oc, scKeyJSONPath[provisioner])).Should(o.Equal(byokKeyID))
+				}
+
+				g.By("# Create a pvc with the preset csi storageclass")
+				myPvcA.scname = presetStorageclasses[0]
+				myPvcA.create(oc)
+				defer myPvcA.deleteAsAdmin(oc)
+
+				g.By("# Create pod with the created pvc and wait for the pod ready")
+				myPodA.create(oc)
+				defer myPodA.deleteAsAdmin(oc)
+				myPodA.waitReady(oc)
+
+				g.By("# Check the pod volume can be read and write")
+				myPodA.checkMountedVolumeCouldRW(oc)
+
+				g.By("# Check the pvc bound pv info on backend as expected")
+				getCredentialFromCluster(oc)
+				switch cloudProvider {
+				case "aws":
+					volumeInfo, getInfoErr := getAwsVolumeInfoByVolumeID(myPvcA.getVolumeID(oc))
+					o.Expect(getInfoErr).NotTo(o.HaveOccurred())
+					o.Expect(gjson.Get(volumeInfo, `Volumes.0.Encrypted`).Bool()).Should(o.BeTrue())
+					o.Expect(gjson.Get(volumeInfo, `Volumes.0.KmsKeyId`).String()).Should(o.Equal(byokKeyID))
+				case "gcp":
+					e2e.Logf("The backend check step is under developing")
+				case "azure":
+					e2e.Logf("The backend check step is under developing")
+				default:
+					e2e.Logf("Unsupported platform: %s", cloudProvider)
+				}
+
+				g.By("# Create csi storageClass without setting kms key")
+				myStorageClass.create(oc)
+				defer myStorageClass.deleteAsAdmin(oc)
+
+				g.By("# Create pvc with the csi storageClass")
+				myPvcB.create(oc)
+				defer myPvcB.deleteAsAdmin(oc)
+
+				g.By("# The volume should be provisioned successfully")
+				myPvcB.waitStatusAsExpected(oc, "Bound")
+
+				g.By("# Check the pvc bound pv info on backend as expected")
+				switch cloudProvider {
+				case "aws":
+					volumeInfo, getInfoErr := getAwsVolumeInfoByVolumeID(myPvcB.getVolumeID(oc))
+					o.Expect(getInfoErr).NotTo(o.HaveOccurred())
+					o.Expect(gjson.Get(volumeInfo, `Volumes.0.Encrypted`).Bool()).Should(o.BeFalse())
+				case "gcp":
+					e2e.Logf("The backend check step is under developing")
+				case "azure":
+					e2e.Logf("The backend check step is under developing")
+				default:
+					e2e.Logf("Unsupported platform: %s", cloudProvider)
+				}
+
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			}()
+		}
+	})
+	// author: pewang@redhat.com
+	// OCP-60600 - [BYOK] Pre-defined default storageclass should react properly when removing/update the user-managed encryption key in ClusterCSIDriver
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-60600-[CSI Driver] [BYOK] Pre-defined default storageclass should react properly when removing/update the user-managed encryption key in ClusterCSIDriver [Disruptive]", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Skipped for test clusters not installed with the BYOK
+		byokKeyID := getByokKeyIDFromClusterCSIDriver(oc, supportProvisioners[0])
+		if byokKeyID == "" {
+			g.Skip("Skipped: the cluster not satisfy the test scenario, no key settings in clustercsidriver/" + supportProvisioners[0])
+		}
+
+		for _, provisioner = range supportProvisioners {
+			func() {
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+				// Set the resource objects definition for the scenario
+				var (
+					presetStorageclasses = getPresetStorageClassListByProvisioner(oc, cloudProvider, provisioner)
+					scKeyJSONPath        = map[string]string{
+						"ebs.csi.aws.com":       "{.parameters.kmsKeyId}",
+						"disk.csi.azure.com":    "{.parameters.diskEncryptionSetID}",
+						"pd.csi.storage.gke.io": "{.parameters.disk-encryption-kms-key}",
+					}
+				)
+
+				g.By("# Check all the preset storageClasses have been injected with kms key")
+				o.Expect(len(presetStorageclasses) > 0).Should(o.BeTrue())
+				for _, presetSc := range presetStorageclasses {
+					sc := newStorageClass(setStorageClassName(presetSc))
+					o.Expect(sc.getFieldByJSONPath(oc, scKeyJSONPath[provisioner])).Should(o.Equal(byokKeyID))
+				}
+
+				g.By("# Remove the user-managed encryption key in ClusterCSIDriver")
+				originDriverConfigContent, getContentError := oc.AsAdmin().WithoutNamespace().Run("get").Args("clustercsidriver/"+provisioner, "-ojson").Output()
+				o.Expect(getContentError).NotTo(o.HaveOccurred())
+				originDriverConfigContent, getContentError = sjson.Delete(originDriverConfigContent, `metadata.resourceVersion`)
+				o.Expect(getContentError).NotTo(o.HaveOccurred())
+				originDriverConfigContentFilePath := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-csd-"+provisioner+"-60600.json")
+				o.Expect(ioutil.WriteFile(originDriverConfigContentFilePath, []byte(originDriverConfigContent), 0644)).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", originDriverConfigContentFilePath).Execute()
+				patchResourceAsAdmin(oc, "", "clustercsidriver/"+provisioner, `[{"op":"remove","path":"/spec/driverConfig"}]`, "json")
+
+				g.By("# Check all the preset storageclasses should update as removing the key parameter")
+				o.Eventually(func() (expectedValue string) {
+					for _, presetSc := range presetStorageclasses {
+						sc := newStorageClass(setStorageClassName(presetSc))
+						expectedValue = expectedValue + sc.getFieldByJSONPath(oc, scKeyJSONPath[provisioner])
+					}
+					return expectedValue
+				}, 60*time.Second, 10*time.Second).Should(o.Equal(""))
+
+				g.By("# Restore the user-managed encryption key in ClusterCSIDriver")
+				o.Expect(oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", originDriverConfigContentFilePath).Execute()).ShouldNot(o.HaveOccurred())
+
+				g.By("# Check all the preset storageClasses have been injected with kms key")
+				o.Eventually(func() (expectedInt int) {
+					expectedInt = 0
+					for _, presetSc := range presetStorageclasses {
+						sc := newStorageClass(setStorageClassName(presetSc))
+						if sc.getFieldByJSONPath(oc, scKeyJSONPath[provisioner]) == byokKeyID {
+							expectedInt = expectedInt + 1
+						}
+					}
+					return expectedInt
+				}, 60*time.Second, 10*time.Second).Should(o.Equal(len(presetStorageclasses)))
+
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			}()
+		}
+	})
 })
 
 // Performing test steps for Online Volume Resizing

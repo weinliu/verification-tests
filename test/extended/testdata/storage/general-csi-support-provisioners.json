@@ -6,7 +6,10 @@
         "provisioners": [
           {
             "name": "ebs.csi.aws.com",
-            "preset_scname": "gp3-csi",
+            "preset_scname": [
+              "gp3-csi",
+              "gp2-csi"
+            ],
             "preset_vscname": "csi-aws-vsc"
           },
           {
@@ -87,7 +90,7 @@
           {
             "name": "vpc.block.csi.ibm.io",
             "preset_scname": "ibmc-vpc-block-10iops-tier",
-	    "preset_vscname": "vpc-block-snapshot"
+            "preset_vscname": "vpc-block-snapshot"
           }
         ]
       }

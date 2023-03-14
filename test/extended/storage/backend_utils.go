@@ -109,6 +109,36 @@ func getCredentialFromCluster(oc *exutil.CLI) {
 	}
 }
 
+// getRootSecretNameByCloudProvider gets the root secret name by cloudProvider
+func getRootSecretNameByCloudProvider() (rootSecret string) {
+	switch cloudProvider {
+	case "aws":
+		return "aws-creds"
+	case "gcp":
+		return "gcp-credentials"
+	case "azure":
+		return "azure-credentials"
+	case "vsphere":
+		return "vsphere-creds"
+	case "openstack":
+		return "openstack-credentials"
+	case "ovirt":
+		return "ovirt-credentials"
+	default:
+		e2e.Logf("Unsupported platform: %s", cloudProvider)
+		return rootSecret
+	}
+}
+
+// isRootSecretExist returns bool, judges whether the root secret exist in the kube-system namespace
+func isRootSecretExist(oc *exutil.CLI) bool {
+	rootSecret := getRootSecretNameByCloudProvider()
+	if rootSecret == "" {
+		return false
+	}
+	return isSpecifiedResourceExist(oc, "secret/"+getRootSecretNameByCloudProvider(), "kube-system")
+}
+
 // Get the volume detail info by persistent volume id
 func getAwsVolumeInfoByVolumeID(volumeID string) (string, error) {
 	mySession := session.Must(session.NewSession())

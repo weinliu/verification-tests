@@ -555,14 +555,27 @@ func getIntreeSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 
 // Get pre-defined storageclass by cloudplatform and provisioner
 func getPresetStorageClassNameByProvisioner(oc *exutil.CLI, cloudProvider string, provisioner string) string {
+	scList := getPresetStorageClassListByProvisioner(oc, cloudProvider, provisioner)
+	if len(scList) < 1 {
+		return ""
+	}
+	return scList[0]
+}
+
+// Get pre-defined storageclass list by cloudplatform and provisioner
+func getPresetStorageClassListByProvisioner(oc *exutil.CLI, cloudProvider string, provisioner string) (scList []string) {
 	// TODO: Adaptation for known product issue https://issues.redhat.com/browse/OCPBUGS-1964
 	// we need to remove the condition after the issue is solved
 	if isAwsOutpostCluster(oc) {
-		return "gp2-csi"
+		return append(scList, "gp2-csi")
 	}
 	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return gjson.GetBytes(csiCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#(name="+provisioner+").preset_scname").String()
+	scArray := gjson.GetBytes(csiCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#(name="+provisioner+").preset_scname").Array()
+	for _, sc := range scArray {
+		scList = append(scList, sc.Str)
+	}
+	return scList
 }
 
 // Get pre-defined storageclass by cloudplatform and provisioner
@@ -959,4 +972,33 @@ func removeAnnotationFromSpecifiedResource(oc *exutil.CLI, resourceNamespace str
 	}
 	cargs = append(cargs, resourceKindAndName, annotationKey+"-")
 	o.Expect(oc.WithoutNamespace().Run("annotate").Args(cargs...).Execute()).NotTo(o.HaveOccurred())
+}
+
+// getByokKeyIDFromClusterCSIDriver gets the kms key id info from BYOK clusters clustercsidriver
+func getByokKeyIDFromClusterCSIDriver(oc *exutil.CLI, driverProvisioner string) (keyID string) {
+	clustercsidriverJSONContent, getContentError := oc.AsAdmin().WithoutNamespace().Run("get").Args("clustercsidriver/"+driverProvisioner, "-ojson").Output()
+	o.Expect(getContentError).ShouldNot(o.HaveOccurred())
+	if !gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.driverType`).Exists() {
+		e2e.Logf("None kms key settings in clustercsidriver/%s, the test cluster is not a BYOK cluster", driverProvisioner)
+		return keyID
+	}
+	switch cloudProvider {
+	case "aws":
+		keyID = gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.aws.kmsKeyARN`).String()
+	case "azure":
+		diskEncryptionSetName := gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.azure.diskEncryptionSet.name`).String()
+		diskEncryptionSetResourceGroup := gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.azure.diskEncryptionSet.resourceGroup`).String()
+		diskEncryptionSetSubscriptionID := gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.azure.diskEncryptionSet.subscriptionID`).String()
+		keyID = "/subscriptions/" + diskEncryptionSetSubscriptionID + "/resourceGroups/" + diskEncryptionSetResourceGroup + "/providers/Microsoft.Compute/diskEncryptionSets/" + diskEncryptionSetName
+	case "gcp":
+		keyRing := gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.gcp.kmsKey.keyRing`).String()
+		location := gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.gcp.kmsKey.location`).String()
+		name := gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.gcp.kmsKey.name`).String()
+		projectID := gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.gcp.kmsKey.projectID`).String()
+		keyID = "projects/" + projectID + "/locations/" + location + "/keyRings/" + keyRing + "/cryptoKeys/" + name
+	default:
+		return keyID
+	}
+	e2e.Logf(`The BYOK test cluster driverProvisioner/%s kms keyID is: "%s"`, driverProvisioner, keyID)
+	return keyID
 }
