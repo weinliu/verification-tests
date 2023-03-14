@@ -908,6 +908,29 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkLogsInContainer(oc, "openshift-monitoring", CMOPodName, "cluster-monitoring-operator", "collectionProfiles is a TechPreview feature")
 	})
 
+	//author: tagao@redhat.com
+	g.It("Author:tagao-Low-60534-check gomaxprocs setting of Node Exporter in CMO [Serial]", func() {
+		var (
+			setGomaxprocsTo1 = filepath.Join(monitoringBaseDir, "setGomaxprocsTo1.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("check default gomaxprocs value is 0")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--runtime.gomaxprocs=0"))
+
+		g.By("set gomaxprocs value to 1")
+		createResourceFromYaml(oc, "openshift-monitoring", setGomaxprocsTo1)
+
+		g.By("check gomaxprocs value in daemonset")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output2).To(o.ContainSubstring("--runtime.gomaxprocs=1"))
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
