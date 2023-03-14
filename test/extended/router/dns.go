@@ -650,4 +650,52 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			o.ContainSubstring("::1         localhost localhost.localdomain localhost6 localhost6.localdomain6")))
 		o.Expect(hostOutput2).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
 	})
+
+	g.It("Author:mjoseph-Critical-60350-Check the max number of domains in the search path list of any pod", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			clientPod           = filepath.Join(buildPruningBaseDir, "testpod-60350.yaml")
+			cltPodLabel         = "app=testpod-60350"
+			cltPodName          = "testpod-60350"
+		)
+		project1 := oc.Namespace()
+
+		g.By("Create a pod with 32 DNS search list")
+		createResourceFromFile(oc, project1, clientPod)
+		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
+
+		g.By("Check the pod event logs and confirm there is no Search Line limits")
+		checkPodEvent := describePodResource(oc, cltPodName, project1)
+		o.Expect(checkPodEvent).NotTo(o.ContainSubstring("Warning  DNSConfigForming"))
+
+		g.By("Check the resulting pod have all those search entries in its /etc/resolf.conf")
+		execOutput, err := oc.Run("exec").Args(cltPodName, "--", "sh", "-c", "cat /etc/resolv.conf").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(execOutput).To(o.ContainSubstring("5th.com 6th.com 7th.com 8th.com 9th.com 10th.com 11th.com 12th.com 13th.com 14th.com 15th.com 16th.com 17th.com 18th.com 19th.com 20th.com 21th.com 22th.com 23th.com 24th.com 25th.com 26th.com 27th.com 28th.com 29th.com 30th.com 31th.com 32th.com"))
+	})
+
+	g.It("Author:mjoseph-Critical-60492-Check the max number of characters in the search path of any pod", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			clientPod           = filepath.Join(buildPruningBaseDir, "testpod-60492.yaml")
+			cltPodLabel         = "app=testpod-60492"
+			cltPodName          = "testpod-60492"
+		)
+		project1 := oc.Namespace()
+
+		g.By("Create a pod with a single search path with 253 characters")
+		createResourceFromFile(oc, project1, clientPod)
+		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
+
+		g.By("Check the pod event logs and confirm there is no Search Line limits")
+		checkPodEvent := describePodResource(oc, cltPodName, project1)
+		o.Expect(checkPodEvent).NotTo(o.ContainSubstring("Warning  DNSConfigForming"))
+
+		g.By("Check the resulting pod have all those search entries in its /etc/resolf.conf")
+		execOutput, err := oc.Run("exec").Args(cltPodName, "--", "sh", "-c", "cat /etc/resolv.conf").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(execOutput).To(o.ContainSubstring("t47x6d4lzz1zxm1bakrmiceb0tljzl9n8r19kqu9s3731ectkllp9mezn7cldozt25nlenyh5jus5b9rr687u2icimakjpyf4rsux3c66giulc0d2ipsa6bpa6dykgd0mc25r1m89hvzjcix73sdwfbu5q67t0c131i1fqne0o7we20ve2emh1046h9m854wfxo0spb2gv5d65v9x2ibuiti7rhr2y8u72hil5cutp63sbhi832kf3v4vuxa0"))
+	})
 })
