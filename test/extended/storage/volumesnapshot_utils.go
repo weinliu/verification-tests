@@ -121,6 +121,11 @@ func (vs *volumeSnapshot) waitReadyToUse(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Volumeshapshot %s is not ready_to_use", vs.name))
 }
 
+// Get the VolumeSnapshot's volumeSnapshotContent name
+func (vs *volumeSnapshot) getContentName(oc *exutil.CLI) string {
+	return getVSContentByVSname(oc, vs.namespace, vs.name)
+}
+
 // Create static volumeSnapshot with specified volumeSnapshotContent
 func createVolumeSnapshotWithSnapshotHandle(oc *exutil.CLI, originVolumeSnapshotExportJSON string, newVolumeSnapshotName string, volumeSnapshotContentName string, volumesnapshotNamespace string) {
 	var (
@@ -165,6 +170,7 @@ func createVolumeSnapshotWithSnapshotHandle(oc *exutil.CLI, originVolumeSnapshot
 func getVSContentByVSname(oc *exutil.CLI, namespace string, vsName string) string {
 	vscontentName, err := oc.WithoutNamespace().Run("get").Args("volumesnapshot", "-n", namespace, vsName, "-o=jsonpath={.status.boundVolumeSnapshotContentName}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf(`The volumesnapshot/"%s" bound VolumeSnapshotContent is "%s"`, vsName, vscontentName)
 	return vscontentName
 }
 

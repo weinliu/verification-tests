@@ -3165,6 +3165,118 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
+	// https://issues.redhat.com/browse/STOR-994
+	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-storage/3141-prevent-volume-mode-conversion
+	// OCP-60487 - [CSI Driver] [Snapshot] should prevent unauthorised users from converting the volume mode when enable the prevent-volume-mode-conversion
+	g.It("ROSA-OSD-Longduration-NonPreRelease-Author:pewang-Medium-60487-[CSI Driver] [Snapshot] should prevent unauthorised users from converting the volume mode when enable the prevent-volume-mode-conversion [Disruptive]", func() {
+
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate            = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+		)
+
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner = range supportProvisioners {
+			func() {
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+				// Set the resource definition for the test scenario
+				storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"), setStorageClassProvisioner(provisioner))
+				pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimVolumemode("Block"))
+				volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)))
+				pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name), setPersistentVolumeClaimVolumemode("Filesystem"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+				myPod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
+				csiSnapShotControllerOperator := newDeployment(setDeploymentName("csi-snapshot-controller-operator"), setDeploymentNamespace("openshift-cluster-storage-operator"), setDeploymentApplabel("app=csi-snapshot-controller-operator"))
+				csiSnapShotController := newDeployment(setDeploymentName("csi-snapshot-controller"), setDeploymentNamespace("openshift-cluster-storage-operator"), setDeploymentApplabel("app=csi-snapshot-controller"))
+				csiDriverController := newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"))
+
+				// TODO: When 4.14 prevent-volume-mode-conversion enabled by default remove the step
+				g.By(`Enable the "prevent-volume-mode-conversion" for csi-provisioner and csi-snapshot-controller`)
+				defer waitCSOhealthy(oc.AsAdmin())
+				defer csiSnapShotController.waitReady(oc.AsAdmin())
+				defer csiDriverController.waitReady(oc.AsAdmin())
+
+				setSpecifiedCSIDriverManagementState(oc, provisioner, "Unmanaged")
+				defer setSpecifiedCSIDriverManagementState(oc, provisioner, "Managed")
+				patchResourceAsAdmin(oc, "", "clusterversions/version", `[{"op":"add","path":"/spec/overrides","value":[{"kind":"Deployment","group":"apps","name":"csi-snapshot-controller-operator","namespace":"openshift-cluster-storage-operator","unmanaged":true}]}]`, "json")
+				defer patchResourceAsAdmin(oc, "", "clusterversions/version", `[{"op":"remove","path":"/spec/overrides"}]`, "json")
+
+				originReplicasNum := csiSnapShotControllerOperator.getReplicasNum(oc)
+				csiSnapShotControllerOperator.scaleReplicas(oc.AsAdmin(), "0")
+				defer csiSnapShotControllerOperator.scaleReplicas(oc.AsAdmin(), originReplicasNum)
+
+				// Add '--prevent-volume-mode-conversion' startup parameter for csi-provisioner and csi-snapshot-controller
+				// As the ebs-csi-driver-controller deployment is fixed template by operator so used hard code(provisioner container index and args index) here
+				// https://github.com/openshift/aws-ebs-csi-driver-operator/blob/master/assets/controller.yaml#L123-L137
+				patchResourceAsAdmin(oc, "openshift-cluster-csi-drivers", "deployment/aws-ebs-csi-driver-controller", `[{"op":"add","path":"/spec/template/spec/containers/2/args/11","value":"--prevent-volume-mode-conversion"}]`, "json")
+				defer patchResourceAsAdmin(oc, "openshift-cluster-csi-drivers", "deployment/aws-ebs-csi-driver-controller", `[{"op":"remove","path":"/spec/template/spec/containers/2/args/11"}]`, "json")
+
+				// As the csi-snapshot-controller deployment is fixed template by operator so used hard code(csi_controller container index and args index) here
+				// https://github.com/openshift/cluster-csi-snapshot-controller-operator/blob/master/assets/csi_controller_deployment.yaml#L32-L48
+				patchResourceAsAdmin(oc, "openshift-cluster-storage-operator", "deployment/csi-snapshot-controller", `[{"op":"add","path":"/spec/template/spec/containers/0/args/6","value":"--prevent-volume-mode-conversion"}]`, "json")
+				defer patchResourceAsAdmin(oc, "openshift-cluster-storage-operator", "deployment/csi-snapshot-controller", `[{"op":"remove","path":"/spec/template/spec/containers/0/args/6"}]`, "json")
+
+				// Make sure the csi driver recover healthy again
+				csiDriverController.waitReady(oc.AsAdmin())
+				csiSnapShotController.waitReady(oc.AsAdmin())
+				waitCSOhealthy(oc.AsAdmin())
+
+				g.By(`Create a csi storageclass with "volumeBindingMode: Immediate"`)
+				storageClass.create(oc)
+				defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+				g.By("Create a Block pvc with the csi storageclass and wait it bounds with provisioned volume")
+				pvcOri.create(oc)
+				defer pvcOri.deleteAsAdmin(oc)
+				pvcOri.waitStatusAsExpected(oc, "Bound")
+
+				g.By("Create volumesnapshot for the pvc and wait for it becomes ready to use")
+				volumesnapshot.create(oc)
+				defer volumesnapshot.delete(oc)
+				volumesnapshot.waitReadyToUse(oc)
+
+				g.By(`Create a restored pvc with volumeMode: "Filesystem"`)
+				pvcRestore.capacity = pvcOri.capacity
+				pvcRestore.createWithSnapshotDataSource(oc)
+				defer pvcRestore.deleteAsAdmin(oc)
+
+				g.By(`The pvc should stuck at "Pending" status and be provisioned failed of "does not have permission to do so"`)
+				o.Eventually(func() bool {
+					msg, _ := pvcRestore.getDescription(oc)
+					return strings.Contains(msg, `failed to provision volume with StorageClass "`+storageClass.name+`": error getting handle for DataSource Type VolumeSnapshot by Name `+volumesnapshot.name+`: requested volume `+
+						pvcRestore.namespace+`/`+pvcRestore.name+` modifies the mode of the source volume but does not have permission to do so. snapshot.storage.kubernetes.io/allow-volume-mode-change annotation is not present on snapshotcontent`)
+				}, 30*time.Second, 3*time.Second).Should(o.BeTrue())
+				o.Consistently(func() string {
+					pvcStatus, _ := pvcRestore.getStatus(oc)
+					return pvcStatus
+				}, 60*time.Second, 10*time.Second).Should(o.Equal("Pending"))
+
+				g.By(`Adding annotation [snapshot.storage.kubernetes.io/allow-volume-mode-change="true"] to the volumesnapshot's content by admin user the restored volume should be provisioned successfully and could be consumed by pod`)
+				addAnnotationToSpecifiedResource(oc.AsAdmin(), "", "volumesnapshotcontent/"+volumesnapshot.getContentName(oc), `snapshot.storage.kubernetes.io/allow-volume-mode-change=true`)
+				pvcRestore.waitStatusAsExpected(oc, "Bound")
+				myPod.create(oc)
+				defer myPod.deleteAsAdmin(oc)
+				myPod.waitReady(oc)
+
+				g.By("Check the restored changed mode volume could be written and read data")
+				myPod.checkMountedVolumeCouldRW(oc)
+
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			}()
+		}
+	})
+
+	// author: pewang@redhat.com
 	// OCP-52239-Critical [CSI Driver] [Generic ephemeral volumes] lifecycle should be the same with pod level
 	g.It("ROSA-OSD_CCS-ARO-Author:pewang-Critical-52239-[CSI Driver] [Generic ephemeral volumes] lifecycle should be the same with pod level", func() {
 		// Define the test scenario support provisioners

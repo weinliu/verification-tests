@@ -935,3 +935,28 @@ func isSpecifiedAPIExist(oc *exutil.CLI, apiNameAndVersion string) bool {
 func isMicroshiftCluster(oc *exutil.CLI) bool {
 	return !isSpecifiedAPIExist(oc, "template.openshift.io/v1")
 }
+
+// Set the specified csi driver ManagementState
+func setSpecifiedCSIDriverManagementState(oc *exutil.CLI, driverName string, managementState string) {
+	patchResourceAsAdmin(oc, "", "clustercsidriver/"+driverName, `{"spec":{"managementState": "`+managementState+`"}}`, "merge")
+}
+
+// Add specified annotation to specified resource
+func addAnnotationToSpecifiedResource(oc *exutil.CLI, resourceNamespace string, resourceKindAndName string, annotationKeyAndValue string) {
+	var cargs []string
+	if resourceNamespace != "" {
+		cargs = append(cargs, "-n", resourceNamespace)
+	}
+	cargs = append(cargs, "--overwrite", resourceKindAndName, annotationKeyAndValue)
+	o.Expect(oc.WithoutNamespace().Run("annotate").Args(cargs...).Execute()).NotTo(o.HaveOccurred())
+}
+
+// Remove specified annotation from specified resource
+func removeAnnotationFromSpecifiedResource(oc *exutil.CLI, resourceNamespace string, resourceKindAndName string, annotationKey string) {
+	var cargs []string
+	if resourceNamespace != "" {
+		cargs = append(cargs, "-n", resourceNamespace)
+	}
+	cargs = append(cargs, resourceKindAndName, annotationKey+"-")
+	o.Expect(oc.WithoutNamespace().Run("annotate").Args(cargs...).Execute()).NotTo(o.HaveOccurred())
+}
