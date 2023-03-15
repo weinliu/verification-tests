@@ -10671,10 +10671,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			}
 		}
 
-		g.By("modify nodeSelector of all default catalogsources")
+		g.By("make all nodes as unschedulable")
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Node Names are %v", nodeName)
+		node := strings.Fields(nodeName)
+
 		defer func() {
-			for _, catsrc := range catalogs {
-				patchResource(oc, asAdmin, withoutNamespace, "-n", "openshift-marketplace", "catsrc", catsrc, "-p", "[{\"op\":\"remove\", \"path\":/spec/grpcPodConfig/nodeSelector/fake43642}]", "--type=json")
+			for _, nodeIndex := range node {
+				oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", nodeIndex)).Execute()
 			}
 			err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 				catalogstrings := []string{"Certified Operators", "Community Operators", "Red Hat Operators", "Red Hat Marketplace"}
@@ -10692,22 +10697,30 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			if err != nil {
 				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-marketplace").Output()
 				e2e.Logf(output)
+				output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "community-operators", "-n", "openshift-marketplace", "-o", "yaml").Output()
+				e2e.Logf(output)
 			}
 			exutil.AssertWaitPollNoErr(err, "cannot get packagemanifests for Certified Operators, Community Operators, Red Hat Operators and Red Hat Marketplace")
 		}()
 
-		for _, catsrc := range catalogs {
-			patchResource(oc, asAdmin, withoutNamespace, "-n", "openshift-marketplace", "catsrc", catsrc, "-p", "{\"spec\":{\"grpcPodConfig\":{\"nodeSelector\":{\"fake43642\":\"fake\"}}}}", "--type=merge")
+		for _, nodeIndex := range node {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", fmt.Sprintf("%s", nodeIndex)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("delete default catsrc certified-operators community-operators redhat-marketplace redhat-operators")
+		for _, catalog := range catalogs {
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("catsrc", catalog, "-n", "openshift-marketplace").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
 		g.By("check alert has been raised")
-		alerts := []string{"redhat-marketplace", "certified-operators", "community-operators", "redhat-operators"}
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(60*time.Second, 600*time.Second, func() (bool, error) {
-			for _, alertString := range alerts {
+			for _, alertString := range catalogs {
 				alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"OperatorHubSourceError\" and .labels.name == \"%s\")'", token, url, alertString)
 				output, err := exec.Command("bash", "-c", alertCMD).Output()
 				if err != nil {
