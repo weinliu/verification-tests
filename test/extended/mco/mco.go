@@ -306,6 +306,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(coreOsRpmOut).Should(o.And(
 			o.MatchRegexp(".*kernel-rt-kvm-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*"),
 			o.MatchRegexp(".*kernel-rt-core-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*"),
+			o.MatchRegexp(".*kernel-rt-modules-core-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*"),
 			o.MatchRegexp(".*kernel-rt-modules-extra-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*"),
 			o.MatchRegexp(".*kernel-rt-modules-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*")))
 		coreOsUnameOut, err := coreOs.DebugNodeWithChroot("uname", "-a")
@@ -494,7 +495,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mc.create()
 
 		g.By("Check content of file authorized_keys to verify whether new one is added successfully")
-		sshKeyOut, err := workerNode.DebugNodeWithChroot("cat", "/home/core/.ssh/authorized_keys")
+		sshKeyOut, err := workerNode.DebugNodeWithChroot("cat", "/home/core/.ssh/authorized_keys.d/ignition")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(sshKeyOut).Should(o.ContainSubstring("mco_test@redhat.com"))
 	})
