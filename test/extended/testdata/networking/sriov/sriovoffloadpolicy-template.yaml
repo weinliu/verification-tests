@@ -11,14 +11,14 @@ objects:
     deviceType: netdevice
     eSwitchMode: "switchdev"
     nicSelector:
-      deviceID: '1017'
       pfNames: 
         - ${PFNAME}
-      vendor: '15b3'
+      vendor: '${VENDOR}'
     nodeSelector:
       feature.node.kubernetes.io/sriov-capable: 'true'
-    numVfs: 10
+    numVfs: 8
     resourceName: ${SRIOVNETPOLICY}
 parameters:
 - name: SRIOVNETPOLICY 
 - name: PFNAME
+- name: VENDOR

@@ -18,10 +18,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc        = exutil.NewCLI("ovsoffload-"+getRandomString(), exutil.KubeConfigPath())
-		deviceID  = "101d"
-		vendorID  = "15b3"
-		sriovOpNs = "openshift-sriov-network-operator"
+		oc = exutil.NewCLI("ovsoffload-"+getRandomString(), exutil.KubeConfigPath())
+		//deviceID  = "101d"
+		vendorID            = "15b3"
+		sriovOpNs           = "openshift-sriov-network-operator"
+		sriovPoolConfigName = "sriovnetworkpoolconfig-offload"
 
 		networkBaseDir       string
 		sriovBaseDir         string
@@ -35,11 +36,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), "openshift-sriov-network-operator", metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				g.Skip("the cluster do not install sriov operator")
+				g.Skip("the cluster does not install sriov operator")
 			}
 		}
-		if !checkDeviceIDExist(oc, sriovOpNs, deviceID) {
-			g.Skip("the cluster do not contain the sriov card. skip this testing!")
+		if !chkSriovPoolConfig(oc, sriovOpNs, sriovPoolConfigName) {
+			g.Skip("the cluster does not configure sriovnetworkpoolconfigs. skip this testing!")
 		}
 		networkBaseDir = exutil.FixturePath("testdata", "networking")
 		sriovBaseDir = filepath.Join(networkBaseDir, "sriov")
@@ -85,10 +86,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
-		waitForSriovPolicyReady(oc, sriovNetPolicy.namespace)
+		waitForOffloadSriovPolicyReady(oc, sriovNetPolicy.namespace)
 
 		g.By("3) ######### Create sriov network attachment ############")
 
@@ -214,11 +215,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
 
-		waitForSriovPolicyReady(oc, sriovNetPolicy.namespace)
+		waitForOffloadSriovPolicyReady(oc, sriovNetPolicy.namespace)
 
 		g.By("3) ######### Create sriov network attachment ############")
 
@@ -337,11 +338,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
 
-		waitForSriovPolicyReady(oc, sriovNetPolicy.namespace)
+		waitForOffloadSriovPolicyReady(oc, sriovNetPolicy.namespace)
 
 		g.By("3) ######### Create sriov network attachment ############")
 
@@ -522,11 +523,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
 
-		waitForSriovPolicyReady(oc, sriovNetPolicy.namespace)
+		waitForOffloadSriovPolicyReady(oc, sriovNetPolicy.namespace)
 
 		g.By("3) ######### Create sriov network attachment ############")
 
@@ -652,11 +653,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
 
-		waitForSriovPolicyReady(oc, sriovNetPolicy.namespace)
+		waitForOffloadSriovPolicyReady(oc, sriovNetPolicy.namespace)
 
 		g.By("3) ######### Create sriov network attachment ############")
 

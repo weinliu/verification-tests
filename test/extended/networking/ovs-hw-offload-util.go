@@ -101,3 +101,35 @@ func startIperfTrafficBackground(oc *exutil.CLI, ns string, pod string, svrip st
 	//wait for 5 seconds for iperf starting.
 	time.Sleep(5 * time.Second)
 }
+
+// Wait for sriov network policy ready
+func waitForOffloadSriovPolicyReady(oc *exutil.CLI, ns string) {
+	workerNodeList := getOvsHWOffloadWokerNodes(oc)
+	err := wait.Poll(30*time.Second, 30*time.Minute, func() (bool, error) {
+		for _, workerNode := range workerNodeList {
+			nodestatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovnetworknodestates", workerNode, "-n", ns, "-o=jsonpath={.status.syncStatus}").Output()
+			if err1 != nil {
+				e2e.Logf("failed to get node %v sriov policy status: %v, retrying...", workerNode, err1)
+				return false, nil
+			}
+
+			if nodestatus != "Succeeded" {
+				e2e.Logf("nodes %v sync up not ready yet: %v, retrying...", workerNode, nodestatus)
+				return false, nil
+			}
+			e2e.Logf("nodes %v sync up ready now", workerNode)
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "sriovnetworknodestates is not ready")
+}
+
+func chkSriovPoolConfig(oc *exutil.CLI, ns string, sriovpoolname string) bool {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovnetworkpoolconfigs.sriovnetwork.openshift.io", "-n", ns).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !strings.Contains(output, sriovpoolname) {
+		e2e.Logf("sriovnetworkpoolconfigs is not configured")
+		return false
+	}
+	return true
+}
