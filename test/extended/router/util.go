@@ -735,6 +735,9 @@ func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 		dnspodname := dnspod[0]
 		dnspodattr := dnspod[1]
 		count := 0
+		// flush the cache to disk
+		err := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", "sync").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		waitErr := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 			output, _ := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
 			count++
