@@ -64,4 +64,24 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 			logger.Infof("no error found")
 		}
 	})
+
+	g.It("Author:rioliu-PstChkUpgrade-NonPreRelease-High-59427-ssh keys can be migrated to new dir when node is upgraded from RHCOS8 to RHCOS9", func() {
+
+		var (
+			oldAuthorizedKeyPath = "/home/core/.ssh/authorized_key"
+			newAuthorizedKeyPath = "/home/core/.ssh/authorized_keys.d/ignition"
+		)
+
+		allCoreOsNodes := NewNodeList(oc).GetAllCoreOsNodesOrFail()
+		for _, node := range allCoreOsNodes {
+			g.By(fmt.Sprintf("check authorized key dir and file on %s", node.GetName()))
+			output, err := node.DebugNodeWithChroot("stat", oldAuthorizedKeyPath)
+			o.Expect(err).Should(o.HaveOccurred(), "old authorized key file still exists")
+			o.Expect(output).Should(o.ContainSubstring("No such file or directory"))
+			output, err = node.DebugNodeWithChroot("stat", newAuthorizedKeyPath)
+			o.Expect(err).ShouldNot(o.HaveOccurred(), "new authorized key file not found")
+			o.Expect(output).Should(o.ContainSubstring("File: " + newAuthorizedKeyPath))
+		}
+
+	})
 })
