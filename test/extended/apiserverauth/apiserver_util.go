@@ -286,8 +286,16 @@ func restoreClusterOcp41899(oc *exutil.CLI) {
 }
 
 func checkClusterLoad(oc *exutil.CLI, nodeType, dirname string) (int, int) {
-	tmpPath, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "nodes", "-l", "node-role.kubernetes.io/"+nodeType, "--no-headers").OutputToFile(dirname)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	var tmpPath string
+	var errAdm error
+	errAdmNode := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		tmpPath, errAdm = oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "nodes", "-l", "node-role.kubernetes.io/"+nodeType, "--no-headers").OutputToFile(dirname)
+		if errAdm != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errAdmNode, fmt.Sprintf("Not able to run adm top command :: %v", errAdm))
 	cmd := fmt.Sprintf(`cat %v | grep -v 'protocol-buffers' | awk '{print $3}'|awk -F '%%' '{ sum += $1 } END { print(sum / NR) }'|cut -d "." -f1`, tmpPath)
 	cpuAvg, err := exec.Command("bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
