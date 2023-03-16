@@ -549,4 +549,183 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(listOutput).NotTo(o.ContainSubstring("allow"))
 		o.Expect(listOutput).NotTo(o.ContainSubstring("drop"))
 	})
+
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-High-60488-EgressFirewall works for a nodeSelector for matchLabels.", func() {
+		g.By("Label one node to match egressfirewall rule")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		}
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType != "ipv4single" {
+			g.Skip("skip due to bug https://issues.redhat.com/browse/OCPBUGS-8473 for now, will add it back once bug fixed!!")
+		}
+
+		node1 := nodeList.Items[0].Name
+		node2 := nodeList.Items[1].Name
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, node1, "ef-dep")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, node1, "ef-dep", "qe")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall3-template.yaml")
+
+		g.By("Get new namespace")
+		ns := oc.Namespace()
+
+		var cidrValue string
+		if ipStackType == "ipv6single" {
+			cidrValue = "::/0"
+		} else {
+			cidrValue = "0.0.0.0/0"
+		}
+
+		g.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("Check the nodes can be acccessed or not")
+		// Will skip the test if the nodes IP cannot be pinged even without egressfirewall
+		node1IP1, node1IP2 := getNodeIP(oc, node1)
+		node2IP1, node2IP2 := getNodeIP(oc, node2)
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP2)
+		if err != nil {
+			g.Skip("Ping node IP failed, skip the test in this environment.")
+		}
+
+		g.By("Create an EgressFirewall object with rule nodeSelector.")
+		egressFW2 := egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Deny",
+			cidr:      cidrValue,
+			template:  egressFWTemplate,
+		}
+		defer egressFW2.deleteEgressFW2Object(oc)
+		egressFW2.createEgressFW2Object(oc)
+
+		g.By("Verify the node matched egressfirewall will be allowed.")
+		o.Eventually(func() error {
+			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP2)
+			return err
+		}, "60s", "10s").ShouldNot(o.HaveOccurred())
+		o.Eventually(func() error {
+			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node2IP2)
+			return err
+		}, "10s", "5s").Should(o.HaveOccurred())
+
+		if ipStackType == "dualstack" {
+			// Test node ipv6 address as well
+			egressFW2.deleteEgressFW2Object(oc)
+			egressFW2.cidr = "::/0"
+			defer egressFW2.deleteEgressFW2Object(oc)
+			egressFW2.createEgressFW2Object(oc)
+			o.Eventually(func() error {
+				_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP1)
+				return err
+			}, "60s", "10s").ShouldNot(o.HaveOccurred())
+			o.Eventually(func() error {
+				_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node2IP1)
+				return err
+			}, "10s", "5s").Should(o.HaveOccurred())
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-High-60812-EgressFirewall works for a nodeSelector for matchExpressions.", func() {
+		g.By("Label one node to match egressfirewall rule")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		}
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType != "ipv4single" {
+			g.Skip("skip due to bug https://issues.redhat.com/browse/OCPBUGS-8473 for now, will add it back once bug fixed!!")
+		}
+
+		node1 := nodeList.Items[0].Name
+		node2 := nodeList.Items[1].Name
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, node1, "ef-org")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, node1, "ef-org", "dev")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall4-template.yaml")
+
+		g.By("Get new namespace")
+		ns := oc.Namespace()
+
+		var cidrValue string
+		if ipStackType == "ipv6single" {
+			cidrValue = "::/0"
+		} else {
+			cidrValue = "0.0.0.0/0"
+		}
+
+		g.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("Check the nodes can be acccessed or not")
+		// Will skip the test if the nodes IP cannot be pinged even without egressfirewall
+		node1IP1, node1IP2 := getNodeIP(oc, node1)
+		node2IP1, node2IP2 := getNodeIP(oc, node2)
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP2)
+		if err != nil {
+			g.Skip("Ping node IP failed, skip the test in this environment.")
+		}
+
+		g.By("Create an EgressFirewall object with rule nodeSelector.")
+		egressFW2 := egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Deny",
+			cidr:      cidrValue,
+			template:  egressFWTemplate,
+		}
+		defer egressFW2.deleteEgressFW2Object(oc)
+		egressFW2.createEgressFW2Object(oc)
+
+		g.By("Verify the node matched egressfirewall will be allowed, unmatched will be blocked!!")
+		o.Eventually(func() error {
+			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP2)
+			return err
+		}, "60s", "10s").ShouldNot(o.HaveOccurred())
+		o.Eventually(func() error {
+			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node2IP2)
+			return err
+		}, "10s", "5s").Should(o.HaveOccurred())
+
+		if ipStackType == "dualstack" {
+			// Test node ipv6 address as well
+			egressFW2.deleteEgressFW2Object(oc)
+			egressFW2.cidr = "::/0"
+			defer egressFW2.deleteEgressFW2Object(oc)
+			egressFW2.createEgressFW2Object(oc)
+			o.Eventually(func() error {
+				_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP1)
+				return err
+			}, "60s", "10s").ShouldNot(o.HaveOccurred())
+			o.Eventually(func() error {
+				_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node2IP1)
+				return err
+			}, "10s", "5s").Should(o.HaveOccurred())
+
+		}
+	})
 })
