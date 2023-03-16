@@ -18,6 +18,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterID                  string
 		region                     string
 		profile                    string
+		instanceType               string
 		zone                       string
 		ami                        string
 		subnetName                 string
@@ -52,6 +53,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			randomMachinesetName := exutil.GetRandomMachineSetName(oc)
 			profile, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.iamInstanceProfile.id}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			instanceType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.instanceType}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			zone, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.placement.availabilityZone}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -106,14 +109,15 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			template: gcpClusterTemplate,
 		}
 		awsMachineTemplate = awsMachineTemplateDescription{
-			name:       "aws-machinetemplate",
-			profile:    profile,
-			zone:       zone,
-			ami:        ami,
-			subnetName: subnetName,
-			sgName:     sgName,
-			subnetID:   subnetID,
-			template:   awsMachineTemplateTemplate,
+			name:         "aws-machinetemplate",
+			profile:      profile,
+			instanceType: instanceType,
+			zone:         zone,
+			ami:          ami,
+			subnetName:   subnetName,
+			sgName:       sgName,
+			subnetID:     subnetID,
+			template:     awsMachineTemplateTemplate,
 		}
 		gcpMachineTemplate = gcpMachineTemplateDescription{
 			name:        "gcp-machinetemplate",

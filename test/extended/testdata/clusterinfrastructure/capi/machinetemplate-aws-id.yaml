@@ -13,7 +13,7 @@ objects:
         spec:
           uncompressedUserData: true
           iamInstanceProfile: ${PROFILE}
-          instanceType: m5.large
+          instanceType: ${INSTANCETYPE}
           failureDomain: ${ZONE}
           cloudInit:
             insecureSkipSecretsManager: true
@@ -29,6 +29,7 @@ objects:
 parameters:
 - name: NAME
 - name: NAMESPACE
+- name: INSTANCETYPE
 - name: PROFILE
 - name: ZONE
 - name: AMI

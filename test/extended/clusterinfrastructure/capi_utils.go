@@ -35,15 +35,16 @@ type gcpClusterDescription struct {
 }
 
 type awsMachineTemplateDescription struct {
-	name       string
-	namespace  string
-	profile    string
-	zone       string
-	ami        string
-	subnetName string
-	subnetID   string
-	sgName     string
-	template   string
+	name         string
+	namespace    string
+	profile      string
+	instanceType string
+	zone         string
+	ami          string
+	subnetName   string
+	subnetID     string
+	sgName       string
+	template     string
 }
 
 type gcpMachineTemplateDescription struct {
@@ -116,7 +117,7 @@ func (gcpCluster *gcpClusterDescription) deleteGCPCluster(oc *exutil.CLI) error 
 
 func (awsMachineTemplate *awsMachineTemplateDescription) createAWSMachineTemplate(oc *exutil.CLI) {
 	e2e.Logf("Creating awsMachineTemplate ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsMachineTemplate.template, "-p", "NAME="+awsMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "PROFILE="+awsMachineTemplate.profile, "ZONE="+awsMachineTemplate.zone, "AMI="+awsMachineTemplate.ami, "SUBNETNAME="+awsMachineTemplate.subnetName, "SUBNETID="+awsMachineTemplate.subnetID, "SGNAME="+awsMachineTemplate.sgName)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsMachineTemplate.template, "-p", "NAME="+awsMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "PROFILE="+awsMachineTemplate.profile, "INSTANCETYPE="+awsMachineTemplate.instanceType, "ZONE="+awsMachineTemplate.zone, "AMI="+awsMachineTemplate.ami, "SUBNETNAME="+awsMachineTemplate.subnetName, "SUBNETID="+awsMachineTemplate.subnetID, "SGNAME="+awsMachineTemplate.sgName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -169,7 +170,7 @@ func (capiMachineSetgcp *capiMachineSetgcpDescription) deleteCapiMachineSetgcp(o
 // waitForCapiMachinesRunning check if all the machines are Running in a MachineSet
 func waitForCapiMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
-	pollErr := wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
+	pollErr := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", clusterAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
@@ -179,6 +180,6 @@ func waitForCapiMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetNam
 		e2e.Logf("Expected %v  machines are Running", machineNumber)
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 12 minutes ...", machineNumber))
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 16 minutes ...", machineNumber))
 	e2e.Logf("All machines are Running ...")
 }
