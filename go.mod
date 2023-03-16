@@ -25,6 +25,7 @@ require (
 	github.com/go-git/go-git/v5 v5.4.2
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/goexpect v0.0.0-20210430020637-ab937bf7fd6f
+	github.com/google/uuid v1.2.0
 	github.com/gophercloud/gophercloud v0.1.0
 	github.com/hashicorp/hc-install v0.4.0
 	github.com/hashicorp/terraform-exec v0.17.3
@@ -153,7 +154,6 @@ require (
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/goterm v0.0.0-20190703233501-fc88cf888a3f // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/google/uuid v1.2.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.0.0-20220520183353-fd19c99a87aa // indirect
 	github.com/googleapis/gax-go/v2 v2.4.0 // indirect
 	github.com/googleapis/go-type-adapters v1.0.0 // indirect

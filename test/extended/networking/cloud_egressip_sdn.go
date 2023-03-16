@@ -3074,6 +3074,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("NonPreRelease-PstChkUpgrade-Author:jechen-High-46710-OVN egressIP should still be functional post upgrade. [Disruptive]", func() {
 
 		ns := "46710-upgrade-ns"
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
+		if nsErr != nil {
+			g.Skip("Skip the PstChkUpgrade test as 46710-upgrade-ns namespace does not exist, PreChkUpgrade test did not run")
+		}
+
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "hello-", "-n", ns, "--ignore-not-found=true").Execute()
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")

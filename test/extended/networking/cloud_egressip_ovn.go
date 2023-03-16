@@ -1186,7 +1186,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer startInstanceOnGcp(oc, instance[0], zone)
 			err = stopInstanceOnGcp(oc, instance[0], zone)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkNodeStatus(oc, nodeList.Items[1].Name, "NotReady")
+			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
 		case "azure":
 			e2e.Logf("\n Azure is detected \n")
 			err := getAzureCredentialFromCluster(oc)
@@ -1538,6 +1538,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("NonPreRelease-PstChkUpgrade-Author:jechen-High-56875-OVN egressIP should still be functional post upgrade. [Disruptive]", func() {
 
 		ns := "56875-upgrade-ns"
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
+		if nsErr != nil {
+			g.Skip("Skip the PstChkUpgrade test as 56875-upgrade-ns namespace does not exist, PreChkUpgrade test did not run")
+		}
+
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "hello-", "-n", ns, "--ignore-not-found=true").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("egressip", "--all").Execute()
