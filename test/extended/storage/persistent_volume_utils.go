@@ -176,9 +176,8 @@ func newPersistentVolume(opts ...persistentVolumeOption) persistentVolume {
 	return defaultPersistentVolume
 }
 
-// Create new PersistentVolume with customized attributes
-func (pv *persistentVolume) create(oc *exutil.CLI) {
-	var pvExtraParameters map[string]interface{}
+// GenerateParametersByVolumeKind generates
+func (pv *persistentVolume) generateParametersByVolumeKind() (pvExtraParameters map[string]interface{}) {
 	switch pv.volumeKind {
 	// nfs kind PersistentVolume
 	case "nfs":
@@ -267,14 +266,49 @@ func (pv *persistentVolume) create(oc *exutil.CLI) {
 			"csi":      csiParameter,
 		}
 	}
-	pv.createWithExtraParameters(oc, pvExtraParameters)
+	return pvExtraParameters
+}
+
+// Create a new PersistentVolume with multi extra parameters
+func (pv *persistentVolume) createWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}) {
+	kindParameters := pv.generateParametersByVolumeKind()
+	if path, ok := kindParameters["jsonPath"]; ok {
+		jsonPathsAndActions = append(jsonPathsAndActions, map[string]string{interfaceToString(path): "set"})
+		delete(kindParameters, "jsonPath")
+	} else {
+		jsonPathsAndActions = append(jsonPathsAndActions, map[string]string{"items.0.spec.": "set"})
+	}
+	multiExtraParameters = append(multiExtraParameters, kindParameters)
+	_, err := applyResourceFromTemplateWithMultiExtraParameters(oc.AsAdmin(), jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", pv.template, "-p", "NAME="+pv.name, "ACCESSMODE="+pv.accessmode,
+		"CAPACITY="+pv.capacity, "RECLAIMPOLICY="+pv.reclaimPolicy, "SCNAME="+pv.scname, "VOLUMEMODE="+pv.volumeMode)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create a new PersistentVolume with extra parameters
 func (pv *persistentVolume) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pv.template, "-p", "NAME="+pv.name, "ACCESSMODE="+pv.accessmode,
-		"CAPACITY="+pv.capacity, "RECLAIMPOLICY="+pv.reclaimPolicy, "SCNAME="+pv.scname, "VOLUMEMODE="+pv.volumeMode)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	extraPath := `items.0.`
+	if path, ok := extraParameters["jsonPath"]; ok {
+		extraPath = interfaceToString(path)
+		delete(extraParameters, "jsonPath")
+	}
+	pv.createWithMultiExtraParameters(oc.AsAdmin(), []map[string]string{{extraPath: "set"}}, []map[string]interface{}{extraParameters})
+}
+
+// Create new PersistentVolume with customized attributes
+func (pv *persistentVolume) create(oc *exutil.CLI) {
+	pv.createWithExtraParameters(oc.AsAdmin(), pv.generateParametersByVolumeKind())
+}
+
+// Expression definition
+type Expression struct {
+	Key      string   `json:"key"`
+	Operator string   `json:"operator"`
+	Values   []string `json:"values"`
+}
+
+// Create new PersistentVolume with nodeAffinity
+func (pv *persistentVolume) createWithNodeAffinityExpressions(oc *exutil.CLI, nodeAffinityExpressions []Expression) {
+	pv.createWithMultiExtraParameters(oc, []map[string]string{{"items.0.spec.nodeAffinity.required.nodeSelectorTerms.0.": "set"}}, []map[string]interface{}{{"matchExpressions": nodeAffinityExpressions}})
 }
 
 // Delete the PersistentVolume use kubeadmin

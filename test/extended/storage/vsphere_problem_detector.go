@@ -215,4 +215,48 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		waitCSOspecifiedStatusValueAsExpected(oc, "Upgradeable", "True")
 		waitCSOspecifiedStatusValueAsExpected(oc, "Available", "False")
 	})
+
+	// author:wduan@redhat.com
+	// OCP-60185 - [vsphere-problem-detector] should report 'vsphere_zonal_volumes_total' metric correctly
+	// Add [Serial] because deployment/vsphere-problem-detector-operator restart is needed
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:wduan-High-60185-[vsphere-problem-detector] should report 'vsphere_zonal_volumes_total' metric correctly [Serial]", func() {
+		g.By("# Create two manual fileshare persist volumes(vSphere CNS File Volume) and one manual general volume")
+		// Retart vSphereDetectorOperator pod and record oginal vsphere_zonal_volumes_total value
+		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
+		mo.waitSpecifiedMetricValueAsExpected("vsphere_zonal_volumes_total", `data.result.0.metric.pod`, vSphereDetectorOperator.getPodList(oc.AsAdmin())[0])
+		initCount, err := mo.getSpecifiedMetricValue("vsphere_zonal_volumes_total", `data.result.0.value.1`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("# Create vSphere zonal PV with nodeAffinity")
+		storageTeamBaseDir := exutil.FixturePath("testdata", "storage")
+		pvTemplate := filepath.Join(storageTeamBaseDir, "csi-pv-template.yaml")
+
+		pv := newPersistentVolume(setPersistentVolumeHandle("3706e4d1-51bf-463c-90ea-b3d0e550d5c5"+getRandomString()), setPersistentVolumeTemplate(pvTemplate), setPersistentVolumeKind("csi"), setPersistentVolumeStorageClassName("manual-sc-"+getRandomString()))
+		matchReginExpression := Expression{
+			Key:      "topology.csi.vmware.com/openshift-region",
+			Operator: "In",
+			Values:   []string{"us-east"},
+		}
+		matchZoneExpression := Expression{
+			Key:      "topology.csi.vmware.com/openshift-zone",
+			Operator: "In",
+			Values:   []string{"us-east-1a"},
+		}
+		pv.createWithNodeAffinityExpressions(oc.AsAdmin(), []Expression{matchReginExpression, matchZoneExpression})
+		defer pv.deleteAsAdmin(oc)
+
+		g.By("# Check the metric vsphere_zonal_volumes_total")
+		// Since the vsphere-problem-detector update the metric every hour restart the deployment to trigger the update right now
+		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
+		initCountInt, err := strconv.Atoi(initCount)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		mo.waitSpecifiedMetricValueAsExpected("vsphere_zonal_volumes_total", `data.result.0.value.1`, interfaceToString(initCountInt+1))
+
+		g.By("# Delete the vSphere zonal PV")
+		pv.deleteAsAdmin(oc)
+		waitForPersistentVolumeStatusAsExpected(oc, pv.name, "deleted")
+
+		g.By("# Check the metric vsphere_zonal_volumes_total")
+		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
+		mo.waitSpecifiedMetricValueAsExpected("vsphere_zonal_volumes_total", `data.result.0.value.1`, interfaceToString(initCountInt))
+	})
 })
