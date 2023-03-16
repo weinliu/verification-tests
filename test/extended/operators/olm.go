@@ -4244,7 +4244,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:xzha-High-22618-prepare to check the marketplace status", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:xzha-High-22618-prepare to check the marketplace status", func() {
 		g.By("1) check version of marketplace operator")
 		marketplaceVersion := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", "marketplace", "-o=jsonpath={.status.versions[?(@.name==\"operator\")].version}")
 		o.Expect(marketplaceVersion).NotTo(o.BeEmpty())
@@ -4345,7 +4345,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("NonPreRelease-PstChkUpgrade-Author:xzha-High-22618-Post check the marketplace status", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:xzha-High-22618-Post check the marketplace status", func() {
 		g.By("1) check version of marketplace operator")
 		marketplaceVersion := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", "marketplace", "-o=jsonpath={.status.versions[?(@.name==\"operator\")].version}")
 		o.Expect(marketplaceVersion).NotTo(o.BeEmpty())
