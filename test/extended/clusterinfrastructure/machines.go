@@ -741,6 +741,49 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.securityProfile}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).Should(o.Equal("{\"encryptionAtHost\":true}"))
+	})
 
+	//author huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-32269-Implement validation/defaulting for AWS [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		g.By("Create a new machineset")
+		machinesetNameDefault := "machineset-32269-default"
+		msDefault := exutil.MachineSetDescription{machinesetNameDefault, 0}
+		defer msDefault.DeleteMachineSet(oc)
+		msDefault.CreateMachineSet(oc)
+
+		g.By("Get the original value of credentialsSecret and userDataSecret fileds")
+		credentialsSecretMachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetNameDefault, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.credentialsSecret.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		userDataSecretMachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetNameDefault, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.userDataSecret.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a new machineset deleting instanceType credentialsSecret and userDataSecret fileds")
+		machinesetName := "machineset-32269"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateAwsMachinesetWithDefaultValues(oc)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine instanceType credentialsSecret and userDataSecret are defaulted")
+		instanceTypeMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.instanceType}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture == "amd64" {
+			o.Expect(instanceTypeMachine).Should(o.Equal("m5.large"))
+		} else if architecture == "arm64" {
+			o.Expect(instanceTypeMachine).Should(o.Equal("m6g.large"))
+		} else {
+			e2e.Logf("No need validation of instanceType on other architecture")
+		}
+		credentialsSecretMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.credentialsSecret.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(credentialsSecretMachine).Should(o.Equal(credentialsSecretMachineset))
+		userDataSecretMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.userDataSecret.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(userDataSecretMachine).Should(o.Equal(userDataSecretMachineset))
 	})
 })

@@ -65,6 +65,34 @@ func (ms *MachineSetDescription) CreateMachineSet(oc *CLI) {
 	}
 }
 
+// CreateAwsMachinesetWithDefaultValues create an AWS machineset with default values
+func (ms *MachineSetDescription) CreateAwsMachinesetWithDefaultValues(oc *CLI) {
+	e2e.Logf("Creating a new AWS MachineSets with default values ...")
+	machinesetName := GetRandomMachineSetName(oc)
+	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	bytes, _ := ioutil.ReadFile(machineSetJSON)
+	machinesetjsonWithName, _ := sjson.Set(string(bytes), "metadata.name", ms.Name)
+	machinesetjsonWithSelector, _ := sjson.Set(machinesetjsonWithName, "spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
+	machinesetjsonWithTemplateLabel, _ := sjson.Set(machinesetjsonWithSelector, "spec.template.metadata.labels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
+	machinesetjsonWithReplicas, _ := sjson.Set(machinesetjsonWithTemplateLabel, "spec.replicas", ms.Replicas)
+	// Adding taints to machineset so that pods without toleration can not schedule to the nodes we provision
+	machinesetjsonWithTaints, _ := sjson.Set(machinesetjsonWithReplicas, "spec.template.spec.taints.0", map[string]interface{}{"effect": "NoSchedule", "key": "mapi", "value": "mapi_test"})
+	machinesetjsonDeleteCredentialsSecret, _ := sjson.Delete(machinesetjsonWithTaints, "spec.template.spec.providerSpec.value.credentialsSecret")
+	machinesetjsonDeleteUserDataSecret, _ := sjson.Delete(machinesetjsonDeleteCredentialsSecret, "spec.template.spec.providerSpec.value.userDataSecret")
+	machinesetjsonDeleteInstanceType, _ := sjson.Delete(machinesetjsonDeleteUserDataSecret, "spec.template.spec.providerSpec.value.instanceType")
+	err = ioutil.WriteFile(machineSetJSON, []byte(machinesetjsonDeleteInstanceType), 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineSetJSON).Execute(); err != nil {
+		ms.DeleteMachineSet(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		WaitForMachinesRunning(oc, ms.Replicas, ms.Name)
+	}
+}
+
 // DeleteMachineSet delete a machineset
 func (ms *MachineSetDescription) DeleteMachineSet(oc *CLI) error {
 	e2e.Logf("Deleting a MachineSets ...")
