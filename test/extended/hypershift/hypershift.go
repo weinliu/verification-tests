@@ -884,19 +884,44 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: mihuang@redhat.com
-	g.It("HyperShiftMGMT-Author:mihuang-Critical-49108-Critical-60490-Separate client certificate trust from the global Hypershift CA", func() {
-		g.By("Check metric works well for the hosted control plane component.")
-		checkSubstring(doOcpReq(oc, OcpGet, true, "servicemonitor", "-n", hostedcluster.namespace+"-"+hostedcluster.name), []string{"etcd", "cluster-version-operator", "catalog-operator", "kube-apiserver", "kube-controller-manager", "monitor-multus-admission-controller", "monitor-ovn-master-metrics", "node-tuning-operator", "olm-operator", "openshift-apiserver", "openshift-controller-manager", "openshift-route-controller-manager"})
-		checkSubstring(doOcpReq(oc, OcpGet, true, "podmonitor", "-n", hostedcluster.namespace+"-"+hostedcluster.name), []string{"cluster-image-registry-operator", "controlplane-operator", "hosted-cluster-config-operator", "ignition-server", "ingress-operator"})
-		o.Expect(doOcpReq(oc, OcpGet, true, "ns", hostedcluster.namespace+"-"+hostedcluster.name, "--show-labels")).Should(o.ContainSubstring("openshift.io/cluster-monitoring=true"))
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author: mihuang-Critical-49108-Critical-49499-Critical-60490-Separate client certificate trust from the global Hypershift CA", func() {
+		g.By("Add label to namespace enable monitoring for hosted control plane component.")
+		defer doOcpReq(oc, "label", true, "namespace", hostedcluster.namespace+"-"+hostedcluster.name, "openshift.io/cluster-monitoring-")
+		doOcpReq(oc, "label", true, "namespace", hostedcluster.namespace+"-"+hostedcluster.name, "openshift.io/cluster-monitoring=true", "--overwrite=true")
 
+		g.By("OCP-49499 && 49108 Check metric works well for the hosted control plane component.")
+		o.Expect(doOcpReq(oc, OcpGet, true, "ns", hostedcluster.namespace+"-"+hostedcluster.name, "--show-labels")).Should(o.ContainSubstring("openshift.io/cluster-monitoring=true"))
+		serviceMonitors := strings.Split(doOcpReq(oc, OcpGet, true, "servicemonitors", "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.items[*].metadata.name}"), " ")
+		o.Expect(serviceMonitors).ShouldNot(o.BeEmpty())
+		podMonitors := strings.Split(doOcpReq(oc, OcpGet, true, "podmonitors", "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.items[*].metadata.name}"), " ")
+		o.Expect(podMonitors).ShouldNot(o.BeEmpty())
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(doOcpReq(oc, OcpExec, true, "-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "sh", "-c", fmt.Sprintf(" curl -k -g -H \"Authorization: Bearer %s\" https://thanos-querier.openshift-monitoring.svc:9091/api/v1/alerts", token))).Should(o.ContainSubstring(`"status":"success"`))
-		metricsCmd := fmt.Sprintf("curl -sS --cacert /etc/prometheus/certs/configmap_%s_root-ca_ca.crt --key /etc/prometheus/certs/secret_%s_metrics-client_tls.key --cert /etc/prometheus/certs/secret_%s_metrics-client_tls.crt https://openshift-apiserver.%s.svc/metrics", hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name)
-		o.Expect(doOcpReq(oc, OcpExec, true, "-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "sh", "-c", metricsCmd)).Should(o.ContainSubstring("# HELP aggregator_openapi_v2_regeneration_count [ALPHA] Counter of OpenAPI v2 spec regeneration count broken down by causing APIService name and reason."))
+		o.Eventually(func() bool {
+			return strings.Contains(doOcpReq(oc, OcpExec, true, "-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "sh", "-c", fmt.Sprintf(" curl -k -g -H \"Authorization: Bearer %s\" https://thanos-querier.openshift-monitoring.svc:9091/api/v1/alerts", token)), `"status":"success"`)
+		}, 5*LongTimeout, LongTimeout/5).Should(o.BeTrue(), fmt.Sprintf("not all metrics in hostedcluster %s are ready", hostedcluster.name))
+		o.Eventually(func() bool {
+			metricsOutput, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "sh", "-c", fmt.Sprintf("curl -sS --cacert /etc/prometheus/certs/configmap_%s_root-ca_ca.crt --key /etc/prometheus/certs/secret_%s_metrics-client_tls.key --cert /etc/prometheus/certs/secret_%s_metrics-client_tls.crt https://openshift-apiserver.%s.svc/metrics", hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name)).Output()
+			if err != nil {
+				return false
+			} else {
+				return strings.Contains(metricsOutput, "# HELP aggregator_openapi_v2_regeneration_count [ALPHA] Counter of OpenAPI v2 spec regeneration count broken down by causing APIService name and reason.")
+			}
+		}, 5*LongTimeout, LongTimeout/5).Should(o.BeTrue(), fmt.Sprintf("not all metrics in hostedcluster %s are ready", hostedcluster.name))
 
-		g.By("Verify that cert files not been modified")
+		g.By("OCP-49499 Check the clusterID is exist")
+		o.Expect(doOcpReq(oc, OcpGet, true, "hostedclusters", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.clusterID}")).ShouldNot(o.BeEmpty())
+
+		g.By("OCP-49499 Check the clusterID label in serviceMonitors/podMonitors and target is up")
+		o.Expect(doOcpReq(oc, OcpExec, true, "-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "sh", "-c", `curl -k -H "Authorization: Bearer `+token+`" https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`)).Should(o.ContainSubstring("up"))
+		for _, serviceMonitor := range serviceMonitors {
+			o.Expect(doOcpReq(oc, OcpGet, true, "servicemonitors", serviceMonitor, "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.spec.endpoints[?(@.relabelings)]}")).Should(o.ContainSubstring(`"targetLabel":"_id"`))
+		}
+		for _, podmonitor := range podMonitors {
+			o.Expect(doOcpReq(oc, OcpGet, true, "podmonitors", podmonitor, "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.spec.podMetricsEndpoints[?(@.relabelings)]}")).Should(o.ContainSubstring(`"targetLabel":"_id"`))
+		}
+
+		g.By("OCP-60490 Verify that cert files not been modified")
 		dirname := "/tmp/kube-root-60490"
 		defer os.RemoveAll(dirname)
 		err = os.MkdirAll(dirname, 0777)
