@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc = exutil.NewCLI("default-registry-upgrade", exutil.KubeConfigPath())
 	)
 	// author: wewang@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined prepare [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined prepare [Disruptive]", func() {
 		var (
 			ns = "26401-upgrade-ns"
 			mc = machineConfig{
@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonPreRelease-PstChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined after upgrade [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined after upgrade [Disruptive]", func() {
 		g.By("Setup upgrade info")
 		ns := "26401-upgrade-ns"
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", ns, "--ignore-not-found").Execute()
@@ -105,7 +105,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonPreRelease-PstChkUpgrade-Author:wewang-High-41400- Users providing custom AWS tags are set with bucket creation after upgrade", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:wewang-High-41400- Users providing custom AWS tags are set with bucket creation after upgrade", func() {
 		g.By("Check platforms")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Check the cluster is with resourceTags")
@@ -146,7 +146,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:xiuwang-Critical-24345-Set proxy in Image-registry-operator before upgrade", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:xiuwang-Critical-24345-Set proxy in Image-registry-operator before upgrade", func() {
 		g.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, noProxy := saveGlobalProxy(oc)
 		if !strings.Contains(httpProxy, "http") {
@@ -196,7 +196,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("NonPreRelease-PstChkUpgrade-Author:xiuwang-Critical-24345-Set proxy in Image-registry-operator after upgrade", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:xiuwang-Critical-24345-Set proxy in Image-registry-operator after upgrade", func() {
 		g.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, noProxy := saveGlobalProxy(oc)
 		if !strings.Contains(httpProxy, "http") {
