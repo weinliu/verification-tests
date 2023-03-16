@@ -29,6 +29,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podHelloTemp         = filepath.Join(buildPruningBaseDir, "pod-hello.yaml")
 		podWkloadCpuTemp     = filepath.Join(buildPruningBaseDir, "pod-workload-cpu.yaml")
 		podWkloadCpuNoAnTemp = filepath.Join(buildPruningBaseDir, "pod-workload-cpu-without-anotation.yaml")
+		podNoWkloadCpuTemp   = filepath.Join(buildPruningBaseDir, "pod-without-workload-cpu.yaml")
+
+		podWkloadCpu52313 = podNoWkloadCpuDescription{
+			name:      "",
+			namespace: "",
+			template:  podNoWkloadCpuTemp,
+		}
 
 		podWkloadCpu52326 = podWkloadCpuDescription{
 			name:        "",
@@ -511,9 +518,9 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: minmli@redhat.com
-	g.It("NonPreRelease-Longduration-Author:minmli-High-52326-High-52329-set workload resource usage from pod level : pod can override defaults and pod should not be set if annotation not specified [Disruptive][Slow]", func() {
+	g.It("NonPreRelease-Longduration-Author:minmli-High-52313-High-52326-High-52329-set workload resource usage from pod level : pod can get configured to defaults and override defaults and pod should not be set if annotation not specified [Disruptive][Slow]", func() {
 		oc.SetupProject()
-		g.By("Test for case OCP-52326 and OCP-52329")
+		g.By("Test for case OCP-52313, OCP-52326 and OCP-52329")
 
 		g.By("Create a machine config for workload setting")
 		mcCpuOverride := filepath.Join(buildPruningBaseDir, "machineconfig-cpu-override.yaml")
@@ -537,6 +544,22 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		err = crioConfigExist(oc, wkloadConfig, configPath)
 		exutil.AssertWaitPollNoErr(err, "workload setting is not set as expected")
 
+		g.By("Create a pod with default workload setting by annotation")
+		podWkloadCpu52313.name = "wkloadcpu-52313"
+		podWkloadCpu52313.namespace = oc.Namespace()
+		podWkloadCpu52313.create(oc)
+
+		g.By("Check pod status")
+		err = podStatus(oc)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		g.By("Check the pod get configured to default workload setting")
+		cpuset := "0"
+		cpushare := "512"
+		err = overrideWkloadCpu(oc, cpuset, cpushare, podWkloadCpu52313.namespace)
+		exutil.AssertWaitPollNoErr(err, "the pod is not configured to default workload setting")
+		podWkloadCpu52313.delete(oc)
+
 		g.By("Create a pod override the default workload setting by annotation")
 		podWkloadCpu52326.name = "wkloadcpu-52326"
 		podWkloadCpu52326.namespace = oc.Namespace()
@@ -548,8 +571,8 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("Check the pod override the default workload setting")
-		cpuset := "0-1"
-		cpushare := "200"
+		cpuset = "0-1"
+		cpushare = "200"
 		err = overrideWkloadCpu(oc, cpuset, cpushare, podWkloadCpu52326.namespace)
 		exutil.AssertWaitPollNoErr(err, "the pod not override the default workload setting")
 		podWkloadCpu52326.delete(oc)

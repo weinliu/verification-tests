@@ -31,6 +31,12 @@ type podWkloadCpuDescription struct {
 	template    string
 }
 
+type podNoWkloadCpuDescription struct {
+	name      string
+	namespace string
+	template  string
+}
+
 type podHelloDescription struct {
 	name      string
 	namespace string
@@ -132,6 +138,16 @@ type ctrcfgOverlayDescription struct {
 	name     string
 	overlay  string
 	template string
+}
+
+func (podNoWkloadCpu *podNoWkloadCpuDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podNoWkloadCpu.template, "-p", "NAME="+podNoWkloadCpu.name, "NAMESPACE="+podNoWkloadCpu.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podNoWkloadCpu *podNoWkloadCpuDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podNoWkloadCpu.namespace, "pod", podNoWkloadCpu.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (podWkloadCpu *podWkloadCpuDescription) create(oc *exutil.CLI) {
