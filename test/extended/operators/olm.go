@@ -12728,7 +12728,11 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 			if err != nil {
 				e2e.Failf("Fail to get resource in project: %s, error:%v", project, err)
 			}
-			if !strings.Contains(resource, "No resources found") {
+			// now, for guest cluster, there is may have a custom catalog resource for testing
+			if project == "openshift-marketplace" && strings.Contains(resource, "marketplace-operator") {
+				e2e.Failf("Found Marketplace related resources running on the guest cluster")
+			}
+			if project != "openshift-marketplace" && !strings.Contains(resource, "No resources found") {
 				e2e.Failf("Found OLM related resources running on the guest cluster")
 			}
 		}
