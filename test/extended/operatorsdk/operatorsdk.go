@@ -4319,7 +4319,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		waitErr := wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
 			podMsg, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pods", "-n", nsOperator).Output()
 			if !strings.Contains(podMsg, "Started container manager") {
-				e2e.Failf("Started container manager failed")
+				e2e.Logf("Started container manager failed")
 				logDebugInfo(oc, nsOperator, "events", "pod")
 				return false, nil
 			}
@@ -4332,7 +4332,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		waitErr = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/contentcollections-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if !strings.Contains(msg, "Starting workers") {
-				e2e.Failf("Starting workers failed")
+				e2e.Logf("Starting workers failed")
 				return false, nil
 			}
 			return true, nil
