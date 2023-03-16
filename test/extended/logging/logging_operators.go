@@ -706,7 +706,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Medium-40508-upgrade from prior version to current version[Serial][Slow]", func() {
-		// to add logging 5.5, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
+		// to add logging 5.6, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
 		tag, err := getIndexImageTag(oc)
@@ -715,8 +715,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
-		// for 5.6, test upgrade from 5.5 to 5.6
-		preSource := CatalogSourceObjects{"stable-5.5", catsrc.name, catsrc.namespace}
+		// for 5.7, test upgrade from 5.6 to 5.7
+		preSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
 		preCLO := SubscriptionObjects{
@@ -750,7 +750,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		WaitForECKPodsToBeReady(oc, preCLO.Namespace)
 
 		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable-5.6", "qe-app-registry", "openshift-marketplace"}
+		var source = CatalogSourceObjects{"stable-5.7", "qe-app-registry", "openshift-marketplace"}
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&EO to %s", source.Channel))
@@ -947,7 +947,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53404-Cluster Logging upgrade with Vector as collector - major version.[Serial][Slow]", func() {
-		// to add logging 5.5, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
+		// to add logging 5.6, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
 		tag, err := getIndexImageTag(oc)
@@ -956,8 +956,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
-		// for 5.6, test upgrade from 5.5 to 5.6
-		preSource := CatalogSourceObjects{"stable-5.5", catsrc.name, catsrc.namespace}
+		// for 5.7, test upgrade from 5.6 to 5.7
+		preSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
 		preCLO := SubscriptionObjects{
@@ -1005,7 +1005,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable-5.6", "qe-app-registry", "openshift-marketplace"}
+		var source = CatalogSourceObjects{"stable-5.7", "qe-app-registry", "openshift-marketplace"}
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&LO to %s", source.Channel))
