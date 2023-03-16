@@ -44,7 +44,7 @@ func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string, string) {
 	}
 
 	hypersfhitPodStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
-		"-n", operatorNS, "pod", "-o=jsonpath={.items[0].status.phase}").Output()
+		"-n", operatorNS, "pod", "-l", "hypershift.openshift.io/operator-component=operator", "-l", "app=operator", "-o=jsonpath={.items[*].status.phase}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(hypersfhitPodStatus).To(o.ContainSubstring("Running"))
 
@@ -97,7 +97,7 @@ func ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc *CLI) (string, string, stri
 	}
 
 	hypersfhitPodStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
-		"-n", operatorNS, "pod", "-o=jsonpath={.items[0].status.phase}").Output()
+		"-n", operatorNS, "pod", "-l", "hypershift.openshift.io/operator-component=operator", "-l", "app=operator", "-o=jsonpath={.items[*].status.phase}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(hypersfhitPodStatus).To(o.ContainSubstring("Running"))
 
