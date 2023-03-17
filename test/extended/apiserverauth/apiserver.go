@@ -3685,8 +3685,23 @@ EOF`, dcpolicyrepo)
 		// setup role for user and post to API
 		testUserAccess := func(role string, step string, expectStatus string) {
 			g.By(fmt.Sprintf("%s>>) Remove default role [admin] from the current user [%s]", step, username))
-			err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "admin", username, "-n", namespace).Execute()
+			pattern := `admin\s*ClusterRole/admin`
+			r, err := regexp.Compile(pattern)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			errAdmRole := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+				rolebindingOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebinding", "-n", namespace, "--no-headers").Output()
+				if r.MatchString(rolebindingOutput) {
+					policyerr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "admin", username, "-n", namespace).Execute()
+					if policyerr != nil {
+						return false, nil
+					}
+				}
+				return true, nil
+			})
+			rolebindingOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebinding", "-n", namespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("Rolebinding of user %v :: %v", username, rolebindingOutput)
+			exutil.AssertWaitPollNoErr(errAdmRole, fmt.Sprintf("Not able to delete admin role for user :: %v :: %v", username, errAdmRole))
 
 			g.By(fmt.Sprintf("%s>>) Add new role [%s] to the current user [%s]", step, role, username))
 			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", role, username, "-n", namespace).Execute()
