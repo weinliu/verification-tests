@@ -1233,35 +1233,35 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		// OCP-43973
 		g.By("scorecard basic test migration")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		e2e.Logf(" scorecard bundle %v", err)
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 		o.Expect(output).To(o.ContainSubstring("spec missing from [memcached-sample]"))
 
 		// OCP-43976
 		g.By("migrate OLM tests-bundle validation")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 
 		g.By("migrate OLM tests-crds have validation test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-crds-have-validation-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-crds-have-validation-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 
 		g.By("migrate OLM tests-crds have resources test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-crds-have-resources-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-crds-have-resources-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: fail"))
 		o.Expect(output).To(o.ContainSubstring("Owned CRDs do not have resources specified"))
 
 		g.By("migrate OLM tests- spec descriptors test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-spec-descriptors-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-spec-descriptors-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: fail"))
 
 		g.By("migrate OLM tests- status descriptors test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-status-descriptors-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-status-descriptors-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 		o.Expect(output).To(o.ContainSubstring("memcacheds.cache.example.com does not have status spec"))
@@ -1269,19 +1269,19 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// OCP-48630
 		g.By("scorecard proxy container port should be configurable")
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$a\\proxy-port: 9001' %s/bundle/tests/scorecard/config.yaml", tmpPath)).Output()
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 
 		// OCP-45428 xunit adjustments - add nested tags and attributes
 		g.By("migrate OLM tests-bundle validation to generate a pass xunit output")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test", "-o", "xunit", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test", "-o", "xunit", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("<testsuite name=\"olm-bundle-validation-test\""))
 		o.Expect(output).To(o.ContainSubstring("<testcase name=\"olm-bundle-validation\""))
 
 		g.By("migrate OLM tests-status descriptors to generate a failed xunit output")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-status-descriptors-test", "-o", "xunit", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-status-descriptors-test", "-o", "xunit", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("<testcase name=\"olm-status-descriptors\""))
 		o.Expect(output).To(o.ContainSubstring("<system-out>Loaded ClusterServiceVersion:"))
@@ -1289,12 +1289,12 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		// OCP-45431 bring in latest o-f/api to SDK BEFORE 1.13
 		g.By("use an non-exist service account to run test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("serviceaccount \"testing\" not found"))
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", "test/extended/testdata/operatorsdk/ocp-43973-data/sa_testing.yaml", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace()).Output()
+		_, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
@@ -1345,7 +1345,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "operator-sdk bundle generate failed")
 
 		g.By("run scorecard ")
-		output, err := operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "4m", "--selector=test=olm-bundle-validation-test", "--test-output", "/testdata", "-n", oc.Namespace()).Output()
+		output, err := operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "4m", "--selector=test=olm-bundle-validation-test", "--test-output", "/testdata", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		e2e.Logf(" scorecard bundle %v", err)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
@@ -1356,7 +1356,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(configFilePath, "mountPath: {}", "mountPath:\n          path: /test-output")
 
 		g.By("scorecard basic test migration")
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		e2e.Logf(" scorecard bundle %v", err)
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 		o.Expect(output).To(o.ContainSubstring("spec missing from [memcached43660-sample]"))
@@ -1370,7 +1370,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "get basic-check-spec-test Failed")
 
-		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		e2e.Logf(" scorecard bundle %v", err)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
@@ -1411,7 +1411,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("Bundle manifests generated successfully in bundle"))
 
-		output, err = operatorsdkCLI.Run("scorecard").Args("bundle", "-c", "config/scorecard/bases/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("bundle", "-c", "config/scorecard/bases/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace(), "--pod-security=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("tests selected"))
 
