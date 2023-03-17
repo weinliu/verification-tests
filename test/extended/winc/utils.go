@@ -565,17 +565,22 @@ func ip4or6(s string) string {
 	return "unknown"
 }
 
-func createManifestFile(oc *exutil.CLI, manifestFile string, replacement map[string]string) error {
+func createManifestFile(oc *exutil.CLI, manifestFile string, replacement ...map[string]string) error {
 	manifest := getFileContent("winc", manifestFile)
-	for rep, value := range replacement {
-		manifest = strings.ReplaceAll(manifest, rep, value)
+
+	for _, m := range replacement {
+		for key, value := range m {
+			manifest = strings.ReplaceAll(manifest, key, value)
+		}
 	}
 	ts := time.Now().UTC().Format(time.RFC3339)
 	splitFileName := strings.Split(manifestFile, ".")
 	manifestFileName := splitFileName[0] + strings.Replace(ts, ":", "", -1) + "." + splitFileName[1] // get rid of offensive colons
-	defer os.Remove(manifestFileName)
+	myFilePath, err := filepath.Abs(manifestFileName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer os.Remove(myFilePath)
 	os.WriteFile(manifestFileName, []byte(manifest), 0644)
-	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFileName).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFileName).Output()
 	return err
 }
 
@@ -690,7 +695,7 @@ func getEndpointsIPs(oc *exutil.CLI, namespace string) string {
 	return endpoints
 }
 
-func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machinesetName string) []string {
+func setBYOH(oc *exutil.CLI, iaasPlatform string, addressesType []string, machinesetName string) []string {
 	user := getAdministratorNameByPlatform(iaasPlatform)
 	clusterVersions, _, err := exutil.GetClusterVersion(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -707,9 +712,19 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machineset
 	defer os.Remove(MSFileName)
 	createMachineset(oc, MSFileName)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	addressesArray := fetchAddress(oc, addressType, machinesetName)
-	err = createManifestFile(oc, "config-map.yaml", map[string]string{"<address>": addressesArray[0], "<username>": user})
-	o.Expect(err).NotTo(o.HaveOccurred())
+	var addressesArray []string
+	if len(addressesType) > 1 {
+		for _, addressType := range addressesType {
+			address := fetchAddress(oc, addressType, machinesetName)
+			addressesArray = append(addressesArray, address[0])
+		}
+		err := createManifestFile(oc, "config-map-ip-dns.yaml", map[string]string{"<ip-address>": addressesArray[0], "<ip-username>": user}, map[string]string{"<dns-address>": addressesArray[1], "<dns-username>": user})
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		addressesArray = fetchAddress(oc, addressesType[0], machinesetName)
+		err := createManifestFile(oc, "config-map.yaml", map[string]string{"<address>": addressesArray[0], "<username>": user})
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 	waitForMachinesetReady(oc, machinesetName, 15, 1)
 	return addressesArray
 }

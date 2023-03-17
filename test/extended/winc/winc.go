@@ -367,11 +367,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42496-byoh-Configure Windows instance with DNS [Slow] [Disruptive]", func() {
-		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
-		address := setBYOH(oc, iaasPlatform, "InternalDNS", byohMachineSetName)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+		address := setBYOH(oc, iaasPlatform, []string{"InternalDNS"}, byohMachineSetName)
 		// removing the config map
 		g.By("Delete the BYOH congigmap for node deconfiguration")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
@@ -398,15 +398,15 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author rrasouli@redhat.com
-	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42516-byoh-Configure Windows instance with IP [Slow][Disruptive]", func() {
-		namespace := "winc-42516"
+	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42484-byoh-Configure Windows instance with IP [Slow][Disruptive]", func() {
+		namespace := "winc-42484"
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
 		defer waitWindowsNodesReady(oc, 2, 15*time.Minute)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
 		defer deleteProject(oc, namespace)
 
-		byohIP := setBYOH(oc, iaasPlatform, "InternalIP", byohMachineSetName)
+		byohIP := setBYOH(oc, iaasPlatform, []string{"InternalIP"}, byohMachineSetName)
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
@@ -427,6 +427,24 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// wait the byoh node is back
 		waitUntilWMCOStatusChanged(oc, "transferring files")
 		waitWindowsNodeReady(oc, byohNode, 5*time.Minute)
+	})
+
+	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42516-byoh-Configure a Windows instance with both IP and DNS [Slow][Disruptive]", func() {
+		namespace := "winc-42516"
+		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
+		defer waitWindowsNodesReady(oc, 2, 15*time.Minute)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
+		defer deleteProject(oc, namespace)
+
+		setBYOH(oc, iaasPlatform, []string{"InternalIP", "InternalDNS"}, byohMachineSetName)
+		createProject(oc, namespace)
+		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
+		scaleDeployment(oc, windowsWorkloads, 5, namespace)
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(msg)
+
 	})
 
 	// author rrasouli@redhat.com
@@ -1426,11 +1444,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By(" Creating new BYOH node ")
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
 
-		waitWindowsNodesReady(oc, 2, 3000*time.Second)
+		defer waitWindowsNodesReady(oc, 2, 3000*time.Second)
 		defer waitForMachinesetReady(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 45, 2)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
-		byohMachine := setBYOH(oc, iaasPlatform, "InternalIP", byohMachineSetName)
+		byohMachine := setBYOH(oc, iaasPlatform, []string{"InternalIP"}, byohMachineSetName)
 		waitWindowsNodesReady(oc, 3, 1000*time.Second)
 		defer os.Remove("mykey")
 		defer os.Remove("mykey.pub")
