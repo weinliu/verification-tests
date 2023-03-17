@@ -320,7 +320,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("NonPreRelease-PstChkUpgrade-Author:yinzhou-Medium-55823-make sure split the route controllers out from OCM", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:yinzhou-Medium-55823-make sure split the route controllers out from OCM", func() {
 		g.By("Check the ingress-ip and ingress-to-route are started under project openshift-route-controller-manager")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-route-controller-manager", "-l", "app=route-controller-manager").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
