@@ -8372,7 +8372,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: xzha@redhat.com, test case OCP-40534
-	g.It("ConnectedOnly-Author:xzha-Medium-40534-the deployment should not lost the resources section [Flaky]", func() {
+	g.It("ConnectedOnly-Author:xzha-Medium-40534-Medium-40532-the deployment should not lost the resources section [Flaky]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -8427,42 +8427,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		memoryDeployment := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"manager\")].resources.requests.memory}")
 		o.Expect(memoryDeployment).To(o.Equal(memoryCSV))
 
-	})
-
-	// author: xzha@redhat.com, test case OCP-40532
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-40532-OLM should not print debug logs", func() {
-		exutil.SkipBaselineCaps(oc, "None")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
-		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		oc.SetupProject()
-		namespaceName := oc.Namespace()
-		var (
-			og = operatorGroupDescription{
-				name:      "test-og",
-				namespace: namespaceName,
-				template:  ogSingleTemplate,
-			}
-			sub = subscriptionDescription{
-				subName:                "redis-40532-operator",
-				namespace:              namespaceName,
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
-				channel:                "stable",
-				ipApproval:             "Automatic",
-				operatorPackage:        "redis-operator",
-				singleNamespace:        true,
-				template:               subTemplate,
-			}
-		)
-		itName := g.CurrentSpecReport().FullText()
-		g.By("STEP 1: create the OperatorGroup ")
-		og.createwithCheck(oc, itName, dr)
-
-		g.By("STEP 2: create sub")
-		sub.create(oc, itName, dr)
-
-		g.By("STEP 3: check there is no debug logs")
+		g.By("OCP-40532: OLM should not print debug logs")
 		olmPodname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "--selector=app=olm-operator", "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(olmPodname).NotTo(o.BeEmpty())
@@ -8478,6 +8443,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(catalogs).NotTo(o.BeEmpty())
 		o.Expect(catalogs).NotTo(o.ContainSubstring("level=debug"))
+
 	})
 
 	// Test case: OCP-42829, author:xzha@redhat.com
