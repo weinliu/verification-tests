@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -377,6 +379,12 @@ func isTargetPortAvailable(oc *exutil.CLI, port int) bool {
 		}
 	}
 	return true
+}
+
+// Get a random number of int32 type [m,n], n > m
+func getRandomNum(m int32, n int32) int32 {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Int31n(n-m+1) + m
 }
 
 func countResource(oc *exutil.CLI, resource string, namespace string) (int, error) {
@@ -818,4 +826,28 @@ func apiserverReadinessProbe(tokenValue string, apiserverName string) string {
 	})
 	exutil.AssertWaitPollNoErr(errCurl, fmt.Sprintf("error waiting for API server readiness: %v", errCurl))
 	return bodyString
+}
+
+// Get one available service IP, retry 3 times
+func getServiceIP(oc *exutil.CLI, clusterIP string) net.IP {
+	var serviceIP net.IP
+	err := wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+		randomServiceIP := net.ParseIP(clusterIP).To4()
+		if randomServiceIP != nil {
+			randomServiceIP[3] += byte(rand.Intn(254 - 1))
+		} else {
+			randomServiceIP = net.ParseIP(clusterIP).To16()
+			randomServiceIP[len(randomServiceIP)-1] = byte(rand.Intn(254 - 1))
+		}
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-A", `-o=jsonpath={.items[*].spec.clusterIP}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(randomServiceIP.String(), output); matched {
+			e2e.Logf("IP %v has been used!", randomServiceIP)
+			return false, nil
+		}
+		serviceIP = randomServiceIP
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Failed to get one available service IP!")
+	return serviceIP
 }

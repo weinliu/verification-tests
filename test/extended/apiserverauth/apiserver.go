@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -2807,58 +2806,78 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-Medium-10969-Create clusterip service", func() {
+	g.It("MicroShiftBoth-ROSA-ARO-OSD_CCS-Author:dpunia-Medium-10969-Create clusterip service", func() {
 		var (
-			name            = "ocp-10969-openshift"
+			caseID          = "10969"
+			name            = "ocp-" + caseID + "-openshift"
+			namespace       = "e2e-apiserver-" + caseID + "-" + exutil.GetRandomString()
 			image           = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
+			serviceEndpoint string
 			servicechkout   string
 			servicechkerror error
-			serviceIPaddr   string
 		)
 
-		g.By("1) Create new project required for this test execution")
-		oc.SetupProject()
-		namespace := oc.Namespace()
-
-		g.By("2) Get cluster worker node to deploy openshift pod")
-		workernodes, workernodegeterr := exutil.GetFirstWorkerNode(oc)
-		o.Expect(workernodegeterr).NotTo(o.HaveOccurred())
-
-		g.By("3) Create new hello pod")
-		podTemplate := getTestDataFilePath("create-pod.yaml")
-		pod := exutil.Pod{Name: name, Namespace: namespace, Template: podTemplate, Parameters: []string{"IMAGE=" + image, "HOSTNAME=" + workernodes, "PORT=8080"}}
-		defer pod.Delete(oc)
-		pod.Create(oc)
-
-		//Generate random port used to create service
-		rand.Seed(time.Now().UnixNano())
-		randomServicePort := rand.Intn(9000-6000) + 6000
-
-		//Generate random service ip from service ip range
-		serviceNetwork, serviceNetworkGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("networks", "cluster", `-o=jsonpath={.spec.serviceNetwork[0]}`).Output()
-		o.Expect(serviceNetworkGetErr).NotTo(o.HaveOccurred())
-		serviceIP, _, serviceipErr := net.ParseCIDR(fmt.Sprintf("%v", serviceNetwork))
-		o.Expect(serviceipErr).NotTo(o.HaveOccurred())
-		randomServiceIP := serviceIP.To4()
-		if randomServiceIP != nil {
-			randomServiceIP[3] = randomServiceIP[3] + byte(rand.Intn(254-1))
-		} else {
-			randomServiceIP = serviceIP.To16()
-			randomServiceIP[len(randomServiceIP)-1] = byte(rand.Intn(254 - 1))
+		g.By("1. Create one new namespace for the test scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(namespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(namespace)
+		isNsPrivileged, _ := exutil.IsNamespacePrivileged(oc, namespace)
+		if !isNsPrivileged {
+			outputError := exutil.SetNamespacePrivileged(oc, namespace)
+			o.Expect(outputError).NotTo(o.HaveOccurred())
 		}
 
+		g.By("2) Create new Hello OpenShift pod")
+		appYamlFile := tmpdir + "ocp10969-hello-pod.yaml"
+		appYaml := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  labels:
+    app: %s
+spec:
+  containers:
+  - name: %s
+    image: %s
+    ports:
+    - containerPort: 8080
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      privileged: false`, name, name, name, image)
+		f, err := os.Create(appYamlFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		_, err = fmt.Fprintf(w, "%s", appYaml)
+		w.Flush()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete", "-f", appYamlFile, "-n", namespace).Args().Execute()
+		saSecretErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", appYamlFile, "-n", namespace).Args().Execute()
+		o.Expect(saSecretErr).NotTo(o.HaveOccurred())
+		exutil.AssertPodToBeReady(oc, name, namespace)
+
+		g.By("3) Generate random port and service ip used to create service")
+		randomServicePort := int(getRandomNum(6000, 9000))
+		clusterIP, svcErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "default", "service", "kubernetes", `-o=jsonpath={.spec.clusterIP}`).Output()
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		serviceIP := getServiceIP(oc, clusterIP)
+
 		g.By("4) Create clusterip service with --clusterip")
-		servicecreateout, servicecreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--clusterip", fmt.Sprintf("%v", randomServiceIP), "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
+		servicecreateout, servicecreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--clusterip", fmt.Sprintf("%v", serviceIP.String()), "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
 		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
 		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created", name)))
 
 		g.By("5) Check clusterip service running status")
 		if serviceIP.To4() != nil {
-			serviceIPaddr = fmt.Sprintf("%v:%v", randomServiceIP, randomServicePort)
+			serviceEndpoint = fmt.Sprintf("%v:%v", serviceIP.String(), randomServicePort)
 		} else {
-			serviceIPaddr = fmt.Sprintf("[%v]:%v", randomServiceIP, randomServicePort)
+			serviceEndpoint = fmt.Sprintf("[%v]:%v", serviceIP.String(), randomServicePort)
 		}
-		servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceIPaddr).Output()
+		servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceEndpoint).Output()
 		o.Expect(servicechkerror).NotTo(o.HaveOccurred())
 		o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
 		servicedelerror := oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
@@ -2870,23 +2889,16 @@ spec:
 		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
 
 		g.By("7) Check clusterip service running status with allotted IP")
-		serviceip, serviceipgetError := oc.WithoutNamespace().Run("get").Args("service", name, "-o=jsonpath={.spec.clusterIP}", "-n", namespace).Output()
+		allottedServiceIP, serviceipgetError := oc.WithoutNamespace().Run("get").Args("service", name, "-o=jsonpath={.spec.clusterIP}", "-n", namespace).Output()
 		o.Expect(serviceipgetError).NotTo(o.HaveOccurred())
-		serviceError := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-			if serviceIP.To4() != nil {
-				serviceIPaddr = fmt.Sprintf("%v:%v", serviceip, randomServicePort)
-			} else {
-				serviceIPaddr = fmt.Sprintf("[%v]:%v", serviceip, randomServicePort)
-			}
-			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceIPaddr).Output()
-			if servicechkerror == nil {
-				o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
-				e2e.Logf("Step 7, Test Passed: Service Accessible with allocated IP")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(serviceError, "Step 7, Test Failed: Service Not Accessible with allocated IP")
+		if serviceIP.To4() != nil {
+			serviceEndpoint = fmt.Sprintf("%v:%v", allottedServiceIP, randomServicePort)
+		} else {
+			serviceEndpoint = fmt.Sprintf("[%v]:%v", allottedServiceIP, randomServicePort)
+		}
+		servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceEndpoint).Output()
+		o.Expect(servicechkerror).NotTo(o.HaveOccurred())
+		o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
 		servicedelerror = oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
 		o.Expect(servicedelerror).NotTo(o.HaveOccurred())
 
