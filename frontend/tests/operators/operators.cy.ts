@@ -29,7 +29,7 @@ describe('Operators related features', () => {
     operatorHubPage.checkOperatorStatus('CockroachDB Helm Operator', 'Succeed');
     });
 
-  it('(OCP-56081),xiyuzhao) Check opt out when console deletes operands', {tags: ['e2e','admin', '@osd-ccs']}, () => {      
+  it('(OCP-56081),xiyuzhao) Check opt out when console deletes operands', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {      
     //data preparation
     let testns
     const dataPreparation = (ns: string) => {

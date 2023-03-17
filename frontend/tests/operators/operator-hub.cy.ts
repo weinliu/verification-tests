@@ -22,7 +22,7 @@ describe('Operator Hub tests', () => {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     });
 
-    it('(OCP-45874) Check source labels on the operator hub page tiles', {tags: ['e2e','admin']}, () => {
+    it('(OCP-45874) Check source labels on the operator hub page tiles', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
         operatorHubPage.goTo()
         operatorHubPage.checkCustomCatalog(OperatorHubSelector.CUSTOM_CATALOG)
         OperatorHubSelector.SOURCE_MAP.forEach((operatorSource, operatorSourceLabel) => {
@@ -63,7 +63,7 @@ describe('Operator Hub tests', () => {
         });
     });
   
-    it('(OCP-55684, xiyuzhao) Allow operator to specitfy where to run with CSV suggested namespace template annotation', {tags: ['e2e','admin']}, () => {
+    it('(OCP-55684, xiyuzhao) Allow operator to specitfy where to run with CSV suggested namespace template annotation', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
         cy.visit(`operatorhub/subscribe?pkg=flux-operator&catalog=${testParams.catalogName}&catalogNamespace=${testParams.catalogNamespace}&targetNamespace=undefined`)
           .get('[data-test-id="resource-title"]')
           .should('contain.text','Install Operator')

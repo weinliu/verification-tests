@@ -13,7 +13,7 @@ describe('pod page', () => {
         cy.adminCLI(`oc delete project ${testName}`);
     });
 
-    it('(OCP-53357,xiyuzhao) Pod host IP is visible on Pod details page', {tags: ['e2e']}, () => {
+    it('(OCP-53357,xiyuzhao) Pod host IP is visible on Pod details page', {tags: ['e2e','@rosa']}, () => {
         cy.visit(`/k8s/ns/${testName}/pods/example`);
         cy.get('[data-test="Host IP"]')
           .should('exist')

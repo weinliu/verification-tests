@@ -18,7 +18,7 @@ describe("yaml editor tests", () => {
     cy.adminCLI(`oc delete project ${testName}`);
   });
 
-  it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page", {tags: ['e2e']}, () => {
+  it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page", {tags: ['e2e','@osd-ccs','@rosa']}, () => {
     cy.visit(`/k8s/ns/${testName}/import`)
       .contains('[data-test-id="resource-title"]', "Import YAML");
     importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");  

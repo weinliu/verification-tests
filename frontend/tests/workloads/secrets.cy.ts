@@ -20,7 +20,7 @@ describe('Workload Secrets test', () => {
     cy.logout();
   });
 
-  it('OCP-47010 - Check Secrets is editable on console', {tags: ['e2e','admin']}, () => {
+  it('OCP-47010 - Check Secrets is editable on console', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     Secrets.gotoSecretsPage(testName);
     listPage.filter.byName('tlssecret');
     listPage.rows.countShouldBe(1);
