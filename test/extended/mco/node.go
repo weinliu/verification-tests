@@ -3,6 +3,7 @@ package mco
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -727,4 +728,11 @@ func quietRecoverNamespaceRestricted(oc *exutil.CLI, namespace string) error {
 
 	logger.Debugf("Recovering namespace %s from privileged", namespace)
 	return exutil.RecoverNamespaceRestricted(oc, namespace)
+}
+
+// removeDateFromRpmOstreeStatus removes the date section of the rpm-ostree statu
+func removeDateFromRpmOstreeStatus(rpmOstreeStatus string) string {
+	// this regexp matches string with format similar to: (2023-03-16T14:46:22Z)
+	m1 := regexp.MustCompile(`\([\-:\dTZ]*\)`)
+	return m1.ReplaceAllString(rpmOstreeStatus, "")
 }

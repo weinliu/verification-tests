@@ -168,7 +168,13 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		deployment, derr := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(derr).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
-		o.Expect(deployment).To(o.Equal(initialDeployment),
+
+		logger.Infof("Initial status with date:\n %s", initialDeployment)
+		logger.Infof("Initial status without date:\n %s", removeDateFromRpmOstreeStatus(initialDeployment))
+		logger.Infof("Current status with date:\n %s", deployment)
+		logger.Infof("Current status without date:\n %s", removeDateFromRpmOstreeStatus(deployment))
+
+		o.Expect(removeDateFromRpmOstreeStatus(deployment)).To(o.Equal(removeDateFromRpmOstreeStatus(initialDeployment)),
 			"Error! the initial deployment was not properly restored after deleting the MachineConfig")
 		logger.Infof("OK!\n")
 
@@ -293,6 +299,8 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 		// Capture current rpm-ostree status
 		g.By("Capture the current ostree deployment")
+		o.Expect(workerNode.WaitUntilRpmOsTreeIsIdle()).
+			NotTo(o.HaveOccurred(), "rpm-ostree status didn't become idle after installing wget")
 		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the booted ostree deployment")
@@ -300,6 +308,8 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		o.Expect(initialDeployment).
 			To(o.ContainSubstring("LayeredPackages: %s", rpmName),
 				"rpm-ostree is not reporting the installed '%s' package in the rpm-ostree status command", rpmName)
+
+		logger.Infof("Initial status without date:\n %s", removeDateFromRpmOstreeStatus(initialDeployment))
 
 		logger.Infof("OK\n")
 
@@ -373,13 +383,21 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 		// Check the rpm-ostree status after the MC deletion
 		g.By("Check that the original ostree deployment was restored")
+		logger.Infof("Waiting for rpm-ostree status to be idle")
 		o.Expect(workerNode.WaitUntilRpmOsTreeIsIdle()).
 			NotTo(o.HaveOccurred(), "rpm-ostree status didn't become idle after restoring the original osImage")
 
+		logger.Infof("Checking original status")
 		deployment, derr := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(derr).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
-		o.Expect(deployment).To(o.Equal(initialDeployment),
+
+		logger.Infof("Initial status with date:\n %s", initialDeployment)
+		logger.Infof("Initial status without date:\n %s", removeDateFromRpmOstreeStatus(initialDeployment))
+		logger.Infof("Current status with date:\n %s", deployment)
+		logger.Infof("Current status without date:\n %s", removeDateFromRpmOstreeStatus(deployment))
+
+		o.Expect(removeDateFromRpmOstreeStatus(deployment)).To(o.Equal(removeDateFromRpmOstreeStatus(initialDeployment)),
 			"Error! the initial deployment was not properly restored after deleting the MachineConfig")
 		logger.Infof("OK!\n")
 
@@ -388,7 +406,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 	g.It("Author:sregidor-NonPreRelease-Medium-54049-Verify base images in the release image", func() {
 		var (
 			oldMachineConfigOsImage = "machine-os-content"
-			coreExtensions          = "rhel-coreos-8-extensions"
+			coreExtensions          = "rhel-coreos-extensions"
 		)
 
 		g.By("Extract pull-secret")
@@ -444,7 +462,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			rpmName            = "zsh"
 			extensionRpmName   = "usbguard"
 			dockerFileCommands = fmt.Sprintf(`
-RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
+RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
     rpm-ostree install %s && \
     rpm-ostree cleanup -m && \
     ostree container commit
@@ -706,7 +724,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		var (
 			rpmName            = "zsh"
 			dockerFileCommands = fmt.Sprintf(`
-RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
+RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
     rpm-ostree install %s && \
     rpm-ostree cleanup -m && \
     ostree container commit
