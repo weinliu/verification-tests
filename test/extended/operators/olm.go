@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-59422-package-server-manager does not stomp on changes made to packgeserver CSV", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-High-59422-package-server-manager does not stomp on changes made to packgeserver CSV", func() {
 		g.By("1) change the packageser CSV's securityContext")
 		packageserverCSVYaml, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o", "yaml").OutputToFile("ocp59422-csv.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
