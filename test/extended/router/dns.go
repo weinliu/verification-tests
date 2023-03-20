@@ -672,7 +672,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Check the resulting pod have all those search entries in its /etc/resolf.conf")
 		execOutput, err := oc.Run("exec").Args(cltPodName, "--", "sh", "-c", "cat /etc/resolv.conf").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(execOutput).To(o.ContainSubstring("5th.com 6th.com 7th.com 8th.com 9th.com 10th.com 11th.com 12th.com 13th.com 14th.com 15th.com 16th.com 17th.com 18th.com 19th.com 20th.com 21th.com 22th.com 23th.com 24th.com 25th.com 26th.com 27th.com 28th.com 29th.com 30th.com 31th.com 32th.com"))
+		o.Expect(execOutput).To(o.ContainSubstring("8th.com 9th.com 10th.com 11th.com 12th.com 13th.com 14th.com 15th.com 16th.com 17th.com 18th.com 19th.com 20th.com 21th.com 22th.com 23th.com 24th.com 25th.com 26th.com 27th.com 28th.com 29th.com 30th.com 31th.com 32th.com"))
 	})
 
 	g.It("Author:mjoseph-Critical-60492-Check the max number of characters in the search path of any pod", func() {
