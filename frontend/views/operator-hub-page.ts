@@ -83,6 +83,143 @@ export namespace OperatorHubSelector {
 
 export const Operand = {
   switchToFormView: () =>{
-    cy.get('#form').click()
+    cy.get('#form').scrollIntoView().click();
+  },
+  switchToYAMLView: () => {
+    cy.get('#yaml').scrollIntoView().click();
+  },
+  submitCreation: () => {
+    cy.byTestID("create-dynamic-form").scrollIntoView().click();
+  },
+  expandSpec: (id: string) =>{
+    cy.get(`#${id}`)
+      .scrollIntoView()
+      .should('have.attr', 'aria-expanded', 'false')
+      .click();
+  },
+  collapseSpec: (id: string) => {
+    cy.get(`#${id}`)
+      .scrollIntoView()
+      .should('have.attr', 'aria-expanded', 'true')
+      .click();
+  },
+  clickAddNodeConfigAdvanced: () => {
+    cy.get('#root_spec_nodeConfigAdvanced_add-btn')
+      .scrollIntoView()
+      .click();
+    // this will expand 'Advanced configuration' where we set all affinities
+    cy.get('#root_spec_nodeConfigAdvanced_accordion-content')
+      .within(() => {
+        cy.get('button.pf-c-expandable-section__toggle')
+          .first()
+          .click()
+      })
+  },
+  setRandomType: () => {
+    cy.get('#root_spec_nodeConfigAdvanced_0_type').click();
+    cy.get('#all-link').click()
+  },
+  expandNodeConfigAdvanced: () => {
+    Operand.expandSpec('root_spec_nodeConfigAdvanced_accordion-toggle')
+  },
+  expandNodeAffinity: () => {
+    Operand.expandSpec('root_spec_nodeConfigAdvanced_0_nodeAffinity_accordion-toggle')
+  },
+  expandPodAffinity: () => {
+    Operand.expandSpec('root_spec_nodeConfigAdvanced_0_podAffinity_accordion-toggle')
+  },
+  expandPodAntiAffinity: () => {
+    Operand.expandSpec('root_spec_nodeConfigAdvanced_0_podAntiAffinity_accordion-toggle')
+  },
+  collapseNodeAffinity: () => {
+    Operand.collapseSpec('root_spec_nodeConfigAdvanced_0_nodeAffinity_accordion-toggle')
+  },
+  collapsePodAffinity: () => {
+    Operand.collapseSpec('root_spec_nodeConfigAdvanced_0_podAffinity_accordion-toggle')
+  },
+  collapsePodAntiAffinity: () => {
+    Operand.collapseSpec('root_spec_nodeConfigAdvanced_0_podAntiAffinity_accordion-toggle')
+  },
+  nodeAffinityAddRequired: (key: string, operator: string, value: string) => {
+    cy.get('#root_spec_nodeConfigAdvanced_0_nodeAffinity_accordion-content')
+      .within(() => {
+        cy.byButtonText('Add required').click();
+      })
+    cy.get('.co-affinity-term')
+      .last()
+      .within(() => {
+        cy.byButtonText('Add expression').click();
+        Operand.addExpression(key, operator, value);
+      })
+  }, 
+  nodeAffinityAddPreferred: (weight: string,key: string, operator: string, value: string) => {
+    cy.get('#root_spec_nodeConfigAdvanced_0_nodeAffinity_accordion-content')
+      .within(() => {
+        cy.byButtonText('Add preferred').click()
+      });
+    cy.get('.co-affinity-term')
+    .last()
+    .within(() => {
+      Operand.setWeight(weight);
+      cy.byButtonText('Add expression').click();
+      Operand.addExpression(key, operator, value);
+    })
+  },
+  podAffinityAddRequired: (tpkey: string,key: string, operator: string, value: string) => {
+    cy.get('#root_spec_nodeConfigAdvanced_0_podAffinity_accordion-content')
+      .within(() => {
+        cy.byButtonText('Add required').click()
+      })
+    cy.get('.co-affinity-term')
+    .last()
+    .within(() => {
+      Operand.setTopologyKey(tpkey);
+      cy.byButtonText('Add expression').click();
+      Operand.addExpression(key, operator, value);
+    })    
+  },
+  podAntiAffinityAddPreferred: (weight: string, tpkey: string, key: string, operator: string, value: string) => {
+    cy.get('#root_spec_nodeConfigAdvanced_0_podAntiAffinity_accordion-content')
+      .within(() => {
+        cy.byButtonText('Add preferred').click()
+      })
+    cy.get('.co-affinity-term')
+    .last()
+    .within(() => {
+      Operand.setWeight(weight);
+      Operand.setTopologyKey(tpkey);
+      cy.byButtonText('Add expression').click();
+      Operand.addExpression(key, operator, value);
+    }) 
+  },
+  setWeight: (weight: string) => {
+    cy.get('.co-affinity-term__weight-input')
+      .last()
+      .within(() => {
+        cy.get('input').clear().type(weight)
+      })
+  },
+  setTopologyKey: (key: string) =>{
+    cy.get('#topology-undefined').last().clear().type(key);
+  },
+  addExpression: (key: string, operator: string, value?: string) => {
+    cy.get('.key-operator-value__name-field')
+      .last()
+      .within(() => {
+        cy.get('input').clear().type(key)
+      })
+    cy.get('.key-operator-value__operator-field')
+      .last()
+      .within(() => {
+        cy.byLegacyTestID('dropdown-button').click();
+        cy.get(`button[data-test-dropdown-menu="${operator}"]`).click();
+      })
+    if(value) {
+      cy.get('.key-operator-value__value-field')
+      .last()
+      .within(() => {
+        cy.get('input').clear().type(value)
+      })
+    }
   }
 }

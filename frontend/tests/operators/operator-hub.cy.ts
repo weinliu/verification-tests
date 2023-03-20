@@ -1,10 +1,11 @@
-import {operatorHubPage, OperatorHubSelector} from "../../views/operator-hub-page";
+import {operatorHubPage, OperatorHubSelector, Operand} from "../../views/operator-hub-page";
 import { listPage } from "upstream/views/list-page";
 
 describe('Operator Hub tests', () => {
     const testParams = {
         catalogName: 'custom-catalogsource',
         catalogNamespace: 'openshift-marketplace',
+        testNamespace: 'test-54307',
         suggestedNamespace: 'testxi3210',
         suggestedNamespaceLabels: 'foo:testxi3120',
         suggestedNamespaceannotations: 'baz:testxi3120'
@@ -18,7 +19,6 @@ describe('Operator Hub tests', () => {
 
     after(() => {
         cy.adminCLI(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace`);
-        cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`);
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     });
 
@@ -77,6 +77,47 @@ describe('Operator Hub tests', () => {
         cy.exec(`oc get project ${testParams.suggestedNamespace} -o template --template={{.metadata}} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
           .its('stdout')
           .should('contain',`${testParams.suggestedNamespaceLabels}`)
-          .and('contain',`${testParams.suggestedNamespaceannotations}`)        
-    })
+          .and('contain',`${testParams.suggestedNamespaceannotations}`)
+        cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`);
+    });
+
+    it('(OCP-54307,yapei) Affinity definition support',{tags: ['e2e','admin','@osd-ccs']}, ()=> {
+        cy.createProject(testParams.testNamespace);
+        operatorHubPage.installOperator('sonarqube-operator', `${testParams.catalogName}`, `${testParams.testNamespace}`);
+        cy.wait(60000);
+        cy.visit(`/k8s/ns/${testParams.testNamespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+        operatorHubPage.checkOperatorStatus('Sonarqube Operator', 'Succeed');
+        cy.visit(`/k8s/ns/${testParams.testNamespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion/sonarqube-operator.v0.0.6/sonarsource.parflesh.github.io~v1alpha1~SonarQube`)
+        cy.byTestID('item-create').click();
+        Operand.switchToFormView();
+        // set required values
+        Operand.expandNodeConfigAdvanced();
+        Operand.clickAddNodeConfigAdvanced();
+        Operand.setRandomType()
+        // set values for nodeAffinity
+        Operand.expandNodeAffinity();
+        Operand.nodeAffinityAddRequired('topology.kubernetes.io/zone', 'In', 'antarctica-east1,antarctica-east2');
+
+        Operand.nodeAffinityAddPreferred('1','another-node-label-key', 'In', 'another-node-label-value');
+        Operand.collapseNodeAffinity();
+        // set values for podAffinity
+        Operand.expandPodAffinity();
+        Operand.podAffinityAddRequired('topology.kubernetes.io/zone','security', 'In', 'S1');
+        Operand.collapsePodAffinity();
+        // set values for podAntiAffinity
+        Operand.expandPodAntiAffinity();
+        Operand.podAntiAffinityAddPreferred('100','topology.kubernetes.io/zone','security', 'In', 'S2');
+        Operand.collapsePodAntiAffinity();
+        Operand.submitCreation();
+        cy.wait(10000);
+        cy.adminCLI(`oc get sonarqube.sonarsource.parflesh.github.io -n ${testParams.testNamespace} -o yaml`)
+          .then((result) => {
+             expect(result.stdout).contain("example-sonarqube")
+               .and('contain', '- antarctica-east1')
+               .and('contain','- antarctica-east2')
+               .and('contain','- S1')
+               .and('contain','- S2')
+        })
+        cy.adminCLI(`oc delete project ${testParams.testNamespace}`);
+    });
 })

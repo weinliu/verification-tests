@@ -1,4 +1,3 @@
-import { guidedTour } from 'upstream/views/guided-tour';
 import { Operand } from '../../views/operator-hub-page'
 
 describe('operand form view', () => {
@@ -10,18 +9,19 @@ describe('operand form view', () => {
         'crdName': 'mock-resources.test.tectonic.com'
     }
     before(() => {
+        cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
-        guidedTour.close();
-        cy.createProject(params.namespace);
         cy.adminCLI(`oc create -f ./fixtures/operators/${params.crdFileName}`);
         cy.adminCLI(`oc create -f ./fixtures/operators/${params.csvFileName} -n ${params.namespace}`);
     })
     after(() => {
+        cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
         cy.adminCLI(`oc delete crd ${params.crdName}`);
         cy.adminCLI(`oc delete namespace ${params.namespace}`);
     })
 
-    it('(OCP-29819,yapei) Dynamically Generate Create Operand Form', {tags: ['e2e','@osd-ccs']}, () => {
+    it('(OCP-29819,yapei) Dynamically Generate Create Operand Form', {tags: ['e2e','admin','@osd-ccs']}, () => {
+        cy.createProject(params.namespace);
         cy.visit(`/k8s/ns/${params.namespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion/mock-operator/test.tectonic.com~v1~MockResource`)
         cy.byTestID('item-create').click()
         Operand.switchToFormView()
@@ -43,32 +43,32 @@ describe('operand form view', () => {
             // in CSV specDescriptors, we have order: select -> password -> requiredText
             // CSV yaml matters? not CRD yaml 
             // so the final order in form is: select -> password -> requiredText -> optionalRequiredText
-            expect(alldivs[0].textContent).to.have.string('Select')
-            expect(alldivs[1].textContent).to.have.string('Password')
-            expect(alldivs[2].textContent).to.have.string('Required Text')
-            expect(alldivs[3].textContent).to.have.string('optionalRequiredText')
+            expect(alldivs[0].textContent).to.include('Select')
+            expect(alldivs[1].textContent).to.include('Password')
+            expect(alldivs[2].textContent).to.include('Required Text')
+            expect(alldivs[3].textContent).to.include('optionalRequiredText')
 
             // optional fields ordering
-            expect(alldivs[4].textContent).to.have.string('Field Group')
-            expect(alldivs[8].textContent).to.have.string('nestedFieldDependency')
-            expect(alldivs[13].textContent).to.have.string('K8s Resource Prefix')
-            expect(alldivs[14].textContent).to.have.string('Pod Count')
-            expect(alldivs[15].textContent).to.have.string('Resource Requirements')
-            expect(alldivs[17].textContent).to.have.string('Boolean Switch')
-            expect(alldivs[18].textContent).to.have.string('Checkbox')
-            expect(alldivs[19].textContent).to.have.string('Image Pull Policy')
-            expect(alldivs[20].textContent).to.have.string('Update Strategy')
-            expect(alldivs[21].textContent).to.have.string('Text')
-            expect(alldivs[22].textContent).to.have.string('Number')
-            expect(alldivs[23].textContent).to.have.string('Node Affinity')
-            expect(alldivs[25].textContent).to.have.string('Pod Affinity')
-            expect(alldivs[27].textContent).to.have.string('Pod Anti Affinity')
-            expect(alldivs[29].textContent).to.have.string('Object With Array')
-            expect(alldivs[39].textContent).to.have.string('Array With Object')
-            expect(alldivs[41].textContent).to.have.string('Deeply Nested')
-            expect(alldivs[51].textContent).to.have.string('arrayFieldDependency')
-            expect(alldivs[53].textContent).to.have.string('fieldDependencyControl')
-            expect(alldivs[54].textContent).to.have.string('[SCHEMA] Array Field Group')
+            expect(alldivs[4].textContent).to.include('Field Group')
+            expect(alldivs[8].textContent).to.include('nestedFieldDependency')
+            expect(alldivs[13].textContent).to.include('K8s Resource Prefix')
+            expect(alldivs[14].textContent).to.include('Pod Count')
+            expect(alldivs[15].textContent).to.include('Resource Requirements')
+            expect(alldivs[17].textContent).to.include('Boolean Switch')
+            expect(alldivs[18].textContent).to.include('Checkbox')
+            expect(alldivs[19].textContent).to.include('Image Pull Policy')
+            expect(alldivs[20].textContent).to.include('Update Strategy')
+            expect(alldivs[21].textContent).to.include('Text')
+            expect(alldivs[22].textContent).to.include('Number')
+            expect(alldivs[23].textContent).to.include('Node Affinity')
+            expect(alldivs[25].textContent).to.include('Pod Affinity')
+            expect(alldivs[27].textContent).to.include('Pod Anti Affinity')
+            expect(alldivs[29].textContent).to.include('Object With Array')
+            expect(alldivs[39].textContent).to.include('Array With Object')
+            expect(alldivs[41].textContent).to.include('Deeply Nested')
+            expect(alldivs[51].textContent).to.include('arrayFieldDependency')
+            expect(alldivs[53].textContent).to.include('fieldDependencyControl')
+            expect(alldivs[54].textContent).to.include('[SCHEMA] Array Field Group')
             cy.get('button.pf-c-expandable-section__toggle')
               .contains('Advanced configuration')
               .scrollIntoView()
@@ -80,6 +80,17 @@ describe('operand form view', () => {
             expect(paragraphs).to.not.include('Hidden')
             // unresolved path (the path does not exist on the CRD schema) will NOT be displayed in the form
             expect(paragraphs).to.not.include('Namespace Selector')
+            // unsupported type will not be shown on Operand details page
         })
+        cy.get('#root_spec_requiredText').type('test required text');
+        cy.get('#root_spec_optionalRequiredText').type('test required text without specDescriptor');
+        Operand.submitCreation();
+        cy.adminCLI(`oc get mockresource.test.tectonic.com -n ${params.namespace}`)
+          .then((result) => {
+             expect(result.stdout).contains("mock-resource-instance")
+          })
+        // unsupported specDescriptors will NOT be shown on Operand details
+        cy.visit(`/k8s/ns/${params.namespace}/clusterserviceversions/mock-operator/test.tectonic.com~v1~MockResource/mock-resource-instance`);
+        cy.contains('Filed Group').should('not.exist');
     })
 })

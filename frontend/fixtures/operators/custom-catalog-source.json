@@ -7,7 +7,7 @@
   },
   "spec": {
     "sourceType": "grpc",
-    "image": "quay.io/openshifttest/54544-operators-index:latest",
+    "image": "quay.io/openshifttest/ui-cypress-operators-index:latest",
     "displayName": "Custom-Auto-Source",
     "publisher": "OpenShift UI QE"
   }
