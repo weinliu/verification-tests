@@ -4462,7 +4462,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		waitErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/ansiblemetrics-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if !strings.Contains(msg, "Starting workers") {
-				e2e.Failf("Starting workers failed")
+				e2e.Logf("Starting workers failed")
 				return false, nil
 			}
 			return true, nil
