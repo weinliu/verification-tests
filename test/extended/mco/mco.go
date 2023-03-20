@@ -1543,7 +1543,7 @@ nulla pariatur.`
 				o.ContainSubstring(unitName),
 				o.ContainSubstring("Active: inactive (dead)"),
 				o.ContainSubstring("Hello from MCO test service"),
-				o.ContainSubstring("example.service: Succeeded.")))
+				o.ContainSubstring("example.service: Deactivated successfully.")))
 
 		g.By("Verify drift config behavior")
 		defer func() {

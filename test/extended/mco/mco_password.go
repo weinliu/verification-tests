@@ -3,7 +3,6 @@ package mco
 import (
 	"fmt"
 	"regexp"
-	"time"
 
 	expect "github.com/google/goexpect"
 	g "github.com/onsi/ginkgo/v2"
@@ -92,7 +91,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 		g.By("Verify that user 'core' can login with the configured password")
 		logger.Infof("verifying node %s", workerNode.GetName())
-		bresp, err := workerNode.ExecuteDebugExpectBatch(10*time.Second, getSSHValidator(user, password))
+		bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, password))
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", workerNode.GetName(), bresp)
 		logger.Infof("OK!\n")
 
@@ -109,7 +108,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 		g.By("Verify that user 'core' can login with the new password")
 		logger.Infof("verifying node %s", workerNode.GetName())
-		bresp, err = workerNode.ExecuteDebugExpectBatch(10*time.Second, getSSHValidator(user, updatedPassword))
+		bresp, err = workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", workerNode.GetName(), bresp)
 		logger.Infof("OK!\n")
 
@@ -120,7 +119,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 		g.By("Verify that user 'core' can not login using a password anymore")
 		logger.Infof("verifying node %s", workerNode.GetName())
-		bresp, err = workerNode.ExecuteDebugExpectBatch(10*time.Second, getSSHValidator(user, updatedPassword))
+		bresp, err = workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
 		o.Expect(err).To(o.HaveOccurred(), "User 'core' was able to login using a password in node %s, but it should not be possible:\n %s", workerNode.GetName(), bresp)
 		logger.Infof("OK!\n")
 
@@ -176,7 +175,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		g.By("Verify that user 'core' can login with the configured password")
 		for _, workerNode := range allWorkerNodes {
 			logger.Infof("Verifying node %s", workerNode.GetName())
-			bresp, err := workerNode.ExecuteDebugExpectBatch(10*time.Second, getSSHValidator(user, password))
+			bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, password))
 			o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", workerNode.GetName(), bresp)
 		}
 		logger.Infof("OK!\n")
@@ -195,7 +194,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		g.By("Verify that user 'core' can login with the new password")
 		for _, workerNode := range allWorkerNodes {
 			logger.Infof("Verifying node %s", workerNode.GetName())
-			bresp, err := workerNode.ExecuteDebugExpectBatch(10*time.Second, getSSHValidator(user, updatedPassword))
+			bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
 			o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", workerNode.GetName(), bresp)
 		}
 		logger.Infof("OK!\n")
@@ -208,7 +207,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		g.By("Verify that user 'core' can not login using a password anymore")
 		for _, workerNode := range allWorkerNodes {
 			logger.Infof("Verifying node %s", workerNode.GetName())
-			bresp, err := workerNode.ExecuteDebugExpectBatch(10*time.Second, getSSHValidator(user, updatedPassword))
+			bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
 			o.Expect(err).To(o.HaveOccurred(), "User 'core' was able to login using a password in node %s, but it should not be possible:\n %s", workerNode.GetName(), bresp)
 		}
 		logger.Infof("OK!\n")
@@ -247,8 +246,9 @@ func getSSHValidator(user, passwd string) []expect.Batcher {
 	return []expect.Batcher{
 		&expect.BExpT{R: "#", T: 120}, // wait for prompt. We wait 120 seconds here, because the debug pod can take some time to be run
 		// in the rest of the commands we use the default timeout
-		&expect.BSnd{S: "chroot /host \n"}, // execute the chroot command
-		&expect.BExp{R: "#"},               // wait for prompt
+		&expect.BSnd{S: "chroot /host\n"}, // execute the chroot command
+		//&expect.BExp{R: "#"},               // wait for prompt
+		&expect.BExp{R: ".*"}, // wait for any prompt or no prompt (sometimes it does not return a prompt)
 		&expect.BSnd{S: fmt.Sprintf("ssh %s@127.0.0.1 -o StrictHostKeyChecking=no\n", user)}, // login with core via ssh
 		&expect.BExp{R: "password:"},                 // wait for password question
 		&expect.BSnd{S: fmt.Sprintf("%s\n", passwd)}, // write the password

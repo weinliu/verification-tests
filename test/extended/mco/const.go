@@ -1,6 +1,10 @@
 // Package mco stores all MCO automated test cases
 package mco
 
+import (
+	"time"
+)
+
 const (
 	// MachineConfigNamespace mco namespace
 	MachineConfigNamespace = "openshift-machine-config-operator"
@@ -99,4 +103,7 @@ const (
 
 	layeringImagestreamNamespace = "layering-tests-imagestreams"
 	layeringRegistryAdminSAName  = "test-registry-sa"
+
+	// DefaultExpectTimeout is the the fault timout for expect commands
+	DefaultExpectTimeout = 30 * time.Second
 )
