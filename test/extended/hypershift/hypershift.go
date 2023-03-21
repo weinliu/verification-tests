@@ -853,28 +853,26 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 54551 is for AWS - skipping test ...")
 		}
 
-		nodepoolName := doOcpReq(oc, OcpGet, true, "nodepool", "-n", hostedcluster.namespace, fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].metadata.name}`, hostedcluster.name))
-		e2e.Logf("nodepoolName:" + nodepoolName)
-
-		replicas := doOcpReq(oc, OcpGet, true, "nodepool", "-n", hostedcluster.namespace, nodepoolName, `-ojsonpath={.spec.replicas}`)
-		replicasInt, err := strconv.Atoi(replicas)
-		o.Expect(err).ShouldNot(o.HaveOccurred())
-		e2e.Logf("replicas:" + replicas)
+		replica := 1
+		nodepoolName := "54551np-" + strings.ToLower(exutil.RandStrDefault())
+		defer hostedcluster.deleteNodePool(nodepoolName)
+		hostedcluster.createAwsNodePool(nodepoolName, replica)
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(nodepoolName), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
 
 		g.By("Check if the nodepool name is propagated from the nodepool to the machine annotation")
-		o.Expect(strings.Count(doOcpReq(oc, OcpGet, true, "awsmachines", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.items[*].metadata.annotations.hypershift\.openshift\.io/nodePool}`), nodepoolName)).Should(o.Equal(replicasInt))
+		o.Expect(strings.Count(doOcpReq(oc, OcpGet, true, "awsmachines", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.items[*].metadata.annotations.hypershift\.openshift\.io/nodePool}`), nodepoolName)).Should(o.Equal(replica))
 
 		g.By("Check if the nodepool name is propagated from machine to node label")
-		o.Expect(strings.Count(doOcpReq(oc, OcpGet, true, "node", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile, `-ojsonpath={.items[*].metadata.labels.hypershift\.openshift\.io/nodePool}`), nodepoolName)).Should(o.Equal(replicasInt))
+		o.Expect(strings.Count(doOcpReq(oc, OcpGet, true, "node", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile, `-ojsonpath={.items[*].metadata.labels.hypershift\.openshift\.io/nodePool}`), nodepoolName)).Should(o.Equal(replica))
 
 		g.By("Scale up the nodepool")
-		replicasIntNew := replicasInt + 1
+		replicasIntNew := replica + 1
 		defer func() {
-			doOcpReq(oc, OcpScale, true, "nodepool", "-n", hostedcluster.namespace, nodepoolName, fmt.Sprintf("--replicas=%d", replicasInt))
-			o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(replicasInt), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedcluster.name))
+			doOcpReq(oc, OcpScale, true, "nodepool", "-n", hostedcluster.namespace, nodepoolName, fmt.Sprintf("--replicas=%d", replica))
+			o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(nodepoolName), LongTimeout, LongTimeout/10).Should(o.Equal(replica), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedcluster.name))
 		}()
 		doOcpReq(oc, OcpScale, true, "nodepool", "-n", hostedcluster.namespace, nodepoolName, fmt.Sprintf("--replicas=%d", replicasIntNew))
-		o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(""), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(replicasIntNew), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedcluster.name))
+		o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(nodepoolName), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(replicasIntNew), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedcluster.name))
 
 		g.By("Check if the nodepool name is propagated from the nodepool to the machine annotation")
 		o.Expect(strings.Count(doOcpReq(oc, OcpGet, true, "awsmachines", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.items[*].metadata.annotations.hypershift\.openshift\.io/nodePool}`), nodepoolName)).Should(o.Equal(replicasIntNew))
