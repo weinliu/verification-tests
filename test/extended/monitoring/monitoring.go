@@ -896,9 +896,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("make sure TechPreview feature is not enabled")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("FeatureGate/cluster", "-ojsonpath={.spec.featureSet}").Output()
-		o.Expect(output).NotTo(o.ContainSubstring("TechPreviewNoUpgrade"))
+		g.By("skip the case in TechPreview feature enabled cluster")
+		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("FeatureGate/cluster", "-ojsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("featureSet is: %s", featureSet)
+		if featureSet != "{}" && strings.Contains(featureSet, "TechPreviewNoUpgrade") {
+			g.Skip("This case is not suitable for TechPreview enabled cluster!")
+		}
 
 		g.By("set collectionProfile to minimal in cluster-monitoring-config configmap")
 		createResourceFromYaml(oc, "openshift-monitoring", collectionProfileminimal)
