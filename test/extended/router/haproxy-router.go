@@ -1796,4 +1796,60 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		protocol = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring(`{}`))
 	})
+
+	g.It("Author:mjoseph-High-41929-Haproxy router continues to function normally with the service selector of exposed route gets removed/deleted", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp41929",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		custContPod := getRouterPod(oc, ingctrl.name)
+
+		g.By("Deploy a backend pod and its service resources")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+
+		g.By("Expose a route with the unsecure service inside the project")
+		routehost := "service-unsecure-" + project1 + "." + ingctrl.domain
+		SrvErr := oc.Run("expose").Args("svc/service-unsecure", "--hostname="+routehost).Execute()
+		o.Expect(SrvErr).NotTo(o.HaveOccurred())
+		routeOutput := getRoutes(oc, project1)
+		o.Expect(routeOutput).To(o.ContainSubstring("service-unsecure"))
+
+		g.By("Cross check the selector value of the 'service-unsecure' service")
+		jpath := ".spec.selector"
+		output := fetchJSONPathValue(oc, project1, "svc/service-unsecure", jpath)
+		o.Expect(output).To(o.ContainSubstring(`"name":"web-server-rc"`))
+
+		g.By("Delete the service selector for the 'service-unsecure' service")
+		patchPath := "{\"spec\":{\"selector\":null}}"
+		patchResourceAsAdmin(oc, project1, "svc/service-unsecure", patchPath)
+
+		g.By("Check the service config to confirm the value of the selector is empty")
+		output = fetchJSONPathValue(oc, project1, "svc/service-unsecure", jpath)
+		o.Expect(output).To(o.BeEmpty())
+
+		g.By("Check the router pod logs and confirm there is no reload error message")
+		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", custContPod).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(log, "error reloading router") {
+			e2e.Failf("Router reloaded after removing service selector")
+		}
+	})
 })
