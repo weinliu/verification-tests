@@ -488,56 +488,56 @@ func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, 
 
 		// look at all the items for a value.  If they are not empty, change the defaults
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.catalogsourcename}", "-n", cmNs).Output()
-		if err == nil {
+		if err == nil && len(msg) > 0 {
 			testrun.catalogSourceName = msg
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.channel}", "-n", cmNs).Output()
-		if err == nil {
+		if err == nil && len(msg) > 0 {
 			testrun.channel = msg
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.icspneeded}", "-n", cmNs).Output()
-		if err == nil {
+		if err == nil && len(msg) > 0 {
 			testrun.icspNeeded, err = strconv.ParseBool(msg)
 			if err != nil {
 				e2e.Failf("Error in %v config map.  icspneeded must be a golang true or false string", cmName)
 			}
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.katamonitormage}", "-n", cmNs).Output()
-		if err == nil {
+		if err == nil && len(msg) > 0 {
 			testrun.katamonitorImage = msg
 			if strings.Contains(msg, "brew.registry.redhat.io") {
 				testrun.icspNeeded = true
 			}
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.mustgatherimage}", "-n", cmNs).Output()
-		if err == nil {
+		if err == nil && len(msg) > 0 {
 			testrun.mustgatherImage = msg
 			if strings.Contains(msg, "brew.registry.redhat.io") {
 				testrun.icspNeeded = true
 			}
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.eligibility}", "-n", cmNs).Output()
-		if err == nil {
+		if err == nil && len(msg) > 0 {
 			testrun.eligibility, err = strconv.ParseBool(msg)
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.eligibleSingleNode}", "-n", cmNs).Output()
-		if err == nil {
+		if err == nil && len(msg) > 0 {
 			testrun.eligibleSingleNode, err = strconv.ParseBool(msg)
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.labelsinglenode}", "-n", cmNs).Output()
-		if err == nil {
+		if err == nil && len(msg) > 0 {
 			testrun.labelSingleNode, err = strconv.ParseBool(msg)
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.operatorVer }", "-n", cmNs).Output()
-		if err == nil {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.operatorVer}", "-n", cmNs).Output()
+		if err == nil && len(msg) > 0 {
 			testrun.operatorVer = msg
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.runtimeClassName }", "-n", cmNs).Output()
-		if err == nil {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.runtimeClassName}", "-n", cmNs).Output()
+		if err == nil && len(msg) > 0 {
 			testrun.runtimeClassName = msg
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.enablePeerPods }", "-n", cmNs).Output()
-		if err == nil {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.enablePeerPods}", "-n", cmNs).Output()
+		if err == nil && len(msg) > 0 {
 			testrun.enablePeerPods, err = strconv.ParseBool(msg)
 		}
 	}
