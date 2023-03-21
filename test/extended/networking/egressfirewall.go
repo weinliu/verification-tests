@@ -728,4 +728,52 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		}
 	})
+
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:huirwang-High-61213-Delete IGMP Groups when deleting stale chassis.[Disruptive]", func() {
+		// This is from bug https://issues.redhat.com/browse/OCPBUGS-7230
+		exutil.SkipConditionally(oc)
+		g.By("Create a new machineset with 2 nodes")
+		machinesetName := "machineset-61213"
+		ms := exutil.MachineSetDescription{machinesetName, 2}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
+		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
+		nodeName1 := exutil.GetNodeNameFromMachine(oc, machineName[1])
+
+		g.By("Obtain the namespace \n")
+		ns := oc.Namespace()
+
+		g.By("Enable multicast on namespace  \n")
+		enableMulticast(oc, ns)
+
+		g.By("Delete ovnkuber-master pods and two nodes \n")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-l", "app=ovnkube-master", "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = ms.DeleteMachineSet(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait ovnkuber-master pods ready\n")
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+		exutil.AssertWaitPollNoErr(err, "ovnkube-master pods are not ready")
+
+		g.By("Check ovn db, the stale chassis for deleted node should be deleted")
+		for _, machine := range []string{nodeName0, nodeName1} {
+			ovnACLCmd := fmt.Sprintf("ovn-sbctl --columns _uuid,hostname list chassis")
+			ovnMasterSourthDBLeaderPod := getOVNLeaderPod(oc, "south")
+			o.Eventually(func() string {
+				outPut, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterSourthDBLeaderPod, ovnACLCmd)
+				o.Expect(listErr).NotTo(o.HaveOccurred())
+				return outPut
+			}, "120s", "10s").ShouldNot(o.ContainSubstring(machine), "The stale chassis still existed!")
+		}
+
+		g.By("Check ovnkuber master logs, no IGMP_Group logs")
+		ovnMasterPodName := getOVNKMasterPod(oc)
+		searchString := "Transaction causes multiple rows in \"IGMP_Group\" table to have identical values"
+		logContents, logErr := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-master", ovnMasterPodName, "")
+		o.Expect(logErr).ShouldNot(o.HaveOccurred())
+		o.Expect(strings.Contains(logContents, searchString)).Should(o.BeFalse())
+	})
 })

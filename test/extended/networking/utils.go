@@ -2405,7 +2405,7 @@ func getHostsubnetByEIP(oc *exutil.CLI, expectedEIP string) string {
 
 // find the ovn-K master pod
 func getOVNKMasterPod(oc *exutil.CLI) string {
-	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.items[*].spec.holderIdentity}").Output()
+	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
 	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
 	var ovnKMasterPod string
 	ovnMasterPods := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
@@ -2420,4 +2420,10 @@ func getOVNKMasterPod(oc *exutil.CLI) string {
 		}
 	}
 	return ovnKMasterPod
+}
+
+// enable multicast on specific namespace
+func enableMulticast(oc *exutil.CLI, ns string) {
+	_, err := runOcWithRetry(oc.AsAdmin().WithoutNamespace(), "annotate", "namespace", ns, "k8s.ovn.org/multicast-enabled=true")
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
