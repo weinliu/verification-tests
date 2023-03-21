@@ -4181,11 +4181,21 @@ EOF`, dcpolicyrepo)
 
 	// author : dpunia@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:dpunia-Medium-56934-[Apiserver] bug Ensure unique CA serial numbers, after enable automated service CA rotation", func() {
-		g.By("Check openshift-apiserver operator before executing test.")
-		output, err := oc.WithoutNamespace().Run("get").Args("co/openshift-apiserver").Output()
+		var (
+			dirname = "/tmp/-OCP-56934/"
+		)
+
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		matched, _ := regexp.MatchString("True.*False.*False", output)
-		o.Expect(matched).Should(o.Equal(true))
+
+		e2e.Logf("Cluster should be healthy before running case.")
+		err = clusterHealthcheck(oc, "OCP-56934/log")
+		if err == nil {
+			e2e.Logf("Cluster health check passed before running case")
+		} else {
+			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
+		}
 
 		g.By("1. Get openshift-apiserver pods and endpoints ip & port")
 		podName, podGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "pod", "--field-selector=status.phase=Running", "-o", "jsonpath={.items[0].metadata.name}").Output()
