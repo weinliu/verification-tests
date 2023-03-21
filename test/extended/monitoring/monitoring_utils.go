@@ -307,3 +307,16 @@ func checkLogsInContainer(oc *exutil.CLI, namespace string, podName string, cont
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to find \"%s\" in the pod logs", checkValue))
 }
+
+// get specific pod name with label then describe pod info
+func getSpecPodInfo(oc *exutil.CLI, ns string, label string, checkValue string) {
+	envCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		podName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].metadata.name}").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", podName, "-n", ns).Output()
+		if err != nil || !strings.Contains(output, checkValue) {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(envCheck, fmt.Sprintf("failed to find \"%s\" in the pod yaml", checkValue))
+}

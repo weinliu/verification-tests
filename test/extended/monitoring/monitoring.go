@@ -931,6 +931,47 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output2).To(o.ContainSubstring("--runtime.gomaxprocs=1"))
 	})
 
+	//author: tagao@redhat.com
+	g.It("Author:tagao-High-60486-check On/Off switch of netclass Collector and netlink backend in Node Exporter [Serial]", func() {
+		var (
+			enableNetlink   = filepath.Join(monitoringBaseDir, "enableNetlink.yaml")
+			disableNetclass = filepath.Join(monitoringBaseDir, "disableNetclass.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("check netclass Collector is enabled by default, netlink is disabled by default")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--collector.netclass"))
+		o.Expect(output).NotTo(o.ContainSubstring("--collector.netclass.netlink"))
+
+		g.By("check netclass metrics in prometheus k8s pod")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="netclass"}'`, token, `"collector":"netclass"`, uwmLoadTime)
+
+		g.By("enable netlink in CMO")
+		createResourceFromYaml(oc, "openshift-monitoring", enableNetlink)
+
+		//Case used to faild at this step, netlink mode need time to fully applied. (added func to utils)
+		g.By("check netlink mode is enabled")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		getSpecPodInfo(oc, "openshift-monitoring", "app.kubernetes.io/name=node-exporter", "--collector.netclass.netlink")
+		getSpecPodInfo(oc, "openshift-monitoring", "app.kubernetes.io/name=node-exporter", "--collector.netclass")
+
+		g.By("disable netclass in CMO")
+		createResourceFromYaml(oc, "openshift-monitoring", disableNetclass)
+
+		g.By("check netclass metrics in prometheus k8s pod again, should not have related metrics")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="netclass"}'`, token, `"result":[]`, 3*uwmLoadTime)
+
+		g.By("check netclass/netlink in daemonset")
+		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output2).To(o.ContainSubstring("--no-collector.netclass"))
+		o.Expect(output2).NotTo(o.ContainSubstring("--collector.netclass.netlink"))
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
