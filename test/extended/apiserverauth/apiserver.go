@@ -4392,7 +4392,7 @@ roleRef:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftBoth-Author:rgangwar-Medium-55480-[Apiserver] Audit logs must be stored and persisted", func() {
+	g.It("NonHyperShiftHOST-MicroShiftBoth-Author:rgangwar-Medium-55480-[Apiserver] Audit logs must be stored and persisted", func() {
 		g.By("1. Debug node and check the KAS audit log.")
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
