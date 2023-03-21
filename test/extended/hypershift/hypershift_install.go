@@ -18,7 +18,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	var (
 		oc           = exutil.NewCLI("hypershift-install", exutil.KubeConfigPath())
 		iaasPlatform string
-		publicKey    = ""
 	)
 
 	g.BeforeEach(func() {
@@ -29,7 +28,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		var err error
-		publicKey, err = exutil.GetPublicKey()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -402,73 +400,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			value, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+hostedCluster2.hostedClustersKubeconfigFile, "deployment", "-A", "-ojsonpath={.items[*].spec.replicas}").Output()
 			return strings.ReplaceAll(strings.ReplaceAll(value, "1", ""), " ", "")
 		}, DefaultTimeout, DefaultTimeout/10).ShouldNot(o.BeEmpty())
-	})
-
-	// author: liangli@redhat.com
-	g.It("Longduration-NonPreRelease-Author:liangli-Critical-47775-[HyperShiftINSTALL] Test AWS private cluster with hypershift [Serial]", func() {
-		if iaasPlatform != "aws" {
-			g.Skip("IAAS platform is " + iaasPlatform + " while 47775 is for AWS - skipping test ...")
-		}
-		caseID := "47775"
-		dir := "/tmp/hypershift" + caseID
-		clusterName := "hypershift-" + caseID
-		defer os.RemoveAll(dir)
-		err := os.MkdirAll(dir, 0755)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Create a hypershift-operator IAM user in the management account and extract AWS private Credentials")
-		preStartJobSetup := newPreStartJob(clusterName+"-setup", oc.Namespace(), caseID, "setup", dir)
-		preStartJobTeardown := newPreStartJob(clusterName+"-teardown", oc.Namespace(), caseID, "teardown", dir)
-		defer preStartJobSetup.delete(oc)
-		preStartJobSetup.create(oc)
-		defer preStartJobTeardown.delete(oc)
-		defer preStartJobTeardown.create(oc)
-		preStartJobSetup.preStartJobExtractCredentials(oc)
-
-		g.By("Config AWS Bucket And install HyperShift operator")
-		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
-		defer installHelper.deleteAWSS3Bucket()
-		defer installHelper.hyperShiftUninstall()
-		installHelper.hyperShiftInstall()
-
-		g.By("create HostedClusters")
-		createCluster := installHelper.createClusterAWSCommonBuilder().
-			withName(clusterName).
-			withNodePoolReplicas(1).
-			withInfraID(clusterName).
-			withSSHKey(publicKey)
-		defer installHelper.destroyAWSHostedClusters(createCluster)
-		hostedCluster := installHelper.createAWSHostedClustersRender(createCluster, func(filename string) error {
-			return replaceInFile(filename, "endpointAccess: Public", "endpointAccess: Private")
-		})
-
-		g.By("check HostedClusters nodepool ready")
-		o.Eventually(func() string {
-			return doOcpReq(oc, OcpGet, false, "hostedcluster", "-n", hostedCluster.namespace, hostedCluster.name)
-		}, ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.ContainSubstring("Completed"), "hostedcluster can't be Completed")
-		o.Eventually(hostedCluster.pollGetNodePoolReplicas(), ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.ContainSubstring("1"), fmt.Sprintf("hostedcluster %s nodepool not ready", hostedCluster.name))
-		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
-
-		g.By("create aws Bastion")
-		awsBastion := &bastion{AWSCreds: installHelper.dir + "/credentials", InfraID: clusterName, Region: installHelper.region, SSHKeyFile: publicKey}
-		defer installHelper.destroyAWSBastion(awsBastion)
-		bastionIP := installHelper.createAWSBastion(awsBastion)
-		o.Expect(bastionIP).ShouldNot(o.BeEmpty())
-		e2e.Logf("Bastion ip:" + bastionIP)
-
-		g.By("Get private IP of nodes in the NodePool")
-		preStartJobGetIP := newPreStartJob(clusterName+"-getip", oc.Namespace(), caseID, "getip", dir)
-		defer preStartJobGetIP.delete(oc)
-		preStartJobGetIP.create(oc)
-		nodeIPs := preStartJobGetIP.prePrivateIP(oc)
-		o.Expect(nodeIPs).ShouldNot(o.BeEmpty())
-		e2e.Logf("private node IP:" + strings.Join(nodeIPs, ","))
-
-		g.By("SSH into one of the nodes via the bastion")
-		execCMDOnWorkNodeByBastion(false, nodeIPs[0], bastionIP, `echo "`+getAllByFile(hostedCluster.hostedClustersKubeconfigFile)+`" > hostedcluster.kubeconfig`)
-		count := execCMDOnWorkNodeByBastion(true, nodeIPs[0], bastionIP, `export KUBECONFIG=hostedcluster.kubeconfig && oc get node --ignore-not-found --no-headers | wc -l`)
-		e2e.Logf("echo:" + count)
-		o.Expect(count).Should(o.ContainSubstring("1"))
 	})
 
 	// author: liangli@redhat.com

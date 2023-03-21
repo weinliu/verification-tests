@@ -3,7 +3,6 @@ package hypershift
 import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"io/ioutil"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"os"
@@ -68,6 +67,7 @@ func (p *preStartJob) preStartJobIP(oc *exutil.CLI) string {
 	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", p.Namespace, "-l", "job-name="+p.Name, `-ojsonpath={.items[0].metadata.name}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	log, err := exutil.GetSpecificPodLogs(oc, p.Namespace, "prestart", podName, `"Your nodeport address is"`)
+	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("preStartJobIP,log:" + log)
 
 	// regex for ip
@@ -76,38 +76,4 @@ func (p *preStartJob) preStartJobIP(oc *exutil.CLI) string {
 
 	regEx := regexp.MustCompile(regexPattern)
 	return regEx.FindString(log)
-}
-
-func (p *preStartJob) prePrivateIP(oc *exutil.CLI) []string {
-	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", p.Namespace, "-l", "job-name="+p.Name, `-ojsonpath={.items[0].metadata.name}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	log, err := exutil.GetSpecificPodLogs(oc, p.Namespace, "prestart", podName, "")
-
-	numBlock := "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
-	regexPattern := numBlock + "\\." + numBlock + "\\." + numBlock + "\\." + numBlock
-
-	regEx := regexp.MustCompile(regexPattern)
-	return regEx.FindAllString(log, -1)
-}
-
-func (p *preStartJob) preStartJobExtractCredentials(oc *exutil.CLI) {
-	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", p.Namespace, "-l", "job-name="+p.Name, `-ojsonpath={.items[0].metadata.name}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	log, err := exutil.GetSpecificPodLogs(oc, p.Namespace, "prestart", podName, "\"AccessKeyId\\|SecretAccessKey\"")
-
-	// regex for credentials
-	accessKeyIDLog := regexp.MustCompile(`AccessKeyId": ".*"`).FindString(log)
-	accessKeyID := accessKeyIDLog[strings.LastIndex(accessKeyIDLog, `: `)+3 : strings.LastIndex(accessKeyIDLog, `"`)]
-
-	secretAccessKeyLog := regexp.MustCompile(`SecretAccessKey": ".*"`).FindString(log)
-	secretAccessKey := secretAccessKeyLog[strings.LastIndex(secretAccessKeyLog, `: `)+3 : strings.LastIndex(secretAccessKeyLog, `"`)]
-
-	filePath := p.TmpDir + "/aws-private-creds"
-	_, err = os.Stat(filePath)
-	if err != nil {
-		content := "[default]\naws_access_key_id=" + accessKeyID + "\naws_secret_access_key=" + secretAccessKey
-		err = ioutil.WriteFile(filePath, []byte(content), 0644)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("extract AWS private Credentials, filePath:" + filePath)
-	}
 }
