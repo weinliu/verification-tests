@@ -37,6 +37,7 @@ const (
 	OcpDebug    OcpClientVerb = "debug"
 	OcpExec     OcpClientVerb = "exec"
 	OcpScale    OcpClientVerb = "scale"
+	OcpAdm      OcpClientVerb = "adm"
 
 	//NodepoolNameSpace is the namespace where the nodepool CR is always created
 	NodepoolNameSpace = "clusters"

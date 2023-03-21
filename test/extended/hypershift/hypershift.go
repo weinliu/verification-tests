@@ -942,4 +942,19 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(res2).Should(o.ContainSubstring(fmt.Sprintf("error %s: verification failed", dirname+"/system-admin_client.crt")))
 	})
+
+	// author: mihuang@redhat.com
+	g.It("HyperShiftMGMT-Author:mihuang-Critical-60903-Test must-gather on the hostedcluster", func() {
+		mustgatherDir := "/tmp/must-gather-60903"
+		defer os.RemoveAll(mustgatherDir)
+		err := os.MkdirAll(mustgatherDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check must-gather works well on the hostedcluster.")
+		doOcpReq(oc, OcpAdm, true, "must-gather", "--dest-dir="+mustgatherDir, "--", "/usr/bin/gather_audit_logs", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)
+		var bashClient = NewCmdClient().WithShowInfo(true)
+		cmdOut, err := bashClient.Run(fmt.Sprintf(`du -h %v`, mustgatherDir)).Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(cmdOut).ShouldNot(o.Equal("0B"))
+	})
 })
