@@ -2724,7 +2724,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-Medium-27680-OLM Bundle support for Prometheus Types", func() {
+	g.It("ConnectedOnly-Author:bandrade-Medium-27680-OLM Bundle support for Prometheus Types [Serial]", func() {
 		exutil.SkipARM64(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
