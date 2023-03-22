@@ -2193,6 +2193,58 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		CurlNode2SvcPass(oc, masterNode, ns1, svc.servicename)
 	})
 
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huirwang-High-61344-EgressIP was migrated to correct workers after deleting machine it was assigned. [Disruptive]", func() {
+		//This is from customer bug: https://bugzilla.redhat.com/show_bug.cgi?id=2079012
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		g.By("Create a new machineset with 2 nodes")
+		exutil.SkipConditionally(oc)
+		machinesetName := "machineset-61344"
+		ms := exutil.MachineSetDescription{machinesetName, 2}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
+		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
+		nodeName1 := exutil.GetNodeNameFromMachine(oc, machineName[1])
+
+		g.By("Apply EgressLabel Key to one node. \n")
+		// No defer here, as this node will be deleted explicitly in the following step.
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeName0, egressNodeLabel, "true")
+
+		g.By("Create an egressip object\n")
+		freeIPs := findFreeIPs(oc, nodeName0, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+		egressip1 := egressIPResource1{
+			name:          "egressip-61344",
+			template:      egressIP1Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		g.By("Apply egess label to another worker node.\n")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeName1, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeName1, egressNodeLabel, "true")
+
+		g.By("Remove the first egress node.\n")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("machines.machine.openshift.io", machineName[0], "-n", "openshift-machine-api").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Verify egressIP was moved to second egress node.\n")
+		o.Eventually(func() bool {
+			egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
+			return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == nodeName1
+		}, "120s", "10s").Should(o.BeTrue(), "egressIP was not migrated to correct workers!!")
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
