@@ -3012,6 +3012,12 @@ spec:
 	})
 
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
+		g.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
 		g.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 

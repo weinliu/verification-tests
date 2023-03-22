@@ -54,6 +54,13 @@ type service struct {
 	template  string
 }
 
+const (
+	asAdmin          = true
+	withoutNamespace = true
+	contain          = false
+	ok               = true
+)
+
 // createAdmissionWebhookFromTemplate : Used for creating different admission hooks from pre-existing template.
 func (admissionHook *admissionWebhook) createAdmissionWebhookFromTemplate(oc *exutil.CLI) {
 	exutil.CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", admissionHook.template, "-p", "NAME="+admissionHook.name, "WEBHOOKNAME="+admissionHook.webhookname,
@@ -850,4 +857,45 @@ func getServiceIP(oc *exutil.CLI, clusterIP string) net.IP {
 	})
 	exutil.AssertWaitPollNoErr(err, "Failed to get one available service IP!")
 	return serviceIP
+}
+
+// the method is to do something with oc.
+func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool, parameters ...string) (string, error) {
+	if asAdmin && withoutNamespace {
+		return oc.AsAdmin().WithoutNamespace().Run(action).Args(parameters...).Output()
+	}
+	if asAdmin && !withoutNamespace {
+		return oc.AsAdmin().Run(action).Args(parameters...).Output()
+	}
+	if !asAdmin && withoutNamespace {
+		return oc.WithoutNamespace().Run(action).Args(parameters...).Output()
+	}
+	if !asAdmin && !withoutNamespace {
+		return oc.Run(action).Args(parameters...).Output()
+	}
+	return "", nil
+}
+
+// the method is to get something from resource. it is "oc get xxx" actaully
+func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
+	var result string
+	var err error
+	err = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+		result, err = doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
+		if err != nil {
+			e2e.Logf("output is %v, error is %v, and try next", result, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get %v", parameters))
+	e2e.Logf("$oc get %v, the returned resource:%v", parameters, result)
+	return result
+}
+
+func getGlobalProxy(oc *exutil.CLI) (string, string, string) {
+	httpProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpProxy}")
+	httpsProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpsProxy}")
+	noProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.noProxy}")
+	return httpProxy, httpsProxy, noProxy
 }
