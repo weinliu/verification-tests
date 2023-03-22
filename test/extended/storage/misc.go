@@ -78,7 +78,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-50443 - [HyperShiftMGMT-NonHyperShiftHOST] Check storage operator's workloads are deployed in hosted control plane and healthy
-	g.It("HyperShiftMGMT-NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Critical-50443-[CSI Driver] Check storage operator's workloads are deployed in hosted control plane and healthy", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Critical-50443-[CSI Driver] Check storage operator's workloads are deployed in hosted control plane and healthy", func() {
 
 		g.By("******" + cloudProvider + " Hypershift test phase start ******")
 

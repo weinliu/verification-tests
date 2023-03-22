@@ -55,7 +55,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Cloud provider is: %v", iaasPlatform)
 	})
 
-	g.It("HyperShiftMGMT-Author:liqcui-Medium-53875-NTO Support profile that have the same name with tuned on hypershift [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:liqcui-Medium-53875-NTO Support profile that have the same name with tuned on hypershift [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -153,7 +153,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(pidMaxValue).NotTo(o.ContainSubstring("868686"))
 	})
 
-	g.It("HyperShiftMGMT-Author:liqcui-Medium-53876-NTO Operand logs errors when applying profile with invalid settings in HyperShift. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:liqcui-Medium-53876-NTO Operand logs errors when applying profile with invalid settings in HyperShift. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -267,7 +267,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(vmDirtyRatioValue).NotTo(o.ContainSubstring("56"))
 	})
 
-	g.It("HyperShiftMGMT-Author:liqcui-Medium-53877-NTO support tuning sysctl that applied to all nodes of nodepool-level settings in hypershift. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:liqcui-Medium-53877-NTO support tuning sysctl that applied to all nodes of nodepool-level settings in hypershift. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -355,7 +355,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "vm.dirty_ratio", "56")
 	})
 
-	g.It("HyperShiftMGMT-Author:liqcui-Medium-53886-NTO support tuning sysctl with different name that applied to one labeled node of nodepool in hypershift. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:liqcui-Medium-53886-NTO support tuning sysctl with different name that applied to one labeled node of nodepool in hypershift. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -453,7 +453,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(pidMaxValue).NotTo(o.ContainSubstring("868686"))
 	})
 
-	g.It("Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-54522-NTO Applying tuning which requires kernel boot parameters. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-54522-NTO Applying tuning which requires kernel boot parameters. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -556,7 +556,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc, ntoNamespace, "hugepages-nodepool", "hugepagesz", false)
 	})
 
-	g.It("Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-56609-NTO Scale out node pool which applied tuning with required kernel boot. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-56609-NTO Scale out node pool which applied tuning with required kernel boot. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -652,7 +652,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc, ntoNamespace, "hugepages-nodepool", "hugepagesz", true)
 
 	})
-	g.It("Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-55360-NTO does not generate MachineConfigs with bootcmdline from manual change to Profile status.bootcmdline. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-55360-NTO does not generate MachineConfigs with bootcmdline from manual change to Profile status.bootcmdline. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -765,7 +765,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertNTOPodLogsLastLinesInManagementCluster(oc, guestClusterNS, ntoOperatorPodName, "18", 60, "refusing to sync MachineConfig")
 	})
 
-	g.It("Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-55359-NTO applies one configmap that is referenced in two nodepools in the same hosted cluster. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-55359-NTO applies one configmap that is referenced in two nodepools in the same hosted cluster. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -940,7 +940,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
 
-	g.It("Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53885-NTO applies different configmaps that reference to into two node pool in the same hosted clusters. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53885-NTO applies different configmaps that reference to into two node pool in the same hosted clusters. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -1135,7 +1135,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
 
-	g.It("HyperShiftMGMT-Author:liqcui-Medium-54546-NTO applies two Tuneds from two configmap referenced in one nodepool of a hosted cluster on hypershift.[Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:liqcui-Medium-54546-NTO applies two Tuneds from two configmap referenced in one nodepool of a hosted cluster on hypershift.[Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -1287,7 +1287,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "openshift-node")
 	})
 
-	g.It("NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53880-NTO apply one configmap that reference to two separated hosted clusters on hypershift. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53880-NTO apply one configmap that reference to two separated hosted clusters on hypershift. [Disruptive]", func() {
 
 		//Second Hosted Cluster
 		guestClusterName2, guestClusterKube2, hostedClusterNS2 = exutil.ValidHypershiftAndGetGuestKubeConf4SecondHostedCluster(oc)
@@ -1497,7 +1497,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
 
-	g.It("NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53883-NTO can apply different tunings to two separated hosted clusters on hypershift. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53883-NTO can apply different tunings to two separated hosted clusters on hypershift. [Disruptive]", func() {
 
 		//Second Hosted Cluster
 		guestClusterName2, guestClusterKube2, hostedClusterNS2 = exutil.ValidHypershiftAndGetGuestKubeConf4SecondHostedCluster(oc)

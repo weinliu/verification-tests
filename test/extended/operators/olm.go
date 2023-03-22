@@ -12649,7 +12649,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("HyperShiftMGMT-Author:bandrade-High-45408-Eliminate use of imagestreams in catalog management", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:bandrade-High-45408-Eliminate use of imagestreams in catalog management", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		g.By("1) check the cronjob in the control-plane project")
 		controlProject := fmt.Sprintf("%s-%s", hostedClusterNS, guestClusterName)
@@ -12685,7 +12685,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("HyperShiftMGMT-Author:jiazha-High-45348-High-45543-Enable hypershift to deploy OLM resources", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:jiazha-High-45348-High-45543-Enable hypershift to deploy OLM resources", func() {
 
 		g.By("1, check if any resource running in the guest cluster")
 		projects := []string{"openshift-operator-lifecycle-manager", "openshift-marketplace"}
@@ -12761,7 +12761,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	})
 
 	// It will cover test case: OCP-45381, author: kuiwang@redhat.com
-	g.It("HyperShiftMGMT-ConnectedOnly-Author:kuiwang-Medium-45381-Support custom catalogs in hypershift", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-ConnectedOnly-Author:kuiwang-Medium-45381-Support custom catalogs in hypershift", func() {
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")

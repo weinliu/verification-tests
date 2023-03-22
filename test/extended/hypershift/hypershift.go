@@ -48,7 +48,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-42855-Check Status Conditions for HostedControlPlane", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:heli-Critical-42855-Check Status Conditions for HostedControlPlane", func() {
 		rc := hostedcluster.checkHCConditions()
 		o.Expect(rc).Should(o.BeTrue())
 
@@ -77,7 +77,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-43555-Allow direct ingress on guest clusters on AWS", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:heli-Critical-43555-Allow direct ingress on guest clusters on AWS", func() {
 		var bashClient = NewCmdClient()
 		console, psw := hostedcluster.getHostedclusterConsoleInfo()
 		parms := fmt.Sprintf("curl -u admin:%s %s  -k  -LIs -o /dev/null -w %s ", psw, console, "%{http_code}")
@@ -214,7 +214,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-43554-Check FIPS support in the Hosted Cluster", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:heli-Critical-43554-Check FIPS support in the Hosted Cluster", func() {
 		if !hostedcluster.isFIPEnabled() {
 			g.Skip("only for the fip enabled hostedcluster, skip test run")
 		}
@@ -284,7 +284,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-46711-Test HCP components to use service account tokens", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:heli-Critical-46711-Test HCP components to use service account tokens", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 46711 is for AWS - skipping test ...")
 		}
@@ -361,7 +361,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-44926-Test priority classes for Hypershift control plane workloads", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:heli-Critical-44926-Test priority classes for Hypershift control plane workloads", func() {
 		if iaasPlatform != "aws" && iaasPlatform != "azure" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 44926 is for AWS or Azure - skipping test ...")
 		}
@@ -492,7 +492,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-44988-Colocate control plane components by default", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:heli-Critical-44988-Colocate control plane components by default", func() {
 		//deployment
 		controlplaneComponents := []string{
 			"kube-apiserver",
@@ -764,7 +764,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: mihuang@redhat.com
-	g.It("HyperShiftMGMT-Author:mihuang-Critical-48936-Test HyperShift cluster Infrastructure TopologyMode", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:mihuang-Critical-48936-Test HyperShift cluster Infrastructure TopologyMode", func() {
 		controllerAvailabilityPolicy := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.controllerAvailabilityPolicy}")
 		e2e.Logf("controllerAvailabilityPolicy is: %s", controllerAvailabilityPolicy)
 		o.Expect(doOcpReq(oc, OcpGet, true, "infrastructure", "-ojsonpath={.items[*].status.controlPlaneTopology}")).Should(o.Equal(controllerAvailabilityPolicy))
@@ -882,7 +882,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: mihuang@redhat.com
-	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author: mihuang-Critical-49108-Critical-49499-Critical-60490-Separate client certificate trust from the global Hypershift CA", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author: mihuang-Critical-49108-Critical-49499-Critical-60490-Separate client certificate trust from the global Hypershift CA", func() {
 		g.By("Add label to namespace enable monitoring for hosted control plane component.")
 		defer doOcpReq(oc, "label", true, "namespace", hostedcluster.namespace+"-"+hostedcluster.name, "openshift.io/cluster-monitoring-")
 		doOcpReq(oc, "label", true, "namespace", hostedcluster.namespace+"-"+hostedcluster.name, "openshift.io/cluster-monitoring=true", "--overwrite=true")

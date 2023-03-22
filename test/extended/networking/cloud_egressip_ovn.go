@@ -2515,7 +2515,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		oc.SetGuestKubeconf(hostedClusterKubeconfig)
 
 	})
-	g.It("HyperShiftMGMT-NonPreRelease-ConnectedOnly-Author:jechen-High-54741-EgressIP health check through monitoring port over GRPC on hypershift cluster. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-NonPreRelease-ConnectedOnly-Author:jechen-High-54741-EgressIP health check through monitoring port over GRPC on hypershift cluster. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
