@@ -47,16 +47,6 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 		workerNode := allCoreos[0]
 
-		g.By("Enable password authentication in worker pool")
-		sshdMC, err := NewEnablePasswdSSHInPoolMachineConfig(wMcp)
-		o.Expect(err).NotTo(o.HaveOccurred(), "There was an error trying to enable password authentication in pool %s", wMcp.GetName())
-
-		defer sshdMC.delete()
-		sshdMC.create()
-
-		wMcp.waitForComplete()
-		logger.Infof("OK!\n")
-
 		g.By("Configure a password for 'core' user")
 		_, _ = workerNode.GetDate() // for debugging purposes, it prints the node's current time in the logs
 		o.Expect(workerNode.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
@@ -66,7 +56,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, user, passwordHash)}
 		mc.skipWaitForMcp = true
 
-		defer mc.deleteNoWait()
+		defer mc.delete()
 		mc.create()
 
 		wMcp.waitForComplete()
@@ -137,16 +127,6 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 		allWorkerNodes := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()
 
-		g.By("Enable password authentication in worker pool")
-		sshdMC, err := NewEnablePasswdSSHInPoolMachineConfig(wMcp)
-		o.Expect(err).NotTo(o.HaveOccurred(), "There was an error trying to enable password authentication in pool %s", wMcp.GetName())
-
-		defer sshdMC.delete()
-		sshdMC.create()
-
-		wMcp.waitForComplete()
-		logger.Infof("OK!\n")
-
 		g.By("Create the 'core' user in RHEL nodes")
 		for _, rhelWorker := range allRhelNodes {
 			// we need to do this to avoid the loop variable to override our value
@@ -166,7 +146,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, user, passwordHash)}
 		mc.skipWaitForMcp = true
 
-		defer mc.deleteNoWait()
+		defer mc.delete()
 		mc.create()
 
 		wMcp.waitForComplete()
@@ -243,15 +223,16 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 // getSSHValidator returns the commands that need to be executed in an interactive expect shell to validate that a user can login via ssh
 func getSSHValidator(user, passwd string) []expect.Batcher {
+
 	return []expect.Batcher{
 		&expect.BExpT{R: "#", T: 120}, // wait for prompt. We wait 120 seconds here, because the debug pod can take some time to be run
 		// in the rest of the commands we use the default timeout
 		&expect.BSnd{S: "chroot /host\n"}, // execute the chroot command
-		//&expect.BExp{R: "#"},               // wait for prompt
+		// &expect.BExp{R: "#"},               // wait for prompt
 		&expect.BExp{R: ".*"}, // wait for any prompt or no prompt (sometimes it does not return a prompt)
-		&expect.BSnd{S: fmt.Sprintf("ssh %s@127.0.0.1 -o StrictHostKeyChecking=no\n", user)}, // login with core via ssh
-		&expect.BExp{R: "password:"},                 // wait for password question
+		&expect.BSnd{S: fmt.Sprintf(`su %s -c "su %s -c 'echo OK'"`, user, user) + "\n"}, // run an echo command forcing the user authentication
+		&expect.BExp{R: "[pP]assword:"},              // wait for password question
 		&expect.BSnd{S: fmt.Sprintf("%s\n", passwd)}, // write the password
-		&expect.BExp{R: `core@.*~`},                  // wait for prompt
+		&expect.BExp{R: `OK`},                        // wait for succeess message
 	}
 }

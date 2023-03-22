@@ -105,5 +105,5 @@ const (
 	layeringRegistryAdminSAName  = "test-registry-sa"
 
 	// DefaultExpectTimeout is the the fault timout for expect commands
-	DefaultExpectTimeout = 30 * time.Second
+	DefaultExpectTimeout = 10 * time.Second
 )
