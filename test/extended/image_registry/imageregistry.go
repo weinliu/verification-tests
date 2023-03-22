@@ -3642,7 +3642,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 	})
 
-	g.It("Author:xiuwang-Critical-59415-Low-59418-Could push manifest list image to internal registry", func() {
+	g.It("Author:xiuwang-ConnectedOnly-Critical-59415-Low-59418-Could push manifest list image to internal registry", func() {
 		var (
 			internalRegistry = "image-registry.openshift-image-registry.svc:5000"
 			multiArchImage   = "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"
@@ -3658,8 +3658,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Without correct rights can't push/pull manifest list images to/from internal registry")
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
-		output, err := exutil.DebugNodeWithChroot(oc, masterNode, "skopeo", "copy", "docker://"+multiArchImage, "docker://"+targetImage, "--all")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ := exutil.DebugNodeWithChroot(oc, masterNode, "skopeo", "copy", "docker://"+multiArchImage, "docker://"+targetImage, "--all")
 		if !strings.Contains(output, "authentication required") {
 			e2e.Failf("Could push manifest list image to internal registry wihtout right")
 		}
