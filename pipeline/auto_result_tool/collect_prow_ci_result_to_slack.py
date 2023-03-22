@@ -223,19 +223,20 @@ class SummaryClient:
 
 
     def notifyToSlack(self, notificationList=[]):
-        try:
-            msgList = []
-            for notification in notificationList:
-                msgList.append({"type": "section","text": {"type":"mrkdwn","text": notification}})
-            msg = {"blocks": msgList}
-            r = self.session.post(url=self.slack_url, json=msg)
-            if (r.status_code != 200) and (r.status_code != 201):
-                raise Exception("send slack message error: {0}".format(r.text))
-            return r.status_code
-        except BaseException as e:
-            print(e)
-            print("\n")
-            return None
+        for notificationListSplit in [notificationList[i:i+30] for i in range(0, len(notificationList), 30)]:
+            print(notificationListSplit)
+            try:
+                msgList = []
+                for notification in notificationListSplit:
+                    msgList.append({"type": "section","text": {"type":"mrkdwn","text": notification}})
+                msg = {"blocks": msgList}
+                r = self.session.post(url=self.slack_url, json=msg)
+                if (r.status_code != 200) and (r.status_code != 201):
+                    raise Exception("send slack message error: {0}".format(r.text))
+            except BaseException as e:
+                print(e)
+                print("\n")
+        return None
 
     def collectResultToSlack(self, launchID):
         result = self.collectResult(launchID)
