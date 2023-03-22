@@ -828,7 +828,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author: rrasouli@redhat.com
-	g.It("Author:rrasouli-Medium-37362-[wmco] wmco using correct golang version", func() {
+	g.It("Smokerun-Author:rrasouli-Medium-37362-[wmco] wmco using correct golang version", func() {
 		g.By("Fetch the correct golang version")
 		// get the golang version
 		getCMD := "oc version -ojson | jq '.serverVersion.goVersion'"
