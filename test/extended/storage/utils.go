@@ -978,7 +978,7 @@ func removeAnnotationFromSpecifiedResource(oc *exutil.CLI, resourceNamespace str
 func getByokKeyIDFromClusterCSIDriver(oc *exutil.CLI, driverProvisioner string) (keyID string) {
 	clustercsidriverJSONContent, getContentError := oc.AsAdmin().WithoutNamespace().Run("get").Args("clustercsidriver/"+driverProvisioner, "-ojson").Output()
 	o.Expect(getContentError).ShouldNot(o.HaveOccurred())
-	if !gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.driverType`).Exists() {
+	if !gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.`+cloudProvider).Exists() {
 		e2e.Logf("None kms key settings in clustercsidriver/%s, the test cluster is not a BYOK cluster", driverProvisioner)
 		return keyID
 	}
