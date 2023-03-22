@@ -864,4 +864,72 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		value = fetchJSONPathValue(oc, project3, "route/shard-ns3", jsonPath)
 		o.Expect(value).To(o.BeEmpty())
 	})
+
+	g.It("Author:mjoseph-NonPreRelease-High-38674-hard-stop-after annotation can be applied globally on all ingresscontroller [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp38674",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		routerpod := getRouterPod(oc, "ocp38674")
+		defaultRouterpod := getRouterPod(oc, "default")
+
+		g.By("Annotate the ingresses.config/cluster with ingress.operator.openshift.io/hard-stop-after globally")
+		defer oc.AsAdmin().WithoutNamespace().Run("annotate").Args(
+			"-n", ingctrl.namespace, "ingresses.config/cluster", "ingress.operator.openshift.io/hard-stop-after-").Execute()
+		err0 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args(
+			"-n", ingctrl.namespace, "ingresses.config/cluster", "ingress.operator.openshift.io/hard-stop-after=30m", "--overwrite").Execute()
+		o.Expect(err0).NotTo(o.HaveOccurred())
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+defaultRouterpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+defaultRouterpod))
+		err1 := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		g.By("Verify the annotation presence in the cluster gloabl config")
+		newRouterpod := getRouterPod(oc, "ocp38674")
+		newDefaultRouterpod := getRouterPod(oc, "default")
+		findAnnotation := getAnnotation(oc, oc.Namespace(), "ingress.config.openshift.io", "cluster")
+		o.Expect(findAnnotation).To(o.ContainSubstring(`"ingress.operator.openshift.io/hard-stop-after":"30m"`))
+
+		g.By("Check the env variable of the custom router pod to verify the hard stop duration is 30m")
+		env := readRouterPodEnv(oc, newRouterpod, "ROUTER_HARD_STOP_AFTER")
+		o.Expect(env).To(o.ContainSubstring(`30m`))
+
+		g.By("Check the env variable of the default router pod to verify the hard stop duration is 30m")
+		env1 := readRouterPodEnv(oc, newDefaultRouterpod, "ROUTER_HARD_STOP_AFTER")
+		o.Expect(env1).To(o.ContainSubstring(`30m`))
+
+		g.By("Annotate the ingresses.config/cluster with ingress.operator.openshift.io/hard-stop-after per ingresscontroller basis")
+		err2 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args(
+			"-n", ingctrl.namespace, "ingresscontrollers/"+ingctrl.name, "ingress.operator.openshift.io/hard-stop-after=45m", "--overwrite").Execute()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+newRouterpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+newRouterpod))
+
+		g.By("Verify the annotation presence in the ocp38674 controller config")
+		newRouterpod1 := getRouterPod(oc, "ocp38674")
+		findAnnotation2 := getAnnotation(oc, ingctrl.namespace, "ingresscontroller.operator.openshift.io", ingctrl.name)
+		o.Expect(findAnnotation2).To(o.ContainSubstring(`"ingress.operator.openshift.io/hard-stop-after":"45m"`))
+
+		g.By("Check the haproxy config on the defualt router pod to verify the hard stop value is still 30m")
+		checkoutput := readRouterPodData(oc, newDefaultRouterpod, "cat haproxy.config", "hard")
+		o.Expect(checkoutput).To(o.ContainSubstring(`hard-stop-after 30m`))
+
+		g.By("Check the haproxy config on the router pod to verify the hard stop value is changed to 45m")
+		checkoutput1 := readRouterPodData(oc, newRouterpod1, "cat haproxy.config", "hard")
+		o.Expect(checkoutput1).To(o.ContainSubstring(`hard-stop-after 45m`))
+	})
 })
