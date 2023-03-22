@@ -16,7 +16,7 @@ class SummaryClient:
                 "SDN":"@sdn-ovn-qe-team",
                 "STORAGE":"@storage-qe-team",
                 "Developer_Experience":"",
-                "User_Interface":"@yapei",
+                "User_Interface":"@ui-qe-team",
                 "PerfScale":"@perfscale-qe-team",
                 "Service_Development_B":"",
                 "NODE":"@node-qe-team",

@@ -16,7 +16,7 @@ class SummaryClient:
                 "SDN":"@sdn-ovn-qe-team",
                 "STORAGE":"@storage-qe-team",
                 "Developer_Experience":"",
-                "User_Interface":"@yapei",
+                "User_Interface":"@ui-qe-team",
                 "PerfScale":"@perfscale-qe-team",
                 "Service_Development_B":"",
                 "NODE":"@node-qe-team",
@@ -287,7 +287,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="python3 collect_prow_ci_result_to_slack.py", usage='''%(prog)s -l <launchID> -s <subteam> -t <token> --ignore_investigated''')
     parser.add_argument("-t","--token", default="")
     parser.add_argument("-s","--subteam", default="", help="subteam in g.Describe, separator is colon, eg OLM:OperatorSDK")
-    parser.add_argument("-l","--launchID", default="", help="the launch ID")
+    parser.add_argument("-l","--launchID", default="", required=True, help="the launch ID")
     parser.add_argument("-v","--version", default="", help="the release version, eg:4.12")
     parser.add_argument("-c","--cluster", default="", help="the jenkins build number of the cluster for debugging")
     parser.add_argument("-w","--webhook_url", default="", help="the webhook url used to send message")
