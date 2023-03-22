@@ -292,7 +292,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: tagao@redhat.com
-	g.It("Author:tagao-Medium-55696-add telemeter alert TelemeterClientFailures", func() {
+	g.It("ConnectedOnly-Author:tagao-Medium-55696-add telemeter alert TelemeterClientFailures", func() {
 		g.By("check TelemeterClientFailures alert is added")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "telemetry", "-ojsonpath={.spec.groups}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("TelemeterClientFailures"))
