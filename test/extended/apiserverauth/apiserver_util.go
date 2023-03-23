@@ -100,6 +100,12 @@ func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason string, c
 // GetEncryptionPrefix :
 func GetEncryptionPrefix(oc *exutil.CLI, key string) (string, error) {
 	var etcdPodName string
+
+	encryptionType, err1 := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	if encryptionType != "aesabc" && encryptionType != "aesgcm" {
+		e2e.Logf("The etcd is not encrypted on!")
+	}
 	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 		podName, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", "openshift-etcd", "-l=etcd", "-o=jsonpath={.items[0].metadata.name}").Output()
 		if err != nil {
@@ -114,7 +120,7 @@ func GetEncryptionPrefix(oc *exutil.CLI, key string) (string, error) {
 	}
 	var encryptionPrefix string
 	err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-		prefix, err := oc.WithoutNamespace().Run("rsh").Args("-n", "openshift-etcd", "-c", "etcd", etcdPodName, "bash", "-c", `etcdctl get `+key+` --prefix -w fields | grep -e "Value" | grep -o k8s:enc:aescbc:v1:[^:]*: | head -n 1`).Output()
+		prefix, err := oc.WithoutNamespace().Run("rsh").Args("-n", "openshift-etcd", "-c", "etcd", etcdPodName, "bash", "-c", `etcdctl get `+key+` --prefix -w fields | grep -e "Value" | grep -o k8s:enc:`+encryptionType+`:v1:[^:]*: | head -n 1`).Output()
 		if err != nil {
 			e2e.Logf("Fail to rsh into etcd pod, error: %s. Trying again", err)
 			return false, nil
@@ -154,7 +160,7 @@ func WaitEncryptionKeyMigration(oc *exutil.CLI, secret string) (bool, error) {
 	var pattern string
 	var waitTime time.Duration
 	if strings.Contains(secret, "openshift-apiserver") {
-		pattern = `migrated-resources: .*oauthaccesstokens.*oauthauthorizetokens.*routes`
+		pattern = `migrated-resources: .*route.openshift.io.*routes`
 		waitTime = 15 * time.Minute
 	} else if strings.Contains(secret, "openshift-kube-apiserver") {
 		pattern = `migrated-resources: .*configmaps.*secrets.*`
