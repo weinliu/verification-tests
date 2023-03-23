@@ -1,7 +1,9 @@
 package networking
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -70,8 +72,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		lrRouteListDelCmd := "ovn-nbctl lr-route-del " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
 		lrRouteListAddCmd := "ovn-nbctl lr-route-add " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
 
-		lRlOutput, lrlErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListAddCmd)
-		o.Expect(lrlErr).NotTo(o.HaveOccurred())
+		_, lrlErr1 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListAddCmd)
+		o.Expect(lrlErr1).NotTo(o.HaveOccurred())
 		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
 
 		defer switchOVNGatewayMode(oc, origMode)
@@ -81,8 +83,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ovnMasterPodName = getOVNLeaderPod(oc, "north")
 		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
 
-		lRlOutput, lrlErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListCmd)
-		o.Expect(lrlErr).NotTo(o.HaveOccurred())
+		lRlOutput, lrlErr2 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListCmd)
+		o.Expect(lrlErr2).NotTo(o.HaveOccurred())
 		o.Expect(lRlOutput).To(o.ContainSubstring("192.168.122.0/24"))
 		o.Expect(lRlOutput).To(o.ContainSubstring("192.168.122.4"))
 
@@ -92,12 +94,100 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ovnMasterPodName = getOVNLeaderPod(oc, "north")
 		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
 
-		lRlOutput, lrlErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListCmd)
-		o.Expect(lrlErr).NotTo(o.HaveOccurred())
+		_, lrlErr3 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListCmd)
+		o.Expect(lrlErr3).NotTo(o.HaveOccurred())
 		o.Expect(lRlOutput).To(o.ContainSubstring("192.168.122.0/24"))
 		o.Expect(lRlOutput).To(o.ContainSubstring("192.168.122.4"))
 		lrRouteListDelCmd = "ovn-nbctl lr-route-del " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
-		lRlOutput, lrlErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
-		o.Expect(lrlErr).NotTo(o.HaveOccurred())
+		_, lrlErr4 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
+		o.Expect(lrlErr4).NotTo(o.HaveOccurred())
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-Medium-61312-Unsupported scenarios in expanding cluster networks should be denied. [Disruptive]", func() {
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType != "ipv4single" {
+			g.Skip("The feature is currently supported on IPv4 cluster only, skip for other IP stack type for now")
+		}
+
+		origNetworkCIDR, orighostPrefix := getClusterNetworkInfo(oc)
+		origNetAddress := strings.Split(origNetworkCIDR, "/")[0]
+		origNetMaskVal, _ := strconv.Atoi(strings.Split(origNetworkCIDR, "/")[1])
+		origHostPrefixVal, _ := strconv.Atoi(orighostPrefix)
+		e2e.Logf("Original netAddress:%v, netMask:%v, hostPrefix: %v", origNetAddress, origNetMaskVal, origHostPrefixVal)
+
+		g.By("1. Verify that decreasing IP space by larger CIDR mask is not allowed")
+		newCIDR := origNetAddress + "/" + strconv.Itoa(origNetMaskVal+1)
+		e2e.Logf("Attempt to change to newCIDR: %v", newCIDR)
+
+		// patch command will be executed even though invalid config is supplied, so still call patchResourceAsAdmin function
+		restorePatchValue := "{\"spec\":{\"clusterNetwork\":[{\"cidr\":\"" + origNetworkCIDR + "\", \"hostPrefix\":" + orighostPrefix + "}],\"networkType\":\"OVNKubernetes\"}}"
+		defer patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
+		patchValue := "{\"spec\":{\"clusterNetwork\":[{\"cidr\":\"" + newCIDR + "\", \"hostPrefix\":" + orighostPrefix + "}],\"networkType\":\"OVNKubernetes\"}}"
+		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", patchValue)
+
+		o.Eventually(func() string {
+			return getCNOStatusCondition(oc)
+		}, 30*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [reducing IP range with a larger CIDR mask for clusterNetwork CIDR is unsupported]`))
+
+		// restore to original valid config before next step
+		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
+		o.Eventually(func() string {
+			return getCNOStatusCondition(oc)
+		}, 30*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [reducing IP range with a larger CIDR mask for clusterNetwork CIDR is unsupported]`))
+
+		g.By("2. Verify that changing hostPrefix is not allowed")
+		newHostPrefix := strconv.Itoa(origHostPrefixVal + 1)
+		e2e.Logf("Attempt to change to newHostPrefix: %v", newHostPrefix)
+
+		// patch command will be executed even though invalid config is supplied, so still call patchResourceAsAdmin function
+		patchValue = "{\"spec\":{\"clusterNetwork\":[{\"cidr\":\"" + origNetworkCIDR + "\", \"hostPrefix\":" + newHostPrefix + "}],\"networkType\":\"OVNKubernetes\"}}"
+		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", patchValue)
+		o.Eventually(func() string {
+			return getCNOStatusCondition(oc)
+		}, 30*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
+
+		// restore to original valid config before next step
+		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
+		o.Eventually(func() string {
+			return getCNOStatusCondition(oc)
+		}, 30*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
+
+		newHostPrefix = strconv.Itoa(origHostPrefixVal - 1)
+		e2e.Logf("Attempt to change to newHostPrefix: %v", newHostPrefix)
+
+		// patch command will be executed even though invalid config is supplied, so still call patchResourceAsAdmin function
+		patchValue = "{\"spec\":{\"clusterNetwork\":[{\"cidr\":\"" + origNetworkCIDR + "\", \"hostPrefix\":" + newHostPrefix + "}],\"networkType\":\"OVNKubernetes\"}}"
+		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", patchValue)
+		o.Eventually(func() string {
+			return getCNOStatusCondition(oc)
+		}, 30*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
+
+		// restore to original valid config before next step
+		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
+		o.Eventually(func() string {
+			return getCNOStatusCondition(oc)
+		}, 30*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
+
+		g.By("3. Verify that changing network IP is not allowed")
+		subAddress := strings.Split(origNetAddress, ".")
+		subAddressB, _ := strconv.Atoi(subAddress[1])
+		newSubAddressB := strconv.Itoa(subAddressB + 1)
+		newNetAddress := subAddress[0] + "." + newSubAddressB + "." + subAddress[2] + "." + subAddress[3]
+		newCIDR = newNetAddress + "/" + strconv.Itoa(origNetMaskVal)
+		e2e.Logf("Attempt to change to newCIDR: %v", newCIDR)
+
+		// patch command will be executed even though invalid config is supplied, so still call patchResourceAsAdmin function
+		patchValue = "{\"spec\":{\"clusterNetwork\":[{\"cidr\":\"" + newCIDR + "\", \"hostPrefix\":" + orighostPrefix + "}],\"networkType\":\"OVNKubernetes\"}}"
+		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", patchValue)
+		o.Eventually(func() string {
+			return getCNOStatusCondition(oc)
+		}, 30*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [modifying IP network value for clusterNetwork CIDR is unsupported]`))
+
+		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
+		o.Eventually(func() string {
+			return getCNOStatusCondition(oc)
+		}, 30*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying IP network value for clusterNetwork CIDR is unsupported]`))
 	})
 })

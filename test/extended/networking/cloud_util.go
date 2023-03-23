@@ -1202,3 +1202,16 @@ func getIPechoURLFromUPIPrivateVlanBM(oc *exutil.CLI) string {
 	}
 	return ""
 }
+
+func getClusterNetworkInfo(oc *exutil.CLI) (string, string) {
+	clusterNetworkInfoString, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network", "cluster", "-o=jsonpath={.spec.clusterNetwork}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// match out network CIDR and hostPrefix
+	pattern := regexp.MustCompile(`\d+\.\d+\.\d+\.\d+\/\d+|\d+`)
+	clusterNetworkInfo := pattern.FindAllString(clusterNetworkInfoString, 2)
+	networkCIDR := clusterNetworkInfo[0]
+	hostPrefix := clusterNetworkInfo[1]
+	e2e.Logf("network CIDR: %v;  hostPrefix: %v", networkCIDR, hostPrefix)
+	return networkCIDR, hostPrefix
+}

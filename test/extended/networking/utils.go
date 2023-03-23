@@ -2427,3 +2427,9 @@ func enableMulticast(oc *exutil.CLI, ns string) {
 	_, err := runOcWithRetry(oc.AsAdmin().WithoutNamespace(), "annotate", "namespace", ns, "k8s.ovn.org/multicast-enabled=true")
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+
+func getCNOStatusCondition(oc *exutil.CLI) string {
+	CNOStatusCondition, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clusteroperators", "network", "-o=jsonpath={.status.conditions}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return CNOStatusCondition
+}
