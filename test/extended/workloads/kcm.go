@@ -100,7 +100,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 
 		g.By("delete all the resource")
-		err = oc.WithoutNamespace().Run("delete").Args("all", "--all", "-n", oc.Namespace()).Execute()
+		err = oc.WithoutNamespace().Run("delete").Args("is", "--all", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("make sure all the imagestream are deleted")
