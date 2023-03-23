@@ -3195,7 +3195,13 @@ spec:
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", "opa-validating-webhook", "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding.rbac.authorization.k8s.io/opa-viewer", "--ignore-not-found").Execute()
 
-		// Skipped case on arm64 cluster
+		// Skipped case on arm64 and proxy cluster with techpreview
+		g.By("Check if it's a proxy cluster with techpreview")
+		featureTech := getResource(oc, asAdmin, withoutNamespace, "featuregate", "cluster", "-o=jsonpath={.spec.featureSet}")
+		httpProxy, _, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") && strings.Contains(featureTech, "TechPreview") {
+			g.Skip("Skip for proxy platform with techpreview")
+		}
 		exutil.SkipARM64(oc)
 		g.By("1. Create certificates with SAN.")
 		opensslCMD := fmt.Sprintf("openssl genrsa -out %v 2048", caKeypem)
@@ -3273,7 +3279,7 @@ EOF`, serverconf)
 
 		var deployerr error
 		deployconfigerr := wait.Poll(30*time.Second, 200*time.Second, func() (bool, error) {
-			deployOutput, deployerr := oc.WithoutNamespace().AsAdmin().Run("create").Args("deploymentconfig", "mydc", "--image", "openshift/hello-openshift", "-n", "test-ns"+randomStr).Output()
+			deployOutput, deployerr := oc.WithoutNamespace().AsAdmin().Run("create").Args("deploymentconfig", "mydc", "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "test-ns"+randomStr).Output()
 			if deployerr != nil {
 				return false, nil
 			}
