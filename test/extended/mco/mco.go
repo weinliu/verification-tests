@@ -2918,6 +2918,27 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-59837-Use wrong user when creating a file [Disruptive]", func() {
+		var (
+			mcName              = "mco-tc-59837-create-file-with-wrong-user"
+			wrongUserFileConfig = `{"contents": {"source": "data:text/plain;charset=utf-8;base64,dGVzdA=="},"mode": 420,"path": "/etc/wronguser-test-file.test","user": {"name": "wronguser"}}`
+			mcp                 = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			// quotemeta to scape regex characters in the file path
+			expectedNDMessage = regexp.QuoteMeta(`failed to retrieve file ownership for file \"/etc/wronguser-test-file.test\": failed to retrieve UserID for username: wronguser`)
+			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+		)
+
+		g.By("Create the force file using a MC")
+
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", wrongUserFileConfig)}
+		mc.skipWaitForMcp = true
+
+		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
+
+	})
+
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason
