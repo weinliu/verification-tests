@@ -491,16 +491,31 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37121-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial][Slow]", func() {
-		var ssb = scanSettingBindingDescription{
-			name:            "cis-test" + getRandomString(),
-			namespace:       "",
-			profilekind1:    "Profile",
-			profilename1:    "ocp4-cis",
-			profilename2:    "ocp4-cis-node",
-			scansettingname: "default",
-			template:        scansettingbindingTemplate,
-		}
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37121-High-61422-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial][Slow]", func() {
+		var (
+			ssb = scanSettingBindingDescription{
+				name:            "cis-test" + getRandomString(),
+				namespace:       "",
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-cis",
+				profilename2:    "ocp4-cis-node",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+			ccrsShouldExist = []string{
+				"ocp4-cis-kubelet-enable-streaming-connections",
+				"ocp4-cis-kubelet-eviction-thresholds-set-hard-imagefs-available",
+				"ocp4-cis-kubelet-eviction-thresholds-set-hard-memory-available",
+				"ocp4-cis-kubelet-eviction-thresholds-set-hard-nodefs-available",
+				"ocp4-cis-kubelet-eviction-thresholds-set-hard-nodefs-inodesfree"}
+			ccrsShouldNotExist = []string{
+				"ocp4-cis-kubelet-eviction-thresholds-set-hard-imagefs-inodesfree",
+				"ocp4-cis-kubelet-eviction-thresholds-set-soft-imagefs-available",
+				"ocp4-cis-kubelet-eviction-thresholds-set-soft-imagefs-inodesfree",
+				"ocp4-cis-kubelet-eviction-thresholds-set-soft-memory-available",
+				"ocp4-cis-kubelet-eviction-thresholds-set-soft-nodefs-available",
+				"ocp4-cis-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree"}
+		)
 
 		g.By("Check default profiles name ocp4-cis .. !!!\n")
 		subD.getProfileName(oc, "ocp4-cis")
@@ -522,7 +537,18 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check complianceSuite result through exit-code.. !!!\n")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
 
-		g.By("ocp-37121 The ComplianceSuite generated successfully using scansetting CR and cis profile and default scansetting... !!!\n")
+		g.By("Check ccr should exist and pass by default.. !!!\n")
+		for _, ccrShouldPass := range ccrsShouldExist {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", ccrShouldPass, "-n", ssb.namespace,
+				"-o=jsonpath={.status}"}).check(oc)
+		}
+
+		g.By("Check ccr should not exist.. !!!\n")
+		for _, ccrNotExist := range ccrsShouldNotExist {
+			newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"ccr", ccrNotExist, "-n", subD.namespace}).check(oc)
+		}
+
+		g.By("ocp-37121-61422 The ComplianceSuite generated successfully using scansetting CR and cis profile and default scansetting... !!!\n")
 	})
 
 	// author: pdhamdhe@redhat.com
