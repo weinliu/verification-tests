@@ -3320,7 +3320,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-11364-[platformmanagement_public_624] Create nodeport service", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-Medium-11364-[platformmanagement_public_624] Create nodeport service", func() {
 		g.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
