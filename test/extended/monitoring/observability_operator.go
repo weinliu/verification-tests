@@ -1,9 +1,10 @@
 package monitoring
 
 import (
+	"path/filepath"
+
 	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"path/filepath"
 )
 
 var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operator ConnectedOnly", func() {
@@ -38,7 +39,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 			namespace: "openshift-observability-operator",
 			template:  filepath.Join(oboBaseDir, "monitoringstack-secret.yaml"),
 		}
-		defer deleteMonitoringStack(oc, msD, secD, "rosa_mc")
+		defer func() {
+			if !exutil.IsROSA() {
+				deleteMonitoringStack(oc, msD, secD, "rosa_mc")
+			}
+		}()
 		g.By("Check observability operator pods liveliness")
 		checkOperatorPods(oc)
 		if !exutil.IsROSA() {
@@ -52,7 +57,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 
 	})
 
-	g.It("HyperShiftMGMT-ROSA-Author:Vibhu-Critical-57440-observability operator uninstall [Serial]", func() {
+	g.It("Author:Vibhu-Critical-57440-observability operator uninstall [Serial]", func() {
 		defer deleteOperator(oc)
 		g.By("Delete ObservabilityOperator")
 
