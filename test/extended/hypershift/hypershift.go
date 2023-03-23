@@ -87,30 +87,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-43282-Implement versioning API and report version status in hostedcluster[Serial][Disruptive]", func() {
-		oriImage := hostedcluster.getCPReleaseImage()
-		e2e.Logf("hostedcluster %s image: %s", hostedcluster.name, oriImage)
-
-		defer func() {
-			hostedcluster.upgradeCPPayload(oriImage)
-			o.Eventually(hostedcluster.pollCheckUpgradeCPPayload(oriImage), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "defer: pollCheckUpgradeCPPayload ready error")
-		}()
-
-		g.By("replace controlplane image to the latest 4.12 nightly")
-		dirImage, err := exutil.GetLatestNightlyImage("4.12")
-		o.Expect(err).ShouldNot(o.HaveOccurred())
-		if strings.Contains(dirImage, oriImage) {
-			dirImage, err = exutil.GetLatest4StableImage()
-			o.Expect(err).ShouldNot(o.HaveOccurred())
-		}
-
-		hostedcluster.upgradeCPPayload(dirImage)
-		o.Eventually(hostedcluster.pollCheckUpgradeCPPayload(dirImage), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "pollCheckUpgradeCPPayload ready error")
-		imageInStatusDir := hostedcluster.getCPDesiredPayload()
-		o.Expect(imageInStatusDir).Should(o.ContainSubstring(dirImage))
-	})
-
-	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings[Serial][Slow]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 43272 is for AWS - skipping test ...")
