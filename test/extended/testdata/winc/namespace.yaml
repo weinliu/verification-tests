@@ -7,4 +7,4 @@ metadata:
     security.openshift.io/scc.podSecurityLabelSync: "true"
     # set pods security profile to privileged. See https://kubernetes.io/docs/concepts/security/pod-security-admission/#pod-security-levels
     pod-security.kubernetes.io/enforce: "privileged"
-    openshift.io/cluster-monitoring: "true"
+    openshift.io/cluster-monitoring: "True"
