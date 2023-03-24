@@ -25,10 +25,6 @@ func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command stri
 		executeOption = append(executeOption, "--to-namespace="+debugNodeNamespace)
 	}
 
-	// TODO: When https://issues.redhat.com/browse/MIXEDARCH-130 dev completed on 4.13, remove the temp avoid know limitation condition
-	if exutil.IsHeterogeneousCluster(oc) {
-		executeOption = append(executeOption, "--image=quay.io/openshifttest/base-fedora@sha256:8962182b4bfc7ee362726ad66871334587e7e5695bec3d7cfc3acbca7a4d309c")
-	}
 	// Running oc debug node in normal projects
 	// (normal projects mean projects that are not clusters default projects like: like "default", "openshift-xxx" et al)
 	// need extra configuration on 4.12+ ocp test clusters
