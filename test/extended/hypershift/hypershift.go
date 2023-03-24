@@ -757,9 +757,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer hostedcluster.deleteNodePool(npNameReplace)
 		hostedcluster.createAwsNodePool(npNameReplace, replica)
 		hostedcluster.createAwsNodePool(npNameInPlace, replica)
-		o.Eventually(func() bool {
-			return hostedcluster.checkNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "WaitingForAvailableMachines"}, {"UpdatingConfig", "status", "True"}, {"UpdatingVersion", "status", "True"}})
-		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "WaitingForAvailableMachines"}, {"UpdatingConfig", "status", "True"}, {"UpdatingVersion", "status", "True"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npNameInPlace), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npNameReplace), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
 		hostedcluster.checkNodepoolAllConditions(npNameInPlace)
@@ -769,39 +767,27 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		hostedcluster.setNodepoolAutoScale(npNameReplace, "3", "1")
 		hostedcluster.setNodepoolAutoRepair(npNameReplace, "true")
 		hostedcluster.upgradeNodepoolPayloadInPlace(npNameReplace, "registry.ci.openshift.org/ocp/release:4.10.0-0.nightly-2022-03-23-095732", false)
-		o.Eventually(func() bool {
-			return hostedcluster.checkNodePoolConditions(npNameReplace, []nodePoolCondition{{"AutoscalingEnabled", "message", "Maximum nodes: 3, Minimum nodes: 1"}, {"AutorepairEnabled", "status", "True"}, {"ValidReleaseImage", "status", "False"}})
-		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameReplace, []nodePoolCondition{{"AutoscalingEnabled", "message", "Maximum nodes: 3, Minimum nodes: 1"}, {"AutorepairEnabled", "status", "True"}, {"ValidReleaseImage", "status", "False"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
 		doOcpReq(oc, OcpPatch, true, "nodepools", npNameReplace, "-n", hostedcluster.namespace, "--type=merge", fmt.Sprintf(`--patch={"spec": {"replicas": 2}}`))
-		o.Eventually(func() bool {
-			return hostedcluster.checkNodePoolConditions(npNameReplace, []nodePoolCondition{{"AutoscalingEnabled", "message", "only one of nodePool.Spec.Replicas or nodePool.Spec.AutoScaling can be set"}})
-		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameReplace, []nodePoolCondition{{"AutoscalingEnabled", "message", "only one of nodePool.Spec.Replicas or nodePool.Spec.AutoScaling can be set"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
 
 		g.By("upgrade nodepool payload InPlace, enable autoscaling and autorepair verify nodepool conditions should correctly generate")
 		image := hostedcluster.getCPReleaseImage()
 		hostedcluster.checkNodepoolAllConditions(npNameInPlace)
 		hostedcluster.upgradeNodepoolPayloadInPlace(npNameInPlace, "quay.io/openshift-release-dev/ocp-release:4.11.20-x86_64", true)
-		o.Eventually(func() bool {
-			return hostedcluster.checkNodePoolConditions(npNameInPlace, []nodePoolCondition{{"ValidReleaseImage", "message", "y-stream"}})
-		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"ValidReleaseImage", "message", "y-stream"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
 		hostedcluster.upgradeNodepoolPayloadInPlace(npNameInPlace, "quay.io/openshift-release-dev/ocp-release:quay.io/openshift-release-dev/ocp-release:4.13.0-ec.1-x86_64", false)
-		o.Eventually(func() bool {
-			return hostedcluster.checkNodePoolConditions(npNameInPlace, []nodePoolCondition{{"ValidReleaseImage", "message", "invalid reference format"}})
-		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"ValidReleaseImage", "message", "invalid reference format"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
 		hostedcluster.upgradeNodepoolPayloadInPlace(npNameInPlace, image, false)
 		hostedcluster.setNodepoolAutoScale(npNameInPlace, "6", "3")
 		hostedcluster.setNodepoolAutoRepair(npNameInPlace, "true")
-		o.Eventually(func() bool {
-			return hostedcluster.checkNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "ScalingUp"}, {"AutoscalingEnabled", "message", "Maximum nodes: 6, Minimum nodes: 3"}, {"AutorepairEnabled", "status", "True"}})
-		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "ScalingUp"}, {"AutoscalingEnabled", "message", "Maximum nodes: 6, Minimum nodes: 3"}, {"AutorepairEnabled", "status", "True"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
 
 		g.By("creade nodepool with minversion and verify nodepool condition")
 		npNameMinVersion := "49436np-minversion-" + strings.ToLower(exutil.RandStrDefault())
 		defer hostedcluster.deleteNodePool(npNameMinVersion)
 		NewAWSNodePool(npNameMinVersion, hostedcluster.name, hostedcluster.namespace).WithNodeCount(&replica).WithReleaseImage("quay.io/openshift-release-dev/ocp-release:4.10.45-x86_64").CreateAWSNodePool()
-		o.Eventually(func() bool {
-			return hostedcluster.checkNodePoolConditions(npNameMinVersion, []nodePoolCondition{{"ValidReleaseImage", "message", "4.11.0"}})
-		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameMinVersion, []nodePoolCondition{{"ValidReleaseImage", "message", "4.11.0"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
 	})
 
 	// author: liangli@redhat.com
@@ -930,6 +916,59 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		res2, err := bashClient.Run(fmt.Sprintf("openssl verify -CAfile %s %s", dirname+"/ca.crt", dirname+"/system-admin_client.crt")).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(res2).Should(o.ContainSubstring(fmt.Sprintf("error %s: verification failed", dirname+"/system-admin_client.crt")))
+	})
+
+	// author: mihuang@redhat.com
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:mihuang-Critical-60744-Better signal for NodePool inability to talk to management side[Serial][Disruptive]", func() {
+		g.By("Create a nodepool to verify that NodePool inability to talk to management side")
+		replica := 1
+		nodepoolName := "60744np-" + strings.ToLower(exutil.RandStrDefault())
+		defer hostedcluster.deleteNodePool(nodepoolName)
+		hostedcluster.createAwsNodePool(nodepoolName, replica)
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(nodepoolName), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
+		hostedcluster.checkNodePoolConditions(nodepoolName, []nodePoolCondition{{"ReachedIgnitionEndpoint", "status", "True"}})
+
+		g.By("Check if metric 'ign_server_get_request' is exposed for nodepool by ignition server")
+		o.Expect(strings.Contains(doOcpReq(oc, "logs", true, "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-l", "app=ignition-server"), "ignition")).Should(o.BeTrue())
+		ignitionPodNameList := strings.Split(doOcpReq(oc, OcpGet, true, "pod", "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-o", `jsonpath={.items[?(@.metadata.labels.app=="ignition-server")].metadata.name}`), " ")
+		foundMetric := false
+		for _, ignitionPodName := range ignitionPodNameList {
+			if strings.Contains(doOcpReq(oc, OcpExec, true, "-n", hostedcluster.namespace+"-"+hostedcluster.name, ignitionPodName, "--", "curl", "0.0.0.0:8080/metrics"), fmt.Sprintf(`ign_server_get_request{nodePool="clusters/%s"}`, nodepoolName)) {
+				foundMetric = true
+				break
+			}
+		}
+		o.Expect(foundMetric).Should(o.BeTrue(), "ignition server get request metric not found")
+
+		g.By("Modify ACL on VPC, deny all inbound and outbound traffic")
+		vpc := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-o", "jsonpath={.spec.platform.aws.cloudProviderConfig.vpc}")
+		region := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-o", "jsonpath={.spec.platform.aws.region}")
+		var bashClient = NewCmdClient().WithShowInfo(true)
+		acl, err := bashClient.Run(fmt.Sprintf(`aws ec2 describe-network-acls --filters Name=vpc-id,Values=%s --query 'NetworkAcls[].NetworkAclId' --region %s --output text`, vpc, region)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(acl).Should(o.ContainSubstring("acl-"))
+		defer func() {
+			bashClient.Run(fmt.Sprintf(`aws ec2 replace-network-acl-entry --network-acl-id %s --ingress --rule-number 100 --protocol -1 --rule-action allow --cidr-block 0.0.0.0/0 --region %s`, acl, region)).Output()
+		}()
+		cmdOutDeny1, err := bashClient.Run(fmt.Sprintf(`aws ec2 replace-network-acl-entry --network-acl-id %s --ingress --rule-number 100 --protocol -1 --rule-action deny --cidr-block 0.0.0.0/0 --region %s`, acl, region)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cmdOutDeny1).Should(o.BeEmpty())
+		defer func() {
+			bashClient.Run(fmt.Sprintf(`aws ec2 replace-network-acl-entry --network-acl-id %s --egress --rule-number 100 --protocol -1 --rule-action allow --cidr-block 0.0.0.0/0 --region %s`, acl, region)).Output()
+		}()
+		cmdOutDeny2, err := bashClient.Run(fmt.Sprintf(`aws ec2 replace-network-acl-entry --network-acl-id %s --egress --rule-number 100 --protocol -1 --rule-action deny --cidr-block 0.0.0.0/0 --region %s`, acl, region)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cmdOutDeny2).Should(o.BeEmpty())
+
+		g.By("Check metric 'ign_server_get_request' is not exposed for nodepool by ignition server after ACL modification")
+		nodepoolName1 := "60744np-1-" + strings.ToLower(exutil.RandStrDefault())
+		defer hostedcluster.deleteNodePool(nodepoolName1)
+		hostedcluster.createAwsNodePool(nodepoolName1, replica)
+		hostedcluster.setNodepoolAutoRepair(nodepoolName1, "true")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(nodepoolName1, []nodePoolCondition{{"ReachedIgnitionEndpoint", "status", "False"}, {"AutorepairEnabled", "status", "False"}}), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		for _, ignitionPodName := range ignitionPodNameList {
+			o.Expect(doOcpReq(oc, OcpExec, true, "-n", hostedcluster.namespace+"-"+hostedcluster.name, ignitionPodName, "--", "curl", "0.0.0.0:8080/metrics")).ShouldNot(o.ContainSubstring(fmt.Sprintf(`ign_server_get_request{nodePool="clusters/%s"}`, nodepoolName1)))
+		}
 	})
 
 	// author: mihuang@redhat.com

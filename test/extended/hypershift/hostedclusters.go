@@ -436,6 +436,12 @@ type nodePoolCondition struct {
 	expectConditionsResult string
 }
 
+func (h *hostedCluster) pollCheckNodePoolConditions(npName string, conditions []nodePoolCondition) func() bool {
+	return func() bool {
+		return h.checkNodePoolConditions(npName, conditions)
+	}
+}
+
 func (h *hostedCluster) checkNodePoolConditions(npName string, conditions []nodePoolCondition) bool {
 	o.Expect(doOcpReq(h.oc, OcpGet, true, "nodepools", "-n", h.namespace, "-ojsonpath={.items[*].metadata.name}")).Should(o.ContainSubstring(npName))
 	for _, condition := range conditions {
