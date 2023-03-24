@@ -560,8 +560,8 @@ func GetNodeNameByMachineset(oc *CLI, machinesetName string) string {
 }
 
 // AssertIfMCPChangesAppliedByName checks the MCP of a given oc client and determines if the machine counts are as expected
-func AssertIfMCPChangesAppliedByName(oc *CLI, mcpName string, timeDurationMin int) {
-	err := wait.Poll(1*time.Minute, time.Duration(timeDurationMin)*time.Minute, func() (bool, error) {
+func AssertIfMCPChangesAppliedByName(oc *CLI, mcpName string, timeDurationSec int) {
+	err := wait.Poll(time.Duration(timeDurationSec/10)*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
 		var (
 			mcpMachineCount         string
 			mcpReadyMachineCount    string
@@ -611,11 +611,11 @@ func AssertIfMCPChangesAppliedByName(oc *CLI, mcpName string, timeDurationMin in
 }
 
 // DeleteMCAndMCPByName used for checking if node return to worker machine config pool and the specified mcp is zero, then delete mc and mcp
-func DeleteMCAndMCPByName(oc *CLI, mcName string, mcpName string, timeDurationMin int) {
+func DeleteMCAndMCPByName(oc *CLI, mcName string, mcpName string, timeDurationSec int) {
 
 	//Check if labeled node return back to worker mcp, then delete mc and mcp after worker mcp is ready
 	e2e.Logf("Check if labeled node return back to worker mcp")
-	AssertIfMCPChangesAppliedByName(oc, "worker", timeDurationMin)
+	AssertIfMCPChangesAppliedByName(oc, "worker", timeDurationSec)
 
 	mcpNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -846,4 +846,52 @@ func Is3MasterNoDedicatedWorkerNode(oc *CLI) bool {
 		}
 	}
 	return matchCount == 3
+}
+
+// SpecifyMachinesetWithDifferentInstanceType used for specify cpu type that different from default one
+func SpecifyMachinesetWithDifferentInstanceType(oc *CLI) string {
+
+	var expectedInstanceType string
+	//Check cloud provider name
+	iaasPlatform := CheckPlatform(oc)
+
+	//Get instance type of the first machineset
+	currentInstanceType := GetMachineSetInstanceType(oc)
+
+	switch iaasPlatform {
+	case "aws":
+		//we use m6i.xlarge as default instance type, if current machineset instanceType is "m6i.xlarge", we use "m6i.2xlarge"
+		expectedInstanceType = "m6i.xlarge"
+		if currentInstanceType == expectedInstanceType {
+			expectedInstanceType = "m6i.2xlarge"
+		}
+	case "azure":
+		//we use Standard_DS2_v2 as default instance type, if current machineset instanceType is "Standard_DS2_v2", we use "Standard_DS3_v2"
+		expectedInstanceType = "Standard_DS2_v2"
+		if currentInstanceType == expectedInstanceType {
+			expectedInstanceType = "Standard_DS3_v2"
+		}
+	case "gcp":
+		// we use n1-standard-2 as default instance type, if current machineset instanceType is "n1-standard-2", we use "n1-standard-4"
+		expectedInstanceType = "n1-standard-2"
+		if currentInstanceType == expectedInstanceType {
+			expectedInstanceType = "n1-standard-4"
+		}
+	case "ibmcloud":
+		//we use bx2-2x8 as default instance type, if current machineset instanceType is "bx2-2x8", we use "bx2d-4x16"
+		expectedInstanceType = "bx2-2x8"
+		if currentInstanceType == expectedInstanceType {
+			expectedInstanceType = "bx2d-4x16"
+		}
+	case "alibabacloud":
+		//we use ecs.g6.large as default instance type, if current machineset instanceType is "ecs.g6.large", we use "ecs.g6.xlarge"
+		expectedInstanceType = "ecs.g6.large"
+		if currentInstanceType == expectedInstanceType {
+			expectedInstanceType = "ecs.g6.xlarge"
+		}
+	default:
+		e2e.Logf("Unsupported cloud provider specified, please check")
+		expectedInstanceType = ""
+	}
+	return expectedInstanceType
 }

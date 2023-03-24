@@ -45,6 +45,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		openshiftNodePostgresqlFile   = exutil.FixturePath("testdata", "psap", "nto", "openshift-node-postgresql.yaml")
 		netPluginFile                 = exutil.FixturePath("testdata", "psap", "nto", "net-plugin-tuned.yaml")
 		cloudProviderFile             = exutil.FixturePath("testdata", "psap", "nto", "cloud-provider-profile.yaml")
+		nodeDiffCPUsTunedBootFile     = exutil.FixturePath("testdata", "psap", "nto", "node-diffcpus-tuned-bootloader.yaml")
+		nodeDiffCPUsMCPFile           = exutil.FixturePath("testdata", "psap", "nto", "node-diffcpus-mcp.yaml")
 
 		isNTO          bool
 		isPAOInstalled bool
@@ -420,7 +422,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The master node %v has been rebooted", masterNodeName)
 
 		g.By("Check MachineConfigPool for expected changes")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "master", 12)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "master", 720)
 
 		g.By("Ensure the settings took effect on the master nodes, only check the first rebooted nodes")
 		assertIfMasterNodeChangesApplied(oc, masterNodeName)
@@ -1139,7 +1141,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
 		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
-		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-rt", "worker-rt", 5)
+		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-rt", "worker-rt", 300)
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-rt-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-realtime", "-n", ntoNamespace, "--ignore-not-found").Execute()
 
@@ -1164,8 +1166,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ntoMCPFile, "-p", "MCP_NAME=worker-rt")
 
 		g.By("Assert if machine config pool applied for worker nodes")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 5)
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-rt", 5)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 300)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-rt", 300)
 
 		g.By("Assert if openshift-realtime profile was applied ...")
 		//Verify if the new profile is applied
@@ -1193,7 +1195,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfNodeSchedulingDisabled(oc)
 
 		g.By("Assert if machine config pool applied for worker nodes")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-rt", 5)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-rt", 300)
 
 		g.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
@@ -1208,7 +1210,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//otherwise the mcp will keep degrade state, it will affected other test case that use mcp
 		g.By("Delete custom MC and MCP by following right way...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-rt-").Execute()
-		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-rt", "worker-rt", 5)
+		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-rt", "worker-rt", 300)
 	})
 
 	g.It("NonHyperShiftHOST-Author:liqcui-Medium-29804-Tuned profile is updated after incorrect tuned CR is fixed [Disruptive]", func() {
@@ -1307,7 +1309,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
-		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-cnf", "worker-cnf", 5)
+		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-cnf", "worker-cnf", 300)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "performance-patch", "-n", ntoNamespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", "performance", "--ignore-not-found").Execute()
 
@@ -1338,7 +1340,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyOperatorResourceByYaml(oc, paoNamespace, paoWorkerCnfMCPFile)
 
 		g.By("Assert if the MCP worker-cnf has been successfully applied ...")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 8)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 480)
 
 		g.By("Check if new profile in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
@@ -1421,7 +1423,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//otherwise the mcp will keep degrade state, it will affected other test case that use mcp
 		g.By("Delete custom MC and MCP by following right way...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-cnf-").Execute()
-		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-cnf", "worker-cnf", 8)
+		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-cnf", "worker-cnf", 480)
 	})
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-45686-NTO Creating tuned profile with references to not yet existing Performance Profile configuration.[Disruptive] [Slow]", func() {
@@ -1447,7 +1449,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			exutil.InstallPAO(oc, paoNamespace)
 		}
 
-		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-optimize", "worker-optimize", 6)
+		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-optimize", "worker-optimize", 360)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "include-performance-profile", "-n", ntoNamespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", "optimize", "--ignore-not-found").Execute()
 
@@ -1545,7 +1547,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//otherwise the mcp will keep degrade state, it will affected other test case that use mcp
 		g.By("Delete custom MC and MCP by following right way...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-optimize-").Execute()
-		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-optimize", "worker-optimize", 8)
+		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-optimize", "worker-optimize", 480)
 	})
 
 	g.It("Author:liqcui-Medium-36152-NTO Get metrics and alerts", func() {
@@ -1709,7 +1711,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
 		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
-		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-hp", "worker-hp", 5)
+		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-hp", "worker-hp", 300)
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-hp-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "hugepages", "-n", ntoNamespace, "--ignore-not-found").Execute()
 
@@ -1782,7 +1784,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("The right way to delete custom MC and MCP...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-hp-").Execute()
-		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-hp", "worker-hp", 8)
+		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-hp", "worker-hp", 480)
 	})
 
 	g.It("NonPreRelease-Author:liqcui-Medium-49439-NTO can start and stop stalld when relying on Tuned '[service]' plugin.[Disruptive]", func() {
@@ -2322,7 +2324,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			exutil.InstallPAO(oc, paoNamespace)
 		}
 
-		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 8)
+		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 480)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("performanceprofile", "pao-baseprofile", "--ignore-not-found").Execute()
 
 		//Use the last worker node as labeled node
@@ -2361,7 +2363,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyOperatorResourceByYaml(oc, "", paoBaseProfileMCP)
 
 		g.By("Assert if machine config pool applied for worker nodes")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 10)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 600)
 
 		g.By("Check if new profile openshift-node-performance-pao-baseprofile in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
@@ -2457,7 +2459,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//otherwise the mcp will keep degrade state, it will affected other test case that use mcp
 		g.By("Delete custom MC and MCP by following correct logic ...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-pao-").Execute()
-		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 8)
+		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 480)
 	})
 
 	g.It("NonHyperShiftHOST-Author:liqcui-Medium-53053-NTO will automatically delete profile with unknown/stuck state. [Disruptive]", func() {
@@ -2579,5 +2581,145 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// The expected Cpus_allowed_list in /proc/$PID/status should be 0 or 0,2-N
 		g.By("Verified the cpu allow list in cgroup black list for nginx process...")
 		o.Expect(assertProcessNOTInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "nginx| tail -1", nodeCPUCoresInt)).To(o.Equal(true))
+	})
+	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-60743-NTO No race to update MC when nodes with different number of CPUs are in the same MCP. [Disruptive] [Slow]", func() {
+
+		// test requires NTO to be installed
+		isSNO := exutil.IsSNOCluster(oc)
+
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
+		}
+
+		haveMachineSet := exutil.IsMachineSetExist(oc)
+
+		if !haveMachineSet {
+			g.Skip("No machineset found, skipping test ...")
+		}
+
+		// currently test is only supported on AWS, GCP, Azure, ibmcloud, alibabacloud
+		supportPlatforms := []string{"aws", "gcp", "azure", "ibmcloud", "alibabacloud"}
+
+		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
+			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
+		}
+
+		//Use the last worker node as labeled node
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Only used for debug NTO version
+		//ntoImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "cluster-node-tuning-operator", "-n", ntoNamespace, "-ojsonpath={.spec.template.spec.containers[*].image}").Output()
+		//e2e.Logf("The image of NTO is: \n%v", ntoImage)
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		//Get NTO Operator Pod Name
+		ntoOperatorPodName := getNTOOperatorPodName(oc, ntoNamespace)
+
+		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
+		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-diffcpus", "worker-diffcpus", 180)
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-diffcpus-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-bootcmdline-cpu", "-n", ntoNamespace, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineset", "ocp-psap-qe-diffcpus", "-n", "openshift-machine-api", "--ignore-not-found").Execute()
+
+		g.By("Label the last node with node-role.kubernetes.io/worker-diffcpus=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-diffcpus=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a new machineset with different instance type.")
+		newMachinesetInstanceType := exutil.SpecifyMachinesetWithDifferentInstanceType(oc)
+		o.Expect(newMachinesetInstanceType).NotTo(o.BeEmpty())
+		exutil.CreateMachinesetbyInstanceType(oc, "ocp-psap-qe-diffcpus", newMachinesetInstanceType)
+
+		g.By("Wait for new node is ready when machineset created")
+		//1 means replicas=1
+		exutil.WaitForMachinesRunning(oc, 1, "ocp-psap-qe-diffcpus")
+
+		secondTunedNodeName := exutil.GetNodeNameByMachineset(oc, "ocp-psap-qe-diffcpus")
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", secondTunedNodeName, "node-role.kubernetes.io/worker-diffcpus-", "--overwrite").Execute()
+		g.By("Label the second node with node-role.kubernetes.io/worker-diffcpus=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", secondTunedNodeName, "node-role.kubernetes.io/worker-diffcpus=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create machine config pool")
+		exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", nodeDiffCPUsMCPFile, "-p", "MCP_NAME=worker-diffcpus")
+
+		g.By("Create openshift-bootcmdline-cpu tuned profile")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, nodeDiffCPUsTunedBootFile)
+
+		g.By("Check if new profile in in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("openshift-bootcmdline-cpu"))
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Assert if the status of adding the two worker node into worker-diffcpus mcp, mcp applied")
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-diffcpus", 360)
+
+		g.By("Assert if openshift-bootcmdline-cpu profile was applied ...")
+		//Verify if the new profile is applied
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-bootcmdline-cpu")
+		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(profileCheck).To(o.Equal("openshift-bootcmdline-cpu"))
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Assert if cmdline was applied in machineconfig...")
+		AssertTunedAppliedMC(oc, "worker-diffcpus", "cpus=")
+
+		g.By("Assert if cmdline was applied in labled node...")
+		o.Expect(AssertTunedAppliedToNode(oc, tunedNodeName, "cpus=")).To(o.Equal(true))
+
+		g.By("<Profiles with bootcmdline conflict> warn message will show in oc get co/node-tuning")
+		coNodeTuningStdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/node-tuning").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(coNodeTuningStdOut).To(o.ContainSubstring("Profiles with bootcmdline conflict"))
+
+		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoOperatorPodName, "25", 180, "due to kernel arguments change with unchanged input configuration")
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		//Verify if the <Profiles with bootcmdline conflict> warn message disapper after removing custom tuned profile
+		g.By("Delete openshift-bootcmdline-cpu tuned in labled node...")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-bootcmdline-cpu", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		//The custom mc and mcp must be deleted by correct sequence, unlabel first and labeled node return to worker mcp, then delete mc and mcp
+		//otherwise the mcp will keep degrade state, it will affected other test case that use mcp
+		g.By("Removing custom MC and MCP from mcp worker-diffcpus...")
+		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-diffcpus-").Execute()
+
+		//remove node from mcp worker-diffcpus
+		//To reduce time using delete machineset instead of unlabel secondTunedNodeName node
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineset", "ocp-psap-qe-diffcpus", "-n", "openshift-machine-api", "--ignore-not-found").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", secondTunedNodeName, "node-role.kubernetes.io/worker-diffcpus-").Execute()
+
+		g.By("Assert if first worker node return to worker mcp")
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 360)
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.BeEmpty())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("<Profiles with bootcmdline conflict> warn message will disappear after removing worker node from mcp worker-diffcpus")
+		assertCONodeTuningStatusWithoutWARNWithRetry(oc, 180, "Profiles with bootcmdline conflict")
+
+		g.By("Assert if isolcpus was applied in labled node...")
+		o.Expect(AssertTunedAppliedToNode(oc, tunedNodeName, "cpus=")).To(o.Equal(false))
 	})
 })

@@ -606,6 +606,7 @@ func AssertTunedAppliedToNode(oc *exutil.CLI, tunedNodeName string, filter strin
 		e2e.Logf("The result is: %v", contentLines[0])
 		isMatch = true
 	} else {
+		e2e.Logf("the result mismatch the filter: %v", filter)
 		isMatch = false
 	}
 	return isMatch
@@ -899,4 +900,52 @@ func assertProcessInCgroupSchedulerBlacklist(oc *exutil.CLI, tunedNodeName strin
 
 	e2e.Logf("Match cgroup Cpus_allowed_list for process %v is: %v", processFilter, isMatch)
 	return isMatch
+}
+
+// getNTOOperatorPodName retrun NTO operator POD name
+func getNTOOperatorPodName(oc *exutil.CLI, namespace string) string {
+	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "pods", "-lname=cluster-node-tuning-operator", "-ojsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(podName).NotTo(o.BeEmpty())
+	return podName
+}
+
+// assertCONodeTuningStatusWithoutWARNWithRetry sometime the WARN messages disappear with delay, so need to retry checking
+func assertCONodeTuningStatusWithoutWARNWithRetry(oc *exutil.CLI, timeDurationSec int, filter string) {
+
+	err := wait.Poll(time.Duration(timeDurationSec/10)*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+
+		coNodeTuningStdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/node-tuning").Output()
+		if err != nil {
+			e2e.Logf("the status of co/node-tuning abnormal, please check")
+			return false, err
+		}
+
+		regCONodeTuningStdOut, err := regexp.Compile(".*" + filter + ".*")
+		if err != nil {
+			e2e.Logf("Un-supported filter %v, please check", filter)
+			return false, err
+		}
+
+		isMatch := regCONodeTuningStdOut.MatchString(coNodeTuningStdOut)
+		if isMatch {
+			loglines := regCONodeTuningStdOut.FindAllString(coNodeTuningStdOut, -1)
+			e2e.Logf("The status of co/node-tuning is:%v \n%v\n", coNodeTuningStdOut, loglines[0])
+			e2e.Logf("The keywords of co/node-tuning still found, try next ...")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The checking of co/node-tuning met with unexpected error, please check")
+}
+
+// fuction to check given string is in array or not
+func implStringArrayContains(stringArray []string, name string) bool {
+	// iterate over the array and compare given string to each element
+	for _, value := range stringArray {
+		if value == name {
+			return true
+		}
+	}
+	return false
 }
