@@ -258,6 +258,15 @@ func jsonEncode(s string) string {
 	return string(e)
 }
 
+// MarshalOrFail returns a marshalled interface or panics
+func MarshalOrFail(input interface{}) []byte {
+	bytes, err := json.Marshal(input)
+	if err != nil {
+		o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "The data cannot be marshaled. Data: %v", input)
+	}
+	return bytes
+}
+
 func getURLEncodedFileConfig(destinationPath, content, mode string) string {
 	encodedContent := url.PathEscape(content)
 
@@ -265,9 +274,7 @@ func getURLEncodedFileConfig(destinationPath, content, mode string) string {
 }
 
 func getBase64EncodedFileConfig(destinationPath, content, mode string) string {
-	encodedContent := b64.StdEncoding.EncodeToString([]byte(content))
-
-	return getFileConfig(destinationPath, "data:text/plain;charset=utf-8;base64,"+encodedContent, mode)
+	return getFileConfig(destinationPath, GetBase64EncodedFileSourceContent(content), mode)
 }
 
 func getFileConfig(destinationPath, source, mode string) string {
@@ -617,4 +624,32 @@ func GetCurrentTestPolarionIDNumber() string {
 
 	r := regexp.MustCompile(`\d+`)
 	return r.FindString(name)
+}
+
+// GetBase64EncodedFileSourceContent returns the ignition config "source" value for a content file encoded in base64
+func GetBase64EncodedFileSourceContent(fileContent string) string {
+
+	encodedContent := b64.StdEncoding.EncodeToString([]byte(fileContent))
+
+	return "data:text/plain;charset=utf-8;base64," + encodedContent
+}
+
+// ConvertOctalPermissionsToDecimalOrFail transfomr an octal permission (0640) to its decimal form (416)
+func ConvertOctalPermissionsToDecimalOrFail(octalPerm string) int {
+
+	o.ExpectWithOffset(1, octalPerm).To(o.And(
+		o.Not(o.BeEmpty()),
+		o.HavePrefix("0")),
+		"Error the octal permissions %s should not be empty and should start with a '0' character")
+
+	// parse the octal string and conver to integer
+	iMode, err := strconv.ParseInt(octalPerm, 8, 64)
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error parsing string %s to ocatl", octalPerm)
+
+	return int(iMode)
+}
+
+// PtrInt returns the pointer to an integer
+func PtrInt(a int) *int {
+	return &a
 }

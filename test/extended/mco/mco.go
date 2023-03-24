@@ -2939,6 +2939,158 @@ nulla pariatur.`
 
 	})
 
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-59867-Create files specifying user and group [Disruptive]", func() {
+		var (
+			filesContent = "test"
+			coreUserID   = 1000
+			coreGroupID  = 1000
+			rootUserID   = 0
+			admGroupID   = 4
+
+			allFiles = []ign32File{
+				{
+					Path: "/etc/core-core-name-test-file.test",
+					Contents: ign32Contents{
+						Source: GetBase64EncodedFileSourceContent(filesContent),
+					},
+					Mode: PtrInt(420), // decimal 0644
+					User: ign32FileUser{
+						Name: "core",
+					},
+					Group: ign32FileGroup{
+						Name: "core",
+					},
+				},
+				{
+					Path: "/etc/core-core-id-test-file.test",
+					Contents: ign32Contents{
+						Source: GetBase64EncodedFileSourceContent(filesContent),
+					},
+					Mode: PtrInt(416), // decimal 0640
+					User: ign32FileUser{
+						ID: PtrInt(coreUserID), // core user ID number
+					},
+					Group: ign32FileGroup{
+						ID: PtrInt(coreGroupID), // core group ID number
+					},
+				},
+				{
+					Path: "/etc/root-adm-id-test-file.test",
+					Contents: ign32Contents{
+						Source: GetBase64EncodedFileSourceContent(filesContent),
+					},
+					Mode: PtrInt(384), // decimal 0600
+					User: ign32FileUser{
+						ID: PtrInt(rootUserID),
+					},
+					Group: ign32FileGroup{
+						ID: PtrInt(admGroupID),
+					},
+				},
+				{
+					Path: "/etc/nouser-test-file.test",
+					Contents: ign32Contents{
+						Source: GetBase64EncodedFileSourceContent(filesContent),
+					},
+					Mode: PtrInt(420), // decimal 0644
+					User: ign32FileUser{
+						ID: PtrInt(12343), // this user does not exist
+					},
+					Group: ign32FileGroup{
+						ID: PtrInt(34321), // this group does not exist
+					},
+				},
+			}
+			workerNode = NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		)
+
+		g.By("Create new machine config to create files with different users and groups")
+		fileConfig := MarshalOrFail(allFiles)
+		mcName := "tc-59867-create-files-with-users"
+
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc.parameters = []string{fmt.Sprintf("FILES=%s", fileConfig)}
+		defer mc.delete()
+
+		mc.create()
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Check that all files have been created with the right user, group, permissions and data")
+		for _, file := range allFiles {
+			logger.Infof("")
+			logger.Infof("CHecking file: %s", file.Path)
+			rf := NewRemoteFile(workerNode, file.Path)
+			o.Expect(rf.Fetch()).NotTo(o.HaveOccurred(), "Error getting the file %s in node %s", file.Path, workerNode.GetName())
+
+			logger.Infof("Checking content: %s", rf.GetTextContent())
+			o.Expect(rf.GetTextContent()).To(o.Equal(filesContent),
+				"The content of file %s is wrong!", file.Path)
+
+			// Verify that the defined user name or user id (only one can be defined in the config) is the expected one
+			if file.User.Name != "" {
+				logger.Infof("Checking user name: %s", rf.GetUIDName())
+				o.Expect(rf.GetUIDName()).To(o.Equal(file.User.Name),
+					"The user who owns file %s is wrong!", file.Path)
+			} else {
+				logger.Infof("Checking user id: %s", rf.GetUIDNumber())
+				o.Expect(rf.GetUIDNumber()).To(o.Equal(fmt.Sprintf("%d", *file.User.ID)),
+					"The user id what owns file %s is wrong!", file.Path)
+			}
+
+			// Verify that if the user ID is defined and its value is the core user's one. Then the name should be "core"
+			if file.User.ID != nil && *file.User.ID == coreUserID {
+				logger.Infof("Checking core user name for ID: %s", rf.GetUIDNumber())
+				o.Expect(rf.GetUIDName()).To(o.Equal("core"),
+					"The user name who owns file %s is wrong! User name for Id %s should be 'core'",
+					file.Path, rf.GetUIDNumber())
+			}
+
+			// Verify that if the user ID is defined and its value is the root user's one. Then the name should be "root"
+			if file.User.ID != nil && *file.User.ID == rootUserID {
+				logger.Infof("Checking root user name: %s", rf.GetUIDName())
+				o.Expect(rf.GetUIDName()).To(o.Equal("root"),
+					"The user name who owns file %s is wrong! User name for Id %s should be 'root'",
+					file.Path, rf.GetUIDNumber())
+			}
+
+			// Verify that the defined group name or group id (only one can be defined in the config) is the expected one
+			if file.Group.Name != "" {
+				logger.Infof("Checking group name: %s", rf.GetGIDName())
+				o.Expect(rf.GetGIDName()).To(o.Equal(file.Group.Name),
+					"The group that owns file %s is wrong!", file.Path)
+			} else {
+				logger.Infof("Checking group id: %s", rf.GetGIDNumber())
+				o.Expect(rf.GetGIDNumber()).To(o.Equal(fmt.Sprintf("%d", *file.Group.ID)),
+					"The group id what owns file %s is wrong!", file.Path)
+			}
+
+			// Verify that if the group ID is defined and its value is the core group's one. Then the name should be "core"
+			if file.Group.ID != nil && *file.Group.ID == coreGroupID {
+				logger.Infof("Checking core group name for ID: %s", rf.GetUIDNumber())
+				o.Expect(rf.GetGIDName()).To(o.Equal("core"),
+					"The group name who owns file %s is wrong! Group name for Id %s should be 'core'",
+					file.Path, rf.GetGIDNumber())
+			}
+
+			// Verify that if the group ID is defined and its value is the adm group's one. Then the name should be "adm"
+			if file.Group.ID != nil && *file.Group.ID == admGroupID {
+				logger.Infof("Checking adm group name: %s", rf.GetUIDNumber())
+				o.Expect(rf.GetGIDName()).To(o.Equal("adm"),
+					"The group name who owns file %s is wrong! Group name for Id %s should be 'adm'",
+					file.Path, rf.GetGIDNumber())
+			}
+
+			logger.Infof("Checking file permissions: %s", rf.GetNpermissions())
+			decimalPerm := ConvertOctalPermissionsToDecimalOrFail(rf.GetNpermissions())
+			o.Expect(decimalPerm).To(o.Equal(*file.Mode),
+				"The permssions of file %s are wrong", file.Path)
+
+			logger.Infof("OK!\n")
+		}
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason

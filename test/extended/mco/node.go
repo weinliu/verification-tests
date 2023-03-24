@@ -42,6 +42,9 @@ func (n Node) String() string {
 
 // DebugNodeWithChroot creates a debugging session of the node with chroot
 func (n *Node) DebugNodeWithChroot(cmd ...string) (string, error) {
+	n.oc.NotShowInfo()
+	defer n.oc.SetShowInfo()
+
 	return exutil.DebugNodeWithChroot(n.oc, n.name, cmd...)
 }
 
