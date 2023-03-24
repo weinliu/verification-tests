@@ -314,6 +314,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("create a test namespace")
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(ns)
 		oc.CreateSpecifiedNamespaceAsAdmin(ns)
+		defer exutil.RecoverNamespaceRestricted(oc, ns)
+		exutil.SetNamespacePrivileged(oc, ns)
 
 		g.By("create a test pod")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", testPodFile, "-n", ns).Execute()
