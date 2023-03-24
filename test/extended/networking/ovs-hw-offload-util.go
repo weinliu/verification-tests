@@ -35,9 +35,18 @@ func getOvsHWOffloadWokerNodes(oc *exutil.CLI) []string {
 }
 
 func capturePacktes(oc *exutil.CLI, ns string, pod string, intf string, srcip string) string {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, pod, "bash", "-c",
-		`timeout --preserve-status 10 tcpdump tcp -c 10 -vvv -i `+fmt.Sprintf("%s", intf)+` and src net `+fmt.Sprintf("%s", srcip)+`/32`).Output()
-	e2e.Logf("start to capture packetes on pod %s using command 'tcpdump tcp -c 10 -vvv -i %s and src net %s/32`", pod, intf, srcip)
+	var output string
+	var err error
+	if strings.Contains(srcip, ":") {
+		// if ipv6 address
+		output, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, pod, "bash", "-c",
+			`timeout --preserve-status 10 tcpdump tcp -c 10 -vvv -i `+fmt.Sprintf("%s", intf)+` and src net `+fmt.Sprintf("%s", srcip)+`/128`).Output()
+		e2e.Logf("start to capture packetes on pod %s using command 'tcpdump tcp -c 10 -vvv -i %s and src net %s/128`", pod, intf, srcip)
+	} else {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, pod, "bash", "-c",
+			`timeout --preserve-status 10 tcpdump tcp -c 10 -vvv -i `+fmt.Sprintf("%s", intf)+` and src net `+fmt.Sprintf("%s", srcip)+`/32`).Output()
+		e2e.Logf("start to capture packetes on pod %s using command 'tcpdump tcp -c 10 -vvv -i %s and src net %s/32`", pod, intf, srcip)
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).NotTo(o.BeEmpty())
 	return output
@@ -81,7 +90,13 @@ func getPodVFPresentor(oc *exutil.CLI, ns string, pod string) string {
 }
 
 func startIperfTraffic(oc *exutil.CLI, ns string, pod string, svrip string, duration string) string {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, pod, "iperf3", "-c", svrip, "-t", duration).Output()
+	var output string
+	var err error
+	if strings.Contains(svrip, ":") {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, pod, "iperf3", "-V", "-c", svrip, "-t", duration).Output()
+	} else {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, pod, "iperf3", "-c", svrip, "-t", duration).Output()
+	}
 	if err != nil {
 		e2e.Logf("start iperf traffic failed, the error message is %s", output)
 	}
@@ -95,8 +110,14 @@ func startIperfTraffic(oc *exutil.CLI, ns string, pod string, svrip string, dura
 }
 
 func startIperfTrafficBackground(oc *exutil.CLI, ns string, pod string, svrip string, duration string) {
+	var err error
 	e2e.Logf("start iperf traffic in background")
-	_, _, _, err := oc.Run("exec").Args("-n", ns, pod, "-q", "--", "iperf3", "-c", svrip, "-t", duration).Background()
+	if strings.Contains(svrip, ":") {
+		// if ipv6 address
+		_, _, _, err = oc.Run("exec").Args("-n", ns, pod, "-q", "--", "iperf3", "-V", "-c", svrip, "-t", duration).Background()
+	} else {
+		_, _, _, err = oc.Run("exec").Args("-n", ns, pod, "-q", "--", "iperf3", "-c", svrip, "-t", duration).Background()
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	//wait for 5 seconds for iperf starting.
 	time.Sleep(5 * time.Second)
