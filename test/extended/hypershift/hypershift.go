@@ -858,7 +858,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: mihuang@redhat.com
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author: mihuang-Critical-49108-Critical-49499-Critical-60490-Separate client certificate trust from the global Hypershift CA", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author: mihuang-Critical-49108-Critical-49499-Critical-59546-Critical-60490-Separate client certificate trust from the global Hypershift CA", func() {
 		g.By("Add label to namespace enable monitoring for hosted control plane component.")
 		defer doOcpReq(oc, "label", true, "namespace", hostedcluster.namespace+"-"+hostedcluster.name, "openshift.io/cluster-monitoring-")
 		doOcpReq(oc, "label", true, "namespace", hostedcluster.namespace+"-"+hostedcluster.name, "openshift.io/cluster-monitoring=true", "--overwrite=true")
@@ -894,6 +894,19 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		for _, podmonitor := range podMonitors {
 			o.Expect(doOcpReq(oc, OcpGet, true, "podmonitors", podmonitor, "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.spec.podMetricsEndpoints[?(@.relabelings)]}")).Should(o.ContainSubstring(`"targetLabel":"_id"`))
 		}
+
+		g.By("OCP-59546 Export HostedCluster metrics")
+		hostedClusterMetricsName := []string{"hypershift_cluster_available_duration_seconds", "hypershift_cluster_deletion_duration_seconds", "hypershift_cluster_guest_cloud_resources_deletion_duration_seconds", "hypershift_cluster_identity_providers", "hypershift_cluster_initial_rollout_duration_seconds", "hypershift_cluster_limited_support_enabled", "hypershift_cluster_proxy", "hypershift_hostedclusters", "hypershift_hostedclusters_failure_conditions", "hypershift_hostedcluster_nodepools", "hypershift_nodepools", "hypershift_nodepools_failure_conditions", "hypershift_nodepools_size"}
+		hypershiftOperatorPodName := strings.Split(doOcpReq(oc, OcpGet, true, "pod", "-n", "hypershift", "-l", "app=operator", `-ojsonpath={.items[*].metadata.name}`), " ")
+		var metrics []string
+		for _, podName := range hypershiftOperatorPodName {
+			for _, name := range hostedClusterMetricsName {
+				if strings.Contains(doOcpReq(oc, OcpExec, true, "-n", "hypershift", podName, "--", "curl", "0.0.0.0:9000/metrics"), name) {
+					metrics = append(metrics, name)
+				}
+			}
+		}
+		e2e.Logf("metrics: %v is exported by hypershift operator", metrics)
 
 		g.By("OCP-60490 Verify that cert files not been modified")
 		dirname := "/tmp/kube-root-60490"
