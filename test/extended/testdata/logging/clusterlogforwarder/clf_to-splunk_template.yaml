@@ -13,7 +13,7 @@ objects:
     - name: splunk-aosqe
       type: splunk
       url: ${URL}
-      secret: 
+      secret:
         name: to-splunk-secret
     pipelines:
     - name: pipe1

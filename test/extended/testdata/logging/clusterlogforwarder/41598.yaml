@@ -12,8 +12,9 @@ objects:
     pipelines:
     - inputRefs:
       - myLogs
+      name: to-default
       outputRefs:
-        - default
+      - default
     inputs:
     - name: myLogs
       application:

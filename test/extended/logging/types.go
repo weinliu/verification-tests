@@ -2,6 +2,7 @@ package logging
 
 import (
 	"encoding/xml"
+
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -466,14 +467,10 @@ type ClusterLogging struct {
 	Metadata   `json:"metadata"`
 	Spec       struct {
 		CollectionSpec struct {
-			Logs struct {
-				Type        string `json:"type"`
-				FluentdSpec struct {
-					Resources    ResourcesSpec     `json:"resources"`
-					NodeSelector map[string]string `json:"nodeSelector,omitempty"`
-					Tolerations  []v1.Toleration   `json:"tolerations,omitempty"`
-				} `json:"fluentd"`
-			} `json:"logs"`
+			Type         string            `json:"type"`
+			Resources    ResourcesSpec     `json:"resources"`
+			NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+			Tolerations  []v1.Toleration   `json:"tolerations,omitempty"`
 		} `json:"collection,omitempty"`
 		LogStoreSpec struct {
 			Type              string `json:"type"`
@@ -493,6 +490,9 @@ type ClusterLogging struct {
 				Infra *RetentionPolicySpec `json:"infra,omitempty"`
 				Audit *RetentionPolicySpec `json:"audit,omitempty"`
 			} `json:"retentionPolicy,omitempty"`
+			LokiStackSpec struct {
+				Name string `json:"name"`
+			} `json:"lokistack,omitempty"`
 		} `json:"logStore,omitempty"`
 		ManagementState   string `json:"managementState"`
 		VisualizationSpec struct {

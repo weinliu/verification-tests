@@ -10,8 +10,12 @@ objects:
     namespace: ${NAMESPACE}
   spec:
     pipelines:
-    - inputRefs: [ myLogsQA1, myLogsDev1 ]
-      outputRefs: [ default  ]
+    - inputRefs:
+      - myLogsQA1
+      - myLogsDev1
+      name: to-default
+      outputRefs:
+      - default
     inputs:
     - name: myLogsQA1
       application:

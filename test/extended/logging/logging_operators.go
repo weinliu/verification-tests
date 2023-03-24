@@ -94,9 +94,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 			if err != nil {
 				return false, err
 			}
-			return (strings.Contains(output, "Error reconciling clusterlogging instance") && strings.Contains(output, "No valid inputs found in ClusterLogForwarder")), nil
+			return (strings.Contains(output, "Error reconciling clusterlogging instance") && strings.Contains(output, "invalid clusterlogforwarder spec. No change in collection")), nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Expected logs are not found in CLO")
+		checkResource(oc, true, false, "cannot have username without password", []string{clf.kind, clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputs.es-created-by-user}"})
 		_, err = oc.AdminKubeClient().CoreV1().ConfigMaps(cloNS).Get(context.Background(), "collector", metav1.GetOptions{})
 		o.Expect(apierrors.IsNotFound(err)).Should(o.BeTrue())
 	})
@@ -815,6 +816,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		g.By("uninstall CLO and LO")
 		clo.uninstallOperator(oc)
 		lo.uninstallOperator(oc)
+		for _, crd := range []string{"alertingrules.loki.grafana.com", "lokistacks.loki.grafana.com", "recordingrules.loki.grafana.com", "rulerconfigs.loki.grafana.com"} {
+			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crd).Execute()
+		}
 	})
 
 	// author qitang@redhat.com

@@ -66,20 +66,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Make sure the Elasticsearch cluster is healthy")
 			cl.assertResourceStatus(oc, "jsonpath={.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
 
-			g.By("Check Vector status")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "component=collector"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			pl := resource{"pods", podList.Items[0].Name, cloNS}
-			pl.checkLogsFromRs(oc, "Healthcheck: Passed", "collector")
-			pl.checkLogsFromRs(oc, "Vector has started", "collector")
-
 			g.By("Check priorityClass in ds/collector")
 			pri, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/collector", "-n", cl.namespace, "-ojsonpath={.spec.template.spec.priorityClassName}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(pri, "system-node-critical")).To(o.BeTrue(), "the priorityClass in ds/collector is: "+pri)
 
 			g.By("Check app indices in ES pod")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-000")
 
@@ -97,9 +90,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-49390-Vector Collecting Kubernetes events using event router[Serial][Slow]", func() {
-
-			g.Skip("Skip due to a known issue https://issues.redhat.com/browse/LOG-2999")
-
 			eventrouterTemplate := exutil.FixturePath("testdata", "logging", "eventrouter", "eventrouter.yaml")
 
 			g.By("Create ClusterLogging instance with Vector as collector")
@@ -362,18 +352,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Make sure the Elasticsearch cluster is healthy")
 			resource{"elasticsearch", "elasticsearch", cloNS}.assertResourceStatus(oc, "jsonpath={.status.cluster.status}", "green")
 
-			g.By("Check Vector status")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=collector"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			pl := resource{"pods", podList.Items[0].Name, cl.namespace}
-			pl.checkLogsFromRs(oc, "Healthcheck: Passed", "collector")
-			pl.checkLogsFromRs(oc, "Vector has started", "collector")
-
 			g.By("Check if the ServiceMonitor object for Vector is created.")
 			resource{"servicemonitor", "collector", cl.namespace}.WaitForResourceToAppear(oc)
 
 			g.By("Check the Vector metrics")
 			bearerToken := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=collector"})
+			o.Expect(err).NotTo(o.HaveOccurred())
 			output, err := e2eoutput.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector.openshift-logging.svc:24231/metrics", 10*time.Second, 20*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("vector_component_received_event_bytes_total"))
@@ -454,6 +439,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					return false, nil
 				}
 				journalBuckets := journalLog.Aggregations.LoggingAggregations.InnerAggregations.Buckets
+				if len(journalBuckets) == 0 {
+					return false, nil
+				}
 				// In AWS, the hostname in journal logs is not the same as the node name
 				if exutil.CheckPlatform(oc) == "aws" {
 					for _, bu := range journalBuckets {

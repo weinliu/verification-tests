@@ -9,21 +9,21 @@ objects:
     name: instance
   spec:
     outputs:
-     - name: cw
-       type: cloudwatch
-       cloudwatch:
-         groupBy: logType
-         region: ${REGION}
-       secret:
-          name: ${SECRETNAME}
+    - name: cw
+      type: cloudwatch
+      cloudwatch:
+        groupBy: logType
+        region: ${REGION}
+      secret:
+        name: ${SECRETNAME}
     pipelines:
-      - name: to-cloudwatch
-        inputRefs:
-          - infrastructure
-          - audit
-          - application
-        outputRefs:
-          - cw
+    - name: to-cloudwatch
+      inputRefs:
+      - infrastructure
+      - audit
+      - application
+      outputRefs:
+      - cw
 parameters:
 - name: SECRETNAME
   value: "cw-secret"

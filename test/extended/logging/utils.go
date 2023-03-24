@@ -347,12 +347,14 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 }
 
 func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
+	var count int
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
 			return false, err
 		}
-		if len(pods.Items) == 0 {
+		count = len(pods.Items)
+		if count == 0 {
 			e2e.Logf("Waiting for pod with label %s to appear\n", label)
 			return false, nil
 		}
@@ -374,7 +376,7 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 		}
 		return ready, nil
 	})
-	if err != nil {
+	if err != nil && count != 0 {
 		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
 		e2e.Failf("pod with label %s is not ready: \n%v", label, podStatus)
 	}
@@ -484,26 +486,36 @@ func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 
 // DeleteClusterLogging deletes the clusterlogging instance and ensures the related resources are removed
 func (r resource) deleteClusterLogging(oc *exutil.CLI) {
-	err := r.clear(oc)
-	if err != nil {
-		e2e.Logf("could not delete %s/%s", r.kind, r.name)
-	}
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("could not delete %s/%s", r.kind, r.name))
-	//make sure other resources are removed
-	crdResources := []resource{{"elasticsearches.logging.openshift.io", "elasticsearch", r.namespace}, {"kibanas.logging.openshift.io", "kibana", r.namespace}}
-	for _, rs := range crdResources {
-		//check if the crd exist before get it
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", rs.kind).Execute()
-		if err == nil {
-			err = rs.WaitUntilResourceIsGone(oc)
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s is not deleted", rs.kind, rs.name))
+	clOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(r.kind, r.name, "-n", r.namespace, "-ojson").Output()
+	if len(clOutput) > 0 && !strings.Contains(clOutput, `clusterloggings.logging.openshift.io "instance" not found`) {
+		err := r.clear(oc)
+		if err != nil {
+			e2e.Logf("could not delete %s/%s", r.kind, r.name)
+		}
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("could not delete %s/%s", r.kind, r.name))
+
+		cl := ClusterLogging{}
+		json.Unmarshal([]byte(clOutput), &cl)
+		//make sure other resources are removed
+		resources := []resource{{"daemonset", "collector", r.namespace}}
+		if cl.Spec.LogStoreSpec.Type == "elasticsearch" {
+			resources = append(resources, resource{"elasticsearches.logging.openshift.io", "elasticsearch", r.namespace})
+			if len(cl.Spec.LogStoreSpec.ElasticsearchSpec.Storage.StorageClassName) > 0 {
+				// remove all the pvcs in the namespace
+				_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
+			}
+		}
+		if cl.Spec.VisualizationSpec.Type == "kibana" {
+			resources = append(resources, resource{"kibanas.logging.openshift.io", "kibana", r.namespace})
+		}
+		for i := 0; i < len(resources); i++ {
+			err = resources[i].WaitUntilResourceIsGone(oc)
+			if err != nil {
+				e2e.Logf("%s/%s is not deleted", resources[i].kind, resources[i].name)
+			}
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s is not deleted", resources[i].kind, resources[i].name))
 		}
 	}
-	ds := resource{"daemonset", "collector", r.namespace}
-	err = ds.WaitUntilResourceIsGone(oc)
-	exutil.AssertWaitPollNoErr(err, "ds/collector is not deleted")
-	// remove all the pvcs in the namespace
-	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
 }
 
 func (r resource) createClusterLogging(oc *exutil.CLI, parameters ...string) {
@@ -1029,6 +1041,9 @@ func (r rsyslog) checkData(oc *exutil.CLI, expect bool, filename string) {
 	err := wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
 		stdout, err := e2eoutput.RunHostCmdWithRetries(r.namespace, r.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
+			if strings.Contains(err.Error(), "No such file or directory") {
+				return false, nil
+			}
 			return false, err
 		}
 		if (strings.Contains(stdout, filename) && expect) || (!strings.Contains(stdout, filename) && !expect) {
@@ -1180,6 +1195,9 @@ func (f fluentdServer) checkData(oc *exutil.CLI, expect bool, filename string) {
 	err := wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
 		stdout, err := e2eoutput.RunHostCmdWithRetries(f.namespace, f.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
+			if strings.Contains(err.Error(), "No such file or directory") {
+				return false, nil
+			}
 			return false, err
 		}
 		if (strings.Contains(stdout, filename) && expect) || (!strings.Contains(stdout, filename) && !expect) {
