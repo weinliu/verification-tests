@@ -1052,6 +1052,7 @@ type fluentdServer struct {
 	sharedKey                  string //if it's not empty, means the shared_key is set, only works when serverAuth is true
 	secretName                 string //the name of the secret for the collector to use
 	loggingNS                  string //the namespace where the collector pods deployed in
+	inPluginType               string //forward or http
 }
 
 func (f fluentdServer) createPipelineSecret(oc *exutil.CLI, keysPath string) {
@@ -1106,21 +1107,27 @@ func (f fluentdServer) deploy(oc *exutil.CLI) {
 
 	// create configmap/deployment/svc
 	cm := resource{"configmap", f.serverName, f.namespace}
+	//when prefix is http-, the fluentdserver using http inplugin.
+	cmFilePrefix := ""
+	if f.inPluginType == "http" {
+		cmFilePrefix = "http-"
+	}
+
 	var cmFileName string
 	if !f.serverAuth {
-		cmFileName = "configmap.yaml"
+		cmFileName = cmFilePrefix + "configmap.yaml"
 	} else {
 		if f.clientAuth {
 			if f.sharedKey != "" {
 				cmFileName = "cm-mtls-share.yaml"
 			} else {
-				cmFileName = "cm-mtls.yaml"
+				cmFileName = cmFilePrefix + "cm-mtls.yaml"
 			}
 		} else {
 			if f.sharedKey != "" {
 				cmFileName = "cm-serverauth-share.yaml"
 			} else {
-				cmFileName = "cm-serverauth.yaml"
+				cmFileName = cmFilePrefix + "cm-serverauth.yaml"
 			}
 		}
 	}

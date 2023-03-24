@@ -43,8 +43,6 @@ objects:
           - mountPath: /etc/fluentd/secrets
             name: certs
             readOnly: true
-        serviceAccount: ${NAME}
-        serviceAccountName: ${NAME}
         volumes:
         - configMap:
             defaultMode: 420

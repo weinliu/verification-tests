@@ -40,8 +40,6 @@ objects:
           - mountPath: /fluentd/etc
             name: config
             readOnly: true
-        serviceAccount: ${NAME}
-        serviceAccountName: ${NAME}
         volumes:
         - configMap:
             defaultMode: 420
