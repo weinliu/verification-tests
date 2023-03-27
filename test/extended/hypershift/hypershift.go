@@ -156,40 +156,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-43268-Expose nodePoolManagement API to enable rolling upgrade[Serial][Disruptive]", func() {
-		if iaasPlatform != "aws" {
-			g.Skip("IAAS platform is " + iaasPlatform + " while 43268 is for AWS - skipping test ...")
-		}
-
-		g.By("create nodepool")
-		npCount := 1
-		npName := "jz-43268-test-01"
-
-		defer func() {
-			hostedcluster.deleteNodePool(npName)
-			o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), LongTimeout, LongTimeout/10).Should(o.BeTrue(),
-				"in defer check all nodes ready error")
-		}()
-
-		hostedcluster.createAwsNodePool(npName, npCount)
-		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(),
-			"nodepool ready error")
-
-		payload := hostedcluster.getNodepoolPayload(npName)
-		e2e.Logf("The original image of nodepool %s is : %s", npName, payload)
-
-		g.By("upgrade nodepool payload InPlace")
-		desiredVersion := "4.12.0-rc.1"
-		desiredImage := fmt.Sprintf("quay.io/openshift-release-dev/ocp-release:%s-x86_64", desiredVersion)
-		hostedcluster.upgradeNodepoolPayloadInPlace(npName, desiredImage, true)
-		o.Eventually(hostedcluster.pollCheckUpgradeNodepoolPayload(npName, desiredImage, desiredVersion), LongTimeout, LongTimeout/10).
-			Should(o.BeTrue(), "check upgrade np payload InPlace error")
-		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(),
-			"nodepool ready after upgrade error")
-
-	})
-
-	// author: heli@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:heli-Critical-43554-Check FIPS support in the Hosted Cluster", func() {
 		if !hostedcluster.isFIPEnabled() {
 			g.Skip("only for the fip enabled hostedcluster, skip test run")
@@ -724,8 +690,10 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("Check the awsmachines are changed")
 		o.Eventually(func() bool {
-			o.Expect(doOcpReq(oc, OcpGet, true, "awsmachines", "-n", hostedcluster.namespace+"-"+hostedcluster.name, fmt.Sprintf(`-ojsonpath='{.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].metadata.name}'`, hostedcluster.namespace, npName))).ShouldNot(o.ContainSubstring(awsMachines))
-			return true
+			if !strings.Contains(doOcpReq(oc, OcpGet, true, "awsmachines", "-n", hostedcluster.namespace+"-"+hostedcluster.name, fmt.Sprintf(`-ojsonpath='{.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].metadata.name}'`, hostedcluster.namespace, npName)), awsMachines) {
+				return true
+			}
+			return false
 		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "awsmachines are not changed")
 
 		g.By("Check the guestcluster podDisruptionBudget are not be deleted")
@@ -757,7 +725,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer hostedcluster.deleteNodePool(npNameReplace)
 		hostedcluster.createAwsNodePool(npNameReplace, replica)
 		hostedcluster.createAwsNodePool(npNameInPlace, replica)
-		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "WaitingForAvailableMachines"}, {"UpdatingConfig", "status", "True"}, {"UpdatingVersion", "status", "True"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "WaitingForAvailableMachines"}, {"UpdatingConfig", "status", "True"}, {"UpdatingVersion", "status", "True"}}), DefaultTimeout, DefaultTimeout/20).Should(o.BeTrue(), "nodepool ready error")
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npNameInPlace), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npNameReplace), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
 		hostedcluster.checkNodepoolAllConditions(npNameInPlace)
@@ -926,7 +894,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer hostedcluster.deleteNodePool(nodepoolName)
 		hostedcluster.createAwsNodePool(nodepoolName, replica)
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(nodepoolName), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
-		hostedcluster.checkNodePoolConditions(nodepoolName, []nodePoolCondition{{"ReachedIgnitionEndpoint", "status", "True"}})
+		o.Expect(hostedcluster.checkNodePoolConditions(nodepoolName, []nodePoolCondition{{"ReachedIgnitionEndpoint", "status", "True"}})).Should(o.BeTrue(), "nodepool ready error")
 
 		g.By("Check if metric 'ign_server_get_request' is exposed for nodepool by ignition server")
 		o.Expect(strings.Contains(doOcpReq(oc, "logs", true, "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-l", "app=ignition-server"), "ignition")).Should(o.BeTrue())

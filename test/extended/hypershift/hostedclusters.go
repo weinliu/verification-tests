@@ -447,7 +447,9 @@ func (h *hostedCluster) checkNodePoolConditions(npName string, conditions []node
 	for _, condition := range conditions {
 		res := doOcpReq(h.oc, OcpGet, true, "nodepools", npName, "-n", h.namespace, fmt.Sprintf(`-ojsonpath={.status.conditions[?(@.type=="%s")].%s}`, condition.conditionsType, condition.conditionsTypeReq))
 		e2e.Logf("checkNodePoolStatus: %s, %s, %s", condition.conditionsType, condition.conditionsTypeReq, res)
-		o.Expect(res).Should(o.ContainSubstring(condition.expectConditionsResult))
+		if !strings.Contains(res, condition.expectConditionsResult) {
+			return false
+		}
 	}
 	return true
 }
@@ -463,8 +465,8 @@ func (h *hostedCluster) getNodepoolStatusPayloadVersion(name string) string {
 	return version
 }
 
-func (h *hostedCluster) upgradeNodepoolPayloadInPlace(name, payload string, inPlace bool) {
-	if inPlace {
+func (h *hostedCluster) upgradeNodepoolPayloadInPlace(name, payload string, isInPlace bool) {
+	if isInPlace {
 		doOcpReq(h.oc, OcpPatch, true, "nodepools", name, "-n", h.namespace, "--type=json", `-p=[{"op": "replace", "path": "/spec/management/upgradeType", "value": "InPlace"}]`)
 	}
 	doOcpReq(h.oc, OcpPatch, true, "nodepools", name, "-n", h.namespace, "--type=json", fmt.Sprintf(`-p=[{"op": "replace", "path": "/spec/release/image","value": "%s"}]`, payload))

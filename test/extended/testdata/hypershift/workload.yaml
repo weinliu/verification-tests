@@ -27,7 +27,7 @@ objects:
                 allowPrivilegeEscalation: false
                 capabilities:
                   drop:
-                    - ALL
+                  - ALL
           restartPolicy: Never
       backoffLimit: 4
       completions: 100
