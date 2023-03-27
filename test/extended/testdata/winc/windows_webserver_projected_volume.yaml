@@ -58,3 +58,6 @@ spec:
               name: pass
       nodeSelector:
         beta.kubernetes.io/os: windows
+      os:
+        name: windows
+

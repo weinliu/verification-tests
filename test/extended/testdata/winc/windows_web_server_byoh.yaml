@@ -49,4 +49,6 @@ spec:
       nodeSelector:
         kubernetes.io/os: windows
         type: byoh-node
+      os:
+	name: windows
 

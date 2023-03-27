@@ -48,3 +48,5 @@ spec:
               runAsUserName: "ContainerAdministrator"
       nodeSelector:
         beta.kubernetes.io/os: windows
+      os:
+        name: windows

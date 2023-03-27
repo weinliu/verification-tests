@@ -55,3 +55,6 @@ spec:
       nodeSelector:
         beta.kubernetes.io/os: windows
         type: "winc"
+      os:
+        name: windows
+
