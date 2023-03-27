@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-High-55151-[Local ephemeral storage] [emptyDir] setting requests and limits should work on Pod level", func() {
+	g.It("ROSA-OSD_CCS-Author:pewang-High-55151-[Local-ephemeral-storage] [emptyDir] setting requests and limits should work on Pod level", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			podTemplate = filepath.Join(storageTeamBaseDir, "pod-with-multiple-containers-using-emptydir-template.yaml")
@@ -78,7 +78,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-High-56080-[Local ephemeral storage] [emptyDir] with sizeLimit should work on Pod level", func() {
+	g.It("ROSA-OSD_CCS-Author:pewang-High-56080-[Local-ephemeral-storage] [emptyDir] with sizeLimit should work on Pod level", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			podTemplate = filepath.Join(storageTeamBaseDir, "pod-with-multiple-containers-using-emptydir-template.yaml")
@@ -131,7 +131,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-High-56223-[Local ephemeral storage] setting requests and limits should work on container level", func() {
+	g.It("ROSA-OSD_CCS-Author:pewang-High-56223-[Local-ephemeral-storage] setting requests and limits should work on container level", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			podTemplate = filepath.Join(storageTeamBaseDir, "pod-with-multiple-containers-using-emptydir-template.yaml")
@@ -176,7 +176,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-High-56225-[Local ephemeral storage] should calculate total requests of Pod when scheduling", func() {
+	g.It("ROSA-OSD_CCS-Author:pewang-High-56225-[Local-ephemeral-storage] should calculate total requests of Pod when scheduling", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			podTemplate                      = filepath.Join(storageTeamBaseDir, "pod-with-multiple-containers-using-emptydir-template.yaml")
@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-High-56364-[Local ephemeral storage] [emptyDir] setting requests and limits should obey the LimitRange policy", func() {
+	g.It("ROSA-OSD_CCS-Author:pewang-High-56364-[Local-ephemeral-storage] [emptyDir] setting requests and limits should obey the LimitRange policy", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			podTemplate                = filepath.Join(storageTeamBaseDir, "pod-with-multiple-containers-using-emptydir-template.yaml")
@@ -298,7 +298,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-High-56365-[Local ephemeral storage] setting requests and limits should obey ResourceQuota hard policy", func() {
+	g.It("ROSA-OSD_CCS-Author:pewang-High-56365-[Local-ephemeral-storage] setting requests and limits should obey ResourceQuota hard policy", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			podTemplate                   = filepath.Join(storageTeamBaseDir, "pod-with-multiple-containers-using-emptydir-template.yaml")

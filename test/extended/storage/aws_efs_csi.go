@@ -54,8 +54,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// OCP-51200 - [AWS-EFS-CSI Driver] [Dynamic PV] [Filesystem] dir permission: 000 should not write into volumes
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51200-[AWS-EFS-CSI Driver] [Dynamic PV] [Filesystem] dir permission: 000 should not write into volumes", func() {
+	// OCP-51200 - [AWS-EFS-CSI-Driver] [Dynamic PV] [Filesystem] dir permission: 000 should not write into volumes
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51200-[AWS-EFS-CSI-Driver] [Dynamic PV] [Filesystem] dir permission: 000 should not write into volumes", func() {
 
 		// Set the resource template for the scenario
 		var (
@@ -103,8 +103,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// OCP-51206 - [AWS-EFS-CSI Driver] [Dynamic PV] [block volume] should not support
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51206-[AWS-EFS-CSI Driver] [Dynamic PV] [block volume] should not support", func() {
+	// OCP-51206 - [AWS-EFS-CSI-Driver] [Dynamic PV] [block volume] should not support
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51206-[AWS-EFS-CSI-Driver] [Dynamic PV] [block volume] should not support", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -132,8 +132,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// OCP-51202 - [AWS-EFS-CSI Driver] [Dynamic PV] [Filesystem] should not support wrong provisioning mode
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51202-[AWS-EFS-CSI Driver] [Dynamic PV] [Filesystem] should not support wrong provisioning mode", func() {
+	// OCP-51202 - [AWS-EFS-CSI-Driver] [Dynamic PV] [Filesystem] should not support wrong provisioning mode
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51202-[AWS-EFS-CSI-Driver] [Dynamic PV] [Filesystem] should not support wrong provisioning mode", func() {
 
 		// Set the resource template for the scenario
 		var (
@@ -179,8 +179,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// OCP-51409 - [AWS-EFS-CSI Driver][Encryption_In_Transit false] Write data inside volume and check the pv parameters
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51409-[AWS-EFS-CSI Driver][Encryption_In_Transit false] Write data inside volume and check the pv parameters", func() {
+	// OCP-51409 - [AWS-EFS-CSI-Driver][Encryption_In_Transit false] Write data inside volume and check the pv parameters
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51409-[AWS-EFS-CSI-Driver][Encryption_In_Transit false] Write data inside volume and check the pv parameters", func() {
 
 		// Set the resource definition
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))
@@ -200,8 +200,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// OCP-48664 - [AWS-EFS-CSI Driver][Encryption_In_Transit true] Write data inside volume and check the pv parameters
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-48664-[AWS-EFS-CSI Driver][Encryption_In_Transit true] Write data inside volume and check the pv parameters", func() {
+	// OCP-48664 - [AWS-EFS-CSI-Driver][Encryption_In_Transit true] Write data inside volume and check the pv parameters
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-48664-[AWS-EFS-CSI-Driver][Encryption_In_Transit true] Write data inside volume and check the pv parameters", func() {
 
 		// Set the resource definition
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))
@@ -223,8 +223,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://github.com/kubernetes-sigs/aws-efs-csi-driver/blob/master/examples/kubernetes/access_points/specs/example.yaml
 	// kubernetes-sigs/aws-efs-csi-driver#167
 	// author: ropatil@redhat.com
-	// OCP-51213 - [AWS-EFS-CSI Driver][Dynamic PV][Filesystem default][accessPoint] Write data inside volumes
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51213-[AWS-EFS-CSI Driver][Dynamic PV][Filesystem default][accessPoint] Write data inside volumes", func() {
+	// OCP-51213 - [AWS-EFS-CSI-Driver][Dynamic PV][Filesystem default][accessPoint] Write data inside volumes
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51213-[AWS-EFS-CSI-Driver][Dynamic PV][Filesystem default][accessPoint] Write data inside volumes", func() {
 
 		// Set the resource definition
 		pvcA := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))
@@ -320,8 +320,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// OCP-52347 - [AWS-EFS-CSI Driver][Dynamic PV][Filesystem] is provisioned successfully with storageclass parameter gidRangeStart and gidRangeEnd [Disruptive]
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-52347-[AWS-EFS-CSI Driver][Dynamic PV][Filesystem] is provisioned successfully with storageclass parameter gidRangeStart and gidRangeEnd [Disruptive]", func() {
+	// OCP-52347 - [AWS-EFS-CSI-Driver][Dynamic PV][Filesystem] is provisioned successfully with storageclass parameter gidRangeStart and gidRangeEnd [Disruptive]
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-52347-[AWS-EFS-CSI-Driver][Dynamic PV][Filesystem] is provisioned successfully with storageclass parameter gidRangeStart and gidRangeEnd [Disruptive]", func() {
 
 		// Set the resource template for the scenario
 		var (
@@ -383,9 +383,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// OCP-52346 - [AWS-EFS-CSI Driver][Dynamic PV][Filesystem] provisioning should not happen if there are no free gidRanges [Disruptive]
+	// OCP-52346 - [AWS-EFS-CSI-Driver][Dynamic PV][Filesystem] provisioning should not happen if there are no free gidRanges [Disruptive]
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2102008
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-52346-[AWS-EFS-CSI Driver][Dynamic PV][Filesystem] provisioning should not happen if there are no free gidRanges [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-52346-[AWS-EFS-CSI-Driver][Dynamic PV][Filesystem] provisioning should not happen if there are no free gidRanges [Disruptive]", func() {
 
 		// Set the resource template for the scenario
 		var (
@@ -452,8 +452,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// OCP-60580 - [AWS-EFS-CSI Driver][Dynamic PV][Filesystem][Stage] EFS csi operator is installed and provision volume successfully
-	g.It("StagerunOnly-Author:ropatil-Critical-60580-[AWS-EFS-CSI Driver][Dynamic PV][Filesystem][Stage] EFS csi operator is installed and provision volume successfully", func() {
+	// OCP-60580 - [AWS-EFS-CSI-Driver][Dynamic PV][Filesystem][Stage] EFS csi operator is installed and provision volume successfully
+	g.It("StagerunOnly-Author:ropatil-Critical-60580-[AWS-EFS-CSI-Driver][Dynamic PV][Filesystem][Stage] EFS csi operator is installed and provision volume successfully", func() {
 
 		// Set the resource definition
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))

@@ -51,8 +51,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: chaoyang@redhat.com
-	// [GCP-Filestore-CSI Driver][Dynamic PV] [Filesystem]Provision filestore instance with customer key
-	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-55727-[GCP-Filestore-CSI Driver][Dynamic PV] [Filesystem]Provision filestore instance with customer key", func() {
+	// [GCP-Filestore-CSI-Driver][Dynamic PV] [Filesystem]Provision filestore instance with customer key
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-55727-[GCP-Filestore-CSI-Driver][Dynamic PV] [Filesystem]Provision filestore instance with customer key", func() {
 
 		// Set the resource template for the scenario
 		var (
@@ -110,7 +110,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	})
 
-	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-StagerunBoth-Author:chaoyang-Medium-57345-[GCP-Filestore-CSI Driver][Dynamic PV] [Filesystem]Dynamic provision standard volume", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-StagerunBoth-Author:chaoyang-Medium-57345-[GCP-Filestore-CSI-Driver][Dynamic PV] [Filesystem]Dynamic provision standard volume", func() {
 		var (
 			storageClassParameters = map[string]string{
 				"network": network,
@@ -149,7 +149,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	})
 
-	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-57349-[GCP-Filestore-CSI Driver][Dynamic PV]Volume online expansion is successful", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-57349-[GCP-Filestore-CSI-Driver][Dynamic PV]Volume online expansion is successful", func() {
 		var (
 			storageClassParameters = map[string]string{
 				"network": network,

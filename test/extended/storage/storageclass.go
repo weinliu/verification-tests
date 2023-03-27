@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-22019-The cluster-storage-operator should manage pre-defined storage class
-	g.It("NonHyperShiftHOST-Author:wduan-High-22019-The cluster-storage-operator should manage pre-defined storage class [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:wduan-High-22019-[Storageclass] The cluster-storage-operator should manage pre-defined storage class [Disruptive]", func() {
 
 		// Get pre-defined storageclass and default storageclass from testdata/storage/pre-defined-storageclass.json
 		g.By("Get pre-defined storageclass and default storageclass")
@@ -60,8 +60,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: wduan@redhat.com
-	// OCP-52743 - [storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present
-	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-52743-[storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present", func() {
+	// OCP-52743 - [Storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-52743-[Storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present", func() {
 		g.By("Check default storageclass number should not be greater than one")
 		allSCRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -128,7 +128,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-51537 - [Metrics] Check metric and alert for default storage class count [Disruptive]
-	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-NonPreRelease-Longduration-Medium-51537-[Metrics] Check metric and alert for default storage class count [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-NonPreRelease-Longduration-Medium-51537-[Storageclass] [Metrics] Check metric and alert for default storage class count [Disruptive]", func() {
 
 		// Set the resource template for the scenario
 		var (
@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// No volume is created when SC provider is not right
-	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-Medium-24923- No volume is created when SC provider is not right", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-Medium-24923-[Storageclass] No volume is created when SC provider is not right", func() {
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
@@ -241,7 +241,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [Dynamic PV][Filesystem] Multiple default storageClass setting should also provision volume successfully without specified the storageClass name [Serial]
-	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-High-60191-[Dynamic PV][Filesystem] Multiple default storageClass setting should also provision volume successfully without specified the storageClass name [Serial]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-High-60191-[Storageclass] [Dynamic PV] [Filesystem] Multiple default storageClass setting should also provision volume successfully without specified the storageClass name [Serial]", func() {
 
 		// Set the resource template for the scenario
 		var (

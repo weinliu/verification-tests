@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author:wduan@redhat.com
-	g.It("NonHyperShiftHOST-Author:wduan-High-44254-[vsphere-problem-detector] should check the node hardware version and report in metric for alerter raising by CSO", func() {
+	g.It("NonHyperShiftHOST-Author:wduan-High-44254-[vSphere-Problem-Detector] should check the node hardware version and report in metric for alerter raising by CSO", func() {
 
 		g.By("# Check HW version from vsphere-problem-detector-operator log")
 		vpdPodlog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/vsphere-problem-detector-operator", "-n", "openshift-cluster-storage-operator", "--limit-bytes", "50000").Output()
@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author:wduan@redhat.com
-	g.It("NonHyperShiftHOST-Author:wduan-Medium-44664-[vsphere-problem-detector] The vSphere cluster is marked as Upgradeable=False if vcenter, esxi versions or HW versions are unsupported", func() {
+	g.It("NonHyperShiftHOST-Author:wduan-Medium-44664-[vSphere-Problem-Detector] The vSphere cluster is marked as Upgradeable=False if vcenter, esxi versions or HW versions are unsupported", func() {
 		g.By("# Get log from vsphere-problem-detector-operator")
 		podlog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/vsphere-problem-detector-operator", "-n", "openshift-cluster-storage-operator").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -97,7 +97,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author:wduan@redhat.com
-	g.It("NonHyperShiftHOST-Author:wduan-High-45514-[vsphere-problem-detector] should report metric about vpshere env", func() {
+	g.It("NonHyperShiftHOST-Author:wduan-High-45514-[vSphere-Problem-Detector] should report metric about vpshere env", func() {
 		// Add 'vsphere_rwx_volumes_total' metric from ocp 4.10
 		g.By("Check metric: vsphere_vcenter_info, vsphere_esxi_version_total, vsphere_node_hw_version_total, vsphere_datastore_total, vsphere_rwx_volumes_total")
 		checkStorageMetricsContent(oc, "vsphere_vcenter_info", "api_version")
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author:wduan@redhat.com
-	g.It("NonHyperShiftHOST-Author:wduan-High-37728-[vsphere-problem-detector] should report vsphere_cluster_check_total metric correctly", func() {
+	g.It("NonHyperShiftHOST-Author:wduan-High-37728-[vSphere-Problem-Detector] should report vsphere_cluster_check_total metric correctly", func() {
 		g.By("Check metric vsphere_cluster_check_total should contain CheckDefaultDatastore, CheckFolderPermissions, CheckTaskPermissions, CheckStorageClasses, ClusterInfo check.")
 		metric := getStorageMetrics(oc, "vsphere_cluster_check_total")
 		clusterCheckList := []string{"CheckDefaultDatastore", "CheckFolderPermissions", "CheckTaskPermissions", "CheckStorageClasses", "ClusterInfo"}
@@ -118,7 +118,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author:wduan@redhat.com
-	g.It("NonHyperShiftHOST-Author:wduan-High-37729-[vsphere-problem-detector] should report vsphere_node_check_total metric correctly", func() {
+	g.It("NonHyperShiftHOST-Author:wduan-High-37729-[vSphere-Problem-Detector] should report vsphere_node_check_total metric correctly", func() {
 		g.By("Check metric vsphere_node_check_total should contain CheckNodeDiskUUID, CheckNodePerf, CheckNodeProviderID, CollectNodeESXiVersion, CollectNodeHWVersion.")
 		metric := getStorageMetrics(oc, "vsphere_node_check_total")
 		nodeCheckList := []string{"CheckNodeDiskUUID", "CheckNodePerf", "CheckNodeProviderID", "CollectNodeESXiVersion", "CollectNodeHWVersion"}
@@ -129,7 +129,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author:pewang@redhat.com
 	// Since it'll restart deployment/vsphere-problem-detector-operator maybe conflict with the other vsphere-problem-detector cases,so set it as [Serial]
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:pewang-High-48763-[vsphere-problem-detector] should report 'vsphere_rwx_volumes_total' metric correctly [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:pewang-High-48763-[vSphere-Problem-Detector] should report 'vsphere_rwx_volumes_total' metric correctly [Serial]", func() {
 		g.By("# Get the value of 'vsphere_rwx_volumes_total' metric real init value")
 		// Restart vsphere-problem-detector-operator and get the init value of 'vsphere_rwx_volumes_total' metric
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
@@ -175,7 +175,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author:pewang@redhat.com
 	// Since it'll make the vSphere CSI driver credential invalid during the execution,so mark it Disruptive
-	g.It("NonHyperShiftHOST-Author:pewang-High-48875-[vmware-vsphere-csi-driver-operator] should report 'vsphere_csi_driver_error' metric when couldn't connect to vCenter [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:pewang-High-48875-[vSphere-CSI-Driver-Operator] should report 'vsphere_csi_driver_error' metric when couldn't connect to vCenter [Disruptive]", func() {
 		g.By("# Get the origin credential of vSphere CSI driver")
 		// Make sure the CSO is healthy
 		waitCSOhealthy(oc)
@@ -217,9 +217,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author:wduan@redhat.com
-	// OCP-60185 - [vsphere-problem-detector] should report 'vsphere_zonal_volumes_total' metric correctly
+	// OCP-60185 - [vSphere-Problem-Detector] should report 'vsphere_zonal_volumes_total' metric correctly
 	// Add [Serial] because deployment/vsphere-problem-detector-operator restart is needed
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:wduan-High-60185-[vsphere-problem-detector] should report 'vsphere_zonal_volumes_total' metric correctly [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:wduan-High-60185-[vSphere-Problem-Detector] should report 'vsphere_zonal_volumes_total' metric correctly [Serial]", func() {
 		g.By("# Create two manual fileshare persist volumes(vSphere CNS File Volume) and one manual general volume")
 		// Retart vSphereDetectorOperator pod and record oginal vsphere_zonal_volumes_total value
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
