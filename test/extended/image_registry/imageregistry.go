@@ -49,13 +49,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.BeforeEach(func() {
 		var message string
 		waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
-			registryDegrade := checkRegistryDegraded(oc)
-			if !registryDegrade {
-				return true, nil
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "TrueFalseFalse") && !strings.Contains(output, "TrueTrueFalse") {
+				message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}{.status.conditions[?(@.type==\"Progressing\")].message}").Output()
+				e2e.Logf("Wait for image-registry coming ready")
+				return false, nil
 			}
-			message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}{.status.conditions[?(@.type==\"Progressing\")].message}").Output()
-			e2e.Logf("Wait for image-registry coming ready")
-			return false, nil
+			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", message))
 	})
@@ -1774,7 +1775,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		case "swift":
 			storageclient = "redhat.com"
 		case "s3":
-			storageclient = "amazonaws.com"
+			bucket, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.bucket}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			storageclient = bucket + ".s3"
 		default:
 			e2e.Failf("Image Registry is using unknown storage type")
 		}
@@ -2036,7 +2039,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:jitli-Medium-12766-Allow imagestream request build config triggers by different mode", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:jitli-Medium-12766-Allow imagestream request build config triggers by different mode", func() {
 
 		oc.SetupProject()
 		g.By("Import an image to create imagestream")
