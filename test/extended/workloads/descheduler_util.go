@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -343,4 +344,12 @@ func checkDeschedulerMetrics(oc *exutil.CLI, strategyname string, metricName str
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get metric %s via prometheus", strategyname))
+}
+
+// SkipMissingCatalogsource mean to skip test when catalogsource/qe-app-registry not available
+func skipMissingCatalogsource(oc *exutil.CLI) {
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+	if strings.Contains(output, "NotFound") {
+		g.Skip("Skip since catalogsource/qe-app-registry not available")
+	}
 }
