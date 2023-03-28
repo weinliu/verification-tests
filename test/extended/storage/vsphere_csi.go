@@ -1,12 +1,14 @@
 package storage
 
 import (
+	"io/ioutil"
 	"path/filepath"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/sjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -119,5 +121,30 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(logRecord).Should(o.And(
 			o.ContainSubstring("validation of StorageClass: \\\""+intreeStorageClass.name+"\\\" Failed"),
 			o.ContainSubstring("validation of StorageClass: \\\""+csiStorageClass.name+"\\\" Failed")))
+	})
+
+	// OCP-60189 - [vSphere-csi-driver-operator] should check topology conflict in csidriver and infrastructure in vsphere_topology_tags metric for alerter raising by CSO
+	// author: wduan@redhat.com
+	g.It("NonHyperShiftHOST-Author:wduan-medium-60189-[vSphere-CSI-Driver-Operator] should check topology conflict in csidriver and infrastructure in vsphere_topology_tags metric for alerter raising by CSO [Serial]", func() {
+		fdNum := getVsphereFailureDomainsNum(oc)
+		if fdNum < 1 {
+			g.Skip("There is no FailureDomains defined in infrastructure, skipped!")
+		}
+		// Get clustercsidriver.spec.driverConfig to recover
+		originDriverConfigContent, getContentError := oc.AsAdmin().WithoutNamespace().Run("get").Args("clustercsidriver/csi.vsphere.vmware.com", "-ojson").Output()
+		o.Expect(getContentError).NotTo(o.HaveOccurred())
+		originDriverConfigContent, getContentError = sjson.Delete(originDriverConfigContent, `metadata.resourceVersion`)
+		o.Expect(getContentError).NotTo(o.HaveOccurred())
+		originDriverConfigContentFilePath := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-60189.json")
+		o.Expect(ioutil.WriteFile(originDriverConfigContentFilePath, []byte(originDriverConfigContent), 0644)).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", originDriverConfigContentFilePath).Execute()
+
+		g.By("# Patch clustercsidriver/csi.vsphere.vmware.com to add topologyCategories")
+		patchResourceAsAdmin(oc, "", "clustercsidriver/csi.vsphere.vmware.com", `[{"op":"replace","path":"/spec/driverConfig","value":{"driverType":"vSphere","vSphere":{"topologyCategories":["openshift-region","openshift-zone"]}}}]`, "json")
+
+		g.By("# Check alert raised for VSphereTopologyMisconfiguration")
+		checkAlertRaised(oc, "VSphereTopologyMisconfiguration")
+		// Hit oc replace failed one time in defer, so add assertion here to detect issue if happens
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", originDriverConfigContentFilePath).Execute()).ShouldNot(o.HaveOccurred())
 	})
 })

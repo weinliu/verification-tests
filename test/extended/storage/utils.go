@@ -1002,3 +1002,15 @@ func getByokKeyIDFromClusterCSIDriver(oc *exutil.CLI, driverProvisioner string) 
 	e2e.Logf(`The BYOK test cluster driverProvisioner/%s kms keyID is: "%s"`, driverProvisioner, keyID)
 	return keyID
 }
+
+// get vSphere infrastructure.spec.platformSpec.vsphere.failureDomains, which is supported from 4.12
+func getVsphereFailureDomainsNum(oc *exutil.CLI) (fdNum int64) {
+	fdcontent, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-ojson").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !gjson.Get(fdcontent, "spec.platformSpec.vsphere.failureDomains").Exists() {
+		fdNum = 0
+	} else {
+		fdNum = gjson.Get(fdcontent, "spec.platformSpec.vsphere.failureDomains.#").Int()
+	}
+	return fdNum
+}
