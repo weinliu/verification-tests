@@ -681,6 +681,16 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "target_label: cluster_id_1")
 		})
 
+		// author: tagao@redhat.com
+		g.It("Author:tagao-Low-43037-Should not have error for oc adm inspect clusteroperator monitoring command", func() {
+			g.By("delete must-gather file at the end of case")
+			defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-43037").Output()
+
+			g.By("oc adm inspect clusteroperator monitoring")
+			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("inspect", "clusteroperator", "monitoring", "--dest-dir=/tmp/must-gather-43037").Output()
+			o.Expect(output).NotTo(o.ContainSubstring("error"))
+		})
 	})
 
 	//author: tagao@redhat.com
