@@ -77,7 +77,7 @@ func operatorInstall(oc *exutil.CLI, sub subscriptionResource, ns namespaceResou
 
 	g.By("(1.3) Creating subscription yaml from template")
 	// no need to check for an existing subscription
-	err0 = applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBSCRIPTIONNAME="+sub.name, "NAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
+	err0 = applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "OPERATORNAME="+sub.operatorName, "SUBSCRIPTIONNAME="+sub.name, "NAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
 		"CATALOGSOURCE="+sub.catalog, "CATALOGSOURCENAMESPACE="+sub.catalogNamespace)
 	if err0 != nil {
 		e2e.Logf("Error creating subscription %v", err0)
