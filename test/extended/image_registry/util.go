@@ -336,7 +336,7 @@ func getRegistryStorageConfig(oc *exutil.CLI) (string, string) {
 		storagetype = "ibmcos"
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.ibmcos.bucket}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-	case "BareMetal", "None", "VSphere", "Nutanix":
+	case "BareMetal", "None", "VSphere", "Nutanix", "External":
 		storagetype = pvcType
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.pvc.claim}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
