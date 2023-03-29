@@ -571,7 +571,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 
 		g.By("create aws nodepool with replica 2")
-		npName := "jz-43553-01"
+		npName := "43553np-" + strings.ToLower(exutil.RandStrDefault())
 		replica := 2
 		releaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.release.image}")
 
@@ -579,13 +579,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			hostedcluster.deleteNodePool(npName)
 			o.Eventually(hostedcluster.pollCheckDeletedNodePool(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
 		}()
-
 		NewAWSNodePool(npName, hostedcluster.name, hostedcluster.namespace).
 			WithNodeCount(&replica).
 			WithReleaseImage(releaseImage).
 			CreateAWSNodePool()
-		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(),
-			fmt.Sprintf("nodepool %s ready error", npName))
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npName))
 
 		g.By("enable autoRepair for the nodepool")
 		hostedcluster.setNodepoolAutoRepair(npName, "true")
@@ -598,10 +596,14 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		nodeName := strings.Split(nodes, " ")[0]
 
 		g.By("create a pod to kill kubelet in the corresponding node of the nodepool")
+		nsName := "guest-43553" + strings.ToLower(exutil.RandStrDefault())
+		defer doOcpReq(oc, "delete", true, "ns", nsName, "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)
+		doOcpReq(oc, "create", true, "ns", nsName, "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)
+		doOcpReq(oc, "label", true, "ns/"+nsName, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)
 		kubeletKillerTemplate := filepath.Join(hypershiftTeamBaseDir, "kubelet-killer.yaml")
 		kk := kubeletKiller{
 			Name:      "kubelet-killer-43553",
-			Namespace: "default",
+			Namespace: nsName,
 			NodeName:  nodeName,
 			Template:  kubeletKillerTemplate,
 		}
