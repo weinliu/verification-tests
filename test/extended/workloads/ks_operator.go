@@ -302,6 +302,9 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	// author: knarra@redhat.com
 	g.It("NonPreRelease-PstChkUpgrade-Author:knarra-High-60542-Guard controller set the readiness probe endpoint explicitly", func() {
+		// If SNO cluster skip the case as there is no quorum guard pod present in there
+		exutil.SkipForSNOCluster(oc)
+
 		// Check if openshift-kube-apiserver guard pod endpoint has been set to readyz
 		g.By("Check if all guard pods in openshift-kube-apiserver namespace are running fine")
 		guardPodName, guardPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=app=guard", `-ojsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
