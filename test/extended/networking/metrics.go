@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -537,5 +538,82 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(metricsOutput1, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput1))
+	})
+
+	g.It("Author:qiowang-Medium-60539-Verify metrics ovs_vswitchd_interfaces_total. [Serial]", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		var (
+			namespace           = "openshift-ovn-kubernetes"
+			metricName          = "ovs_vswitchd_interfaces_total"
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		podName, getPodNameErr := exutil.GetPodName(oc, namespace, "app=ovnkube-node", nodeName)
+		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+
+		g.By("1. Get the metrics of " + metricName + " before creating new pod on the node")
+		prometheusURL := "localhost:29105/metrics"
+		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+		metricValue1 := strings.TrimSpace(string(metricOutput1))
+		e2e.Logf("The output of the %s is : %v", metricName, metricValue1)
+
+		g.By("2. Create a pod on the node")
+		ns := oc.Namespace()
+		pod := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nodeName,
+			template:  pingPodNodeTemplate,
+		}
+		defer pod.deletePingPodNode(oc)
+		pod.createPingPodNode(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		g.By("3. Get the metrics of " + metricName + " after creating new pod on the node")
+		metricValue1Int, _ := strconv.Atoi(metricValue1)
+		expectedIncValue := strconv.Itoa(metricValue1Int + 1)
+		e2e.Logf("The expected value of the %s is : %v", metricName, expectedIncValue)
+		metricIncOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			output2, err2 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
+			o.Expect(err2).NotTo(o.HaveOccurred())
+			metricOutput2, _ := exec.Command("bash", "-c", "cat "+output2+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+			metricValue2 := strings.TrimSpace(string(metricOutput2))
+			e2e.Logf("The output of the %s is : %v", metricName, metricValue2)
+			if metricValue2 == expectedIncValue {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
+
+		g.By("4. Delete the pod on the node")
+		pod.deletePingPodNode(oc)
+
+		g.By("5. Get the metrics of " + metricName + " after deleting the pod on the node")
+		expectedDecValue := metricValue1
+		e2e.Logf("The expected value of the %s is : %v", metricName, expectedDecValue)
+		metricDecOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			output3, err3 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
+			o.Expect(err3).NotTo(o.HaveOccurred())
+			metricOutput3, _ := exec.Command("bash", "-c", "cat "+output3+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+			metricValue3 := strings.TrimSpace(string(metricOutput3))
+			e2e.Logf("The output of the %s is : %v", metricName, metricValue3)
+			if metricValue3 == expectedDecValue {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricDecOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricDecOutput))
 	})
 })
