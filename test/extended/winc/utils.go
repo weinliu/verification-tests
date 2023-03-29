@@ -239,6 +239,22 @@ func getWindowsNodesUptime(oc *exutil.CLI, privateKey string, iaasPlatform strin
 	return winUptime
 }
 
+func getWindowsNodeCurrentTime(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string) time.Time {
+
+	bastionHost := getSSHBastionHost(oc, iaasPlatform)
+	layout := "Monday January 2 2006 15:04:05 PM"
+	msg, err := runPSCommand(bastionHost, winHostIP, "date", privateKey, iaasPlatform)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	outSplitted := strings.Split(msg, "\r\n")
+	tsFromOutput := strings.ReplaceAll(strings.TrimSpace(outSplitted[len(outSplitted)-4]), ",", "")
+	e2e.Logf("Current time in Windows host %v: %v", winHostIP, tsFromOutput)
+	timeStamp, err := time.Parse(layout, tsFromOutput)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	return timeStamp
+
+}
+
 func createLinuxWorkload(oc *exutil.CLI, namespace string) {
 	linuxWebServer := filepath.Join(exutil.FixturePath("testdata", "winc"), "linux_web_server.yaml")
 	// Wait up to 3 minutes for Linux workload ready
@@ -789,28 +805,6 @@ func waitForServicesCM(oc *exutil.CLI, cmName string) {
 	}
 }
 
-// Function to force the WICD reconciliation, it simply overrides
-// the desired-version annotation.
-func forceWicdReconciliation(oc *exutil.CLI, winHostName string) {
-
-	initialDV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	// Set the desired-version annotation to any string, for example: "anything"
-	_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "anything"}}}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	// Give time to WMCO to assimilate the change.
-	time.Sleep(15 * time.Second)
-	// And now, replace it back to the original value initalDV
-	_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "`+strings.Trim(strings.TrimSpace(initialDV), "'")+`"}}}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// Make sure that the annotation was properly restored
-	afterChangeDV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(afterChangeDV).Should(o.Equal(initialDV))
-
-}
-
 func getServiceTimeStamp(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string, status string, serviceName string) time.Time {
 
 	bastionHost := getSSHBastionHost(oc, iaasPlatform)
@@ -825,6 +819,61 @@ func getServiceTimeStamp(oc *exutil.CLI, winHostIP string, privateKey string, ia
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return timeStamp
+
+}
+
+// getServiceProperty allows obtaining specific properties from a Windows service (https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-service#syntax)
+// by passing the desired property in the property parameter.
+func getServiceProperty(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string, serviceName string, property string) string {
+
+	bastionHost := getSSHBastionHost(oc, iaasPlatform)
+	cmd := fmt.Sprintf("Get-WmiObject win32_service | Where-Object { $_.Name -eq \\\"%v\\\" } | select -ExpandProperty \\\"%v\\\"", serviceName, property)
+	msg, err := runPSCommand(bastionHost, winHostIP, cmd, privateKey, iaasPlatform)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	outSplitted := strings.Split(msg, "\r\n")
+	propertyFromOutput := strings.TrimSpace(outSplitted[len(outSplitted)-2])
+	e2e.Logf("Sevice %v %v: %v", serviceName, property, propertyFromOutput)
+
+	return propertyFromOutput
+
+}
+
+// setServiceState allows starting or stopping a Service
+// Allowed values for state: "start" | "stop"
+func setServiceState(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string, state string, serviceName string) {
+
+	if (state != "start") && (state != "stop") {
+		e2e.Failf("State %v can't be set for the service %v", state, serviceName)
+	}
+	currentStatus := getServiceProperty(oc, winHostIP, privateKey, iaasPlatform, serviceName, "State")
+	// Check the state before setting it, as stopping an stopped service
+	// or start an started service will fail.
+	if state == "stop" && currentStatus == "Stopped" {
+		e2e.Logf("Service %v is already %v", serviceName, currentStatus)
+	} else if state == "start" && currentStatus == "Running" {
+		e2e.Logf("Service %v is already %v", serviceName, currentStatus)
+	} else {
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+		cmd := fmt.Sprintf("sc.exe \\\"%v\\\" \\\"%v\\\"", state, serviceName)
+		_, err := runPSCommand(bastionHost, winHostIP, cmd, privateKey, iaasPlatform)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Wait for the service state to change and verify the right state change
+		pollErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			status := getServiceProperty(oc, winHostIP, privateKey, iaasPlatform, serviceName, "State")
+			if state == "stop" && status == "Stopped" {
+				e2e.Logf("Sevice %v state set to %v", serviceName, state)
+				return true, nil
+			} else if state == "start" && status == "Running" {
+				e2e.Logf("Sevice %v state set to %v", serviceName, state)
+				return true, nil
+			}
+			return false, nil
+
+		})
+		if pollErr != nil {
+			e2e.Failf("Service %v hasn't been set to %v state after %v seconds ...", serviceName, state, 60)
+		}
+	}
 
 }
 
@@ -922,4 +971,45 @@ func getValueFromText(body []byte, searchVal string) string {
 	}
 	return strings.TrimSpace(strings.Split(s, searchVal)[1])
 
+}
+
+func checkLogAfterTimeStamp(logOut string, expectedMsg string, timeStamp time.Time) bool {
+
+	dateLayout := "Monday January 2 2006"
+	layout := "15:04:05.000000"
+	splittedLog := strings.Split(logOut, "\n")
+	for i := len(splittedLog) - 1; i >= 0; i-- {
+		// typical log: I0310 07:39:38.174073    1784 controller.go:294] successfully reconciled service windows_exporter
+		// we need the time, at position 1.
+		// Logs do not include the date, only the time. So we obtain the date from the timeStamp
+		// (which has been obtained from the Windows host's date command)
+		parseTs, err := time.Parse(dateLayout+" "+layout, timeStamp.Format(dateLayout)+" "+strings.Split(splittedLog[i], " ")[1])
+		if err != nil {
+			return false
+		}
+
+		if parseTs.After(timeStamp) {
+			if strings.Contains(splittedLog[i], expectedMsg) {
+				return true
+			}
+		} else {
+			return false
+		}
+	}
+	return false
+}
+
+// waitForAdminNodeLogEvent waits for a specific message to appear in a node's log
+// to know what are the possible node logs run: oc adm node-logs <node-id> --path=/
+func waitForAdminNodeLogEvent(oc *exutil.CLI, host string, logPath string, message string, timeStamp time.Time) {
+	waitLogErr := wait.Poll(10*time.Second, 25*time.Minute, func() (bool, error) {
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", host, "--path="+logPath).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !checkLogAfterTimeStamp(msg, message, timeStamp) {
+			return false, nil
+		}
+		e2e.Logf("Message: \"%v\", found in node %v 's log %v", message, host, logPath)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("Failed to find \"%v\" in node %v log %v after 25 minutes", message, host, logPath))
 }

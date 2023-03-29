@@ -1310,27 +1310,22 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		for idx, winhost := range winInternalIP {
 
 			g.By(fmt.Sprintf("Modify %v service binPath and check dependents stopped timestamp in host with IP %v", targetService, winhost))
-			cmd := fmt.Sprintf("Get-WmiObject win32_service | Where-Object { $_.Name -eq \\\"%v\\\" } | select -ExpandProperty PathName", targetService)
-			msg, _ := runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
-			listOut := strings.Split(msg, "\r\n")
-			initialBinPath := strings.TrimSpace(listOut[len(listOut)-2])
+
+			initialBinPath := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "PathName")
 
 			// Add --service-name containerd as argument to containerd service
-			cmd = fmt.Sprintf("sc.exe config %v binPath=\\\"%v --service-name containerd\\\"", targetService, initialBinPath)
-			msg, _ = runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
+			cmd := fmt.Sprintf("sc.exe config %v binPath=\\\"%v --service-name containerd\\\"", targetService, initialBinPath)
+			msg, _ := runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
 			o.Expect(msg).Should(o.ContainSubstring("SUCCESS"))
 
-			// TODO: Remove once https://issues.redhat.com/browse/WINC-736 is finished
-			// This is a workaround to force the WICD reconciliation
 			winHostName := winHostNames[idx]
-			forceWicdReconciliation(oc, winHostName)
 
-			// Ensure that the binPath command was restored
-			time.Sleep(90 * time.Second) // Give time to WICD to reconcile
-			cmd = fmt.Sprintf("Get-WmiObject win32_service | Where-Object { $_.Name -eq \\\"%v\\\" } | select -ExpandProperty PathName", targetService)
-			msg, _ = runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
-			listOut = strings.Split(msg, "\r\n")
-			afterReconciliationBinPath := strings.TrimSpace(listOut[len(listOut)-2])
+			svcModifiedTs := getWindowsNodeCurrentTime(oc, winhost, privateKey, iaasPlatform)
+			// When WICD reconciles the service state a message "successfully reconciled service <service_name>"
+			// will appear in wicd/windows-instance-config-daemon.exe.INFO logs.
+			waitForAdminNodeLogEvent(oc, winHostName, "wicd/windows-instance-config-daemon.exe.INFO", "successfully reconciled service "+targetService, svcModifiedTs)
+
+			afterReconciliationBinPath := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "PathName")
 
 			o.Expect(afterReconciliationBinPath).Should(o.Equal(initialBinPath))
 
@@ -1353,6 +1348,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		}
 	})
+
 	// author jfrancoa@redhat.com
 	g.It("Smokerun-Author:jfrancoa-Medium-38188-Get Windows instance/core number and CPU arch", func() {
 
@@ -1556,6 +1552,32 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			}
 		}
 
+	})
+
+	g.It("Author:jfrancoa-Medium-60944-WICD controller periodically reconciles state of Windows services [Disruptive]", func() {
+
+		targetService := "windows_exporter"
+
+		winInternalIP := getWindowsInternalIPs(oc)
+		winHostNames := getWindowsHostNames(oc)
+
+		for idx, winhost := range winInternalIP {
+
+			g.By(fmt.Sprintf("Stop service %v in host with IP %v", targetService, winhost))
+			// In case something goes wrong and the service does not get reconciled, make sure to
+			// restore back the service using defer
+			defer setServiceState(oc, winhost, privateKey, iaasPlatform, "start", targetService)
+			setServiceState(oc, winhost, privateKey, iaasPlatform, "stop", targetService)
+
+			stoppedTs := getWindowsNodeCurrentTime(oc, winhost, privateKey, iaasPlatform)
+			// When WICD reconciles the service state a message "successfully reconciled service <service_name>"
+			// will appear in wicd/windows-instance-config-daemon.exe.INFO logs.
+			waitForAdminNodeLogEvent(oc, winHostNames[idx], "wicd/windows-instance-config-daemon.exe.INFO", "successfully reconciled service "+targetService, stoppedTs)
+
+			status := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "State")
+			o.Expect(status).Should(o.Equal("Running"))
+
+		}
 	})
 
 })
