@@ -59,6 +59,8 @@ type scanSettingDescription struct {
 	schedule               string
 	size                   string
 	strictnodescan         bool
+	debug                  bool
+	priorityclassname      string
 	template               string
 }
 
@@ -153,6 +155,19 @@ type pvExtractDescription struct {
 	template  string
 }
 
+type priorityClassDescription struct {
+	name         string
+	namespace    string
+	prirotyValue int
+	template     string
+}
+
+func (priorityClassD *priorityClassDescription) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", priorityClassD.namespace, "-f", priorityClassD.template, "-p", "NAME="+priorityClassD.name,
+		"NAMESPACE="+priorityClassD.namespace, "PRIORITYVALUE="+strconv.Itoa(priorityClassD.prirotyValue))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func (csuite *complianceSuiteDescription) create(oc *exutil.CLI) {
 	e2e.Logf("The value of debug is: %v", csuite.debug)
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", csuite.template, "-p", "NAME="+csuite.name, "NAMESPACE="+csuite.namespace,
@@ -176,9 +191,9 @@ func (pb *profileBundleDescription) create(oc *exutil.CLI) {
 }
 
 func (ss *scanSettingDescription) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ss.template, "-p", "NAME="+ss.name, "NAMESPACE="+ss.namespace,
-		"AUTOAPPLYREMEDIATIONS="+strconv.FormatBool(ss.autoapplyremediations), "SCHEDULE="+ss.schedule, "SIZE="+ss.size, "ROTATION="+strconv.Itoa(ss.rotation),
-		"ROLES1="+ss.roles1, "ROLES2="+ss.roles2, "STRICTNODESCAN="+strconv.FormatBool(ss.strictnodescan), "AUTOUPDATEREMEDIATIONS="+strconv.FormatBool(ss.autoupdateremediations))
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ss.template, "-p", "NAME="+ss.name, "NAMESPACE="+ss.namespace, "PRIORITYCLASSNAME="+ss.priorityclassname,
+		"AUTOAPPLYREMEDIATIONS="+strconv.FormatBool(ss.autoapplyremediations), "SCHEDULE="+ss.schedule, "SIZE="+ss.size, "ROTATION="+strconv.Itoa(ss.rotation), "ROLES1="+ss.roles1,
+		"ROLES2="+ss.roles2, "STRICTNODESCAN="+strconv.FormatBool(ss.strictnodescan), "AUTOUPDATEREMEDIATIONS="+strconv.FormatBool(ss.autoupdateremediations), "DEBUG="+strconv.FormatBool(ss.debug))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -195,7 +210,7 @@ func (csuite *complianceSuiteDescription) delete(itName string, dr describerResr
 func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 	for _, v := range objs {
 		e2e.Logf("Start to remove: %v", v)
-		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, "-n", v.namespace, v.name).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, "-n", v.namespace, v.name, "--ignore-not-found").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
@@ -552,6 +567,7 @@ func getStorageClassProvisioner(oc *exutil.CLI) string {
 		return scpro
 	}
 	scs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass").OutputToFile(getRandomString() + "isc-config.json")
+	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the result of scs:%v", scs)
 	result, err := exec.Command("bash", "-c", "cat "+scs+" | grep \"default\" | awk '{print $3}'; rm -rf "+scs).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -639,6 +655,7 @@ func checkResourceNumber(oc *exutil.CLI, exceptedRsNo int, parameters ...string)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the result of rs:%v", rs)
 	result, err := exec.Command("bash", "-c", "cat "+rs+" | wc -l").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	r1 := strings.TrimSpace(string(result))
 	rsNumber, _ := strconv.Atoi(r1)
 	if rsNumber < exceptedRsNo {
@@ -651,6 +668,7 @@ func checkWarnings(oc *exutil.CLI, expectedString string, parameters ...string) 
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the result of rs:%v", rs)
 	result, err := exec.Command("bash", "-c", "cat "+rs+" | awk '{print $1}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	checkresults := strings.Fields(string(result))
 	for _, checkresult := range checkresults {
 		e2e.Logf("the result of checkresult:%v", checkresult)
@@ -1026,4 +1044,13 @@ func checkAlert(oc *exutil.CLI, token, alertString string, timeout time.Duration
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The alerts NOT to contain %s", alertString))
+}
+
+func assertParameterValueForBulkPods(oc *exutil.CLI, expected string, parameters ...string) {
+	result, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	rList := strings.Fields(result)
+	for _, res := range rList {
+		o.Expect(res).Should(o.Equal(expected), fmt.Sprintf("The %s NOT equals to %s", res, expected))
+	}
 }

@@ -11,6 +11,8 @@ objects:
   # Suite-specific settings
   autoApplyRemediations: ${{AUTOAPPLYREMEDIATIONS}}
   schedule: "${SCHEDULE}"
+  priorityClass: "${PRIORITYCLASSNAME}"
+  debug: ${{DEBUG}}
   # Scan-specific settings
   rawResultStorage:
     size: "${SIZE}"
@@ -30,3 +32,5 @@ parameters:
 - name: ROTATION
 - name: ROLES1
 - name: ROLES2
+- name: PRIORITYCLASSNAME
+- name: DEBUG

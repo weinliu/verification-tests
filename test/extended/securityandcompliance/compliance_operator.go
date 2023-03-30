@@ -314,6 +314,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				rotation:               10,
 				schedule:               "0 1 * * *",
 				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
 				template:               scansettingTemplate,
 			}
 			ssb = scanSettingBindingDescription{
@@ -1862,6 +1864,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				rotation:               5,
 				schedule:               "0 1 * * *",
 				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
 				template:               scansettingTemplate,
 			}
 			ssb = scanSettingBindingDescription{
@@ -3330,6 +3334,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				schedule:               "0 1 * * *",
 				strictnodescan:         false,
 				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
 				template:               scansettingSingleTemplate,
 			}
 			ssb = scanSettingBindingDescription{
@@ -3408,6 +3414,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				schedule:               "0 1 * * *",
 				strictnodescan:         false,
 				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
 				template:               scansettingSingleTemplate,
 			}
 			ssb = scanSettingBindingDescription{
@@ -3706,6 +3714,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				schedule:               "0 1 * * *",
 				strictnodescan:         false,
 				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
 				template:               scansettingSingleTemplate,
 			}
 			ssbCis               = "cis-test" + getRandomString()
@@ -3825,6 +3835,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				schedule:               "0 1 * * *",
 				strictnodescan:         false,
 				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
 				template:               scansettingSingleTemplate,
 			}
 			ssbPci               = "pci-test" + getRandomString()
@@ -3946,6 +3958,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				schedule:               "0 1 * * *",
 				strictnodescan:         false,
 				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
 				template:               scansettingSingleTemplate,
 			}
 			ssbHigh              = "high-test" + getRandomString()
@@ -4413,6 +4427,100 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("check alerts")
 		alertString := "annotations.*The compliance suite pci-test returned as.*The cluster is out-of-compliance"
 		checkAlert(oc, token, alertString, 200)
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ARO-OSD_CCS-Author:xiyuan-Medium-53303-create a scansettingbinding with or without priorityClass defined in scansetting [Serial]", func() {
+		var (
+			priorityClassTemplate = filepath.Join(buildPruningBaseDir, "priorityclass.yaml")
+			prioritym             = priorityClassDescription{
+				name:         "prioritym" + getRandomString(),
+				namespace:    subD.namespace,
+				prirotyValue: 99,
+				template:     priorityClassTemplate,
+			}
+			ss = scanSettingDescription{
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "ss-with-pc" + getRandomString(),
+				namespace:              "",
+				roles1:                 "master",
+				roles2:                 "worker",
+				rotation:               5,
+				schedule:               "0 1 * * *",
+				size:                   "2Gi",
+				priorityclassname:      prioritym.name,
+				debug:                  true,
+				template:               scansettingTemplate,
+			}
+			ssbWithPC    = "ssb-with-pc-" + getRandomString()
+			ssbWithoutPC = "ssb-without-pc-" + getRandomString()
+		)
+
+		defer func() {
+			cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbWithPC})
+			cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbWithoutPC})
+			cleanupObjects(oc, objectTableRef{"priorityclass", subD.namespace, prioritym.name})
+			cleanupObjects(oc, objectTableRef{"scansetting", subD.namespace, ss.name})
+		}()
+
+		g.By("Create priorityclass !!!\n")
+		prioritym.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, prioritym.name, ok, []string{"priorityclass", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create scansetting !!!\n")
+		ss.namespace = subD.namespace
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		_, err := OcComplianceCLI().Run("bind").Args("-N", ssbWithPC, "-S", ss.name, "profile/ocp4-cis", "profile/ocp4-cis-node", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbWithPC, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbWithPC, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, ssbWithPC, "NON-COMPLIANT INCONSISTENT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.priorityclassname, ok, []string{"compliancesuite", ssbWithPC, "-n", subD.namespace,
+			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
+
+		g.By("Check priorityname and priority for pods.. !!!\n")
+		assertParameterValueForBulkPods(oc, ss.priorityclassname, "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClass}")
+		assertParameterValueForBulkPods(oc, strconv.Itoa(prioritym.prirotyValue), "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+		assertParameterValueForBulkPods(oc, ss.priorityclassname, "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClass}")
+		assertParameterValueForBulkPods(oc, strconv.Itoa(prioritym.prirotyValue), "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+
+		g.By("Remove ssb and patch ss !!!\n")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbWithPC, "-n", subD.namespace, "--ignore-not-found").Execute()
+		patch := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/priorityClass\"}]")
+		patchResource(oc, asAdmin, withoutNamespace, "ss", ss.name, "-n", subD.namespace, "--type", "json", "-p", patch)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"scansetting", ss.name, "-n", subD.namespace,
+			"-o=jsonpath={.priorityClass}"}).check(oc)
+
+		g.By("Create scansettingbinding without priorityClass !!!\n")
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbWithoutPC, "-S", ss.name, "profile/ocp4-cis", "profile/ocp4-cis-node", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbWithoutPC, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbWithoutPC, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, ssbWithoutPC, "NON-COMPLIANT INCONSISTENT")
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"compliancesuite", ssbWithoutPC, "-n", subD.namespace,
+			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
+
+		g.By("Check priorityname and priority for pods.. !!!\n")
+		assertParameterValueForBulkPods(oc, "", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClass}")
+		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+		assertParameterValueForBulkPods(oc, "", "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClass}")
+		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
 	})
 
 	// author: xiyuan@redhat.com
