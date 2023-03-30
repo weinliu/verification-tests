@@ -4699,4 +4699,103 @@ type: kubernetes.io/service-account-token`
 			e2e.Failf("Cluster nodes health check failed")
 		}
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-Author:rgangwar-High-43261-[Apiserver] APIServer Support None audit policy [Disruptive][Slow]", func() {
+		var (
+			patch                = `[{"op": "replace", "path": "/spec/audit", "value":{"profile":"None"}}]`
+			patchToRecover       = `[{"op": "replace", "path": "/spec/audit", "value":{"profile":"Default"}}]`
+			expectedProgCoStatus = map[string]string{"Progressing": "True"}
+			expectedCoStatus     = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			coOps                = []string{"authentication", "openshift-apiserver"}
+		)
+
+		defer func() {
+			contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
+			o.Expect(contextErr).NotTo(o.HaveOccurred())
+			contextOutput, contextErr := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-context").Output()
+			o.Expect(contextErr).NotTo(o.HaveOccurred())
+			e2e.Logf("Context after rollack :: %v", contextOutput)
+		}()
+
+		defer func() {
+			g.By("Restoring apiserver/cluster's profile")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patchToRecover).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "patched (no change)") {
+				e2e.Logf("Apiserver/cluster's audit profile not changed from the default values")
+			} else {
+				g.By("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout and recovery")
+				e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
+				err = waitCoBecomes(oc, "kube-apiserver", 100, expectedProgCoStatus)
+				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+				e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
+				err = waitCoBecomes(oc, "kube-apiserver", 1500, expectedCoStatus)
+				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
+
+				// Using 60s because KAS takes long time, when KAS finished rotation, OAS and Auth should have already finished.
+				for _, ops := range coOps {
+					e2e.Logf("Checking %s should be Available in 60 seconds", ops)
+					err = waitCoBecomes(oc, ops, 60, expectedCoStatus)
+					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%v operator is not becomes available in 60 seconds", ops))
+				}
+			}
+		}()
+
+		g.By("1. Set None profile to audit log")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("patched"), "apiserver/cluster not patched")
+		g.By("2. Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout and recovery")
+		g.By("2.1 Checking kube-apiserver operator should be in Progressing in 100 seconds")
+		err = waitCoBecomes(oc, "kube-apiserver", 100, expectedProgCoStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+		g.By("2.2 Checking kube-apiserver operator should be Available in 1500 seconds")
+		err = waitCoBecomes(oc, "kube-apiserver", 1500, expectedCoStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
+
+		// Using 60s because KAS takes long time, when KAS finished rotation, OAS and Auth should have already finished.
+		i := 3
+		for _, ops := range coOps {
+			g.By(fmt.Sprintf("2.%d Checking %s should be Available in 60 seconds", i, ops))
+			err = waitCoBecomes(oc, ops, 60, expectedCoStatus)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%v operator is not becomes available in 60 seconds", ops))
+			i = i + 1
+		}
+		e2e.Logf("KAS, OAS and Auth operator are available after rollout")
+
+		// Must-gather for audit logs
+		// Related bug 2008223
+		// Due to bug 2040654, exit code is unable to get failure exit code from executed script, so the step will succeed here.
+		g.By("3. Get must-gather audit logs")
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/"+tmpdir+"/audit_must_gather_OCP-43261", "--", "/usr/bin/gather_audit_logs").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(msg, "ERROR: To raise a Red Hat support request")).Should(o.BeTrue())
+		o.Expect(strings.Contains(msg, "spec.audit.profile")).Should(o.BeTrue())
+
+		g.By("4. Check if there is no new audit logs are generated after None profile setting.")
+		errUser := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", "system:admin", "-n", "default").Execute()
+		o.Expect(errUser).NotTo(o.HaveOccurred())
+		// Define the command to run on each node
+		now := time.Now().UTC().Format("2006-01-02 15:04:05")
+		script := fmt.Sprintf(`for logpath in kube-apiserver oauth-apiserver openshift-apiserver; do grep -h system:authenticated:oauth /var/log/${logpath}/audit*.log | jq -c 'select (.requestReceivedTimestamp | .[0:19] + "Z" | fromdateiso8601 > "%s")' >> /tmp/OCP-43261-$logpath.json; done; cat /tmp/OCP-43261-*.json`, now)
+		g.By("4.1 Get all master nodes.")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+		counter := 0
+		for _, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("4.2 Get audit log file from %s", masterNode))
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", script)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+			errCount := strings.Count(strings.TrimSpace(masterNodeLogs), "\n")
+			if errCount > 0 {
+				e2e.Logf("Error logs on master node %v :: %v", masterNode, masterNodeLogs)
+			}
+			counter = errCount + counter
+		}
+		if counter > 0 {
+			e2e.Failf("Audit logs counts increased :: %d", counter)
+		}
+	})
 })
