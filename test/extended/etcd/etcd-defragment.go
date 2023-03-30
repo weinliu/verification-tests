@@ -18,7 +18,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: mifiedle@redhat.com
-	g.It("NonHyperShiftHOST-Author:mifiedle-High-43335-etcd data store will defragment and recover unused space [Slow] [Flaky]", func() {
+	g.It("NonHyperShiftHOST-DEPRECATED-Author:mifiedle-High-43335-etcd data store will defragment and recover unused space [Slow] [Flaky]", func() {
 
 		g.By("Discover all the etcd pods")
 		etcdPodList := getPodListByLabel(oc, "etcd=true")
