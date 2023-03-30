@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -15,10 +16,13 @@ import (
 	"github.com/ghodss/yaml"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/pretty"
 	"github.com/tidwall/sjson"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -1013,4 +1017,17 @@ func getVsphereFailureDomainsNum(oc *exutil.CLI) (fdNum int64) {
 		fdNum = gjson.Get(fdcontent, "spec.platformSpec.vsphere.failureDomains.#").Int()
 	}
 	return fdNum
+}
+
+// isTechPreviewNoUpgrade checks if a cluster is a TechPreviewNoUpgrade cluster
+func isTechPreviewNoUpgrade(oc *exutil.CLI) bool {
+	featureGate, err := oc.AdminConfigClient().ConfigV1().FeatureGates().Get(context.Background(), "cluster", metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false
+		}
+		e2e.Failf("could not retrieve feature-gate: %v", err)
+	}
+
+	return featureGate.Spec.FeatureSet == configv1.TechPreviewNoUpgrade
 }

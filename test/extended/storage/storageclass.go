@@ -307,4 +307,82 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(scFromPV).To(o.Equal(storageClass2.name))
 	})
+
+	// author: chaoyang@redhat.com
+	// Test case exec with featuregate enabled TechPreviewNoUpgrade
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-60581-[Storageclass] Pending pvc will be bound after there is a default storageclass created [Serial]", func() {
+
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip for featuregate set as TechPreviewNoUpgrade")
+		}
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+		)
+
+		//Get the default storageclass
+		defaultsc := getClusterDefaultStorageclassByPlatform(cloudProvider)
+		if defaultsc == "" {
+			g.Skip("Skip for non supported platform")
+		}
+
+		//Skip test case when there are multiple default storageclass
+		allSc := getAllStorageClass(oc)
+		var oriDefaultSc []string
+		for i := 0; i < len(allSc); i++ {
+			if checkDefaultStorageclass(oc, allSc[i]) {
+				oriDefaultSc = append(oriDefaultSc, allSc[i])
+			}
+		}
+		if len(oriDefaultSc) != 1 {
+			g.Skip("Only test scenario with one default storageclass")
+		}
+
+		//Mark default storageclass as non-default
+		setSpecifiedStorageClassAsNonDefault(oc, oriDefaultSc[0])
+		defer setSpecifiedStorageClassAsDefault(oc, oriDefaultSc[0])
+
+		//create new project
+		g.By("#Create new project for the scenario")
+		oc.SetupProject()
+
+		//Create pvc without storageclass
+		g.By("#Create pvc without mentioning storageclass name")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		pvc.createWithoutStorageclassname(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+
+		//Check pvc status is pending
+		g.By("#Check pvc status stuck at Pending")
+		o.Consistently(func() string {
+			pvcState, _ := pvc.getStatus(oc)
+			return pvcState
+		}, 60*time.Second, 10*time.Second).Should(o.ContainSubstring("Pending"))
+
+		g.By("#Create new default storageclass")
+		// Get the provisioner from the cluster
+		provisioner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc/"+oriDefaultSc[0], "-o", "jsonpath={.provisioner}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+		storageClass.provisioner = provisioner
+		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner))
+		sc.create(oc)
+		defer sc.deleteAsAdmin(oc)
+		setSpecifiedStorageClassAsDefault(oc, sc.name)
+
+		g.By("Waiting for pod status is Running")
+		pvc.waitStatusAsExpected(oc, "Bound")
+		pod.waitReady(oc)
+
+		g.By("Check the PV's storageclass should be newly create storageclass")
+		o.Expect(getScNamesFromSpecifiedPv(oc, pvc.getVolumeName(oc))).To(o.Equal(sc.name))
+
+	})
+
 })

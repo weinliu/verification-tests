@@ -326,3 +326,10 @@ func setSpecifiedStorageClassAsNonDefault(oc *exutil.CLI, scName string) {
 	o.Expect(output).To(o.Equal("false"))
 	e2e.Logf("Changed the storage class %v to be non-default one successfully", scName)
 }
+
+func getAllStorageClass(oc *exutil.CLI) []string {
+	output, err := oc.AsAdmin().Run("get").Args("storageclass", "-o=custom-columns=NAME:.metadata.name", "--no-headers").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	scArray := strings.Fields(output)
+	return scArray
+}
