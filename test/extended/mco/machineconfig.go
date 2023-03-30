@@ -79,6 +79,33 @@ func (mc *MachineConfig) delete() {
 	mcp.waitForComplete()
 }
 
+// GetExtensions returns all the extensions configured in this MC
 func (mc *MachineConfig) GetExtensions() (string, error) {
 	return mc.Get(`{.spec.extensions}`)
+}
+
+// GetAuthorizedKeysByUser returns the authorizedkeys that this MC defines for the given user in a json list format
+func (mc *MachineConfig) GetAuthorizedKeysByUser(user string) (string, error) {
+	return mc.Get(fmt.Sprintf(`{.spec.config.passwd.users[?(@.name=="%s")].sshAuthorizedKeys}`, user))
+}
+
+// GetAuthorizedKeysByUserAsList returns the authorizedkeys that this MC defines for the given user as a list of strings
+func (mc *MachineConfig) GetAuthorizedKeysByUserAsList(user string) ([]string, error) {
+	listKeys := []string{}
+
+	keys, err := mc.Get(fmt.Sprintf(`{.spec.config.passwd.users[?(@.name=="%s")].sshAuthorizedKeys}`, user))
+	if err != nil {
+		return nil, err
+	}
+
+	if keys == "" {
+		return listKeys, nil
+	}
+
+	jKeys := JSON(keys)
+	for _, key := range jKeys.Items() {
+		listKeys = append(listKeys, key.ToString())
+	}
+
+	return listKeys, err
 }

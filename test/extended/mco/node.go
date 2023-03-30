@@ -595,6 +595,28 @@ func (n *Node) UserExists(userName string) bool {
 	return err == nil
 }
 
+// GetRHELVersion returns the RHEL version of the  node
+func (n *Node) GetRHELVersion() (string, error) {
+	vContent, err := n.DebugNodeWithChroot("cat", "/etc/os-release")
+	if err != nil {
+		return "", err
+	}
+
+	r := regexp.MustCompile(`RHEL_VERSION="(?P<rhel_version>.*)"`)
+	match := r.FindStringSubmatch(vContent)
+	if len(match) == 0 {
+		msg := fmt.Sprintf("No RHEL_VERSION available in /etc/os-release file: %s", vContent)
+		logger.Infof(msg)
+		return "", fmt.Errorf(msg)
+	}
+
+	rhelvIndex := r.SubexpIndex("rhel_version")
+	rhelVersion := match[rhelvIndex]
+
+	logger.Infof("Node %s RHEL_VERSION %s", n.GetName(), rhelVersion)
+	return rhelVersion, nil
+}
+
 // GetAll returns a []Node list with all existing nodes
 func (nl *NodeList) GetAll() ([]Node, error) {
 	allNodeResources, err := nl.ResourceList.GetAll()

@@ -485,21 +485,6 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		createMcAndVerifyIgnitionVersion(oc, "invalid ign version", "change-worker-ign-version-to-invalid", "3.9.0")
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-42679-add new ssh authorized keys CoreOs [Serial]", func() {
-		workerNode := skipTestIfOsIsNotCoreOs(oc)
-		g.By("Create new machine config with new authorized key")
-		mcName := TmplAddSSHAuthorizedKeyForWorker
-		mcTemplate := mcName + ".yaml"
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
-		defer mc.delete()
-		mc.create()
-
-		g.By("Check content of file authorized_keys to verify whether new one is added successfully")
-		sshKeyOut, err := workerNode.DebugNodeWithChroot("cat", "/home/core/.ssh/authorized_keys.d/ignition")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(sshKeyOut).Should(o.ContainSubstring("mco_test@redhat.com"))
-	})
-
 	g.It("Author:sregidor-NonPreRelease-High-46304-add new ssh authorized keys RHEL. OCP<4.10 [Serial]", func() {
 		skipTestIfClusterVersion(oc, ">=", "4.10")
 		workerNode := skipTestIfOsIsNotRhelOs(oc)
@@ -3181,6 +3166,17 @@ func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, workerNod
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(podOut).Should(o.MatchRegexp(textToVerify.textToVerifyForNode))
 	logger.Infof("%s is verified in the machine config daemon!", stepText)
+}
+
+// skipTestIfRHELVersion skips the test case if the provided RHEL version matches the constraints.
+func skipTestIfRHELVersion(node Node, operator, constraintVersion string) {
+	rhelVersion, err := node.GetRHELVersion()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting RHEL version from node %s", node.GetName())
+
+	if CompareVersions(rhelVersion, operator, constraintVersion) {
+		g.Skip(fmt.Sprintf("Test case skipped because current RHEL version %s %s %s",
+			rhelVersion, operator, constraintVersion))
+	}
 }
 
 // skipTestIfClusterVersion skips the test case if the provided version matches the constraints.

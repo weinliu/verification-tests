@@ -6,11 +6,13 @@ type ign32Contents struct {
 	Source      string `json:"source,omitempty"`
 }
 
+// ign32FileUser describes the user that will own a given file
 type ign32FileUser struct {
 	Name string `json:"name,omitempty"`
 	ID   *int   `json:"id,omitempty"`
 }
 
+// ign32FileUser describes the group that will own a given file
 type ign32FileGroup struct {
 	Name string `json:"name,omitempty"`
 	ID   *int   `json:"id,omitempty"`
@@ -23,4 +25,11 @@ type ign32File struct {
 	Mode     *int           `json:"mode,omitempty"`
 	User     ign32FileUser  `json:"user,omitempty"`
 	Group    ign32FileGroup `json:"group,omitempty"`
+}
+
+// ign32PaswdUser describes the passwd data regarding a given user
+type ign32PaswdUser struct {
+	Name              string   `json:"name,omitempty"`
+	SSHAuthorizedKeys []string `json:"sshAuthorizedKeys,omitempty"`
+	PasswordHash      string   `json:"passwordHash,omitempty"`
 }

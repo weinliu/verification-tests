@@ -151,20 +151,48 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 
 }
 
-// GetNodes returns a list with the nodes that belong to the machine config pool
-func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
+// getNodesWithTags returns a list with the nodes that belong to the machine config poola and has the provided tags
+func (mcp *MachineConfigPool) getNodesWithTags(tags string) ([]Node, error) {
 	labels := JSON(mcp.GetOrFail(`{.spec.nodeSelector.matchLabels}`))
 	o.Expect(labels.Exists()).Should(o.BeTrue(), fmt.Sprintf("The pool %s has no machLabels value defined", mcp.GetName()))
 
 	nodeList := NewNodeList(mcp.oc)
 	// Never select windows nodes
 	requiredLabel := "kubernetes.io/os!=windows"
+	if tags != "" {
+		requiredLabel += ","
+		requiredLabel += tags
+	}
 	for k, v := range labels.ToMap() {
 		requiredLabel += fmt.Sprintf(",%s=%s", k, v.(string))
 	}
 	nodeList.ByLabel(requiredLabel)
 
 	return nodeList.GetAll()
+}
+
+// GetNodes returns a list with the nodes that belong to the machine config pool
+func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
+	return mcp.getNodesWithTags("")
+}
+
+// GetNodesOrFail returns a list with the nodes that belong to the machine config pool and fail the test if any error happened
+func (mcp *MachineConfigPool) GetNodesOrFail() []Node {
+	ns, err := mcp.GetNodes()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Cannot get the nodes in %s MCP", mcp.GetName())
+	return ns
+}
+
+// GetCoreOsNodes returns a list with the CoreOs nodes that belong to the machine config pool
+func (mcp *MachineConfigPool) GetCoreOsNodes() ([]Node, error) {
+	return mcp.getNodesWithTags("node.openshift.io/os_id=rhcos")
+}
+
+// GetCoreOsNodesOrFail returns a list with the nodes that belong to the machine config pool and fail the test if any error happened
+func (mcp *MachineConfigPool) GetCoreOsNodesOrFail() []Node {
+	ns, err := mcp.GetCoreOsNodes()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Cannot get the coreOS nodes in %s MCP", mcp.GetName())
+	return ns
 }
 
 // GetSortedNodes returns a list with the nodes that belong to the machine config pool in the same order used to update them
