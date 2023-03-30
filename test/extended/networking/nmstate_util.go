@@ -2,6 +2,7 @@
 package networking
 
 import (
+	"net"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -205,4 +206,25 @@ func deleteNNCP(oc *exutil.CLI, name string) {
 	if err != nil {
 		e2e.Logf("Failed to delete nncp %s, error:%s", name, err)
 	}
+}
+
+func getDefaultSubnetForSpecificSDNNode(oc *exutil.CLI, nodeName string) string {
+	var sub1 string
+	iface, _ := getDefaultInterface(oc)
+	getDefaultSubnetCmd := "/usr/sbin/ip -4 -brief a show " + iface
+	podName, getPodNameErr := exutil.GetPodName(oc, "openshift-sdn", "app=sdn", nodeName)
+	o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
+	cmd := []string{"-n", "openshift-sdn", "-c", "sdn", podName, "--", "/bin/sh", "-c", getDefaultSubnetCmd}
+	subnet, getSubnetErr := oc.WithoutNamespace().AsAdmin().Run("exec").Args(cmd...).Output()
+	o.Expect(getSubnetErr).NotTo(o.HaveOccurred())
+	defSubnet := strings.Fields(subnet)[2]
+	e2e.Logf("Get the default subnet: %s", defSubnet)
+
+	_, ipNet, getCIDRErr := net.ParseCIDR(defSubnet)
+	o.Expect(getCIDRErr).NotTo(o.HaveOccurred())
+	e2e.Logf("ipnet: %v", ipNet)
+	sub1 = ipNet.String()
+	e2e.Logf("\n\n\n sub1 as -->%v<--\n\n\n", sub1)
+
+	return sub1
 }

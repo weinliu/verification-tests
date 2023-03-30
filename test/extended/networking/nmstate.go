@@ -746,7 +746,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 
 		g.By("1. Configure SDN egressIP")
 		g.By("1.1 Pick a node as egressIP node, add egressCIDRs to it")
-		subnet := getEgressCIDRsForNode(oc, nodeName)
+		subnet := getDefaultSubnetForSpecificSDNNode(oc, nodeName)
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+nodeName, "{\"egressCIDRs\":[]}")
 		patchResourceAsAdmin(oc, "hostsubnet/"+nodeName, "{\"egressCIDRs\":[\""+subnet+"\"]}")
 
