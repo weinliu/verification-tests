@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: chaoyang@redhat.com
 	// [GCP-Filestore-CSI-Driver][Dynamic PV] [Filesystem]Provision filestore instance with customer key
-	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-55727-[GCP-Filestore-CSI-Driver][Dynamic PV] [Filesystem]Provision filestore instance with customer key", func() {
+	g.It("OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-55727-[GCP-Filestore-CSI-Driver][Dynamic PV] [Filesystem]Provision filestore instance with customer key", func() {
 
 		// Set the resource template for the scenario
 		var (
@@ -110,46 +110,55 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	})
 
-	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-StagerunBoth-Author:chaoyang-Medium-57345-[GCP-Filestore-CSI-Driver][Dynamic PV] [Filesystem]Dynamic provision standard volume", func() {
-		var (
-			storageClassParameters = map[string]string{
-				"network": network,
-				"tier":    "standard",
-			}
-			extraParameters = map[string]interface{}{
-				"parameters":           storageClassParameters,
-				"allowVolumeExpansion": false,
-			}
-		)
+	gcpFileStoreTypeTestSuit := map[string]string{
+		"57345": "standard",
+		"59526": "enterprise",
+	}
+	caseIds := []string{"57345", "59526"}
+	for i := 0; i < len(caseIds); i++ {
+		volumeType := gcpFileStoreTypeTestSuit[caseIds[i]]
 
-		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("filestore.csi.storage.gke.io"))
+		g.It("OSD_CCS-Longduration-NonPreRelease-StagerunBoth-Author:chaoyang-Medium-"+caseIds[i]+"-[GCP-Filestore-CSI-Driver][Dynamic PV] [Filesystem]Dynamic provision volume "+volumeType, func() {
+			var (
+				storageClassParameters = map[string]string{
+					"network": network,
+					"tier":    volumeType,
+				}
+				extraParameters = map[string]interface{}{
+					"parameters":           storageClassParameters,
+					"allowVolumeExpansion": false,
+				}
+			)
 
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("filestore.csi.storage.gke.io"))
 
-		g.By("# Create csi storageclass")
-		storageClass.createWithExtraParameters(oc, extraParameters)
-		defer storageClass.deleteAsAdmin(oc)
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
-		g.By("# Create a pvc with the csi storageclass")
-		pvc.scname = storageClass.name
-		pvc.create(oc)
-		defer pvc.deleteAsAdmin(oc)
+			g.By("# Create csi storageclass")
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
 
-		g.By("# Create deployment with the created pvc and wait ready")
-		dep.create(oc)
-		defer dep.delete(oc)
-		dep.longerTime().waitReady(oc)
+			g.By("# Create a pvc with the csi storageclass")
+			pvc.scname = storageClass.name
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
 
-		g.By("# Check the deployment's pod mounted volume can be read and write")
-		dep.checkPodMountedVolumeCouldRW(oc)
+			g.By("# Create deployment with the created pvc and wait ready")
+			dep.create(oc)
+			defer dep.delete(oc)
+			dep.longerTime().waitReady(oc)
 
-		g.By("# Check the deployment's pod mounted volume have the exec right")
-		dep.checkPodMountedVolumeHaveExecRight(oc)
+			g.By("# Check the deployment's pod mounted volume can be read and write")
+			dep.checkPodMountedVolumeCouldRW(oc)
 
-	})
+			g.By("# Check the deployment's pod mounted volume have the exec right")
+			dep.checkPodMountedVolumeHaveExecRight(oc)
 
-	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-57349-[GCP-Filestore-CSI-Driver][Dynamic PV]Volume online expansion is successful", func() {
+		})
+	}
+
+	g.It("OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-57349-[GCP-Filestore-CSI-Driver][Dynamic PV]Volume online expansion is successful", func() {
 		var (
 			storageClassParameters = map[string]string{
 				"network": network,
