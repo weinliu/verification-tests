@@ -127,7 +127,7 @@ type oprResource struct {
 	namespace string
 }
 
-//When will return false if Operator is not installed, and true otherwise
+// When will return false if Operator is not installed, and true otherwise
 func (opr *oprResource) checkOperatorPOD(oc *exutil.CLI) bool {
 	e2e.Logf("Checking if " + opr.name + " pod is succesfully running...")
 	podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(opr.kind, "-n", opr.namespace, "--no-headers").Output()
@@ -215,7 +215,7 @@ func (opr *oprResource) waitLongDurationDaemonsetReady(oc *exutil.CLI, timeDurat
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the pod of %v is not running", opr.name))
 }
 
-//trunct pods logs by filter
+// trunct pods logs by filter
 func (opr *oprResource) assertOprPodLogs(oc *exutil.CLI, filter string) {
 	podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", opr.namespace, "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -302,7 +302,7 @@ func assertSimpleKmodeOnNode(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(waitErr, "the simple-kmod not found")
 }
 
-//Encrypt and Decrypt Pull Secret for multi-build
+// Encrypt and Decrypt Pull Secret for multi-build
 func createHash(key string) string {
 	hasher := md5.New()
 	hasher.Write([]byte(key))
@@ -355,7 +355,7 @@ func BASE64DecodeStr(src string) string {
 	return string(plaintext)
 }
 
-//Create docker config for multi-build
+// Create docker config for multi-build
 type secretResource struct {
 	name       string
 	namespace  string

@@ -150,6 +150,13 @@ func (podNoWkloadCpu *podNoWkloadCpuDescription) delete(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+type runtimeTimeoutDescription struct {
+	name       string
+	labelkey   string
+	labelvalue string
+	template   string
+}
+
 func (podWkloadCpu *podWkloadCpuDescription) create(oc *exutil.CLI) {
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podWkloadCpu.template, "-p", "NAME="+podWkloadCpu.name, "NAMESPACE="+podWkloadCpu.namespace, "WORKLOADCPU="+podWkloadCpu.workloadcpu)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -207,6 +214,16 @@ func (memHog *memHogDescription) create(oc *exutil.CLI) {
 
 func (podSleep *podSleepDescription) create(oc *exutil.CLI) {
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podSleep.template, "-p", "NAMESPACE="+podSleep.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (runtimeTimeout *runtimeTimeoutDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", runtimeTimeout.template, "-p", "NAME="+runtimeTimeout.name, "LABELKEY="+runtimeTimeout.labelkey, "LABELVALUE="+runtimeTimeout.labelvalue)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (runtimeTimeout *runtimeTimeoutDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", runtimeTimeout.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -593,7 +610,7 @@ func getPodNetNs(oc *exutil.CLI, hostname string) (string, error) {
 }
 
 func addLabelToNode(oc *exutil.CLI, label string, workerNodeName string, resource string) {
-	_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args(resource, workerNodeName, label).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args(resource, workerNodeName, label, "--overwrite").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("\nLabel Added")
 }
@@ -1025,4 +1042,45 @@ func assertKubeletLogLevel(oc *exutil.CLI) {
 		e2e.Logf("Running Proccess of kubelet are:\n %v\n", kublet)
 	}
 	exutil.AssertWaitPollNoErr(waitErr, "KUBELET_LOG_LEVEL is not expected")
+}
+
+// this function is for  updating the runtimeRequestTimeout parameter using KubeletConfig CR
+
+func runTimeTimeout(oc *exutil.CLI) {
+	var kubeletConf string
+	var err error
+	nodeName, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(nodeErr).NotTo(o.HaveOccurred())
+	e2e.Logf("\nNode Names are %v", nodeName)
+	nodes := strings.Fields(nodeName)
+
+	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+
+		for _, node := range nodes {
+			nodeStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}").Output()
+			o.Expect(statusErr).NotTo(o.HaveOccurred())
+			e2e.Logf("\nNode %s Status is %s\n", node, nodeStatus)
+
+			if nodeStatus == "True" {
+				kubeletConf, err = exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", "cat /etc/kubernetes/kubelet.conf | grep runtimeRequestTimeout")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				if strings.Contains(string(kubeletConf), "runtimeRequestTimeout") && strings.Contains(string(kubeletConf), ":") && strings.Contains(string(kubeletConf), "3m0s") {
+					e2e.Logf(" RunTime Request Timeout is 3 minutes. \n")
+					return true, nil
+				} else {
+					e2e.Logf("Runtime Request Timeout is not 3 minutes. \n")
+					return false, nil
+				}
+			} else {
+				e2e.Logf("\n NODES ARE NOT READY\n ")
+			}
+		}
+		return false, nil
+	})
+	if waitErr != nil {
+		e2e.Logf("RunTime Request Timeout is:\n %v\n", kubeletConf)
+
+	}
+	exutil.AssertWaitPollNoErr(waitErr, "Runtime Request Timeout is not expected")
 }

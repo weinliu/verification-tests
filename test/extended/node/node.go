@@ -30,6 +30,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podWkloadCpuTemp     = filepath.Join(buildPruningBaseDir, "pod-workload-cpu.yaml")
 		podWkloadCpuNoAnTemp = filepath.Join(buildPruningBaseDir, "pod-workload-cpu-without-anotation.yaml")
 		podNoWkloadCpuTemp   = filepath.Join(buildPruningBaseDir, "pod-without-workload-cpu.yaml")
+		runtimeTimeoutTemp   = filepath.Join(buildPruningBaseDir, "kubeletconfig-runReqTout.yaml")
 
 		podWkloadCpu52313 = podNoWkloadCpuDescription{
 			name:      "",
@@ -125,6 +126,12 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			name:     "",
 			overlay:  "",
 			template: ctrcfgOverlayTemp,
+		}
+		runtimeTimeout = runtimeTimeoutDescription{
+			name:       "",
+			labelkey:   "",
+			labelvalue: "",
+			template:   runtimeTimeoutTemp,
 		}
 	)
 	// author: pmali@redhat.com
@@ -676,6 +683,37 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Test for OCP-55033")
 		g.By("check Kubelet Log Level\n")
 		assertKubeletLogLevel(oc)
+	})
+
+	//author: asahay@redhat.com
+	g.It("Author:asahay-High-52472-update runtimeRequestTimeout parameter using KubeletConfig CR [Disruptive]", func() {
+
+		oc.SetupProject()
+		runtimeTimeout.name = "kubeletconfig-52472"
+		runtimeTimeout.labelkey = "custom-kubelet"
+		runtimeTimeout.labelvalue = "test-timeout"
+
+		g.By("Label mcp worker custom-kubelet as test-timeout \n")
+		addLabelToNode(oc, "custom-kubelet=test-timeout", "worker", "mcp")
+		defer removeLabelFromNode(oc, "custom-kubelet-", "worker", "mcp")
+
+		g.By("Create KubeletConfig \n")
+		defer func() {
+			mcpName := "worker"
+			err := checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer runtimeTimeout.delete(oc)
+		runtimeTimeout.create(oc)
+
+		g.By("Check mcp finish rolling out")
+		mcpName := "worker"
+		err := checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		g.By("Check Runtime Request Timeout")
+		runTimeTimeout(oc)
+
 	})
 
 })
