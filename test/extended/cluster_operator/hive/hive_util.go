@@ -965,7 +965,7 @@ func exposeMetrics(oc *exutil.CLI, testDataDir string, needRecoverPtr *bool, pre
 			*needRecoverPtr, *prevConfigPtr = false, ""
 		} else {
 			e2e.Logf("User workload is not enabled, enabling ...")
-			*needRecoverPtr, *prevConfigPtr = true, strings.ReplaceAll(extractOutput, "\n", "\\n")
+			*needRecoverPtr, *prevConfigPtr = true, extractOutput
 
 			extractOutputParts := strings.Split(extractOutput, "\n")
 			containKeyword := false
@@ -981,7 +981,7 @@ func exposeMetrics(oc *exutil.CLI, testDataDir string, needRecoverPtr *bool, pre
 				e2e.Logf("Keyword \"enableUserWorkload\" not found in cluster-monitoring-config, adding ...")
 				extractOutputParts = append(extractOutputParts, "enableUserWorkload: true")
 			}
-			modifiedExtractOutput := strings.Join(extractOutputParts, "\\n")
+			modifiedExtractOutput := strings.ReplaceAll(strings.Join(extractOutputParts, "\\n"), "\"", "\\\"")
 
 			e2e.Logf("Patching ConfigMap cluster-monitoring-config to enable user workload monitoring ...")
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ConfigMap", "cluster-monitoring-config", "-n", "openshift-monitoring", "--type", "merge", "-p", fmt.Sprintf("{\"data\":{\"config.yaml\": \"%s\"}}", modifiedExtractOutput)).Execute()
@@ -1039,6 +1039,7 @@ func recoverClusterMonitoring(oc *exutil.CLI, needRecoverPtr *bool, prevConfigPt
 			}
 		} else {
 			e2e.Logf("Reverting changes made to ConfigMap/cluster-monitoring-config ...")
+			*prevConfigPtr = strings.ReplaceAll(strings.ReplaceAll(*prevConfigPtr, "\n", "\\n"), "\"", "\\\"")
 			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ConfigMap", "cluster-monitoring-config", "-n", "openshift-monitoring", "--type", "merge", "-p", fmt.Sprintf("{\"data\":{\"config.yaml\": \"%s\"}}", *prevConfigPtr)).Execute()
 			if err != nil {
 				e2e.Logf("Error occurred when patching ConfigMap/cluster-monitoring-config: %v", err)
