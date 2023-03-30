@@ -32,6 +32,7 @@ type complianceSuiteDescription struct {
 	value               string
 	operator            string
 	nodeSelector        string
+	priorityClass       string
 	pvAccessModes       string
 	size                string
 	rotation            int
@@ -171,7 +172,7 @@ func (priorityClassD *priorityClassDescription) create(oc *exutil.CLI) {
 func (csuite *complianceSuiteDescription) create(oc *exutil.CLI) {
 	e2e.Logf("The value of debug is: %v", csuite.debug)
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", csuite.template, "-p", "NAME="+csuite.name, "NAMESPACE="+csuite.namespace,
-		"SCHEDULE="+csuite.schedule, "SCANNAME="+csuite.scanname, "SCANTYPE="+csuite.scanType, "PROFILE="+csuite.profile, "CONTENT="+csuite.content,
+		"SCHEDULE="+csuite.schedule, "SCANNAME="+csuite.scanname, "SCANTYPE="+csuite.scanType, "PROFILE="+csuite.profile, "CONTENT="+csuite.content, "PRIORITYCLASSNAME="+csuite.priorityClass,
 		"CONTENTIMAGE="+csuite.contentImage, "RULE="+csuite.rule, "NOEXTERNALRESOURCES="+strconv.FormatBool(csuite.noExternalResources), "KEY="+csuite.key,
 		"VALUE="+csuite.value, "OPERATOR="+csuite.operator, "NODESELECTOR="+csuite.nodeSelector, "PVACCESSMODE="+csuite.pvAccessModes, "STORAGECLASSNAME="+csuite.storageClassName,
 		"SIZE="+csuite.size, "ROTATION="+strconv.Itoa(csuite.rotation), "TAILORCONFIGMAPNAME="+csuite.tailoringConfigMap, "DEBUG="+strconv.FormatBool(csuite.debug))

@@ -4489,9 +4489,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
 
 		g.By("Check priorityname and priority for pods.. !!!\n")
-		assertParameterValueForBulkPods(oc, ss.priorityclassname, "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClass}")
+		assertParameterValueForBulkPods(oc, ss.priorityclassname, "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
 		assertParameterValueForBulkPods(oc, strconv.Itoa(prioritym.prirotyValue), "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
-		assertParameterValueForBulkPods(oc, ss.priorityclassname, "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClass}")
+		assertParameterValueForBulkPods(oc, ss.priorityclassname, "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
 		assertParameterValueForBulkPods(oc, strconv.Itoa(prioritym.prirotyValue), "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
 
 		g.By("Remove ssb and patch ss !!!\n")
@@ -4517,10 +4517,108 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
 
 		g.By("Check priorityname and priority for pods.. !!!\n")
-		assertParameterValueForBulkPods(oc, "", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClass}")
+		assertParameterValueForBulkPods(oc, "", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
 		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
-		assertParameterValueForBulkPods(oc, "", "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClass}")
+		assertParameterValueForBulkPods(oc, "", "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
 		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ARO-OSD_CCS-Author:xiyuan-Medium-53301-create a compliancesuite with or without priorityClass", func() {
+		var (
+			priorityClassTemplate = filepath.Join(buildPruningBaseDir, "priorityclass.yaml")
+			prioritym             = priorityClassDescription{
+				name:         "prioritym" + getRandomString(),
+				namespace:    subD.namespace,
+				prirotyValue: 99,
+				template:     priorityClassTemplate,
+			}
+			csuite = complianceSuiteDescription{
+				name:          "suite-with-pc" + getRandomString(),
+				namespace:     subD.namespace,
+				scanname:      "cis-scan" + getRandomString(),
+				profile:       "xccdf_org.ssgproject.content_profile_cis",
+				content:       "ssg-ocp4-ds.xml",
+				contentImage:  "quay.io/complianceascode/ocp4:latest",
+				nodeSelector:  "master",
+				debug:         true,
+				priorityClass: prioritym.name,
+				template:      csuiteTemplate,
+			}
+			csuiteWithoutPC = complianceSuiteDescription{
+				name:          "suite-without-pc" + getRandomString(),
+				namespace:     subD.namespace,
+				scanname:      "cis-scan" + getRandomString(),
+				profile:       "xccdf_org.ssgproject.content_profile_cis",
+				content:       "ssg-ocp4-ds.xml",
+				contentImage:  "quay.io/complianceascode/ocp4:latest",
+				nodeSelector:  "master",
+				debug:         true,
+				priorityClass: "",
+				template:      csuiteTemplate,
+			}
+		)
+
+		defer func() {
+			cleanupObjects(oc, objectTableRef{"suite", subD.namespace, csuite.name})
+			cleanupObjects(oc, objectTableRef{"suite", subD.namespace, csuiteWithoutPC.name})
+			cleanupObjects(oc, objectTableRef{"priorityclass", subD.namespace, prioritym.name})
+		}()
+
+		g.By("Create priorityclass !!!\n")
+		prioritym.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, prioritym.name, ok, []string{"priorityclass", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create compliancesuite and check compliancesuite status !!!\n")
+		csuite.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, csuite.name, ok, []string{"compliancesuite", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", csuite.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
+
+		g.By("Check ComplianceSuite status and result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, prioritym.name, ok, []string{"compliancesuite", csuite.name, "-n", subD.namespace,
+			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
+
+		g.By("Check priorityname and priority for pods.. !!!\n")
+		assertParameterValueForBulkPods(oc, prioritym.name, "pod", "-l", "compliance.openshift.io/scan-name="+csuite.scanname+",workload=scanner", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].spec.priorityClassName}")
+		assertParameterValueForBulkPods(oc, strconv.Itoa(prioritym.prirotyValue), "pod", "-l", "compliance.openshift.io/scan-name="+csuite.scanname+",workload=scanner",
+			"-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+		assertParameterValueForBulkPods(oc, prioritym.name, "pod", "-l", "compliance.openshift.io/scan-name="+csuite.scanname+",workload=aggregator", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].spec.priorityClassName}")
+		assertParameterValueForBulkPods(oc, strconv.Itoa(prioritym.prirotyValue), "pod", "-l", "compliance.openshift.io/scan-name="+csuite.scanname+",workload=aggregator",
+			"-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+
+		g.By("Create compliancesuite without priorityclass and check compliancesuite status !!!\n")
+		csuiteWithoutPC.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, csuiteWithoutPC.name, ok, []string{"compliancesuite", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteWithoutPC.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
+
+		g.By("Check ComplianceSuite status and result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteWithoutPC.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, csuiteWithoutPC.name, "NON-COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"compliancesuite", csuiteWithoutPC.name, "-n", subD.namespace,
+			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
+
+		g.By("Check priorityname and priority for pods.. !!!\n")
+		assertParameterValueForBulkPods(oc, "", "pod", "-l", "compliance.openshift.io/scan-name="+csuiteWithoutPC.scanname+",workload=scanner", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].spec.priorityClassName}")
+		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "compliance.openshift.io/scan-name="+csuiteWithoutPC.scanname+",workload=scanner",
+			"-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+		assertParameterValueForBulkPods(oc, "", "pod", "-l", "compliance.openshift.io/scan-name="+csuiteWithoutPC.scanname+",workload=aggregator", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].spec.priorityClassName}")
+		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "compliance.openshift.io/scan-name="+csuiteWithoutPC.scanname+",workload=aggregator",
+			"-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
 	})
 
 	// author: xiyuan@redhat.com

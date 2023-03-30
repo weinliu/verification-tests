@@ -25,6 +25,7 @@ objects:
         rawResultStorage:
           size: "${SIZE}"
           rotation: ${{ROTATION}}
+        priorityClass: "${PRIORITYCLASSNAME}"
 
 parameters:
 - name: NAME
@@ -41,3 +42,4 @@ parameters:
 - name: SIZE
 - name: ROTATION
 - name: DEBUG
+- name: PRIORITYCLASSNAME
