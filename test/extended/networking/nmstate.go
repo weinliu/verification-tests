@@ -17,7 +17,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	var (
 		oc          = exutil.NewCLI("networking-nmstate", exutil.KubeConfigPath())
 		opNamespace = "openshift-nmstate"
-		opName      = "nmstate-operator"
+		opName      = "kubernetes-nmstate-operator"
 	)
 
 	g.BeforeEach(func() {
