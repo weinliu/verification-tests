@@ -814,7 +814,10 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: mihuang@redhat.com
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author: mihuang-Critical-49108-Critical-49499-Critical-59546-Critical-60490-Separate client certificate trust from the global Hypershift CA", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author: mihuang-Critical-49108-Critical-49499-Critical-59546-Critical-60490-Critical-61970-Separate client certificate trust from the global Hypershift CA", func() {
+		g.By("OCP-61970: OCPBUGS-10792-Changing the api group of the hypershift namespace servicemonitor back to coreos.com")
+		o.Expect(doOcpReq(oc, OcpGet, true, "servicemonitor", "-n", "hypershift", "-ojsonpath={.items[*].apiVersion}")).Should(o.ContainSubstring("coreos.com"))
+
 		g.By("Add label to namespace enable monitoring for hosted control plane component.")
 		defer doOcpReq(oc, "label", true, "namespace", hostedcluster.namespace+"-"+hostedcluster.name, "openshift.io/cluster-monitoring-")
 		doOcpReq(oc, "label", true, "namespace", hostedcluster.namespace+"-"+hostedcluster.name, "openshift.io/cluster-monitoring=true", "--overwrite=true")
@@ -846,9 +849,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(doOcpReq(oc, OcpExec, true, "-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "sh", "-c", `curl -k -H "Authorization: Bearer `+token+`" https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`)).Should(o.ContainSubstring("up"))
 		for _, serviceMonitor := range serviceMonitors {
 			o.Expect(doOcpReq(oc, OcpGet, true, "servicemonitors", serviceMonitor, "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.spec.endpoints[?(@.relabelings)]}")).Should(o.ContainSubstring(`"targetLabel":"_id"`))
+			o.Expect(doOcpReq(oc, OcpGet, true, "servicemonitors", serviceMonitor, "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.apiVersion}")).Should(o.ContainSubstring("coreos.com"))
 		}
 		for _, podmonitor := range podMonitors {
 			o.Expect(doOcpReq(oc, OcpGet, true, "podmonitors", podmonitor, "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.spec.podMetricsEndpoints[?(@.relabelings)]}")).Should(o.ContainSubstring(`"targetLabel":"_id"`))
+			o.Expect(doOcpReq(oc, OcpGet, true, "podmonitors", podmonitor, "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.apiVersion}")).Should(o.ContainSubstring("coreos.com"))
 		}
 
 		g.By("OCP-59546 Export HostedCluster metrics")
