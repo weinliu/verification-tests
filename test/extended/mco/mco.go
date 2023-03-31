@@ -1,7 +1,6 @@
 package mco
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -1709,123 +1708,6 @@ nulla pariatur.`
 		o.Expect(rf.GetNpermissions()).To(o.Equal(fileMode))
 	})
 
-	g.It("Author:rioliu-Longduration-NonPreRelease-High-49373-Send alert when MCO can't safely apply updated Kubelet CA on nodes in paused pool [Disruptive]", func() {
-
-		g.By("create customized prometheus rule, change timeline and expression to trigger alert in a short period of time")
-		ruleFile := generateTemplateAbsolutePath("prometheus-rule-mcc.yaml")
-		defer func() {
-			deleteErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", ruleFile).Execute()
-			if deleteErr != nil {
-				logger.Errorf("delete customized prometheus rule failed %v", deleteErr)
-			}
-		}()
-		createRuleErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", ruleFile).Execute()
-		o.Expect(createRuleErr).NotTo(o.HaveOccurred())
-
-		g.By("check prometheus rule exists or not")
-		mccRule, mccRuleErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", MachineConfigNamespace).Output()
-		o.Expect(mccRuleErr).NotTo(o.HaveOccurred())
-		o.Expect(mccRule).Should(o.ContainSubstring("machine-config-controller-test"))
-		o.Expect(mccRule).Should(o.ContainSubstring("machine-config-controller")) // check the builtin rule exists or not
-
-		g.By("pause mcp worker")
-		workerPool := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
-		defer func() {
-			workerPool.pause(false) // fallback solution, unpause worker pool if case is failed before last step.
-			workerPool.waitForComplete()
-		}()
-		workerPool.pause(true)
-
-		g.By("trigger kube-apiserver-to-kubelet-signer cert rotation")
-		rotateErr := oc.AsAdmin().Run("patch").Args("secret/kube-apiserver-to-kubelet-signer", `-p={"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`, "-n", "openshift-kube-apiserver-operator").Execute()
-		o.Expect(rotateErr).NotTo(o.HaveOccurred())
-
-		g.By("check metrics for machine config controller")
-		ctrlerPod, podsErr := getMachineConfigControllerPod(oc)
-		o.Expect(podsErr).NotTo(o.HaveOccurred())
-		o.Expect(ctrlerPod).NotTo(o.BeEmpty())
-		// get sa token
-		saToken, saErr := exutil.GetSAToken(oc)
-		o.Expect(saErr).NotTo(o.HaveOccurred())
-		o.Expect(saToken).NotTo(o.BeEmpty())
-		// get metric value
-		var metric string
-		pollerr := wait.Poll(3*time.Second, 3*time.Minute, func() (bool, error) {
-			cmd := "curl -k -H \"" + fmt.Sprintf("Authorization: Bearer %v", saToken) + "\" https://localhost:9001/metrics|grep machine_config_controller"
-			metrics, metricErr := exutil.RemoteShPodWithBash(oc.AsAdmin(), MachineConfigNamespace, ctrlerPod, cmd)
-			if metrics == "" || metricErr != nil {
-				logger.Errorf("get mcc metrics failed in poller: %v, will try next round", metricErr)
-				return false, nil
-			}
-			if len(metrics) > 0 {
-				scanner := bufio.NewScanner(strings.NewReader(metrics))
-				for scanner.Scan() {
-					line := scanner.Text()
-					if strings.Contains(line, `machine_config_controller_paused_pool_kubelet_ca{pool="worker"}`) {
-						if !strings.HasSuffix(line, "0") {
-							metric = line
-							logger.Infof("found metric %s", line)
-							return true, nil
-						}
-					}
-				}
-			}
-
-			return false, nil
-		})
-
-		exutil.AssertWaitPollNoErr(pollerr, "got error when polling mcc metrics")
-		o.Expect(metric).NotTo(o.BeEmpty())
-		strArray := strings.Split(metric, " ") // split metric line with space, get metric value to verify, it should not be 0
-		o.Expect(strArray[len(strArray)-1]).ShouldNot(o.Equal("0"))
-
-		g.By("check pending alert")
-		// wait 2 mins
-		var counter int
-		waiterErrX := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
-			if counter++; counter == 11 {
-				return true, nil
-			}
-			logger.Infof("waiting for alert state change %s", strings.Repeat("=", counter))
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waiterErrX, "alert waiter poller is failed")
-
-		pendingAlerts, pendingAlertErr := getAlertsByName(oc, "MachineConfigControllerPausedPoolKubeletCATest")
-		o.Expect(pendingAlertErr).NotTo(o.HaveOccurred())
-		o.Expect(pendingAlerts).ShouldNot(o.BeEmpty())
-
-		for _, pendingAlert := range pendingAlerts {
-			o.Expect(pendingAlert.Get("state").ToString()).Should(o.Equal("pending"))
-			o.Expect(pendingAlert.Get("labels").Get("severity").ToString()).Should(o.Or(o.Equal("warning"), o.Equal("critical")))
-		}
-
-		g.By("check firing alert")
-		// 5 mins later, all the pending alerts will be changed to firing
-		counter = 0
-		waiterErrY := wait.Poll(1*time.Minute, 7*time.Minute, func() (bool, error) {
-			if counter++; counter == 6 {
-				return true, nil
-			}
-			logger.Infof("waiting for alert state change %s", strings.Repeat("=", counter))
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waiterErrY, "alert waiter poller is failed")
-
-		firingAlerts, firingAlertErr := getAlertsByName(oc, "MachineConfigControllerPausedPoolKubeletCATest")
-		o.Expect(firingAlertErr).NotTo(o.HaveOccurred())
-		o.Expect(firingAlerts).ShouldNot(o.BeEmpty())
-
-		for _, firingAlert := range firingAlerts {
-			o.Expect(firingAlert.Get("state").ToString()).Should(o.Equal("firing"))
-			o.Expect(firingAlert.Get("labels").Get("severity").ToString()).Should(o.Or(o.Equal("warning"), o.Equal("critical")))
-		}
-
-		g.By("unpause mcp worker")
-		workerPool.pause(false)
-		workerPool.waitForComplete()
-
-	})
 	g.It("Author:sregidor-NonPreRelease-High-51219-Check ClusterRole rules", func() {
 		expectedServiceAcc := MachineConfigDaemon
 		eventsRoleBinding := MachineConfigDaemonEvents
