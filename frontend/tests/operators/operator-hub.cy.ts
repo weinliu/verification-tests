@@ -140,13 +140,12 @@ describe('Operator Hub tests', () => {
         Operand.submitCreation();
         cy.wait(10000);
         cy.adminCLI(`oc get sonarqube.sonarsource.parflesh.github.io -n ${testParams.testNamespace} -o yaml`)
-          .then((result) => {
-             expect(result.stdout).contain("example-sonarqube")
-               .and('contain', '- antarctica-east1')
-               .and('contain','- antarctica-east2')
-               .and('contain','- S1')
-               .and('contain','- S2')
-        })
+          .its('stdout')
+          .should('contain', 'example-sonarqube')
+          .and('contain', '- antarctica-east1')
+          .and('contain','- antarctica-east2')
+          .and('contain','- S1')
+          .and('contain','- S2')
         cy.adminCLI(`oc delete project ${testParams.testNamespace}`);
     });
 })
