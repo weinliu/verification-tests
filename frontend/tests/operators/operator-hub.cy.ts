@@ -1,4 +1,4 @@
-import {operatorHubPage, OperatorHubSelector, Operand} from "../../views/operator-hub-page";
+import {operatorHubPage, OperatorHubSelector, Operand, installedOperatorPage} from "../../views/operator-hub-page";
 import { listPage } from "upstream/views/list-page";
 
 describe('Operator Hub tests', () => {
@@ -79,6 +79,35 @@ describe('Operator Hub tests', () => {
           .should('contain',`${testParams.suggestedNamespaceLabels}`)
           .and('contain',`${testParams.suggestedNamespaceannotations}`)
         cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`);
+    });
+
+    it('(OCP-42671, xiyuzhao) OperatorHub shows correct operator installation states', {tags: ['e2e','admin','@osd-ccs','@rosa']},  () => {
+        const params ={
+            ns: 'test-42671',
+            operatorName: 'infinispan-operator',
+            csvName: 'Infinispan Operator'
+        }
+        cy.createProject(`${params.ns}`);
+        operatorHubPage.installOperator(`${params.operatorName}`, `${testParams.catalogName}`,`${params.ns}`);
+        installedOperatorPage.goToWithNS(`${params.ns}`)
+        operatorHubPage.checkOperatorStatus(`${params.csvName}`, 'Succeeded')
+        operatorHubPage.goToWithNamespace(`${params.ns}`);
+        operatorHubPage.checkInstallStateCheckBox('installed')
+        operatorHubPage.filter('infinispan');
+        cy.byTestID('success-icon')
+          .parent()
+          .contains('Installed')
+          .click();
+        cy.byLegacyTestID('operator-uninstall-btn').should('exist')
+        cy.get('[data-test-id="operator-modal-box"]').contains('has been installed');
+        cy.get('[data-test-id="operator-modal-box"] p a')
+          .contains('View it here')
+          .should('have.attr','href')     
+          .then((href) => {
+            cy.visit(href);
+            cy.byLegacyTestID('horizontal-link-public~Details').should('exist')
+          });
+        cy.adminCLI(`oc delete project ${params.ns}`);
     });
 
     it('(OCP-54307,yapei) Affinity definition support',{tags: ['e2e','admin','@osd-ccs']}, ()=> {

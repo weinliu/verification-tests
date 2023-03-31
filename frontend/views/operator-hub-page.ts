@@ -5,6 +5,10 @@ export const operatorHubPage = {
     // the operator hub page is loaded when the count is displayed
     cy.get('.co-catalog-page__num-items').should('exist')
   },
+  goToWithNamespace: (ns: string) => {
+    cy.visit(`/operatorhub/ns/${ns}`);
+    cy.get('.co-catalog-page__num-items').should('exist')
+  },
   getAllTileLabels: () => {
     return cy.get('.pf-c-badge')
   },
@@ -21,6 +25,12 @@ export const operatorHubPage = {
     cy.get('form[data-test-group-name="catalogSourceDisplayName"]')
       .find(`[data-test="catalogSourceDisplayName-${name}"]`)
       .find('[type="checkbox"]').uncheck()
+  },
+  checkInstallStateCheckBox: (state: string) =>{
+    cy.get('form[data-test-group-name="installState"]')
+      .find(`[data-test="installState-${state}"]`)
+      .find('[type="checkbox"]')
+      .check();
   },
   filter: (name: string) => {
     cy.get('input[type="text"]')
@@ -61,7 +71,10 @@ export const operatorHubPage = {
     cy.get('[data-test="install-operator"]').click();
   },
   checkOperatorStatus: (csvName, csvStatus) => {
-    cy.get(`[data-test-operator-row="${csvName}"]`).parents('tr').children().contains(`${csvStatus}`, {timeout: 60000});
+    cy.get(`[data-test-operator-row="${csvName}"]`)
+      .parents('tr')
+      .children()
+      .contains(`${csvStatus}`, {timeout: 60000});
   },
   removeOperator: (csvName) => {
     listPage.rows.clickKebabAction(`${csvName}`,"Uninstall Operator");
@@ -222,4 +235,11 @@ export const Operand = {
       })
     }
   }
+}
+
+export const installedOperatorPage ={
+  goToWithNS: (ns: string) => {
+    cy.visit(`/k8s/ns/${ns}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+    cy.get('[aria-label="Installed Operators"]').should('exist');
+    }
 }
