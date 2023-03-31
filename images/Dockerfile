@@ -28,7 +28,7 @@ RUN oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hype
     oc image extract quay.io/openshifttest/oc-compliance:latest --file /tmp/oc-compliance && mv oc-compliance /usr/bin/ && chmod 755 /usr/bin/oc-compliance && \
     oc image extract quay.io/openshifttest/openshift4-tools:v1 --file=/tmp/OpenShift4-tools.tar && tar -C /opt -xf OpenShift4-tools.tar && rm -fr OpenShift4-tools.tar && \
     curl -s -L https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz -o govc_Linux_x86_64.tar.gz && tar -C /usr/bin/ -xvf govc_Linux_x86_64.tar.gz govc && rm -f govc_Linux_x86_64.tar.gz && \
-    MIRRORURL=https://mirror2.openshift.com/pub/openshift-v4 && CLIENTURL=${MIRRORURL}/x86_64/clients/ocp-dev-preview/latest && \
+    MIRRORURL=https://mirror2.openshift.com/pub/openshift-v4 && CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/candidate && \
     curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp/ -o ocp.html && curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp-dev-preview/ -o pre.html && \
     ecver=$(grep -E "<a href=\"candidate-4\.14" pre.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${ecver}V" && \
     if [ "V${ecver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp-dev-preview/${ecver}; fi && \
