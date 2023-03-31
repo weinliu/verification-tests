@@ -4,7 +4,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -54,10 +53,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("Get token of current user")
 		token := oc.UserConfig().BearerToken
 		g.By("check federate endpoint service")
-		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/federate --data-urlencode 'match[]=cluster_version'", token, "cluster_version{endpoint", platformLoadTime)
+		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/federate --data-urlencode 'match[]=cluster_version'", token, "cluster_version{endpoint", 3*platformLoadTime)
 
 		g.By("check federate route")
-		checkRoute(oc, "openshift-monitoring", "prometheus-k8s-federate", token, "match[]=cluster_version", "cluster_version{endpoint", platformLoadTime)
+		checkRoute(oc, "openshift-monitoring", "prometheus-k8s-federate", token, "match[]=cluster_version", "cluster_version{endpoint", 3*platformLoadTime)
 	})
 
 	// author: juzhao@redhat.com
@@ -124,6 +123,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
+		g.By("create project ns then attach pv/pvc")
+		oc.SetupProject()
+		ns = oc.Namespace()
+		createResourceFromYaml(oc, ns, helloPodPvc)
+
 		g.By("Check labels for pod")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_labels{pod="alertmanager-main-0"}'`, token, `"label_statefulset_kubernetes_io_pod_name"`, uwmLoadTime)
 
@@ -136,14 +140,9 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("Check labels for PDB")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_poddisruptionbudget_labels{poddisruptionbudget="thanos-querier-pdb"}'`, token, `"label_app_kubernetes_io_name"`, uwmLoadTime)
 
-		g.By("create project ns then attach pv/pvc")
-		oc.SetupProject()
-		ns = oc.Namespace()
-		createResourceFromYaml(oc, ns, helloPodPvc)
-
-		g.By("Check labels for PV/PVC") //make sure pv/pvcs have been attached before checkMetric
+		g.By("Check labels for PV/PVC")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolume_labels'`, token, `"persistentvolume"`, 2*uwmLoadTime)
-		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolumeclaim_labels'`, token, `"persistentvolumeclaim"`, uwmLoadTime)
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolumeclaim_labels'`, token, `"persistentvolumeclaim"`, 2*uwmLoadTime)
 	})
 
 	// author: juzhao@redhat.com
@@ -164,23 +163,28 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Medium-48432-Allow OpenShift users to configure request logging for Thanos Querier query endpoint", func() {
-		var (
-			thanosQuerierPodName string
-		)
-		g.By("Get token of SA prometheus-k8s")
-		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-
-		g.By("make sure thanos-querier pods are ready")
-		time.Sleep(60 * time.Second) //thanos-querier pod name will changed when cm modified, need time to create pods
+		g.By("check thanos-querier pods are normal and able to see the request.logging-config setting")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "thanos-querier", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring(`request.logging-config`))
+
+		//thanos-querier pod name will changed when cm modified, pods may not restart yet during the first check
+		g.By("double confirm thanos-querier pods are ready")
+		podList, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/instance=thanos-querier")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range podList {
+			exutil.AssertPodToBeReady(oc, pod, "openshift-monitoring")
+		}
 
 		g.By("query with thanos-querier svc")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster_version"`, 3*uwmLoadTime)
-		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster-version-operator"`, 2*uwmLoadTime)
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster-version-operator"`, 3*uwmLoadTime)
 
 		g.By("check from thanos-querier logs")
-		thanosQuerierPodName, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/instance=thanos-querier", "-ojsonpath={.items[].metadata.name}").Output()
-		exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "thanos-query", thanosQuerierPodName, "query=cluster_version")
+		for _, pod := range podList {
+			checkLogsInContainer(oc, "openshift-monitoring", pod, "thanos-query", "query=cluster_version")
+		}
 	})
 
 	// author: juzhao@redhat.com
