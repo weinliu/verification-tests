@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.ContainSubstring("UpgradeableTrue"),
 				o.ContainSubstring("DegradedFalse"),
 				o.ContainSubstring("AvailableTrue"),
-			))
+			), "CO machine-config does not have the right condition status.\n%s", co.PrettyString())
 
 		logger.Infof("machine config operator is healthy")
 
