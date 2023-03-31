@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 		subD = subscriptionDescription{
 			subName:                "compliance-operator",
 			namespace:              ns,
-			channel:                "release-0.1",
+			channel:                "stable",
 			ipApproval:             "Automatic",
 			operatorPackage:        "compliance-operator",
 			catalogSourceName:      "qe-app-registry",

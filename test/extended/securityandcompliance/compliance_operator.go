@@ -110,7 +110,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD = subscriptionDescription{
 			subName:                "compliance-operator",
 			namespace:              "openshift-compliance",
-			channel:                "release-0.1",
+			channel:                "stable",
 			ipApproval:             "Automatic",
 			operatorPackage:        "compliance-operator",
 			catalogSourceName:      "qe-app-registry",
@@ -2727,7 +2727,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			sub = subscriptionDescription{
 				subName:                "file-integrity-operator",
 				namespace:              fioNamespace,
-				channel:                "release-0.1",
+				channel:                "stable",
 				ipApproval:             "Automatic",
 				operatorPackage:        "file-integrity-operator",
 				catalogSourceName:      "redhat-operators",
