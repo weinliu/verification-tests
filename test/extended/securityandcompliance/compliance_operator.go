@@ -505,6 +505,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				template:        scansettingbindingTemplate,
 			}
 			ccrsShouldExist = []string{
+				"ocp4-cis-node-master-kubelet-enable-protect-kernel-defaults",
+				"ocp4-cis-node-master-file-groupowner-etcd-pki-cert-files",
+				"ocp4-cis-node-master-file-groupowner-openshift-pki-cert-files",
+				"ocp4-cis-node-master-file-groupowner-openshift-pki-key-files",
+				"ocp4-cis-node-master-file-owner-etcd-pki-cert-files",
+				"ocp4-cis-node-master-file-owner-openshift-pki-cert-files",
+				"ocp4-cis-node-master-file-owner-openshift-pki-key-files",
+				"ocp4-cis-node-master-file-permissions-etcd-pki-cert-files",
+				"ocp4-cis-node-master-file-permissions-openshift-pki-cert-files",
+				"ocp4-cis-node-master-file-permissions-openshift-pki-key-files",
 				"ocp4-cis-kubelet-enable-streaming-connections",
 				"ocp4-cis-kubelet-eviction-thresholds-set-hard-imagefs-available",
 				"ocp4-cis-kubelet-eviction-thresholds-set-hard-memory-available",
