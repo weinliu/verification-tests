@@ -356,7 +356,7 @@ func (np *HypershiftNodePool) WaitUntilReady() {
 	o.Eventually(
 		np.Poll(`{.status.replicas}`),
 		np.EstimateTimeoutInMins(), "30s").
-		Should(o.Equal(replicas), fmt.Sprintf("current nodes should equal to desired nodes %s", replicas))
+		Should(o.Equal(replicas), "current nodes should equal to desired nodes %s. Nodepool:\n%s", replicas, np.PrettyString())
 	logger.Infof("nodepool %s is ready", np.GetName())
 }
 
@@ -370,7 +370,7 @@ func (np *HypershiftNodePool) WaitUntilConfigIsUpdating() {
 		}
 		logger.Infof("condition UpdatingConfig not found")
 		return nil
-	}, "5m", "2s").Should(o.HaveKeyWithValue("status", "True"))
+	}, "5m", "2s").Should(o.HaveKeyWithValue("status", "True"), "UpdatingConfig condition status should be 'True'. Nodepool:\n%s", np.PrettyString())
 	logger.Infof("status of condition UpdatingConfig is True")
 }
 
@@ -384,7 +384,7 @@ func (np *HypershiftNodePool) WaitUntilVersionIsUpdating() {
 		}
 		logger.Infof("condition UpdatingVersion not found")
 		return nil
-	}, "5m", "2s").Should(o.HaveKeyWithValue("status", "True"))
+	}, "5m", "2s").Should(o.HaveKeyWithValue("status", "True"), "UpdatingVersion condition status should be 'True'. Nodepool:\n%s", np.PrettyString())
 	logger.Infof("status of condition UpdatingVersion is True")
 }
 
@@ -397,7 +397,7 @@ func (np *HypershiftNodePool) WaitUntilConfigUpdateIsCompleted() {
 			return false
 		}
 		return true
-	}, np.EstimateTimeoutInMins(), "30s").Should(o.BeTrue(), "config update is not completed")
+	}, np.EstimateTimeoutInMins(), "30s").Should(o.BeTrue(), "config update is not completed. Nodepool:\n%s", np.PrettyString())
 	logger.Infof("nodepool %s config update is completed", np.GetName())
 }
 
@@ -410,7 +410,7 @@ func (np *HypershiftNodePool) WaitUntilVersionUpdateIsCompleted() {
 			return false
 		}
 		return true
-	}, np.EstimateTimeoutInMins(), "2s").Should(o.BeTrue(), "version update is not completed")
+	}, np.EstimateTimeoutInMins(), "2s").Should(o.BeTrue(), "version update is not completed. Nodepool:\n%s", np.PrettyString())
 	logger.Infof("nodepool %s version update is completed", np.GetName())
 }
 
@@ -420,7 +420,7 @@ func (np *HypershiftNodePool) EstimateTimeoutInMins() string {
 	if err != nil {
 		desiredNodes = 2 // use 2 replicas as default
 	}
-	return fmt.Sprintf("%dm", desiredNodes*10)
+	return fmt.Sprintf("%dm", desiredNodes*15)
 }
 
 // GetAllLinuxNodes get all linux nodes in this nodepool
