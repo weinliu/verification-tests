@@ -502,4 +502,24 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		})
 		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("No job has been created"))
 	})
+	// author: yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:yinzhou-Low-60194-Make sure KCM KS operator is rebased onto the latest version of Kubernetes", func() {
+		g.By("Get the latest version of Kubernetes")
+		ocVersion, versionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
+		o.Expect(versionErr).NotTo(o.HaveOccurred())
+		kubenetesVersion := strings.Split(strings.Split(ocVersion, "+")[0], "v")[1]
+		kuberVersion := strings.Split(kubenetesVersion, ".")[0] + "." + strings.Split(kubenetesVersion, ".")[1]
+		g.By("Check the KCM operator is rebased with latest version")
+		kcmPodOprator, descKCMErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-n", "openshift-kube-controller-manager-operator", "-l", "app=kube-controller-manager-operator").Output()
+		o.Expect(descKCMErr).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(kuberVersion, kcmPodOprator); !matched {
+			e2e.Failf("KCM operator not rebased with latest Kubernetes\n")
+		}
+		g.By("Check the KS operator is rebased with latest version")
+		ksPodOprator, descKSErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-n", "openshift-kube-scheduler-operator", "-l", "app=openshift-kube-scheduler-operator").Output()
+		o.Expect(descKSErr).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(kuberVersion, ksPodOprator); !matched {
+			e2e.Failf("KS operator not rebased with latest Kubernetes\n")
+		}
+	})
 })
