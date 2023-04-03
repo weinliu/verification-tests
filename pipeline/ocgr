@@ -2,6 +2,15 @@
 set +x
 #generae report
 
+function assert_compile {
+  compile_result=$(cat /tmp/makebinary_result)
+  echo "compile result ${compile_result}"
+  if [ "X${compile_result}X" != "X0X" ]; then
+    echo "the compile fails"
+    exit 1
+  fi
+}
+
 function get_build_type {
 
   # the following is Disruptive
@@ -134,6 +143,7 @@ else
   ATTRIBUTIONOPTION=${ATTRIBUTIONOPTION:4}
 fi
 
+assert_compile
 get_build_type
 
 rm -fr handleattribution.py && eval cp -fr ${WORKSPACE}"/private/pipeline/handleattribution.py" .
@@ -192,6 +202,10 @@ resultfile=`ls -rt -1 junit_e2e_* 2>&1 || true`
 echo $resultfile
 if (echo $resultfile | grep -E "no matches found") || (echo $resultfile | grep -E "No such file or directory") ; then
   echo "there is no result file generated"
+  if [[ "X${profiletype}X" == "XstageX" ]]; then
+    echo "this is stage pipeline without case selected"
+    exit 0
+  fi
   exit 1
 fi
 current_time=`date "+%Y-%m-%d-%H-%M-%S"`

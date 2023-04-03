@@ -27,11 +27,13 @@ function run {
     export ENABLE_PRINT_EVENT_STDOUT=true
     echo "make all"
     make all
+    echo $? > /tmp/makebinary_result
   else
     unset DUMP_EVENTS_ON_FAILURE
     export ENABLE_PRINT_EVENT_STDOUT=true
     echo "make build"
     make build
+    echo $? > /tmp/makebinary_result
   fi
   if [[ "x${http_proxy_tmp}x" != "xx" ]] || [[ "x${https_proxy_tmp}x" != "xx" ]]; then
     echo "set env http_proxy https_proxy"
