@@ -329,11 +329,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-37096"
 		machinesetName := getWindowsMachineSetName(oc, "winsecond", iaasPlatform, zone)
 		machinesetMultiOSFileName := iaasPlatform + "_windows_machineset.yaml"
-		machinesetFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, machinesetName, machinesetMultiOSFileName, "secondary")
+		err := configureMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetMultiOSFileName, "secondary")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
-		defer os.Remove(machinesetFileName)
-		createMachineset(oc, machinesetFileName)
 		// here we provision 1 webservers with a runtime class ID, up to 20 minutes due to pull image on AWS
 		waitForMachinesetReady(oc, machinesetName, 20, 1)
 		// Here we fetch machine IP from machineset
@@ -1204,13 +1202,28 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = createManifestFile(oc, "wicd_configmap.yaml", map[string]string{"<version>": "8.8.8-55657c8"})
+
+		manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "wicd_configmap.yaml", map[string]string{"<version>": "8.8.8-55657c8"})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = createManifestFile(oc, "wicd_configmap.yaml", map[string]string{"<version>": "0.0.1-55657c8"})
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile, "--ignore-not-found").Execute()
+		defer os.Remove(manifestFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "wicd_configmap.yaml", map[string]string{"<version>": "0.0.1-55657c8"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile, "--ignore-not-found").Execute()
+		defer os.Remove(manifestFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Create also one with the same id as the existing
-		err = createManifestFile(oc, "wicd_configmap.yaml", map[string]string{"<version>": wmcoLogVersion})
+		manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "wicd_configmap.yaml", map[string]string{"<version>": wmcoLogVersion})
 		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile, "--ignore-not-found").Execute()
+		defer os.Remove(manifestFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// scaling WMCO pod back to 1
 		scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		waitForServicesCM(oc, windowsServicesCM)
 
