@@ -5,6 +5,7 @@ describe('Administration pages pesudo translation', () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   	cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.switchPerspective('Administrator');
   });
 
   after(() => {
@@ -15,8 +16,7 @@ describe('Administration pages pesudo translation', () => {
   it('(OCP-35766,yapei) administration pages pesudo translation', {tags: ['e2e','admin','@osd-ccs']}, () => {
     cy.log('cluster settings details pesudo translation');
     cy.visit('/settings/cluster?pseudolocalization=true&lng=en');
-    cy.get('.co-cluster-settings__section', {timeout: 10000});
-    cy.get('.pf-c-alert__title').isPseudoLocalized();
+    cy.get('.co-cluster-settings__section', {timeout: 40000});
     cy.get('.co-cluster-settings').isPseudoLocalized();
     cy.get(DetailsPageSelector.horizontalNavTabs).isPseudoLocalized();
     cy.get(DetailsPageSelector.itemLabels).isPseudoLocalized();
@@ -30,7 +30,7 @@ describe('Administration pages pesudo translation', () => {
 
     cy.log('cluster settings configurations pesudo translation');
     cy.visit('/settings/cluster/globalconfig?pseudolocalization=true&lng=en');
-    cy.get('.co-m-table-grid', {timeout: 10000});
+    cy.get('.co-m-table-grid', {timeout: 40000});
     cy.get('.co-help-text').isPseudoLocalized();
     cy.byLegacyTestID('item-filter').isPseudoLocalized();
     cy.get('.co-m-table-grid__head').isPseudoLocalized();

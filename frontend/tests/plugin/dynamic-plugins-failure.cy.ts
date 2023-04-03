@@ -13,7 +13,7 @@ describe('Dynamic Plugins notification features', () => {
   let enabled = 0;
   let total = 2;
   let checkStatusMessage = (status: string, message: string) => {
-    cy.get('button').contains(`${status}`).click();
+    cy.get('[data-test="status-text"]', {timeout: 30000}).contains(`${status}`).click();
     cy.contains(`${message}`).should('be.visible');
   };
 
@@ -39,6 +39,7 @@ describe('Dynamic Plugins notification features', () => {
       .and('include','console-demo-plugin-1')
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
     cy.get('[data-label="Status"]').should('exist');
+    cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
     checkStatusMessage('Failed', 'ailed to get a valid plugin manifest');
   });
 
