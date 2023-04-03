@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	sub := subscription{
 		name:        "cluster-kube-descheduler-operator",
 		namespace:   kubeNamespace,
-		channelName: "4.13",
+		channelName: "4.14",
 		opsrcName:   "qe-app-registry",
 		sourceName:  "openshift-marketplace",
 		template:    subscriptionT,
@@ -45,7 +45,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	deschu := kubedescheduler{
 		namespace:        kubeNamespace,
 		interSeconds:     60,
-		imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.13.0",
+		imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
 		logLevel:         "Normal",
 		operatorLogLevel: "Normal",
 		profile1:         "AffinityAndTaints",
@@ -754,7 +754,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("StagerunBoth-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -770,7 +770,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.13.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -1042,7 +1042,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.13.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -1206,7 +1206,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.13.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "AffinityAndTaints",
@@ -1301,7 +1301,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschuP := kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.13.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "AffinityAndTaints",
@@ -1409,7 +1409,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.13.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -1466,7 +1466,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschuP := kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.13.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "AffinityAndTaints",
@@ -1586,7 +1586,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.stage.redhat.io/openshift4/ose-descheduler:v4.13.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -1800,7 +1800,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.13.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
