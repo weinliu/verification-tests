@@ -273,7 +273,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			podIP := ovnPods.Items[0].Status.PodIP
 			e2e.Logf("Pod IP is %s ", podIP)
-			ovnCurl := "curl " + podIP + ":8080"
+			var ovnCurl string
+			if strings.Contains(podIP, ":") {
+				ovnCurl = "curl --globoff [" + podIP + "]:8080"
+			} else {
+				ovnCurl = "curl --globoff " + podIP + ":8080"
+			}
 			_, err = e2eoutput.RunHostCmdWithRetries(ovnProj, ovnPods.Items[1].Name, ovnCurl, 3*time.Second, 30*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
