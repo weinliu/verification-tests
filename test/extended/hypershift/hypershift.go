@@ -960,4 +960,18 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(cmdOut).ShouldNot(o.Equal("0B"))
 	})
+
+	// author: mihuang@redhat.com
+	g.It("HyperShiftMGMT-Author:mihuang-Critical-61604-Validate network input and signal in hyperv1.ValidHostedClusterConfiguration[Disruptive]", func() {
+		g.By("Patch hostedcluster to set network to invalid value and check the ValidConfiguration conditions of hostedcluster CR")
+		clusterNetworkCidr := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-o", `jsonpath={.spec.networking.clusterNetwork[0].cidr}`)
+		defer doOcpReq(oc, OcpPatch, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "--type", "merge", "-p", `{"spec":{"networking":{"clusterNetwork":[{"cidr": "`+clusterNetworkCidr+`"}]}}}`)
+		doOcpReq(oc, OcpPatch, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "--type", "merge", "-p", `{"spec":{"networking":{"clusterNetwork":[{"cidr": "172.31.0.0/16"}]}}}`)
+		o.Eventually(func() bool {
+			if strings.Contains(doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-o", `jsonpath={.status.conditions[?(@.type=="ValidConfiguration")].reason}`), "InvalidConfiguration") {
+				return true
+			}
+			return false
+		}, DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "conditions are not changed")
+	})
 })
