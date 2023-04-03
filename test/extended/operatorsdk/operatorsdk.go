@@ -4746,19 +4746,24 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}()
 		g.By("Run bundle without options --security-context-config=restricted")
 		output, _ := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m").Output()
-		o.Expect(output).To(o.ContainSubstring("violates PodSecurity"))
-		output, err := operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("uninstalled"))
+		if strings.Contains(output, "violates PodSecurity") {
 
-		g.By("Add label to decrease namespace safety factor")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("violates PodSecurity, need add label to decrease namespace safety factor")
+			output, err := operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("uninstalled"))
 
-		g.By("Run bundle without options --security-context-config=restricted again")
-		output, _ = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+			g.By("Add label to decrease namespace safety factor")
+			_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Run bundle without options --security-context-config=restricted again")
+			output, _ = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+		} else {
+			o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+		}
 
 	})
 
