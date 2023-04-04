@@ -3120,6 +3120,132 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Skip for not support scenarios!")
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-62001-Traffic from egress IPs was not interrupted after adding deleting iptable blocking rule. [Disruptive][Slow]", func() {
+		// This is from customer bug https://issues.redhat.com/browse/OCPBUGS-6714
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		timer := estimateTimeoutForEgressIP(oc)
+
+		g.By("Identify two worker nodes with same subnet as egressIP nodes, pick a third node as non-egressIP node \n")
+		var egressNode1, egressNode2, nonEgressNode string
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || len(egressNodes) < 2 || len(nodeList.Items) < 3 {
+			g.Skip("Need at least 3 worker nodes, the prerequirement was not fullfilled, skip the case!!")
+		}
+		egressNode1 = egressNodes[0]
+		egressNode2 = egressNodes[1]
+		for i := 0; i < len(nodeList.Items); i++ {
+			if nodeList.Items[i].Name != egressNode1 && nodeList.Items[i].Name != egressNode2 {
+				nonEgressNode = nodeList.Items[i].Name
+				break
+			}
+		}
+		if nonEgressNode == "" {
+			g.Skip("Did not get a node that is not egressIP node, skip the case!!")
+		}
+
+		e2e.Logf("\nEgressNode1: %v\n", egressNode1)
+		e2e.Logf("\nEgressNode2: %v\n", egressNode2)
+		e2e.Logf("\nnonEgressNode: %v\n", nonEgressNode)
+
+		g.By("Get subnet from egressIP node, add egressCIDRs to both egressIP nodes\n")
+		sub := getEgressCIDRsForNode(oc, egressNode1)
+
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
+
+		g.By("Find 2 unused IPs from one egress node \n")
+		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode1, sub, 2)
+
+		g.By("Create a namespaces, apply the both egressIPs to the namespace, but create a test pod on the third non-egressIP node \n")
+		ns := oc.Namespace()
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\", \""+freeIPs[1]+"\"]}")
+
+		podns := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		podns.createPingPodNode(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		g.By("Add/Remove iptable rules to two egress nodes one by one")
+		for _, egressNode := range egressNodes {
+			e2e.Logf("Add iptable rule to  block port 9 to egress node:%s", egressNode)
+			delCmdOptions := []string{"iptables", "-t", "raw", "-D", "PREROUTING", "-p", "tcp", "--destination-port", "9", "-j", "DROP"}
+			addCmdOptions := []string{"iptables", "-t", "raw", "-A", "PREROUTING", "-p", "tcp", "--destination-port", "9", "-j", "DROP"}
+			defer exutil.DebugNodeWithChroot(oc, egressNode, delCmdOptions...)
+			_, debugNodeErr := exutil.DebugNodeWithChroot(oc, egressNode, addCmdOptions...)
+			o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+
+			e2e.Logf("Wait egressIP removed from egress node:%s", egressNode)
+			ip, err := getEgressIPByKind(oc, "hostsubnet", egressNode, 0)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(ip) == 0).Should(o.BeTrue())
+
+			e2e.Logf("Remove iptable rule to  block port 9 to egress node:%s", egressNode)
+			_, debugNodeErr = exutil.DebugNodeWithChroot(oc, egressNode, delCmdOptions...)
+			o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+
+			e2e.Logf("Wait egressIP back to egress node:%s\n", egressNode)
+			ip, err = getEgressIPByKind(oc, "hostsubnet", egressNode, 1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(ip) == 1).Should(o.BeTrue())
+		}
+
+		g.By("Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP \n")
+		var dstHost, primaryInf string
+		var infErr, snifErr error
+		var tcpdumpDS *tcpdumpDaemonSet
+		switch flag {
+		case "ipecho":
+			g.By(" Use IP-echo service to verify egressIP.")
+			sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(sourceIP)
+			o.Expect(sourceIP).Should(o.And(
+				o.ContainSubstring(freeIPs[0]),
+				o.ContainSubstring(freeIPs[1])))
+		case "tcpdump":
+			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump", "true")
+
+			primaryInf, infErr = getSnifPhyInf(oc, egressNode1)
+			o.Expect(infErr).NotTo(o.HaveOccurred())
+			dstHost = nslookDomainName("ifconfig.me")
+			defer deleteTcpdumpDS(oc, "tcpdump-46555", ns)
+			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-46555", "tcpdump", "true", dstHost, primaryInf, 80)
+			o.Expect(snifErr).NotTo(o.HaveOccurred())
+
+			g.By("Verify all egressIP is randomly used as sourceIP.")
+			egressipErr := wait.Poll(10*time.Second, timer, func() (bool, error) {
+				randomStr, url := getRequestURL(dstHost)
+				_, cmdErr := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				egressIPCheck1 := checkMatchedIPs(oc, ns, tcpdumpDS.name, randomStr, freeIPs[0], true)
+				egressIPCheck2 := checkMatchedIPs(oc, ns, tcpdumpDS.name, randomStr, freeIPs[1], true)
+				if egressIPCheck1 != nil || egressIPCheck2 != nil || cmdErr != nil {
+					e2e.Logf("Either of egressIPs %s or %s not found in tcpdump log, try next round.", freeIPs[0], freeIPs[1])
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get both EgressIPs %s and %s in tcpdump", freeIPs[0], freeIPs[1]))
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {

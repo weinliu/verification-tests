@@ -1005,8 +1005,18 @@ func getEgressIPByKind(oc *exutil.CLI, kind string, kindName string, expectedNum
 	var ip = []string{}
 	iplist, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, kindName, "-o=jsonpath={.egressIPs}").Output()
 	isIPListEmpty := (iplist == "" || iplist == "[]")
-	if expectedNum == 0 && isIPListEmpty {
-		return ip, nil
+	if expectedNum == 0 {
+		// Add waiting time for egressIP removed
+		egressIPEmptyErr := wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
+			iplist, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, kindName, "-o=jsonpath={.egressIPs}").Output()
+			if iplist == "" || iplist == "[]" {
+				e2e.Logf("EgressIP list is empty")
+				return true, nil
+			}
+			e2e.Logf("EgressIP list is %s, not removed, or have err:%v, and try next round", iplist, err)
+			return false, nil
+		})
+		return ip, egressIPEmptyErr
 	}
 	if !isIPListEmpty && iplist != "[]" {
 		ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
