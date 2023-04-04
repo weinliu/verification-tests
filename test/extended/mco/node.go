@@ -42,14 +42,36 @@ func (n Node) String() string {
 
 // DebugNodeWithChroot creates a debugging session of the node with chroot
 func (n *Node) DebugNodeWithChroot(cmd ...string) (string, error) {
+	var (
+		out        string
+		err        error
+		numRetries = 3
+	)
 	n.oc.NotShowInfo()
 	defer n.oc.SetShowInfo()
 
-	return exutil.DebugNodeWithChroot(n.oc, n.name, cmd...)
+	for i := 0; i < numRetries; i++ {
+		if i > 0 {
+			logger.Infof("Error happened: %s.\nRetrying command. Num retries: %d", err, i)
+		}
+		out, err = exutil.DebugNodeWithChroot(n.oc, n.name, cmd...)
+		if err == nil {
+			return out, nil
+		}
+	}
+
+	return out, err
 }
 
 // DebugNodeWithChrootStd creates a debugging session of the node with chroot and only returns separated stdout and stderr
 func (n *Node) DebugNodeWithChrootStd(cmd ...string) (string, string, error) {
+	var (
+		stdout     string
+		stderr     string
+		err        error
+		numRetries = 3
+	)
+
 	setErr := quietSetNamespacePrivileged(n.oc, n.oc.Namespace())
 	if setErr != nil {
 		return "", "", setErr
@@ -58,7 +80,15 @@ func (n *Node) DebugNodeWithChrootStd(cmd ...string) (string, string, error) {
 	cargs := []string{"node/" + n.GetName(), "--", "chroot", "/host"}
 	cargs = append(cargs, cmd...)
 
-	stdout, stderr, err := n.oc.Run("debug").Args(cargs...).Outputs()
+	for i := 0; i < numRetries; i++ {
+		if i > 0 {
+			logger.Infof("Error happened: %s.\nRetrying command. Num retries: %d", err, i)
+		}
+		stdout, stderr, err := n.oc.Run("debug").Args(cargs...).Outputs()
+		if err == nil {
+			return stdout, stderr, nil
+		}
+	}
 
 	recErr := quietRecoverNamespaceRestricted(n.oc, n.oc.Namespace())
 	if recErr != nil {
@@ -70,7 +100,23 @@ func (n *Node) DebugNodeWithChrootStd(cmd ...string) (string, string, error) {
 
 // DebugNodeWithOptions launch debug container with options e.g. --image
 func (n *Node) DebugNodeWithOptions(options []string, cmd ...string) (string, error) {
-	return exutil.DebugNodeWithOptions(n.oc, n.name, options, cmd...)
+	var (
+		out        string
+		err        error
+		numRetries = 3
+	)
+
+	for i := 0; i < numRetries; i++ {
+		if i > 0 {
+			logger.Infof("Error happened: %s.\nRetrying command. Num retries: %d", err, i)
+		}
+		out, err = exutil.DebugNodeWithOptions(n.oc, n.name, options, cmd...)
+		if err == nil {
+			return out, nil
+		}
+	}
+
+	return out, err
 }
 
 // DebugNode creates a debugging session of the node

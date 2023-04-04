@@ -224,7 +224,7 @@ func (b *OsImageBuilder) removeImage() error {
 	logger.Infof("Removing image %s", b.osImage)
 
 	podmanCLI := container.NewPodmanCLI()
-	rmOutput, err := podmanCLI.Run("rmi").Args(b.osImage).Output()
+	rmOutput, err := podmanCLI.Run("rmi").Args("-i", b.osImage).Output()
 	if err != nil {
 		msg := fmt.Sprintf("Podman failed removing image %s:\n%s\n%s", b.osImage, rmOutput, err)
 		logger.Errorf(msg)

@@ -222,7 +222,7 @@ func (b *OsImageBuilderInNode) pushImage() error {
 
 func (b *OsImageBuilderInNode) removeImage() error {
 	g.By("Remove osImage")
-	rmOutput, err := b.node.DebugNodeWithChroot("podman", "rmi", b.osImage)
+	rmOutput, err := b.node.DebugNodeWithChroot("podman", "rmi", "-i", b.osImage)
 	if err != nil {
 		msg := fmt.Sprintf("Podman failed removing image %s:\n%s\n%s", b.osImage, rmOutput, err)
 		logger.Errorf(msg)
