@@ -1,6 +1,9 @@
 package storage
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -9,6 +12,10 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/sjson"
+	"github.com/vmware/govmomi/cns"
+	cnstypes "github.com/vmware/govmomi/cns/types"
+	"github.com/vmware/govmomi/pbm"
+	"github.com/vmware/govmomi/pbm/types"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -146,5 +153,77 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		checkAlertRaised(oc, "VSphereTopologyMisconfiguration")
 		// Hit oc replace failed one time in defer, so add assertion here to detect issue if happens
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", originDriverConfigContentFilePath).Execute()).ShouldNot(o.HaveOccurred())
+	})
+
+	// author: pewang@redhat.com
+	// OCP-62014 - [vSphere CSI Driver] using the encryption storage policy should provision encrypt volume which could be read and written data
+	g.It("NonHyperShiftHOST-Author:pewang-High-62014-[vSphere CSI Driver] using the encryption storage policy should provision encrypt volume which could be read and written data", func() {
+
+		// Currently the case only could be run on cucushift-installer-rehearse-vsphere-upi-encrypt CI profile
+		if !isSpecifiedResourceExist(oc, "sc/thin-csi-encryption", "") {
+			g.Skip("Skipped: the test cluster is not an encryption cluster")
+		}
+
+		// Set the resource definition for the scenario
+		var (
+			storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate        = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			myCSIEncryptionSc  = newStorageClass(setStorageClassName("thin-csi-encryption"), setStorageClassProvisioner("csi.vsphere.vmware.com"))
+			myPvc              = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(myCSIEncryptionSc.name))
+			myPod              = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(myPvc.name))
+		)
+
+		g.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		g.By("# Create a pvc with the preset csi storageclass")
+		myPvc.create(oc)
+		defer myPvc.deleteAsAdmin(oc)
+
+		g.By("# Create pod with the created pvc and wait for the pod ready")
+		myPod.create(oc)
+		defer myPod.deleteAsAdmin(oc)
+		myPod.waitReady(oc)
+
+		g.By("# Check the pod volume can be read and write")
+		myPod.checkMountedVolumeCouldRW(oc)
+
+		g.By("# Check the volume is encrypted used the same storagePolicy which set in the storageclass from backend")
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Get the pv encryption storagePolicy id from CNS
+		myVimClient := NewVim25Client(ctx, oc)
+		myCNSClient, newCNSClientErr := cns.NewClient(ctx, myVimClient)
+		o.Expect(newCNSClientErr).ShouldNot(o.HaveOccurred(), "Failed to init the vSphere CNS client.")
+		volumeQueryResults, volumeQueryErr := myCNSClient.QueryVolume(ctx, cnstypes.CnsQueryFilter{
+			Names: []string{getPersistentVolumeNameByPersistentVolumeClaim(oc, myPvc.namespace, myPvc.name)},
+		})
+		o.Expect(volumeQueryErr).ShouldNot(o.HaveOccurred(), "Failed to get the volume info from CNS.")
+		o.Expect(volumeQueryResults.Volumes).Should(o.HaveLen(1))
+
+		// Get the pv encryption storagePolicy name by its storagePolicy id from pbm
+		pbmClient, newPbmClientErr := pbm.NewClient(ctx, myVimClient)
+		o.Expect(newPbmClientErr).ShouldNot(o.HaveOccurred(), "Failed to init the vSphere PBM client.")
+		policyQueryResults, policyQueryErr := pbmClient.RetrieveContent(ctx, []types.PbmProfileId{{UniqueId: volumeQueryResults.Volumes[0].StoragePolicyId}})
+		o.Expect(policyQueryErr).ShouldNot(o.HaveOccurred(), "Failed to get storagePolicy name by id.")
+		o.Expect(policyQueryResults).Should(o.HaveLen(1))
+
+		// Check the volume is encrypted used the same storagePolicy which set in the storageclass from backend
+		var (
+			myCSIEncryptionScParameters map[string]interface{}
+			myCSIEncryptionScPolicyName string
+		)
+		o.Expect(json.Unmarshal([]byte(myCSIEncryptionSc.getFieldByJSONPath(oc, `{.parameters}`)), &myCSIEncryptionScParameters)).ShouldNot(o.HaveOccurred(), "Failed to unmarshal storageclass parameters")
+		for k, v := range myCSIEncryptionScParameters {
+			if strings.EqualFold(k, "storagePolicyName") {
+				myCSIEncryptionScPolicyName = fmt.Sprint(v)
+				break
+			}
+		}
+		o.Expect(myCSIEncryptionScPolicyName).ShouldNot(o.BeEmpty(), "The storageclass storagePolicyName setting is empty")
+		o.Expect(policyQueryResults[0].GetPbmProfile().Name).Should(o.Equal(myCSIEncryptionScPolicyName), "The volume encrypted storagePolicy is not as expected")
 	})
 })

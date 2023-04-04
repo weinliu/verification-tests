@@ -1,10 +1,12 @@
 package storage
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +22,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"github.com/vmware/govmomi"
+	"github.com/vmware/govmomi/vim25"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -926,4 +930,49 @@ func isAzureStackCluster(oc *exutil.CLI) bool {
 	azureCloudType, errMsg := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
 	o.Expect(errMsg).NotTo(o.HaveOccurred())
 	return strings.EqualFold(azureCloudType, "AzureStackCloud")
+}
+
+// GetvSphereCredentials gets the vsphere credentials from cluster
+func GetvSphereCredentials(oc *exutil.CLI) (host string, username string, password string) {
+	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "kube-system", "secret/"+getRootSecretNameByCloudProvider(), "-o", `jsonpath={.data}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get the vSphere cluster root credentials")
+	for key, value := range gjson.Parse(credential).Value().(map[string]interface{}) {
+		if strings.Contains(key, "username") {
+			username = fmt.Sprint(value)
+			host = strings.TrimSuffix(key, ".username")
+		}
+		if strings.Contains(key, "password") {
+			password = fmt.Sprint(value)
+		}
+	}
+
+	o.Expect(host).ShouldNot(o.BeEmpty(), "Failed to get the vSphere vcenter host")
+	o.Expect(username).ShouldNot(o.BeEmpty(), "Failed to get the vSphere vcenter user")
+	o.Expect(password).ShouldNot(o.BeEmpty(), "Failed to get the vSphere vcenter password")
+
+	decodeByte, decodeErr := base64.StdEncoding.DecodeString(username)
+	o.Expect(decodeErr).NotTo(o.HaveOccurred(), "Failed to decode the user")
+	username = string(decodeByte)
+	decodeByte, decodeErr = base64.StdEncoding.DecodeString(password)
+	o.Expect(decodeErr).NotTo(o.HaveOccurred(), "Failed to decode the password")
+	password = string(decodeByte)
+
+	return host, username, password
+}
+
+// NewVim25Client init the vsphere vim25.Client
+func NewVim25Client(ctx context.Context, oc *exutil.CLI) *vim25.Client {
+	host, user, pwd := GetvSphereCredentials(oc)
+	vsmURL := &url.URL{
+
+		Scheme: "https",
+
+		Host: host,
+
+		Path: "/sdk",
+	}
+	vsmURL.User = url.UserPassword(user, pwd)
+	govmomiClient, err := govmomi.NewClient(ctx, vsmURL, true)
+	o.Expect(err).ShouldNot(o.HaveOccurred(), "Failed to init the vim25 client")
+	return govmomiClient.Client
 }
