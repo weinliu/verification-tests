@@ -27,19 +27,21 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc               = exutil.NewCLIWithoutNamespace("default")
-		mcoNamespace     = "openshift-machine-api"
-		wmcoNamespace    = "openshift-windows-machine-config-operator"
-		wmcoDeployment   = "windows-machine-config-operator"
-		privateKey       = ""
-		publicKey        = ""
-		windowsWorkloads = "win-webserver"
-		linuxWorkloads   = "linux-webserver"
-		defaultWindowsMS = "windows"
-		defaultNamespace = "winc-test"
-		iaasPlatform     string
-		zone             string
-		svcs             = map[int]string{
+		oc                = exutil.NewCLIWithoutNamespace("default")
+		mcoNamespace      = "openshift-machine-api"
+		wmcoNamespace     = "openshift-windows-machine-config-operator"
+		wmcoDeployment    = "windows-machine-config-operator"
+		privateKey        = ""
+		publicKey         = ""
+		windowsWorkloads  = "win-webserver"
+		linuxWorkloads    = "linux-webserver"
+		windowsServiceDNS = "win-webserver.winc-test.svc.cluster.local"
+		linuxServiceDNS   = "linux-webserver.winc-test.svc.cluster.local:8080"
+		defaultWindowsMS  = "windows"
+		defaultNamespace  = "winc-test"
+		iaasPlatform      string
+		zone              string
+		svcs              = map[int]string{
 			0: "windows_exporter",
 			1: "kubelet",
 			2: "hybrid-overlay-node",
@@ -582,6 +584,30 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			e2e.Failf("Failed to curl Windows web server from Windows pod in the same node")
 		}
 
+		g.By("Test connectivity from Linux pod to a Windows pod by DNS")
+		command = []string{"exec", "-n", namespace, linuxPodNameArray[0], "--", "curl", windowsServiceDNS}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(msg, "Windows Container Web Server") {
+			e2e.Failf("Failed to curl by DNS a Windows workload from a Linux pod")
+		}
+
+		g.By("Test connectivity from last Windows pod to a Windows by DNS")
+		command = []string{"exec", "-n", namespace, winPodNameArray[len(winPodNameArray)-1], "--", "curl", windowsServiceDNS}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(msg, "Windows Container Web Server") {
+			e2e.Failf("Failed to curl by DNS a Windows workload from last Windows pod pod")
+		}
+
+		g.By("Test connectivity from Windows pod to a Linux pod by DNS")
+		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", linuxServiceDNS}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(msg, "Linux Container Web Server") {
+			e2e.Failf("Failed to curl by DNS a Linux web server from Windows pod")
+		}
+
 		g.By("Check communication: Windows pod <--> Windows pod across different Windows nodes")
 		lastHostIP := hostIPArray[len(hostIPArray)-1]
 		if hostIPArray[0] == lastHostIP {
@@ -594,6 +620,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Windows pod across different Windows nodes")
 		}
+
 		lastPodName := winPodNameArray[len(winPodNameArray)-1]
 		command = []string{"exec", "-n", namespace, lastPodName, "--", "curl", winPodIPArray[0]}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
