@@ -439,22 +439,54 @@ func restoreCVSpec(upstream string, channel string, oc *exutil.CLI) {
 }
 
 // Run "oc adm release extract" cmd to extract manifests from current live cluster
-func extractManifest(oc *exutil.CLI) (string, error) {
-	tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
-	err := os.Mkdir(tempDataDir, 0755)
-	if err != nil {
-		return tempDataDir, fmt.Errorf("failed to create directory: %v", err)
+func extractManifest(oc *exutil.CLI) (tempDataDir string, err error) {
+	tempDataDir = filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
+
+	if err = os.Mkdir(tempDataDir, 0755); err != nil {
+		err = fmt.Errorf("failed to create directory: %v", err)
+		return
 	}
+
+	if err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute(); err != nil {
+		err = fmt.Errorf("failed to extract dockerconfig: %v", err)
+		return
+	}
+
 	manifestDir := filepath.Join(tempDataDir, "manifest")
-	err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute()
-	if err != nil {
-		return tempDataDir, fmt.Errorf("failed to extract dockerconfig: %v", err)
+	if err = oc.AsAdmin().Run("adm").Args("release", "extract", "--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson").Execute(); err != nil {
+		//Workaround c2s/cs2s clusters that only have token to the mirror in pull secret
+		e2e.Logf("warning: release extract failed once with:\n\"%v\"", err)
+		var region, image, mirror string
+		if region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure",
+			"cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output(); err != nil {
+			err = fmt.Errorf("failed to get cluster region: %v", err)
+			return
+		}
+
+		if region != "us-iso-east-1" && region != "us-isob-east-1" {
+			err = fmt.Errorf("oc adm release failed, and no retry for non-c2s/cs2s region: %s", region)
+			return
+		}
+
+		if image, err = exutil.GetReleaseImage(oc); err != nil {
+			err = fmt.Errorf("failed to get cluster release image: %v", err)
+			return
+		}
+
+		if mirror, err = oc.AsAdmin().Run("get").Args("ImageContentSourcePolicy",
+			"-o", "jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}").Output(); err != nil {
+			err = fmt.Errorf("failed to acquire mirror from ICSP: %v", err)
+			return
+		}
+
+		if err = oc.AsAdmin().Run("adm").Args("release", "extract",
+			"--from", fmt.Sprintf("%s@%s", mirror, strings.Split(image, "@")[1]),
+			"--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson").Execute(); err != nil {
+			err = fmt.Errorf("failed to extract manifests: %v", err)
+			return
+		}
 	}
-	err = oc.AsAdmin().Run("adm").Args("release", "extract", "--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson").Execute()
-	if err != nil {
-		return tempDataDir, fmt.Errorf("failed to extract manifests: %v", err)
-	}
-	return tempDataDir, nil
+	return
 }
 
 func getRandomString() string {
@@ -693,13 +725,43 @@ func getReleaseInfo(oc *exutil.CLI) (output string, err error) {
 		err = fmt.Errorf("failed to create tempdir %s: %v", tempDataDir, err)
 		return
 	}
+
 	if err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute(); err != nil {
 		err = fmt.Errorf("failed to extract dockerconfig: %v", err)
 		return
 	}
+
 	if output, err = oc.AsAdmin().Run("adm").Args("release", "info", "-a", tempDataDir+"/.dockerconfigjson", "-ojson").Output(); err != nil {
-		err = fmt.Errorf("failed to get release info: %v", err)
-		return
+		//Workaround c2s/cs2s clusters that only have token to the mirror in pull secret
+		e2e.Logf("warning: release info failed once with:\n\"%v\"", err)
+		var region, image, mirror string
+		if region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure",
+			"cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output(); err != nil {
+			err = fmt.Errorf("failed to get cluster region: %v", err)
+			return
+		}
+
+		if region != "us-iso-east-1" && region != "us-isob-east-1" {
+			err = fmt.Errorf("oc adm release failed, and no retry for non-c2s/cs2s region: %s", region)
+			return
+		}
+
+		if image, err = exutil.GetReleaseImage(oc); err != nil {
+			err = fmt.Errorf("failed to get cluster release image: %v", err)
+			return
+		}
+
+		if mirror, err = oc.AsAdmin().Run("get").Args("ImageContentSourcePolicy",
+			"-o", "jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}").Output(); err != nil {
+			err = fmt.Errorf("failed to acquire mirror from ICSP: %v", err)
+			return
+		}
+
+		if output, err = oc.AsAdmin().Run("adm").Args("release", "info", "-a", tempDataDir+"/.dockerconfigjson",
+			fmt.Sprintf("%s@%s", mirror, strings.Split(image, "@")[1])).Output(); err != nil {
+			err = fmt.Errorf("failed to get release info: %v", err)
+			return
+		}
 	}
 	return
 }

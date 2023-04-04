@@ -20,6 +20,15 @@ func GetClusterVersion(oc *CLI) (string, string, error) {
 	return clusterVersion, clusterBuild, err
 }
 
+// GetReleaseImage returns the release image as string value (Ex: registry.ci.openshift.org/ocp/release@sha256:b13971e61312f5dddd6435ccf061ac1a8447285a85828456edcd4fc2504cfb8f)
+func GetReleaseImage(oc *CLI) (string, error) {
+	releaseImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o", "jsonpath={..desired.image}").Output()
+	if err != nil {
+		return "", err
+	}
+	return releaseImage, nil
+}
+
 // GetInfraID returns the infra id
 func GetInfraID(oc *CLI) (string, error) {
 	infraID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath='{.status.infrastructureName}'").Output()
