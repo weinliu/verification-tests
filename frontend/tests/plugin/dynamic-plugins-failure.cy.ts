@@ -43,7 +43,7 @@ describe('Dynamic Plugins notification features', () => {
     checkStatusMessage('Failed', 'ailed to get a valid plugin manifest');
   });
 
-  it('(OCP-52366, xiangyli) ocp52366-failure add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
+  it('(OCP-52366, yapei) ocp52366-failure add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
     Overview.goToDashboard();
     Overview.isLoaded();
     statusCard.secondaryStatus('Dynamic Plugins', 'Degraded');

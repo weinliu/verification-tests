@@ -24,7 +24,7 @@ describe('Debug console for pods', () => {
     cy.logout()
   })
 
-  it('(OCP-48000, xiangyli), Run Pod in Debug mode', {tags: ['e2e']}, () => {
+  it('(OCP-48000, xiyuzhao), Run Pod in Debug mode', {tags: ['e2e']}, () => {
     // Import the nodejs-ex.git and run the invalid command to cause CrashLoopBackoof && Twice
     nav.sidenav.switcher.changePerspectiveTo('Developer')
     cy.visit(`/import/ns/${testParams.namespace}`)

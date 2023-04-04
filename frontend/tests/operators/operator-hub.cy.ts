@@ -22,7 +22,7 @@ describe('Operator Hub tests', () => {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     });
 
-    it('(OCP-45874) Check source labels on the operator hub page tiles', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+    it('(OCP-45874,yapei) Check source labels on the operator hub page tiles', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
         operatorHubPage.goTo()
         operatorHubPage.checkCustomCatalog(OperatorHubSelector.CUSTOM_CATALOG)
         OperatorHubSelector.SOURCE_MAP.forEach((operatorSource, operatorSourceLabel) => {

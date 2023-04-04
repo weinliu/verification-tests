@@ -25,7 +25,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
     cy.logout()
   })
 
-  it('(OCP-50153, xiangyli, admin) - Display All Namespace Operands for Global Operators', {tags: ['e2e','admin']}, () => {
+  it('(OCP-50153, xiyuzhao) - Display All Namespace Operands for Global Operators', {tags: ['e2e','admin']}, () => {
     // install the operator
     operatorHubPage.installOperator(params.operatorName, params.catalogSourceName)
     // wait for operator to install

@@ -25,7 +25,7 @@ describe('Check rollout restart and retry in Deployment/DC', () => {
     cy.logout()
   })
 
-  it('(OCP-52579, xiangyli) Add Rollout Restart and Retry function to Deployment/Deployment Config', {tags: ['e2e']}, () => {
+  it('(OCP-52579, xiyuzhao) Add Rollout Restart and Retry function to Deployment/Deployment Config', {tags: ['e2e']}, () => {
       // Check point 1: Kebab and action list button click for deployment
       cy.visit(`/k8s/ns/${params.namespace}/apps~v1~Deployment`)
       cy.adminCLI(`oc get deployment/${params.deploymentName} -n ${params.namespace} -o yaml`)

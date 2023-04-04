@@ -20,7 +20,7 @@ describe('Workload Secrets test', () => {
     cy.logout();
   });
 
-  it('OCP-47010 - Check Secrets is editable on console', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-47010, xiyuzhao) Check Secrets is editable on console', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     Secrets.gotoSecretsPage(testName);
     listPage.filter.byName('tlssecret');
     listPage.rows.countShouldBe(1);
@@ -34,7 +34,7 @@ describe('Workload Secrets test', () => {
     Secrets.validKeyValueExist("keyfortest", "valuefortest");
   });
 
-  it('(OCP-54014, xiangyli) Check Base64 data value for jave keystore secret would not change without changing anything', {tags: ['e2e','admin']}, () => {
+  it('(OCP-54014, xiyuzhao) Check Base64 data value for jave keystore secret would not change without changing anything', {tags: ['e2e','admin']}, () => {
     cy.visit(`/k8s/ns/${testName}/secrets/test1/edit`)
     cy.byTestID('save-changes').click()
     cy.exec(`oc get secret -n ${testName} test1 -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} > /tmp/secret2.yaml`)

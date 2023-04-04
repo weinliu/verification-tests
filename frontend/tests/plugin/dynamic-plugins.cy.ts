@@ -48,7 +48,7 @@ describe('Dynamic plugins features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-54170, xiangyli) Promote ConsolePlugins API version to v1', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
+  it('(OCP-54170, yapei) Promote ConsolePlugins API version to v1', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
       cy.visit('/k8s/cluster/customresourcedefinitions/consoleplugins.console.openshift.io/instances')
       listPage.rows.shouldExist('console-demo-plugin')
       cy.exec(`oc get consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -o yaml | grep 'apiVersion'`)
@@ -143,7 +143,7 @@ describe('Dynamic plugins features', () => {
     cy.get('[data-test="detail-item-value"]').should('include.text','Custom Overview Detail Info');
   });
 
-  it('(OCP-52366, xiangyli) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-52366, yapei) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin','@osd-ccs']}, () => {
     cy.switchPerspective('Administrator');
     Overview.goToDashboard();
     statusCard.toggleItemPopover("Dynamic Plugins");
