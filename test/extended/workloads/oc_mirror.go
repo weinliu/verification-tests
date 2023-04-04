@@ -359,4 +359,43 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Medium-60594-ImageSetConfig containing OCI FBC and release platform and additionalImages works well with --use-oci-feature flag [Serial]", func() {
+		err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("version").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Set registry config")
+		dirname := "/tmp/case60594"
+		err = os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+
+		_, _, err = locateDockerCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Copy the registry as OCI FBC")
+		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.12 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			_, err := exec.Command("bash", "-c", command).Output()
+			if err != nil {
+				e2e.Logf("copy failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
+		g.By("Set registry app")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		ociFullConfig := filepath.Join(ocmirrorBaseDir, "config-oci-all.yaml")
+		defer os.RemoveAll("oc-mirror-workspace")
+		defer os.RemoveAll(".oc-mirror.log")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFullConfig, "docker://"+serInfo.serviceName, "--use-oci-feature", "--dest-skip-tls", "--dry-run").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
 })
