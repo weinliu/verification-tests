@@ -776,4 +776,78 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(logErr).ShouldNot(o.HaveOccurred())
 		o.Expect(strings.Contains(logContents, searchString)).Should(o.BeFalse())
 	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-PreChkUpgrade-Author:huirwang-High-62056-Check egressfirewall is functional post upgrade", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			statefulSetHelloPod = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
+			egressFWTemplate    = filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
+			ns                  = "62056-upgrade-ns"
+		)
+
+		g.By("create new namespace")
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create an EgressFirewall object with rule deny.")
+		egressFW2 := egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Deny",
+			cidr:      "0.0.0.0/0",
+			template:  egressFWTemplate,
+		}
+		egressFW2.createEgressFW2Object(oc)
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"www.redhat.com\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"::/0\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
+			o.Expect(errPatch).NotTo(o.HaveOccurred())
+		} else {
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"www.redhat.com\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
+			o.Expect(errPatch).NotTo(o.HaveOccurred())
+		}
+		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		g.By("Create a pod in the namespace")
+		createResourceFromFile(oc, ns, statefulSetHelloPod)
+		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
+		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
+		helloPodname := getPodName(oc, ns, "app=hello")[0]
+
+		g.By("Check the allowed website can be accessed!")
+		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check the other website can be blocked!")
+		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
+		o.Expect(err).To(o.HaveOccurred())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-PstChkUpgrade-Author:huirwang-High-62056-Check egressfirewall is functional post upgrade", func() {
+		ns := "62056-upgrade-ns"
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
+		if nsErr != nil {
+			g.Skip("Skip the PstChkUpgrade test as 62056-upgrade-ns namespace does not exist, PreChkUpgrade test did not run")
+		}
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
+
+		g.By("Verify if EgressFirewall was applied correctly")
+		efErr := waitEgressFirewallApplied(oc, "default", ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		g.By("Get the pod in the namespace")
+		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
+		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
+		helloPodname := getPodName(oc, ns, "app=hello")[0]
+
+		g.By("Check the allowed website can be accessed!")
+		_, err := e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check the other website can be blocked!")
+		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
+		o.Expect(err).To(o.HaveOccurred())
+	})
 })
