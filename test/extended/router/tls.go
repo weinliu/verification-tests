@@ -3,6 +3,8 @@ package router
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -267,5 +269,46 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		statsOut, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+	})
+
+	// bugzilla: 2025624
+	g.It("Author:mjoseph-Longduration-NonPreRelease-High-49750-After certificate rotation, ingress router's metrics endpoint will auto update certificates [Disruptive]", func() {
+		// Check whether the authentication operator is present or not
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route", "oauth-openshift", "-n", "openshift-authentication").Output()
+		if strings.Contains(output, "namespaces \"openshift-authentication\" not found") || err != nil {
+			g.Skip("This cluster dont have authentication operator, so skipping the test.")
+		}
+		var (
+			ingressLabel = "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default"
+		)
+
+		g.By("Check the metrics endpoint to get the intial certificate details")
+		routerpod := getRouterPod(oc, "default")
+		curlCmd := fmt.Sprintf("curl -k -v https://localhost:1936/metrics")
+		statsOut, err := exutil.RemoteShPod(oc, "openshift-ingress", routerpod, "sh", "-c", curlCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(statsOut, "CAfile: /etc/pki/tls/certs/ca-bundle.crt")).Should(o.BeTrue())
+		dateRe := regexp.MustCompile("(start date.*)")
+		certStartDate := dateRe.FindAllString(string(statsOut), -1)
+
+		g.By("Delete the default CA certificate in openshift-service-ca namespace")
+		defer ensureAllClusterOperatorsNormal(oc, 920)
+		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "signing-key", "-n", "openshift-service-ca").Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		g.By("Waiting for some time till the cluster operators stabilize")
+		ensureClusterOperatorNormal(oc, "authentication", 5, 720)
+
+		g.By("Check the router logs to see the certificate in the metrics reloaded")
+		ensureLogsContainString(oc, "openshift-ingress", ingressLabel, "reloaded metrics certificate")
+
+		g.By("Check the metrics endpoint to get the certificate details after reload")
+		curlCmd1 := fmt.Sprintf("curl -k -vvv https://localhost:1936/metrics")
+		statsOut1, err3 := exutil.RemoteShPod(oc, "openshift-ingress", routerpod, "sh", "-c", curlCmd1)
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(statsOut1, "CAfile: /etc/pki/tls/certs/ca-bundle.crt")).Should(o.BeTrue())
+		certStartDate1 := dateRe.FindAllString(string(statsOut1), -1)
+		// Cross check the start date of the ceritificate is not same after reloading
+		o.Expect(certStartDate1[0]).NotTo(o.Equal(certStartDate[0]))
 	})
 })
