@@ -34,7 +34,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		logger.Infof("test dir %s is cleaned up", tmpdir)
 	})
 
-	g.It("Author:rioliu-PstChkUpgrade-NonPreRelease-High-45550-upgrade cluster is failed on RHEL node", func() {
+	g.It("NonHyperShiftHOST-Author:rioliu-PstChkUpgrade-NonPreRelease-High-45550-upgrade cluster is failed on RHEL node", func() {
 
 		skipTestIfOsIsNotRhelOs(oc)
 
@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	})
 
-	g.It("Author:rioliu-PstChkUpgrade-NonPreRelease-High-55748-Upgrade failed with Transaction in progress", func() {
+	g.It("NonHyperShiftHOST-Author:rioliu-PstChkUpgrade-NonPreRelease-High-55748-Upgrade failed with Transaction in progress", func() {
 
 		g.By("check machine config daemon log to verify no error `Transaction in progress` found")
 
@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		}
 	})
 
-	g.It("Author:rioliu-PstChkUpgrade-NonPreRelease-High-59427-ssh keys can be migrated to new dir when node is upgraded from RHCOS8 to RHCOS9", func() {
+	g.It("NonHyperShiftHOST-Author:rioliu-PstChkUpgrade-NonPreRelease-High-59427-ssh keys can be migrated to new dir when node is upgraded from RHCOS8 to RHCOS9", func() {
 
 		var (
 			oldAuthorizedKeyPath = "/home/core/.ssh/authorized_key"
