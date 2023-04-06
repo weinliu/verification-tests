@@ -3161,6 +3161,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exec.Command("bash", "-c", "cd "+tmpPath+" && go get github.com/operator-framework/operator-lib/proxy").Output()
 		exec.Command("bash", "-c", "cd "+tmpPath+" && go get k8s.io/apimachinery/pkg/util/diff@v0.24.0").Output()
 		exec.Command("bash", "-c", "cd "+tmpPath+" && go get github.com/evanphx/json-patch").Output()
+		exec.Command("bash", "-c", "cd "+tmpPath+" && go get github.com/example-inc/memcached-operator").Output()
 		podmanCLI := container.NewPodmanCLI()
 		podmanCLI.ExecCommandPath = tmpPath
 		output, err = podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
