@@ -302,6 +302,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).To(o.ContainSubstring("TelemeterClientFailures"))
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-62092-Don't fire NodeFilesystemAlmostOutOfSpace alert for certain tmpfs mount points", func() {
+		g.By("check NodeFilesystemAlmostOutOfSpace alert from node-exporter-rules prometheusrules")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "node-exporter-rules", `-ojsonpath={.spec.groups[*].rules[?(@.alert=="NodeFilesystemAlmostOutOfSpace")].expr}`, "-n", "openshift-monitoring").Output()
+		e2e.Logf("NodeFilesystemAlmostOutOfSpace alert expr: %v", output)
+		g.By("mountpoint /var/lib/ibmc-s3fs.* is excluded")
+		o.Expect(output).To(o.ContainSubstring(`mountpoint!~"/var/lib/ibmc-s3fs.*"`))
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
