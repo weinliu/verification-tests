@@ -1,0 +1,17 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: image-digest-mirror-set
+objects:
+  - kind: ImageDigestMirrorSet
+    apiVersion: config.openshift.io/v1
+    metadata:
+      name: "${NAME}"
+    spec:
+      imageDigestMirrors:
+      - mirrors:
+        - example.io/digest-example/ubi-minimal
+        source: registry.access.redhat.com/ubi8/ubi-minimal
+        mirrorSourcePolicy: NeverContactSource  # do not redirect to the source registry if the pull from the mirror is failed
+parameters:
+  - name: NAME

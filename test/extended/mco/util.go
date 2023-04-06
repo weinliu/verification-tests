@@ -43,6 +43,28 @@ type ImageContentSourcePolicy struct {
 	template string
 }
 
+// ImageDigestMirrorSet struct is used to handle ImageDigestMirrorSet resources in OCP
+type ImageDigestMirrorSet struct {
+	Resource
+	Template
+}
+
+// NewImageDigestMirrorSet create a new ImageDigestMirrorSet struct
+func NewImageDigestMirrorSet(oc *exutil.CLI, name string, t Template) *ImageDigestMirrorSet {
+	return &ImageDigestMirrorSet{Resource: *NewResource(oc, "ImageDigestMirrorSet", name), Template: t}
+}
+
+// ImageTagMirrorSet struct is used to handle ImageTagMirrorSet resources in OCP
+type ImageTagMirrorSet struct {
+	Resource
+	Template
+}
+
+// NewImageTagMirrorSet create a new ImageTagMirrorSet struct
+func NewImageTagMirrorSet(oc *exutil.CLI, name string, t Template) *ImageTagMirrorSet {
+	return &ImageTagMirrorSet{Resource: *NewResource(oc, "ImageTagMirrorSet", name), Template: t}
+}
+
 // TextToVerify is a helper struct to verify configurations using the `createMcAndVerifyMCValue` function
 type TextToVerify struct {
 	textToVerifyForMC   string
@@ -652,4 +674,38 @@ func ConvertOctalPermissionsToDecimalOrFail(octalPerm string) int {
 // PtrInt returns the pointer to an integer
 func PtrInt(a int) *int {
 	return &a
+}
+
+// RemoveAllMCOPods removes all MCO pods in openshift-machine-config-operator namespace
+func RemoveAllMCOPods(oc *exutil.CLI) error {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-n", MachineConfigNamespace, "--all").Execute()
+
+	if err != nil {
+		logger.Errorf("Cannot delete the pods in %s namespace", MachineConfigNamespace)
+		return err
+	}
+
+	logger.Infof("Waiting for MCO pods to be runnging and ready in namespace %s", MachineConfigNamespace)
+	waitErr := wait.Poll(10*time.Second, 15*time.Minute,
+		func() (bool, error) {
+			status, err := NewNamespacedResourceList(oc.AsAdmin(), "pod", MachineConfigNamespace).
+				Get(`{.items[*].status.conditions[?(@.type=="Ready")].status}`)
+
+			if err != nil {
+				return false, err
+			}
+
+			if strings.Contains(status, "False") {
+				return false, nil
+			}
+
+			return true, nil
+		})
+
+	if waitErr != nil {
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", MachineConfigNamespace).Execute()
+		return fmt.Errorf("MCO pods were deleted in namespace %s, but they did not become ready", MachineConfigNamespace)
+	}
+
+	return nil
 }

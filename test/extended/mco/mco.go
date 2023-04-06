@@ -2958,6 +2958,183 @@ nulla pariatur.`
 		}
 
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-61555-ImageDigestMirrorSet test [Disruptive]", func() {
+		var (
+			idmsName = "tc-61555-digest-mirror"
+			mcp      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			node     = mcp.GetNodesOrFail()[0]
+		)
+		// ImageDigetsMirrorSet is not compatible with ImageContentSourcePolicy.
+		// If any ImageContentSourcePolicy exists we skip this test case.
+		skipTestIfImageContentSourcePolicyExists(oc.AsAdmin())
+
+		g.By("Start capturing events and clean pods logs")
+		startTime, dErr := node.GetDate()
+		o.Expect(dErr).ShouldNot(o.HaveOccurred(), "Error getting date in node %s", node.GetName())
+
+		o.Expect(node.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+			"Error getting the latest event in node %s", node.GetName())
+
+		logger.Infof("Removing all MCO pods to clean the logs.")
+		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("OK!\n")
+
+		g.By("Create new machine config to deploy a ImageDigestMirrorSet configuring a mirror registry")
+		idms := NewImageDigestMirrorSet(oc.AsAdmin(), idmsName, *NewMCOTemplate(oc, "add-image-digest-mirror-set.yaml"))
+		defer mcp.waitForComplete()
+		defer idms.Delete()
+
+		idms.Create("-p", "NAME="+idmsName)
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Check logs to verify that no drain operation happened.")
+		log, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), "")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		o.Expect(log).Should(o.ContainSubstring("Changes do not require drain, skipping"))
+		logger.Infof("OK!\n")
+
+		g.By("Check logs to verify that crio service was reloaded.")
+		o.Expect(log).Should(o.ContainSubstring("crio config reloaded successfully"))
+		logger.Infof("OK!\n")
+
+		g.By("Check logs to verify that nodes were not rebooted.")
+		o.Expect(log).Should(o.ContainSubstring("skipping reboot"))
+		logger.Infof("OK!\n")
+
+		g.By("Verify that the node was NOT rebooted")
+		o.Expect(node.GetUptime()).Should(o.BeTemporally("<", startTime),
+			"The node %s must NOT be rebooted after applying the configuration, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
+		logger.Infof("OK!\n")
+
+		g.By("Check that no drain nor reboot events were triggered")
+		nodeEvents, eErr := node.GetEvents()
+		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", node.GetName())
+		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Drain"), "Error, a Drain event was triggered but it shouldn't")
+		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Reboot"), "Error, a Reboot event was triggered but it shouldn't")
+		logger.Infof("OK!\n")
+
+		g.By("Check that the  /etc/containers/registries.conf file was configured")
+		rf := NewRemoteFile(node, "/etc/containers/registries.conf")
+		o.Expect(rf.Fetch()).To(o.Succeed(),
+			"Error getting file /etc/containers/registries.conf")
+
+		configRegex := `(?s)` + regexp.QuoteMeta(`[[registry]]`) + ".*" +
+			regexp.QuoteMeta(`registry.access.redhat.com/ubi8/ubi-minimal`) + ".*" +
+			regexp.QuoteMeta(`[[registry.mirror]]`) + ".*" +
+			regexp.QuoteMeta(`example.io/digest-example/ubi-minimal`) + ".*" +
+			`pull-from-mirror *= *"digest-only"`
+
+		o.Expect(rf.GetTextContent()).To(o.MatchRegexp(configRegex),
+			"The file /etc/containers/registries.conf has not been properly configured with the new mirror information")
+		logger.Infof("OK!\n")
+
+		g.By("Delete the ImageDigestMirrorSet resource")
+		idms.Delete()
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Check that the configuration in file /etc/containers/registries.conf was restored")
+		o.Expect(rf.Fetch()).To(o.Succeed(),
+			"Error getting file /etc/containers/registries.conf")
+
+		o.Expect(rf.GetTextContent()).NotTo(o.ContainSubstring(`example.io/digest-example/ubi-minimal`),
+			"The configuration in file /etc/containers/registries.conf was not restored after deleting the ImageDigestMirrorSet resource")
+		logger.Infof("OK!\n")
+
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-61558-ImageTagMirrorSet test [Disruptive]", func() {
+		var (
+			itmsName = "tc-61558-tag-mirror"
+			mcp      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			node     = mcp.GetNodesOrFail()[0]
+		)
+
+		// ImageTagMirrorSet is not compatible with ImageContentSourcePolicy.
+		// If any ImageContentSourcePolicy exists we skip this test case.
+		skipTestIfImageContentSourcePolicyExists(oc.AsAdmin())
+
+		g.By("Start capturing events and clean pods logs")
+		startTime, dErr := node.GetDate()
+		o.Expect(dErr).ShouldNot(o.HaveOccurred(), "Error getting date in node %s", node.GetName())
+
+		o.Expect(node.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+			"Error getting the latest event in node %s", node.GetName())
+
+		logger.Infof("Removing all MCO pods to clean the logs.")
+		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("OK!\n")
+
+		g.By("Create new machine config to deploy a ImageTagMirrorSet configuring a mirror registry")
+		itms := NewImageTagMirrorSet(oc.AsAdmin(), itmsName, *NewMCOTemplate(oc, "add-image-tag-mirror-set.yaml"))
+		defer mcp.waitForComplete()
+		defer itms.Delete()
+
+		itms.Create("-p", "NAME="+itmsName)
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Check logs to verify that a drain operation was executed.")
+		log, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), "")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		o.Expect(log).Should(o.ContainSubstring("requesting cordon and drain"))
+		logger.Infof("OK!\n")
+
+		g.By("Check logs to verify that crio service was reloaded.")
+		o.Expect(log).Should(o.ContainSubstring("crio config reloaded successfully"))
+		logger.Infof("OK!\n")
+
+		g.By("Check logs to verify that nodes were not rebooted.")
+		o.Expect(log).Should(o.ContainSubstring("skipping reboot"))
+		logger.Infof("OK!\n")
+
+		g.By("Verify that the node was NOT rebooted")
+		o.Expect(node.GetUptime()).Should(o.BeTemporally("<", startTime),
+			"The node %s must NOT be rebooted after applying the configuration, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
+		logger.Infof("OK!\n")
+
+		g.By("Check no reboot events were triggered")
+		nodeEvents, eErr := node.GetEvents()
+		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", node.GetName())
+		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Reboot"), "Error, a Reboot event was triggered but it shouldn't")
+		logger.Infof("OK!\n")
+
+		g.By("Check that drain events were triggered")
+		o.Expect(nodeEvents).To(HaveEventsSequence("Drain"), "Error, a Drain event was triggered but it shouldn't")
+		logger.Infof("OK!\n")
+
+		g.By("Check that the  /etc/containers/registries.conf file was configured")
+		rf := NewRemoteFile(node, "/etc/containers/registries.conf")
+		o.Expect(rf.Fetch()).To(o.Succeed(),
+			"Error getting file /etc/containers/registries.conf")
+
+		configRegex := `(?s)` + regexp.QuoteMeta(`[[registry]]`) + ".*" +
+			regexp.QuoteMeta(`registry.redhat.io/openshift4`) + ".*" +
+			regexp.QuoteMeta(`[[registry.mirror]]`) + ".*" +
+			regexp.QuoteMeta(`mirror.example.com/redhat`) + ".*" +
+			`pull-from-mirror *= *"tag-only"`
+
+		o.Expect(rf.GetTextContent()).To(o.MatchRegexp(configRegex),
+			"The file /etc/containers/registries.conf has not been properly configured with the new mirror information")
+		logger.Infof("OK!\n")
+
+		g.By("Delete the ImageDigestMirrorSet resource")
+		itms.Delete()
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Check that the configuration in file /etc/containers/registries.conf was restored")
+		o.Expect(rf.Fetch()).To(o.Succeed(),
+			"Error getting file /etc/containers/registries.conf")
+
+		o.Expect(rf.GetTextContent()).NotTo(o.ContainSubstring(`example.io/digest-example/ubi-minimal`),
+			"The configuration in file /etc/containers/registries.conf was not restored after deleting the ImageDigestMirrorSet resource")
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason
@@ -3094,6 +3271,17 @@ func skipTestIfOsIsNotRhelOs(oc *exutil.CLI) Node {
 func skipTestIfFIPSIsNotEnabled(oc *exutil.CLI) {
 	if !isFIPSEnabledInClusterConfig(oc) {
 		g.Skip("fips is not enabled, skip this test")
+	}
+}
+
+// skipTestIfImageContentSourcePolicyExists skip the test if any ImageContentSourcePolicy exists in the cluster
+func skipTestIfImageContentSourcePolicyExists(oc *exutil.CLI) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy").Output()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error checking if ImageContentSourcePolicy exist in the cluster or not")
+
+	if output != "No resources found" {
+		logger.Infof("ImageContentSourcePolicy in cluster:\n%s", output)
+		g.Skip("There are ImageContentSourcePolicies resources in the cluster. This test case is not compatible with ImageContentSourcePolicies resources.")
 	}
 }
 
