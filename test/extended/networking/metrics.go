@@ -447,7 +447,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		checkovnkubeMasterNetworkProgrammingetrics(oc, prometheusURL, metricName2)
 	})
 
-	g.It("NonHyperShiftHOST-Author:zzhao-Medium-53030-bug2060079- NodeProxyApplySlow should have correct value.", func() {
+	g.It("NonHyperShiftHOST-Author:zzhao-Medium-53030-NodeProxyApplySlow should have correct value.", func() {
+		//This script is for https://bugzilla.redhat.com/show_bug.cgi?id=2060079
 		networkType := checkNetworkType(oc)
 		if !strings.Contains(networkType, "openshiftsdn") {
 			g.Skip("Skip testing on non-sdn cluster!!!")
