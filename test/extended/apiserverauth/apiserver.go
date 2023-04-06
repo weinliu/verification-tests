@@ -4179,6 +4179,12 @@ EOF`, dcpolicyrepo)
 			dirname = "/tmp/-OCP-56934/"
 		)
 
+		g.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
