@@ -20,11 +20,13 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		oc = exutil.NewCLI("mco-upgrade", exutil.KubeConfigPath())
 		// temp dir to store all test files, and it will be recycled when test is finished
 		tmpdir string
+		wMcp   *MachineConfigPool
 	)
 
 	g.JustBeforeEach(func() {
 		tmpdir = createTmpDir()
 		preChecks(oc)
+		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 	})
 
 	g.JustAfterEach(func() {
@@ -82,6 +84,100 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 			o.Expect(err).ShouldNot(o.HaveOccurred(), "new authorized key file not found")
 			o.Expect(output).Should(o.ContainSubstring("File: " + newAuthorizedKeyPath))
 		}
+
+	})
+
+	g.It("Author:sregidor-PreChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update [Disruptive]", func() {
+		var (
+			kcName     = "change-maxpods-kubelet-config"
+			kcTemplate = generateTemplateAbsolutePath(kcName + ".yaml")
+			crName     = "change-ctr-cr-config"
+			crTemplate = generateTemplateAbsolutePath(crName + ".yaml")
+		)
+
+		if len(wMcp.GetNodesOrFail()) == 0 {
+			g.Skip("Worker pool has 0 nodes configured.")
+		}
+
+		g.By("create kubelet config to add 500 max pods")
+		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+		kc.create()
+
+		g.By("create ContainerRuntimeConfig")
+		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
+		cr.create()
+
+		g.By("wait for worker pool to be ready")
+		wMcp.waitForComplete()
+
+	})
+
+	g.It("Author:sregidor-PstChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update  [Disruptive]", func() {
+
+		var (
+			kcName     = "change-maxpods-kubelet-config"
+			kcTemplate = generateTemplateAbsolutePath(kcName + ".yaml")
+			crName     = "change-ctr-cr-config"
+			crTemplate = generateTemplateAbsolutePath(crName + ".yaml")
+
+			mcKubeletConfigName                = "99-worker-generated-kubelet"
+			mcContainerRuntimeConfigConfigName = "99-worker-generated-containerruntime"
+		)
+
+		// Skip if worker pool has no nodes
+		if len(wMcp.GetNodesOrFail()) == 0 {
+			g.Skip("Worker pool has 0 nodes configured.")
+		}
+
+		// Skip if the precheck part of the test was not executed
+		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+		if !kc.Exists() {
+			g.Skip(fmt.Sprintf(`The PreChkUpgrade part of the test should have created a KubeletConfig resource "%s". This resource does not exist in the cluster. Maybe we are upgrading from an old branck like 4.5?`, kc.GetName()))
+		}
+		defer wMcp.waitForComplete()
+		defer kc.Delete()
+
+		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
+		if !cr.Exists() {
+			g.Skip(fmt.Sprintf(`The PreChkUpgrade part of the test should have created a ContainerRuntimConfig resource "%s". This resource does not exist in the cluster. Maybe we are upgrading from an old branck like 4.5?`, cr.GetName()))
+		}
+		defer cr.Delete()
+
+		logger.Infof("Jira issure: https://issues.redhat.com/browse/OCPBUGS-6018")
+		logger.Infof("PR: https://github.com/openshift/machine-config-operator/pull/3501")
+
+		g.By("check that the MC in the worker pool has the right kubelet configuration")
+		worker := wMcp.GetNodesOrFail()[0]
+		config := NewRemoteFile(worker, "/etc/kubernetes/kubelet.conf")
+		o.Expect(config.Fetch()).To(o.Succeed(),
+			"Could not get the current kubelet config in node %s", worker.GetName())
+
+		o.Expect(config.GetTextContent()).To(o.ContainSubstring(`"maxPods": 500`),
+			"The kubelet configuration is not the expected one.")
+
+		g.By("check controller versions")
+		rmc, err := wMcp.GetConfiguredMachineConfig()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Cannot get the MC configured for worker pool")
+
+		logger.Infof("Get controller version in rendered MC %s", rmc.GetName())
+		rmcCV := rmc.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/generated-by-controller-version}`)
+		logger.Infof("rendered MC controller version %s", rmcCV)
+
+		kblmc := NewMachineConfig(oc.AsAdmin(), mcKubeletConfigName, MachineConfigPoolWorker)
+		logger.Infof("Get controller version in KubeletConfig generated MC %s", rmc.GetName())
+		kblmcCV := kblmc.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/generated-by-controller-version}`)
+		logger.Infof("KubeletConfig generated MC controller version %s", kblmcCV)
+
+		crcmc := NewMachineConfig(oc.AsAdmin(), mcContainerRuntimeConfigConfigName, MachineConfigPoolWorker)
+		logger.Infof("Get controller version in ContainerRuntimeConfig generated MC %s", rmc.GetName())
+		crcmcCV := crcmc.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/generated-by-controller-version}`)
+		logger.Infof("ContainerRuntimeConfig generated MC controller version %s", crcmcCV)
+
+		o.Expect(kblmcCV).To(o.Equal(rmcCV),
+			"KubeletConfig generated MC and worker pool rendered MC should have the same Controller Version annotation")
+		o.Expect(crcmcCV).To(o.Equal(rmcCV),
+			"ContainerRuntimeConfig generated MC and worker pool rendered MC should have the same Controller Version annotation")
 
 	})
 })
