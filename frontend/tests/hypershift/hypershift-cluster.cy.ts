@@ -8,10 +8,9 @@ describe('feature for hypershift provisined cluster', () => {
 
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout;
   });
 
-  it('(OCP-48890,yanpzhan) The TopologyMode needs to be passed to the console via console-config.yaml', {tags: ['e2e','admin']}, () => {
+  it('(OCP-48890,yanpzhan) The TopologyMode needs to be passed to the console via console-config.yaml', {tags: ['e2e','HyperShiftGUEST','admin']}, () => {
     let $topologyMode;
     cy.exec(`oc get infrastructures.config.openshift.io cluster --template={{.status.controlPlaneTopology}} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       $topologyMode = result.stdout;
@@ -27,12 +26,9 @@ describe('feature for hypershift provisined cluster', () => {
     });
   });
 
-  it('(OCP-50239,yanpzhan) Update cluster setting page and overview page for hypershift provisioned cluster', {tags: ['e2e','admin']}, () => {
+  it('(OCP-50239,yanpzhan) Update cluster setting page and overview page for hypershift provisioned cluster', {tags: ['HyperShiftGUEST','admin']}, () => {
+    cy.switchPerspective('Administrator');
     ClusterSettingPage.goToClusterSettingConfiguration();
-    //set win.SERVER_FLAGS.controlPlaneTopology to External to simulate hypershift provisioned cluster
-    cy.window().then((win: any) => {
-      win.SERVER_FLAGS.controlPlaneTopology = 'External';
-    });
 
     //Check on cluster setting detail page and cluster version page
     ClusterSettingPage.clickToClustSettingDetailTab();
