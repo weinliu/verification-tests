@@ -3,6 +3,7 @@ import json
 import time
 import argparse
 import logging
+import pprint
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from jira import JIRA
@@ -46,7 +47,10 @@ class JIRAManager:
             except:
                 issues[issue.key]["components"] = "unknown"
             try:
-                issues[issue.key]["qe_contact"] = issue.fields.customfield_12315948.emailAddress
+                issues[issue.key]["qe_contact_email"] = issue.fields.customfield_12315948.emailAddress
+                issues[issue.key]["qe_contact_key"] = issue.fields.customfield_12315948.key
+                issues[issue.key]["qe_contact_displayName"] = issue.fields.customfield_12315948.displayName
+                issues[issue.key]["qe_contact"] = issue.fields.customfield_12315948.displayName + os.linesep + issue.fields.customfield_12315948.emailAddress
             except:
                 issues[issue.key]["qe_contact"] = "unknown"
             try:
@@ -61,10 +65,9 @@ class JIRAManager:
                 issues[issue.key]["labels"] = issue.fields.labels
             except:
                 issues[issue.key]["labels"] = []
-        self.logger.debug(issues)
+        self.logger.info(pprint.pformat(issues, indent=1))
         self.logger.debug(json.dumps(issue.raw['fields'], indent=4, sort_keys=True))
         return issues
-
 
 class CollectClient:
     def __init__(self, args):
@@ -122,15 +125,42 @@ class CollectClient:
     def collectIssues(self):
         issues = self.jiraManager.getIssues()
         self.write_e2e_google_sheet(issues)
+        
+    def request_debug(self):
+        spreadsheet = self.gclient.open_by_url(self.target_file)
+        worksheet = spreadsheet.worksheet("ServiceDeliveryImpact Bugs")
+        values_list_all = worksheet.get_all_values()
+        message_list = []
+        message_list.append('''For ServiceDeliveryImpact Bugs, https://docs.google.com/spreadsheets/d/1tU0IvHR9XahcBM_8kYZQXGIZiu79PG4X1X14XnZ1jeM/edit#gid=0, Please help to update the column H-L, Thanks!
+Root Cause Analysed: when dev added comment or PR to fix the bug, QE needs to understand the root cause, which is helpful to design new test case to cover this scenario
+Tested: QE already verify the fix with e2e scenario mentioned in the bug
+Automated: the new test case is automated, if the case is manual only, please mark it as "Manual Only"\n''')
+        for row in range(1, len(values_list_all)):
+            values_list = values_list_all[row]
+            bug_id = values_list[0]
+            qa_contact = values_list[5]
+            bug_status = values_list[6]
+            rcaed = values_list[7]
+            tested = values_list[8]
+            automated = values_list[9]
+            if bug_status.lower() == "verified" or bug_status.lower() == "closed":
+                if not rcaed or not tested or not automated:
+                    message_list.append(bug_id + ": @" +qa_contact.split(os.linesep)[0])
+        self.logger.info(os.linesep.join(message_list))
+            
+            
+        
 
 ########################################################################################################################################
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="python3 collect_ServiceDeliveryImpact_bugs.py", usage='''%(prog)s''')
     parser.add_argument("-t","--token", required=True, help="the jira token")
     parser.add_argument("-k","--key", default="", required=False, help="the key file path")
+    parser.add_argument("-r","--request_debug", dest='request_debug', default=False, action='store_true', help="the flag to request debug")
     args=parser.parse_args()
 
     cclient = CollectClient(args)
-    cclient.collectIssues()
-    
+    if not args.request_debug:
+        cclient.collectIssues()
+    cclient.request_debug()
     exit(0)  
