@@ -311,6 +311,45 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).To(o.ContainSubstring(`mountpoint!~"/var/lib/ibmc-s3fs.*"`))
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-48350-create alert-routing-edit role to allow end users to manage alerting CR", func() {
+		var (
+			alertManagerConfig = filepath.Join(monitoringBaseDir, "valid-alertmanagerconfig.yaml")
+		)
+		g.By("check clusterrole alert-routing-edit exists")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole").Output()
+		o.Expect(strings.Contains(output, "alert-routing-edit")).To(o.BeTrue())
+
+		g.By("create project, add alert-routing-edit RoleBinding to specific user")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "-n", ns, "alert-routing-edit", oc.Username()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("create AlertmanagerConfig under the project")
+		createResourceFromYaml(oc, ns, alertManagerConfig)
+
+		g.By("check AlertmanagerConfig is created")
+		output, _ = oc.WithoutNamespace().Run("get").Args("AlertmanagerConfig", "-n", ns).Output()
+		o.Expect(output).To(o.ContainSubstring("valid-test-config"))
+
+		g.By("the user should able to change AlertmanagerConfig")
+		err = oc.WithoutNamespace().Run("patch").Args("AlertmanagerConfig", "valid-test-config", "-p", `{"spec":{"receivers":[{"name":"webhook","webhookConfigs":[{"url":"https://test.io/push"}]}]}}`, "--type=merge", "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check AlertmanagerConfig is updated")
+		output, _ = oc.WithoutNamespace().Run("get").Args("AlertmanagerConfig", "valid-test-config", "-ojsonpath={.spec.receivers}", "-n", ns).Output()
+		o.Expect(output).To(o.ContainSubstring("https://test.io/push"))
+
+		g.By("the user should able to delete AlertmanagerConfig")
+		err = oc.WithoutNamespace().Run("delete").Args("AlertmanagerConfig", "valid-test-config", "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check AlertmanagerConfig is deleted")
+		output, _ = oc.WithoutNamespace().Run("get").Args("AlertmanagerConfig", "-n", ns).Output()
+		o.Expect(output).NotTo(o.ContainSubstring("valid-test-config"))
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
