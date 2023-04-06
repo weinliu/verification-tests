@@ -30,7 +30,6 @@ describe('Notification drawer tests', () => {
     }else{
       cy.adminCLI(`oc delete cm cluster-monitoring-config -n openshift-monitoring`);
     }
-    cy.logout;
   })
 
   it('(OCP-45305,yanpzhan) check alert on overview page and notification drawer list', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
@@ -45,7 +44,7 @@ describe('Notification drawer tests', () => {
     cy.contains('Hide user workload notifications').click();
     Overview.goToDashboard();
     Overview.isLoaded();
-    cy.get('span.co-break-word').contains('Testing 123');
+    cy.get('.co-break-word').contains('Testing 123');
     Overview.clickNotificationDrawer();
     cy.get('.pf-c-notification-drawer__list-item-description').contains('Testing 123');
   });
