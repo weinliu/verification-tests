@@ -1248,7 +1248,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "tuned=ips", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create ips profile")
+		g.By("Create ips-host profile, new tuned should automatically handle duplicate sysctl settings")
 		//Define duplicated parameter and value
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=kernel.pid_max", "SYSCTLVALUE1=1048575", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
@@ -1257,33 +1257,61 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).To(o.ContainSubstring("ips-host"))
 
+		g.By("Assert active and recommended profile (ips-host) match in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `active and recommended profile \(ips-host\) match`)
+
+		g.By("Check if new custom profile applied to label node")
+		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
+
+		//Only used for debug info
 		g.By("Check current profile for each node")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
 		e2e.Logf("Current profile for each node: \n%v", output)
 
-		g.By("Assert DuplicateError in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "3", 120, "DuplicateError|already exists|DuplicateOptionError")
+		//New tuned can automatically de-duplicate value of sysctl, no duplicate error anymore
+		g.By("Assert if the duplicate value of sysctl kernel.pid_max take effective on target node, expected value should be 1048575")
+		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "kernel.pid_max", "1048575")
 
-		g.By("Apply ips patch profile")
-		//Remove duplicated parameter and value
-		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=#kernel.pid_max", "SYSCTLVALUE1=1048575", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
+		g.By("Get default value of fs.mount-max on label node")
+		defaultMaxMapCount := getValueOfSysctlByName(oc, ntoNamespace, tunedNodeName, "fs.mount-max")
+		o.Expect(defaultMaxMapCount).NotTo(o.BeEmpty())
+		e2e.Logf("The default value of sysctl fs.mount-max is %v", defaultMaxMapCount)
 
-		g.By("Check if new profile in in rendered tuned")
-		renderCheck, err = getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("ips-host"))
+		//setting an invalid value for ips-host profile
+		g.By("Update ips-host profile with invalid value of fs.mount-max = -1")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=fs.mount-max", "SYSCTLVALUE1=-1", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
-		g.By("Assert ips-host in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "1", 180, `active and recommended profile \(ips-host\) match`)
+		g.By("Assert static tuning from profile 'ips-host' applied in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `static tuning from profile 'ips-host' applied`)
 
-		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "ips-host")
+		g.By("Check if new custom profile applied to label node")
+		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "True")).To(o.Equal(true))
 
 		g.By("Check current profile for each node")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
 		e2e.Logf("Current profile for each node: \n%v", output)
+
+		//The invalid value won't impact default value of fs.mount-max
+		g.By("Assert if the value of sysctl fs.mount-max still use default value")
+		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "fs.mount-max", defaultMaxMapCount)
+
+		//setting an new value of fs.mount-max for ips-host profile
+		g.By("Update ips-host profile with new value of fs.mount-max = 868686")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=fs.mount-max", "SYSCTLVALUE1=868686", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
+
+		g.By("Assert active and recommended profile (ips-host) match in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `active and recommended profile \(ips-host\) match`)
+
+		g.By("Check if new custom profile applied to label node")
+		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
+
+		g.By("Check current profile for each node")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		//The invalid value won't impact default value of fs.mount-max
+		g.By("Assert if the new value of sysctl fs.mount-max take effective, expected value is 868686")
+		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "fs.mount-max", "868686")
 	})
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-39123-NTO Operator will update tuned after changing included profile [Disruptive] [Slow]", func() {
 		// test requires NTO to be installed
@@ -1550,7 +1578,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-optimize", "worker-optimize", 480)
 	})
 
-	g.It("Author:liqcui-Medium-36152-NTO Get metrics and alerts", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-36152-NTO Get metrics and alerts", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")

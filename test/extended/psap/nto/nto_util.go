@@ -949,3 +949,42 @@ func implStringArrayContains(stringArray []string, name string) bool {
 	}
 	return false
 }
+
+// getValueOfSysctlByName parses out the line determining sysctl in the kernel
+func getValueOfSysctlByName(oc *exutil.CLI, ntoNamespace, tunedNodeName, sysctlparm string) string {
+
+	var sysctlValue string
+	defaultValues, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "sysctl", sysctlparm).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(defaultValues).NotTo(o.BeEmpty())
+	sysctlArray := strings.Split(defaultValues, "=")
+	sysctlLen := len(sysctlArray)
+	if sysctlLen == 2 {
+		sysctlValue = strings.TrimSpace(sysctlArray[1])
+	}
+	return sysctlValue
+}
+
+// assertNTOCustomProfileStatus return correct profile status
+func assertNTOCustomProfileStatus(oc *exutil.CLI, ntoNamespace string, tunedNodeName string, expectedProfile string, expectedAppliedStatus string, expectedDegradedStatus string) bool {
+
+	currentProfile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile", tunedNodeName, `-ojsonpath={.status.tunedProfile}`).Output()
+	currentProfile = strings.Trim(currentProfile, "'")
+	e2e.Logf("currentProfile is %v", currentProfile)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(currentProfile).NotTo(o.BeEmpty())
+
+	appliedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+	appliedStatus = strings.Trim(appliedStatus, "'")
+	e2e.Logf("appliedStatus is %v", appliedStatus)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(appliedStatus).NotTo(o.BeEmpty())
+
+	degradedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Degraded")].status}'`).Output()
+	degradedStatus = strings.Trim(degradedStatus, "'")
+	e2e.Logf("degradedStatus is %v", degradedStatus)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(degradedStatus).NotTo(o.BeEmpty())
+
+	return appliedStatus == expectedAppliedStatus && degradedStatus == expectedDegradedStatus && currentProfile == expectedProfile
+}
