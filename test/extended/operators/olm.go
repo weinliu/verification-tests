@@ -588,7 +588,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		deps := []string{"catalog-operator", "olm-operator", "package-server-manager", "packageserver"}
 		for _, value := range deps {
 			logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(fmt.Sprintf("deployment/%s", value), "-n", "openshift-operator-lifecycle-manager").Output()
-			if err != nil || strings.Contains(logs, "fatal error") {
+			if err != nil || strings.Contains(logs, "fatal error") || strings.Contains(logs, "TLS handshake error") || strings.Contains(logs, "x509") {
 				e2e.Failf("error:%v, %s get fatal error:%v", err, value, logs)
 			}
 		}
