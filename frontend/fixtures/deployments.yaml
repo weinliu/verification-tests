@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hello-openshift
+  name: ocp50657-example-deployment
 spec:
   selector:
     matchLabels:
