@@ -120,4 +120,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		e2e.Logf("cpmsOut:%s", cpmsOut)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Critical-22612-Cluster could scale up/down after upgrade [Disruptive][Slow]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "ibmcloud", "alibabacloud", "nutanix", "openstack")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-22612"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Scale up machineset")
+		exutil.ScaleMachineSet(oc, machinesetName, 1)
+
+		g.By("Scale down machineset")
+		exutil.ScaleMachineSet(oc, machinesetName, 0)
+	})
 })

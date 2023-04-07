@@ -161,6 +161,7 @@ func ScaleMachineSet(oc *CLI, machineSetName string, replicas int) {
 	e2e.Logf("Scaling MachineSets ...")
 	_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), MapiMachineset, machineSetName, "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	WaitForMachinesRunning(oc, replicas, machineSetName)
 }
 
 // DeleteMachine delete a machine
@@ -216,6 +217,21 @@ func WaitForMachineProvisioned(oc *CLI, machineSetName string) {
 		return true, nil
 	})
 	AssertWaitPollNoErr(err, "Check machine phase failed")
+}
+
+// WaitForMachinesDisapper check if all the machines are Dissappered in a MachineSet
+func WaitForMachinesDisapper(oc *CLI, machineSetName string) {
+	e2e.Logf("Waiting for the machines Dissapper ...")
+	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
+		machineNames, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", machineAPINamespace).Output()
+		if machineNames != "" {
+			e2e.Logf(" Still have machines are not Disappered yet and waiting up to 1 minutes ...")
+			return false, nil
+		}
+		e2e.Logf("All machines are Disappered")
+		return true, nil
+	})
+	AssertWaitPollNoErr(err, "Wait machine disappear failed.")
 }
 
 // WaitForMachinesRunningByLabel check if all the machines with the specific labels are Running
