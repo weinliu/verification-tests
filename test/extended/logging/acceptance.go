@@ -117,6 +117,11 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			e2e.Logf("\nthe %s log labels are: %v\n", logType, labels)
 		}
 
+		journalLog, err := lc.searchLogsInLoki("infrastructure", `{log_type = "infrastructure", kubernetes_namespace_name !~ ".+"}`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		journalLogs := extractLogEntities(journalLog)
+		o.Expect(len(journalLogs) > 0).Should(o.BeTrue(), "can't find journal logs in lokistack")
+
 		res, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\"}")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(res.Data.Result) == 0).Should(o.BeTrue())

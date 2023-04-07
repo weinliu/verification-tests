@@ -489,6 +489,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
 			e2e.Logf("App log count check complete with Success!")
 
+			journalLog, err := lc.searchLogsInLoki("infrastructure", `{log_type = "infrastructure", kubernetes_namespace_name !~ ".+"}`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			journalLogs := extractLogEntities(journalLog)
+			o.Expect(len(journalLogs) > 0).Should(o.BeTrue(), "can't find journal logs in lokistack")
+
 			g.By("Checking Audit logs")
 			//Audit logs should not be found for this case
 			res, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\"}")
