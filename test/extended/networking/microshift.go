@@ -337,7 +337,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("MicroShiftOnly-Author:anusaxen-High-60746-Check nodeport service works well on Microshift", func() {
+	g.It("MicroShiftOnly-Author:anusaxen-High-60746-Check nodeport service works well on Microshift[Disruptive]", func() {
 		var (
 			caseID           = "60746"
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
@@ -379,6 +379,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		svcURL := net.JoinHostPort(nodeIP, nodePort)
 		g.By("curl NodePort Service")
 		_, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("reload the firewalld and then check nodeport service still can be worked")
+		_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "firewall-cmd --reload")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		firewallState, err := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "firewall-cmd --state")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(firewallState).To(o.ContainSubstring("running"))
+
+		_, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "10")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Delete test-service-etp-cluster from ns and rec-reate it with ETP type Local")
@@ -667,6 +677,49 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		output2, err := e2eoutput.RunHostCmd(e2eTestNamespace, hellosdnPodName[0], "cat /sys/class/net/eth0/mtu")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output2).Should(o.ContainSubstring(mtu))
+
+	})
+	// author: zzhao@redhat.com
+	g.It("MicroShiftOnly-Author:zzhao-Medium-61161-Expose coredns forward as configurable option[Disruptive]", func() {
+
+		g.By("Check the default coredns config file")
+		dnsConfigMap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "cm", "dns-default", "-o=jsonpath={.data.Corefile}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(dnsConfigMap).Should(o.ContainSubstring("forward . /etc/resolv.conf"))
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName := nodeList.Items[0].Name
+
+		g.By("cp the default dns config file to a new path")
+		cpNewConfig := "mkdir /run/systemd/resolve && cp /etc/resolv.conf /run/systemd/resolve/resolv.conf && systemctl restart microshift"
+		rmDnsConfig := "rm -fr /run/systemd/resolve && systemctl restart microshift"
+		defer func() {
+			_, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", rmDnsConfig)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			output := wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+				dnsConfigMap, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "cm", "dns-default", "-o=jsonpath={.data.Corefile}").Output()
+				if strings.Contains(dnsConfigMap, "/etc/resolv.conf") {
+					return true, nil
+				}
+				e2e.Logf("dns config has not been updated")
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(output, fmt.Sprintf("Fail to updated dns configmap:%s", output))
+		}()
+		_, err1 := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cpNewConfig)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		g.By("Check the coredns is consuming the new config file")
+		output := wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+			dnsConfigMap, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "cm", "dns-default", "-o=jsonpath={.data.Corefile}").Output()
+			if strings.Contains(dnsConfigMap, "/run/systemd/resolve/resolv.conf") {
+				return true, nil
+			}
+			e2e.Logf("dns config has not been updated")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(output, fmt.Sprintf("Fail to updated dns configmap:%s", output))
 
 	})
 })
