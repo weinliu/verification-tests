@@ -213,4 +213,66 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(gjson.Get(volumeInfo, `Volumes.0.Encrypted`).Bool()).Should(o.BeTrue())
 		o.Expect(gjson.Get(volumeInfo, `Volumes.0.KmsKeyId`).String()).Should(o.Equal(myKmsKeyArn))
 	})
+
+	// author: pewang@redhat.com
+	// AWS EBS CSI Driver v1.15.0 new feature, rebase from OCP 4.13
+	// https://issues.redhat.com/browse/STOR-1018
+	// https://github.com/openshift/aws-ebs-csi-driver/pull/215
+	// TODO: When rebase AWS EBS CSI Driver v1.17.0+ add the [Filesystem] [xfs] test scenario
+	// https://github.com/kubernetes-sigs/aws-ebs-csi-driver/blob/master/CHANGELOG.md#notable-changes
+
+	type caseItem struct {
+		caseID         string
+		testParameters map[string]string
+	}
+
+	awsEBSvolFsFormatBlocksizeTestSuit := []caseItem{
+		{"62149", map[string]string{"fsType": "ext2"}}, // OCP-62149 - [AWS-EBS-CSI] [Filesystem] [ext2] should support specifying block size for filesystem format
+		{"62192", map[string]string{"fsType": "ext3"}}, // OCP-62192 - [AWS-EBS-CSI] [Filesystem] [ext3] should support specifying block size for filesystem format
+		{"62193", map[string]string{"fsType": "ext4"}}, // OCP-62193 - [AWS-EBS-CSI] [Filesystem] [ext4] should support specifying block size for filesystem format
+	}
+	for _, testCase := range awsEBSvolFsFormatBlocksizeTestSuit {
+		fsType := testCase.testParameters["fsType"]
+		g.It("ROSA-OSD_CCS-Author:pewang-High-"+testCase.caseID+"-[AWS-EBS-CSI] [Filesystem] ["+fsType+"] should support specifying block size for filesystem format", func() {
+			// Set the resource objects definition for the scenario
+			var (
+				myStorageClass               = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("ebs.csi.aws.com"))
+				myPvc                        = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(myStorageClass.name))
+				myPod                        = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(myPvc.name))
+				volumeType                   = "gp3"
+				fsFormatBlockSize            = fmt.Sprint(getRandomNum(1000, 5000))
+				validFsFormatBlockSizeValues = []string{"1024", "2048", "4096"}
+			)
+
+			g.By("# Create new project for the scenario")
+			oc.SetupProject()
+
+			g.By("# Create aws-ebs-csi storageclass with specifying block size for filesystem format")
+			if isAwsOutpostCluster(oc) {
+				volumeType = "gp2"
+			}
+			myStorageclassParameters := map[string]interface{}{
+				"parameters":           map[string]string{"type": volumeType, "blocksize": fsFormatBlockSize, "csi.storage.k8s.io/fstype": fsType},
+				"allowVolumeExpansion": true,
+			}
+			myStorageClass.createWithExtraParameters(oc, myStorageclassParameters)
+			defer myStorageClass.deleteAsAdmin(oc)
+
+			g.By("# Create a pvc with the aws-ebs-csi storageclass")
+			myPvc.create(oc)
+			defer myPvc.deleteAsAdmin(oc)
+
+			g.By("# Create pod with the created pvc and wait for the pod ready")
+			myPod.create(oc)
+			defer myPod.deleteAsAdmin(oc)
+			myPod.waitReady(oc)
+
+			g.By("# Check the volume consumed by pod could be read and written")
+			myPod.checkMountedVolumeCouldRW(oc)
+
+			g.By("# Check the pv volumeAttributes have the filesystem format blocksize setting")
+			o.Expect(checkVolumeCsiContainAttributes(oc, myPvc.getVolumeName(oc), `"blocksize":"`+fsFormatBlockSize+`"`)).Should(o.BeTrue(), "The pv volumeAttributes don't have the filesystem format blocksize setting")
+			o.Expect(myPod.execCommand(oc, "stat -f /mnt/storage/|grep -Eo '^Block size: [0-9]{4}'|awk '{print $3}'")).Should(o.BeElementOf(validFsFormatBlockSizeValues), "The actual filesystem format blocksize setting is not as expected")
+		})
+	}
 })
