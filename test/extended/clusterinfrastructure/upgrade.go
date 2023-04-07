@@ -4,6 +4,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
@@ -109,5 +110,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.metadataServiceOptions.authentication}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring("Required"))
+	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-PstChkUpgrade-Author:huliu-Medium-62265-Ensure controlplanemachineset is generated automatically after upgrade", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
+		cpmsOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
+		e2e.Logf("cpmsOut:%s", cpmsOut)
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 })
