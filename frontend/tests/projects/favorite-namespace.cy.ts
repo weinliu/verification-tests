@@ -11,7 +11,6 @@ describe("namespace dropdown favorite test", () => {
   });
 
   after(() => {
-    cy.logout();
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 

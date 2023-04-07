@@ -8,7 +8,7 @@ export const namespaceDropdown = {
     clickTheDropdown: () => {
         cy.byLegacyTestID('namespace-bar-dropdown')
             .within(($div) => {
-                cy.get('button').click()
+                cy.get('button[class~=co-namespace-dropdown__menu-toggle]').click()
             })
     },
     getProjectsDisplayed: () => {

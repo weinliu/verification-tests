@@ -17,12 +17,12 @@ export const operatorHubPage = {
       .find(`[data-test="catalogSourceDisplayName-${name}"]`)
   },
   checkSourceCheckBox: (name: string) => {
-    cy.get('form[data-test-group-name="catalogSourceDisplayName"]')
+    cy.get('form[data-test-group-name="catalogSourceDisplayName"]', {timeout: 60000})
       .find(`[data-test="catalogSourceDisplayName-${name}"]`)
       .find('[type="checkbox"]').check()
   },
   uncheckSourceCheckBox: (name: string) => {
-    cy.get('form[data-test-group-name="catalogSourceDisplayName"]')
+    cy.get('form[data-test-group-name="catalogSourceDisplayName"]', {timeout: 60000})
       .find(`[data-test="catalogSourceDisplayName-${name}"]`)
       .find('[type="checkbox"]').uncheck()
   },
