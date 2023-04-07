@@ -21,10 +21,6 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	)
 
 	g.BeforeEach(func() {
-		platform := checkPlatform(oc)
-		if !strings.Contains(platform, "baremetal") && !strings.Contains(platform, "none") && !strings.Contains(platform, "vsphere") && !strings.Contains(platform, "openstack") {
-			g.Skip("Skipping for unsupported platform, not baremetal!")
-		}
 
 		namespaceTemplate := generateTemplateAbsolutePath("namespace-template.yaml")
 		operatorGroupTemplate := generateTemplateAbsolutePath("operatorgroup-template.yaml")
@@ -60,6 +56,10 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:qiowang-High-46380-High-46382-High-46379-Create/Disable/Remove interface on node [Disruptive] [Slow]", func() {
+		g.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitableForNMState(oc)) {
+			g.Skip("Skipping for unsupported platform!")
+		}
 
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -209,6 +209,10 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46329-Configure bond on node [Disruptive]", func() {
+		g.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitableForNMState(oc)) {
+			g.Skip("Skipping for unsupported platform!")
+		}
 
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -320,6 +324,10 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46383-VLAN [Disruptive]", func() {
+		g.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitableForNMState(oc)) {
+			g.Skip("Skipping for unsupported platform!")
+		}
 
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -429,6 +437,10 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-53346-Verify that it is able to reset linux-bridge vlan-filtering with vlan is empty [Disruptive]", func() {
+		g.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitableForNMState(oc)) {
+			g.Skip("Skipping for unsupported platform!")
+		}
 
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -584,6 +596,11 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46327-Medium-46795-Static IP and Route can be applied [Disruptive]", func() {
+		g.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitableForNMState(oc)) {
+			g.Skip("Skipping for unsupported platform!")
+		}
+
 		var (
 			ipAddrV4      = "192.0.2.251"
 			destAddrV4    = "198.51.100.0/24"
@@ -731,6 +748,10 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-54350-Verify that nmstate work well with SDN egressIP [Disruptive]", func() {
+		g.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitableForNMState(oc)) {
+			g.Skip("Skipping for unsupported platform!")
+		}
 		networkType := checkNetworkType(oc)
 		if !strings.Contains(networkType, "sdn") {
 			g.Skip("Skip for not sdn cluster !!!")

@@ -228,3 +228,12 @@ func getDefaultSubnetForSpecificSDNNode(oc *exutil.CLI, nodeName string) string 
 
 	return sub1
 }
+
+func isPlatformSuitableForNMState(oc *exutil.CLI) bool {
+	platform := checkPlatform(oc)
+	if !strings.Contains(platform, "baremetal") && !strings.Contains(platform, "none") && !strings.Contains(platform, "vsphere") && !strings.Contains(platform, "openstack") {
+		e2e.Logf("Skipping for unsupported platform, not baremetal/vsphere/openstack!")
+		return false
+	}
+	return true
+}
