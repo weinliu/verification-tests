@@ -1,6 +1,7 @@
 package node
 
 import (
+	"os/exec"
 	"path/filepath"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -772,6 +773,18 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("2) check conmon value from crio config")
 		//we need check every node for the conmon = ""
 		checkConmonForAllNode(oc)
+	})
+
+	g.It("Author:asahay-Medium-57332-collecting the audit log with must gather", func() {
+
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-57332").Output()
+		g.By("Running the must gather command \n")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-57332", "--", "/usr/bin/gather_audit_logs").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("check the must-gather result")
+		_, err = exec.Command("bash", "-c", "ls -l /tmp/must-gather-57332").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 	})
 })
 
