@@ -9,6 +9,7 @@ import (
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	//e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota", func() {
@@ -713,9 +714,65 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		g.By("Check Runtime Request Timeout")
 		runTimeTimeout(oc)
-
 	})
 
+	//author: minmli@redhat.com
+	g.It("NonPreRelease-PreChkUpgrade-Author:minmli-High-45351-prepare to check crioConfig[Disruptive][Slow]", func() {
+		g.By("1) oc debug one worker and edit /etc/crio/crio.conf")
+		// we update log_level = "debug" in /etc/crio/crio.conf
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodename := nodeList.Items[0].Name
+		_, err = exutil.DebugNodeWithChroot(oc, nodename, "/bin/bash", "-c", "sed -i 's/log_level = \"info\"/log_level = \"debug\"/g' /etc/crio/crio.conf")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2) create a ContainerRuntimeConfig to set overlaySize")
+		ctrcfgOverlay.name = "ctrcfg-45351"
+		ctrcfgOverlay.overlay = "35G"
+		mcpName := "worker"
+		ctrcfgOverlay.create(oc)
+
+		g.By("3) check mcp finish rolling out")
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "mcp update failed")
+
+		g.By("4) check overlaySize update as expected")
+		err = checkOverlaySize(oc, ctrcfgOverlay.overlay)
+		exutil.AssertWaitPollNoErr(err, "overlaySize not update as expected")
+	})
+
+	//author: minmli@redhat.com
+	g.It("NonPreRelease-PstChkUpgrade-Author:minmli-High-45351-post check crioConfig[Disruptive][Slow]", func() {
+		g.By("1) check overlaySize don't change after upgrade")
+		ctrcfgOverlay.name = "ctrcfg-45351"
+		ctrcfgOverlay.overlay = "35G"
+
+		defer func() {
+			g.By("Delete the configRuntimeConfig")
+			cleanupObjectsClusterScope(oc, objectTableRefcscope{"ContainerRuntimeConfig", ctrcfgOverlay.name})
+			g.By("Check mcp finish rolling out")
+			err := checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "mcp is not updated")
+		}()
+
+		defer func() {
+			g.By("Restore /etc/crio/crio.conf")
+			nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, node := range nodeList.Items {
+				nodename := node.Name
+				_, err = exutil.DebugNodeWithChroot(oc, nodename, "/bin/bash", "-c", "sed -i 's/log_level = \"debug\"/log_level = \"info\"/g' /etc/crio/crio.conf")
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+
+		err := checkOverlaySize(oc, ctrcfgOverlay.overlay)
+		exutil.AssertWaitPollNoErr(err, "overlaySize change after upgrade")
+
+		g.By("2) check conmon value from crio config")
+		//we need check every node for the conmon = ""
+		checkConmonForAllNode(oc)
+	})
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {

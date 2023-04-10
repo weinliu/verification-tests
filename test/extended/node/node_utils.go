@@ -1084,3 +1084,40 @@ func runTimeTimeout(oc *exutil.CLI) {
 	}
 	exutil.AssertWaitPollNoErr(waitErr, "Runtime Request Timeout is not expected")
 }
+
+func checkConmonForAllNode(oc *exutil.CLI) {
+	var configStr string
+	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+		nodeName, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode Names are %v", nodeName)
+		nodes := strings.Fields(nodeName)
+
+		for _, node := range nodes {
+			nodeStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}").Output()
+			o.Expect(statusErr).NotTo(o.HaveOccurred())
+			e2e.Logf("\nNode [%s] Status is %s\n", node, nodeStatus)
+
+			if nodeStatus == "True" {
+				configStr, err := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", "crio config | grep 'conmon = \"\"'")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				if strings.Contains(string(configStr), "conmon = \"\"") {
+					e2e.Logf(" conmon check pass. \n")
+				} else {
+					e2e.Logf(" conmon check failed. \n")
+					return false, nil
+				}
+			} else {
+				e2e.Logf("\n NODES ARE NOT READY\n ")
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+
+	if waitErr != nil {
+		e2e.Logf("conmon string is:\n %v\n", configStr)
+	}
+	exutil.AssertWaitPollNoErr(waitErr, "the conmon is not as expected!")
+}
