@@ -1,7 +1,6 @@
 package workloads
 
 import (
-	"encoding/json"
 	"fmt"
 	o "github.com/onsi/gomega"
 	"io/ioutil"
@@ -497,16 +496,9 @@ func getSyncGroup(oc *exutil.CLI, syncConfig string) string {
 func getLeaderKCM(oc *exutil.CLI) string {
 	var leaderKCM string
 	e2e.Logf("Get the control-plane from configmap")
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/kube-controller-manager", "-n", "kube-system", "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease/kube-controller-manager", "-n", "kube-system", "-o=jsonpath={.spec.holderIdentity}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("Print the output: %v ", output)
-	contronplanInfo := &ControlplaneInfo{}
-	e2e.Logf("convert to json file ")
-	if err = json.Unmarshal([]byte(output), &contronplanInfo); err != nil {
-		e2e.Failf("unable to decode with error: %v", err)
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
-	leaderIP := strings.Split(contronplanInfo.HolderIdentity, "_")[0]
+	leaderIP := strings.Split(output, "_")[0]
 
 	out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
