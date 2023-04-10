@@ -506,12 +506,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("2. Get the metrics of " + metricName + " when ovn controller connected to SB DB")
 		prometheusURL := "localhost:29105/metrics"
-		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-		metricValue := strings.TrimSpace(string(metricOutput))
-		e2e.Logf("The output of the %s is : %v", metricName, metricValue)
-		o.Expect(metricValue).To(o.Equal("1"))
+		metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+			metricValue := strings.TrimSpace(string(metricOutput))
+			e2e.Logf("The output of the %s is : %v", metricName, metricValue)
+			if metricValue == "1" {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
 
 		g.By("3. Configure iptables to block connection from the worker node ovn controller to SB DB")
 		for _, iptablesCmd := range iptablesCmdList {
