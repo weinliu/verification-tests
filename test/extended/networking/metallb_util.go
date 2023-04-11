@@ -3,6 +3,7 @@ package networking
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,9 +49,43 @@ type addressPoolResource struct {
 }
 
 type loadBalancerServiceResource struct {
+	name                          string
+	namespace                     string
+	labelKey                      string
+	labelValue                    string
+	externaltrafficpolicy         string
+	allocateLoadBalancerNodePorts bool
+	template                      string
+}
+
+type ipAddressPoolResource struct {
+	name                      string
+	namespace                 string
+	label1                    string
+	value1                    string
+	priority                  uint
+	addresses                 []string
+	namespaces                []string
+	serviceLabelKey           string
+	serviceLabelValue         string
+	serviceSelectorKey        string
+	serviceSelectorOperator   string
+	serviceSelectorValue      []string
+	namespaceLabelKey         string
+	namespaceLabelValue       string
+	namespaceSelectorKey      string
+	namespaceSelectorOperator string
+	namespaceSelectorValue    []string
+	template                  string
+}
+type l2AdvertisementResource struct {
 	name                  string
 	namespace             string
-	externaltrafficpolicy string
+	interfaces            []string
+	ipAddressPools        []string
+	nodeSelectorsKey      string
+	nodeSelectorsOperator string
+	nodeSelectorValues    []string
 	template              string
 }
 
@@ -187,17 +222,28 @@ func createAddressPoolCR(oc *exutil.CLI, addresspool addressPoolResource, addres
 }
 
 func createLoadBalancerService(oc *exutil.CLI, loadBalancerSvc loadBalancerServiceResource, loadBalancerServiceTemplate string) (status bool) {
-	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", loadBalancerSvc.template, "-p", "NAME="+loadBalancerSvc.name, "NAMESPACE="+loadBalancerSvc.namespace, "EXTERNALTRAFFICPOLICY="+loadBalancerSvc.externaltrafficpolicy)
+	var msg string
+	svcFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", loadBalancerSvc.template, "-p", "NAME="+loadBalancerSvc.name, "NAMESPACE="+loadBalancerSvc.namespace, "LABELKEY1="+loadBalancerSvc.labelKey, "LABELVALUE1="+loadBalancerSvc.labelValue,
+		"EXTERNALTRAFFICPOLICY="+loadBalancerSvc.externaltrafficpolicy, "NODEPORTALLOCATION="+strconv.FormatBool(loadBalancerSvc.allocateLoadBalancerNodePorts)).OutputToFile(getRandomString() + "svc.json")
+	g.By("Creating service file")
 	if err != nil {
-		e2e.Logf("Error creating LoadBalancerService %v", err)
+		e2e.Logf("Error creating LoadBalancerService %v with %v", err, svcFile)
 		return false
 	}
+
+	g.By("Applying deployment file " + svcFile)
+	msg, err = oc.AsAdmin().Run("apply").Args("-f", svcFile, "-n", loadBalancerSvc.namespace).Output()
+	if err != nil {
+		e2e.Logf("Could not apply svcFile %v %v", msg, err)
+		return false
+	}
+
 	return true
 }
 
 func checkLoadBalancerSvcStatus(oc *exutil.CLI, namespace string, svcName string) error {
 
-	return wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+	return wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
 		e2e.Logf("Checking status of service %s", svcName)
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}").Output()
 		if err != nil {
@@ -236,19 +282,22 @@ func validateService(oc *exutil.CLI, nodeName string, svcExternalIP string) bool
 
 func deleteMetalLBCR(oc *exutil.CLI, rs metalLBCRResource) {
 	e2e.Logf("delete %s %s in namespace %s", "metallb", rs.name, rs.namespace)
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("metallb", rs.name, "-n", rs.namespace).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("metallb", rs.name, "-n", rs.namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func deleteAddressPool(oc *exutil.CLI, rs addressPoolResource) {
 	e2e.Logf("delete %s %s in namespace %s", "addresspool", rs.name, rs.namespace)
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("addresspool", rs.name, "-n", rs.namespace).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("addresspool", rs.name, "-n", rs.namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func obtainMACAddressForIP(oc *exutil.CLI, nodeName string, svcExternalIP string, arpReuests int) string {
 	defInterface, intErr := getDefaultInterface(oc)
 	o.Expect(intErr).NotTo(o.HaveOccurred())
 	cmd := fmt.Sprintf("arping -I %s %s -c %d", defInterface, svcExternalIP, arpReuests)
-	output, arpErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bin/sh", "-c", cmd)
+	//https://issues.redhat.com/browse/OCPBUGS-10321 DebugNodeWithOptionsAndChroot replaced
+	output, arpErr := exutil.DebugNodeWithOptions(oc, nodeName, []string{"-q"}, "bin/sh", "-c", cmd)
 	o.Expect(arpErr).NotTo(o.HaveOccurred())
 	e2e.Logf("ARP request response %s", output)
 	re := regexp.MustCompile(`([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})`)
@@ -261,34 +310,84 @@ func obtainMACAddressForIP(oc *exutil.CLI, nodeName string, svcExternalIP string
 }
 
 func getNodeAnnouncingL2Service(oc *exutil.CLI, svcName string, namespace string) string {
-	var allEvents []string
-	var svcEvents string
 	fieldSelectorArgs := fmt.Sprintf("reason=nodeAssigned,involvedObject.kind=Service,involvedObject.name=%s", svcName)
-	sortByArgs := fmt.Sprintf("=.lastTimestamp")
-	svcEvents, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", namespace, "--field-selector", fieldSelectorArgs, "--sort-by", sortByArgs).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(svcEvents).ShouldNot(o.ContainSubstring("No events were found"))
-	e2e.Logf("Events %s for %s in namespace %s", svcEvents, svcName, namespace)
-	for _, index := range strings.Split(svcEvents, "\n") {
-		if strings.Contains(index, "announcing from node") {
-			re := regexp.MustCompile(`"([^\"]+)"`)
-			event := re.FindString(index)
-			allEvents = append(allEvents, event)
+	var nodeName string
+	errCheck := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		var allEvents []string
+		var svcEvents string
+		svcEvents, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", namespace, "--field-selector", fieldSelectorArgs).Output()
+		if err != nil {
+			return false, nil
 		}
-	}
+		if !strings.Contains(svcEvents, "No resources found") {
+			for _, index := range strings.Split(svcEvents, "\n") {
+				if strings.Contains(index, "announcing from node") {
+					e2e.Logf("Processing event service %s", index)
+					re := regexp.MustCompile(`"([^\"]+)"`)
+					event := re.FindString(index)
+					allEvents = append(allEvents, event)
+				}
+			}
+			nodeName = strings.Trim(allEvents[len(allEvents)-1], "\"")
+			return true, nil
+		}
+		return false, nil
 
-	return strings.Trim(allEvents[len(allEvents)-1], "\"")
-
+	})
+	o.Expect(nodeName).NotTo(o.BeEmpty())
+	o.Expect(errCheck).NotTo(o.HaveOccurred())
+	return nodeName
 }
 
 func isPlatformSuitable(oc *exutil.CLI) bool {
-
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if !strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
-		return false
+	if strings.Contains(msg, "sriov.openshift-qe.sdn.com") || strings.Contains(msg, "offload.openshift-qe.sdn.com") {
+		return true
 
+	}
+	return false
+
+}
+
+func createIPAddressPoolCR(oc *exutil.CLI, ipAddresspool ipAddressPoolResource, addressPoolTemplate string) (status bool) {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipAddresspool.template, "-p", "NAME="+ipAddresspool.name, "NAMESPACE="+ipAddresspool.namespace, "PRIORITY="+strconv.Itoa(int(ipAddresspool.priority)), "ADDRESS1="+ipAddresspool.addresses[0], "ADDRESS2="+ipAddresspool.addresses[1],
+		"NAMESPACE1="+ipAddresspool.namespaces[0], "NAMESPACE2="+ipAddresspool.namespaces[1],
+		"MLSERVICEKEY1="+ipAddresspool.serviceLabelKey, "MLSERVICEVALUE1="+ipAddresspool.serviceLabelValue, "MESERVICEKEY1="+ipAddresspool.serviceSelectorKey, "MESERVICEOPERATOR1="+ipAddresspool.serviceSelectorOperator, "MESERVICEKEY1VALUE1="+ipAddresspool.serviceSelectorValue[0],
+		"MLNAMESPACEKEY1="+ipAddresspool.serviceLabelKey, "MLNAMESPACEVALUE1="+ipAddresspool.serviceLabelValue, "MENAMESPACEKEY1="+ipAddresspool.namespaceSelectorKey, "MENAMESPACEOPERATOR1="+ipAddresspool.namespaceSelectorOperator, "MENAMESPACEKEY1VALUE1="+ipAddresspool.namespaceSelectorValue[0])
+	if err != nil {
+		e2e.Logf("Error creating ip addresspool %v", err)
+		return false
 	}
 	return true
 
+}
+func deleteIPAddressPool(oc *exutil.CLI, rs ipAddressPoolResource) {
+	e2e.Logf("delete %s %s in namespace %s", "ipaddresspool", rs.name, rs.namespace)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ipaddresspool", rs.name, "-n", rs.namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func createL2AdvertisementCR(oc *exutil.CLI, l2advertisement l2AdvertisementResource, l2AdvertisementTemplate string) (status bool) {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", l2advertisement.template, "-p", "NAME="+l2advertisement.name, "NAMESPACE="+l2advertisement.namespace,
+		"IPADDRESSPOOL1="+l2advertisement.ipAddressPools[0], "INTERFACE1="+l2advertisement.interfaces[0], "INTERFACES2="+l2advertisement.interfaces[1], "INTERFACES3="+l2advertisement.interfaces[2],
+		"WORKER1="+l2advertisement.nodeSelectorValues[0], "WORKER2="+l2advertisement.nodeSelectorValues[1])
+	if err != nil {
+		e2e.Logf("Error creating l2advertisement %v", err)
+		return false
+	}
+	return true
+
+}
+
+func deleteL2Advertisement(oc *exutil.CLI, rs l2AdvertisementResource) {
+	e2e.Logf("delete %s %s in namespace %s", "l2advertisement", rs.name, rs.namespace)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("l2advertisement", rs.name, "-n", rs.namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func getLoadBalancerSvcNodePort(oc *exutil.CLI, namespace string, svcName string) string {
+	nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ports[0].nodePort}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return nodePort
 }

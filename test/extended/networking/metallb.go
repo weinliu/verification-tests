@@ -8,18 +8,20 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN metallb", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc          = exutil.NewCLI("networking-metallb", exutil.KubeConfigPath())
-		opNamespace = "metallb-system"
-		opName      = "metallb-operator"
-		testDataDir = exutil.FixturePath("testdata", "networking/metallb")
-		l2Addresses = [2]string{"192.168.111.60-192.168.111.69", "192.168.111.70-192.168.111.79"}
+		oc                        = exutil.NewCLI("networking-metallb", exutil.KubeConfigPath())
+		opNamespace               = "metallb-system"
+		opName                    = "metallb-operator"
+		serviceLabelKey           = "environ"
+		serviceLabelValue         = "Test"
+		serviceNodePortAllocation = true
+		testDataDir               = exutil.FixturePath("testdata", "networking/metallb")
+		l2Addresses               = [2]string{"192.168.111.60-192.168.111.69", "192.168.111.70-192.168.111.79"}
 	)
 
 	g.BeforeEach(func() {
@@ -48,6 +50,17 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		}
 
 		operatorInstall(oc, sub, ns, og)
+		g.By("Making sure CRDs are successfully installed")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "addresspools.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "bfdprofiles.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "bgpadvertisements.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "bgppeers.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "communities.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "ipaddresspools.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "l2advertisements.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
 
 	})
 
@@ -107,18 +120,12 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		g.By("SUCCESS - MetalLB CR Created")
 
 		g.By("2. Create Layer2 addresspool")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		var addresses []string
-		for i := 0; i <= (len(l2Addresses) - 1); i++ {
-			addresses = append(addresses, l2Addresses[i])
-		}
 		addresspoolTemplate := filepath.Join(testDataDir, "addresspool-template.yaml")
 		addresspool := addressPoolResource{
 			name:      "addresspool-l2",
 			namespace: opNamespace,
 			protocol:  "layer2",
-			addresses: addresses,
+			addresses: l2Addresses[:],
 			template:  addresspoolTemplate,
 		}
 		defer deleteAddressPool(oc, addresspool)
@@ -134,20 +141,26 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 		g.By("3.2 Create a service with extenaltrafficpolicy local")
 		svc1 := loadBalancerServiceResource{
-			name:                  "hello-world-local",
-			namespace:             ns,
-			externaltrafficpolicy: "Local",
-			template:              loadBalancerServiceTemplate,
+			name:                          "hello-world-local",
+			namespace:                     ns,
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			allocateLoadBalancerNodePorts: serviceNodePortAllocation,
+			externaltrafficpolicy:         "Local",
+			template:                      loadBalancerServiceTemplate,
 		}
 		result = createLoadBalancerService(oc, svc1, loadBalancerServiceTemplate)
 		o.Expect(result).To(o.BeTrue())
 
 		g.By("3.3 Create a service with extenaltrafficpolicy Cluster")
 		svc2 := loadBalancerServiceResource{
-			name:                  "hello-world-cluster",
-			namespace:             ns,
-			externaltrafficpolicy: "Cluster",
-			template:              loadBalancerServiceTemplate,
+			name:                          "hello-world-cluster",
+			namespace:                     ns,
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			allocateLoadBalancerNodePorts: serviceNodePortAllocation,
+			externaltrafficpolicy:         "Cluster",
+			template:                      loadBalancerServiceTemplate,
 		}
 		result = createLoadBalancerService(oc, svc2, loadBalancerServiceTemplate)
 		o.Expect(result).To(o.BeTrue())
@@ -155,12 +168,14 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		g.By("3.3 SUCCESS - Services created successfully")
 
 		g.By("3.4 Validate LoadBalancer services")
-		err = checkLoadBalancerSvcStatus(oc, svc1.namespace, svc1.name)
+		masterNodeList, err1 := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		err := checkLoadBalancerSvcStatus(oc, svc1.namespace, svc1.name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		svcIP := getLoadBalancerSvcIP(oc, svc1.namespace, svc1.name)
 		e2e.Logf("The service %s External IP is %q", svc1.name, svcIP)
-		result = validateService(oc, nodeList.Items[2].Name, svcIP)
+		result = validateService(oc, masterNodeList[0], svcIP)
 		o.Expect(result).To(o.BeTrue())
 
 		err = checkLoadBalancerSvcStatus(oc, svc2.namespace, svc2.name)
@@ -168,7 +183,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 		svcIP = getLoadBalancerSvcIP(oc, svc2.namespace, svc2.name)
 		e2e.Logf("The service %s External IP is %q", svc2.name, svcIP)
-		result = validateService(oc, nodeList.Items[2].Name, svcIP)
+		result = validateService(oc, masterNodeList[0], svcIP)
 		o.Expect(result).To(o.BeTrue())
 
 	})
@@ -178,7 +193,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		g.By("Test case for bug ID 2054225")
 		g.By("0. Check the platform if it is suitable for running the test")
 		if !(isPlatformSuitable(oc)) {
-			g.Skip("These cases can only be run on networking team's private RDU2 cluster , skip for other envrionment!!!")
+			g.Skip("These cases can only be run on networking team's private RDU cluster , skip for other envrionment!!!")
 		}
 		g.By("1. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
@@ -194,21 +209,14 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		g.By("SUCCESS - MetalLB CR Created")
 
 		g.By("2. Create Layer2 addresspool")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		o.Expect(err).NotTo(o.HaveOccurred())
 		masterNodeList, err1 := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(err1).NotTo(o.HaveOccurred())
-		var addresses []string
-		for i := 0; i <= (len(l2Addresses) - 1); i++ {
-			addresses = append(addresses, l2Addresses[i])
-		}
-
 		addresspoolTemplate := filepath.Join(testDataDir, "addresspool-template.yaml")
 		addresspool := addressPoolResource{
 			name:      "addresspool-l2",
 			namespace: opNamespace,
 			protocol:  "layer2",
-			addresses: addresses,
+			addresses: l2Addresses[:],
 			template:  addresspoolTemplate,
 		}
 		defer deleteAddressPool(oc, addresspool)
@@ -224,10 +232,13 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 		g.By("3.2 Create a service with extenaltrafficpolicy Cluster")
 		svc := loadBalancerServiceResource{
-			name:                  "hello-world-cluster",
-			namespace:             ns,
-			externaltrafficpolicy: "Cluster",
-			template:              loadBalancerServiceTemplate,
+			name:                          "hello-world-cluster",
+			namespace:                     ns,
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			allocateLoadBalancerNodePorts: serviceNodePortAllocation,
+			externaltrafficpolicy:         "Cluster",
+			template:                      loadBalancerServiceTemplate,
 		}
 		result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
 		o.Expect(result).To(o.BeTrue())
@@ -235,29 +246,205 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		g.By("3.3 SUCCESS - Services created successfully")
 
 		g.By("3.4 Validate LoadBalancer services")
-		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		err := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
 		e2e.Logf("The service %s External IP is %q", svc.name, svcIP)
-		result = validateService(oc, nodeList.Items[2].Name, svcIP)
+		result = validateService(oc, masterNodeList[0], svcIP)
 		o.Expect(result).To(o.BeTrue())
 
 		g.By("4. Validate MAC Address assigned to service")
-		g.By("4.1 Obtain MAC address for  Load Balancer Service IP")
+		g.By("4.1 Get the node announcing the service IP")
+		nodeName := getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
+		e2e.Logf("Node announcing the service IP %s ", nodeName)
+
+		g.By("4.2 Obtain MAC address for  Load Balancer Service IP")
 		macAddress := obtainMACAddressForIP(oc, masterNodeList[0], svcIP, 5)
 		o.Expect(macAddress).NotTo(o.BeEmpty())
 		e2e.Logf("MAC address by ARP Lookup %s ", macAddress)
 
-		g.By("4.3 Get the node announcing the service IP")
-		nodeName := getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
-		e2e.Logf("Node announcing the service IP %s ", nodeName)
-
-		g.By("4.4 Get MAC address configured on the node interface announcing the service IP Address")
+		g.By("4.3 Get MAC address configured on the node interface announcing the service IP Address")
 		macAddress1 := getNodeMacAddress(oc, nodeName)
 		o.Expect(macAddress1).NotTo(o.BeEmpty())
 		e2e.Logf("MAC address of announcing node %s ", macAddress1)
 		o.Expect(strings.ToLower(macAddress)).Should(o.Equal(macAddress1))
+	})
+
+	g.It("Author:asood-High-60182-Verify the nodeport is not allocated to VIP based LoadBalancer service type [Disruptive]", func() {
+		var (
+			ns                   string
+			namespaces           []string
+			serviceSelectorKey   = "environ"
+			serviceSelectorValue = [1]string{"Test"}
+			namespaceLabelKey    = "region"
+			namespaceLabelValue  = [1]string{"NA"}
+			interfaces           = [3]string{"br-ex", "eno1", "eno2"}
+			workers              []string
+			ipaddresspools       []string
+			svc_names            = [2]string{"hello-world-cluster", "hello-world-local"}
+			svc_etp              = [2]string{"Cluster", "Local"}
+		)
+
+		g.By("0. Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU clusters, skip for other envrionment!!!")
+		}
+		//Two worker nodes needed to create l2advertisement object
+		workers, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !(len(workers) >= 2) {
+			g.Skip("These cases can only be run for cluster that has atleast two worker nodes")
+		}
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Incompatible networkType, skipping test!!!")
+		}
+
+		g.By("1. Create MetalLB CR")
+		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
+		metallbCR := metalLBCRResource{
+			name:      "metallb",
+			namespace: opNamespace,
+			template:  metallbCRTemplate,
+		}
+		defer deleteMetalLBCR(oc, metallbCR)
+		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
+		o.Expect(result).To(o.BeTrue())
+		g.By("SUCCESS - MetalLB CR Created")
+
+		g.By("2.1 Create two namespace")
+		for i := 0; i < 2; i++ {
+			oc.SetupProject()
+			ns = oc.Namespace()
+			namespaces = append(namespaces, ns)
+			g.By("Label the namespace")
+			_, err := oc.AsAdmin().Run("label").Args("namespace", ns, namespaceLabelKey+"="+namespaceLabelValue[0], "--overwrite").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		g.By("3. Create IP addresspool")
+		ipAddresspoolTemplate := filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+
+		ipAddresspool := ipAddressPoolResource{
+			name:                      "ipaddresspool-l2",
+			namespace:                 opNamespace,
+			addresses:                 l2Addresses[:],
+			namespaces:                namespaces[:],
+			priority:                  10,
+			serviceLabelKey:           serviceSelectorKey,
+			serviceLabelValue:         serviceSelectorValue[0],
+			serviceSelectorKey:        serviceSelectorKey,
+			serviceSelectorOperator:   "In",
+			serviceSelectorValue:      serviceSelectorValue[:],
+			namespaceLabelKey:         namespaceLabelKey,
+			namespaceLabelValue:       namespaceLabelValue[0],
+			namespaceSelectorKey:      namespaceLabelKey,
+			namespaceSelectorOperator: "In",
+			namespaceSelectorValue:    namespaceLabelValue[:],
+			template:                  ipAddresspoolTemplate,
+		}
+		defer deleteIPAddressPool(oc, ipAddresspool)
+		result = createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)
+		o.Expect(result).To(o.BeTrue())
+		ipaddresspools = append(ipaddresspools, ipAddresspool.name)
+		g.By("SUCCESS - IP Addresspool")
+
+		g.By("4. Create L2Advertisement")
+		l2AdvertisementTemplate := filepath.Join(testDataDir, "l2advertisement-template.yaml")
+		l2advertisement := l2AdvertisementResource{
+			name:               "l2-adv",
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddresspools[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: workers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer deleteL2Advertisement(oc, l2advertisement)
+		result = createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
+		o.Expect(result).To(o.BeTrue())
+
+		masterNodeList, err1 := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		loadBalancerServiceTemplate := filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
+
+		for i := 0; i < 2; i++ {
+			g.By("5.1 Create a service with extenaltrafficpolicy " + svc_etp[i])
+			svc := loadBalancerServiceResource{
+				name:                          svc_names[i],
+				namespace:                     namespaces[i],
+				externaltrafficpolicy:         svc_etp[i],
+				labelKey:                      serviceLabelKey,
+				labelValue:                    serviceLabelValue,
+				allocateLoadBalancerNodePorts: false,
+				template:                      loadBalancerServiceTemplate,
+			}
+			result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("5.2 LoadBalancer service with name " + svc_names[i])
+			g.By("5.2.1 Check LoadBalancer service is created")
+			err := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("5.2.2 Get LoadBalancer service IP")
+			svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+			g.By("5.2.3 Get LoadBalancer service IP announcing node")
+			nodeName := getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
+			e2e.Logf("%s is announcing the service %s with IP %s ", nodeName, svc.name, svcIP)
+			g.By("5.2.4 Validate service")
+			result = validateService(oc, masterNodeList[0], svcIP)
+			o.Expect(result).To(o.BeTrue())
+			g.By("5.2.5 Check nodePort is not assigned to service")
+			nodePort := getLoadBalancerSvcNodePort(oc, svc.namespace, svc.name)
+			o.Expect(nodePort).To(o.BeEmpty())
+
+		}
+		g.By("6. Change the shared gateway mode to local gateway mode")
+		var desiredMode string
+		origMode := getOVNGatewayMode(oc)
+		if origMode == "local" {
+			desiredMode = "shared"
+		} else {
+			desiredMode = "local"
+		}
+		e2e.Logf("Cluster is currently on gateway mode %s", origMode)
+		e2e.Logf("Desired mode is %s", desiredMode)
+
+		defer switchOVNGatewayMode(oc, origMode)
+		switchOVNGatewayMode(oc, desiredMode)
+		g.By("7. Validate services in modified gateway mode " + desiredMode)
+		for i := 0; i < 2; i++ {
+			g.By("7.1 Create a service with extenal traffic policy " + svc_etp[i])
+			svc_names[i] = svc_names[i] + "-0"
+			svc := loadBalancerServiceResource{
+				name:                          svc_names[i],
+				namespace:                     namespaces[i],
+				externaltrafficpolicy:         svc_etp[i],
+				labelKey:                      serviceLabelKey,
+				labelValue:                    serviceLabelValue,
+				allocateLoadBalancerNodePorts: false,
+				template:                      loadBalancerServiceTemplate,
+			}
+			result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("7.2 LoadBalancer service with name " + svc_names[i])
+			g.By("7.2.1 Check LoadBalancer service is created")
+			err := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("7.2.2 Get LoadBalancer service IP")
+			svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+			g.By("7.2.3 Get LoadBalancer service IP announcing node")
+			nodeName := getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
+			e2e.Logf("%s is announcing the service %s with IP %s ", nodeName, svc.name, svcIP)
+			g.By("7.2.4 Validate service")
+			result = validateService(oc, masterNodeList[0], svcIP)
+			o.Expect(result).To(o.BeTrue())
+			g.By("7.2.5 Check nodePort is not assigned to service")
+			nodePort := getLoadBalancerSvcNodePort(oc, svc.namespace, svc.name)
+			o.Expect(nodePort).To(o.BeEmpty())
+
+		}
+
 	})
 
 })

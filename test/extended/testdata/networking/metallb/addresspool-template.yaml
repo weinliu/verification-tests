@@ -1,7 +1,7 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: metallb-cr-template
+  name: addresspool-cr-template
 objects:
 - kind: AddressPool
   apiVersion: metallb.io/v1alpha1
