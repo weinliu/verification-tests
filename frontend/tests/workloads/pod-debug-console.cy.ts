@@ -1,5 +1,4 @@
 import { guidedTour } from './../../upstream/views/guided-tour';
-import { nav } from '../../upstream/views/nav';
 
 describe('Debug console for pods', () => {
 
@@ -13,20 +12,18 @@ describe('Debug console for pods', () => {
   }
 
   before(() => {
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-    guidedTour.isOpen()
-    guidedTour.close()
-    cy.createProject(testParams.namespace)
+    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    guidedTour.close();
+    cy.createProject(testParams.namespace);
   })
 
   after(() => {
-    cy.adminCLI(`oc delete project ${testParams.namespace}`)
-    cy.logout()
+    cy.adminCLI(`oc delete project ${testParams.namespace}`);
   })
 
   it('(OCP-48000, xiyuzhao), Run Pod in Debug mode', {tags: ['e2e']}, () => {
     // Import the nodejs-ex.git and run the invalid command to cause CrashLoopBackoof && Twice
-    nav.sidenav.switcher.changePerspectiveTo('Developer')
+    cy.switchPerspective('Developer');
     cy.visit(`/import/ns/${testParams.namespace}`)
     cy.byLegacyTestID('git-form-input-url').clear().type(testParams.gitURL)
     cy.get('#form-input-git-url-field-helper').contains('Validated')
