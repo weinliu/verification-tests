@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1586,13 +1587,26 @@ spec:
 		defer func() {
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookName, "--ignore-not-found").Execute()
 		}()
+		preConfigKasStatus := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		e2e.Logf("ValidatingWebhook Pre-configuration with %s operator status: %s", "kube-apiserver", preConfigKasStatus)
 		validatingWebHook.createAdmissionWebhookFromTemplate(oc)
 		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{validatingWebhookName}, "")
 		e2e.Logf("Test step-1 has passed : Creation of ValidatingWebhookConfiguration with virtual resource reference succeeded.")
 
 		g.By("2) Check for kube-apiserver operator status after virtual resource reference for a validating webhook added.")
-		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
-		e2e.Logf("Test step-2 has passed : Kube-apiserver operators are in normal after virtual resource reference for a validating webhook added.")
+		// wait some bit more time and double check, to ensure it is stably healthy
+		time.Sleep(100 * time.Second)
+		postConfigKasStatus := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		e2e.Logf("ValidatingWebhook Post-configuration with %s operator status %s", "kube-apiserver", postConfigKasStatus)
+
+		// Check if KAS operator status is changed after ValidatingWebhook configration creation
+		if !reflect.DeepEqual(preConfigKasStatus, postConfigKasStatus) {
+			if reflect.DeepEqual(preConfigKasStatus, kubeApiserverCoStatus) {
+				// preConfigKasStatus has the same status of kubeApiserverCoStatus, means KAS operator is changed from stable to unstable
+				e2e.Failf("Test step-2 failed: Kube-apiserver operator are abnormal after virtual resource reference for a validating webhook added!")
+			}
+		}
+		e2e.Logf("Test step-2 has passed : Kube-apiserver operator are in normal after virtual resource reference for a validating webhook added.")
 
 		g.By("3) Check for information message on kube-apiserver cluster w.r.t virtual resource reference for a validating webhook")
 		compareAPIServerWebhookConditions(oc, reason, "True", []string{`VirtualResourceAdmissionError`})
