@@ -13,7 +13,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
 
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-    cy.adminCLI(`oc apply -f ./fixtures/${params.catalogSourceFile}`)
+    cy.adminCLI(`oc apply -f ./fixtures/operators/${params.catalogSourceFile}`)
     cy.adminCLI(`oc new-project ${params.anotherNamespace}`)
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
   })
