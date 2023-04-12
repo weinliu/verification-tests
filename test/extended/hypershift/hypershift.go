@@ -974,4 +974,24 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			return false
 		}, DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "conditions are not changed")
 	})
+
+	// author: mihuang@redhat.com
+	g.It("HyperShiftMGMT-Author:mihuang-Critical-62195-Add validation for taint.value in nodePool[Serial][Disruptive]", func() {
+		g.By("Create a nodepool with invalid taint value and check the ValidConfiguration conditions of hostedcluster CR")
+		nodepoolName := "62195np" + strings.ToLower(exutil.RandStrDefault())
+		defer func() {
+			hostedcluster.deleteNodePool(nodepoolName)
+			o.Eventually(hostedcluster.pollCheckDeletedNodePool(nodepoolName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
+			o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check all nodes ready error")
+		}()
+		hostedcluster.createAwsNodePool(nodepoolName, 1)
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(nodepoolName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
+		nodeName := doOcpReq(oc, OcpGet, true, "node", "-l", "hypershift.openshift.io/nodePool="+nodepoolName, "-ojsonpath={.items[*].metadata.name}", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)
+		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "nodes", nodeName, "node-role.kubernetes.io/infra=//:NoSchedule", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile).Output()
+		o.Expect(err).Should(o.HaveOccurred())
+		defer doOcpReq(oc, OcpAdm, true, "taint", "nodes", nodeName, "node-role.kubernetes.io/infra=foo:NoSchedule-", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "nodes", nodeName, "node-role.kubernetes.io/infra=foo:NoSchedule", "--overwrite", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile).Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(doOcpReq(oc, OcpGet, true, "node", nodeName, "-o", "jsonpath={.spec.taints[0].value}", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)).Should(o.Equal("foo"))
+	})
 })
