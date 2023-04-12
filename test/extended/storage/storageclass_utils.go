@@ -94,7 +94,7 @@ func newStorageClass(opts ...storageClassOption) storageClass {
 func (sc *storageClass) create(oc *exutil.CLI) {
 	// Currently AWS Outpost only support gp2 type volumes
 	// https://github.com/kubernetes-sigs/aws-ebs-csi-driver/blob/master/docs/parameters.md
-	if isAwsOutpostCluster(oc) {
+	if isGP2volumeSupportOnly(oc) {
 		gp2VolumeTypeParameter := map[string]string{"type": "gp2"}
 		sc.createWithExtraParameters(oc, map[string]interface{}{"parameters": gp2VolumeTypeParameter})
 	} else {
@@ -114,7 +114,7 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 	sc.getParametersFromTemplate()
 	// Currently AWS Outpost only support gp2 type volumes
 	// https://github.com/kubernetes-sigs/aws-ebs-csi-driver/blob/master/docs/parameters.md
-	if isAwsOutpostCluster(oc) {
+	if isGP2volumeSupportOnly(oc) {
 		sc.parameters["type"] = "gp2"
 	}
 	if _, ok := extraParameters["parameters"]; ok || len(sc.parameters) > 0 {

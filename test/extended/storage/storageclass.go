@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("Create a pvc without specifying storageclass")
 			// TODO: Adaptation for known product issue https://issues.redhat.com/browse/OCPBUGS-1964
 			// we need to remove the condition after the issue is solved
-			if isAwsOutpostCluster(oc) {
+			if isGP2volumeSupportOnly(oc) {
 				pvc.scname = "gp2-csi"
 				pvc.create(oc)
 			} else {
@@ -115,7 +115,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			scFromPV, err := getScNamesFromSpecifiedPv(oc, pvName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defaultSC := gjson.Get(allSCRes, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true).metadata.name").String()
-			if isAwsOutpostCluster(oc) {
+			if isGP2volumeSupportOnly(oc) {
 				o.Expect(scFromPV).To(o.Equal("gp2-csi"))
 			} else {
 				o.Expect(scFromPV).To(o.Equal(defaultSC))

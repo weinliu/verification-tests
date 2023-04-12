@@ -392,6 +392,11 @@ func newEbsVolume(opts ...volOption) ebsVolume {
 // https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateVolume.html
 // https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/device_naming.html
 func (vol *ebsVolume) create(ac *ec2.EC2) string {
+	// Adapt for aws local zones which only support "gp2" volume
+	// https://aws.amazon.com/about-aws/global-infrastructure/localzones/locations/
+	if len(strings.Split(vol.AvailabilityZone, "-")) > 3 {
+		vol.VolumeType = "gp2"
+	}
 	volumeInput := &ec2.CreateVolumeInput{
 		AvailabilityZone: aws.String(vol.AvailabilityZone),
 		Encrypted:        aws.Bool(vol.Encrypted),

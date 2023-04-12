@@ -570,7 +570,7 @@ func getPresetStorageClassNameByProvisioner(oc *exutil.CLI, cloudProvider string
 func getPresetStorageClassListByProvisioner(oc *exutil.CLI, cloudProvider string, provisioner string) (scList []string) {
 	// TODO: Adaptation for known product issue https://issues.redhat.com/browse/OCPBUGS-1964
 	// we need to remove the condition after the issue is solved
-	if isAwsOutpostCluster(oc) {
+	if isGP2volumeSupportOnly(oc) {
 		return append(scList, "gp2-csi")
 	}
 	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
@@ -902,6 +902,19 @@ func isAwsOutpostCluster(oc *exutil.CLI) bool {
 		return false
 	}
 	return strings.Contains(getWorkersInfo(oc), `topology.ebs.csi.aws.com/outpost-id`)
+}
+
+// isAwsLocalZoneCluster judges whether the aws test cluster has edge(local zone) workers
+func isAwsLocalZoneCluster(oc *exutil.CLI) bool {
+	if cloudProvider != "aws" {
+		return false
+	}
+	return strings.Contains(getWorkersInfo(oc), `node-role.kubernetes.io/edge`)
+}
+
+// isGP2volumeSupportOnly judges whether the aws test cluster only support gp2 type volumes
+func isGP2volumeSupportOnly(oc *exutil.CLI) bool {
+	return isAwsLocalZoneCluster(oc) || isAwsOutpostCluster(oc)
 }
 
 // Definition of int64Slice type
