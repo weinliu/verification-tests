@@ -20,6 +20,7 @@ import (
 	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -467,8 +468,33 @@ func (catsrc *catalogSourceDescription) create(oc *exutil.CLI, itName string, dr
 		"DISPLAYNAME="+"\""+catsrc.displayName+"\"", "PUBLISHER="+"\""+catsrc.publisher+"\"", "SOURCETYPE="+catsrc.sourceType,
 		"INTERVAL="+catsrc.interval, "IMAGETEMPLATE="+catsrc.imageTemplate)
 	o.Expect(err).NotTo(o.HaveOccurred())
+	catsrc.setSCCRestricted(oc)
 	dr.getIr(itName).add(newResource(oc, "catsrc", catsrc.name, requireNS, catsrc.namespace))
 	e2e.Logf("create catsrc %s SUCCESS", catsrc.name)
+}
+
+func (catsrc *catalogSourceDescription) setSCCRestricted(oc *exutil.CLI) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmaps", "-n", "openshift-kube-apiserver", "config", `-o=jsonpath={.data.config\.yaml}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	psa := gjson.Get(output, "admission.pluginConfig.PodSecurity.configuration.defaults.enforce").String()
+	e2e.Logf("pod-security.kubernetes.io/enforce is %s", string(psa))
+	if strings.Contains(string(psa), "restricted") {
+		originSCC := catsrc.getSCC(oc)
+		e2e.Logf("spec.grpcPodConfig.securityContextConfig is %s", originSCC)
+		if strings.Compare(originSCC, "") == 0 {
+			e2e.Logf("set spec.grpcPodConfig.securityContextConfig to be restricted")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", `{"spec":{"grpcPodConfig":{"securityContextConfig":"restricted"}}}`).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			e2e.Logf("spec.grpcPodConfig.securityContextConfig is not empty, skip setting")
+		}
+	}
+}
+
+func (catsrc *catalogSourceDescription) getSCC(oc *exutil.CLI) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.spec.grpcPodConfig.securityContextConfig}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return output
 }
 
 func (catsrc *catalogSourceDescription) createWithCheck(oc *exutil.CLI, itName string, dr describerResrouce) {

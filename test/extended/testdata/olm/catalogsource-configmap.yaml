@@ -10,8 +10,6 @@ objects:
     namespace: "${NAMESPACE}"
   spec:
     configMap: "${ADDRESS}"
-    grpcPodConfig:
-      securityContextConfig: restricted
     displayName: "${DISPLAYNAME}"
     icon:
       base64data: ""
