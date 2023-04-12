@@ -17,7 +17,7 @@ export const logsPage = {
   searchLog: (keyword) => {
     cy.get('.pf-c-log-viewer__scroll-container', {timeout: 6000}).scrollTo('top');
     cy.get('input[placeholder="Search"]').type(`${keyword}`);
-    cy.get('span.pf-c-log-viewer__string').contains(`${keyword}`);
+    cy.get('span.pf-c-log-viewer__string').contains(`${keyword}`, { matchCase: false });
   },
   clearSearch: () => {
     cy.get('[aria-label="Reset"]').click();

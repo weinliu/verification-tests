@@ -10,7 +10,6 @@ describe('node logs related features', () => {
 
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout;
   });
 
   it('(OCP-43996,yapei) View Master and Worker Node Logs', {tags: ['e2e','admin']}, () => {
