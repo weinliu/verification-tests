@@ -3135,6 +3135,77 @@ nulla pariatur.`
 			"The configuration in file /etc/containers/registries.conf was not restored after deleting the ImageDigestMirrorSet resource")
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-62084-Certificate rotation in paused pools[Disruptive]", func() {
+		var (
+			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			certSecret = NewSecret(oc.AsAdmin(), "openshift-kube-apiserver-operator", "kube-apiserver-to-kubelet-signer")
+		)
+
+		g.By("Pause MachineConfigPools")
+		defer mMcp.waitForComplete()
+		defer wMcp.waitForComplete()
+
+		defer wMcp.pause(false)
+		wMcp.pause(true)
+		defer mMcp.pause(false)
+		mMcp.pause(true)
+		logger.Infof("OK!\n")
+
+		g.By("Get current kube-apiserver certificate")
+		initialCert := certSecret.GetDataValueOrFail("tls.crt")
+		logger.Infof("Current certificate length: %d", len(initialCert))
+		logger.Infof("OK!\n")
+
+		g.By("Rotate certificate")
+		o.Expect(
+			certSecret.Patch("merge", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`),
+		).To(o.Succeed(),
+			"The secret could not be patched in order to rotate the certificate")
+		logger.Infof("OK!\n")
+
+		g.By("Get current kube-apiserver certificate")
+		logger.Infof("Wait for certificate rotation")
+		o.Eventually(certSecret.GetDataValueOrFail).WithArguments("tls.crt").
+			ShouldNot(o.Equal(initialCert),
+				"The certificate was not rotated")
+
+		newCert := certSecret.GetDataValueOrFail("tls.crt")
+		logger.Infof("New certificate length: %d", len(newCert))
+		logger.Infof("OK!\n")
+
+		o.Expect(initialCert).NotTo(o.Equal(newCert),
+			"The certificate was not rotated")
+		logger.Infof("OK!\n")
+
+		// We verify all nodes in the pools (be aware that windows nodes do not belong to any pool, we are skipping them)
+		for _, node := range append(wMcp.GetNodesOrFail(), mMcp.GetNodesOrFail()...) {
+			logger.Infof("Checking certificate in node: %s", node.GetName())
+
+			rfCert := NewRemoteFile(node, "/etc/kubernetes/kubelet-ca.crt")
+
+			// Eventually the certificate file in all nodes should contain the new rotated certificate
+			o.Eventually(func(gm o.Gomega) string { // Passing o.Gomega as parameter we can use assertions inside the Eventually function without breaking the retries.
+				gm.Expect(rfCert.Fetch()).To(o.Succeed(),
+					"Cannot read the certificate file in node:%s ", node.GetName())
+				return rfCert.GetTextContent()
+			}, "5m", "10s").
+				Should(o.ContainSubstring(newCert),
+					"The certificate file %s in node %s does not contain the new rotated certificate.", rfCert.GetFullPath(), node.GetName())
+			logger.Infof("OK!\n")
+		}
+
+		g.By("Unpause MachineConfigPools")
+		logger.Infof("Check that once we unpause the pools the pending config can be applied without problems")
+		wMcp.pause(false)
+		mMcp.pause(false)
+		wMcp.waitForComplete()
+		mMcp.waitForComplete()
+
+		logger.Infof("OK!\n")
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason

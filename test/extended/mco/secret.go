@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -69,6 +70,15 @@ func (s Secret) Extract() (string, error) {
 func (s Secret) GetDataValue(key string) (string, error) {
 	templateArg := fmt.Sprintf(`--template={{index .data "%s" | base64decode}}`, key)
 	return s.oc.AsAdmin().WithoutNamespace().Run("get").Args(s.GetKind(), s.GetName(), "-n", s.GetNamespace(), templateArg).Output()
+}
+
+// GetDataValueOrFail gets the value stored in the secret's key and fail the test if there is any error
+func (s Secret) GetDataValueOrFail(key string) string {
+	data, err := s.GetDataValue(key)
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(),
+		"Cannot get the value of %s from secret %s -n %s",
+		key, s.GetName(), s.GetNamespace())
+	return data
 }
 
 // SetDataValue sets a key/value to store in the secret
