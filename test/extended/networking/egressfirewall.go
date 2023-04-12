@@ -13,6 +13,7 @@ import (
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
@@ -849,5 +850,118 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Check the other website can be blocked!")
 		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
+	})
+
+	// author: jechen@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-61176-High-61177-EgressFirewall should work with namespace that is longer than forth-three characters even after restart. [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall5-template.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		ns := "test-egressfirewall-with-a-very-long-namespace-61176-61177"
+
+		g.By("1. Create a long namespace over 43 characters, create an EgressFirewall object with mixed of Allow and Deny rules.")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
+		o.Expect(nsErr).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		egressFW5 := egressFirewall5{
+			name:        "default",
+			namespace:   ns,
+			ruletype1:   "Allow",
+			rulename1:   "dnsName",
+			rulevalue1:  "www.google.com",
+			protocol1:   "TCP",
+			portnumber1: 443,
+			ruletype2:   "Deny",
+			rulename2:   "dnsName",
+			rulevalue2:  "www.facebook.com",
+			protocol2:   "TCP",
+			portnumber2: 443,
+			template:    egressFWTemplate,
+		}
+
+		defer removeResource(oc, true, true, "egressfirewall", egressFW5.name, "-n", egressFW5.namespace)
+		egressFW5.createEgressFW5Object(oc)
+		efErr := waitEgressFirewallApplied(oc, egressFW5.name, ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n egressfirewall is applied\n")
+
+		g.By("2. Create a test pod in the namespace")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc.AsAdmin())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("3. Check www.facebook.com is blocked \n")
+		o.Eventually(func() bool {
+			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.facebook.com --connect-timeout 5")
+			return err != nil
+		}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work as expected!!")
+
+		g.By("4. Check www.google.com is allowed \n")
+		o.Eventually(func() bool {
+			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.google.com --connect-timeout 5")
+			return err == nil
+		}, "120s", "10s").Should(o.BeTrue(), "Allow rule did not work as expected!!")
+
+		g.By("5. Check ACLs in northdb. \n")
+		ovnMeasterLeaderPod := getOVNKMasterPod(oc)
+		o.Expect(ovnMeasterLeaderPod != "").Should(o.BeTrue())
+		aclCmd := "ovn-nbctl --no-leader-only find acl | grep external_ids | grep test-egressfirewall-with-a-very-long-namespace"
+		checkAclErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			aclOutput, aclErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMeasterLeaderPod, aclCmd)
+			if aclErr != nil {
+				e2e.Logf("%v,Waiting for ACLs to be synced, try next ...,", aclErr)
+				return false, nil
+			}
+			// check ACLs rules for the long namespace
+			if strings.Contains(aclOutput, "test-egressfirewall-with-a-very-long-namespace") && strings.Count(aclOutput, "test-egressfirewall-with-a-very-long-namespace") == 2 {
+				e2e.Logf("The ACLs for egressfirewall in northbd are as expected!")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkAclErr, fmt.Sprintf("ACLs were not synced correctly!"))
+
+		g.By("6. Restart OVN masters\n")
+		delPodErr := oc.AsAdmin().Run("delete").Args("pod", "-l", "app=ovnkube-master", "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(delPodErr).NotTo(o.HaveOccurred())
+
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+
+		g.By("7. Check ACL again in northdb after restart. \n")
+		ovnMeasterLeaderPod = getOVNKMasterPod(oc)
+		o.Expect(ovnMeasterLeaderPod != "").Should(o.BeTrue())
+		checkAclErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			aclOutput, aclErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMeasterLeaderPod, aclCmd)
+			if aclErr != nil {
+				e2e.Logf("%v,Waiting for ACLs to be synced, try next ...,", aclErr)
+				return false, nil
+			}
+			// check ACLs rules for the long namespace after restart
+			if strings.Contains(aclOutput, "test-egressfirewall-with-a-very-long-namespace") && strings.Count(aclOutput, "test-egressfirewall-with-a-very-long-namespace") == 2 {
+				e2e.Logf("The ACLs for egressfirewall in northbd are as expected!")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkAclErr, fmt.Sprintf("ACLs were not synced correctly!"))
+
+		g.By("8. Check egressfirewall rules still work correctly after restart \n")
+		o.Eventually(func() bool {
+			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.facebook.com --connect-timeout 5")
+			return err != nil
+		}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work correctly after restart!!")
+
+		o.Eventually(func() bool {
+			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.google.com --connect-timeout 5")
+			return err == nil
+		}, "120s", "10s").Should(o.BeTrue(), "Allow rule did not work correctly after restart!!")
 	})
 })

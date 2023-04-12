@@ -196,6 +196,22 @@ type egressrouterMultipleDst struct {
 	template       string
 }
 
+type egressFirewall5 struct {
+	name        string
+	namespace   string
+	ruletype1   string
+	rulename1   string
+	rulevalue1  string
+	protocol1   string
+	portnumber1 int
+	ruletype2   string
+	rulename2   string
+	rulevalue2  string
+	protocol2   string
+	portnumber2 int
+	template    string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -315,6 +331,19 @@ func (egressFirewall *egressFirewall2) createEgressFW2Object(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create EgressFW2 %v", egressFirewall.name))
+}
+
+func (EFW *egressFirewall5) createEgressFW5Object(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		parameters := []string{"--ignore-unknown-parameters=true", "-f", EFW.template, "-p", "NAME=" + EFW.name, "NAMESPACE=" + EFW.namespace, "RULETYPE1=" + EFW.ruletype1, "RULENAME1=" + EFW.rulename1, "RULEVALUE1=" + EFW.rulevalue1, "PROTOCOL1=" + EFW.protocol1, "PORTNUMBER1=" + strconv.Itoa(EFW.portnumber1), "RULETYPE2=" + EFW.ruletype2, "RULENAME2=" + EFW.rulename2, "RULEVALUE2=" + EFW.rulevalue2, "PROTOCOL2=" + EFW.protocol2, "PORTNUMBER2=" + strconv.Itoa(EFW.portnumber2)}
+		err1 := applyResourceFromTemplateByAdmin(oc, parameters...)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create EgressFW2 %v", EFW.name))
 }
 
 func (ipBlock_ingress_policy *ipBlockIngressDual) createipBlockIngressObjectDual(oc *exutil.CLI) {
