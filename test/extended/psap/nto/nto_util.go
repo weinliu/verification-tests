@@ -678,10 +678,10 @@ func AssertNTOCertificateRotate(oc *exutil.CLI, ntoNamespace string, tunedNodeNa
 	metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
 	err := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
 
-		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
+		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		openSSLExpireDateAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | /host/bin/openssl x509 -noout -dates")
+		openSSLExpireDateAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | /bin/openssl x509 -noout -dates")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("The openSSL Expired Date information of NTO openSSL after rotate as below: \n%v", openSSLExpireDateAfter)
@@ -706,7 +706,7 @@ func compareCertificateBetweenOpenSSLandTLSSecret(oc *exutil.CLI, ntoNamespace s
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 
 		//Extract certificate from openssl that nto operator service endpoint
-		openSSLOutputAfter, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'").Output()
+		openSSLOutputAfter, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Extract tls.crt from secret node-tuning-operator-tls
@@ -828,13 +828,15 @@ func confirmedTunedReady(oc *exutil.CLI, ntoNamespace string, tunedName string, 
 }
 
 // switchThrottlectlOnOff
-func switchThrottlectlOnOff(oc *exutil.CLI, tunedNodeName string, throttlectlState string, timeDurationSec int) {
+func switchThrottlectlOnOff(oc *exutil.CLI, ntoNamespace, tunedNodeName string, throttlectlState string, timeDurationSec int) {
 
 	err := wait.Poll(10*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
 
-		_, err := exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", throttlectlState)
+		//_, err := exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", throttlectlState)
+		err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "host", "/usr/bin/throttlectl", throttlectlState).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		schedRTRuntimeStatus, err := exutil.DebugNode(oc, tunedNodeName, "cat", "/proc/sys/kernel/sched_rt_runtime_us")
+		//schedRTRuntimeStatus, err := exutil.DebugNode(oc, tunedNodeName, "cat", "/proc/sys/kernel/sched_rt_runtime_us")
+		schedRTRuntimeStatus, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "cat", "/proc/sys/kernel/sched_rt_runtime_us").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Sleep 10s each time and retry two times to improve sucessful rate of restarting stalld

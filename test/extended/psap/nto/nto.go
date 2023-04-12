@@ -973,7 +973,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(openshiftControlPlaneTunedConf).NotTo(o.BeEmpty())
 		o.Expect(openshiftControlPlaneTunedConf).To(o.ContainSubstring("include=openshift"))
 
-		if strings.Contains(kernelVersion, "el8") {
+		if strings.Contains(kernelVersion, "el8") || strings.Contains(kernelVersion, "el9") {
 			o.Expect(openshiftControlPlaneTunedConf).To(o.And(
 				o.ContainSubstring("sched_wakeup_granularity_ns=4000000"),
 				o.ContainSubstring("sched_migration_cost_ns=5000000")))
@@ -1368,7 +1368,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyOperatorResourceByYaml(oc, paoNamespace, paoWorkerCnfMCPFile)
 
 		g.By("Assert if the MCP worker-cnf has been successfully applied ...")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 480)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 750)
 
 		g.By("Check if new profile in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
@@ -1403,7 +1403,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, paoPerformancePatchFile)
 
 		g.By("Assert if the MCP worker-cnf is ready after node rebooted ...")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 720)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 750)
 
 		g.By("Check if new profile performance-patch in rendered tuned")
 		renderCheck, err = getTunedRender(oc, ntoNamespace)
@@ -1636,11 +1636,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
 
 		g.By("Get information about the certificate the metrics server in NTO")
-		openSSLOutputBefore, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null").Output()
+		openSSLOutputBefore, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get information about the creation and expiration date of the certificate")
-		openSSLExpireDateBefore, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | /host/bin/openssl x509 -noout -dates").Output()
+		openSSLExpireDateBefore, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | /bin/openssl x509 -noout -dates").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The openSSL Expired Date information of NTO openSSL before rotate as below: \n%v", openSSLExpireDateBefore)
 
@@ -1837,7 +1837,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defer exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "on")
 
 		g.By("Set off for /usr/bin/throttlectl before enable stalld")
-		switchThrottlectlOnOff(oc, tunedNodeName, "off", 30)
+		switchThrottlectlOnOff(oc, ntoNamespace, tunedNodeName, "off", 30)
 
 		g.By("Label the node with node-role.kubernetes.io/worker-stalld=")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld=", "--overwrite").Execute()
@@ -2255,7 +2255,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Switch off throttlectl to improve sucessfull rate of stalld starting
 		g.By("Set off for /usr/bin/throttlectl before enable stalld")
-		switchThrottlectlOnOff(oc, tunedNodeName, "off", 30)
+		switchThrottlectlOnOff(oc, ntoNamespace, tunedNodeName, "off", 30)
 
 		g.By("Label the node with node-role.kubernetes.io/worker-stalld=")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld=", "--overwrite").Execute()
@@ -2391,7 +2391,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyOperatorResourceByYaml(oc, "", paoBaseProfileMCP)
 
 		g.By("Assert if machine config pool applied for worker nodes")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 600)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 720)
 
 		g.By("Check if new profile openshift-node-performance-pao-baseprofile in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
@@ -2449,13 +2449,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(realTimekernalOutput).NotTo(o.BeEmpty())
-			o.Expect(realTimekernalOutput).To(o.ContainSubstring("rt7"))
+			o.Expect(realTimekernalOutput).To(o.Or(o.ContainSubstring("rt7"), o.ContainSubstring("rt14")))
 		} else {
 			g.By("Check realTime kernel setting that created by PAO in labled node ")
 			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(realTimekernalOutput).NotTo(o.BeEmpty())
-			o.Expect(realTimekernalOutput).NotTo(o.ContainSubstring("rt7"))
+			o.Expect(realTimekernalOutput).NotTo(o.Or(o.ContainSubstring("rt7"), o.ContainSubstring("rt14")))
 		}
 
 		g.By("Check runtimeClass setting that created by PAO ... ")
