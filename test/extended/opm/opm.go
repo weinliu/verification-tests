@@ -1063,6 +1063,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 
 		g.By("get index.db")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", dbimagetag, "--path", "/database/index.db:"+TmpDataPath).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("get index.db SUCCESS, path is %s", indexdbFilePath)
 		if _, err := os.Stat(indexdbFilePath); os.IsNotExist(err) {
 			e2e.Logf("get index.db Failed")
@@ -1236,7 +1237,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		msg, err := opmCLI.Run("index").Args("add", "-b", s, "-t", t1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-		matched, err = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v", bundles[a], bundles[b]), msg)
+		matched, _ = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v", bundles[a], bundles[b]), msg)
 		o.Expect(matched).To(o.BeTrue())
 
 		msg, err = containerCLI.Run("images").Args("-n", t1).Output()
@@ -1249,7 +1250,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "--generate").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-		matched, err = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v", bundles[a], bundles[b]), msg)
+		matched, _ = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v", bundles[a], bundles[b]), msg)
 		o.Expect(matched).To(o.BeTrue())
 
 		sqlResults, err = sqlit.QueryOperatorChannel(path.Join(indexTmpPath1, "index.db"))
@@ -1271,7 +1272,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "-t", t2).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-		matched, err = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v", bundles[a], bundles[b]), msg)
+		matched, _ = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v", bundles[a], bundles[b]), msg)
 		o.Expect(matched).To(o.BeTrue())
 
 		msg, err = containerCLI.Run("images").Args("-n", t2).Output()
@@ -1284,7 +1285,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "--generate").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-		matched, err = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v", bundles[a], bundles[b]), msg)
+		matched, _ = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v", bundles[a], bundles[b]), msg)
 		o.Expect(matched).To(o.BeTrue())
 
 		sqlResults, err = sqlit.QueryOperatorChannel(path.Join(indexTmpPath1, "index.db"))
@@ -1307,7 +1308,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "-t", t3).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-		matched, err = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
+		matched, _ = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
 		o.Expect(matched).To(o.BeTrue())
 
 		msg, err = containerCLI.Run("images").Args("-n", t3).Output()
@@ -1320,7 +1321,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "--generate").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-		matched, err = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
+		matched, _ = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
 		o.Expect(matched).To(o.BeTrue())
 
 		sqlResults, err = sqlit.QueryOperatorChannel(path.Join(indexTmpPath1, "index.db"))
@@ -1344,7 +1345,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "-t", t4).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-		matched, err = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
+		matched, _ = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
 		o.Expect(matched).To(o.BeTrue())
 
 		msg, err = containerCLI.Run("images").Args("-n", t4).Output()
@@ -1366,7 +1367,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "-t", t5).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-		matched, err = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
+		matched, _ = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
 		o.Expect(matched).To(o.BeTrue())
 
 		msg, err = containerCLI.Run("images").Args("-n", t5).Output()
@@ -1387,7 +1388,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "--generate").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-		matched, err = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
+		matched, _ = regexp.MatchString(fmt.Sprintf("bundles=.*%v %v %v", bundles[a], bundles[b], bundles[c]), msg)
 		o.Expect(matched).To(o.BeTrue())
 
 		sqlResults, err = sqlit.QueryOperatorChannel(path.Join(indexTmpPath1, "index.db"))
@@ -1502,7 +1503,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: create a catalog using basic veneer with yaml format")
-		output, err := opmCLI.Run("alpha").Args("render-veneer", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "yaml").Output()
+		output, err := opmCLI.Run("alpha").Args("render-template", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		indexFilePath := filepath.Join(catsrcPathYaml, "index.yaml")
@@ -1528,7 +1529,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: create a catalog using basic veneer with json format")
-		output, err = opmCLI.Run("alpha").Args("render-veneer", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "json").Output()
+		output, err = opmCLI.Run("alpha").Args("render-template", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		indexFilePath = filepath.Join(catsrcPathJSON, "index.json")
@@ -1564,7 +1565,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: GenerateMajorChannels: true GenerateMinorChannels: false")
-		output, err := opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-1.yaml"), "-o", "yaml").Output()
+		output, err := opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-1.yaml"), "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		indexFilePath := filepath.Join(catsrcPath1, "index.yaml")
@@ -1595,7 +1596,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: GenerateMajorChannels: true GenerateMinorChannels: true")
-		output, err = opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-2.yaml"), "-o", "yaml").Output()
+		output, err = opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-2.yaml"), "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		indexFilePath = filepath.Join(catsrcPath2, "index.yaml")
@@ -1627,7 +1628,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: not set GenerateMajorChannels and GenerateMinorChannels")
-		output, err = opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-3.yaml")).Output()
+		output, err = opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-3.yaml")).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		indexFilePath = filepath.Join(catsrcPath3, "index.json")
@@ -1657,7 +1658,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("stable-v2.1     nginx-operator.v2.1.0"))
 
 		g.By("step: generate mermaid graph data for generated-channels")
-		output, err = opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-4.yaml"), "-o", "mermaid").Output()
+		output, err = opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-4.yaml"), "-o", "mermaid").Output()
 		if err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1667,7 +1668,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("nginx-operator-fast-v2.0-nginx-operator.v2.0.1[\"nginx-operator.v2.0.1\"]"))
 
 		g.By("step: semver veneer should validate bundle versions")
-		output, err = opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-5.yaml")).Output()
+		output, err = opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-5.yaml")).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("encountered bundle versions which differ only by build metadata, which cannot be ordered"))
 		o.Expect(string(output)).To(o.ContainSubstring("cannot be compared to \"1.0.1-alpha\""))
@@ -1680,7 +1681,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: generate index.yaml with yaml format")
-		command := "cat " + filePath + "| opm alpha render-veneer semver -o yaml - "
+		command := "cat " + filePath + "| opm alpha render-template semver -o yaml - "
 		contentByte, err := exec.Command("bash", "-c", command).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1707,14 +1708,14 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("stable-v2     nginx-operator.v2.1.0"))
 
 		g.By("step: generate json format file")
-		command = "cat " + filePath + `| opm alpha render-veneer semver  - | jq 'select(.schema=="olm.channel")'| jq '{name,entries}'`
+		command = "cat " + filePath + `| opm alpha render-template semver  - | jq 'select(.schema=="olm.channel")'| jq '{name,entries}'`
 		contentByte, err = exec.Command("bash", "-c", command).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(contentByte)).To(o.ContainSubstring("nginx-operator.v1.0.2"))
 		o.Expect(string(contentByte)).To(o.ContainSubstring("candidate-v1"))
 
 		g.By("step: generate mermaid graph data for generated-channels")
-		command = "cat " + filePath + "| opm alpha render-veneer semver -o mermaid -"
+		command = "cat " + filePath + "| opm alpha render-template semver -o mermaid -"
 		contentByte, err = exec.Command("bash", "-c", command).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(contentByte)).To(o.ContainSubstring("package \"nginx-operator\""))
