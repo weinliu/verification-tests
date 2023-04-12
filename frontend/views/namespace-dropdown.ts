@@ -6,11 +6,10 @@ export const namespaceDropdown = {
         cy.get(selector).click();
     },
     clickTheDropdown: () => {
-        cy.byLegacyTestID('namespace-bar-dropdown')
-            .within(($div) => {
-                cy.get('button[class~=co-namespace-dropdown__menu-toggle]').click()
-            })
-    },
+        cy.get('[data-test-id="namespace-bar-dropdown"] button')
+          .contains("Project:")
+          .click({ force: true });
+    },    
     getProjectsDisplayed: () => {
         return cy.get('li[data-test="dropdown-menu-item-link"]');
     },
@@ -38,16 +37,22 @@ export const namespaceDropdown = {
             }
         })
     },
-
     filterNamespace: (name: string) => {
         cy.get('[data-test="dropdown-text-filter"]').clear()
           .type(name, { force: true });
     },
-    favoriteNamespace: (name: string) => {
-        cy.get('[data-test="dropdown-menu-item-link"]').contains(name)
-          .next('button.pf-m-favorite').click();
+    addFavoriteNamespace: (name: string) => {
+        cy.byTestID('dropdown-menu-item-link')
+          .contains(name)
+          .next('[aria-label="not starred"]')
+          .click()      
     },
-
+    removeFavoriteNamespace: (name: string) => {
+        cy.byTestID('dropdown-menu-item-link')
+          .contains(name)
+          .next('[aria-label="starred"]')
+          .click()  
+    },
     selectNamespace: (name: string) => {
         namespaceDropdown.clickTheDropdown();
         namespaceDropdown.showSystemProjects();

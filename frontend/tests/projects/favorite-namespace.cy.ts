@@ -3,11 +3,7 @@ import { namespaceDropdown } from "views/namespace-dropdown";
 describe("namespace dropdown favorite test", () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env("LOGIN_USERNAME")}`);
-    cy.login(
-      Cypress.env("LOGIN_IDP"),
-      Cypress.env("LOGIN_USERNAME"),
-      Cypress.env("LOGIN_PASSWORD")
-    );
+    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
   after(() => {
@@ -23,18 +19,19 @@ describe("namespace dropdown favorite test", () => {
     cy.visit('/search/all-namespaces');
     namespaceDropdown.clickTheDropdown();
     namespaceDropdown.showSystemProjects();
-
     namespaces.forEach(namespace => {
       namespaceDropdown.filterNamespace(namespace);
-      namespaceDropdown.favoriteNamespace(namespace);
+      namespaceDropdown.addFavoriteNamespace(namespace);
       cy.get(`li:contains(${namespace})`).should('have.length', 2);
     });
-    // close the namespace dropdown and open again
-    namespaceDropdown.clickTheDropdown();
+    /*  Starred system namespace will list in dropdown 
+        Even if 'Show default project' is disable */
+    cy.visit('/k8s/all-namespaces/core~v1~Pod');
     namespaceDropdown.clickTheDropdown();
     namespaceDropdown.hideSystemProjects();
     namespaces.forEach(namespace => {
       cy.get(`li:contains(${namespace})`).should('have.length', 1);
+      namespaceDropdown.removeFavoriteNamespace(namespace);
     });
   });
 });
