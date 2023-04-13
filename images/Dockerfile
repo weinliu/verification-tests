@@ -37,7 +37,7 @@ RUN oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hype
     gaver=$(grep -E "<a href=\"latest-4\.14" ocp.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${gaver}V" && \
     if [ "V${gaver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/${gaver}; fi && \
     curl -s -k -L ${CLIENTURL}/opm-linux.tar.gz -o opm-linux.tar.gz  && \
-    curl -s -k -L ${CLIENTURL}/oc-mirror.tar.gz -o oc-mirror.tar.gz && \
+    curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp/4.13.0-rc.2/oc-mirror.tar.gz -o oc-mirror.tar.gz && \
     tar -C /usr/bin -xzvf opm-linux.tar.gz && rm -fr opm-linux.tar.gz /usr/bin/oc && \
     tar -C /usr/bin/ -xzvf oc-mirror.tar.gz && chmod +x /usr/bin/oc-mirror && rm -f oc-mirror.tar.gz && \
     curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/operator-sdk/ -o sdk.html && \
