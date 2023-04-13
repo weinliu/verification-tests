@@ -315,7 +315,7 @@ func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
 		linuxWorkers = append(linuxWorkers, allNodes...)
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && myNode.readyStatus == "True" {
 				linuxWorkers = append(linuxWorkers, myNode)
 			}
 		}
@@ -331,7 +331,7 @@ func getSchedulableRhelWorkers(allNodes []node) []node {
 		schedulableRhelWorkers = append(schedulableRhelWorkers, allNodes...)
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osID == "rhel" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osID == "rhel" && strSliceContains(myNode.role, "worker") && myNode.readyStatus == "True" {
 				schedulableRhelWorkers = append(schedulableRhelWorkers, myNode)
 			}
 		}
@@ -350,7 +350,7 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 			expectedWorker = allNodes[0]
 		} else {
 			for _, myNode := range allNodes {
-				if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
+				if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && myNode.readyStatus == "True" {
 					expectedWorker = myNode
 					break
 				}
@@ -368,7 +368,7 @@ func getOneSchedulableMaster(allNodes []node) (expectedMater node) {
 		expectedMater = allNodes[0]
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "master") && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "master") && myNode.readyStatus == "True" {
 				expectedMater = myNode
 				break
 			}
