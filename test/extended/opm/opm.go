@@ -1868,4 +1868,26 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("test case 47222 SUCCESS")
 	})
+
+	// author: jitli@redhat.com
+	g.It("ConnectedOnly-Author:jitli-Medium-60573-opm exclude bundles with olm.deprecated property when rendering", func() {
+
+		g.By("opm render the sqlite index image message")
+		msg, err := opmCLI.Run("render").Args("quay.io/olmqe/catalogtest-index:v4.12depre", "-oyaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(msg, "olm.deprecated") {
+			e2e.Failf("opm render the sqlite index image message, doesn't show the bundle with olm.dreprecated label")
+		}
+
+		g.By("opm render the fbc index image message")
+		msg, err = opmCLI.Run("render").Args("quay.io/olmqe/test-index:mix", "-oyaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(msg, "olm.deprecated") {
+			e2e.Logf("opm render the fbc index image message, still show the bundle with olm.dreprecated label")
+		} else {
+			e2e.Failf("opm render the fbc index image message, should show the bundle with olm.dreprecated label")
+		}
+
+	})
+
 })
