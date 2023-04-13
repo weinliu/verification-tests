@@ -4818,4 +4818,84 @@ type: kubernetes.io/service-account-token`
 			e2e.Failf("Audit logs counts increased :: %d", counter)
 		}
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-Author:rgangwar-High-33427-[Apiserver] customize audit config of apiservers [Disruptive][Slow]", func() {
+		var (
+			patchAllRequestBodies   = `[{"op": "replace", "path": "/spec/audit", "value":{"profile":"AllRequestBodies"}}]`
+			patchWriteRequestBodies = `[{"op": "replace", "path": "/spec/audit", "value":{"profile":"WriteRequestBodies"}}]`
+			patchToRecover          = `[{"op": "replace", "path": "/spec/audit", "value":{"profile":"Default"}}]`
+			podScript               = "grep -r '\"managedFields\":{' /var/log/kube-apiserver | wc -l"
+			now                     = time.Now().UTC()
+			unixTimestamp           = now.Unix()
+		)
+
+		defer func() {
+			g.By("Restoring apiserver/cluster's profile")
+			output := setAuditProfile(oc, "apiserver/cluster", patchToRecover)
+			if strings.Contains(output, "patched (no change)") {
+				e2e.Logf("Apiserver/cluster's audit profile not changed from the default values")
+			}
+		}()
+
+		g.By("1. Checking the current default audit policy of cluster")
+		checkApiserversAuditPolicies(oc, "Default")
+
+		g.By("2. Get all master nodes.")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("3. Checking verbs in kube-apiserver audit logs")
+		script := fmt.Sprintf(`grep -hE "\"verb\":\"(create|delete|patch|update)\",\"user\":.*(requestObject|responseObject)|\"verb\":\"(get|list|watch)\",\"user\":.*(requestObject|responseObject)" /var/log/kube-apiserver/audit.log | jq -r "select (.requestReceivedTimestamp | .[0:19] + \"Z\" | fromdateiso8601 > %v)" | tail -n 1`, unixTimestamp)
+		masterNodeLogs, errCount := checkAuditLogs(oc, script, masterNodes[0], "openshift-kube-apiserver")
+		if errCount > 0 {
+			e2e.Failf("Verbs in kube-apiserver audit logs on master node %v :: %v", masterNodes[0], masterNodeLogs)
+		}
+		e2e.Logf("No verbs logs in kube-apiserver audit logs on master node %v", masterNodes[0])
+		g.By("4. Set audit profile to WriteRequestBodies")
+		setAuditProfile(oc, "apiserver/cluster", patchWriteRequestBodies)
+
+		g.By("5. Checking the current WriteRequestBodies audit policy of cluster.")
+		checkApiserversAuditPolicies(oc, "WriteRequestBodies")
+
+		g.By("6. Checking verbs and managedFields in kube-apiserver audit logs after audit profile to WriteRequestBodies")
+		masterNodeLogs, errCount = checkAuditLogs(oc, script, masterNodes[0], "openshift-kube-apiserver")
+		if errCount == 0 {
+			e2e.Failf("Post audit profile to WriteRequestBodies, No Verbs in kube-apiserver audit logs on master node %v :: %v :: %v", masterNodes[0], masterNodeLogs, errCount)
+		}
+
+		podsList := getPodsListByLabel(oc.AsAdmin(), "openshift-kube-apiserver", "app=openshift-kube-apiserver")
+		execKasOuptut := ExecCommandOnPod(oc, podsList[0], "openshift-kube-apiserver", podScript)
+		trimOutput := strings.TrimSpace(execKasOuptut)
+		count, _ := strconv.Atoi(trimOutput)
+		if count == 0 {
+			e2e.Logf("The step succeeded and the managedFields count is zero in KAS logs.")
+		} else {
+			e2e.Failf("The step Failed and the managedFields count is not zero in KAS logs :: %d.", count)
+		}
+		e2e.Logf("Post audit profile to WriteRequestBodies, verbs captured in kube-apiserver audit logs on master node %v", masterNodes[0])
+
+		g.By("7. Set audit profile to AllRequestBodies")
+		setAuditProfile(oc, "apiserver/cluster", patchAllRequestBodies)
+
+		g.By("8. Checking the current AllRequestBodies audit policy of cluster.")
+		checkApiserversAuditPolicies(oc, "AllRequestBodies")
+
+		g.By("9. Checking verbs and managedFields in kube-apiserver audit logs after audit profile to AllRequestBodies")
+		masterNodeLogs, errCount = checkAuditLogs(oc, script, masterNodes[0], "openshift-kube-apiserver")
+		if errCount == 0 {
+			e2e.Failf("Post audit profile to AllRequestBodies, No Verbs in kube-apiserver audit logs on master node %v :: %v", masterNodes[0], masterNodeLogs)
+		}
+
+		execKasOuptut = ExecCommandOnPod(oc, podsList[0], "openshift-kube-apiserver", podScript)
+		trimOutput = strings.TrimSpace(execKasOuptut)
+		count, _ = strconv.Atoi(trimOutput)
+		if count == 0 {
+			e2e.Logf("The step succeeded and the managedFields count is zero in KAS logs.")
+		} else {
+			e2e.Failf("The step Failed and the managedFields count is not zero in KAS logs :: %d.", count)
+		}
+		e2e.Logf("Post audit profile to AllRequestBodies, Verbs captured in kube-apiserver audit logs on master node %v", masterNodes[0])
+	})
 })

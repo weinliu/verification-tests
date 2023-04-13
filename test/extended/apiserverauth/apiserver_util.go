@@ -20,6 +20,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -886,7 +887,7 @@ func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool
 func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	var err error
-	err = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+	err = wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
 		result, err = doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("output is %v, error is %v, and try next", result, err)
@@ -904,4 +905,81 @@ func getGlobalProxy(oc *exutil.CLI) (string, string, string) {
 	httpsProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpsProxy}")
 	noProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.noProxy}")
 	return httpProxy, httpsProxy, noProxy
+}
+
+// Get the pods List by label
+func getPodsListByLabel(oc *exutil.CLI, namespace string, selectorLabel string) []string {
+	podsOp := getResource(oc, asAdmin, withoutNamespace, "pod", "-n", namespace, "-l", selectorLabel, "-o=jsonpath={.items[*].metadata.name}")
+	o.Expect(podsOp).NotTo(o.BeEmpty())
+	return strings.Split(podsOp, " ")
+}
+
+func checkApiserversAuditPolicies(oc *exutil.CLI, auditPolicyName string) {
+	e2e.Logf("Checking the current " + auditPolicyName + " audit policy of cluster")
+	defaultProfile := getResource(oc, asAdmin, withoutNamespace, "apiserver/cluster", `-o=jsonpath={.spec.audit.profile}`)
+	o.Expect(defaultProfile).Should(o.ContainSubstring(auditPolicyName), "current audit policy of cluster is not default :: "+defaultProfile)
+
+	e2e.Logf("Checking the audit config file of kube-apiserver currently in use.")
+	podsList := getPodsListByLabel(oc.AsAdmin(), "openshift-kube-apiserver", "app=openshift-kube-apiserver")
+	execKasOuptut := ExecCommandOnPod(oc, podsList[0], "openshift-kube-apiserver", "ls /etc/kubernetes/static-pod-resources/configmaps/kube-apiserver-audit-policies/")
+	re := regexp.MustCompile(`policy.yaml`)
+	matches := re.FindAllString(execKasOuptut, -1)
+	if len(matches) == 0 {
+		e2e.Failf("Audit config file of kube-apiserver is wrong :: %s", execKasOuptut)
+	}
+	e2e.Logf("Audit config file of kube-apiserver :: %s", execKasOuptut)
+
+	e2e.Logf("Checking the audit config file of openshif-apiserver currently in use.")
+	podsList = getPodsListByLabel(oc.AsAdmin(), "openshift-apiserver", "app=openshift-apiserver-a")
+	execOasOuptut := ExecCommandOnPod(oc, podsList[0], "openshift-apiserver", "cat /var/run/configmaps/config/config.yaml")
+	re = regexp.MustCompile(`/var/run/configmaps/audit/policy.yaml`)
+	matches = re.FindAllString(execOasOuptut, -1)
+	if len(matches) == 0 {
+		e2e.Failf("Audit config file of openshift-apiserver is wrong :: %s", execOasOuptut)
+	}
+	e2e.Logf("Audit config file of openshift-apiserver :: %v", matches)
+
+	e2e.Logf("Checking the audit config file of openshif-oauth-apiserver currently in use.")
+	podsList = getPodsListByLabel(oc.AsAdmin(), "openshift-oauth-apiserver", "app=openshift-oauth-apiserver")
+	execAuthOuptut := ExecCommandOnPod(oc, podsList[0], "openshift-oauth-apiserver", "ls /var/run/configmaps/audit/")
+	re = regexp.MustCompile(`policy.yaml`)
+	matches = re.FindAllString(execAuthOuptut, -1)
+	if len(matches) == 0 {
+		e2e.Failf("Audit config file of openshift-oauth-apiserver is wrong :: %s", execAuthOuptut)
+	}
+	e2e.Logf("Audit config file of openshift-oauth-apiserver :: %v", execAuthOuptut)
+}
+
+func checkAuditLogs(oc *exutil.CLI, script string, masterNode string, namespace string) (string, int) {
+	g.By(fmt.Sprintf("Get audit log file from %s", masterNode))
+	masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", script)
+	o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+	errCount := len(strings.TrimSpace(masterNodeLogs))
+	return masterNodeLogs, errCount
+}
+
+func setAuditProfile(oc *exutil.CLI, patchNamespace string, patch string) string {
+	expectedProgCoStatus := map[string]string{"Progressing": "True"}
+	expectedCoStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+	coOps := []string{"authentication", "openshift-apiserver"}
+	patchOutput, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchNamespace, "--type=json", "-p", patch).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(patchOutput, "patched") {
+		e2e.Logf("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after audit profile change")
+		g.By("5.1 Checking kube-apiserver operator should be in Progressing in 100 seconds")
+		err = waitCoBecomes(oc, "kube-apiserver", 100, expectedProgCoStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
+		err = waitCoBecomes(oc, "kube-apiserver", 1500, expectedCoStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
+		// Using 60s because KAS takes long time, when KAS finished rotation, OAS and Auth should have already finished.
+		for _, ops := range coOps {
+			e2e.Logf("Checking %s should be Available in 60 seconds", ops)
+			err = waitCoBecomes(oc, ops, 60, expectedCoStatus)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%v operator is not becomes available in 60 seconds", ops))
+		}
+		e2e.Logf("Post audit profile set. KAS, OAS and Auth operator are available after rollout")
+		return patchOutput
+	}
+	return patchOutput
 }
