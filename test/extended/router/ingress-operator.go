@@ -932,4 +932,71 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		checkoutput1 := readRouterPodData(oc, newRouterpod1, "cat haproxy.config", "hard")
 		o.Expect(checkoutput1).To(o.ContainSubstring(`hard-stop-after 45m`))
 	})
+
+	g.It("Author:mjoseph-Critical-51255-cluster-ingress-operator can set AWS ELB idle Timeout on per controller basis", func() {
+		g.By("Pre-flight check for the platform type")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp51255",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Patch the new custom ingress controller with connectionIdleTimeout as 2m")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"classicLoadBalancer\":{\"connectionIdleTimeout\":\"2m\"}}}}}}}")
+
+		g.By("Check the LB service and ensure the annotations are updated")
+		waitForOutput(oc, "openshift-ingress", "svc/router-"+ingctrl.name, ".metadata.annotations", `"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout":"120"`)
+
+		g.By("Check the connectionIdleTimeout value in the controller status")
+		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, ".status.endpointPublishingStrategy.loadBalancer.providerParameters.aws.classicLoadBalancer.connectionIdleTimeout", "2m0s")
+	})
+
+	g.It("Author:mjoseph-Medium-51256-cluster-ingress-operator does not accept negative value of AWS ELB idle Timeout option", func() {
+		g.By("Pre-flight check for the platform type")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp51256",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Patch the new custom ingress controller with connectionIdleTimeout with a negative value")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"classicLoadBalancer\":{\"connectionIdleTimeout\":\"-2m\"}}}}}}}")
+
+		g.By("Check the LB service and ensure the annotation is not added")
+		findAnnotation := getAnnotation(oc, "openshift-ingress", "svc", "router-"+ingctrl.name)
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring("service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout"))
+
+		g.By("Check the connectionIdleTimeout value is '0s' in the controller status")
+		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, ".status.endpointPublishingStrategy.loadBalancer.providerParameters.aws.classicLoadBalancer.connectionIdleTimeout", "0s")
+	})
 })
