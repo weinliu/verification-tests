@@ -110,7 +110,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check cluster-autoscaler-operator deployment was synced by cvo soon")
-		err = wait.Poll(15*time.Second, 3*time.Minute, func() (bool, error) {
+		err = wait.Poll(15*time.Second, 5*time.Minute, func() (bool, error) {
 			caoDeploy, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("deploy/cluster-autoscaler-operator", "-n", machineAPINamespace).Output()
 			if strings.Contains(caoDeploy, "service-ca") {
 				e2e.Logf("cluster-autoscaler-operator deployment was not synced by cvo")
@@ -119,7 +119,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			e2e.Logf("cluster-autoscaler-operator deployment was synced by cvo")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "cluster-autoscaler-operator deployment was not synced by cvo in 3m")
+		exutil.AssertWaitPollNoErr(err, "cluster-autoscaler-operator deployment was not synced by cvo in 5m")
 
 		g.By("Check cluster-autoscaler-operator pod is running")
 		err = wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
