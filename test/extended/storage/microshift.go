@@ -633,4 +633,102 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc3.create(oc)
 		defer pvc3.deleteAsAdmin(oc)
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-59665-[MicroShift] Delete pvc which is not consumed by pod should be successful
+	g.It("MicroShiftOnly-Author:rdeore-Critical-59665-[MicroShift] Delete pvc which is not consumed by pod should be successful", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID           = "59665"
+			e2eTestNamespace = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate      = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+		)
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("#. Define storage resources")
+		presetStorageClass := newStorageClass(setStorageClassName("topolvm-provisioner"), setStorageClassProvisioner(topolvmProvisioner))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimStorageClassName(presetStorageClass.name), setPersistentVolumeClaimCapacity("1Gi"))
+
+		g.By("#. Create a pvc with presetStorageClass and check description")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		o.Eventually(func() string {
+			pvcInfo, _ := pvc.getDescription(oc)
+			return pvcInfo
+		}, 30*time.Second, 5*time.Second).Should(o.And(
+			o.ContainSubstring("WaitForFirstConsumer"),
+			o.ContainSubstring("kubernetes.io/pvc-protection")))
+
+		g.By("#. Check pvc can be deleted successfully")
+		pvc.delete(oc.AsAdmin())
+		pvc.waitStatusAsExpected(oc, "deleted")
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-59666-[MicroShift] Delete pvc which is in active use by pod should postpone deletion and new pods consume such pvc should stuck at FailedScheduling
+	g.It("MicroShiftOnly-Author:rdeore-Critical-59666-[MicroShift] Delete pvc which is in active use by pod should postpone deletion and new pods consume such pvc should stuck at FailedScheduling", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID             = "59666"
+			e2eTestNamespace   = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate        = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			deploymentTemplate = filepath.Join(storageMicroshiftBaseDir, "dep-template.yaml")
+		)
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("#. Define storage resources")
+		presetStorageClass := newStorageClass(setStorageClassName("topolvm-provisioner"), setStorageClassProvisioner(topolvmProvisioner))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimStorageClassName(presetStorageClass.name), setPersistentVolumeClaimCapacity("1Gi"))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentNamespace(e2eTestNamespace), setDeploymentPVCName(pvc.name))
+		dep2 := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentNamespace(e2eTestNamespace), setDeploymentPVCName(pvc.name))
+
+		g.By("#. Create a pvc with presetStorageClass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("#. Create deployment with the created pvc and wait for the pod ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+
+		g.By("#. Wait for the deployment ready")
+		dep.waitReady(oc)
+
+		g.By("#. Delete PVC in active use")
+		err := pvc.deleteUntilTimeOut(oc.AsAdmin(), "3")
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("#. Check PVC still exists and is in Terminating status")
+		o.Consistently(func() string {
+			pvcInfo, _ := pvc.getDescription(oc)
+			return pvcInfo
+		}, 30*time.Second, 5*time.Second).Should(o.ContainSubstring("Terminating"))
+
+		g.By("#. Create new deployment with same pvc")
+		dep2.create(oc)
+		defer dep2.deleteAsAdmin(oc)
+
+		g.By("#. Check Pod scheduling failed for new deployment")
+		podName := dep2.getPodList(oc)[0]
+		o.Eventually(func() string {
+			podInfo := describePod(oc, dep2.namespace, podName)
+			return podInfo
+		}, 30*time.Second, 5*time.Second).Should(o.And(
+			o.ContainSubstring("FailedScheduling"),
+			o.ContainSubstring("persistentvolumeclaim \""+pvc.name+"\" is being deleted")))
+
+		g.By("#. Delete all Deployments")
+		dep2.deleteAsAdmin(oc)
+		dep.deleteAsAdmin(oc)
+
+		g.By("#. Check PVC is deleted successfully")
+		pvc.waitStatusAsExpected(oc, "deleted")
+	})
 })

@@ -200,6 +200,11 @@ func (pvc *persistentVolumeClaim) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", pvc.name, "-n", pvc.namespace, "--ignore-not-found").Execute()
 }
 
+// Delete the PersistentVolumeClaim wait until timeout in seconds
+func (pvc *persistentVolumeClaim) deleteUntilTimeOut(oc *exutil.CLI, timeoutSeconds string) error {
+	return oc.WithoutNamespace().Run("delete").Args("pvc", pvc.name, "-n", pvc.namespace, "--ignore-not-found", "--timeout="+timeoutSeconds+"s").Execute()
+}
+
 // Get the PersistentVolumeClaim status
 func (pvc *persistentVolumeClaim) getStatus(oc *exutil.CLI) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", pvc.namespace, pvc.name, "-o=jsonpath={.status.phase}").Output()
