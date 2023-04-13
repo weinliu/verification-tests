@@ -476,7 +476,7 @@ func (n Node) GetDateWithDelta(delta string) (time.Time, error) {
 
 // IsFIPSEnabled check whether fips is enabled on node
 func (n *Node) IsFIPSEnabled() (bool, error) {
-	output, err := exutil.DebugNodeWithChroot(n.oc, n.name, "fips-mode-setup", "--check")
+	output, err := n.DebugNodeWithChroot("fips-mode-setup", "--check")
 	if err != nil {
 		logger.Errorf("Error checking fips mode %s", err)
 	}
@@ -486,13 +486,13 @@ func (n *Node) IsFIPSEnabled() (bool, error) {
 
 // IsKernelArgEnabled check whether kernel arg is enabled on node
 func (n *Node) IsKernelArgEnabled(karg string) (bool, error) {
-	unameOut, unameErr := exutil.DebugNodeWithChroot(n.oc, n.name, "bash", "-c", "uname -a")
+	unameOut, unameErr := n.DebugNodeWithChroot("bash", "-c", "uname -a")
 	if unameErr != nil {
 		logger.Errorf("Error checking kernel arg via uname -a: %v", unameErr)
 		return false, unameErr
 	}
 
-	cliOut, cliErr := exutil.DebugNodeWithChroot(n.oc, n.name, "cat", "/proc/cmdline")
+	cliOut, cliErr := n.DebugNodeWithChroot("cat", "/proc/cmdline")
 	if cliErr != nil {
 		logger.Errorf("Err checking kernel arg via /proc/cmdline: %v", cliErr)
 		return false, cliErr
