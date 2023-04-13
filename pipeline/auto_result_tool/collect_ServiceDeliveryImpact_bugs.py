@@ -38,6 +38,8 @@ class JIRAManager:
             filter = "labels = ServiceDeliveryImpact AND created >= startOfYear() ORDER BY Created DESC"
         issues_jira  = self.jira.search_issues(filter)
         for issue in issues_jira:
+            if "OSDOCS" in issue.key:
+                continue
             issues[issue.key] = dict()
             issues[issue.key]["summary"] = issue.fields.summary
             issues[issue.key]["link"] = "https://issues.redhat.com/browse/"+issue.key
@@ -65,7 +67,18 @@ class JIRAManager:
                 issues[issue.key]["labels"] = issue.fields.labels
             except:
                 issues[issue.key]["labels"] = []
-        self.logger.info(pprint.pformat(issues, indent=1))
+            try:
+                issues[issue.key]["Target Version"] = issue.fields.customfield_12319940[0].name
+            except:
+                issues[issue.key]["Target Version"] = ""
+            if len(issues[issue.key]["Target Version"]) == 0:
+                try:
+                    for fix_version in issue.fields.fixVersions:
+                        issues[issue.key]["Target Version"] = issues[issue.key]["Target Version"] + fix_version.name
+                except:
+                    issues[issue.key]["Target Version"] = ""
+            
+        self.logger.debug(pprint.pformat(issues, indent=1))
         self.logger.debug(json.dumps(issue.raw['fields'], indent=4, sort_keys=True))
         return issues
 
@@ -104,6 +117,10 @@ class CollectClient:
                 worksheet.update_acell("G"+str(row+1), issues[bug_id]['status'])
                 self.logger.info("update G%s: %s", str(row+1), issues[bug_id]['status'])
                 time.sleep(2)
+            if issues[bug_id]['Target Version'] != values_list[7]:
+                worksheet.update_acell("H"+str(row+1), issues[bug_id]['Target Version'])
+                self.logger.info("update H%s: %s", str(row+1), issues[bug_id]['Target Version'])
+                time.sleep(2)
             issues.pop(bug_id)
             
         for bug_id in issues.keys():
@@ -116,7 +133,8 @@ class CollectClient:
                              issues[bug_id]['components'],
                              issues[bug_id]['created'],
                              issues[bug_id]['qe_contact'],
-                             issues[bug_id]['status']]
+                             issues[bug_id]['status'],
+                             issues[bug_id]['Target Version']]
             worksheet.insert_row(update_record, index=2)
             worksheet.update_acell('B2',f'=HYPERLINK("{link}","{summary}")')
             self.logger.info("================ update %s ======================", bug_id)
@@ -131,21 +149,25 @@ class CollectClient:
         worksheet = spreadsheet.worksheet("ServiceDeliveryImpact Bugs")
         values_list_all = worksheet.get_all_values()
         message_list = []
-        message_list.append('''For ServiceDeliveryImpact Bugs, https://docs.google.com/spreadsheets/d/1tU0IvHR9XahcBM_8kYZQXGIZiu79PG4X1X14XnZ1jeM/edit#gid=0, Please help to update the column H-L, Thanks!
+        message_list.append('''For ServiceDeliveryImpact Bugs, https://docs.google.com/spreadsheets/d/1tU0IvHR9XahcBM_8kYZQXGIZiu79PG4X1X14XnZ1jeM/edit#gid=0, Please help to update the column I-M, Thanks!
 Root Cause Analysed: when dev added comment or PR to fix the bug, QE needs to understand the root cause, which is helpful to design new test case to cover this scenario
 Tested: QE already verify the fix with e2e scenario mentioned in the bug
 Automated: the new test case is automated, if the case is manual only, please mark it as "Manual Only"\n''')
         for row in range(1, len(values_list_all)):
             values_list = values_list_all[row]
             bug_id = values_list[0]
+            type = values_list[2]
+            component = values_list[3]
             qa_contact = values_list[5]
             bug_status = values_list[6]
-            rcaed = values_list[7]
-            tested = values_list[8]
-            automated = values_list[9]
-            if bug_status.lower() == "verified" or bug_status.lower() == "closed":
+            rcaed = values_list[8]
+            tested = values_list[9]
+            automated = values_list[10]
+            if "bug" not in type.lower():
+                continue
+            if bug_status.lower() == "verified" or bug_status.lower() == "closed" or bug_status.lower() == "on_qa":
                 if not rcaed or not tested or not automated:
-                    message_list.append(bug_id + ": @" +qa_contact.split(os.linesep)[0])
+                    message_list.append(bug_id + " "+ component +" @" +qa_contact.split(os.linesep)[0])
         self.logger.info(os.linesep.join(message_list))
             
             
