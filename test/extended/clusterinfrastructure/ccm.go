@@ -80,6 +80,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-42657-Enable out-of-tree cloud providers with feature gate [Disruptive]", func() {
 		g.By("Check if ccm on this platform is supported")
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "openstack", "gcp", "vsphere")
+		// There is a bug for GCP private cluster enable TechPreviewNoUpgrade https://issues.redhat.com/browse/OCPBUGS-5755
+		publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if exutil.CheckPlatform(oc) == "gcp" && publicZone == "" {
+			g.Skip("GCP private cluster if enable TechPreviewNoUpgrade will hit https://issues.redhat.com/browse/OCPBUGS-5755, skip this case!!")
+		}
+
 		g.By("Check if ccm is deployed")
 		ccm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
