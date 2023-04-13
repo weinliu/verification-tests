@@ -23,12 +23,11 @@ describe("Improve MachineConfigPool list table for update status", () => {
   });
 
   it("(OCP-51395, xiyuzhao) Improve MachineConfigPool list table for update status", {tags: ['e2e','admin'] }, () => {
-
     cy.visit('/settings/cluster')
-    ClusterSettingPage.configureChannel()
     ClusterSettingPage.editUpstreamConfig()
+    ClusterSettingPage.configureChannel()
     cy.visit('/settings/cluster')
-    cy.contains(/Up to date|Available updates/g).should('be.visible')
+    cy.contains(/Up to date|Available updates|Not retrieving updates/g).should('be.visible')
 
     mcp.listPage.goToMCPPage()
     // Old columns should not exist
