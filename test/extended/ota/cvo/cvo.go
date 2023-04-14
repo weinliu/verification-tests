@@ -180,46 +180,60 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
-		g.By("Check oc adm upgrade when there are not-recommended updates")
-		expUpdate := "Additional updates which are not recommended based on your cluster " +
+		g.By("Check recommended update and notes about additional updates present on the output of oc adm upgrade")
+		expUpdate1 := "Additional updates which are not recommended based on your cluster " +
 			"configuration are available, to view those re-run the command with " +
 			"--include-not-recommended"
-		found := checkUpdates(oc, false, 5, 15, "No updates available", expUpdate)
+		expUpdate2 := "Recommended updates:\n\n  " +
+			"VERSION     IMAGE\n  " +
+			"4.99.999999 registry.ci.openshift.org/ocp/release@sha256:" +
+			"9999999999999999999999999999999999999999999999999999999999999999"
+		found := checkUpdates(oc, false, 5, 15, expUpdate1, expUpdate2)
 		o.Expect(found).To(o.BeTrue())
 
-		g.By("Check risk type=Always updates present")
-		expUpdate = "Version: 4.88.888888\n  " +
+		g.By("Check risk type=Always updates and 2 risks update present")
+		expUpdate1 = "Version: 4.88.888888\n  " +
 			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
 			"8888888888888888888888888888888888888888888888888888888888888888\n  " +
 			"Recommended: False\n  " +
 			"Reason: ReleaseIsRejected\n  " +
 			"Message: Too many CI failures on this release, so do not update to it"
-		found = checkUpdates(oc, true, 5, 15, "No updates available", "Supported but not recommended updates", expUpdate)
+
+		expUpdate2 = "Version: 4.77.777777\n  " +
+			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
+			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
+			"Recommended: Unknown\n  " +
+			"Reason: EvaluationFailed"
+		found = checkUpdates(oc, true, 5, 15, "Supported but not recommended updates", expUpdate1, expUpdate2)
 		o.Expect(found).To(o.BeTrue())
 
-		g.By("Check 2 risks updates present")
-		expUpdate = "Version: 4.77.777777\n  " +
+		g.By("Check Recommended: Unknown update is changed to Recommended: False with MultipleReasons")
+		expUpdate2 = "Version: 4.77.777777\n  " +
+			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
+			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
+			"Recommended: False\n  " +
+			"Reason: MultipleReasons\n  " +
+			"Message: On clusters on default invoker user, this imaginary bug can happen. " +
+			"https://bug.example.com/a"
+		found = checkUpdates(oc, true, 60, 15*60, "Supported but not recommended updates", expUpdate2)
+		o.Expect(found).To(o.BeTrue())
+
+		g.By("Check The reason for the multiple risks is changed to SomeInvokerThing")
+		expUpdate2 = "Version: 4.77.777777\n  " +
 			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
 			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
 			"Recommended: False\n  " +
 			"Reason: SomeInvokerThing\n  " +
-			"Message: On clusters on default invoker user, this imaginary bug can happen. https://bug.example.com/a"
-		found = checkUpdates(oc, true, 60, 15*60, "No updates available", "Supported but not recommended updates", expUpdate)
-		o.Expect(found).To(o.BeTrue())
-
-		g.By("Check recommended update present")
-		expUpdate = "Recommended updates:\n\n  " +
-			"VERSION     IMAGE\n  " +
-			"4.99.999999 registry.ci.openshift.org/ocp/release@sha256:" +
-			"9999999999999999999999999999999999999999999999999999999999999999"
-		found = checkUpdates(oc, true, 60, 15*60, expUpdate)
+			"Message: On clusters on default invoker user, this imaginary bug can happen. " +
+			"https://bug.example.com/a"
+		found = checkUpdates(oc, true, 60, 15*60, "Supported but not recommended updates", expUpdate2)
 		o.Expect(found).To(o.BeTrue())
 
 		g.By("Check multiple reason conditional update present")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "buggy").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		expUpdate = "Version: 4.77.777777\n  " +
+		expUpdate2 = "Version: 4.77.777777\n  " +
 			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
 			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
 			"Recommended: False\n  " +
@@ -228,7 +242,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"https://bug.example.com/a\n  \n  " +
 			"On clusters with the channel set to 'buggy', this imaginary bug can happen. " +
 			"https://bug.example.com/b"
-		found = checkUpdates(oc, true, 300, 65*60, expUpdate)
+		found = checkUpdates(oc, true, 300, 65*60, expUpdate2)
 		o.Expect(found).To(o.BeTrue())
 	})
 
