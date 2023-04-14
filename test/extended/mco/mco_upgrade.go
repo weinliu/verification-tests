@@ -77,10 +77,15 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		allCoreOsNodes := NewNodeList(oc).GetAllCoreOsNodesOrFail()
 		for _, node := range allCoreOsNodes {
 			g.By(fmt.Sprintf("check authorized key dir and file on %s", node.GetName()))
-			output, err := node.DebugNodeWithChroot("stat", oldAuthorizedKeyPath)
-			o.Expect(err).Should(o.HaveOccurred(), "old authorized key file still exists")
-			o.Expect(output).Should(o.ContainSubstring("No such file or directory"))
-			output, err = node.DebugNodeWithChroot("stat", newAuthorizedKeyPath)
+			o.Eventually(func(gm o.Gomega) {
+				output, err := node.DebugNodeWithChroot("stat", oldAuthorizedKeyPath)
+				gm.Expect(err).Should(o.HaveOccurred(), "old authorized key file still exists")
+				gm.Expect(output).Should(o.ContainSubstring("No such file or directory"))
+			}, "3m", "20s",
+			).Should(o.Succeed(),
+				"The old authorized key file still exists")
+
+			output, err := node.DebugNodeWithChroot("stat", newAuthorizedKeyPath)
 			o.Expect(err).ShouldNot(o.HaveOccurred(), "new authorized key file not found")
 			o.Expect(output).Should(o.ContainSubstring("File: " + newAuthorizedKeyPath))
 		}
