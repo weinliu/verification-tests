@@ -32,10 +32,8 @@ RUN oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hype
     curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp/ -o ocp.html && curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp-dev-preview/ -o pre.html && \
     ecver=$(grep -E "<a href=\"candidate-4\.14" pre.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${ecver}V" && \
     if [ "V${ecver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp-dev-preview/${ecver}; fi && \
-    rcver=$(grep -E "<a href=\"4\.14.0-rc" ocp.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${rcver}V" && \
-    if [ "V${rcver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/${rcver}; fi && \
-    gaver=$(grep -E "<a href=\"latest-4\.14" ocp.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${gaver}V" && \
-    if [ "V${gaver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/${gaver}; fi && \
+    rcgaver=$(grep -E "<a href=\"4\.14" ocp.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${rcgaver}V" && \
+    if [ "V${rcgaver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/${rcgaver}; fi && \
     curl -s -k -L ${CLIENTURL}/opm-linux.tar.gz -o opm-linux.tar.gz  && \
     curl -s -k -L ${CLIENTURL}/oc-mirror.tar.gz -o oc-mirror.tar.gz && \
     tar -C /usr/bin -xzvf opm-linux.tar.gz && rm -fr opm-linux.tar.gz /usr/bin/oc && \
