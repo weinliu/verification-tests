@@ -776,12 +776,13 @@ func (podTwoContainers *podTwoContainersDescription) delete(oc *exutil.CLI) erro
 }
 
 func (podUserNS *podUserNSDescription) crioWorkloadConfigExist(oc *exutil.CLI) error {
-	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+	return wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodename := nodeList.Items[0].Name
-		workloadString, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/crio/crio.conf.d/00-default")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		workloadString, _ := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/crio/crio.conf.d/00-default")
+		//not handle err as a workaround of issue: debug container needs more time to start in 4.13&4.14
+		//o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(string(workloadString), "crio.runtime.workloads.openshift-builder") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.userns-mode") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.Devices") {
 			e2e.Logf("the crio workload exist in /etc/crio/crio.conf.d/00-default")
 		} else {
@@ -793,15 +794,14 @@ func (podUserNS *podUserNSDescription) crioWorkloadConfigExist(oc *exutil.CLI) e
 }
 
 func (podUserNS *podUserNSDescription) userContainersExistForNS(oc *exutil.CLI) error {
-	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+	return wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodename := nodeList.Items[0].Name
-		userContainers, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/subuid")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		groupContainers, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/subgid")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(string(userContainers), "containers") && strings.Contains(string(groupContainers), "containers") {
+		xContainers, _ := exutil.DebugNodeWithChroot(oc, nodename, "bash", "-c", "cat /etc/subuid /etc/subgid")
+		//not handle err as a workaround of issue: debug container needs more time to start in 4.13&4.14
+		//o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Count(xContainers, "containers") == 2 {
 			e2e.Logf("the user containers exist in /etc/subuid and /etc/subgid")
 		} else {
 			e2e.Logf("the user containers not exist in /etc/subuid and /etc/subgid")
@@ -812,7 +812,7 @@ func (podUserNS *podUserNSDescription) userContainersExistForNS(oc *exutil.CLI) 
 }
 
 func (podUserNS *podUserNSDescription) podRunInUserNS(oc *exutil.CLI) error {
-	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+	return wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", podUserNS.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		idString, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", podUserNS.namespace, podName, "id").Output()
@@ -827,8 +827,9 @@ func (podUserNS *podUserNSDescription) podRunInUserNS(oc *exutil.CLI) error {
 
 			nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", podUserNS.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			nodeUserNS, err := exutil.DebugNodeWithChroot(oc, string(nodename), "/bin/bash", "-c", "lsns -t user | grep /usr/lib/systemd/systemd")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeUserNS, _ := exutil.DebugNodeWithChroot(oc, string(nodename), "/bin/bash", "-c", "lsns -t user | grep /usr/lib/systemd/systemd")
+			//not handle err as a workaround of issue: debug container needs more time to start in 4.13&4.14
+			//o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("host user ns string : %v", nodeUserNS)
 			nodeNSstr := strings.Split(string(nodeUserNS), "\n")
 			nodeNS := strings.Fields(nodeNSstr[0])
