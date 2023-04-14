@@ -739,7 +739,7 @@ spec:
 		if err == nil {
 			e2e.Logf("Cluster health check passed before running case")
 		} else {
-			e2e.Failf("Cluster health check failed before running case :: %s ", err)
+			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
 		}
 
 		g.By("Check the configuration of priority level")

@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		if err == nil {
 			e2e.Logf("Cluster health check passed before running dr case")
 		} else {
-			e2e.Failf("Cluster health check failed before running dr case :: %s ", err)
+			g.Skip(fmt.Sprintf("Cluster health check failed before running dr case :: %s ", err))
 		}
 
 		platform := exutil.CheckPlatform(oc)

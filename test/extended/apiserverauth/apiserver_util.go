@@ -711,15 +711,15 @@ func ExecCommandOnPod(oc *exutil.CLI, podname string, namespace string, command 
 func clusterHealthcheck(oc *exutil.CLI, dirname string) error {
 	err := clusterNodesHealthcheck(oc, 600, dirname)
 	if err != nil {
-		return fmt.Errorf("Cluster nodes health check failed")
+		return fmt.Errorf("Cluster nodes health check failed. Abnormality found in nodes.")
 	}
 	err = clusterOperatorHealthcheck(oc, 1500, dirname)
 	if err != nil {
-		return fmt.Errorf("Cluster operators health check failed")
+		return fmt.Errorf("Cluster operators health check failed. Abnormality found in cluster operators.")
 	}
 	err = clusterPodsHealthcheck(oc, 600, dirname)
 	if err != nil {
-		return fmt.Errorf("Cluster pods health check failed")
+		return fmt.Errorf("Cluster pods health check failed. Abnormality found in pods.")
 	}
 	return nil
 }
@@ -748,7 +748,6 @@ func clusterOperatorHealthcheck(oc *exutil.CLI, waitTime int, dirname string) er
 		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
-	exutil.AssertWaitPollNoErr(errCo, "Abnormality found in cluster operators.")
 	return errCo
 }
 
@@ -774,7 +773,6 @@ func clusterPodsHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error 
 	if errPod != nil {
 		e2e.Logf("%s", podLogs)
 	}
-	exutil.AssertWaitPollNoErr(errPod, "Abnormality found in pods.")
 	return errPod
 }
 
@@ -798,7 +796,6 @@ func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error
 		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
-	exutil.AssertWaitPollNoErr(errNode, "Abnormality found in nodes.")
 	return errNode
 }
 
