@@ -4898,4 +4898,35 @@ type: kubernetes.io/service-account-token`
 		}
 		e2e.Logf("Post audit profile to AllRequestBodies, Verbs captured in kube-apiserver audit logs on master node %v", masterNodes[0])
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Author:rgangwar-Medium-54786-[logging] component name presents in klog headers", func() {
+
+		var (
+			e2eTestNamespace = "microshift-ocp54786"
+			components       = []string{"kube-controller-manager", "kubelet", "kube-apiserver"}
+		)
+
+		g.By("1. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("2. Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("3. Checking component name presents in klog headers")
+		for _, comps := range components {
+			script := `journalctl -u microshift.service|grep -i "microshift.*: ` + comps + `"|tail -1`
+			masterNodeLogs, checkLogErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", script)
+			o.Expect(checkLogErr).NotTo(o.HaveOccurred())
+			count := len(strings.TrimSpace(masterNodeLogs))
+			if count > 0 {
+				e2e.Logf("Component name presents in klog headers for :: %v :: %v", comps, masterNodeLogs)
+			} else {
+				e2e.Failf("Component name not presents in klog headers for :: %v :: %v", comps, masterNodeLogs)
+			}
+		}
+	})
 })
