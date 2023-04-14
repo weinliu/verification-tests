@@ -1,0 +1,24 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: tailoredprofile-hypershift-template
+objects:
+- apiVersion: compliance.openshift.io/v1alpha1
+  kind: TailoredProfile
+  metadata:
+    name: "${NAME}"
+    namespace: "${NAMESPACE}"
+  spec:
+    extends: "${EXTENDS}"
+    title: My little profile
+    description: This profile test required rules
+    setValues:
+    - name: ocp4-hypershift-cluster
+      value: "${VALUE}"
+      rationale: This value is used for HyperShift version detection
+
+parameters:
+- name: NAME
+- name: NAMESPACE
+- name: EXTENDS
+- name: VALUE

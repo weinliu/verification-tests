@@ -54,6 +54,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		prometheusAuditRuleYAML          string
 		wordpressRouteYAML               string
 		resourceQuotaYAML                string
+		tprofileHypershfitTemplate       string
 		tprofileWithoutDescriptionYAML   string
 		tprofileWithoutTitleYAML         string
 		tprofileForCustomMcpTemplate     string
@@ -77,6 +78,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		cscantaintsTemplate = filepath.Join(buildPruningBaseDir, "compliancescantaints.yaml")
 		cscanSCTemplate = filepath.Join(buildPruningBaseDir, "compliancescanStorageClass.yaml")
 		tprofileTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile.yaml")
+		tprofileHypershfitTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-hypershift.yaml")
 		tprofileWithoutVarTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutvariable.yaml")
 		scansettingTemplate = filepath.Join(buildPruningBaseDir, "scansetting.yaml")
 		scansettingSingleTemplate = filepath.Join(buildPruningBaseDir, "scansettingsingle.yaml")
@@ -4629,6 +4631,98 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].spec.priorityClassName}")
 		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "compliance.openshift.io/scan-name="+csuiteWithoutPC.scanname+",workload=aggregator",
 			"-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("HyperShiftMGMT-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-60854-High-60864-Check the scan for ocp4-cis/ocp4-pci-dss with tailored profile works for hypershift cluster [Serial][Slow]", func() {
+		var (
+			tprofileCis = tailoredProfileDescription{
+				name:      "hypershift-cis" + getRandomString(),
+				namespace: subD.namespace,
+				extends:   "ocp4-cis",
+				value:     "",
+				template:  tprofileHypershfitTemplate,
+			}
+			tprofilePcidss = tailoredProfileDescription{
+				name:      "hypershift-pci-dss" + getRandomString(),
+				namespace: subD.namespace,
+				extends:   "ocp4-pci-dss",
+				value:     "",
+				template:  tprofileHypershfitTemplate,
+			}
+			ssbCis                = "test-cis" + getRandomString()
+			ssbPcidss             = "test-pci-dss" + getRandomString()
+			ccrsCisShouldFailList = []string{
+				tprofileCis.name + "-audit-log-forwarding-webhook",
+				tprofileCis.name + "-idp-is-configured",
+				tprofileCis.name + "-ocp-api-server-audit-log-maxbackup"}
+			ccrsPcidssShouldFailList = []string{
+				tprofilePcidss.name + "-audit-log-forwarding-webhook",
+				tprofilePcidss.name + "-idp-is-configured",
+				tprofilePcidss.name + "-ocp-api-server-audit-log-maxbackup"}
+		)
+
+		defer cleanupObjects(oc,
+			objectTableRef{"scansettingbinding", subD.namespace, ssbCis},
+			objectTableRef{"scansettingbinding", subD.namespace, ssbPcidss},
+			objectTableRef{"tailoredprofile", subD.namespace, tprofileCis.name},
+			objectTableRef{"tailoredprofile", subD.namespace, tprofilePcidss.name})
+
+		g.By("Create the name of hosted cluster !!!\n")
+		hostedClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", "-A", "-n", subD.namespace, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the tailoredprofiels !!!\n")
+		tprofileCis.value = hostedClusterName
+		tprofilePcidss.value = hostedClusterName
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofileCis.template, "-p", "NAME="+tprofileCis.name, "NAMESPACE="+tprofileCis.namespace,
+			"EXTENDS="+tprofileCis.extends, "VALUE="+tprofileCis.value)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofilePcidss.template, "-p", "NAME="+tprofilePcidss.name, "NAMESPACE="+tprofilePcidss.namespace,
+			"EXTENDS="+tprofilePcidss.extends, "VALUE="+tprofilePcidss.value)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"tp", tprofileCis.name, "-n", subD.namespace, "-o=jsonpath={.status.state}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"tp", tprofilePcidss.name, "-n", subD.namespace, "-o=jsonpath={.status.state}"}).check(oc)
+
+		g.By("Rerun scan and check ComplianceSuite status & result.. !!!\n")
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbCis, "-n", subD.namespace, "tailoredprofile/"+tprofileCis.name).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbPcidss, "-n", subD.namespace, "tailoredprofile/"+tprofilePcidss.name).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbCis, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbPcidss, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status !!!\n")
+		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssbCis, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssbPcidss, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+
+		g.By("Check complianceSuite name and result.. !!!\n")
+		subD.complianceSuiteResult(oc, ssbCis, "NON-COMPLIANT")
+		subD.complianceSuiteResult(oc, ssbPcidss, "NON-COMPLIANT")
+
+		g.By("Verify the failed ccr number and failed ccr list.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "PASS", ok, []string{"compliancecheckresult", tprofileCis.name + "-api-server-encryption-provider-cipher",
+			"-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "PASS", ok, []string{"compliancecheckresult", tprofilePcidss.name + "-api-server-encryption-provider-cipher",
+			"-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		ccrCisFailList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-l", "compliance.openshift.io/check-status=FAIL,"+"compliance.openshift.io/suite="+ssbCis,
+			"-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+		ccrCisFailNumber := len(strings.Fields(ccrCisFailList))
+		ccrPcidssFailList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-l", "compliance.openshift.io/check-status=FAIL,"+"compliance.openshift.io/suite="+ssbPcidss,
+			"-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+		ccrPcidssFailNumber := len(strings.Fields(ccrPcidssFailList))
+		o.Expect(ccrCisFailNumber).Should(o.Equal(3), fmt.Sprintf("The  ccrCisFailNumber %s is NOT 3", ccrCisFailNumber))
+		o.Expect(ccrPcidssFailNumber).Should(o.Equal(3), fmt.Sprintf("The ccrPcidssFailNumber %s is NOT 3", ccrPcidssFailNumber))
+		for _, ccrCis := range ccrsCisShouldFailList {
+			o.Expect(strings.Fields(ccrCisFailList)).Should(o.ContainElement(ccrCis), fmt.Sprintf("The %s NOT in the failed ccr list %s", ccrCis, ccrCisFailList))
+
+		}
+		for _, ccrPcidss := range ccrsPcidssShouldFailList {
+			o.Expect(strings.Fields(ccrPcidssFailList)).Should(o.ContainElement(ccrPcidss), fmt.Sprintf("The %s NOT in the failed ccr list %s", ccrPcidss, ccrPcidssFailList))
+
+		}
 	})
 
 	// author: xiyuan@redhat.com
