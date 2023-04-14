@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-High-46506-High-46817-Mirror a single image works well", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-High-46506-High-46817-Mirror a single image works well [Serial]", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture == "Multi-Arch" {
 			g.Skip("Skip for Multi-Arch")
@@ -218,6 +218,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		_, err = os.Stat("/tmp/46506test/mirror_seq1_000000.tar")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Mirror to registry from archive")
+		defer os.RemoveAll("oc-mirror-workspace")
 		out2, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "/tmp/46506test/mirror_seq1_000000.tar", "docker://"+serInfo.serviceName+"/mirrorachive", "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(out2, "using stateless mode") {
@@ -246,7 +247,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init", "--registry", "localhost:5000/test:latest", "--output", "json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-High-46769-Critical-46515-High-registry backend test", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-High-46769-Critical-46515-High-registry backend test [Serial]", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture == "Multi-Arch" {
 			g.Skip("Skip for Multi-Arch")
@@ -276,6 +277,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Mirroring selected operator and helm image")
+		defer os.RemoveAll("oc-mirror-workspace")
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", operatorConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--continue-on-error").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
