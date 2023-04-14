@@ -38,6 +38,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		exutil.SkipARM64(oc)
 		machinesetName := "machineset-45377"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer ms.DeleteMachineSet(oc)
@@ -61,6 +62,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		exutil.SkipARM64(oc)
 		machinesetName := "machineset-46967"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer ms.DeleteMachineSet(oc)
