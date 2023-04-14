@@ -363,6 +363,13 @@ func getHAProxyVersion(oc *exutil.CLI) string {
 	return proxyVersion
 }
 
+func getHAProxyRPMVersion(oc *exutil.CLI) string {
+	routerpod := getRouterPod(oc, "default")
+	haproxyOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "rpm -qa haproxy22").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return haproxyOutput
+}
+
 func getImagePullSpecFromPayload(oc *exutil.CLI, image string) string {
 	var pullspec string
 	baseDir := exutil.FixturePath("testdata", "router")
