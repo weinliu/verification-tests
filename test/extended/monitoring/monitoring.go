@@ -743,6 +743,87 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("inspect", "clusteroperator", "monitoring", "--dest-dir=/tmp/must-gather-43037").Output()
 			o.Expect(output).NotTo(o.ContainSubstring("error"))
 		})
+
+		// author: tagao@redhat.com
+		g.It("Author:tagao-Medium-32224-Separate user workload configuration [Serial]", func() {
+			var (
+				separateUwmConf = filepath.Join(monitoringBaseDir, "separate-uwm-config.yaml")
+			)
+			g.By("delete uwm-config/cm-config and bound pvc at the end of a serial case")
+			defer func() {
+				PvcNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "-ojsonpath={.items[*].metadata.name}", "-l", "app.kubernetes.io/instance=user-workload", "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				for _, pvc := range strings.Fields(PvcNames) {
+					oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc", pvc, "-n", "openshift-user-workload-monitoring").Execute()
+				}
+			}()
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+			g.By("this case should excute on cluser which have storage class")
+			checkSc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc").Output()
+			if checkSc == "{}" || !strings.Contains(checkSc, "default") {
+				g.Skip("This case should excute on cluser which have default storage class!")
+			}
+
+			g.By("get master node mames with label")
+			NodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master", "-ojsonpath={.items[*].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeNameList := strings.Fields(NodeNames)
+
+			g.By("add labels to master nodes, and delete them at the end of case")
+			for _, name := range nodeNameList {
+				defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", name, "uwm-").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", name, "uwm=deploy").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			g.By("create the separate user workload configuration")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", separateUwmConf)
+
+			g.By("check remoteWrite metrics")
+			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=prometheus_remote_storage_shards'`, token, `"url":"http://localhost:1234/receive"`, 3*uwmLoadTime)
+
+			g.By("check prometheus-user-workload pods are bound to PVCs, check cpu and memory")
+			PodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-ojsonpath={.items[*].metadata.name}", "-l", "app.kubernetes.io/name=prometheus", "-n", "openshift-user-workload-monitoring").Output()
+			PodNameList := strings.Fields(PodNames)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range PodNameList {
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, "-ojsonpath={.spec.volumes[]}", "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(output).To(o.ContainSubstring("uwm-prometheus"))
+				output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, `-ojsonpath={.spec.containers[?(@.name=="prometheus")].resources.requests}`, "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(output).To(o.ContainSubstring(`"cpu":"200m","memory":"1Gi"`))
+			}
+
+			g.By("check thanos-ruler-user-workload pods are bound to PVCs, check cpu and memory")
+			PodNames, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-ojsonpath={.items[*].metadata.name}", "-l", "app.kubernetes.io/name=thanos-ruler", "-n", "openshift-user-workload-monitoring").Output()
+			PodNameList = strings.Fields(PodNames)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range PodNameList {
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, "-ojsonpath={.spec.volumes[]}", "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(output).To(o.ContainSubstring("thanosruler"))
+				output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, `-ojsonpath={.spec.containers[?(@.name=="thanos-ruler")].resources.requests}`, "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(output).To(o.ContainSubstring(`"cpu":"20m","memory":"50Mi"`))
+			}
+
+			g.By("toleration settings check")
+			PodNames, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-ojsonpath={.items[*].metadata.name}", "-n", "openshift-user-workload-monitoring").Output()
+			PodNameList = strings.Fields(PodNames)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range PodNameList {
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, "-ojsonpath={.spec.tolerations}", "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(output).To(o.ContainSubstring("node-role.kubernetes.io/master"))
+				o.Expect(output).To(o.ContainSubstring(`"operator":"Exists"`))
+			}
+			g.By("prometheus.enforcedSampleLimit check")
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", "-ojsonpath={.spec.enforcedSampleLimit}", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(output).To(o.ContainSubstring("2"))
+
+			g.By("prometheus.retention check")
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", "-ojsonpath={.spec.retention}", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(output).To(o.ContainSubstring("48h"))
+		})
 	})
 
 	//author: tagao@redhat.com
