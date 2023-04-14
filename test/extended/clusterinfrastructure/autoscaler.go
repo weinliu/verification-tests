@@ -26,6 +26,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterAutoscaler         clusterAutoscalerDescription
 		machineAutoscaler         machineAutoscalerDescription
 		workLoad                  workLoadDescription
+		iaasPlatform              string
 	)
 
 	g.BeforeEach(func() {
@@ -314,5 +315,71 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Check alert ClusterAutoscalerUnableToScaleMemoryLimitReached is raised")
 		checkAlertRaised(oc, "ClusterAutoscalerUnableToScaleMemoryLimitReached")
+	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-37854-Autoscaler will scale down the nodegroup that has Failed machine when maxNodeProvisionTime is reached[Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "azure", "openstack", "vsphere")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-37854"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		var invalidValue string
+		iaasPlatform = exutil.CheckPlatform(oc)
+		switch iaasPlatform {
+		case "aws":
+			invalidValue = "\"instanceType\": \"invalid\""
+		case "azure":
+			invalidValue = "\"vmSize\": \"invalid\""
+		case "gcp":
+			invalidValue = "\"machineType\": \"invalid\""
+		case "openstack":
+			invalidValue = "\"flavor\": \"invalid\""
+		case "vsphere":
+			invalidValue = "\"template\": \"invalid\""
+		}
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{`+invalidValue+`}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create clusterautoscaler")
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+		clusterAutoscaler.createClusterAutoscaler(oc)
+
+		g.By("Create MachineAutoscaler")
+		machineAutoscaler = machineAutoscalerDescription{
+			name:           "machineautoscaler-37854",
+			namespace:      "openshift-machine-api",
+			maxReplicas:    2,
+			minReplicas:    0,
+			template:       machineAutoscalerTemplate,
+			machineSetName: machinesetName,
+		}
+		defer machineAutoscaler.deleteMachineAutoscaler(oc)
+		machineAutoscaler.createMachineAutoscaler(oc)
+
+		g.By("Create workload")
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+
+		g.By("Check new created machine has 'Failed' phase")
+		exutil.WaitForMachineFailed(oc, machinesetName)
+
+		g.By("Check cluster auto scales down and node group will be marked as backoff")
+		autoscalePodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-machine-api", "-l", "cluster-autoscaler=default", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(30*time.Second, 1200*time.Second, func() (bool, error) {
+			autoscalerLog, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+autoscalePodName, "-n", "openshift-machine-api").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			replicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.replicas}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if replicas == "0" && strings.Contains(autoscalerLog, "Scale-up timed out for node group") && strings.Contains(autoscalerLog, "Removing unregistered node failed-machine-openshift-machine-api_") && strings.Contains(autoscalerLog, "openshift-machine-api/"+machinesetName+" is not ready for scaleup - backoff") {
+				return true, nil
+			}
+			e2e.Logf("cluster didn't autoscale down or node group didn't be marked as backoff")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Check didn't scales down or node group didn't be marked as backoff")
 	})
 })
