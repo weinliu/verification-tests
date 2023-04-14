@@ -92,7 +92,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	})
 
-	g.It("Author:sregidor-PreChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:sregidor-PreChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update [Disruptive]", func() {
 		var (
 			kcName     = "change-maxpods-kubelet-config"
 			kcTemplate = generateTemplateAbsolutePath(kcName + ".yaml")
@@ -117,7 +117,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	})
 
-	g.It("Author:sregidor-PstChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update  [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:sregidor-PstChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update  [Disruptive]", func() {
 
 		var (
 			kcName     = "change-maxpods-kubelet-config"
