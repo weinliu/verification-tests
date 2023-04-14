@@ -9,7 +9,7 @@ export const namespaceDropdown = {
         cy.get('[data-test-id="namespace-bar-dropdown"] button')
           .contains("Project:")
           .click({ force: true });
-    },    
+    },
     getProjectsDisplayed: () => {
         return cy.get('li[data-test="dropdown-menu-item-link"]');
     },
@@ -45,13 +45,13 @@ export const namespaceDropdown = {
         cy.byTestID('dropdown-menu-item-link')
           .contains(name)
           .next('[aria-label="not starred"]')
-          .click()      
+          .click()
     },
     removeFavoriteNamespace: (name: string) => {
         cy.byTestID('dropdown-menu-item-link')
           .contains(name)
           .next('[aria-label="starred"]')
-          .click()  
+          .click()
     },
     selectNamespace: (name: string) => {
         namespaceDropdown.clickTheDropdown();

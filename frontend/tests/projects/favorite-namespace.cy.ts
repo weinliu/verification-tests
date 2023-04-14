@@ -24,7 +24,7 @@ describe("namespace dropdown favorite test", () => {
       namespaceDropdown.addFavoriteNamespace(namespace);
       cy.get(`li:contains(${namespace})`).should('have.length', 2);
     });
-    /*  Starred system namespace will list in dropdown 
+    /*  Starred system namespace will list in dropdown
         Even if 'Show default project' is disable */
     cy.visit('/k8s/all-namespaces/core~v1~Pod');
     namespaceDropdown.clickTheDropdown();
