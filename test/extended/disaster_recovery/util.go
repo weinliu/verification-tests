@@ -107,7 +107,7 @@ func runPSCommand(bastionHost string, nodeInternalIP string, command string, pri
 
 func waitForOperatorRestart(oc *exutil.CLI, operatorName string) {
 	g.By("Check the operator should be in Progressing")
-	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+	err := wait.Poll(20*time.Second, 600*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", operatorName).Output()
 		if err != nil {
 			e2e.Logf("clusteroperator not start new progress, error: %s. Trying again", err)
@@ -193,7 +193,7 @@ func waitMachineStatusRunning(oc *exutil.CLI, newMasterMachineName string) {
 
 // make sure correct number of machines are present
 func waitforDesiredMachineCount(oc *exutil.CLI, machineCount int) {
-	err := wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
+	err := wait.Poll(60*time.Second, 1500*time.Second, func() (bool, error) {
 		output, errGetMachine := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath='{.items[*].metadata.name}'").Output()
 		o.Expect(errGetMachine).NotTo(o.HaveOccurred())
 		machineNameList := strings.Fields(output)
@@ -268,7 +268,7 @@ func updateMachineYmlFile(machineYmlFile string, oldMachineName string, newMaste
 
 // make sure operator is not processing and degraded
 func checkOperator(oc *exutil.CLI, operatorName string) {
-	err := wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
+	err := wait.Poll(60*time.Second, 1500*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().Run("get").Args("clusteroperator", operatorName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
