@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -1143,4 +1144,85 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(listOutput).ShouldNot(o.ContainSubstring("&& arp"))
 	})
 
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:huirwang-High-62524-OVN address_set referenced in acl should not miss when networkpolicy name includes dot.", func() {
+		// This is for customer bug https://issues.redhat.com/browse/OCPBUGS-4085
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			networkPolicyFile   = filepath.Join(buildPruningBaseDir, "networkpolicy/egress-ingress-62524.yaml")
+		)
+		g.By("Check cluster network type")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("This case requires OVNKubernetes as network backend")
+		}
+
+		g.By("Get namespace")
+		ns := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "team-").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "team=openshift-networking").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("create test pods")
+		createResourceFromFile(oc, ns, testPodFile)
+		err = waitForPodWithLabelReady(oc, ns, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testPod := getPodName(oc, ns, "name=test-pods")
+
+		g.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("create egress-ingress type networkpolicy")
+		createResourceFromFile(oc, ns, networkPolicyFile)
+		output, err := oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("egress-ingress-62524.test"))
+
+		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		g.By("Verify the address_set exists for the specific acl")
+		//list ACLs related to the networkpolicy name
+		listACLCmd := "ovn-nbctl --data=bare --no-heading --format=table find acl | grep  egress-ingress-62524.test"
+		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listOutput).NotTo(o.BeEmpty())
+
+		// Get the address set name from the acls
+		regex := `\{\$(\w+)\}`
+		re := regexp.MustCompile(regex)
+		matches := re.FindAllStringSubmatch(listOutput, -1)
+		if len(matches) == 0 {
+			e2e.Fail("No matched address_set name found")
+		}
+		var result []string
+		for _, match := range matches {
+			if len(match) == 2 { // Check if a match was found
+				result = append(result, match[1]) // Append the captured group to the result slice
+			}
+		}
+		if len(result) == 0 {
+			e2e.Fail("No matched address_set name found")
+		}
+
+		//Check adress_set can be found when ovn-nbctl list address_set
+		for _, addrSetName := range result {
+			listAddressSetCmd := "ovn-nbctl --no-leader-only list address_set | grep " + addrSetName
+			listAddrOutput, listAddrErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listAddressSetCmd)
+			o.Expect(listAddrErr).NotTo(o.HaveOccurred())
+			o.Expect(listAddrOutput).NotTo(o.BeEmpty())
+		}
+
+		g.By("Checking pods connectivity")
+		CurlPod2PodPass(oc, ns, testPod[0], ns, pod1.name)
+		CurlPod2PodFail(oc, ns, testPod[0], ns, testPod[1])
+
+	})
 })

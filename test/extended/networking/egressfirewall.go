@@ -325,7 +325,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
 		g.By("Check the result, default deny rules should have lower priority than allow rules\n")
-		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids=egressFirewall=%s", ns1)
+		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:egressFirewall=%s", ns1)
 		ovnMasterPodName := getOVNLeaderPod(oc, "north")
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
