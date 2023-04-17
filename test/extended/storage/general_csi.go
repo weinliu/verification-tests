@@ -421,7 +421,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-47370 -[CSI-Driver] [Dynamic PV] [Filesystem] provisioning volume with subpath
 	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-47370-[CSI-Driver] [Dynamic PV] [Filesystem] provisioning volume with subpath", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "filestore.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			// SeLinuxLabel values nfs_t: AWS EFS, container_t: other provisioner, cifs_t: azurefile
@@ -439,7 +439,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc.SetupProject() //create new project
 		for _, provisioner = range supportProvisioners {
 
-			if provisioner == "efs.csi.aws.com" {
+			if provisioner == "efs.csi.aws.com" || provisioner == "filestore.csi.storage.gke.io" {
 				SELinuxLabelValue = "nfs_t"
 			} else {
 				SELinuxLabelValue = "container_file_t"
@@ -463,6 +463,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podAWithSubpathA.createWithSubpathVolume(oc, "subpathA")
 			defer podAWithSubpathA.deleteAsAdmin(oc)
 			podAWithSubpathA.waitReady(oc)
+
 			// Since the scenario all the test pods comsume the same pvc and scheduler maybe schedule the test pods to different cause flake of "Unable to attach or mount volumes"
 			// Patch the test namespace with node-selector schedule the test pods to the same node
 			nodeName := getNodeNameByPod(oc, podAWithSubpathA.namespace, podAWithSubpathA.name)
@@ -496,6 +497,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("# Create podCWithSubpathA and wait for the pod ready")
 			podCWithSubpathA.createWithSubpathVolume(oc, "subpathA")
 			defer podCWithSubpathA.deleteAsAdmin(oc)
+
 			podCWithSubpathA.waitReady(oc)
 
 			g.By("# Check the subpathA's data still exist not be covered and podCWithSubpathA could also see the file content")
@@ -1578,7 +1580,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-47879 - [CSI-Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it successfully
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47879-[CSI-Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it successfully", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "filestore.csi.storage.gke.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -1595,10 +1597,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		// Set the resource template for the scenario
 		var (
-			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
-			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
-			podTemplate            = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+			storageTeamBaseDir          = exutil.FixturePath("testdata", "storage")
+			pvcTemplate                 = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate                 = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate      = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+			volumeSnapshotClassTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshotclass-template.yaml")
 		)
 
 		g.By("Create new project for the scenario")
@@ -1625,7 +1628,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			// Create volumesnapshot with pre-defined volumesnapshotclass
 			g.By("Create volumesnapshot and wait for ready_to_use")
-			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			var presetVscName string
+			if provisioner == "filestore.csi.storage.gke.io" {
+				volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(provisioner), setVolumeSnapshotDeletionpolicy("Delete"))
+				volumesnapshotClass.create(oc)
+				defer volumesnapshotClass.deleteAsAdmin(oc)
+				presetVscName = volumesnapshotClass.name
+
+			} else {
+				presetVscName = getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			}
 			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
@@ -1637,13 +1649,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("Create a restored pvc with the preset csi storageclass")
 			pvcRestore.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
-			pvcRestore.capacity = pvcOri.capacity
+			if provisioner == "filestore.csi.storage.gke.io" {
+				var getCapacityErr error
+				pvcRestore.capacity, getCapacityErr = getPvCapacityByPvcName(oc, pvcOri.name, pvcOri.namespace)
+				o.Expect(getCapacityErr).NotTo(o.HaveOccurred())
+			} else {
+				pvcRestore.capacity = pvcOri.capacity
+			}
 			pvcRestore.createWithSnapshotDataSource(oc)
 			defer pvcRestore.deleteAsAdmin(oc)
 
 			g.By("Create pod with the restored pvc and wait for the pod ready")
 			podRestore.create(oc)
 			defer podRestore.deleteAsAdmin(oc)
+
 			podRestore.waitReady(oc)
 
 			g.By("Check the file exist in restored volume")

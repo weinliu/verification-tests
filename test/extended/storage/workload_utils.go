@@ -99,6 +99,10 @@ func setPodMountPath(mountPath string) podOption {
 
 // Create a new customized pod object
 func newPod(opts ...podOption) pod {
+	defaultMaxWaitReadyTime := defaultMaxWaitingTime
+	if provisioner == "filestore.csi.storage.gke.io" {
+		defaultMaxWaitReadyTime = longerMaxWaitingTime
+	}
 	defaultPod := pod{
 		name:             "mypod-" + getRandomString(),
 		template:         "pod-template.yaml",
@@ -108,7 +112,7 @@ func newPod(opts ...podOption) pod {
 		volumeType:       "volumeMounts",
 		pathType:         "mountPath",
 		mountPath:        "/mnt/storage",
-		maxWaitReadyTime: defaultMaxWaitingTime,
+		maxWaitReadyTime: defaultMaxWaitReadyTime,
 		invalid:          false,
 	}
 

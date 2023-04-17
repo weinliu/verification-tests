@@ -260,8 +260,9 @@ func getGidRangeStartValueFromStorageClass(oc *exutil.CLI, scName string) (int, 
 
 // Define CSI Driver Provisioners const
 const (
-	ebsCsiDriverProvisioner string = "ebs.csi.aws.com"
-	efsCsiDriverProvisioner string = "efs.csi.aws.com"
+	ebsCsiDriverProvisioner       string = "ebs.csi.aws.com"
+	efsCsiDriverProvisioner       string = "efs.csi.aws.com"
+	filestoreCSiDriverProvisioner string = "filestore.csi.storage.gke.io"
 )
 
 // Generate storageClass parameters by volume type
@@ -290,6 +291,12 @@ func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string
 			"provisioningMode": volumeType,
 			"fileSystemId":     fsID,
 			"directoryPerms":   "700",
+		}
+	case filestoreCSiDriverProvisioner:
+		scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, "filestore.csi.storage.gke.io")
+		networkID := getNetworkFromStorageClass(oc, scName)
+		storageClassParameters = map[string]string{
+			"network": networkID,
 		}
 	default:
 		storageClassParameters = map[string]string{
