@@ -2196,6 +2196,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	// author: huirwang@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huirwang-High-61344-EgressIP was migrated to correct workers after deleting machine it was assigned. [Disruptive]", func() {
 		//This is from customer bug: https://bugzilla.redhat.com/show_bug.cgi?id=2079012
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
+			g.Skip("Skip for non-supported auto scaling machineset platforms!!")
+		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 

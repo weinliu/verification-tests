@@ -5,6 +5,9 @@ metadata:
 spec:
   selector:
     app: egress-router-cni
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
   ports:
   - name: con1
     protocol: TCP

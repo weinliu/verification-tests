@@ -732,6 +732,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:huirwang-High-61213-Delete IGMP Groups when deleting stale chassis.[Disruptive]", func() {
 		// This is from bug https://issues.redhat.com/browse/OCPBUGS-7230
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
+			g.Skip("Skip for non-supported auto scaling machineset platforms!!")
+		}
 		exutil.SkipConditionally(oc)
 		g.By("Create a new machineset with 2 nodes")
 		machinesetName := "machineset-61213"
