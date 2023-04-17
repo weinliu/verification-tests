@@ -886,6 +886,51 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(output).To(o.ContainSubstring("Windows"))
 	})
 
+	// author: yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-61607-oc image mirror always copy blobs if the target is file", func() {
+		testBaseDir := exutil.FixturePath("testdata", "workloads")
+		mappingFile := filepath.Join(testBaseDir, "testmapping.txt")
+		mirrorFile := filepath.Join(testBaseDir, "mirror-from-filesystem.txt")
+
+		extractTmpDirName := "/tmp/case61607"
+		err := os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Set registry app")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		g.By("First mirror")
+		defer os.RemoveAll("output61607")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("mirror", "-f", mappingFile, "--dir", "output61607", "-a", extractTmpDirName+"/.dockerconfigjson").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Remove one blob")
+		blobName, err := exec.Command("bash", "-c", `ls output61607/v2/openshifttest/hello-openshift/blobs/ |head  -n 1`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(blobName).NotTo(o.BeEmpty())
+		_, err = exec.Command("bash", "-c", "rm -rf "+"output61607/v2/openshifttest/hello-openshift/blobs/"+string(blobName)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err := exec.Command("bash", "-c", "ls output61607/v2/openshifttest/hello-openshift/blobs/").Output()
+		o.Expect(output).NotTo(o.ContainSubstring(string(blobName)))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Second mirror")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("mirror", "-f", mappingFile, "--dir", "output61607", "-a", extractTmpDirName+"/.dockerconfigjson").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Mirror from file to registry")
+		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, serInfo.serviceName, mirrorFile)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("mirror", "-f", mirrorFile, "--from-dir=output61607", "--insecure").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
 })
 
 // ClientVersion ...
