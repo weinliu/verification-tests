@@ -80,7 +80,28 @@ func checkOVNswitchPorts(podName []string, outPut string) bool {
 	return result
 }
 
-func CurlMultusPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPDst string) {
-	_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPDst, "8080"))
+func CurlMultusPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPDst string, outputInt string, podEnvName string) {
+	output, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --interface "+outputInt+" --connect-timeout 5 -s "+net.JoinHostPort(podIPDst, "8080"))
 	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(strings.Contains(output, podEnvName)).To(o.BeTrue())
+}
+
+func CurlMultusPod2PodFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPDst string, outputInt string, podEnvName string) {
+	output, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --interface "+outputInt+" --connect-timeout 5 -s "+net.JoinHostPort(podIPDst, "8080"))
+	o.Expect(err).To(o.HaveOccurred())
+	o.Expect(strings.Contains(output, podEnvName)).NotTo(o.BeTrue())
+}
+
+// Using getPodMultiNetworks when pods consume multiple NADs
+// Using getPodMultiNetwork when pods consume single NAD
+func getPodMultiNetworks(oc *exutil.CLI, namespace string, podName string, netName string) (string, string) {
+	cmd1 := "ip a sho " + netName + " | awk 'NR==3{print $2}' |grep -Eo '((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])'"
+	cmd2 := "ip a sho " + netName + " | awk 'NR==5{print $2}' |grep -Eo '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
+	podv4Output, err := e2eoutput.RunHostCmd(namespace, podName, cmd1)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podIPv4 := strings.TrimSpace(podv4Output)
+	podv6Output, err1 := e2eoutput.RunHostCmd(namespace, podName, cmd2)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	podIPv6 := strings.TrimSpace(podv6Output)
+	return podIPv4, podIPv6
 }
