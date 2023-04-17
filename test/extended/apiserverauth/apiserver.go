@@ -3341,17 +3341,23 @@ EOF`, dcpolicyrepo)
 
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-Medium-11364-[platformmanagement_public_624] Create nodeport service", func() {
+		var (
+			generatedNodePort int
+			curlOutput        string
+			curlErr           error
+			filename          = "hello-pod.json"
+			podName           = "hello-openshift"
+		)
+
 		g.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
-		filename := "hello-pod.json"
 		g.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
 		template := getTestDataFilePath(filename)
 		err := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		podName := "hello-openshift"
 		g.By(fmt.Sprintf("3) Wait for pod with name %s to be ready", podName))
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 
@@ -3376,7 +3382,7 @@ EOF`, dcpolicyrepo)
 		g.By(fmt.Sprintf("6) Create nodeport service at random target port %d", port1))
 		err = oc.Run("create").Args("service", "nodeport", serviceName, fmt.Sprintf("--tcp=%d:8080", port1)).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.Run("delete").Args("service", serviceName).Execute()
+		defer oc.Run("delete").Args("service", serviceName, "--ignore-not-found").Execute()
 
 		g.By(fmt.Sprintf("7) Check node port for service %s", serviceName))
 		nodePort, err := oc.Run("get").Args("services", serviceName, fmt.Sprintf("-o=jsonpath={.spec.ports[?(@.port==%d)].nodePort}", port1)).Output()
@@ -3396,8 +3402,16 @@ EOF`, dcpolicyrepo)
 
 		url := fmt.Sprintf("%s:%s", hostIP, nodePort)
 		g.By(fmt.Sprintf("10) Check network access to %s", url))
-		curlOutput, err := oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		// retry 3 times, sometimes, the endpoint is not ready for accessing.
+		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+			curlOutput, curlErr = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
+			if err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Unable to access the %s", url))
+		o.Expect(curlErr).NotTo(o.HaveOccurred())
 		o.Expect(curlOutput).To(o.ContainSubstring("Hello OpenShift!"))
 
 		g.By(fmt.Sprintf("11) Delete service %s", serviceName))
@@ -3415,9 +3429,7 @@ EOF`, dcpolicyrepo)
 		})
 		exutil.AssertWaitPollNoErr(err, "cannot assign random target port")
 
-		var generatedNodePort int
 		npLeftBound, npRightBound := getNodePortRange(oc)
-
 		g.By(fmt.Sprintf("13) Create another nodeport service with random target port %d and node port [%d-%d]", port2, npLeftBound, npRightBound))
 		// multiple try to avoid node port collision: https://issues.redhat.com/browse/OCPQE-10011
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
@@ -3433,8 +3445,15 @@ EOF`, dcpolicyrepo)
 
 		url = fmt.Sprintf("%s:%d", hostIP, generatedNodePort)
 		g.By(fmt.Sprintf("14) Check network access again to %s", url))
-		curlOutput, err = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+			curlOutput, curlErr = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
+			if err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Unable to access the %s", url))
+		o.Expect(curlErr).NotTo(o.HaveOccurred())
 		o.Expect(curlOutput).To(o.ContainSubstring("Hello OpenShift!"))
 	})
 
