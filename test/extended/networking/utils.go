@@ -2476,3 +2476,27 @@ func getCNOStatusCondition(oc *exutil.CLI) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return CNOStatusCondition
 }
+
+// return severity and expr of specific ovn alert in networking-rules
+func getOVNAlertNetworkingRules(oc *exutil.CLI, alertName string) (string, string) {
+	// get all ovn alert names in networking-rules
+	ns := "openshift-ovn-kubernetes"
+	allAlerts, nameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", ns, "networking-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
+	o.Expect(nameErr).NotTo(o.HaveOccurred())
+	e2e.Logf("The alert are %v", allAlerts)
+
+	if !strings.Contains(allAlerts, alertName) {
+		e2e.Failf("Target alert %v is not found", alertName)
+		return "", ""
+	} else {
+		var severity, expr string
+		severity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", ns, "networking-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\""+alertName+"\")].labels.severity}").Output()
+		o.Expect(severityErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alert severity is %v", severity)
+		expr, exprErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", ns, "networking-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\""+alertName+"\")].expr}").Output()
+		o.Expect(exprErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alert expr is %v", expr)
+
+		return severity, expr
+	}
+}

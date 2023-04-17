@@ -14,12 +14,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	var oc = exutil.NewCLI("networking-alerts", exutil.KubeConfigPath())
 
-	g.It("NonHyperShiftHOST-Author:weliang-Medium-51438-Upgrade NoRunningOvnMaster to critical severity and inclue runbook.", func() {
+	g.BeforeEach(func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
 		}
+	})
 
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-51438-Upgrade NoRunningOvnMaster to critical severity and inclue runbook.", func() {
 		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
 		o.Expect(NameErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The alertName is %v", alertName)
@@ -37,11 +39,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-51439-Upgrade NoOvnMasterLeader to critical severity and inclue runbook.", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
 		o.Expect(NameErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The alertName is %v", alertName)
@@ -59,11 +56,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-51722-Create runbook and link SOP for SouthboundStale alert", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
 		o.Expect(NameErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The alertName is %v", alertName)
@@ -81,11 +73,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-51724-Create runbook and link SOP for V4SubnetAllocationThresholdExceeded alert", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
 		o.Expect(NameErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The alertName is %v", alertName)
@@ -103,11 +90,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("Author:weliang-Medium-51726-Create runbook and link SOP for NodeWithoutOVNKubeNodePodRunning alert", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "networking-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
 		o.Expect(NameErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The alertName is %v", alertName)
@@ -125,11 +107,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-51723-bug 2094068 Create runbook and link SOP for NorthboundStale alert", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
 		o.Expect(NameErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The alertName is %v", alertName)
@@ -147,11 +124,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-55903-OVN-K alerts for ovn db leader", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		dbLeaderAlertsList := []string{
 			"OVNKubernetesNorthboundDatabaseLeaderError",
 			"OVNKubernetesSouthboundDatabaseLeaderError",
@@ -173,11 +145,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-55909-OVN-K alerts for ovn db cluster ID error", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		dbLeaderAlertsList := []string{
 			"OVNKubernetesNorthboundDatabaseClusterIDError",
 			"OVNKubernetesSouthboundDatabaseClusterIDError",
@@ -197,11 +164,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-53822-OVN-K alerts for ovn db term lag", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		dbTermLagAlertsList := []string{
 			"OVNKubernetesNorthboundDatabaseTermLag",
 			"OVNKubernetesSouthboundDatabaseTermLag",
@@ -221,11 +183,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-53859-OVN-K alerts for ovn db cluster member error", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		dbMemeberAlertsList := []string{
 			"OVNKubernetesNorthboundDatabaseClusterMemberError",
 			"OVNKubernetesSouthboundDatabaseClusterMemberError",
@@ -245,11 +202,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-53902-OVN-K alerts for ovn db connection error", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		dbConnAlertsList := []string{
 			"OVNKubernetesNorthboundDatabaseOutboundConnectionError",
 			"OVNKubernetesSouthboundDatabaseOutboundConnectionError",
@@ -275,11 +227,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-53926-OVN-K alerts for ovn northd inactivity", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
 		o.Expect(NameErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The alertName is %v", alertName)
@@ -292,11 +239,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("Author:qiowang-Medium-53999-OVN-K alerts for ovn controller disconnection", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-
 		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "networking-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
 		o.Expect(NameErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The alertName is %v", alertName)
@@ -306,5 +248,23 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(severityErr).NotTo(o.HaveOccurred())
 		e2e.Logf("alertSeverity of OVNKubernetesControllerDisconnectedSouthboundDatabase is %v", alertSeverity)
 		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
+	})
+
+	g.It("Author:qiowang-Medium-60705-Verify alert OVNKubernetesNodeOVSOverflowKernel", func() {
+		alertSeverity, alertExpr := getOVNAlertNetworkingRules(oc, "OVNKubernetesNodeOVSOverflowKernel")
+		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
+		o.Expect(alertExpr).To(o.ContainSubstring("increase(ovs_vswitchd_dp_flows_lookup_lost[5m]) > 0"))
+	})
+
+	g.It("Author:qiowang-Medium-60706-Verify alert OVNKubernetesNodeOVSOverflowUserspace", func() {
+		alertSeverity, alertExpr := getOVNAlertNetworkingRules(oc, "OVNKubernetesNodeOVSOverflowUserspace")
+		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
+		o.Expect(alertExpr).To(o.ContainSubstring("increase(ovs_vswitchd_netlink_overflow[5m]) > 0"))
+	})
+
+	g.It("Author:qiowang-Medium-60709-Verify alert OVNKubernetesResourceRetryFailure", func() {
+		alertSeverity, alertExpr := getOVNAlertNetworkingRules(oc, "OVNKubernetesResourceRetryFailure")
+		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
+		o.Expect(alertExpr).To(o.ContainSubstring("increase(ovnkube_resource_retry_failures_total[10m]) > 0"))
 	})
 })
