@@ -382,4 +382,44 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "Check didn't scales down or node group didn't be marked as backoff")
 	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-28876-Machineset should have relevant annotations to support scale from/to zero[Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "azure")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-28876"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Add a new annotation to machineset")
+		oc.AsAdmin().WithoutNamespace().Run("annotate").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "--overwrite", "new=new").Output()
+
+		g.By("Check machineset with valid instanceType have annotations")
+		machineSetAnnotations, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("out:%s", machineSetAnnotations)
+		o.Expect(strings.Contains(machineSetAnnotations, "machine.openshift.io/memoryMb") && strings.Contains(machineSetAnnotations, "new")).To(o.BeTrue())
+
+		g.By("Check machineset with invalid instanceType couldn't set autoscaling from zero annotations")
+		var invalidValue string
+		iaasPlatform = exutil.CheckPlatform(oc)
+		switch iaasPlatform {
+		case "aws":
+			invalidValue = "\"instanceType\": \"invalid\""
+		case "azure":
+			invalidValue = "\"vmSize\": \"invalid\""
+		case "gcp":
+			invalidValue = "\"machineType\": \"invalid\""
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{`+invalidValue+`}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		machineControllerPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-machine-api", "-l", "api=clusterapi,k8s-app=controller", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		machineControllerLog, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+machineControllerPodName, "-c", "machine-controller", "-n", "openshift-machine-api").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(machineControllerLog, "unknown instance type") || strings.Contains(machineControllerLog, "Failed to set autoscaling from zero annotations, instance type unknown")).To(o.BeTrue())
+	})
 })
