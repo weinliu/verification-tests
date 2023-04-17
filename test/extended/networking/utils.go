@@ -1332,13 +1332,17 @@ func getPodIP(oc *exutil.CLI, namespace string, podName string) (string, string)
 		e2e.Logf("The pod  %s IP in namespace %s is %q", podName, namespace, podIP)
 		return podIP, ""
 	} else if ipStack == "dualstack" {
-		podIPv6, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[1].ip}").Output()
+		podIP1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[1].ip}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The pod  %s IPv6 in namespace %s is %q", podName, namespace, podIPv6)
-		podIPv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
+		e2e.Logf("The pod's %s 1st IP in namespace %s is %q", podName, namespace, podIP1)
+		podIP2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The pod  %s IPv4 in namespace %s is %q", podName, namespace, podIPv4)
-		return podIPv6, podIPv4
+		e2e.Logf("The pod's %s 2nd IP in namespace %s is %q", podName, namespace, podIP2)
+		if netutils.IsIPv6String(podIP1) {
+			e2e.Logf("This is IPv6 primary dual stack cluster")
+			return podIP1, podIP2
+		}
+		return podIP2, podIP1
 	}
 	return "", ""
 }
