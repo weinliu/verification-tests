@@ -526,7 +526,7 @@ func removeDuplicateElement(elements []string) []string {
 }
 
 func (registry *registry) createregistry(oc *exutil.CLI) serviceInfo {
-	err := oc.AsAdmin().Run("new-app").Args("--image", registry.dockerImage, "-n", registry.namespace).Execute()
+	err := oc.AsAdmin().Run("new-app").Args("--image", registry.dockerImage, "REGISTRY_STORAGE_DELETE_ENABLED=true", "-n", registry.namespace).Execute()
 	if err != nil {
 		e2e.Failf("Failed to create the registry server")
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -400,4 +401,76 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	g.It("NonHyperShiftHOST-ConnectedOnly-Longduration-Author:yinzhou-NonPreRelease-Medium-60597-Critical-60595-oc-mirror support for TargetCatalog field for operator[Serial]", func() {
+		g.By("Set registry config")
+		dirname := "/tmp/case60597"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+
+		_, _, err = locateDockerCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Copy the registry as OCI FBC")
+		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.12 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			_, err := exec.Command("bash", "-c", command).Output()
+			if err != nil {
+				e2e.Logf("copy failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
+		g.By("Set registry app")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads/config-60597")
+		normalTargetConfig := filepath.Join(ocmirrorBaseDir, "config-60597-normal-target.yaml")
+		ociTargetTagConfig := filepath.Join(ocmirrorBaseDir, "config-60597-oci-target-tag.yaml")
+		normalConfig := filepath.Join(ocmirrorBaseDir, "config-60597-normal.yaml")
+		defer os.RemoveAll("oc-mirror-workspace")
+		defer os.RemoveAll("olm_artifacts")
+		output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalTargetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(serInfo.serviceName+"/abc/redhat-operator-index:v4.12", output); !matched {
+			e2e.Failf("Can't find the expect target catalog\n")
+		}
+		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName, "--use-oci-feature", "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("/mno/redhat-operator-index:v5", output); !matched {
+			e2e.Failf("Can't find the expect target catalog\n")
+		}
+		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName+"/ocit", "--use-oci-feature", "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("/ocit/mno/redhat-operator-index:v5", output); !matched {
+			e2e.Failf("Can't find the expect target catalog\n")
+		}
+		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(serInfo.serviceName+"/redhat/redhat-operator-index:v4.12", output); !matched {
+			e2e.Failf("Can't find the expect target catalog\n")
+		}
+		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalConfig, "docker://"+serInfo.serviceName+"/testname", "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(serInfo.serviceName+"/testname/redhat/redhat-operator-index:v4.12", output); !matched {
+			e2e.Failf("Can't find the expect target catalog\n")
+		}
+		g.By("Checkpoint for 60595")
+		ocmirrorDir := exutil.FixturePath("testdata", "workloads")
+		ociFirstConfig := filepath.Join(ocmirrorDir, "config-oci-f.yaml")
+		ociSecondConfig := filepath.Join(ocmirrorDir, "config-oci-s.yaml")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFirstConfig, "docker://"+serInfo.serviceName, "--use-oci-feature", "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociSecondConfig, "docker://"+serInfo.serviceName, "--use-oci-feature", "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("Deleting manifest", output); !matched {
+			e2e.Failf("Can't find the prune log\n")
+		}
+	})
 })
