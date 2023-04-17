@@ -1591,6 +1591,9 @@ nulla pariatur.`
 	})
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-49568-Check nodes updating order maxUnavailable=1 [Serial]", func() {
+		// Skip if no machinesets
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+
 		g.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
 		platform := exutil.CheckPlatform(oc)
 		logger.Infof("Platform is %s", platform)
@@ -1644,6 +1647,9 @@ nulla pariatur.`
 	})
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-49672-Check nodes updating order maxUnavailable>1 [Serial]", func() {
+		// Skip if no machinesets
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+
 		g.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
 		platform := exutil.CheckPlatform(oc)
 		logger.Infof("Platform is %s", platform)
@@ -2054,6 +2060,8 @@ nulla pariatur.`
 	})
 
 	g.It("Author:sregidor-NonPreRelease-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
+		// Skip if no machinesets
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
 
 		// Skip if not AWS
 		platform := exutil.CheckPlatform(oc)

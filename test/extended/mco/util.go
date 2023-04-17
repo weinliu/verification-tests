@@ -640,6 +640,35 @@ func skipTestIfExtensionsAreUsed(oc *exutil.CLI) {
 
 }
 
+// skipTestIfWorkersCannotBeScaled skips the current test if the worker pool cannot be scaled via machineset
+func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
+	logger.Infof("Checking if in this cluster workers can be scaled using machinesets")
+	msl, err := NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAll()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
+
+	// If there is no machineset then clearly we can't use them to scale the workers
+	if len(msl) == 0 {
+		g.Skip("There is no machineset available in current cluster. This test cannot be execute if workers cannot be scaled via machineset")
+	}
+
+	totalworkers := 0
+	for _, ms := range msl {
+		replicas := ms.GetOrFail(`{.spec.replicas}`)
+		if replicas != "" {
+			intReplicas, err := strconv.Atoi(replicas)
+			if err == nil {
+				totalworkers += intReplicas
+			}
+		}
+	}
+
+	// In some UPI/SNO/Compact clusters machineset resources exist, but they are all configured with 0 replicas
+	// If all machinesets have 0 replicas, then it means that we need to the test case
+	if totalworkers == 0 {
+		g.Skip("There are machinesets in this cluster, but they are not available to scale workers. This test cannot be execute if workers cannot be scaled via machineset")
+	}
+}
+
 // GetCurrentTestPolarionIDNumber inspects the name of the test case and return the number of the polarion ID linked to this automated test case. It returns an empty string if no ID found.
 func GetCurrentTestPolarionIDNumber() string {
 	name := g.CurrentSpecReport().FullText()
