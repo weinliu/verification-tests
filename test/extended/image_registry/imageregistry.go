@@ -3724,4 +3724,66 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			e2e.Failf("Shouldn't get image without rights")
 		}
 	})
+
+	g.It("NonPreRelease-Longduration-Author:wewang-Critical-61598-Uploading large layers should success when push large size image [Serial]", func() {
+		g.By("Check image registry storage type")
+		out, err := oc.AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.storage.s3}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(out, "bucket") {
+			g.Skip("Skip testing on non s3 storage cluster")
+		}
+
+		g.By("Create a build with uploading large layers image")
+		localImageName := "FROM registry.fedoraproject.org/fedora:37\nRUN dd if=/dev/urandom of=/bigfile bs=1M count=10240"
+		defer func() {
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("bc/fedora", "-n", oc.Namespace()).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("bc/fedora", "-n", oc.Namespace()).Output()
+			o.Expect(out).To(o.ContainSubstring("fedora\" not found"))
+
+			g.By("Get server host")
+			routeName := getRandomString()
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+			refRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+			waitRouteReady(refRoute)
+
+			g.By("Prune the images")
+			defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", oc.Username()).Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", oc.Username()).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			token, err := oc.Run("whoami").Args("-t").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			oc.WithoutNamespace().AsAdmin().Run("adm").Args("prune", "images", "--token="+token, "--keep-younger-than=0m", "--keep-tag-revisions=0", "--registry-url="+refRoute, "--confirm").Execute()
+
+			g.By("Check new builded large image deleted")
+			imageOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("images", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			imageCount := strings.Count(imageOut, oc.Namespace()+"/fedora")
+			o.Expect(imageCount).To(o.Equal(0))
+		}()
+
+		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("-D", localImageName, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(15*time.Second, 1*time.Minute, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("build", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "Running") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Failed to create build")
+
+		g.By("Check the logs")
+		logInfo = "Successfully pushed image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/fedora"
+		err = wait.Poll(5*time.Minute, 30*time.Minute, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("bc/fedora", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, logInfo) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Failed to push large image")
+	})
 })
