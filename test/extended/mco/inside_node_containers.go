@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"strings"
 
@@ -14,8 +15,8 @@ import (
 
 // OsImageBuilderInNode encapsulates the functionality to build custom osImages inside a cluster node
 type OsImageBuilderInNode struct {
-	node Node
-	architecture,
+	node         Node
+	architecture architecture.Architecture
 	osImage,
 	dockerFileCommands, // Full docker file but the "FROM basOsImage..." that will be calculated
 	dockerConfig,
@@ -41,10 +42,8 @@ func (b *OsImageBuilderInNode) prepareEnvironment() error {
 	}
 	logger.Infof("Using docker config file: %s\n", b.dockerConfig)
 
-	if b.architecture == "" {
-		b.architecture = exutil.GetClusterArchitecture(b.node.oc)
-		logger.Infof("Building using architecture: %s", b.architecture)
-	}
+	b.architecture = architecture.ClusterArchitecture(b.node.oc)
+	logger.Infof("Building using architecture: %s", b.architecture)
 
 	b.remoteTmpDir = filepath.Join("/root", e2e.TestContext.OutputDir, fmt.Sprintf("mco-test-%s", exutil.GetRandomString()))
 	_, err := b.node.DebugNodeWithChroot("mkdir", "-p", b.remoteTmpDir)
@@ -179,8 +178,8 @@ func (b *OsImageBuilderInNode) buildImage() error {
 	buildPath := filepath.Dir(b.remoteDockerfile)
 	podmanCLI.ExecCommandPath = buildPath
 	switch b.architecture {
-	case ArchitectureARM64, ArchitectureAMD64:
-		output, err := b.node.DebugNodeWithChroot("podman", "build", buildPath, "--arch", b.architecture, "--tag", b.osImage, "--authfile", b.remoteDockerConfig)
+	case architecture.AMD64, architecture.ARM64, architecture.PPC64LE, architecture.S390X:
+		output, err := b.node.DebugNodeWithChroot("podman", "build", buildPath, "--arch", b.architecture.String(), "--tag", b.osImage, "--authfile", b.remoteDockerConfig)
 		if err != nil {
 			msg := fmt.Sprintf("Podman failed building image %s with architecture %s:\n%s\n%s", b.osImage, b.architecture, output, err)
 			logger.Errorf(msg)
@@ -189,7 +188,7 @@ func (b *OsImageBuilderInNode) buildImage() error {
 
 		logger.Debugf(output)
 	default:
-		msg := fmt.Sprintf("Architecture '%s' is not supported. Oly 'arm64' and 'amd64' architectures are supported", b.architecture)
+		msg := fmt.Sprintf("Architecture '%s' is not supported. Oly 'arm64' and 'amd64' architectures are supported", b.architecture.String())
 		logger.Errorf(msg)
 		return fmt.Errorf(msg)
 	}

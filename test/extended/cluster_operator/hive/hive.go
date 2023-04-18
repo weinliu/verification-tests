@@ -1,6 +1,7 @@
 package hive
 
 import (
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -26,7 +27,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	)
 	g.BeforeEach(func() {
 		// skip ARM64 arch
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 
 		//Install Hive operator if not
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")

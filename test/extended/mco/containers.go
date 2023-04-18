@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,8 +17,8 @@ import (
 
 // OsImageBuilder encapsulates the functionality to build custom osImage in the machine running the testcase
 type OsImageBuilder struct {
-	oc *exutil.CLI
-	architecture,
+	oc           *exutil.CLI
+	architecture architecture.Architecture
 	osImage,
 	dockerFileCommands, // Full docker file but the "FROM basOsImage..." that will be calculated
 	dockerConfig,
@@ -40,10 +41,9 @@ func (b *OsImageBuilder) prepareEnvironment() error {
 	}
 	logger.Infof("Using docker config file: %s\n", b.dockerConfig)
 
-	if b.architecture == "" {
-		b.architecture = exutil.GetClusterArchitecture(b.oc)
-		logger.Infof("Building using architecture: %s", b.architecture)
-	}
+	b.architecture = architecture.ClusterArchitecture(b.oc)
+	logger.Infof("Building using architecture: %s", b.architecture)
+
 	if b.UseInternalRegistry {
 		if err := b.preparePushToInternalRegistry(); err != nil {
 			return err
@@ -179,8 +179,8 @@ func (b *OsImageBuilder) buildImage() error {
 	podmanCLI := container.NewPodmanCLI()
 	podmanCLI.ExecCommandPath = buildDir
 	switch b.architecture {
-	case ArchitectureARM64, ArchitectureAMD64:
-		output, err := podmanCLI.Run("build").Args(buildDir, "--arch", b.architecture, "--tag", b.osImage, "--authfile", b.dockerConfig).Output()
+	case architecture.AMD64, architecture.ARM64, architecture.PPC64LE, architecture.S390X:
+		output, err := podmanCLI.Run("build").Args(buildDir, "--arch", b.architecture.String(), "--tag", b.osImage, "--authfile", b.dockerConfig).Output()
 		if err != nil {
 			msg := fmt.Sprintf("Podman failed building image %s with architecture %s:\n%s\n%s", b.osImage, b.architecture, output, err)
 			logger.Errorf(msg)
@@ -189,7 +189,7 @@ func (b *OsImageBuilder) buildImage() error {
 
 		logger.Debugf(output)
 	default:
-		msg := fmt.Sprintf("Architecture '%s' is not supported. Oly 'arm64' and 'amd64' architectures are supported", b.architecture)
+		msg := fmt.Sprintf("architecture '%s' is not supported. ", b.architecture)
 		logger.Errorf(msg)
 		return fmt.Errorf(msg)
 	}

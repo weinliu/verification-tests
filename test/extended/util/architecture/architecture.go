@@ -1,0 +1,98 @@
+package architecture
+
+import (
+	"fmt"
+	g "github.com/onsi/ginkgo/v2"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"strings"
+)
+
+type Architecture int
+
+const (
+	AMD64 Architecture = iota
+	ARM64
+	PPC64LE
+	S390X
+	MULTI
+)
+
+// SkipArchitectures skip the test if the cluster is one of the given architectures
+func SkipArchitectures(oc *exutil.CLI, architectures ...Architecture) (architecture Architecture) {
+	architecture = ClusterArchitecture(oc)
+	for _, arch := range architectures {
+		if arch == architecture {
+			g.Skip(fmt.Sprintf("Skip for cluster architecture: %s", arch.String()))
+		}
+	}
+	return
+}
+
+// SkipNonAmd64SingleArch skip the test if the cluster is not an AMD64, single-arch, cluster
+func SkipNonAmd64SingleArch(oc *exutil.CLI) (Architecture Architecture) {
+	architecture := ClusterArchitecture(oc)
+	if architecture != AMD64 {
+		g.Skip(fmt.Sprintf("Skip for cluster architecture: %s", architecture.String()))
+	}
+	return
+}
+
+// FromString returns the Architecture value for the given string
+func FromString(arch string) Architecture {
+	switch arch {
+	case "amd64":
+		return AMD64
+	case "arm64":
+		return ARM64
+	case "ppc64le":
+		return PPC64LE
+	case "s390x":
+		return S390X
+	case "multi":
+		return MULTI
+	default:
+		e2e.Failf("Unknown architecture %s", arch)
+	}
+	return AMD64
+}
+
+// String returns the string value for the given Architecture
+func (a Architecture) String() string {
+	switch a {
+	case AMD64:
+		return "amd64"
+	case ARM64:
+		return "arm64"
+	case PPC64LE:
+		return "ppc64le"
+	case S390X:
+		return "s390x"
+	case MULTI:
+		return "multi"
+	default:
+		e2e.Failf("Unknown architecture %d", a)
+	}
+	return ""
+}
+
+// ClusterArchitecture returns the cluster's Architecture
+// If the cluster uses the multi-arch payload, this function returns Architecture.multi
+func ClusterArchitecture(oc *exutil.CLI) (architecture Architecture) {
+	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("nodes", "-o=jsonpath={.items[*].status.nodeInfo.architecture}").Output()
+	if err != nil {
+		e2e.Failf("unable to get the cluster architecture: ", err)
+	}
+	if output == "" {
+		e2e.Failf("the retrieved architecture is empty")
+	}
+	architectureList := strings.Split(output, " ")
+	architecture = FromString(architectureList[0])
+	for _, nodeArchitecture := range architectureList[1:] {
+		if FromString(nodeArchitecture) != architecture {
+			e2e.Logf("Found multi-arch node cluster")
+			return MULTI
+		}
+	}
+	return
+}

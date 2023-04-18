@@ -2,6 +2,7 @@ package clusterinfrastructure
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -75,7 +76,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create machineset with instance type other than default in cluster")
 		exutil.SkipConditionally(oc)
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		platform := exutil.CheckPlatform(oc)
 		if platform == "aws" {
 			ms := exutil.MachineSetDescription{"machineset-45430", 0}

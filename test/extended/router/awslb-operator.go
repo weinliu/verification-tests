@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"strings"
 
@@ -22,7 +23,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	g.BeforeEach(func() {
 		// skip ARM64 arch
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
 		if strings.Contains(output, "NotFound") {
 			g.Skip("Skip since catalogsource/qe-app-registry is not installed")

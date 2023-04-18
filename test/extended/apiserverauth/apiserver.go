@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -730,7 +731,7 @@ spec:
 		)
 		defer os.RemoveAll(dirname)
 		// Skipped case on arm64 cluster
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -887,7 +888,7 @@ spec:
 		}()
 
 		// Skipped case on arm64 cluster
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check the configuration of priority level")
@@ -3216,7 +3217,7 @@ spec:
 		if strings.Contains(httpProxy, "http") && strings.Contains(featureTech, "TechPreview") {
 			g.Skip("Skip for proxy platform with techpreview")
 		}
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		g.By("1. Create certificates with SAN.")
 		opensslCMD := fmt.Sprintf("openssl genrsa -out %v 2048", caKeypem)
 		_, caKeyErr := exec.Command("bash", "-c", opensslCMD).Output()

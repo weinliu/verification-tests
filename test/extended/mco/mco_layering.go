@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -36,7 +37,7 @@ var _ = g.Describe("[sig-mco] MCO Layering", func() {
 
 	g.It("Author:sregidor-ConnectedOnly-VMonly-Longduration-NonPreRelease-Critical-54085-Update osImage changing /etc /usr and rpm [Disruptive]", func() {
 
-		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
+		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 
 		dockerFileCommands := `
 RUN mkdir /etc/tc_54085 && chmod 3770 /etc/tc_54085 && ostree container commit
@@ -239,7 +240,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 			yumRepoFile     = "/etc/yum.repos.d/tc-54159-centos.repo"
 		)
 
-		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
+		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 
 		dockerFileCommands := `
 RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && chmod 1755 /usr/bin/tc_54159_rpm_and_osimage
@@ -457,7 +458,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 	})
 	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-High-54909-Configure extensions while using a custom osImage [Disruptive]", func() {
-		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
+		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 		var (
 			rpmName            = "zsh"
 			extensionRpmName   = "usbguard"
@@ -718,7 +719,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 	})
 
 	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-High-54915-Configure kerneltype while using a custom osImage [Disruptive]", func() {
-		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
+		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
 
 		var (
@@ -1079,11 +1080,4 @@ func checkInvalidOsImagesDegradedStatus(oc *exutil.CLI, image, layeringMcName, e
 
 	validateMcpNodeDegraded(layeringMC, mcp, expectedNDMessage, expectedNDReason)
 
-}
-
-func skipTestIfSupportedArchNotMatched(oc *exutil.CLI) {
-	architecture := exutil.GetClusterArchitecture(oc)
-	if architecture != ArchitectureAMD64 && architecture != ArchitectureARM64 {
-		g.Skip("Do not support " + architecture + "architecture")
-	}
 }

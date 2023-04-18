@@ -2,6 +2,7 @@ package operatorsdk
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"strings"
 	"time"
 
@@ -28,21 +29,15 @@ const (
 	nok              = false
 )
 
-func buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir string) {
+func buildPushOperatorImage(architecture architecture.Architecture, tmpPath, imageTag, tokenDir string) {
 
 	g.By("Build and Push the operator image with architecture")
 	podmanCLI := container.NewPodmanCLI()
 	podmanCLI.ExecCommandPath = tmpPath
-	switch architecture {
-	case "amd64":
-		output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Successfully"))
-	case "arm64":
-		output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Successfully"))
-	}
+	output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", architecture.String(), "--tag", imageTag,
+		"--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.ContainSubstring("Successfully"))
 
 	waitErr := wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
 		output, _ := podmanCLI.Run("push").Args(imageTag).Output()

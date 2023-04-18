@@ -2,6 +2,7 @@ package operators
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -95,7 +96,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-High-59416-Revert Catalog PSA decisions for 4.12", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		g.By("step 1 -> check openshift-marketplace project labels")
 		labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-marketplace", "--show-labels").Output()
 		if err != nil {
@@ -869,7 +870,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-High-43101-OLM blocks minor OpenShift upgrades when incompatible optional operators are installed", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		// consumes this index imaage: quay.io/olmqe/etcd-index:upgrade-auto, it contains the etcdoperator v0.9.2, v0.9.4, v0.9.5
 		g.By("1) Create a CatalogSource in the openshift-marketplace project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
@@ -1236,7 +1237,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// add `Serial` label since this etcd-operator are subscribed for cluster-scoped,
 	// that means may leads to other etcd-opertor subscription fail if in Parallel
 	g.It("ConnectedOnly-VMonly-Author:jiazha-High-37826-use an PullSecret for the private Catalog Source image [Serial]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		g.By("1) Create a pull secert for CatalogSource")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dockerConfig := filepath.Join("/home", "cloud-user", ".docker", "auto", "config.json")
@@ -1603,7 +1604,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-Medium-33450-Operator upgrades can delete existing CSV before completion", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		g.By("1) Install a customization CatalogSource CR")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
@@ -1886,7 +1887,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-54038-Comply with Operator Anti-Affinity definition", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -1955,7 +1956,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-54036-Comply with Operator NodeAffinity definition", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			buildPruningBaseDir  = exutil.FixturePath("testdata", "olm")
@@ -2065,7 +2066,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-24387-Any CRD upgrade is allowed if there is only one owner in a cluster [Disruptive] [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			catName             = "cs-24387"
@@ -2254,7 +2255,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-ConnectedOnly-Medium-33902-Catalog Weighting [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -2441,7 +2442,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-43073-Indicate dependency class in resolution constraint text", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		oc.SetupProject()
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
@@ -2496,7 +2497,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-Medium-24772-OLM should support for user defined ServiceAccount for OperatorGroup with fine grained permission", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		saRoles := filepath.Join(buildPruningBaseDir, "scoped-sa-fine-grained-roles.yaml")
 		oc.SetupProject()
@@ -2667,7 +2668,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-30765-Operator-version based dependencies metadata", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
@@ -2725,7 +2726,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-27680-OLM Bundle support for Prometheus Types [Serial]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
@@ -2796,7 +2797,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-24916-Operators in AllNamespaces should be granted namespace list [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -2835,7 +2836,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-47149-Conjunctive constraint of one packages and one GVK", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -2907,7 +2908,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-47181-Disjunctive constraint of one package and one GVK", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -2961,7 +2962,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-47179-Disjunctive constraint of one package and one GVK", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -3175,7 +3176,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-32613-Operators won't install if the CSV dependency is already installed", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
@@ -3862,7 +3863,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: scolange@redhat.com
 	g.It("ConnectedOnly-Author:scolange-Medium-41565-Resolution fails to sort channel if inner entry does not satisfy predicate", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var Sub = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		var og1 = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -4021,7 +4022,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: scolange@redhat.com
 	g.It("ConnectedOnly-Author:scolange-Medium-43723-Allow missing replaces in channel tail in DC validation", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -4755,7 +4756,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-24870, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-High-24870-can not create csv without operator group", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -4814,7 +4815,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover part of test case: OCP-25855, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-High-25855-Add the channel field to subscription_sync_count [Serial]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -4937,7 +4938,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-23170, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-23170-API labels should be hash", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5011,7 +5012,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-20979, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-20979-only one IP is generated [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5077,7 +5078,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-25757 and 22656, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-25757-High-22656-manual approval strategy apply to subsequent releases [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5220,7 +5221,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-24438, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-24438-check subscription CatalogSource Status", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5288,7 +5289,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-24027, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24027-can create and delete catalogsource and sub repeatedly", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5359,7 +5360,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover part of test case: OCP-21404, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-21404-csv will be RequirementsNotMet after sa is delete", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5430,7 +5431,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover part of test case: OCP-21404, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-21404-csv will be RequirementsNotMet after role rule is delete", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5504,7 +5505,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-29723, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-29723-As cluster admin find abnormal status condition via components of operator resource", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5575,7 +5576,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-30762, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-30762-installs bundles with v1 CRDs", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5632,7 +5633,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-27683, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-27683-InstallPlans can install from extracted bundles", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5702,7 +5703,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-24513, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24513-Operator config support env only", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5770,7 +5771,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-24382, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24382-Should restrict CRD update if schema changes [Serial]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5849,7 +5850,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-25760, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-25760-Operator upgrades does not fail after change the channel", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5913,7 +5914,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-35895, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-35895-can't install a CSV with duplicate roles", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5973,7 +5974,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-32863, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-32863-Support resources required for SAP Gardener Control Plane Operator [Disruptive]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6049,7 +6050,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-34472, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-34472-OLM label dependency", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6108,7 +6109,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-37263, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-37263-Subscription stays in UpgradePending but InstallPlan not installing [Slow]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6243,7 +6244,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-33176, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-33176-Enable generated operator component adoption for operators with single ns mode [Slow] [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName                  = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir     = exutil.FixturePath("testdata", "olm")
@@ -6428,7 +6429,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-39897, author: kuiwang@redhat.com
 	//Set it as serial because it will delete CRD of teiid. It potential impact other cases if it is in parallel.
 	g.It("ConnectedOnly-Author:kuiwang-Medium-39897-operator objects should not be recreated after all other associated resources have been deleted [Serial]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6925,7 +6926,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: scolange@redhat.com
 	g.It("ConnectedOnly-Author:scolange-Medium-24738-CRD should update if previously defined schemas do not change [Disruptive] [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var cmTemplate = filepath.Join(buildPruningBaseDir, "configmap-etcd.yaml")
 		var patchCfgMap = filepath.Join(buildPruningBaseDir, "configmap-ectd-alpha-beta.yaml")
@@ -7099,7 +7100,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-25644, author: tbuskey@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-Medium-25644-OLM collect CSV health per version", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var err error
 		var (
@@ -7329,7 +7330,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-30312-can allow admission webhook definitions in CSV", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -7421,7 +7422,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-30317-can allow mutating admission webhook definitions in CSV", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -7512,7 +7513,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-30319-Admission Webhook Configuration names should be unique", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName                 = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "olm")
@@ -7591,7 +7592,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-30206-Medium-30242-can include secrets and configmaps in the bundle", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -7883,7 +7884,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	g.It("ConnectedOnly-Author:xzha-Medium-59380-Upgrade should be success when there are multiple upgrade paths between channel entries", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -8297,7 +8298,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com, test case OCP-40529
 	g.It("ConnectedOnly-Author:xzha-Medium-40529-OPERATOR_CONDITION_NAME should have correct value", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -8518,7 +8519,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com, test case OCP-43110
 	g.It("ConnectedOnly-Author:xzha-High-43110-OLM provide a helpful error message when install removed api", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -8582,7 +8583,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com, test case OCP-43639
 	g.It("ROSA-ConnectedOnly-Author:xzha-High-43639-OLM must explicitly alert on deprecated APIs in use", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -8660,7 +8661,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com, test case OCP-48439
 	g.It("ConnectedOnly-Author:xzha-Medium-48439-OLM upgrades operators immediately", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -8721,7 +8722,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-40958, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-40958-Indicate invalid OperatorGroup on InstallPlan status [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -8839,7 +8840,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-41174-Periodically retry InstallPlan execution until a timeout expires", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		roletemplate := filepath.Join(buildPruningBaseDir, "role.yaml")
@@ -9042,7 +9043,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-41035-Fail InstallPlan on bundle unpack timeout [Slow]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -9110,7 +9111,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	//author:xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-47322-Arbitrary Constraints can be defined as bundle properties", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -9248,7 +9249,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	//author:xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-47319-Arbitrary Compound Constraints with AND can be defined as bundle properties", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -9385,7 +9386,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	//author:xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-47323-Arbitrary Compound Constraints with OR NOT can be defined as bundle properties", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -9611,7 +9612,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: tbuskey@redhat.com, test case OCP-43291
 	g.It("ConnectedOnly-Author:xzha-High-43291-Indicate resolution conflicts on involved Subscription statuses [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10360,7 +10361,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 	// It will cover test case: OCP-23473, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-23473-permit z-stream releases skipping during operator updates", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10511,7 +10512,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 	// It will cover test case: OCP-21824, author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-21824-verify CRD should be ready before installing the operator [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10803,7 +10804,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// It will cover test case: OCP-25783, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-High-25783-Subscriptions are not getting processed taking very long to get processed [Serial]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -10883,7 +10884,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// It will cover test case: OCP-21484, OCP-21532(actually it covers OCP-21484), author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-21484-High-21532-watch special or all namespace by operator group", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10987,7 +10988,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// It will cover test case: OCP-33241, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-33241-Enable generated operator component adoption for operators with all ns mode [Serial]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -11094,7 +11095,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-34181-can add conversion webhooks for singleton operators", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -11184,7 +11185,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// It will cover test case: OCP-40531, author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-40531-High-41051-High-23172-the value of lastUpdateTime of csv and Components of Operator should be correct [Serial]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -11258,7 +11259,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// Test case: OCP-27672, author:xzha@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:xzha-Medium-27672-Allow Operator Registry Update Polling with automatic ipApproval [Slow]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		containerCLI := container.NewPodmanCLI()
 		containerTool := "podman"
 		quayCLI := container.NewQuayCLI()
@@ -11385,7 +11386,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	})
 
 	g.It("VMonly-ConnectedOnly-Author:xzha-Medium-27672-Allow Operator Registry Update Polling with manual ipApproval [Slow]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		containerCLI := container.NewPodmanCLI()
 		containerTool := "podman"
 		quayCLI := container.NewQuayCLI()
@@ -11553,7 +11554,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// OCP-45361 author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-Medium-45361-Resolution failed error condition in Subscription should be removed after resolution error is resolved [Flaky]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildIndexBaseDir   = exutil.FixturePath("testdata", "olm")
@@ -11771,7 +11772,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			containerCLI    = container.NewPodmanCLI()
 			containerTool   = "podman"
@@ -11933,7 +11934,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	})
 
 	g.It("VMonly-Author:xzha-ConnectedOnly-Medium-43246-Medium-53873-Convert an existing db based index to declarative config", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -12018,7 +12019,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// Test case: OCP-30835, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-30835-complete operator upgrades automatically based on SemVer setting default channel in opm alpha bundle build", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildIndexBaseDir   = exutil.FixturePath("testdata", "olm")
@@ -12126,7 +12127,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// Test case: OCP-30860, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-30860-complete operator upgrades automatically based on SemVer instead of replaces or skips [Slow]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildIndexBaseDir   = exutil.FixturePath("testdata", "olm")
@@ -12267,7 +12268,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// Test case: OCP-30674, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-30674-complete operator upgrades automatically based on SemVer without setting default channel", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildIndexBaseDir   = exutil.FixturePath("testdata", "olm")
@@ -12375,7 +12376,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// Test case: OCP-29810, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-29810-The bundle and index image reated successfully when spec replaces field is null", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName            = g.CurrentSpecReport().FullText()
 			buildIndexBaseDir = exutil.FixturePath("testdata", "olm")

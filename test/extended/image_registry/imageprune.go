@@ -2,6 +2,7 @@ package imageregistry
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"strings"
 	"time"
@@ -576,7 +577,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get cluster architecture")
-		architecture := exutil.GetClusterArchitecture(oc)
+		// TODO[aleskandro,wewang]: this case needs a fix to be fully multi-arch compatible.
+		// The arch-specific SHAs are hardcoded and that's not needed.
+		// Moreover, we might rely on the pod's node architecture by default (not only for multi-arch clusters)
+		curArchitecture := architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		g.By("Could pull a sub-manifest of manifest list via pullthrough and manifest list blobs can delete via hard prune")
 		for i := 0; i < 2; i++ {
@@ -592,23 +596,25 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			checkPodsRunningWithLabel(oc, oc.Namespace(), "run="+isarr[i], 1)
 
 			g.By("Get architecture from node of pod for multi-arch cluster")
-			if architecture == "Multi-Arch" {
+			if curArchitecture == architecture.MULTI {
 				podnode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod/"+isarr[i], "-o=jsonpath={.spec.nodeName}", "-n", oc.Namespace()).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				architecture, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("node/"+podnode, "-o=jsonpath={.items[*].status.nodeInfo.architecture}").Output()
+				podnodeArchitecture, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("node/"+podnode, "-o=jsonpath={.items[*].status.nodeInfo.architecture}").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
+				curArchitecture = architecture.FromString(podnodeArchitecture)
 			}
 
 			g.By("Check the pod's image and image id")
 			out, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod/"+isarr[i], "-n", oc.Namespace()).Output()
-			if architecture == "amd64" {
+			switch curArchitecture {
+			case architecture.AMD64:
 				o.Expect(out).To(o.ContainSubstring(isarr[i] + ":latest"))
 				o.Expect(out).To(o.ContainSubstring(amdid[i]))
-			} else if architecture == "arm64" {
+			case architecture.ARM64:
 				o.Expect(out).To(o.ContainSubstring(isarr[i] + ":latest"))
 				o.Expect(out).To(o.ContainSubstring(armid[i]))
-			} else {
-				e2e.Logf("will support new archifecture cluster later")
+			default:
+				e2e.Logf("only amd64 and arm64 are currently supported")
 			}
 
 			g.By("Delete pod and imagestream, then hard prune the registry")

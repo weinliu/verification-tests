@@ -29,11 +29,6 @@ const (
 	// ControllerLabelValue value used to identify the controller pod
 	ControllerLabelValue = "machine-config-controller"
 
-	// ArchitectureARM64 value used to identify arm64 architecture
-	ArchitectureARM64 = "arm64"
-	// ArchitectureAMD64 value used to identify amd64 architecture
-	ArchitectureAMD64 = "amd64"
-
 	// TmplAddSSHAuthorizedKeyForWorker template file name: change-worker-add-ssh-authorized-key
 	TmplAddSSHAuthorizedKeyForWorker = "change-worker-add-ssh-authorized-key"
 

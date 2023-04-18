@@ -3,6 +3,7 @@ package workloads
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"io/ioutil"
 
 	"os"
@@ -595,11 +596,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("NonHyperShiftHOST-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Critical-51009-High-51017-oc adm release new support manifest list", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture == "Multi-Arch" {
-			g.Skip("Skip for Multi-Arch")
-		}
-
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		workloadsBaseDir := exutil.FixturePath("testdata", "workloads")
 		manifestlistImagestream := filepath.Join(workloadsBaseDir, "12708358_4.11.0-0.nightly-multi-2022-04-18-120932-release-imagestream.yaml")
@@ -631,10 +628,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-44928-oc image mirror support registry which authorization server's url is different from registry url", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture == "Multi-Arch" {
-			g.Skip("Skip for Multi-Arch")
-		}
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		dockerauthBaseDir := exutil.FixturePath("testdata", "workloads")
 		dockerConfigDir := filepath.Join(dockerauthBaseDir, "config")
 		dockerauthfile := filepath.Join(dockerauthBaseDir, "auth.json")

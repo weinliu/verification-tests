@@ -2,6 +2,7 @@ package operatorsdk
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os"
 	"os/exec"
 	"strings"
@@ -500,10 +501,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-42928-SDK support the previous base ansible image [Slow]", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		// test data
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		dataPath := filepath.Join(buildPruningBaseDir, "ocp-42928-data")
@@ -569,7 +567,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -855,13 +853,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: chuo@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:chuo-High-34427-Ensure that Ansible Based Operators creation is working", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 
 		imageTag := "quay.io/olmqe/memcached-operator-ansible-base:v" + ocpversion + getRandomString()
-		if architecture == "arm64" {
+		// TODO[aleskandro,chuo]: this is a workaround See https://issues.redhat.com/browse/ARMOCP-531
+		if clusterArchitecture == architecture.ARM64 {
 			imageTag = "quay.io/olmqe/memcached-operator-ansible-base:v" + ocpversion + "-34427"
 		}
 		nsSystem := "system-ocp34427" + getRandomString()
@@ -935,11 +931,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		switch architecture {
-		case "amd64":
-			buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
-		case "arm64":
-			e2e.Logf("platform is arm64, IMG is " + imageTag)
+		// TODO[aleskandro,chuo]: this is a workaround: https://issues.redhat.com/browse/ARMOCP-531
+		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
+		switch clusterArchitecture {
+		case architecture.AMD64:
+			buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
+		case architecture.ARM64:
+			e2e.Logf(fmt.Sprintf("platform is %s, IMG is %s", clusterArchitecture.String(), imageTag))
 		}
 
 		g.By("step: Install the CRD")
@@ -1018,12 +1016,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: chuo@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:chuo-Medium-34366-change ansible operator flags from maxWorkers using env MAXCONCURRENTRECONCILES ", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 		imageTag := "quay.io/olmqe/memcached-operator-max-worker:v" + ocpversion + getRandomString()
-		if architecture == "arm64" {
+		// TODO[aleskandro,chuo]: this is a workaround: https://issues.redhat.com/browse/ARMOCP-531
+		if clusterArchitecture == architecture.ARM64 {
 			imageTag = "quay.io/olmqe/memcached-operator-max-worker:v" + ocpversion + "-34366"
 		}
 		nsSystem := "system-ocp34366" + getRandomString()
@@ -1095,11 +1091,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		switch architecture {
-		case "amd64":
-			buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
-		case "arm64":
-			e2e.Logf("platform is arm64, IMG is " + imageTag)
+		// TODO[aleskandro,chuo]: this is a workaround: https://issues.redhat.com/browse/ARMOCP-531
+		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
+		switch clusterArchitecture {
+		case architecture.AMD64:
+			buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
+		case architecture.ARM64:
+			e2e.Logf(fmt.Sprintf("platform is %s, IMG is %s", clusterArchitecture.String(), imageTag))
 		}
 
 		g.By("step: Install the CRD")
@@ -1419,10 +1417,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: chuo@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:chuo-High-34426-Critical-52625-Medium-37142-ensure that Helm Based Operators creation and cr create delete ", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 		imageTag := "quay.io/olmqe/nginx-operator-base:v" + ocpversion + "-34426" + getRandomString()
 		nsSystem := "system-34426-" + getRandomString()
 		nsOperator := "nginx-operator-34426-system"
@@ -1498,7 +1493,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -1737,10 +1732,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		dataPath := filepath.Join(buildPruningBaseDir, "ocp-44295-data")
 		quayCLI := container.NewQuayCLI()
@@ -1901,10 +1893,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			buildPruningBaseDir        = exutil.FixturePath("testdata", "operatorsdk")
 			dataPath                   = filepath.Join(buildPruningBaseDir, "ocp-52371-data")
@@ -2064,10 +2053,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			buildPruningBaseDir        = exutil.FixturePath("testdata", "operatorsdk")
 			dataPath                   = filepath.Join(buildPruningBaseDir, "ocp-52377-data")
@@ -2216,11 +2202,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: chuo@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:chuo-High-40341-Ansible operator needs a way to pass vars as unsafe ", func() {
 		imageTag := "quay.io/olmqe/memcached-operator-pass-unsafe:v" + ocpversion + getRandomString()
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "arm64" && architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
-		if architecture == "arm64" {
+		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
+		if clusterArchitecture == architecture.ARM64 {
 			imageTag = "quay.io/olmqe/memcached-operator-pass-unsafe:v" + ocpversion + "-40341"
 		}
 		nsSystem := "system-40341-" + getRandomString()
@@ -2293,11 +2276,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		switch architecture {
-		case "amd64":
-			buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
-		case "arm64":
-			e2e.Logf("platform is arm64, IMG is " + imageTag)
+		// TODO[aleskandro,chuo]: this is a workaround: https://issues.redhat.com/browse/ARMOCP-531
+		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
+		switch clusterArchitecture {
+		case architecture.AMD64:
+			buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
+		case architecture.ARM64:
+			e2e.Logf(fmt.Sprintf("platform is %s, IMG is %s", clusterArchitecture, imageTag))
 		}
 
 		g.By("step: Install the CRD")
@@ -2390,10 +2375,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-48885-SDK generate digest type bundle of ansible", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
-			g.Skip("Do not support " + architecture)
-		}
+		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		dataPath := filepath.Join(buildPruningBaseDir, "ocp-48885-data")
 		tmpBasePath := "/tmp/ocp-48885-" + getRandomString()
@@ -2464,10 +2446,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		dataPath := filepath.Join(buildPruningBaseDir, "ocp-52813-data")
 		tmpBasePath := "/tmp/ocp-52813-" + getRandomString()
@@ -2517,7 +2496,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
@@ -2562,10 +2541,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		dataPath := filepath.Join(buildPruningBaseDir, "ocp-52814-data")
 		tmpBasePath := "/tmp/ocp-52814-" + getRandomString()
@@ -2616,7 +2592,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
@@ -2665,10 +2641,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") == "" && os.Getenv("http_proxy") == "" {
 			g.Skip("HTTP_PROXY is empty - skipping test ...")
 		}
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		tmpBasePath := "/tmp/ocp-44550-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-44550")
 		err := os.MkdirAll(tmpPath, 0o755)
@@ -2731,7 +2704,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -2807,10 +2780,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-44551-SDK support helm type operator for http_proxy env", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		tmpBasePath := "/tmp/ocp-44551-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-44551")
 		err := os.MkdirAll(tmpPath, 0o755)
@@ -2872,7 +2842,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -3090,10 +3060,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-44553-SDK support go type operator for http_proxy env [Slow]", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		architecture.SkipNonAmd64SingleArch(oc)
 		tmpBasePath := "/tmp/ocp-44553-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-44553")
 		err := os.MkdirAll(tmpPath, 0o755)
@@ -3429,10 +3396,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jitli@redhat.com
 	g.It("VMonly-DisconnectedOnly-Author:jitli-High-52571-Disconnected test for ansible type operator", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "operatorsdk")
 			dataPath            = filepath.Join(buildPruningBaseDir, "ocp-48885-data")
@@ -3502,7 +3466,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "memcached-operator-52571.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: make bundle use image digests")
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
@@ -3627,11 +3591,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jitli@redhat.com
 	g.It("VMonly-DisconnectedOnly-Author:jitli-High-52572-Disconnected test for helm type operator", func() {
-
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "operatorsdk")
 			dataPath            = filepath.Join(buildPruningBaseDir, "ocp-52813-data")
@@ -3681,7 +3641,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
@@ -3825,10 +3785,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jitli@redhat.com
 	g.It("VMonly-DisconnectedOnly-Author:jitli-High-52305-Disconnected test for go type operator [Slow]", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "operatorsdk")
 			dataPath            = filepath.Join(buildPruningBaseDir, "ocp-52814-data")
@@ -3881,7 +3838,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
@@ -4028,10 +3985,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-45141-High-41497-High-34292-High-29374-High-28157-High-27977-ansible k8sevent k8sstatus maxConcurrentReconciles modules to a collect blacklist [Slow]", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		// test data
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		dataPath := filepath.Join(buildPruningBaseDir, "ocp-27977-data")
@@ -4097,7 +4051,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -4233,10 +4187,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-28586-ansible Content Collections Support in watches.yaml", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		// test data
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		dataPath := filepath.Join(buildPruningBaseDir, "ocp-28586-data")
@@ -4306,7 +4257,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -4364,10 +4315,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-48366-add ansible prometheus metrics", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		// test data
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		dataPath := filepath.Join(buildPruningBaseDir, "ocp-48366-data")
@@ -4429,7 +4377,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -4515,10 +4463,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-48359-SDK init plugin about hybird helm operator [Slow]", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		tmpBasePath := "/tmp/ocp-48359-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-48359")
 		err := os.MkdirAll(tmpPath, 0o755)
@@ -4592,7 +4537,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Deploy the operator")
 		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
@@ -4654,11 +4599,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jitli@redhat.com
 	g.It("VMonly-Author:jitli-High-40964-migrate packagemanifest to bundle", func() {
-
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" {
-			g.Skip("Do not support " + architecture)
-		}
+		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			tmpBasePath           = "/tmp/ocp-40964-" + getRandomString()
 			pacakagemanifestsPath = exutil.FixturePath("testdata", "operatorsdk", "ocp-40964-data", "manifests", "etcd")

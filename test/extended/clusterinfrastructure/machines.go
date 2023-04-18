@@ -1,6 +1,7 @@
 package clusterinfrastructure
 
 import (
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		machinesetName := "machineset-45377"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer ms.DeleteMachineSet(oc)
@@ -62,7 +63,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		machinesetName := "machineset-46967"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer ms.DeleteMachineSet(oc)
@@ -254,7 +255,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-35513-Windows machine should successfully provision for aws [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-35513"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -344,7 +345,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48594-AWS EFA network interfaces should be supported via machine api [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region == "us-iso-east-1" {
@@ -371,7 +372,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48595-Negative validation for AWS NetworkInterfaceType [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region == "us-iso-east-1" {
@@ -773,13 +774,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Check machine instanceType credentialsSecret and userDataSecret are defaulted")
 		instanceTypeMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.instanceType}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture == "amd64" {
+		switch arch := architecture.ClusterArchitecture(oc); arch {
+		case architecture.AMD64:
 			o.Expect(instanceTypeMachine).Should(o.Equal("m5.large"))
-		} else if architecture == "arm64" {
+		case architecture.ARM64:
 			o.Expect(instanceTypeMachine).Should(o.Equal("m6g.large"))
-		} else {
-			e2e.Logf("No need validation of instanceType on other architecture")
+		default:
+			e2e.Logf("ignoring the validation of the instanceType for cluster architecture %s", arch.String())
 		}
 		credentialsSecretMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.credentialsSecret.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

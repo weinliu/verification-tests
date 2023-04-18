@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,7 +103,7 @@ var _ = g.Describe("[sig-mco] MCO hypershift", func() {
 
 	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-54366-hypershift Update release image of node pool [Disruptive]", func() {
 		// check arch, only support amd64
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 
 		// create a nodepool with 2 replicas and enable in place upgrade
 		defer ht.DestroyNodePoolOnAws()

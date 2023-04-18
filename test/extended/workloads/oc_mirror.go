@@ -2,6 +2,7 @@ package workloads
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -181,10 +182,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-High-46506-High-46817-Mirror a single image works well [Serial]", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture == "Multi-Arch" {
-			g.Skip("Skip for Multi-Arch")
-		}
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		operatorS := filepath.Join(ocmirrorBaseDir, "config_singleimage.yaml")
 
@@ -249,10 +247,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-High-46769-Critical-46515-High-registry backend test [Serial]", func() {
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture == "Multi-Arch" {
-			g.Skip("Skip for Multi-Arch")
-		}
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		g.By("Set podman registry config")
 		dirname := "/tmp/case46769"
 		err := os.MkdirAll(dirname, 0755)

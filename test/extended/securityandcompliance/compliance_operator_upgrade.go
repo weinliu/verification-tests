@@ -1,6 +1,7 @@
 package securityandcompliance
 
 import (
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"strconv"
 
@@ -47,7 +48,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 		g.BeforeEach(func() {
 			g.By("Skip test when precondition not meet !!!")
 			SkipMissingCatalogsource(oc)
-			exutil.SkipARM64(oc)
+			architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 			SkipMissingDefaultSC(oc)
 			SkipMissingRhcosWorkers(oc)
 

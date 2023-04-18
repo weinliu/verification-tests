@@ -2,6 +2,7 @@ package securityandcompliance
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"strconv"
 	"strings"
 	"time"
@@ -74,7 +75,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		}
 
 		SkipMissingCatalogsource(oc)
-		exutil.SkipARM64(oc)
+		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 
 		createSecurityProfileOperator(oc, subD, ogD)
 	})

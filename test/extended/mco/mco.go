@@ -3,6 +3,7 @@ package mco
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -195,7 +196,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42365-add real time kernel argument [Disruptive]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		platform := exutil.CheckPlatform(oc)
 		if platform == GCPPlatform || platform == AWSPlatform {
 			workerNode := skipTestIfOsIsNotCoreOs(oc)
@@ -229,7 +230,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		createMcAndVerifyMCValue(oc, "Usb Extension", "change-worker-extension-usbguard", workerNode, textToVerify, "rpm", "-q", "usbguard")
 	})
 	g.It("Author:sregidor-Longduration-NonPreRelease-Critical-56131-Install all extensions [Disruptive]", func() {
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 
 		var (
 			workerNode                   = skipTestIfOsIsNotCoreOs(oc)
@@ -2226,7 +2227,7 @@ nulla pariatur.`
 
 	g.It("Author:rioliu-NonPreRelease-High-53668-when FIPS and realtime kernel are both enabled node should NOT be degraded [Disruptive]", func() {
 		// skip if arm64. realtime kernel is not supported.
-		exutil.SkipARM64(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
 		// skip the test if fips is not enabled
 		skipTestIfFIPSIsNotEnabled(oc)
 		// skip the test if platform is not aws or gcp. realtime kargs currently supported on these platforms

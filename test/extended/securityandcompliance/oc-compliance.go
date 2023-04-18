@@ -3,6 +3,7 @@ package securityandcompliance
 import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	"path/filepath"
 
@@ -55,7 +56,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 
 		g.By("Skip test when precondition not meet !!!")
 		SkipMissingCatalogsource(oc)
-		exutil.SkipARM64(oc)
+		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 		SkipMissingDefaultSC(oc)
 		SkipMissingRhcosWorkers(oc)
 

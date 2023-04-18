@@ -57,40 +57,6 @@ func GetClusterPrefixName(oc *CLI) string {
 	return strings.Split(output, ".")[2]
 }
 
-// GetClusterArchitecture return ClusterArchitecture
-// If ClusterArchitecture is multi-arch, return Multi-Arch
-func GetClusterArchitecture(oc *CLI) string {
-	architecture := ""
-	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("nodes", "-o=jsonpath={.items[*].status.nodeInfo.architecture}").Output()
-	if err != nil {
-		e2e.Failf("get architecture failed err %v .", err)
-	}
-	if output == "" {
-		e2e.Failf("get architecture failed")
-	}
-	architectureList := strings.Split(output, " ")
-	architecture = architectureList[0]
-	for _, architectureIndex := range architectureList {
-		if architectureIndex != architecture {
-			e2e.Logf("architecture %s", output)
-			return "Multi-Arch"
-		}
-	}
-	return architecture
-}
-
-// SkipARM64 skip the test if cluster is arm64
-func SkipARM64(oc *CLI) {
-	arch := GetClusterArchitecture(oc)
-	e2e.Logf("architecture is " + arch)
-	if arch == "arm64" {
-		g.Skip("Skip for arm64")
-	}
-	if arch == "Multi-Arch" {
-		g.Skip("Skip for Multi-Arch")
-	}
-}
-
 // SkipBaselineCaps skip the test if cluster has no required resources.
 // sets is comma separated list of baselineCapabilitySets to skip.
 // for example: "None, v4.11"
@@ -153,9 +119,4 @@ func SkipHypershiftHostedCluster(oc *CLI) {
 	if topology == "External" {
 		g.Skip("Skip for Hypershift cluster")
 	}
-}
-
-// IsHeterogeneousCluster judges whether the test cluster has heterogeneous nodes
-func IsHeterogeneousCluster(oc *CLI) bool {
-	return GetClusterArchitecture(oc) == "Multi-Arch"
 }

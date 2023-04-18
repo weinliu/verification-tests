@@ -2,6 +2,7 @@ package securityandcompliance
 
 import (
 	"fmt"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"strconv"
 	"strings"
 
@@ -133,7 +134,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("Skip test when precondition not meet !!!")
 		SkipMissingCatalogsource(oc)
-		exutil.SkipARM64(oc)
+		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 		SkipMissingDefaultSC(oc)
 		SkipMissingRhcosWorkers(oc)
 
