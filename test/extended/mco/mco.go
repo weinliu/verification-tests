@@ -2784,8 +2784,10 @@ nulla pariatur.`
 			expectedNDReason  = "1 nodes are reporting degraded status on sync"
 		)
 
-		g.By("Try to enable FIPS in master pool")
+		// If FIPS is already enabled, we skip the test case
+		skipTestIfFIPSIsEnabled(oc.AsAdmin())
 
+		g.By("Try to enable FIPS in master pool")
 		mMc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolMaster).SetMCOTemplate(mcTemplate)
 		mMc.parameters = []string{"FIPS=true"}
 		mMc.skipWaitForMcp = true
@@ -2800,6 +2802,40 @@ nulla pariatur.`
 
 		validateMcpNodeDegraded(wMc, wMcp, expectedNDMessage, expectedNDReason)
 		logger.Infof("OK!\n")
+
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Low-25822-Refuse to disable FIPS mode by MCO[Disruptive]", func() {
+		var (
+			mMcName = "99-master-fips"
+			wMcName = "99-worker-fips"
+			wMcp    = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mMcp    = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			mMc     = NewMachineConfig(oc.AsAdmin(), mMcName, MachineConfigPoolMaster)
+			wMc     = NewMachineConfig(oc.AsAdmin(), wMcName, MachineConfigPoolWorker)
+
+			expectedNDMessage = regexp.QuoteMeta("detected change to FIPS flag; refusing to modify FIPS on a running cluster")
+			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+		)
+
+		// If FIPS is already disabled, we skip the test case
+		skipTestIfFIPSIsNotEnabled(oc.AsAdmin())
+
+		defer func() {
+			logger.Infof("Starting defer logic")
+			mMc.Patch("merge", `{"spec":{"fips": true}}`)
+			wMc.Patch("merge", `{"spec":{"fips": true}}`)
+			wMcp.RecoverFromDegraded()
+			mMcp.RecoverFromDegraded()
+		}()
+
+		g.By("Patch the master-fips MC and set fips=false")
+		mMc.Patch("merge", `{"spec":{"fips": false}}`)
+		checkNodeDegraded(mMcp, expectedNDMessage, expectedNDReason, 1)
+
+		g.By("Try to disasble FIPS in worker pool")
+		wMc.Patch("merge", `{"spec":{"fips": false}}`)
+		checkNodeDegraded(wMcp, expectedNDMessage, expectedNDReason, 1)
 
 	})
 
@@ -3227,17 +3263,21 @@ nulla pariatur.`
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason
 func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expectedNDMessage, expectedNDReason string) {
-
-	oc := mcp.oc
 	defer mcp.RecoverFromDegraded()
 	defer mc.deleteNoWait()
 	mc.create()
 	logger.Infof("OK!\n")
 
+	checkNodeDegraded(mcp, expectedNDMessage, expectedNDReason, 2)
+}
+
+func checkNodeDegraded(mcp *MachineConfigPool, expectedNDMessage, expectedNDReason string, offset int) {
+	oc := mcp.oc
+
 	g.By("Wait until MCP becomes degraded")
-	o.Eventually(mcp.pollDegradedStatus(), "10m", "30s").Should(o.Equal("True"),
+	o.EventuallyWithOffset(offset, mcp.pollDegradedStatus(), "10m", "30s").Should(o.Equal("True"),
 		"The '%s' MCP should become degraded when we try to create an invalid MC, but it didn't.", mcp.GetName())
-	o.Eventually(mcp.pollDegradedMachineCount(), "5m", "30s").Should(o.Equal("1"),
+	o.EventuallyWithOffset(offset, mcp.pollDegradedMachineCount(), "5m", "30s").Should(o.Equal("1"),
 		"The '%s' MCP should report '1' degraded machine count, but it doesn't.", mcp.GetName())
 
 	logger.Infof("OK!\n")
@@ -3251,11 +3291,11 @@ func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expected
 	nodeDegradedMessage := nodeDegradedConditionJSON.Get("message").ToString()
 	nodeDegradedReason := nodeDegradedConditionJSON.Get("reason").ToString()
 
-	o.ExpectWithOffset(1, nodeDegradedStatus).Should(o.Equal("True"),
+	o.ExpectWithOffset(offset, nodeDegradedStatus).Should(o.Equal("True"),
 		"'worker' MCP should report degraded status in the NodeDegraded condition: %s", nodeDegradedCondition)
-	o.ExpectWithOffset(1, nodeDegradedMessage).Should(o.MatchRegexp(expectedNDMessage),
+	o.ExpectWithOffset(offset, nodeDegradedMessage).Should(o.MatchRegexp(expectedNDMessage),
 		"'worker' MCP is not reporting the expected message in the NodeDegraded condition: %s", nodeDegradedCondition)
-	o.ExpectWithOffset(1, nodeDegradedReason).Should(o.MatchRegexp(expectedNDReason),
+	o.ExpectWithOffset(offset, nodeDegradedReason).Should(o.MatchRegexp(expectedNDReason),
 		"'worker' MCP is not reporting the expected reason in the NodeDegraded condition: %s", nodeDegradedCondition)
 	logger.Infof("OK!\n")
 
@@ -3266,7 +3306,7 @@ func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expected
 	// If the degraded node is true, then co/machine-config should not be upgradeable
 	// It's unlikely, but it can happen that the MCP is degraded, but the CO has not been already updated with the right error message.
 	// So we need to poll for the right reason
-	o.Eventually(func() string {
+	o.EventuallyWithOffset(offset, func() string {
 		var err error
 		mcDataMap, err = getStatusCondition(oc, "co/machine-config", "Upgradeable")
 		if err != nil {
@@ -3276,15 +3316,14 @@ func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expected
 	}, "5m", "10s").Should(o.Equal("DegradedPool"),
 		"co/machine-config Upgradeable condition reason is not the expected one: %s", mcDataMap)
 
-	o.ExpectWithOffset(1, mcDataMap["status"].(string)).Should(
+	o.ExpectWithOffset(offset, mcDataMap["status"].(string)).Should(
 		o.Equal("False"),
 		"co/machine-config Upgradeable condition status is not the expected one: %s", mcDataMap)
-	o.ExpectWithOffset(1, mcDataMap["message"].(string)).Should(
+	o.ExpectWithOffset(offset, mcDataMap["message"].(string)).Should(
 		o.ContainSubstring("One or more machine config pools are degraded, please see `oc get mcp` for further details and resolve before upgrading"),
 		"co/machine-config Upgradeable condition message is not the expected one: %s", mcDataMap)
 
 	logger.Infof("OK!\n")
-
 }
 
 func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, workerNode Node, textToVerify TextToVerify, cmd ...string) {
@@ -3359,6 +3398,13 @@ func skipTestIfOsIsNotRhelOs(oc *exutil.CLI) Node {
 func skipTestIfFIPSIsNotEnabled(oc *exutil.CLI) {
 	if !isFIPSEnabledInClusterConfig(oc) {
 		g.Skip("fips is not enabled, skip this test")
+	}
+}
+
+// skipTestIfFIPSIstEnabled skip the test if fips is not enabled
+func skipTestIfFIPSIsEnabled(oc *exutil.CLI) {
+	if isFIPSEnabledInClusterConfig(oc) {
+		g.Skip("fips is enabled, skip this test")
 	}
 }
 
