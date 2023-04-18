@@ -37,6 +37,14 @@ type CatalogSourceObjects struct {
 	SourceNamespace string `json:",omitempty"`
 }
 
+// OperatorNamespace struct to handle creation of namespace
+type OperatorNamespace struct {
+	Name                string
+	NamespaceTemplate   string
+	RoleTemplate        string
+	RoleBindingTemplate string
+}
+
 type version struct {
 	Operator struct {
 		Branch  string `yaml:"branch"`
@@ -310,19 +318,36 @@ func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
 }
 
 func checkOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName string) bool {
-	err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace).Execute()
-	if err1 == nil {
-		csvName, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
-		o.Expect(err2).NotTo(o.HaveOccurred())
-		o.Expect(csvName).NotTo(o.BeEmpty())
-		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(csvState, "Succeeded") == 0 {
-			e2e.Logf("CSV check complete!!!")
-			e2e.Logf("%s operator already present in the cluster", operatorName)
-			return true
+	err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", operatorNamespace).Execute()
+	if err == nil {
+		err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace).Execute()
+		if err1 == nil {
+			csvName, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
+			o.Expect(err2).NotTo(o.HaveOccurred())
+			o.Expect(csvName).NotTo(o.BeEmpty())
+			csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Compare(csvState, "Succeeded") == 0 {
+				e2e.Logf("CSV check complete!!!")
+				e2e.Logf("%s operator already present in the cluster", operatorName)
+				return true
+			}
 		}
 	}
 	e2e.Logf("%s operator will be created by tests", operatorName)
 	return false
+}
+
+func (ns *OperatorNamespace) deployOperatorNamespace(oc *exutil.CLI) {
+	e2e.Logf("Creating Netobserv operator namespace")
+	nsParameters := []string{"--ignore-unknown-parameters=true", "-f", ns.NamespaceTemplate}
+	exutil.ApplyClusterResourceFromTemplate(oc, nsParameters...)
+
+	e2e.Logf("Create netobserv operator namespace role")
+	roleParameters := []string{"--ignore-unknown-parameters=true", "-f", ns.RoleTemplate, "-p", "NAMESPACE=" + ns.Name}
+	exutil.ApplyNsResourceFromTemplate(oc, ns.Name, roleParameters...)
+
+	e2e.Logf("Create netobserv operator namespace roleBinding")
+	roleBindingParameters := []string{"--ignore-unknown-parameters=true", "-f", ns.RoleBindingTemplate, "-p", "NAMESPACE=" + ns.Name}
+	exutil.ApplyNsResourceFromTemplate(oc, ns.Name, roleBindingParameters...)
 }

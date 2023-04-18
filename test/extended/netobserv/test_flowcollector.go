@@ -18,23 +18,35 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	var (
 		oc = exutil.NewCLI("netobserv", exutil.KubeConfigPath())
 		// NetObserv Operator variables
-		operatorNamespace = "openshift-operators"
-		NOPackageName     = "netobserv-operator"
-		subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-		catsrc            = resource{"catsrc", "qe-app-registry", "openshift-marketplace"}
-		baseDir           = exutil.FixturePath("testdata", "netobserv")
-		loggingbaseDir    = exutil.FixturePath("testdata", "logging", "subscription")
-		flowFixturePath   = filePath.Join(baseDir, "flowcollector_v1alpha1_template.yaml")
-		NOSource          = CatalogSourceObjects{"v1.0.x", catsrc.name, catsrc.namespace}
-		NO                = SubscriptionObjects{
+		netobservNS   = "openshift-netobserv-operator"
+		NOPackageName = "netobserv-operator"
+		catsrc        = resource{"catsrc", "qe-app-registry", "openshift-marketplace"}
+		NOSource      = CatalogSourceObjects{"v1.0.x", catsrc.name, catsrc.namespace}
+
+		// Template directories
+		baseDir         = exutil.FixturePath("testdata", "netobserv")
+		lokiDir         = exutil.FixturePath("testdata", "netobserv", "loki")
+		kafkaDir        = exutil.FixturePath("testdata", "netobserv", "kafka")
+		subscriptionDir = exutil.FixturePath("testdata", "netobserv", "subscription")
+		flowFixturePath = filePath.Join(baseDir, "flowcollector_v1beta1_template.yaml")
+
+		// Namespace object
+		OperatorNS = OperatorNamespace{
+			Name:                netobservNS,
+			NamespaceTemplate:   filePath.Join(subscriptionDir, "namespace.yaml"),
+			RoleTemplate:        filePath.Join(subscriptionDir, "role.yaml"),
+			RoleBindingTemplate: filePath.Join(subscriptionDir, "roleBinding.yaml"),
+		}
+		NO = SubscriptionObjects{
 			OperatorName:  "netobserv-operator",
-			Namespace:     operatorNamespace,
+			Namespace:     netobservNS,
 			PackageName:   NOPackageName,
-			Subscription:  subTemplate,
-			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 			CatalogSource: NOSource,
 		}
 		// Loki Operator variables
+		lokiNS          = "openshift-operators"
 		lokiPackageName = "loki-operator"
 		lokiStackName   = "lokistack"
 	)
@@ -48,14 +60,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 
 		// Check if Network Observability Operator is already present
-		NOexisting := checkOperatorStatus(oc, operatorNamespace, NOPackageName)
+		NOexisting := checkOperatorStatus(oc, netobservNS, NOPackageName)
 
-		// Deply operator if not present
+		// Create operatorNS and deploy operator if not present
 		if !NOexisting {
+			OperatorNS.deployOperatorNamespace(oc)
 			NO.SubscribeOperator(oc)
 			// Check if NO operator is deployed
-			waitForPodReadyWithLabel(oc, operatorNamespace, "app="+NO.OperatorName)
-			NOStatus := checkOperatorStatus(oc, operatorNamespace, NOPackageName)
+			waitForPodReadyWithLabel(oc, netobservNS, "app="+NO.OperatorName)
+			NOStatus := checkOperatorStatus(oc, netobservNS, NOPackageName)
 			o.Expect((NOStatus)).To(o.BeTrue())
 
 			// check if flowcollector API exists
@@ -68,9 +81,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	g.It("Author:memodi-High-49107-verify pods are created [Serial]", func() {
 		namespace := oc.Namespace()
 		flow := Flowcollector{
-			Namespace:     namespace,
-			ProcessorKind: "DaemonSet",
-			Template:      flowFixturePath,
+			Namespace: namespace,
+			Template:  flowFixturePath,
 		}
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
@@ -201,15 +213,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokiSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
 		LO := SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
-			Namespace:     operatorNamespace,
+			Namespace:     lokiNS,
 			PackageName:   lokiPackageName,
-			Subscription:  subTemplate,
-			OperatorGroup: filePath.Join(loggingbaseDir, "allnamespace-og.yaml"),
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 			CatalogSource: lokiSource,
 		}
 
 		// Check if Loki Operator is already present
-		existing := checkOperatorStatus(oc, operatorNamespace, lokiPackageName)
+		existing := checkOperatorStatus(oc, lokiNS, lokiPackageName)
 		// Defer Uninstall of Loki operator if created by tests
 		defer func(existing bool) {
 			if !existing {
@@ -218,13 +230,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}(existing)
 
 		LO.SubscribeOperator(oc)
-		waitForPodReadyWithLabel(oc, operatorNamespace, "name="+LO.OperatorName)
+		waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
 
 		g.By("Deploy lokiStack")
 		// get storageClass name
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		lokiStackTemplate := filePath.Join(baseDir, "lokistack-simple.yaml")
+		lokiStackTemplate := filePath.Join(lokiDir, "lokistack-simple.yaml")
 		ls := lokiStack{lokiStackName, namespace, "1x.extra-small", "s3", "s3-secret", sc, "netobserv-loki-54043-" + getInfrastructureName(oc), lokiStackTemplate}
 
 		// deploy lokiStack
@@ -246,7 +258,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			LokiURL:             lokiURL,
 			LokiAuthToken:       "FORWARD",
 			LokiTLSEnable:       true,
-			LokiCertName:        fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName),
+			LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName),
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -320,15 +332,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokiSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
 		LO := SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
-			Namespace:     operatorNamespace,
+			Namespace:     lokiNS,
 			PackageName:   lokiPackageName,
-			Subscription:  subTemplate,
-			OperatorGroup: filePath.Join(loggingbaseDir, "allnamespace-og.yaml"),
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 			CatalogSource: lokiSource,
 		}
 
 		// Check if Loki Operator is already present
-		existing := checkOperatorStatus(oc, operatorNamespace, lokiPackageName)
+		existing := checkOperatorStatus(oc, lokiNS, lokiPackageName)
 		// Defer Uninstall of Loki operator if created by tests
 		defer func(existing bool) {
 			if !existing {
@@ -337,13 +349,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}(existing)
 
 		LO.SubscribeOperator(oc)
-		waitForPodReadyWithLabel(oc, operatorNamespace, "name="+LO.OperatorName)
+		waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
 
 		g.By("Deploy lokiStack")
 		// get storageClass name
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		lokiStackTemplate := filePath.Join(baseDir, "lokistack-simple.yaml")
+		lokiStackTemplate := filePath.Join(lokiDir, "lokistack-simple.yaml")
 		ls := lokiStack{lokiStackName, namespace, "1x.extra-small", "s3", "s3-secret", sc, "netobserv-loki-50504-" + getInfrastructureName(oc), lokiStackTemplate}
 
 		// deploy lokiStack
@@ -359,12 +371,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", lokiStackName, namespace)
 
 		flow := Flowcollector{
-			Namespace:     namespace,
-			Template:      flowFixturePath,
-			LokiURL:       lokiURL,
-			LokiAuthToken: "FORWARD",
-			LokiTLSEnable: true,
-			LokiCertName:  fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName),
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiAuthToken:   "FORWARD",
+			LokiTLSEnable:   true,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName),
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -477,15 +489,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokiSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
 		LO := SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
-			Namespace:     operatorNamespace,
+			Namespace:     lokiNS,
 			PackageName:   lokiPackageName,
-			Subscription:  subTemplate,
-			OperatorGroup: filePath.Join(loggingbaseDir, "allnamespace-og.yaml"),
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 			CatalogSource: lokiSource,
 		}
 
 		// Check if Loki Operator is already present
-		existing := checkOperatorStatus(oc, operatorNamespace, lokiPackageName)
+		existing := checkOperatorStatus(oc, lokiNS, lokiPackageName)
 		// Defer Uninstall of Loki operator if created by tests
 		defer func(existing bool) {
 			if !existing {
@@ -494,13 +506,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}(existing)
 
 		LO.SubscribeOperator(oc)
-		waitForPodReadyWithLabel(oc, operatorNamespace, "name="+LO.OperatorName)
+		waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
 
 		g.By("Deploy lokiStack")
 		// get storageClass name
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		lokiStackTemplate := filePath.Join(baseDir, "lokistack-simple.yaml")
+		lokiStackTemplate := filePath.Join(lokiDir, "lokistack-simple.yaml")
 		ls := lokiStack{lokiStackName, namespace, "1x.extra-small", "s3", "s3-secret", sc, "netobserv-loki-54840-" + getInfrastructureName(oc), lokiStackTemplate}
 
 		// deploy lokiStack
@@ -515,7 +527,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flow.LokiURL = fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", lokiStackName, namespace)
 		flow.LokiAuthToken = "FORWARD"
 		flow.LokiTLSEnable = true
-		flow.LokiCertName = fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName)
+		flow.LokiTLSCertName = fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName)
 
 		flow.createFlowcollector(oc)
 
@@ -580,15 +592,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokiSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
 		LO := SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
-			Namespace:     operatorNamespace,
+			Namespace:     lokiNS,
 			PackageName:   lokiPackageName,
-			Subscription:  subTemplate,
-			OperatorGroup: filePath.Join(loggingbaseDir, "allnamespace-og.yaml"),
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 			CatalogSource: lokiSource,
 		}
 
 		//Check if Loki Operator is already present
-		existing := checkOperatorStatus(oc, operatorNamespace, lokiPackageName)
+		existing := checkOperatorStatus(oc, lokiNS, lokiPackageName)
 		// Defer Uninstall of Loki operator if created by tests
 		defer func(existing bool) {
 			if !existing {
@@ -597,14 +609,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}(existing)
 
 		LO.SubscribeOperator(oc)
-		waitForPodReadyWithLabel(oc, operatorNamespace, "name="+LO.OperatorName)
+		waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
 
 		g.By("Deploy lokiStack")
 		// get storageClass Name
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		lokiStackTemplate := filePath.Join(baseDir, "lokistack-simple.yaml")
+		lokiStackTemplate := filePath.Join(lokiDir, "lokistack-simple.yaml")
 		ls := lokiStack{lokiStackName, namespace, "1x.extra-small", "s3", "s3-secret", sc, "netobserv-loki-53597-" + getInfrastructureName(oc), lokiStackTemplate}
 
 		// deploy lokiStack
@@ -619,10 +631,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
 		amq := SubscriptionObjects{
 			OperatorName:  "amq-streams-cluster-operator",
-			Namespace:     "openshift-operators",
+			Namespace:     namespace,
 			PackageName:   "amq-streams",
-			Subscription:  filePath.Join(loggingbaseDir, "sub-template.yaml"),
-			OperatorGroup: filePath.Join(loggingbaseDir, "singlenamespace-og.yaml"),
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "singlenamespace-og.yaml"),
 			CatalogSource: catsrc,
 		}
 
@@ -633,7 +645,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy KAFKA")
 		// Kafka metrics config Template path
-		kafkaMetricsPath := filePath.Join(baseDir, "kafka-metrics-config.yaml")
+		kafkaMetricsPath := filePath.Join(kafkaDir, "kafka-metrics-config.yaml")
 
 		kafkaMetrics := KafkaMetrics{
 			Namespace: namespace,
@@ -641,7 +653,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		// Kafka Template path
-		kafkaPath := filePath.Join(baseDir, "kafka-default.yaml")
+		kafkaPath := filePath.Join(kafkaDir, "kafka-default.yaml")
 
 		kafka := Kafka{
 			Name:         "kafka-cluster",
@@ -651,7 +663,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		// Kafka Topic path
-		kafkaTopicPath := filePath.Join(baseDir, "kafka-topic.yaml")
+		kafkaTopicPath := filePath.Join(kafkaDir, "kafka-topic.yaml")
 
 		kafkaTopic := KafkaTopic{
 			TopicName: "network-flows",
@@ -683,7 +695,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			LokiURL:             lokiURL,
 			LokiAuthToken:       "FORWARD",
 			LokiTLSEnable:       true,
-			LokiCertName:        fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName),
+			LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName),
 			KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s", namespace),
 		}
 
@@ -708,5 +720,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 		// verify logs
 		verifyTime(oc, namespace, ls.Name, forwardCRB.ServiceAccountName, ls.Namespace)
+
 	})
 })

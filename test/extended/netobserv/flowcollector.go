@@ -11,16 +11,21 @@ import (
 
 // Flowcollector struct to handle Flowcollector resources
 type Flowcollector struct {
-	Namespace           string
-	ProcessorKind       string
-	DeploymentModel     string
-	Template            string
-	MetricServerTLSType string
-	LokiURL             string
-	LokiAuthToken       string
-	LokiTLSEnable       bool
-	LokiCertName        string
-	KafkaAddress        string
+	Namespace                 string
+	ProcessorKind             string
+	DeploymentModel           string
+	Template                  string
+	MetricServerTLSType       string
+	LokiURL                   string
+	LokiAuthToken             string
+	LokiTLSEnable             bool
+	LokiTLSCertName           string
+	KafkaAddress              string
+	LogType                   string
+	LokiStatusTLSEnable       bool
+	LokiStatusURL             string
+	LokiStatusTLSCertName     string
+	LokiStatusTLSUserCertName string
 }
 
 // Metrics struct to handle Metrics resources
@@ -78,8 +83,8 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		parameters = append(parameters, "LOKI_TLS_ENABLE="+strconv.FormatBool(flow.LokiTLSEnable))
 	}
 
-	if flow.LokiCertName != "" {
-		parameters = append(parameters, "LOKI_CERT_NAME="+flow.LokiCertName)
+	if flow.LokiTLSCertName != "" {
+		parameters = append(parameters, "LOKI_TLS_CERT_NAME="+flow.LokiTLSCertName)
 	}
 
 	if flow.DeploymentModel != "" {
@@ -89,6 +94,27 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 	if flow.KafkaAddress != "" {
 		parameters = append(parameters, "KAFKA_ADDRESS="+flow.KafkaAddress)
 	}
+
+	if flow.LokiStatusURL != "" {
+		parameters = append(parameters, "LOKI_STATUS_URL="+flow.LokiStatusURL)
+	}
+
+	if strconv.FormatBool(flow.LokiStatusTLSEnable) != "" {
+		parameters = append(parameters, "LOKI_STATUS_TLS_ENABLE="+strconv.FormatBool(flow.LokiStatusTLSEnable))
+	}
+
+	if flow.LokiStatusTLSCertName != "" {
+		parameters = append(parameters, "LOKI_STATUS_TLS_USER_CERT_NAME="+flow.LokiStatusTLSCertName)
+	}
+
+	if flow.LokiStatusTLSUserCertName != "" {
+		parameters = append(parameters, "LOKI_STATUS_TLS_USER_CERT_NAME="+flow.LokiStatusTLSUserCertName)
+	}
+
+	if flow.LogType != "" {
+		parameters = append(parameters, "LOG_TYPE="+flow.LogType)
+	}
+
 	exutil.ApplyNsResourceFromTemplate(oc, flow.Namespace, parameters...)
 }
 

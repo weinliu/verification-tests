@@ -1,0 +1,14 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: namespace-template
+objects:
+- kind: Namespace
+  apiVersion: v1
+  metadata:
+    name: ${NAMESPACE_NAME}
+    labels:
+      openshift.io/cluster-monitoring: "true"
+parameters:
+- name: NAMESPACE_NAME
+  value: "openshift-netobserv-operator"
