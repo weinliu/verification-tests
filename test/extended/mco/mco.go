@@ -29,6 +29,14 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:rioliu-Critical-42347-health check for machine-config-operator [Serial]", func() {
+		g.By("make sure that pools are fully updated before executing the checks")
+		// If any previous test created a MC, it can happen that pools are updating and will report Upgradeable=False, failing the test
+		// The checks in this test case only make sense in a cluster that is not updating any pool
+		mMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+		mMcp.waitForComplete()
+		wMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		wMcp.waitForComplete()
+
 		g.By("checking mco status")
 		co := NewResource(oc.AsAdmin(), "co", "machine-config")
 		coStatus := co.GetOrFail(`{range .status.conditions[*]}{.type}{.status}{"\n"}{end}`)
