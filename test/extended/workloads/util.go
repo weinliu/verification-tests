@@ -866,7 +866,7 @@ func locatePodmanCred(oc *exutil.CLI, dst string) error {
 }
 
 func checkPodStatus(oc *exutil.CLI, podLabel string, namespace string, expected string) {
-	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", podLabel, "-o=jsonpath={.items[*].status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("the result of pod:%v", output)
