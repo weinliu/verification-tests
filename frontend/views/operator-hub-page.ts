@@ -26,7 +26,7 @@ export const operatorHubPage = {
       .find(`[data-test="catalogSourceDisplayName-${name}"]`)
       .find('[type="checkbox"]').uncheck()
   },
-  checkInstallStateCheckBox: (state: string) =>{
+  checkInstallStateCheckBox: (state: string) => {
     cy.get('form[data-test-group-name="installState"]')
       .find(`[data-test="installState-${state}"]`)
       .find('[type="checkbox"]')
@@ -54,6 +54,7 @@ export const operatorHubPage = {
     })
     cy.byTestID('Enable-radio-input').click()
     cy.byTestID('install-operator').trigger('click')
+    cy.get('#operator-install-page').should('exist')
 
     cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')
 
@@ -74,10 +75,10 @@ export const operatorHubPage = {
     cy.get(`[data-test-operator-row="${csvName}"]`)
       .parents('tr')
       .children()
-      .contains(`${csvStatus}`, {timeout: 60000});
+      .contains(`${csvStatus}`, { timeout: 60000 });
   },
   removeOperator: (csvName) => {
-    listPage.rows.clickKebabAction(`${csvName}`,"Uninstall Operator");
+    listPage.rows.clickKebabAction(`${csvName}`, "Uninstall Operator");
     cy.get('#confirm-action').click();
     cy.get(`[data-test-operator-row="${csvName}"]`).should('not.exist');
   }
@@ -95,7 +96,7 @@ export namespace OperatorHubSelector {
 }
 
 export const Operand = {
-  switchToFormView: () =>{
+  switchToFormView: () => {
     cy.get('#form').scrollIntoView().click();
   },
   switchToYAMLView: () => {
@@ -104,7 +105,7 @@ export const Operand = {
   submitCreation: () => {
     cy.byTestID("create-dynamic-form").scrollIntoView().click();
   },
-  expandSpec: (id: string) =>{
+  expandSpec: (id: string) => {
     cy.get(`#${id}`)
       .scrollIntoView()
       .should('have.attr', 'aria-expanded', 'false')
@@ -164,32 +165,32 @@ export const Operand = {
         cy.byButtonText('Add expression').click();
         Operand.addExpression(key, operator, value);
       })
-  }, 
-  nodeAffinityAddPreferred: (weight: string,key: string, operator: string, value: string) => {
+  },
+  nodeAffinityAddPreferred: (weight: string, key: string, operator: string, value: string) => {
     cy.get('#root_spec_nodeConfigAdvanced_0_nodeAffinity_accordion-content')
       .within(() => {
         cy.byButtonText('Add preferred').click()
       });
     cy.get('.co-affinity-term')
-    .last()
-    .within(() => {
-      Operand.setWeight(weight);
-      cy.byButtonText('Add expression').click();
-      Operand.addExpression(key, operator, value);
-    })
+      .last()
+      .within(() => {
+        Operand.setWeight(weight);
+        cy.byButtonText('Add expression').click();
+        Operand.addExpression(key, operator, value);
+      })
   },
-  podAffinityAddRequired: (tpkey: string,key: string, operator: string, value: string) => {
+  podAffinityAddRequired: (tpkey: string, key: string, operator: string, value: string) => {
     cy.get('#root_spec_nodeConfigAdvanced_0_podAffinity_accordion-content')
       .within(() => {
         cy.byButtonText('Add required').click()
       })
     cy.get('.co-affinity-term')
-    .last()
-    .within(() => {
-      Operand.setTopologyKey(tpkey);
-      cy.byButtonText('Add expression').click();
-      Operand.addExpression(key, operator, value);
-    })    
+      .last()
+      .within(() => {
+        Operand.setTopologyKey(tpkey);
+        cy.byButtonText('Add expression').click();
+        Operand.addExpression(key, operator, value);
+      })
   },
   podAntiAffinityAddPreferred: (weight: string, tpkey: string, key: string, operator: string, value: string) => {
     cy.get('#root_spec_nodeConfigAdvanced_0_podAntiAffinity_accordion-content')
@@ -197,13 +198,13 @@ export const Operand = {
         cy.byButtonText('Add preferred').click()
       })
     cy.get('.co-affinity-term')
-    .last()
-    .within(() => {
-      Operand.setWeight(weight);
-      Operand.setTopologyKey(tpkey);
-      cy.byButtonText('Add expression').click();
-      Operand.addExpression(key, operator, value);
-    }) 
+      .last()
+      .within(() => {
+        Operand.setWeight(weight);
+        Operand.setTopologyKey(tpkey);
+        cy.byButtonText('Add expression').click();
+        Operand.addExpression(key, operator, value);
+      })
   },
   setWeight: (weight: string) => {
     cy.get('.co-affinity-term__weight-input')
@@ -212,7 +213,7 @@ export const Operand = {
         cy.get('input').clear().type(weight)
       })
   },
-  setTopologyKey: (key: string) =>{
+  setTopologyKey: (key: string) => {
     cy.get('#topology-undefined').last().clear().type(key);
   },
   addExpression: (key: string, operator: string, value?: string) => {
@@ -227,19 +228,19 @@ export const Operand = {
         cy.byLegacyTestID('dropdown-button').click();
         cy.get(`button[data-test-dropdown-menu="${operator}"]`).click();
       })
-    if(value) {
+    if (value) {
       cy.get('.key-operator-value__value-field')
-      .last()
-      .within(() => {
-        cy.get('input').clear().type(value)
-      })
+        .last()
+        .within(() => {
+          cy.get('input').clear().type(value)
+        })
     }
   }
 }
 
-export const installedOperatorPage ={
+export const installedOperatorPage = {
   goToWithNS: (ns: string) => {
     cy.visit(`/k8s/ns/${ns}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
     cy.get('[aria-label="Installed Operators"]').should('exist');
-    }
+  }
 }

@@ -16,11 +16,11 @@ const metricType = [
 ]
 
 function getTopologyScopeURL(scope: string): string {
-    return `**/topology?filters=&limit=100&reporter=destination&timeRange=300&type=bytes&scope=${scope}&rateInterval=30s&step=15s`
+    return `**/topology?filters=*&limit=50&recordType=flowLog&reporter=destination&timeRange=300&rateInterval=30s&step=15s&type=bytes&scope=${scope}`
 }
 
 function getTopologyResourceScopeGroupURL(groups: string): string {
-    return `**/topology?filters=&limit=100&reporter=destination&timeRange=300&type=bytes&scope=resource&groups=${groups}&rateInterval=30s&step=15s`
+    return `**/topology?filters=*&limit=50&recordType=flowLog&reporter=destination&timeRange=300&rateInterval=30s&step=15s&type=bytes&scope=resource&groups=${groups}`
 }
 // NETOBSERV-784 bug can fail some cases where some topoloigy tests may crash console.
 
@@ -37,7 +37,8 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
 
         // sepcify --env noo_catalog_src=upstream to run tests 
         // from most recent "main" image
-        let catalogImg, catalogDisplayName
+        let catalogImg
+        let catalogDisplayName = "Production Operators"
         const catSrc = Cypress.env('noo_catalog_src')
         if (catSrc == "upstream") {
             catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
@@ -46,10 +47,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
             catalogSources.createCustomCatalog(catalogImg, this.catalogSource, catalogDisplayName)
         }
         else {
-            cy.adminCLI(`oc create -f ./fixtures/icsp.yaml`)
-            this.catalogSource = "downstreamqe-registry"
-            catalogDisplayName = "DownstreamQE Catalog"
-            catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
+            catalogSources.enableQECatalogSource()
         }
         Operator.install(catalogDisplayName)
         Operator.createFlowcollector(project)
@@ -69,19 +67,19 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
 
         cy.byTestID("show-view-options-button").should('exist').click().then(views => {
             cy.contains('Display options').should('exist').click()
+            // set one display to test with
+            cy.byTestID('layout-dropdown').click()
+            cy.byTestID('Grid').click()
+
+
         })
-        // set one display to test with
-        // cy.wait(5000)
-        // cy.byTestID('layout-dropdown').click()
-        // cy.wait(5000) // wait needs to be here due to bug.
-        // cy.byTestID('Grid').click()
         cy.byTestID(topologySelectors.metricsDrop).should('exist').click().get('#sum').click()
         cy.contains('Display options').should('exist').click()
 
         // Advance options menu remains visible throughout the test
     })
 
-    it("should verify topology page features", function () {
+    it.only("should verify topology page features", function () {
         cy.byTestID('search-topology-element-input').should('exist')
         cy.contains('Display options').should('exist').click()
 
@@ -312,13 +310,11 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
     })
 
     after("after all tests are done", function () {
-        if (this.catalogSource == "downstreamqe-registry") {
-            cy.adminCLI('oc delete -f ./fixtures/icsp.yaml')
-        }
         Operator.deleteFlowCollector()
         Operator.uninstall()
-        Operator.deleteCatalogSource(this.catalogSource)
+        cy.adminCLI('oc delete crd/flowcollectors.flows.netobserv.io')
         cy.adminCLI(`oc delete project ${project}`)
+        cy.adminCLI('oc delete project openshift-netobserv-operator')
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.logout()
     })

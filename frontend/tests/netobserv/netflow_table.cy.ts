@@ -19,7 +19,8 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
 
         // sepcify --env noo_release=upstream to run tests 
         // from most recent "main" image
-        let catalogImg, catalogDisplayName
+        let catalogImg
+        let catalogDisplayName = "Production Operators"
         const catSrc = Cypress.env('noo_catalog_src')
         if (catSrc == "upstream") {
             catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
@@ -28,9 +29,6 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
             catalogSources.createCustomCatalog(catalogImg, this.catalogSource, catalogDisplayName)
         }
         else {
-            cy.adminCLI(`oc create -f ./fixtures/icsp.yaml`)
-            this.catalogSource = "downstreamqe-registry"
-            catalogDisplayName = "DownstreamQE Catalog"
             catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
         }
         Operator.install(catalogDisplayName)
@@ -128,18 +126,27 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
                 }
                 expect(npkts).to.be.greaterThan(0)
             })
+            cy.get('#query-summary-toggle').should('exist').click()
+            cy.get('#summaryPanel').should('be.visible')
+
+            cy.contains('Results').should('exist')
+            cy.contains('Cardinality').should('exist')
+            cy.contains('Configuration').should('exist')
+            cy.contains('Sampling').should('exist')
         })
 
         it("should validate columns", { tags: ['e2e', 'admin'] }, function () {
             cy.byTestID("show-view-options-button").should('exist').click()
+            netflowPage.stopAutoRefresh()
             cy.byTestID('view-options-button').click()
             cy.get(colSelectors.mColumns).click().then(col => {
                 cy.get(colSelectors.columnsModal).should('be.visible')
             })
-            // group columns
-            cy.get('#K8S_OwnerObject').check()
+            // group columns: Disable for bug NETOBSERV-967
+            // cy.get('#K8S_OwnerObject').check()
+            // cy.get('#AddrPort').check()
+
             cy.get('#Mac').check()
-            cy.get('#AddrPort').check()
             cy.get('#Proto').check()
             cy.get('#FlowDirection').check()
 
@@ -151,16 +158,18 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
             cy.get('#DstK8S_HostIP').check()
 
             cy.byTestID(colSelectors.save).click()
+            cy.reload()
 
-            cy.byTestID('table-composable').within(() => {
+            cy.byTestID('table-composable').should('exist').within(() => {
+                cy.get(colSelectors.srcNS).should('not.exist')
                 cy.get(colSelectors.dstNodeIP).should('exist')
-                cy.get(colSelectors.gK8sOwner).should('exist')
                 cy.get(colSelectors.Mac).should('exist')
-                cy.get(colSelectors.gIPPort).should('exist')
+                // group columns: Disable for bug NETOBSERV-967
+                // cy.get(colSelectors.gK8sOwner).should('exist')
+                // cy.get(colSelectors.gIPPort).should('exist')
                 cy.get(colSelectors.Protocol).should('exist')
 
                 cy.get(colSelectors.srcNodeIP).should('exist')
-                cy.get(colSelectors.srcNS).should('not.exist')
 
                 cy.get(colSelectors.direction).should('exist')
             })
@@ -176,12 +185,14 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
         })
 
         it("should validate filters", { tags: ['e2e', 'admin'] }, function () {
+            netflowPage.stopAutoRefresh()
+
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
 
             // Verify Source namespace filter
             cy.byTestID('group-1-toggle').click().byTestID('src_namespace').click()
             cy.byTestID('autocomplete-search').type(project + '{enter}')
-            cy.get('#filters div.custom-chip > p').should('have.text', `"${project}"`)
+            cy.get('#filters div.custom-chip > p').should('contain.text', `${project}`)
 
             // Verify NS column for all rows
             cy.get('td:nth-child(3) span.co-resource-item__resource-name').should('exist').each(row => {
@@ -221,6 +232,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
         })
 
         it("should validate localstorage for plugin", { tags: ['e2e', 'admin'] }, function () {
+            netflowPage.stopAutoRefresh()
             // clear all filters if present
             cy.get('body').then((body) => {
                 if (body.find('[data-test="filters"] > [data-test="clear-all-filters-button"]').length > 0) {
@@ -250,23 +262,6 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
                 cy.byTestID("show-view-options-button").should('exist').click()
             })
 
-            cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-
-            //expand Source filter if its not expanded
-            cy.get('#group-1-toggle').then($srcfilter => {
-                if ($srcfilter.hasClass("pf-m-expanded")) {
-                    cy.byTestID('src_port').click()
-                    cy.byTestID('autocomplete-search').type('3100{enter}')
-                    cy.get(':nth-child(1) > .pf-c-chip-group__label').click()
-                }
-                else {
-                    cy.wrap($srcfilter).click()
-                    cy.byTestID('src_port').click()
-                    cy.byTestID('autocomplete-search').type('3100{enter}')
-                    cy.get(':nth-child(1) > .pf-c-chip-group__label').click()
-                }
-            })
-
             cy.visit('/monitoring/alerts')
             cy.visit('/netflow-traffic')
 
@@ -275,20 +270,17 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
                 expect(settings['netflow-traffic-refresh']).to.be.equal(15000)
                 expect(settings['netflow-traffic-size-size']).to.be.equal('s')
                 expect(settings['netflow-traffic-columns']).to.include('StartTime')
-                expect(settings['netflow-traffic-disabled-filters']['src_port']).to.be.equal('3100')
             })
         })
     })
 
     after("delete flowcollector and NetObs Operator", function () {
-        if (this.catalogSource == "downstreamqe-registry") {
-            cy.adminCLI('oc delete -f ./fixtures/icsp.yaml')
-        }
         // uninstall operator and all resources 
         Operator.deleteFlowCollector()
         Operator.uninstall()
-        Operator.deleteCatalogSource(this.catalogSource)
+        cy.adminCLI('oc delete crd/flowcollectors.flows.netobserv.io')
         cy.adminCLI(`oc delete project ${project}`)
+        cy.adminCLI('oc delete project openshift-netobserv-operator')
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.logout()
 

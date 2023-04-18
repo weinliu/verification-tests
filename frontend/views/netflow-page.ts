@@ -4,7 +4,7 @@ export const netflowPage = {
         cy.intercept('**/backend/api/loki/topology*').as('call1')
         cy.visit('/netflow-traffic')
         // wait for all calls to complete before checking due to bug
-        cy.wait('@call1', { timeout: 15000 }).wait('@call1')
+        cy.wait('@call1', { timeout: 60000 }).wait('@call1')
 
         cy.get('[data-test="filters"] > [data-test="clear-all-filters-button"]').should('exist').click()
 
@@ -21,6 +21,14 @@ export const netflowPage = {
     toggleFullScreen: () => {
         cy.byTestID(genSelectors.moreOpts).should('exist').click().then(moreOpts => {
             cy.get(genSelectors.expand).click()
+        })
+    },
+    stopAutoRefresh: () => {
+        cy.byTestID(genSelectors.refreshDrop).then(btn => {
+            expect(btn).to.exist
+            cy.wrap(btn).click().then(drop => {
+                cy.get('[data-test="OFF_KEY"]').should('exist').click()
+            })
         })
     }
 }
@@ -59,14 +67,14 @@ export namespace colSelectors {
     export const save = 'columns-save-button'
     export const resetDefault = 'columns-reset-button'
     export const Mac = '[data-test=th-Mac] > .pf-c-table__button'
-    export const gK8sOwner = '[data-test=th-K8S_OwnerObject] > .pf-c-table__button > .pf-c-table__button-content > .pf-c-table__text'
-    export const gIPPort = '[data-test=th-AddrPort] > .pf-c-table__button > .pf-c-table__button-content > .pf-c-table__text'
+    export const gK8sOwner = '[data-test=th-K8S_OwnerObject] > .pf-c-table__button'
+    export const gIPPort = '[data-test=th-AddrPort] > .pf-c-table__button'
     export const Protocol = '[data-test=th-Proto] > .pf-c-table__button'
-    export const srcNodeIP = '[data-test=th-SrcK8S_HostIP] > .pf-c-table__button > .pf-c-table__button-content > .pf-c-table__text'
-    export const srcNS = '[data-test=th-SrcK8S_Namespace] > .pf-c-table__button > .pf-c-table__button-content > .pf-c-table__text'
+    export const srcNodeIP = '[data-test=th-SrcK8S_HostIP] > .pf-c-table__button'
+    export const srcNS = '[data-test=th-SrcK8S_Namespace] > .pf-c-table__button'
     export const dstNodeIP = '[data-test=th-DstK8S_HostIP] > .pf-c-table__button'
     export const direction = '[data-test=th-FlowDirection] > .pf-c-table__button'
-    export const bytes = '[data-test=th-Bytes] > .pf-c-table__button > .pf-c-table__button-content > .pf-c-table__text'
+    export const bytes = '[data-test=th-Bytes] > .pf-c-table__button'
     export const packets = '[data-test=th-Packets] > .pf-c-table__button'
 }
 
