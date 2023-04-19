@@ -19,10 +19,22 @@ type MachineConfigPool struct {
 	Resource
 }
 
+// MachineConfigPoolList struct handles list of MCPs
+type MachineConfigPoolList struct {
+	ResourceList
+}
+
 // NewMachineConfigPool create a NewMachineConfigPool struct
 func NewMachineConfigPool(oc *exutil.CLI, name string) *MachineConfigPool {
 	return &MachineConfigPool{Resource: *NewResource(oc, "mcp", name)}
 }
+
+// MachineConfigPoolList construct a new node list struct to handle all existing nodes
+func NewMachineConfigPoolList(oc *exutil.CLI) *MachineConfigPoolList {
+	return &MachineConfigPoolList{*NewResourceList(oc, "mcp")}
+}
+
+// String implements the Stringer interface
 
 func (mcp *MachineConfigPool) create() {
 	exutil.CreateClusterResourceFromTemplate(mcp.oc, "--ignore-unknown-parameters=true", "-f", mcp.template, "-p", "NAME="+mcp.name)
@@ -151,17 +163,17 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 
 }
 
-// getNodesWithTags returns a list with the nodes that belong to the machine config poola and has the provided tags
-func (mcp *MachineConfigPool) getNodesWithTags(tags string) ([]Node, error) {
+// getNodesWithLabels returns a list with the nodes that belong to the machine config pool and has the provided labels
+func (mcp *MachineConfigPool) getNodesWithLabels(extraLabels string) ([]Node, error) {
 	labels := JSON(mcp.GetOrFail(`{.spec.nodeSelector.matchLabels}`))
 	o.Expect(labels.Exists()).Should(o.BeTrue(), fmt.Sprintf("The pool %s has no machLabels value defined", mcp.GetName()))
 
 	nodeList := NewNodeList(mcp.oc)
 	// Never select windows nodes
 	requiredLabel := "kubernetes.io/os!=windows"
-	if tags != "" {
+	if extraLabels != "" {
 		requiredLabel += ","
-		requiredLabel += tags
+		requiredLabel += extraLabels
 	}
 	for k, v := range labels.ToMap() {
 		requiredLabel += fmt.Sprintf(",%s=%s", k, v.(string))
@@ -173,7 +185,30 @@ func (mcp *MachineConfigPool) getNodesWithTags(tags string) ([]Node, error) {
 
 // GetNodes returns a list with the nodes that belong to the machine config pool
 func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
-	return mcp.getNodesWithTags("")
+	// A node can belong to several pools
+	// In the case of "worker" pool, if a node belongs to both "worker" and "master" pool
+	// then the node is considered to belong to "master" node and not to "worker" pool.
+	if mcp.GetName() == MachineConfigPoolWorker {
+		nodes, err := mcp.getNodesWithLabels("")
+		if err != nil {
+			return nil, err
+		}
+		nodesNotMaster := []Node{}
+
+		masterPool := NewMachineConfigPool(mcp.oc, MachineConfigPoolMaster)
+		for _, node := range nodes {
+			nodeIsMaster, err := node.IsInPool(masterPool)
+			if err != nil {
+				return nil, err
+			}
+			if !nodeIsMaster {
+				nodesNotMaster = append(nodesNotMaster, node)
+			}
+		}
+
+		return nodesNotMaster, nil
+	}
+	return mcp.getNodesWithLabels("")
 }
 
 // GetNodesOrFail returns a list with the nodes that belong to the machine config pool and fail the test if any error happened
@@ -185,7 +220,7 @@ func (mcp *MachineConfigPool) GetNodesOrFail() []Node {
 
 // GetCoreOsNodes returns a list with the CoreOs nodes that belong to the machine config pool
 func (mcp *MachineConfigPool) GetCoreOsNodes() ([]Node, error) {
-	return mcp.getNodesWithTags("node.openshift.io/os_id=rhcos")
+	return mcp.getNodesWithLabels("node.openshift.io/os_id=rhcos")
 }
 
 // GetCoreOsNodesOrFail returns a list with the nodes that belong to the machine config pool and fail the test if any error happened
@@ -427,4 +462,34 @@ func (mcp *MachineConfigPool) GetConfiguredMachineConfig() (*MachineConfig, erro
 
 	logger.Debugf("The currently configured MC in pool %s is: %s", mcp.GetName(), currentMcName)
 	return NewMachineConfig(mcp.oc, currentMcName, mcp.GetName()), nil
+}
+
+// GetAll returns a []MachineConfigPool list with all existing machine config pools sorted by creation time
+func (mcpl *MachineConfigPoolList) GetAll() ([]MachineConfigPool, error) {
+	mcpl.ResourceList.SortByTimestamp()
+	allMCPResources, err := mcpl.ResourceList.GetAll()
+	if err != nil {
+		return nil, err
+	}
+	allMCPs := make([]MachineConfigPool, 0, len(allMCPResources))
+
+	for _, mcpRes := range allMCPResources {
+		allMCPs = append(allMCPs, *NewMachineConfigPool(mcpl.oc, mcpRes.name))
+	}
+
+	return allMCPs, nil
+}
+
+// GetCompactCompatiblePool returns worker pool if the cluster is not compact/SNO. Else it will return master pool.
+func GetCompactCompatiblePool(oc *exutil.CLI) *MachineConfigPool {
+	var (
+		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+	)
+	if len(wMcp.GetNodesOrFail()) == 0 {
+		logger.Infof("Running in SNO/Compact cluster. Using master pool for testing")
+		return mMcp
+	}
+
+	return wMcp
 }

@@ -23,6 +23,8 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		updatedPassword   string
 		wMcp              *MachineConfigPool
 		mMcp              *MachineConfigPool
+		// Compact compatible MCP. If the node is compact/SNO this variable will be the master pool, else it will be the worker pool
+		mcp *MachineConfigPool
 	)
 
 	g.JustBeforeEach(func() {
@@ -33,6 +35,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		updatedPassword = "coretest2"
 		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+		mcp = GetCompactCompatiblePool(oc.AsAdmin())
 
 		preChecks(oc)
 	})
@@ -42,30 +45,32 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 			mcName = "tc-59417-test-core-passwd"
 		)
 
-		allCoreos := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()
+		allCoreos := mcp.GetCoreOsNodesOrFail()
 		if len(allCoreos) == 0 {
-			g.Skip("There are no coreOs worker nodes in this cluster")
+			logger.Infof("No CoreOs nodes are configured in the pool %s. We use master pool for testing", mcp.GetName())
+			mcp = mMcp
+			allCoreos = mcp.GetCoreOsNodesOrFail()
 		}
 
-		workerNode := allCoreos[0]
+		node := allCoreos[0]
 
 		g.By("Configure a password for 'core' user")
-		_, _ = workerNode.GetDate() // for debugging purposes, it prints the node's current time in the logs
-		o.Expect(workerNode.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
-			"Error getting the latest event in node %s", workerNode.GetName())
+		_, _ = node.GetDate() // for debugging purposes, it prints the node's current time in the logs
+		o.Expect(node.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+			"Error getting the latest event in node %s", node.GetName())
 
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
 		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, user, passwordHash)}
 		mc.skipWaitForMcp = true
 
 		defer mc.delete()
 		mc.create()
 
-		wMcp.waitForComplete()
+		mcp.waitForComplete()
 		logger.Infof("OK!\n")
 
 		g.By("Check MCD logs to make sure drain and reboot are skipped")
-		podLogs, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, workerNode.GetMachineConfigDaemon(), `"drain\|reboot"`)
+		podLogs, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), `"drain\|reboot"`)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Errot getting the drain and reboot logs: %s", err)
 		logger.Infof("Pod logs to skip node drain and reboot:\n %v", podLogs)
 		o.Expect(podLogs).Should(
@@ -75,16 +80,16 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		logger.Infof("OK!\n")
 
 		g.By("Check events to make sure that drain and reboot events were not triggered")
-		nodeEvents, eErr := workerNode.GetEvents()
-		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", workerNode.GetName())
+		nodeEvents, eErr := node.GetEvents()
+		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", node.GetName())
 		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Drain"), "Error, a Drain event was triggered but it shouldn't")
 		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Reboot"), "Error, a Reboot event was triggered but it shouldn't")
 		logger.Infof("OK!\n")
 
 		g.By("Verify that user 'core' can login with the configured password")
-		logger.Infof("verifying node %s", workerNode.GetName())
-		bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, password))
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", workerNode.GetName(), bresp)
+		logger.Infof("verifying node %s", node.GetName())
+		bresp, err := node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, password))
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", node.GetName(), bresp)
 		logger.Infof("OK!\n")
 
 		g.By("Update the password value")
@@ -94,25 +99,25 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		o.Expect(patchErr).NotTo(o.HaveOccurred(),
 			"Error patching mc %s to update the 'core' user password")
 
-		wMcp.waitForComplete()
+		mcp.waitForComplete()
 
 		logger.Infof("OK!\n")
 
 		g.By("Verify that user 'core' can login with the new password")
-		logger.Infof("verifying node %s", workerNode.GetName())
-		bresp, err = workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", workerNode.GetName(), bresp)
+		logger.Infof("verifying node %s", node.GetName())
+		bresp, err = node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", node.GetName(), bresp)
 		logger.Infof("OK!\n")
 
 		g.By("Remove the password")
 		mc.deleteNoWait()
-		wMcp.waitForComplete()
+		mcp.waitForComplete()
 		logger.Infof("OK!\n")
 
 		g.By("Verify that user 'core' can not login using a password anymore")
-		logger.Infof("verifying node %s", workerNode.GetName())
-		bresp, err = workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
-		o.Expect(err).To(o.HaveOccurred(), "User 'core' was able to login using a password in node %s, but it should not be possible:\n %s", workerNode.GetName(), bresp)
+		logger.Infof("verifying node %s", node.GetName())
+		bresp, err = node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
+		o.Expect(err).To(o.HaveOccurred(), "User 'core' was able to login using a password in node %s, but it should not be possible:\n %s", node.GetName(), bresp)
 		logger.Infof("OK!\n")
 
 	})
@@ -206,18 +211,18 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		)
 
 		g.By("Create a password for a non-core user using a MC")
-		sortedNodes, err := wMcp.GetSortedNodes()
+		sortedNodes, err := mcp.GetSortedNodes()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the nodes in the worker MCP")
 		fistUpdatedNode := sortedNodes[0]
 
 		expectedNDMessage := regexp.QuoteMeta(fmt.Sprintf(`Node %s is reporting: "can't reconcile config`, fistUpdatedNode.GetName())) +
 			`.*` +
 			regexp.QuoteMeta(`ignition passwd user section contains unsupported changes: non-core user`)
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
 		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, wrongUser, passwordHash)}
 		mc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mc, wMcp, expectedNDMessage, expectedNDReason)
+		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
 
 	})
 
@@ -273,12 +278,6 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 			user = ign32PaswdUser{Name: "core", SSHAuthorizedKeys: []string{key1, key2}}
 		)
 
-		// If no nodes in worker pool, we use master pool. It will make the test work in compact clusters
-		mcp := wMcp
-		if len(mcp.GetNodesOrFail()) == 0 {
-			logger.Infof("No nodes in worker pool. Using master pool instead.")
-			mcp = mMcp
-		}
 		node := mcp.GetCoreOsNodesOrFail()[0]
 		skipTestIfRHELVersion(node, "<", "9.0")
 
@@ -302,7 +301,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		logger.Infof("OK!\n")
 
 		g.By("Create a new MC to deploy new authorized keys")
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
 		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[%s]`, MarshalOrFail(user))}
 		mc.skipWaitForMcp = true
 

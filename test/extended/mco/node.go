@@ -663,6 +663,53 @@ func (n *Node) GetRHELVersion() (string, error) {
 	return rhelVersion, nil
 }
 
+// GetPools returns a list with all the MCPs matching this node's labels. An node can be in more than one pool.
+func (n *Node) GetPools() ([]MachineConfigPool, error) {
+	allPools, err := NewMachineConfigPoolList(n.oc).GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	nodePools := []MachineConfigPool{}
+	for _, mcp := range allPools {
+		// Get all nodes labeled for this pool
+		allNodes, err := mcp.getNodesWithLabels("")
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range allNodes {
+			if n.GetName() == node.GetName() {
+				nodePools = append(nodePools, mcp)
+			}
+		}
+	}
+
+	return nodePools, nil
+}
+
+// IsInPoolOrFail returns true if this node belongs to the given MCP. If an error happens it fails the test.
+func (n *Node) IsInPoolOrFail(mcp *MachineConfigPool) bool {
+	isInPool, err := n.IsInPool(mcp)
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(),
+		"Cannot get the list of pools for node %s", n.GetName())
+	return isInPool
+}
+
+// IsInPool returns true if this node belongs to the given MCP.
+func (n *Node) IsInPool(mcp *MachineConfigPool) (bool, error) {
+	pools, err := n.GetPools()
+	if err != nil {
+		return false, err
+	}
+
+	for _, pool := range pools {
+		if pool.GetName() == mcp.GetName() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // GetAll returns a []Node list with all existing nodes
 func (nl *NodeList) GetAll() ([]Node, error) {
 	allNodeResources, err := nl.ResourceList.GetAll()
