@@ -374,7 +374,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
 		g.By("Get the base number of egressfirewall rules\n")
-		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids=egressFirewall=%s", ns1)
+		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:egressFirewall=%s", ns1)
 		ovnMasterPodName := getOVNLeaderPod(oc, "north")
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
@@ -542,7 +542,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(outPut).NotTo(o.ContainSubstring(egressFW.name))
 
 		g.By("Check ovn db, corresponding egressfirewall acls were deleted.")
-		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids=egressFirewall=%s", ns1)
+		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:egressFirewall=%s", ns1)
 		ovnMasterPodName := getOVNLeaderPod(oc, "north")
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
