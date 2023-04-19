@@ -737,6 +737,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 			mMcp         = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		)
 
+		mMcp.SetWaitingTimeForRTKernel()
+		wMcp.SetWaitingTimeForRTKernel()
 		defer mMcp.waitForComplete()
 		defer wMcp.waitForComplete()
 
@@ -747,6 +749,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		wRtMc.skipWaitForMcp = true
 
 		defer wRtMc.deleteNoWait()
+		// TODO: When we extract the "mcp.waitForComplete" from the "create" method, we need to take into account that if
+		// we are configuring a rt-kernel we need to wait longer.
 		wRtMc.create()
 		logger.Infof("OK!\n")
 
@@ -825,8 +829,15 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 			"Error getting the rpm-ostree status value in worker node %s", masterNode.GetName())
 
 		o.Expect(wStatus).Should(o.And(
-			o.MatchRegexp("(?s)LayeredPackages: kernel-rt-core.*kernel-rt-kvm.*kernel-rt-modules.*kernel-rt-modules-extra"),
-			o.ContainSubstring("RemovedBasePackages: kernel-core kernel-modules kernel kernel-modules-extra")),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-rt-core"),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-rt-kvm"),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-rt-modules"),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-rt-modules-extra"),
+
+			o.MatchRegexp("(?s)RemovedBasePackages:.*kernel-core"),
+			o.MatchRegexp("(?s)RemovedBasePackages:.*kernel-modules"),
+			o.MatchRegexp("(?s)RemovedBasePackages:.*kernel"),
+			o.MatchRegexp("(?s)RemovedBasePackages:.*kernel-modules-extra")),
 			"rpm-ostree status is not reporting the kernel layered packages properly")
 		logger.Infof("OK\n")
 
@@ -841,8 +852,15 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 			"Error getting the rpm-ostree status value in master node %s", masterNode.GetName())
 
 		o.Expect(mStatus).Should(o.And(
-			o.MatchRegexp("(?s)LayeredPackages: kernel-rt-core.*kernel-rt-kvm.*kernel-rt-modules.*kernel-rt-modules-extra"),
-			o.ContainSubstring("RemovedBasePackages: kernel-core kernel-modules kernel kernel-modules-extra")),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-rt-core"),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-rt-kvm"),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-rt-modules"),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-rt-modules-extra"),
+
+			o.MatchRegexp("(?s)RemovedBasePackages: .*kernel-core"),
+			o.MatchRegexp("(?s)RemovedBasePackages: .*kernel-modules"),
+			o.MatchRegexp("(?s)RemovedBasePackages: .*kernel"),
+			o.MatchRegexp("(?s)RemovedBasePackages: .*kernel-modules-extra")),
 			"rpm-ostree status is not reporting the kernel layered packages properly")
 		logger.Infof("OK\n")
 

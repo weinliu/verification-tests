@@ -17,6 +17,7 @@ import (
 type MachineConfigPool struct {
 	template string
 	Resource
+	MinutesWaitingPerNode int
 }
 
 // MachineConfigPoolList struct handles list of MCPs
@@ -26,7 +27,7 @@ type MachineConfigPoolList struct {
 
 // NewMachineConfigPool create a NewMachineConfigPool struct
 func NewMachineConfigPool(oc *exutil.CLI, name string) *MachineConfigPool {
-	return &MachineConfigPool{Resource: *NewResource(oc, "mcp", name)}
+	return &MachineConfigPool{Resource: *NewResource(oc, "mcp", name), MinutesWaitingPerNode: DefaultMinutesWaitingPerNode}
 }
 
 // MachineConfigPoolList construct a new node list struct to handle all existing nodes
@@ -157,10 +158,19 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 		}
 		return totalNodes
 	},
-		"5m").Should(o.BeNumerically(">=", 0), fmt.Sprintf("machineCount field has no value in MCP %s", mcp.name))
+		"5m", "5s").Should(o.BeNumerically(">=", 0), fmt.Sprintf("machineCount field has no value in MCP %s", mcp.name))
 
-	return totalNodes * 10
+	return totalNodes * mcp.MinutesWaitingPerNode
+}
 
+// SetWaitingTimeForRTKernel increases the time that the MCP will wait for the update to be executed
+func (mcp *MachineConfigPool) SetWaitingTimeForRTKernel() {
+	mcp.MinutesWaitingPerNode = DefaultMinutesWaitingPerNode + RTKernelIncWait
+}
+
+// SetDefaultWaitingTime restore the default waiting time that the MCP will wait for the update to be executed
+func (mcp *MachineConfigPool) SetDefaultWaitingTime() {
+	mcp.MinutesWaitingPerNode = DefaultMinutesWaitingPerNode
 }
 
 // getNodesWithLabels returns a list with the nodes that belong to the machine config pool and has the provided labels

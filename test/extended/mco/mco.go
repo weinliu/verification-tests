@@ -267,6 +267,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-43310-add kernel arguments, kernel type and extension to the RHCOS and RHEL [Disruptive]", func() {
+		// skip if not amd64. realtime kernel is not supported.
+		architecture.SkipNonAmd64SingleArch(oc)
+
 		nodeList := NewNodeList(oc)
 		allRhelOs := nodeList.GetAllRhelWokerNodesOrFail()
 		allCoreOs := nodeList.GetAllCoreOsWokerNodesOrFail()
@@ -282,6 +285,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mcName := "change-worker-karg-ktype-extension"
 		mcTemplate := mcName + ".yaml"
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
+		// TODO: When we extract the "mcp.waitForComplete" from the "create" and "delete" methods, we need to take into account that if
+		// we are configuring a rt-kernel we need to wait longer.
 		defer mc.delete()
 		mc.create()
 
@@ -2253,7 +2258,8 @@ nulla pariatur.`
 		rtMcName := "50-realtime-kernel"
 		rtMcTemplate := "change-worker-kernel-argument.yaml"
 		rtMc := NewMachineConfig(oc.AsAdmin(), rtMcName, MachineConfigPoolMaster).SetMCOTemplate(rtMcTemplate)
-
+		// TODO: When we extract the "mcp.waitForComplete" from the "create" and "delete" methods, we need to take into account that if
+		// we are configuring a rt-kernel we need to wait longer.
 		defer rtMc.delete()
 		rtMc.create()
 
@@ -3331,6 +3337,8 @@ func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, workerNod
 	mcTemplate := mcName + ".yaml"
 	mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
 	defer mc.delete()
+	// TODO: When we extract the "mcp.waitForComplete" from the "create" method, we need to take into account that if
+	// we are configuring a rt-kernel we need to wait longer.
 	mc.create()
 	logger.Infof("Machine config is created successfully!")
 

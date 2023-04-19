@@ -99,6 +99,12 @@ const (
 	layeringImagestreamNamespace = "layering-tests-imagestreams"
 	layeringRegistryAdminSAName  = "test-registry-sa"
 
-	// DefaultExpectTimeout is the the fault timout for expect commands
+	// DefaultExpectTimeout is the default tiemout for expect commands
 	DefaultExpectTimeout = 10 * time.Second
+
+	// DefaultMinutesWaitingPerNode is the  number of minutes per node that the MCPs will wait to become updated
+	DefaultMinutesWaitingPerNode = 10
+
+	// RTKernelIncWait exta minutes that MCPs will wait per node if we use a rt-kernel configuration
+	RTKernelIncWait = 5
 )

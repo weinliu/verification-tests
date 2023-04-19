@@ -61,6 +61,9 @@ func (mc *MachineConfig) create() {
 
 	if !mc.skipWaitForMcp {
 		mcp := NewMachineConfigPool(mc.oc, mc.pool)
+		if mc.GetKernelTypeOrFail() != "" {
+			mcp.SetWaitingTimeForRTKernel() // Since we configure realtime kernel we wait longer for completion
+		}
 		mcp.waitForComplete()
 	}
 
@@ -76,6 +79,9 @@ func (mc *MachineConfig) delete() {
 	err := mc.oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", mc.name, "--ignore-not-found=true").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	mcp := NewMachineConfigPool(mc.oc, mc.pool)
+	if mc.GetKernelTypeOrFail() != "" {
+		mcp.SetWaitingTimeForRTKernel() // If the MC is configuring realtime kernel, we increase the waiting period
+	}
 	mcp.waitForComplete()
 }
 
@@ -87,6 +93,10 @@ func (mc *MachineConfig) GetExtensions() (string, error) {
 // GetAuthorizedKeysByUser returns the authorizedkeys that this MC defines for the given user in a json list format
 func (mc *MachineConfig) GetAuthorizedKeysByUser(user string) (string, error) {
 	return mc.Get(fmt.Sprintf(`{.spec.config.passwd.users[?(@.name=="%s")].sshAuthorizedKeys}`, user))
+}
+
+func (mc *MachineConfig) GetKernelTypeOrFail() string {
+	return mc.GetOrFail(`{.spec.kernelType}`)
 }
 
 // GetAuthorizedKeysByUserAsList returns the authorizedkeys that this MC defines for the given user as a list of strings
