@@ -2,13 +2,14 @@ package operators
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"regexp"
 	"strconv"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	"github.com/blang/semver"
 	"github.com/google/go-github/github"
@@ -8373,7 +8374,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: xzha@redhat.com, test case OCP-40534
-	g.It("ConnectedOnly-Author:xzha-Medium-40534-Medium-40532-the deployment should not lost the resources section [Flaky]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-40534-Medium-40532-the deployment should not lost the resources section [Flaky]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
