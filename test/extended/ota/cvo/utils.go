@@ -463,7 +463,8 @@ func extractManifest(oc *exutil.CLI) (tempDataDir string, err error) {
 			return
 		}
 
-		if region != "us-iso-east-1" && region != "us-isob-east-1" {
+		// region us-iso-* represent C2S, us-isob-* represent SC2S
+		if !strings.Contains(region, "us-iso-") && !strings.Contains(region, "us-isob-") {
 			err = fmt.Errorf("oc adm release failed, and no retry for non-c2s/cs2s region: %s", region)
 			return
 		}
@@ -481,7 +482,7 @@ func extractManifest(oc *exutil.CLI) (tempDataDir string, err error) {
 
 		if err = oc.AsAdmin().Run("adm").Args("release", "extract",
 			"--from", fmt.Sprintf("%s@%s", mirror, strings.Split(image, "@")[1]),
-			"--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson").Execute(); err != nil {
+			"--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson", "--insecure").Execute(); err != nil {
 			err = fmt.Errorf("failed to extract manifests: %v", err)
 			return
 		}
@@ -741,7 +742,8 @@ func getReleaseInfo(oc *exutil.CLI) (output string, err error) {
 			return
 		}
 
-		if region != "us-iso-east-1" && region != "us-isob-east-1" {
+		// region us-iso-* represent C2S, us-isob-* represent SC2S
+		if !strings.Contains(region, "us-iso-") && !strings.Contains(region, "us-isob-") {
 			err = fmt.Errorf("oc adm release failed, and no retry for non-c2s/cs2s region: %s", region)
 			return
 		}
@@ -757,7 +759,8 @@ func getReleaseInfo(oc *exutil.CLI) (output string, err error) {
 			return
 		}
 
-		if output, err = oc.AsAdmin().Run("adm").Args("release", "info", "-a", tempDataDir+"/.dockerconfigjson",
+		if output, err = oc.AsAdmin().Run("adm").Args("release", "info",
+			"--insecure", "-a", tempDataDir+"/.dockerconfigjson",
 			fmt.Sprintf("%s@%s", mirror, strings.Split(image, "@")[1])).Output(); err != nil {
 			err = fmt.Errorf("failed to get release info: %v", err)
 			return
