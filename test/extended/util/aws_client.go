@@ -386,7 +386,6 @@ func (sc *S3Client) CreateBucket(name string) error {
 			CreateBucketConfiguration: &s3.CreateBucketConfiguration{
 				LocationConstraint: aws.String(*sc.svc.Config.Region),
 			},
-			ACL: aws.String(s3.BucketCannedACLPublicRead),
 		}
 	}
 
@@ -397,6 +396,14 @@ func (sc *S3Client) CreateBucket(name string) error {
 	}
 
 	e2e.Logf("bucket %s is created successfully %v", name, cbo)
+
+	_, doe := sc.svc.DeletePublicAccessBlock(&s3.DeletePublicAccessBlockInput{
+		Bucket: aws.String(name),
+	})
+	if doe != nil {
+		e2e.Logf("delete public access block failed on bucket %s: %v", name, doe)
+		return doe
+	}
 
 	return nil
 
