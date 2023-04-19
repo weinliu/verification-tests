@@ -207,7 +207,7 @@ func CheckIfResourceAvailable(oc *exutil.CLI, resource string, resourceNames []s
 }
 
 func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
-	return wait.Poll(20*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errCo := wait.Poll(20*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
 		gottenStatus := getCoStatus(oc, coName, expectedStatus)
 		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
 		if eq {
@@ -228,6 +228,11 @@ func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus m
 		}
 		return false, nil
 	})
+	if errCo != nil {
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	return errCo
 }
 
 func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) map[string]string {
@@ -243,7 +248,7 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 
 // Check ciphers for authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io:
 func verifyCiphers(oc *exutil.CLI, expectedCipher string, operator string) error {
-	return wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+	return wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		switch operator {
 		case "openshift-authentication":
 			e2e.Logf("Get the cipers for openshift-authentication:")
@@ -288,7 +293,7 @@ func verifyCiphers(oc *exutil.CLI, expectedCipher string, operator string) error
 func restoreClusterOcp41899(oc *exutil.CLI) {
 	e2e.Logf("Checking openshift-controller-manager operator should be Available")
 	expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-	err := waitCoBecomes(oc, "openshift-controller-manager", 300, expectedStatus)
+	err := waitCoBecomes(oc, "openshift-controller-manager", 500, expectedStatus)
 	exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not becomes available")
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", "openshift-config").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

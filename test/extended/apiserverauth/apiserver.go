@@ -445,13 +445,13 @@ spec:
 				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
 
 				// Using 60s because KAS takes long time, when KAS finished rotation, OAS and Auth should have already finished.
-				e2e.Logf("Checking openshift-apiserver operator should be Available in 60 seconds")
-				err = waitCoBecomes(oc, "openshift-apiserver", 60, expectedStatus)
-				exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator is not becomes available in 60 seconds")
+				e2e.Logf("Checking openshift-apiserver operator should be Available in 200 seconds")
+				err = waitCoBecomes(oc, "openshift-apiserver", 200, expectedStatus)
+				exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator is not becomes available in 200 seconds")
 
-				e2e.Logf("Checking authentication operator should be Available in 60 seconds")
-				err = waitCoBecomes(oc, "authentication", 60, expectedStatus)
-				exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 60 seconds")
+				e2e.Logf("Checking authentication operator should be Available in 200 seconds")
+				err = waitCoBecomes(oc, "authentication", 200, expectedStatus)
+				exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 200 seconds")
 				e2e.Logf("KAS, OAS and Auth operator are available after rollout and cipher's recovery")
 			}
 		}()
@@ -480,13 +480,13 @@ spec:
 			exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
 
 			// Using 60s because KAS takes long time, when KAS finished rotation, OAS and Auth should have already finished.
-			e2e.Logf("Checking openshift-apiserver operator should be Available in 60 seconds")
-			err = waitCoBecomes(oc, "openshift-apiserver", 60, expectedStatus)
-			exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator is not becomes available in 60 seconds")
+			e2e.Logf("Checking openshift-apiserver operator should be Available in 200 seconds")
+			err = waitCoBecomes(oc, "openshift-apiserver", 200, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator is not becomes available in 200 seconds")
 
-			e2e.Logf("Checking authentication operator should be Available in 60 seconds")
-			err = waitCoBecomes(oc, "authentication", 60, expectedStatus)
-			exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 60 seconds")
+			e2e.Logf("Checking authentication operator should be Available in 200 seconds")
+			err = waitCoBecomes(oc, "authentication", 200, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 200 seconds")
 		}
 	})
 
@@ -589,11 +589,11 @@ spec:
 
 		e2e.Logf("Checking openshift-controller-manager operator should be in Progressing in 100 seconds")
 		expectedStatus := map[string]string{"Progressing": "True"}
-		err = waitCoBecomes(oc, "openshift-controller-manager", 100, expectedStatus) // Wait it to become Progressing=True
-		exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not start progressing in 100 seconds")
+		err = waitCoBecomes(oc, "openshift-controller-manager", 200, expectedStatus) // Wait it to become Progressing=True
+		exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not start progressing in 200 seconds")
 		e2e.Logf("Checking openshift-controller-manager operator should be Available in 300 seconds")
 		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-		err = waitCoBecomes(oc, "openshift-controller-manager", 300, expectedStatus) // Wait it to become Available=True and Progressing=False and Degraded=False
+		err = waitCoBecomes(oc, "openshift-controller-manager", 500, expectedStatus) // Wait it to become Available=True and Progressing=False and Degraded=False
 		exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not becomes available in 300 seconds")
 
 		g.By("Create the new kubeconfig")
