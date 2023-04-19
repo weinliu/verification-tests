@@ -356,3 +356,11 @@ func GetNodeArchByName(oc *CLI, nodeName string) string {
 	e2e.Logf(`The node/%s arch is "%s"`, nodeName, nodeArch)
 	return nodeArch
 }
+
+// Get node list by label
+func GetNodeListByLabel(oc *CLI, labelKey string) []string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", labelKey, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Fail to get node with label %v, got error: %v\n", labelKey, err)
+	nodeNameList := strings.Fields(output)
+	return nodeNameList
+}
