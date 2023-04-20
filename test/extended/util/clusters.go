@@ -105,6 +105,13 @@ func SkipIfPlatformTypeNot(oc *CLI, platforms string) {
 	}
 }
 
+// IsHypershiftHostedCluster
+func IsHypershiftHostedCluster(oc *CLI) bool {
+	topology, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status.controlPlaneTopology}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Compare(topology, "External") == 0
+}
+
 // SkipHypershiftHostedCluster skip the test on a Hypershift cluster
 // NOTE: according to @kuiwang02 the preffered method is NonHyperShiftHOST label
 // leaving this one as a second line of defence just in case

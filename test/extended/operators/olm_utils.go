@@ -474,10 +474,15 @@ func (catsrc *catalogSourceDescription) create(oc *exutil.CLI, itName string, dr
 }
 
 func (catsrc *catalogSourceDescription) setSCCRestricted(oc *exutil.CLI) {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmaps", "-n", "openshift-kube-apiserver", "config", `-o=jsonpath={.data.config\.yaml}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	psa := gjson.Get(output, "admission.pluginConfig.PodSecurity.configuration.defaults.enforce").String()
-	e2e.Logf("pod-security.kubernetes.io/enforce is %s", string(psa))
+	psa := "restricted"
+	if exutil.IsHypershiftHostedCluster(oc) {
+		e2e.Logf("cluster is Hypershift Hosted Cluster, cannot get default PSA setting, use default value restricted")
+	} else {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmaps", "-n", "openshift-kube-apiserver", "config", `-o=jsonpath={.data.config\.yaml}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		psa = gjson.Get(output, "admission.pluginConfig.PodSecurity.configuration.defaults.enforce").String()
+		e2e.Logf("pod-security.kubernetes.io/enforce is %s", string(psa))
+	}
 	if strings.Contains(string(psa), "restricted") {
 		originSCC := catsrc.getSCC(oc)
 		e2e.Logf("spec.grpcPodConfig.securityContextConfig is %s", originSCC)
