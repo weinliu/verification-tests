@@ -468,4 +468,94 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			e2e.Failf("Can't find the prune log\n")
 		}
 	})
+
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Low-60603-oc-mirror negative test", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads/config-60603")
+		configOCI := filepath.Join(buildPruningBaseDir, "config-oci.yaml")
+		configNormal := filepath.Join(buildPruningBaseDir, "config-normal.yaml")
+
+		g.By("Set registry app")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configOCI, "--use-oci-feature", "file://").Output()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("oci feature cannot be used when mirroring to local archive"))
+		output, err1 := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configOCI, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		o.Expect(err1).Should(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("configuration file is authorized only with flag --use-oci-feature"))
+		output, err2 := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configNormal, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--use-oci-feature").Output()
+		o.Expect(err2).Should(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("please execute without the --use-oci-feature flag"))
+	})
+
+	g.It("NonHyperShiftHOST-ConnectedOnly-Longduration-Author:yinzhou-NonPreRelease-Medium-60607-oc mirror purne for mirror2disk and mirror2mirror with and without skip-pruning[Serial]", func() {
+		g.By("Set registry config")
+		dirname := "/tmp/case60607"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set registry app")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads/config-60603")
+		configFirst := filepath.Join(buildPruningBaseDir, "config-normal-first.yaml")
+		configSecond := filepath.Join(buildPruningBaseDir, "config-normal-second.yaml")
+		configThird := filepath.Join(buildPruningBaseDir, "config-normal-third.yaml")
+
+		fileList := []string{configFirst, configSecond, configThird}
+		for _, file := range fileList {
+			sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, serInfo.serviceName, file)
+			_, err = exec.Command("bash", "-c", sedCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		defer os.RemoveAll("oc-mirror-workspace")
+		defer os.RemoveAll("olm_artifacts")
+
+		defer os.RemoveAll("mirror_seq1_000000.tar")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configFirst, "file://").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check the tag for mirrored image")
+		checkCmd := fmt.Sprintf(`curl -k 'https://%s/v2/openshift4/ose-cluster-kube-descheduler-operator/tags/list'`, serInfo.serviceName)
+		output, err := exec.Command("bash", "-c", checkCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("null"))
+		defer os.RemoveAll("mirror_seq2_000000.tar")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configSecond, "file://").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		outputMirror, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "mirror_seq2_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("Deleting manifest", outputMirror); !matched {
+			e2e.Failf("Can't find the prune log\n")
+		}
+		g.By("Check the tag again, should be null")
+		outputNew, err := exec.Command("bash", "-c", checkCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(outputNew).To(o.ContainSubstring("null"))
+		defer os.RemoveAll("mirror_seq3_000000.tar")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configThird, "file://").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		outputMirror, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "mirror_seq3_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls", "--skip-pruning").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("Deleting manifest", outputMirror); matched {
+			e2e.Failf("Should not find the prune log\n")
+		}
+	})
 })
