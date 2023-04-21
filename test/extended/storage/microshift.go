@@ -731,4 +731,99 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("#. Check PVC is deleted successfully")
 		pvc.waitStatusAsExpected(oc, "deleted")
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-59670-[MicroShift] Admin can change default storage class to non-default [Serial]
+	g.It("MicroShiftOnly-Author:rdeore-Critical-59670-[MicroShift] Admin can change default storage class to non-default [Serial]", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID           = "59670"
+			e2eTestNamespace = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+		)
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("#. Check default storageclass is present")
+		allSClasses, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defaultSCList := gjson.Get(allSClasses, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true)#.metadata.name")
+		e2e.Logf("The default storageclass list: %s", defaultSCList)
+		defaultSCCount := len(defaultSCList.Array())
+		o.Expect(defaultSCCount == 1).Should(o.BeTrue())
+		defaultSCName := defaultSCList.Array()[0].String()
+		e2e.Logf("The default storageclass name: %s", defaultSCName)
+
+		g.By("#. Make default storage class as non-default")
+		setSpecifiedStorageClassAsNonDefault(oc.AsAdmin(), defaultSCName)
+		defer setSpecifiedStorageClassAsDefault(oc.AsAdmin(), defaultSCName)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-59671-[MicroShift] Change dynamic provisioned PV reclaim policy should work as expected
+	g.It("MicroShiftOnly-Author:rdeore-Critical-59671-[MicroShift] Change dynamic provisioned PV reclaim policy should work as expected", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID             = "59671"
+			e2eTestNamespace   = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate        = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			deploymentTemplate = filepath.Join(storageMicroshiftBaseDir, "dep-template.yaml")
+		)
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("#. Define storage resources")
+		presetStorageClass := newStorageClass(setStorageClassName("topolvm-provisioner"), setStorageClassProvisioner(topolvmProvisioner))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimStorageClassName(presetStorageClass.name), setPersistentVolumeClaimCapacity("1Gi"))
+		pv := newPersistentVolume()
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentNamespace(e2eTestNamespace), setDeploymentPVCName(pvc.name))
+
+		g.By("#. Create a pvc with presetStorageClass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("#. Create deployment with the created pvc and wait for the pod ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+
+		g.By("#. Wait for the deployment ready")
+		dep.waitReady(oc)
+
+		g.By("#. Change PV reclaim policy to 'Retain'")
+		pv.name = pvc.getVolumeName(oc)
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("logicalvolume", pv.name).Execute()
+		o.Expect(applyVolumeReclaimPolicyPatch(oc, pv.name, pvc.namespace, "Retain")).To(o.ContainSubstring("patched"))
+
+		g.By("#. Delete the Deployment")
+		dep.deleteAsAdmin(oc)
+
+		g.By("#. Delete the PVC")
+		pvc.delete(oc.AsAdmin())
+
+		g.By("#. Check PVC is deleted successfully")
+		pvc.waitStatusAsExpected(oc, "deleted")
+
+		g.By("#. Check PV still exists in Released status")
+		o.Consistently(func() string {
+			pvInfo, _ := getPersistentVolumeStatus(oc, pv.name)
+			return pvInfo
+		}, 30*time.Second, 5*time.Second).Should(o.ContainSubstring("Released"))
+
+		g.By("#. Delete the PV")
+		pv.deleteAsAdmin(oc)
+
+		g.By("#. Check PV is deleted successfully")
+		o.Eventually(func() string {
+			pvInfo, _ := getPersistentVolumeStatus(oc, pv.name)
+			return pvInfo
+		}, 30*time.Second, 5*time.Second).Should(o.ContainSubstring("not found"))
+
+		g.By("#. Delete the logical volume of the corresponding PV") // To free up the backend Volume Group storage space
+		err := oc.WithoutNamespace().AsAdmin().Run("delete").Args("logicalvolume", pv.name).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })

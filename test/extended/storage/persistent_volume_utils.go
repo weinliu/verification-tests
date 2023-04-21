@@ -510,3 +510,17 @@ func getPvNodeAffinityAvailableZones(oc *exutil.CLI, pvName string) []string {
 	e2e.Logf("PV \"%s\" nodeAffinity \" %s \"values: %s", topologyPath[cloudProvider], pvName, availableZonesStr)
 	return strings.Split(availableZonesStr, ",")
 }
+
+// Apply the patch to change persistent volume reclaim policy
+func applyVolumeReclaimPolicyPatch(oc *exutil.CLI, pvName string, namespace string, newPolicy string) (string, error) {
+	command1 := "{\"spec\":{\"persistentVolumeReclaimPolicy\":\"" + newPolicy + "\"}}"
+	command := []string{"pv", pvName, "-n", namespace, "-p", command1, "--type=merge"}
+	e2e.Logf("The command is %s", command)
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(command...).Output()
+	if err != nil {
+		e2e.Logf("Execute command failed with err:%v .", err)
+		return msg, err
+	}
+	e2e.Logf("The command executed successfully %s", command)
+	return msg, nil
+}
