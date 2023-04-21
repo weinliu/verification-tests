@@ -25,7 +25,7 @@ objects:
       :programname, contains, "journal.system" /var/log/custom/infra.log
       :programname, contains, "k8s-audit.log" /var/log/custom/audit.log
       :programname, contains, "openshift-audit.log" /var/log/custom/audit.log
-      :msg, contains, "docker"{
+      :msg, contains, "container_name"{
         if $msg contains "infrastructure" then /var/log/clf/infra-container.log
         if $msg contains "application" then /var/log/clf/app-container.log
       }

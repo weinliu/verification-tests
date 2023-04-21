@@ -26,7 +26,7 @@ objects:
       module(load="imudp" TimeRequery="500")
       input(type="imtcp" port="6514")
       input(type="imudp" port="514")
-      :msg, contains, "docker"{
+      :msg, contains, "container_name"{
         if $msg contains "infrastructure" then /var/log/clf/infra-container.log
         if $msg contains "application" then /var/log/clf/app-container.log
       }
