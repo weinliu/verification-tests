@@ -1,7 +1,14 @@
 package hive
 
 import (
+	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"io/ioutil"
 	"os"
@@ -120,6 +127,114 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		g.By("Check if ClusterClaim created successfully and become running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
+	})
+
+	//author: fxie@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "23167"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-23167-[aws]The tags created on users in AWS match what the installer did on your instances[Serial]", func() {
+		testCaseID := "23167"
+		cdName := "cd-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Creating ClusterDeployment ...")
+		installConfig := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		cd := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 3,
+		}
+		defer cleanCD(oc, cd.name+"-imageset", oc.Namespace(), installConfig.name1, cd.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfig, cd)
+
+		// Wait for the cluster to be installed and extract its infra id
+		newCheck("expect", "get", asAdmin, false, compare, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
+		infraID, _, err := oc.AsAdmin().Run("get").Args("cd", cdName, "-o", "jsonpath='{.spec.clusterMetadata.infraID}'").Outputs()
+		infraID = strings.Trim(infraID, "'")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Cluster infraID: " + infraID)
+
+		// Extract AWS credentials
+		AWSAccessKeyId, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_access_key_id", "--to=-").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		AWSSecretAccessKey, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_secret_access_key", "--to=-").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// AWS clients
+		cfg, err := config.LoadDefaultConfig(
+			context.Background(),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(AWSAccessKeyId, AWSSecretAccessKey, "")),
+			config.WithRegion(AWSRegion),
+		)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ec2Client := ec2.NewFromConfig(cfg)
+		iamClient := iam.NewFromConfig(cfg)
+
+		// Make sure resources are created with the target tag
+		targetTag := "kubernetes.io/cluster/" + infraID
+		g.By("Checking that resources are created with the target tag " + targetTag)
+		describeTagsOutput, err := ec2Client.DescribeTags(context.Background(), &ec2.DescribeTagsInput{
+			Filters: []types.Filter{
+				{
+					Name:   aws.String("key"),
+					Values: []string{targetTag},
+				},
+			},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(describeTagsOutput.Tags)).NotTo(o.BeZero())
+
+		// Make sure the IAM users are tagged
+		g.By("Looking for IAM users prefixed with infraID ...")
+		pagination := aws.Int32(50)
+		userFound, username := false, ""
+		listUsersOutput := &iam.ListUsersOutput{}
+		err = wait.Poll(6*time.Second, 10*time.Minute, func() (bool, error) {
+			listUsersOutput, err = iamClient.ListUsers(context.Background(), &iam.ListUsersInput{
+				Marker:   listUsersOutput.Marker,
+				MaxItems: pagination,
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			for _, user := range listUsersOutput.Users {
+				if strings.HasPrefix(*user.UserName, infraID) {
+					userFound, username = true, *user.UserName
+					break
+				}
+			}
+
+			if userFound {
+				return true, nil
+			}
+			return false, nil
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(userFound).To(o.BeTrue())
+
+		g.By("Looking for tags on user " + username)
+		listUserTagsOutput, err := iamClient.ListUserTags(context.Background(), &iam.ListUserTagsInput{
+			UserName: aws.String(username),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(*listUserTagsOutput.Tags[0].Key).To(o.Equal(targetTag))
+		o.Expect(*listUserTagsOutput.Tags[0].Value).To(o.Equal("owned"))
 	})
 
 	//author: jshu@redhat.com
