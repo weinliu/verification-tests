@@ -103,7 +103,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		checkStorageMetricsContent(oc, "vsphere_vcenter_info", "api_version")
 		checkStorageMetricsContent(oc, "vsphere_esxi_version_total", "api_version")
 		checkStorageMetricsContent(oc, "vsphere_node_hw_version_total", "hw_version")
-		checkStorageMetricsContent(oc, "vsphere_datastore_total", "instance")
+		// Currently CI accounts don't have enough permisssion get the datastore total info, temp remove the "vsphere_datastore_total" metric check
+		// TODO: Check with SPLAT/DPP Team whether we could add the permission in CI account
+		// checkStorageMetricsContent(oc, "vsphere_datastore_total", "instance")
 		checkStorageMetricsContent(oc, "vsphere_rwx_volumes_total", "value")
 	})
 
