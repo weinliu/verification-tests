@@ -88,8 +88,8 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 		g.By("Verify that user 'core' can login with the configured password")
 		logger.Infof("verifying node %s", node.GetName())
-		bresp, err := node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, password))
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", node.GetName(), bresp)
+		bresp, err := node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getPasswdValidator(user, password))
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the login process in node %s:\n %s", node.GetName(), bresp)
 		logger.Infof("OK!\n")
 
 		g.By("Update the password value")
@@ -105,8 +105,8 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 		g.By("Verify that user 'core' can login with the new password")
 		logger.Infof("verifying node %s", node.GetName())
-		bresp, err = node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", node.GetName(), bresp)
+		bresp, err = node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getPasswdValidator(user, updatedPassword))
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error in the login process in node %s:\n %s", node.GetName(), bresp)
 		logger.Infof("OK!\n")
 
 		g.By("Remove the password")
@@ -116,7 +116,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 		g.By("Verify that user 'core' can not login using a password anymore")
 		logger.Infof("verifying node %s", node.GetName())
-		bresp, err = node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
+		bresp, err = node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getPasswdValidator(user, updatedPassword))
 		o.Expect(err).To(o.HaveOccurred(), "User 'core' was able to login using a password in node %s, but it should not be possible:\n %s", node.GetName(), bresp)
 		logger.Infof("OK!\n")
 
@@ -162,8 +162,8 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		g.By("Verify that user 'core' can login with the configured password")
 		for _, workerNode := range allWorkerNodes {
 			logger.Infof("Verifying node %s", workerNode.GetName())
-			bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, password))
-			o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", workerNode.GetName(), bresp)
+			bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getPasswdValidator(user, password))
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error in the login process in node %s:\n %s", workerNode.GetName(), bresp)
 		}
 		logger.Infof("OK!\n")
 
@@ -181,8 +181,8 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		g.By("Verify that user 'core' can login with the new password")
 		for _, workerNode := range allWorkerNodes {
 			logger.Infof("Verifying node %s", workerNode.GetName())
-			bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
-			o.Expect(err).NotTo(o.HaveOccurred(), "Error in the ssh login process in node %s:\n %s", workerNode.GetName(), bresp)
+			bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getPasswdValidator(user, updatedPassword))
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error in the login process in node %s:\n %s", workerNode.GetName(), bresp)
 		}
 		logger.Infof("OK!\n")
 
@@ -194,7 +194,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		g.By("Verify that user 'core' can not login using a password anymore")
 		for _, workerNode := range allWorkerNodes {
 			logger.Infof("Verifying node %s", workerNode.GetName())
-			bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getSSHValidator(user, updatedPassword))
+			bresp, err := workerNode.ExecuteDebugExpectBatch(DefaultExpectTimeout, getPasswdValidator(user, updatedPassword))
 			o.Expect(err).To(o.HaveOccurred(), "User 'core' was able to login using a password in node %s, but it should not be possible:\n %s", workerNode.GetName(), bresp)
 		}
 		logger.Infof("OK!\n")
@@ -345,10 +345,41 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		logger.Infof("OK!\n")
 
 	})
+	g.It("Author:sregidor-NonPreRelease-Medium-62533-Passwd login must not work with ssh[Disruptive]", func() {
+		var (
+			mcName = "tc-62533-test-passwd-ssh-login"
+		)
+
+		allCoreos := mcp.GetCoreOsNodesOrFail()
+		if len(allCoreos) == 0 {
+			logger.Infof("No CoreOs nodes are configured in the %s pool. We use master pool for testing", mcp.GetName())
+			mcp = mMcp
+			allCoreos = mcp.GetCoreOsNodesOrFail()
+		}
+
+		node := allCoreos[0]
+
+		g.By("Configure a password for 'core' user")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
+		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, user, passwordHash)}
+		mc.skipWaitForMcp = true
+
+		defer mc.delete()
+		mc.create()
+
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Check that the password cannot be used to login to the cluster via ssh")
+		logger.Infof("verifying node %s", node.GetName())
+		bresp, err := node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getPasswdSSHValidator(user))
+		o.Expect(err).NotTo(o.HaveOccurred(), "Ssh login should not be allowed in node %s and should report a 'permission denied' error:\n %s", node.GetName(), bresp)
+		logger.Infof("OK!\n")
+	})
 })
 
-// getSSHValidator returns the commands that need to be executed in an interactive expect shell to validate that a user can login via ssh
-func getSSHValidator(user, passwd string) []expect.Batcher {
+// getPasswdValidator returns the commands that need to be executed in an interactive expect shell to validate that a user can login
+func getPasswdValidator(user, passwd string) []expect.Batcher {
 
 	return []expect.Batcher{
 		&expect.BExpT{R: "#", T: 120}, // wait for prompt. We wait 120 seconds here, because the debug pod can take some time to be run
@@ -360,6 +391,16 @@ func getSSHValidator(user, passwd string) []expect.Batcher {
 		&expect.BExp{R: "[pP]assword:"},              // wait for password question
 		&expect.BSnd{S: fmt.Sprintf("%s\n", passwd)}, // write the password
 		&expect.BExp{R: `OK`},                        // wait for succeess message
+	}
+}
+
+// getPasswdSSHValidator returns the commands that need to be executed in an interactive expect shell to validate that a user can NOT login via ssh
+func getPasswdSSHValidator(user string) []expect.Batcher {
+
+	return []expect.Batcher{
+		&expect.BExpT{R: "#", T: 120}, // wait for prompt. We wait 120 seconds here, because the debug pod can take some time to be run
+		&expect.BSnd{S: fmt.Sprintf("chroot /host ssh -o StrictHostKeyChecking=no %s@127.0.01\n", user)}, // run a ssh login command
+		&expect.BExp{R: `Permission denied`}, // wait for the login to be rejected because of permission denied
 	}
 }
 

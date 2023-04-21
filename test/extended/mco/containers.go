@@ -2,11 +2,12 @@ package mco
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"

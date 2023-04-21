@@ -3,12 +3,13 @@ package mco
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 
