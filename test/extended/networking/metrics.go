@@ -2,6 +2,7 @@ package networking
 
 import (
 	"fmt"
+	"net"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -335,15 +336,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		oc.SetupProject()
 		ns := oc.Namespace()
 
-		ipStackType := checkIPStackType(oc)
 		g.By("get controller-managert service ip address")
 		managertServiceIP := getControllerManagerLeaderIP(oc, "openshift-controller-manager", "openshift-master-controllers")
-		var prometheusURL string
-		if ipStackType == "ipv6single" {
-			prometheusURL = "https://[" + managertServiceIP + "]:8443/metrics"
-		} else {
-			prometheusURL = "https://" + managertServiceIP + ":8443/metrics"
-		}
+		svcURL := net.JoinHostPort(managertServiceIP, "8443")
+		prometheusURL := "https://" + svcURL + "/metrics"
 
 		var metricNumber string
 		metricsErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
@@ -373,24 +369,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("get test service ip address")
 		testServiceIP, _ := getSvcIP(oc, ns, "test-service") //This case is check metrics not svc testing, do not need use test-service dual-stack address
+		dstURL := net.JoinHostPort(testServiceIP, "27017")
 
 		g.By("test-pod can curl service ip address:port")
-		//Need curl serverice several times, otherwise casue curl: (7) Failed to connect to 172.30.248.18 port 27017
-		//after 0 ms: Connection refused\ncommand terminated with exit code 7\n\nerror:\nexit status 7"
-		if ipStackType == "ipv6single" {
-			for i := 0; i < 6; i++ {
-				e2eoutput.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
-			}
-			_, svcerr := e2eoutput.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
-			o.Expect(svcerr).NotTo(o.HaveOccurred())
-		}
-		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
-			for i := 0; i < 6; i++ {
-				e2eoutput.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
-			}
-			_, svcerr := e2eoutput.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
-			o.Expect(svcerr).NotTo(o.HaveOccurred())
-		}
+		_, svcerr1 := e2eoutput.RunHostCmd(ns, testPodName, "curl -connect-timeout 5 -s "+dstURL)
+		o.Expect(svcerr1).NotTo(o.HaveOccurred())
 
 		g.By("idle test-service")
 		_, idleerr := oc.Run("idle").Args("-n", ns, "test-service").Output()
@@ -399,19 +382,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("test pod can curl service address:port again to unidle the svc")
 		//Need curl serverice several times, otherwise casue curl: (7) Failed to connect to 172.30.248.18 port 27017
 		//after 0 ms: Connection refused\ncommand terminated with exit code 7\n\nerror:\nexit status 7"
-		if ipStackType == "ipv6single" {
-			for i := 0; i < 6; i++ {
-				e2eoutput.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
-			}
-			_, svcerr := e2eoutput.RunHostCmd(ns, testPodName, "curl ["+testServiceIP+"]:27017 --connect-timeout 5")
-			o.Expect(svcerr).NotTo(o.HaveOccurred())
-		} else {
-			for i := 0; i < 6; i++ {
-				e2eoutput.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
-			}
-			_, svcerr := e2eoutput.RunHostCmd(ns, testPodName, "curl "+testServiceIP+":27017 --connect-timeout 5")
-			o.Expect(svcerr).NotTo(o.HaveOccurred())
+		for i := 0; i < 3; i++ {
+			e2eoutput.RunHostCmd(ns, testPodName, "curl -connect-timeout 5 -s "+dstURL)
 		}
+		_, svcerr2 := e2eoutput.RunHostCmd(ns, testPodName, "curl -connect-timeout 5 -s "+dstURL)
+		o.Expect(svcerr2).NotTo(o.HaveOccurred())
 
 		//Because Bug 2064786: Not always can get the metrics of openshift_unidle_events_total
 		//Need curl several times to get the metrics of openshift_unidle_events_total
