@@ -1383,7 +1383,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--allow-explicit-upgrade", "--force", "--to-image", fakeReleasePayload).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
+		defer recoverReleaseAccepted(oc)
 
 		g.By("check ReleaseAccepted=False")
 		// usually happens quicker, but 8 minutes is safe deadline
@@ -1454,7 +1454,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--allow-explicit-upgrade", "--to-image", oldReleasePayload).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
+		defer recoverReleaseAccepted(oc)
 
 		err = waitForCondition(30, 480, "False",
 			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
@@ -1494,7 +1494,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		err := oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--allow-explicit-upgrade", "--to-image", fakeReleasePayload).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
+		defer recoverReleaseAccepted(oc)
 
 		err = waitForCondition(30, 480, "False",
 			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")

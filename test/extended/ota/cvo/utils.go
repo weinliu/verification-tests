@@ -416,6 +416,8 @@ func buildGraph(client *storage.Client, oc *exutil.CLI, projectID string, graphN
 // restoreCVSpec restores upstream and channel of clusterversion
 // if no need to restore, pass "nochange" to the argument(s)
 func restoreCVSpec(upstream string, channel string, oc *exutil.CLI) {
+	e2e.Logf("Restoring upgrade graph to '%s' channel to '%s'", upstream, channel)
+
 	if channel != "nochange" {
 		oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "--allow-explicit-channel", channel).Execute()
 		exec.Command("bash", "-c", "sleep 5").Output()
@@ -788,4 +790,24 @@ func getCVOPod(oc *exutil.CLI, jsonpath string) (map[string]interface{}, error) 
 		return nil, fmt.Errorf("unmarshal release info error: %v", err)
 	}
 	return objectValue, nil
+}
+
+// clearing fake upgrade and waiting for ReleaseAccepted recovery
+func recoverReleaseAccepted(oc *exutil.CLI) (err error) {
+	var out string
+	if out, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Output(); err != nil {
+		err = fmt.Errorf("clearing upgrade failed with: %s\n%v", out, err)
+		e2e.Logf(err.Error())
+		return err
+	}
+	if err = waitForCondition(30, 480, "True",
+		"oc get clusterversion version -o jsonpath=\"{.status.conditions[?(@.type=='ReleaseAccepted')].status}\""); err != nil {
+		if strings.Compare(err.Error(), "timed out waiting for the condition") == 0 {
+			err = fmt.Errorf("ReleaseAccepted condition is not false in 8m")
+		} else {
+			err = fmt.Errorf("waiting for ReleaseAccepted returned error: %s", err.Error())
+		}
+		e2e.Logf(err.Error())
+	}
+	return err
 }
