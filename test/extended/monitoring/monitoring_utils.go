@@ -254,13 +254,18 @@ func checkRmtWrtConfig(oc *exutil.CLI, ns string, podName string, checkValue str
 	exutil.AssertWaitPollNoErr(envCheck, "failed to check remote write config")
 }
 
-func checkAlertNotExist(oc *exutil.CLI, token, alertName string) {
-	cmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/alerts"
-	chk, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", cmd)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(chk, alertName) {
-		e2e.Failf("Target alert found: %s", alertName)
-	}
+// check Alerts or Metrics are not exist, Metrics is more recommended to use util `checkMetric`
+func checkAlertNotExist(oc *exutil.CLI, url, token, alertName string, timeout time.Duration) {
+	cmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
+	err := wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
+		chk, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil || strings.Contains(chk, alertName) {
+			return false, nil
+		}
+		return true, err
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Target alert found: %s", alertName))
 }
 
 // check alertmanger config in the pod
@@ -319,4 +324,16 @@ func getSpecPodInfo(oc *exutil.CLI, ns string, label string, checkValue string) 
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(envCheck, fmt.Sprintf("failed to find \"%s\" in the pod yaml", checkValue))
+}
+
+// check pods with label that are fully deleted
+func checkPodDeleted(oc *exutil.CLI, ns string, label string, checkValue string) {
+	podCheck := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
+		if err != nil || strings.Contains(output, checkValue) {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(podCheck, fmt.Sprintf("found \"%s\" exist or not fully deleted", checkValue))
 }

@@ -279,7 +279,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query= up == 0'", token, `"result":[]`, 2*uwmLoadTime)
 
 		g.By("check no alert 'TargetDown'")
-		checkAlertNotExist(oc, "TargetDown", token)
+		checkAlertNotExist(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/alerts", token, "TargetDown", uwmLoadTime)
 	})
 
 	// author: tagao@redhat.com
@@ -760,10 +760,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-			g.By("this case should excute on cluser which have storage class")
+			g.By("this case should execute on cluster which have storage class")
 			checkSc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc").Output()
 			if checkSc == "{}" || !strings.Contains(checkSc, "default") {
-				g.Skip("This case should excute on cluser which have default storage class!")
+				g.Skip("This case should execute on cluster which have default storage class!")
 			}
 
 			g.By("get master node mames with label")
@@ -823,6 +823,111 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			g.By("prometheus.retention check")
 			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", "-ojsonpath={.spec.retention}", "-n", "openshift-user-workload-monitoring").Output()
 			o.Expect(output).To(o.ContainSubstring("48h"))
+		})
+
+		// author: tagao@redhat.com
+		g.It("Author:tagao-Medium-50954-Allow the deployment of a dedicated UWM Alertmanager [Serial]", func() {
+			var (
+				dedicatedUWMalertmanager = filepath.Join(monitoringBaseDir, "dedicated-uwm-alertmanager.yaml")
+				exampleAlert             = filepath.Join(monitoringBaseDir, "example-alert-rule.yaml")
+				AlertmanagerConfig       = filepath.Join(monitoringBaseDir, "exampleAlertConfigAndSecret.yaml")
+			)
+			g.By("delete uwm-config/cm-config and bound pvc at the end of a serial case")
+			defer func() {
+				PvcNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "-ojsonpath={.items[*].metadata.name}", "-l", "alertmanager=user-workload", "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				for _, pvc := range strings.Fields(PvcNames) {
+					oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc", pvc, "-n", "openshift-user-workload-monitoring").Execute()
+				}
+			}()
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+			g.By("this case should execute on cluster which have storage class")
+			checkSc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc").Output()
+			if checkSc == "{}" || !strings.Contains(checkSc, "default") {
+				g.Skip("This case should execute on cluster which have default storage class!")
+			}
+
+			g.By("get master node mames with label")
+			NodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master", "-ojsonpath={.items[*].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeNameList := strings.Fields(NodeNames)
+
+			g.By("add labels to master nodes, and delete them at the end of case")
+			for _, name := range nodeNameList {
+				defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", name, "uwm-").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", name, "uwm=alertmanager").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			g.By("create the dedicated UWM Alertmanager configuration")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", dedicatedUWMalertmanager)
+
+			g.By("deploy prometheusrule and alertmanagerconfig to user project")
+			oc.SetupProject()
+			ns := oc.Namespace()
+			createResourceFromYaml(oc, ns, exampleAlert)
+			createResourceFromYaml(oc, ns, AlertmanagerConfig)
+
+			g.By("check the alerts could be found in alertmanager under openshift-user-workload-monitoring project")
+			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			checkMetric(oc, `https://alertmanager-user-workload.openshift-user-workload-monitoring.svc:9095/api/v2/alerts`, token, "TestAlert1", 3*uwmLoadTime)
+
+			g.By("check the alerts could not be found in openshift-monitoring project")
+			//same as: checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?&filter={alertname="TestAlert1"}`, token, "[]", 3*uwmLoadTime)
+			checkAlertNotExist(oc, "https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts", token, "TestAlert1", 3*uwmLoadTime)
+
+			g.By("get alertmanager pod names")
+			PodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-ojsonpath={.items[*].metadata.name}", "-l", "app.kubernetes.io/name=alertmanager", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("check alertmanager pod resources limits and requests")
+			for _, pod := range strings.Fields(PodNames) {
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, `-ojsonpath={.spec.containers[?(@.name=="alertmanager")].resources.limits}`, "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(output).To(o.ContainSubstring(`"cpu":"100m","memory":"250Mi"`))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, `-ojsonpath={.spec.containers[?(@.name=="alertmanager")].resources.requests}`, "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(output).To(o.ContainSubstring(`"cpu":"40m","memory":"200Mi"`))
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			g.By("check alertmanager pod are bound pvcs")
+			for _, pod := range strings.Fields(PodNames) {
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, "-ojsonpath={.spec.volumes[]}", "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(output).To(o.ContainSubstring("uwm-alertmanager"))
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			g.By("check AlertmanagerConfigs are take effect")
+			for _, pod := range strings.Fields(PodNames) {
+				checkAlertmangerConfig(oc, "openshift-user-workload-monitoring", pod, "api_url: http://wechatserver:8080/", true)
+			}
+
+			g.By("check logLevel is correctly set")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanager/user-workload", "-ojsonpath={.spec.logLevel}", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(output).To(o.ContainSubstring("debug"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("check logLevel is take effect")
+			for _, pod := range strings.Fields(PodNames) {
+				output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-c", "alertmanager", pod, "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if !strings.Contains(output, "level=debug") {
+					e2e.Failf("logLevel is wrong or not take effect")
+				}
+			}
+
+			g.By("disable alertmanager in user-workload-monitoring-config")
+			//oc patch cm user-workload-monitoring-config -p '{"data": {"config.yaml": "alertmanager:\n  enabled: false\n"}}' --type=merge -n openshift-user-workload-monitoring
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "user-workload-monitoring-config", "-p", `{"data": {"config.yaml": "alertmanager:\n  enabled: false\n"}}`, "--type=merge", "-n", "openshift-user-workload-monitoring").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("should found user project alerts in platform alertmanager")
+			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts`, token, "TestAlert1", 3*uwmLoadTime)
+
+			g.By("UWM alertmanager pod should disappear") //need time to wait pod fully terminated, put this step after the checkMetric
+			checkPodDeleted(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/name=alertmanager", "alertmanager")
 		})
 	})
 
