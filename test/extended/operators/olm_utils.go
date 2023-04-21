@@ -474,6 +474,10 @@ func (catsrc *catalogSourceDescription) create(oc *exutil.CLI, itName string, dr
 }
 
 func (catsrc *catalogSourceDescription) setSCCRestricted(oc *exutil.CLI) {
+	if strings.Compare(catsrc.namespace, "openshift-marketplace") == 0 {
+		e2e.Logf("the namespace is openshift-marketplace, skip setting SCC")
+		return
+	}
 	psa := "restricted"
 	if exutil.IsHypershiftHostedCluster(oc) {
 		e2e.Logf("cluster is Hypershift Hosted Cluster, cannot get default PSA setting, use default value restricted")
