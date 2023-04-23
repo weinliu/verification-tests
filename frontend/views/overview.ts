@@ -46,4 +46,28 @@ export const statusCard = {
   secondaryStatus: (item: string, status: string) => {
     cy.get(`[data-status-id="${item}-secondary-status"]`,{timeout: 60000}).contains(status);
   }
+};
+export const notificationDrawer = {
+  toggleNotificationItem: (item: string, toggle: string)=> {
+    let action_flag = toggle === 'expand' ? 'true' : 'false'
+    cy.get('.pf-c-notification-drawer__group-toggle-title')
+      .contains(`{item}`)
+      .parent('button')
+      .as('itemButton')
+      .invoke('attr', 'aria-expanded')
+      .then((expanded) => {
+        if(expanded != action_flag){
+          cy.get('@itemButton').click();
+        }
+      })
+  },
+  collapseCriticalAlerts: () => {
+    notificationDrawer.toggleNotificationItem('Critical Alerts', 'collapse')
+  },
+  collapseOtherAlerts: () => {
+    notificationDrawer.toggleNotificationItem('Other Alerts', 'collapse')
+  },
+  expandRecommendations: () => {
+    notificationDrawer.toggleNotificationItem('Recommendations', 'expand')
+  },
 }

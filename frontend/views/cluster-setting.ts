@@ -1,4 +1,8 @@
 export const ClusterSettingPage = {
+  isLoaded: () => {
+    cy.get('.co-cluster-settings', {timeout: 30000}).should('be.visible');
+    cy.get('.co-m-pane__body-group', {timeout: 30000}).should('be.visible');
+  },
   goToClusterSettingConfiguration: () => cy.visit('/settings/cluster/globalconfig'),
   clickToClustSettingDetailTab: () => cy.get('[data-test-id="horizontal-link-Details"]').click(),
   checkUpstreamUrlDisabled: () => cy.get('button[data-test-id="cluster-version-upstream-server-url"]').should("have.attr", "aria-disabled").and("eq", "true"),
@@ -31,7 +35,7 @@ export const ClusterSettingPage = {
       .clear()
       .type('https://openshift-release.apps.ci.l2s4.p1.openshiftapps.com/graph');
     cy.get('[data-test="confirm-action"]').click();
-    
+
   },
   configureChannel: () => {
     cy.get('[data-test-id="cluster-version"]').then(($version) => {
