@@ -924,6 +924,39 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("mirror", "-f", mirrorFile, "--from-dir=output61607", "--insecure").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+	// author: yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:yinzhou-High-51011-oc adm release mirror support manifest list[Serial]", func() {
+		extractTmpDirName := "/tmp/case51011"
+		err := os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		pullSpec := getLatestMultiPayload()
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry:1.2.0",
+			namespace:   oc.Namespace(),
+		}
+
+		g.By("Trying to launch a registry app")
+		serInfo := registry.createregistry(oc)
+		defer registry.deleteregistry(oc)
+
+		g.By("Make sure mirror succeed")
+		err = wait.PollImmediate(1200*time.Second, 3600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "mirror", "-a", extractTmpDirName+"/.dockerconfigjson", "--keep-manifest-list", "--from="+pullSpec, "--to="+serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev", "--insecure").Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "mirror failed")
+
+		_, standerr, err := oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("info", "-a", extractTmpDirName+"/.dockerconfigjson", serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev", "--insecure").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(standerr).To(o.ContainSubstring("use --filter-by-os to select"))
+	})
 
 })
 
