@@ -94,10 +94,12 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	g.It("NonHyperShiftHOST-Author:sregidor-PreChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update [Disruptive]", func() {
 		var (
-			kcName     = "change-maxpods-kubelet-config"
-			kcTemplate = generateTemplateAbsolutePath(kcName + ".yaml")
-			crName     = "change-ctr-cr-config"
-			crTemplate = generateTemplateAbsolutePath(crName + ".yaml")
+			kcName     = "mco-tc-62154-kubeletconfig"
+			kcTemplate = generateTemplateAbsolutePath("change-maxpods-kubelet-config.yaml")
+			crName     = "mco-tc-62154-crconfig"
+			crTemplate = generateTemplateAbsolutePath("generic-container-runtime-config.yaml")
+
+			crConfig = `{"pidsLimit": 2048}`
 		)
 
 		if len(wMcp.GetNodesOrFail()) == 0 {
@@ -110,7 +112,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 		g.By("create ContainerRuntimeConfig")
 		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
-		cr.create()
+		cr.create("-p", "CRCONFIG="+crConfig)
 
 		g.By("wait for worker pool to be ready")
 		wMcp.waitForComplete()
@@ -120,10 +122,10 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 	g.It("NonHyperShiftHOST-Author:sregidor-PstChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update  [Disruptive]", func() {
 
 		var (
-			kcName     = "change-maxpods-kubelet-config"
-			kcTemplate = generateTemplateAbsolutePath(kcName + ".yaml")
-			crName     = "change-ctr-cr-config"
-			crTemplate = generateTemplateAbsolutePath(crName + ".yaml")
+			kcName     = "mco-tc-62154-kubeletconfig"
+			kcTemplate = generateTemplateAbsolutePath("change-maxpods-kubelet-config.yaml")
+			crName     = "mco-tc-62154-crconfig"
+			crTemplate = generateTemplateAbsolutePath("generic-container-runtime-config.yaml")
 
 			mcKubeletConfigName                = "99-worker-generated-kubelet"
 			mcContainerRuntimeConfigConfigName = "99-worker-generated-containerruntime"
@@ -137,14 +139,14 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		// Skip if the precheck part of the test was not executed
 		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
 		if !kc.Exists() {
-			g.Skip(fmt.Sprintf(`The PreChkUpgrade part of the test should have created a KubeletConfig resource "%s". This resource does not exist in the cluster. Maybe we are upgrading from an old branck like 4.5?`, kc.GetName()))
+			g.Skip(fmt.Sprintf(`The PreChkUpgrade part of the test should have created a KubeletConfig resource "%s". This resource does not exist in the cluster. Maybe we are upgrading from an old branch like 4.5?`, kc.GetName()))
 		}
 		defer wMcp.waitForComplete()
 		defer kc.Delete()
 
 		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
 		if !cr.Exists() {
-			g.Skip(fmt.Sprintf(`The PreChkUpgrade part of the test should have created a ContainerRuntimConfig resource "%s". This resource does not exist in the cluster. Maybe we are upgrading from an old branck like 4.5?`, cr.GetName()))
+			g.Skip(fmt.Sprintf(`The PreChkUpgrade part of the test should have created a ContainerRuntimConfig resource "%s". This resource does not exist in the cluster. Maybe we are upgrading from an old branch like 4.5?`, cr.GetName()))
 		}
 		defer cr.Delete()
 

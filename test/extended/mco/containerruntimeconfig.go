@@ -28,8 +28,12 @@ func NewContainerRuntimeConfigList(oc *exutil.CLI) *ContainerRuntimeConfigList {
 	return &ContainerRuntimeConfigList{*NewResourceList(oc, "ContainerRuntimeConfig")}
 }
 
-func (cr *ContainerRuntimeConfig) create() {
-	exutil.CreateClusterResourceFromTemplate(cr.oc, "--ignore-unknown-parameters=true", "-f", cr.template, "-p", "NAME="+cr.name)
+// TODO: Refactor this strutc remove this method and embed Template
+func (cr *ContainerRuntimeConfig) create(parameters ...string) {
+	allParams := []string{"--ignore-unknown-parameters=true", "-f", cr.template,
+		"-p", "NAME=" + cr.name}
+	allParams = append(allParams, parameters...)
+	exutil.CreateClusterResourceFromTemplate(cr.oc, allParams...)
 }
 
 func (cr ContainerRuntimeConfig) waitUntilSuccess(timeout string) {
