@@ -585,7 +585,7 @@ func newLokiClient(routeAddress string) *lokiClient {
 	client := &lokiClient{}
 	client.address = routeAddress
 	client.retries = 5
-	client.quiet = true
+	client.quiet = false
 	return client
 }
 
@@ -894,7 +894,7 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 		}
 		if resp.StatusCode != expectedStatusCode {
 			buf, _ := io.ReadAll(resp.Body) // nolint
-			e2e.Logf("Error response from server: %s (%v) attempts remaining: %d", string(buf), err, attempts)
+			e2e.Logf("Error response from server: %s %s (%v), attempts remaining: %d", resp.Status, string(buf), err, attempts)
 			if err := resp.Body.Close(); err != nil {
 				e2e.Logf("error closing body", err)
 			}

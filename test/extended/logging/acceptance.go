@@ -65,6 +65,15 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			s = "minio"
 		}
 
+		// add audit rule
+		if len(masterNodes.Items) == 0 {
+			workerNodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "auditctl -W /var/log/pods/ -p rwa -k read-write-pod-logs")
+			_, err = exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "auditctl -w /var/log/pods/ -p rwa -k read-write-pod-logs")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
 		appProj := oc.Namespace()
 		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -95,7 +104,9 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 		//check logs in loki stack
 		g.By("check logs in loki")
-		bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", oc.Namespace())
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(bearerToken).retry(5)
 		for _, logType := range []string{"application", "infrastructure"} {
@@ -121,7 +132,9 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		journalLogs := extractLogEntities(journalLog)
 		o.Expect(len(journalLogs) > 0).Should(o.BeTrue(), "can't find journal logs in lokistack")
+		e2e.Logf("found journal logs")
 
+		g.By("check audit logs")
 		res, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\"}")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(res.Data.Result) == 0).Should(o.BeTrue())
