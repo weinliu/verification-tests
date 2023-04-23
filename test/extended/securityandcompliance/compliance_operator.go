@@ -2,9 +2,10 @@ package securityandcompliance
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"strconv"
 	"strings"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -4632,6 +4633,101 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].spec.priorityClassName}")
 		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "compliance.openshift.io/scan-name="+csuiteWithoutPC.scanname+",workload=aggregator",
 			"-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ARO-OSD_CCS-Author:xiyuan-Medium-53321-create a compliancesuite/scansettingbinding with a non-exist priorityClass [Serial]", func() {
+		var (
+			priorityClassName = "pc-not-exists" + getRandomString()
+			csuite            = complianceSuiteDescription{
+				name:          "suite-with-pc" + getRandomString(),
+				namespace:     subD.namespace,
+				scanname:      "cis-scan" + getRandomString(),
+				profile:       "xccdf_org.ssgproject.content_profile_cis",
+				content:       "ssg-ocp4-ds.xml",
+				contentImage:  "quay.io/complianceascode/ocp4:latest",
+				nodeSelector:  "master",
+				debug:         true,
+				priorityClass: priorityClassName,
+				template:      csuiteTemplate,
+			}
+			ss = scanSettingDescription{
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "ss-with-pc" + getRandomString(),
+				namespace:              "",
+				roles1:                 "master",
+				roles2:                 "worker",
+				rotation:               5,
+				schedule:               "0 1 * * *",
+				size:                   "2Gi",
+				priorityclassname:      priorityClassName,
+				debug:                  true,
+				template:               scansettingTemplate,
+			}
+			ssbWithPC = "ssb-with-pc-" + getRandomString()
+		)
+
+		defer func() {
+			cleanupObjects(oc, objectTableRef{"suite", subD.namespace, csuite.name})
+			cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbWithPC})
+			cleanupObjects(oc, objectTableRef{"ss", subD.namespace, ss.name})
+		}()
+
+		g.By("Check priorityclass not exist !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"priorityclass", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create compliancesuite and check compliancesuite status !!!\n")
+		csuite.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, csuite.name, ok, []string{"compliancesuite", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", csuite.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
+
+		g.By("Check ComplianceSuite status and result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"compliancesuite", csuite.name, "-n", subD.namespace,
+			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
+
+		g.By("Check event message.. !!!\n")
+		commonMessage := ".*Error while getting priority class.*" + priorityClassName + ".*"
+		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name="+csuite.name+",involvedObject.kind=ComplianceSuite", "-o=jsonpath={.items[*].message}")
+		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name="+csuite.scanname+",involvedObject.kind=ComplianceScan", "-o=jsonpath={.items[*].message}")
+
+		g.By("Create scansetting !!!\n")
+		ss.namespace = subD.namespace
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		_, err := OcComplianceCLI().Run("bind").Args("-N", ssbWithPC, "-S", ss.name, "profile/ocp4-cis", "profile/ocp4-cis-node", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbWithPC, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbWithPC, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, ssbWithPC, "NON-COMPLIANT INCONSISTENT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.priorityclassname, ok, []string{"compliancesuite", ssbWithPC, "-n", subD.namespace,
+			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
+
+		g.By("Check priorityname and priority for pods.. !!!\n")
+		assertParameterValueForBulkPods(oc, "", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
+		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+		assertParameterValueForBulkPods(oc, "", "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
+		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+
+		g.By("Check event message for ssb.. !!!\n")
+		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name="+ssbWithPC+",involvedObject.kind=ComplianceSuite", "-o=jsonpath={.items[*].message}")
+		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name=ocp4-cis,involvedObject.kind=ComplianceScan", "-o=jsonpath={.items[*].message}")
+		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name=ocp4-cis-node-master,involvedObject.kind=ComplianceScan", "-o=jsonpath={.items[*].message}")
+		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name=ocp4-cis-node-worker,involvedObject.kind=ComplianceScan", "-o=jsonpath={.items[*].message}")
 	})
 
 	// author: xiyuan@redhat.com

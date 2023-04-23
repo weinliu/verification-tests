@@ -1055,3 +1055,12 @@ func assertParameterValueForBulkPods(oc *exutil.CLI, expected string, parameters
 		o.Expect(res).Should(o.Equal(expected), fmt.Sprintf("The %s NOT equals to %s", res, expected))
 	}
 }
+
+func assertEventMessageRegexpMatch(oc *exutil.CLI, expected string, parameters ...string) {
+	eventsMessage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if matched, _ := regexp.MatchString(expected, eventsMessage); !matched {
+		e2e.Logf("The %s NOT match to regexp %s", eventsMessage, expected)
+		o.Expect(matched).To(o.BeTrue())
+	}
+}
