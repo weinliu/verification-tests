@@ -992,7 +992,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#retain
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:pewang-High-44907-[CSI-Driver] [Dynamic PV] [Retain reclaimPolicy] [Static PV] volumes could be re-used after the pvc/pv deletion", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "filestore.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
@@ -1431,7 +1431,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//[CSI-Driver] [Dynamic PV] [Security] CSI volume security testing when privileged is false
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Critical-44908-[CSI-Driver] [Dynamic PV] CSI volume security testing when privileged is false ", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com", "filestore.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -1483,7 +1483,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("%s", outputMountPath)
 			o.Expect(outputMountPath).To(o.ContainSubstring("24680"))
-			o.Expect(outputMountPath).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
+			if provisioner == "filestore.csi.storage.gke.io" {
+				o.Expect(outputMountPath).To(o.ContainSubstring("system_u:object_r:nfs_t:s0"))
+			} else {
+				o.Expect(outputMountPath).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
+			}
 
 			_, err = pod.execCommandAsAdmin(oc, "touch "+pod.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1491,7 +1495,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("%s", outputTestfile)
 			o.Expect(outputTestfile).To(o.ContainSubstring("24680"))
-			o.Expect(outputTestfile).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
+			if provisioner == "filestore.csi.storage.gke.io" {
+				o.Expect(outputTestfile).To(o.ContainSubstring("system_u:object_r:nfs_t:s0"))
+			} else {
+				o.Expect(outputTestfile).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
+			}
 
 			o.Expect(pod.execCommandAsAdmin(oc, fmt.Sprintf("echo '#!/bin/bash\necho \"Hello OpenShift Storage\"' > %s && chmod +x %s ", pod.mountPath+"/hello", pod.mountPath+"/hello"))).Should(o.Equal(""))
 			outputExecfile, err := pod.execCommandAsAdmin(oc, "cat "+pod.mountPath+"/hello")
@@ -2520,7 +2528,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// Known issue(BZ2073617) for ibm CSI Driver
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-37570-[CSI-Driver][Dynamic PV][FileSystem] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "filestore.csi.storage.gke.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -2610,9 +2618,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			dep.checkPodMountedVolumeHaveExecRight(oc)
 
 			g.By("Check nodeAffinity in pv info")
-			pvName := pvc.getVolumeName(oc)
-			o.Expect(checkPvNodeAffinityContains(oc, pvName, topologyKey[cloudProvider])).To(o.BeTrue())
-			o.Expect(checkPvNodeAffinityContains(oc, pvName, zone)).To(o.BeTrue())
+			if provisioner != "filestore.csi.storage.gke.io" {
+				pvName := pvc.getVolumeName(oc)
+				oc.WithoutNamespace().Run("describe").Args("pv ", pvName).Output()
+				o.Expect(checkPvNodeAffinityContains(oc, pvName, topologyKey[cloudProvider])).To(o.BeTrue())
+				o.Expect(checkPvNodeAffinityContains(oc, pvName, zone)).To(o.BeTrue())
+			}
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}

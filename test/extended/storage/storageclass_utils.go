@@ -97,6 +97,12 @@ func (sc *storageClass) create(oc *exutil.CLI) {
 	if isGP2volumeSupportOnly(oc) {
 		gp2VolumeTypeParameter := map[string]string{"type": "gp2"}
 		sc.createWithExtraParameters(oc, map[string]interface{}{"parameters": gp2VolumeTypeParameter})
+	} else if provisioner == "filestore.csi.storage.gke.io" {
+		scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, "filestore.csi.storage.gke.io")
+		networkID := getNetworkFromStorageClass(oc, scName)
+		filestoreNetworkParameter := map[string]string{"network": networkID}
+		sc.createWithExtraParameters(oc, map[string]interface{}{"parameters": filestoreNetworkParameter})
+
 	} else {
 		err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", sc.template, "-p", "SCNAME="+sc.name, "RECLAIMPOLICY="+sc.reclaimPolicy,
 			"PROVISIONER="+sc.provisioner, "VOLUMEBINDINGMODE="+sc.volumeBindingMode)
@@ -116,6 +122,11 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 	// https://github.com/kubernetes-sigs/aws-ebs-csi-driver/blob/master/docs/parameters.md
 	if isGP2volumeSupportOnly(oc) {
 		sc.parameters["type"] = "gp2"
+	}
+	if provisioner == "filestore.csi.storage.gke.io" {
+		scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, "filestore.csi.storage.gke.io")
+		networkID := getNetworkFromStorageClass(oc, scName)
+		sc.parameters["network"] = networkID
 	}
 	if _, ok := extraParameters["parameters"]; ok || len(sc.parameters) > 0 {
 		parametersByte, err := json.Marshal(extraParameters["parameters"])

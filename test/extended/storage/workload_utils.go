@@ -646,6 +646,10 @@ func setDeploymentMaxWaitReadyTime(maxWaitReadyTime time.Duration) deployOption 
 
 // Create a new customized Deployment object
 func newDeployment(opts ...deployOption) deployment {
+	defaultMaxWaitReadyTime := defaultMaxWaitingTime
+	if provisioner == "filestore.csi.storage.gke.io" {
+		defaultMaxWaitReadyTime = longerMaxWaitingTime
+	}
 	defaultDeployment := deployment{
 		name:             "my-dep-" + getRandomString(),
 		template:         "dep-template.yaml",
@@ -656,7 +660,7 @@ func newDeployment(opts ...deployOption) deployment {
 		pvcname:          "",
 		volumetype:       "volumeMounts",
 		typepath:         "mountPath",
-		maxWaitReadyTime: defaultMaxWaitingTime,
+		maxWaitReadyTime: defaultMaxWaitReadyTime,
 	}
 
 	for _, o := range opts {
