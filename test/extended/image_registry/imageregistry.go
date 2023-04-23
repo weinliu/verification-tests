@@ -3646,7 +3646,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 	})
 
-	g.It("Author:xiuwang-ConnectedOnly-Critical-59415-Low-59418-Could push manifest list image to internal registry", func() {
+	g.It("NonHyperShiftHOST-Author:xiuwang-ConnectedOnly-Critical-59415-Low-59418-Could push manifest list image to internal registry", func() {
 		var (
 			internalRegistry = "image-registry.openshift-image-registry.svc:5000"
 			multiArchImage   = "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"
