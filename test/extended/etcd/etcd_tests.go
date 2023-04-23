@@ -139,3 +139,49 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		}
 	})
 })
+var _ = g.Describe("[sig-etcd] ETCD Microshift", func() {
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLIWithoutNamespace("default")
+	// author: geliu@redhat.com
+	g.It("MicroShiftOnly-Author:geliu-Medium-62738-[ETCD] Build Microshift prototype to launch etcd as an transient systemd unit", func() {
+		g.By("1. Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+		masterNode := masterNodes[0]
+		g.By("2. Check microshift version")
+		output, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "microshift version")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if strings.Contains(output, "MicroShift Version") {
+			e2e.Logf("Micorshift version is %v ", output)
+		} else {
+			e2e.Failf("Test Failed to get MicroShift Version.")
+		}
+		g.By("3. Check etcd version")
+		output, err = exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "microshift-etcd version")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "MicroShift-etcd Version: 4") {
+			e2e.Logf("micorshift-etcd version is %v ", output)
+		} else {
+			e2e.Failf("Test Failed to get MicroShift-etcd Version.")
+		}
+		g.By("4. Check etcd run as an transient systemd unit")
+		output, err = exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "systemctl status microshift-etcd.scope")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Active: active (running)") {
+			e2e.Logf("microshift-etcd.scope status is: %v ", output)
+		} else {
+			e2e.Failf("Test Failed to get microshift-etcd.scope status.")
+		}
+		g.By("5. Check etcd log")
+		output, err = exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "journalctl -u microshift-etcd.scope -o cat")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Running scope as unit: microshift-etcd.scope") {
+			e2e.Logf("micorshift-etcd log is %v ", output)
+		} else {
+			e2e.Failf("Test Failed to get micorshift-etcd log.")
+		}
+	})
+})
