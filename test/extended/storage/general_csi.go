@@ -567,6 +567,116 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: jiasun@redhat.com
+	// OCP-30459 - [CSI-Driver] [Clone] Source and cloned PVC's volumeMode should be consistent
+	g.It("ARO-Author:jiasun-High-30459-[CSI-Driver] [Clone] Source and cloned PVC's volumeMode should be consistent", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		for _, provisioner = range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			g.By("Get the zone value with CSI topology key")
+			topologyPath := map[string]string{
+				"azure":        `topology\.disk\.csi\.azure\.com\/zone`,
+				"alibabacloud": `topology\.diskplugin\.csi\.alibabacloud\.com\/zone`,
+				"gcp":          `topology\.gke\.io\/zone`,
+			}
+			topologyKey := map[string]string{
+				"azure":        "topology.disk.csi.azure.com/zone",
+				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
+				"gcp":          "topology.gke.io/zone",
+			}
+
+			allNodes := getAllNodesInfo(oc)
+			node := getOneSchedulableWorker(allNodes)
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			zone := gjson.Get(output, topologyPath[cloudProvider]).String()
+
+			g.By("Create new storageClass with volumeBindingMode == Immediate")
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+
+			if len(zone) == 0 {
+				storageClass.create(oc)
+				defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+			} else {
+				e2e.Logf("The AvailableZone of node \"%s\" is \"%s\"", node.name, zone)
+				zones := []string{zone}
+				labelExpressions := []map[string]interface{}{
+					{"key": topologyKey[cloudProvider], "values": zones},
+				}
+				matchLabelExpressions := []map[string]interface{}{
+					{"matchLabelExpressions": labelExpressions},
+				}
+				extraParameters := map[string]interface{}{
+					"allowedTopologies": matchLabelExpressions,
+				}
+				storageClass.createWithExtraParameters(oc, extraParameters)
+				defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+			}
+
+			g.By("Create three pvcs with different volumeMode")
+			// Set the resource definition for the original
+			pvcVMnull := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimName("my-pvc-vmnull"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pvcVMfs := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Filesystem"), setPersistentVolumeClaimName("my-pvc-vmfs"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pvcVMbl := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimName("my-pvc-vmbl"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+
+			pvcVMnull.createWithoutVolumeMode(oc)
+			defer pvcVMnull.deleteAsAdmin(oc)
+			pvcVMfs.create(oc)
+			defer pvcVMfs.deleteAsAdmin(oc)
+			pvcVMbl.create(oc)
+			defer pvcVMbl.deleteAsAdmin(oc)
+
+			g.By("Create clone pvc with the preset csi storageclass")
+			// Set the resource definition for the clone
+			pvc1Clone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvcVMnull.capacity), setPersistentVolumeClaimDataSourceName(pvcVMnull.name), setPersistentVolumeClaimName("my-pvc-vmnull-vmnull"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pvc2Clone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvcVMnull.capacity), setPersistentVolumeClaimVolumemode("Filesystem"), setPersistentVolumeClaimDataSourceName(pvcVMnull.name), setPersistentVolumeClaimName("my-pvc-vmnull-vmfs"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pvc3Clone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvcVMfs.capacity), setPersistentVolumeClaimDataSourceName(pvcVMfs.name), setPersistentVolumeClaimName("my-pvc-vmfs-vmnull"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pvc4Clone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvcVMfs.capacity), setPersistentVolumeClaimVolumemode("Filesystem"), setPersistentVolumeClaimDataSourceName(pvcVMfs.name), setPersistentVolumeClaimName("my-pvc-vmfs-vmfs"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pvc5Clone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvcVMbl.capacity), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(pvcVMbl.name), setPersistentVolumeClaimName("my-pvc-vmbl-vmbl"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+
+			//createWithCloneDataSourceandVmnull
+			pvc1Clone.createWithCloneDataSourceWithoutVolumeMode(oc)
+			defer pvc1Clone.deleteAsAdmin(oc)
+			pvc2Clone.createWithCloneDataSource(oc)
+			defer pvc2Clone.deleteAsAdmin(oc)
+			pvc3Clone.createWithCloneDataSourceWithoutVolumeMode(oc)
+			defer pvc3Clone.deleteAsAdmin(oc)
+			pvc4Clone.createWithCloneDataSource(oc)
+			defer pvc4Clone.deleteAsAdmin(oc)
+			pvc5Clone.createWithCloneDataSource(oc)
+			defer pvc5Clone.deleteAsAdmin(oc)
+
+			g.By("Check the cloned pvc volumeMode is as expected")
+			pvc1Clone.waitStatusAsExpected(oc, "Bound")
+			pvc1Clone.checkVolumeModeAsexpected(oc, "Filesystem")
+			pvc2Clone.waitStatusAsExpected(oc, "Bound")
+			pvc2Clone.checkVolumeModeAsexpected(oc, "Filesystem")
+			pvc3Clone.waitStatusAsExpected(oc, "Bound")
+			pvc3Clone.checkVolumeModeAsexpected(oc, "Filesystem")
+			pvc4Clone.waitStatusAsExpected(oc, "Bound")
+			pvc4Clone.checkVolumeModeAsexpected(oc, "Filesystem")
+			pvc5Clone.waitStatusAsExpected(oc, "Bound")
+			pvc5Clone.checkVolumeModeAsexpected(oc, "Block")
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 	// author: wduan@redhat.com
 	// OCP-46358 - [CSI-Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-46358-[CSI-Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode", func() {

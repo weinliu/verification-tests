@@ -112,6 +112,14 @@ func (pvc *persistentVolumeClaim) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create new PersistentVolumeClaim without volumeMode
+func (pvc *persistentVolumeClaim) createWithoutVolumeMode(oc *exutil.CLI) {
+	if pvc.namespace == "" {
+		pvc.namespace = oc.Namespace()
+	}
+	o.Expect(applyResourceFromTemplateWithMultiExtraParameters(oc, []map[string]string{{"items.0.spec.volumeMode": "delete"}}, []map[string]interface{}{}, "-f", pvc.template, "-p", "PVCNAME="+pvc.name, "PVCNAMESPACE="+pvc.namespace, "SCNAME="+pvc.scname, "ACCESSMODE="+pvc.accessmode, "VOLUMEMODE="+pvc.volumemode, "PVCCAPACITY="+pvc.capacity)).Should(o.ContainSubstring("created"))
+}
+
 // Create new PersistentVolumeClaim with customized parameters to expect Error to occur
 func (pvc *persistentVolumeClaim) createToExpectError(oc *exutil.CLI) string {
 	if pvc.namespace == "" {
@@ -139,6 +147,24 @@ func (pvc *persistentVolumeClaim) createWithCloneDataSource(oc *exutil.CLI) {
 	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "PVCNAME="+pvc.name, "PVCNAMESPACE="+pvc.namespace, "SCNAME="+pvc.scname,
 		"ACCESSMODE="+pvc.accessmode, "VOLUMEMODE="+pvc.volumemode, "PVCCAPACITY="+pvc.capacity)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Create a new PersistentVolumeClaim with clone dataSource parameters and null volumeMode
+func (pvc *persistentVolumeClaim) createWithCloneDataSourceWithoutVolumeMode(oc *exutil.CLI) {
+	if pvc.namespace == "" {
+		pvc.namespace = oc.Namespace()
+	}
+	dataSource := map[string]string{
+		"kind": "PersistentVolumeClaim",
+		"name": pvc.dataSourceName,
+	}
+	extraParameters := map[string]interface{}{
+		"dataSource": dataSource,
+	}
+	jsonPathsAndActions := []map[string]string{{"items.0.spec.volumeMode": "delete"}, {"items.0.spec.dataSource": "set"}}
+	multiExtraParameters := []map[string]interface{}{{}, extraParameters}
+	o.Expect(applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "PVCNAME="+pvc.name, "PVCNAMESPACE="+pvc.namespace, "SCNAME="+pvc.scname,
+		"ACCESSMODE="+pvc.accessmode, "PVCCAPACITY="+pvc.capacity)).Should(o.ContainSubstring("created"))
 }
 
 // Create a new PersistentVolumeClaim with snapshot dataSource parameters
@@ -299,6 +325,14 @@ func getVolSizeFromPvc(oc *exutil.CLI, pvcName string, namespace string) (string
 // Wait for PVC Volume Size to get Resized
 func (pvc *persistentVolumeClaim) waitResizeSuccess(oc *exutil.CLI, expandedCapactiy string) {
 	waitPVCVolSizeToGetResized(oc, pvc.namespace, pvc.name, expandedCapactiy)
+}
+
+// Get the VolumeMode expected to equal
+func (pvc *persistentVolumeClaim) checkVolumeModeAsexpected(oc *exutil.CLI, vm string) {
+	pvcVM, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", pvc.name, "-n", pvc.namespace, "-o=jsonpath={.spec.volumeMode}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The pvc.spec.volumeMode is %s", pvcVM)
+	o.Expect(pvcVM).To(o.Equal(vm))
 }
 
 // Wait for PVC capacity expand successfully
