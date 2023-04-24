@@ -2,11 +2,12 @@ package operatorsdk
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -26,9 +27,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	var makeCLI = NewMakeCLI()
 	var mvnCLI = NewMVNCLI()
 	var oc = exutil.NewCLIWithoutNamespace("default")
-	var ocpversion = "4.13"
-	var ocppreversion = "4.12"
-	var upstream = false
+	var ocpversion = "4.14"
+	var ocppreversion = "4.13"
+	var upstream = true
 
 	// author: jfan@redhat.com
 	g.It("VMonly-Author:jfan-High-37465-SDK olm improve olm related sub commands", func() {
