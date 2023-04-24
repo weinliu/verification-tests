@@ -4,7 +4,7 @@ metadata:
   name: aws-load-balancer-operator
   namespace: aws-load-balancer-operator
 spec:
-  channel: stable-v0
+  channel: stable-v1
   installPlanApproval: Automatic
   name: aws-load-balancer-operator
   source: qe-app-registry

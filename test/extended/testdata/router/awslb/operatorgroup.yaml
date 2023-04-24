@@ -4,6 +4,4 @@ metadata:
   name: aws-lb-operatorgroup
   namespace: aws-load-balancer-operator
 spec:
-  targetNamespaces:
-  - aws-load-balancer-operator
   upgradeStrategy: Default
