@@ -107,7 +107,7 @@ describe('Operator Hub tests', () => {
           .should('have.attr','href')
           .then((href) => {
             cy.visit(href);
-            cy.byLegacyTestID('horizontal-link-public~Details').should('exist')
+            cy.byLegacyTestID('horizontal-link-Details').should('exist')
           });
         cy.adminCLI(`oc delete project ${params.ns}`);
     });
