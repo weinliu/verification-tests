@@ -10,7 +10,7 @@ describe('Operator Hub tests', () => {
         suggestedNamespaceLabels: 'foo:testxi3120',
         suggestedNamespaceannotations: 'baz:testxi3120'
       }
-    
+
     before(() => {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
         cy.adminCLI(`oc create -f ./fixtures/operators/custom-catalog-source.json`)
@@ -38,9 +38,9 @@ describe('Operator Hub tests', () => {
     });
 
     it('(OCP-54544,yapei) Check OperatorHub filter to use nodeArchitectures instead of GOARCH', {tags: ['e2e','admin','@osd-ccs']}, () => {
-        // in ocp54544--catalogsource, we have 
-        // etcd: operatorframework.io/arch.arm64: supported only  
-        // argocd: didn't define operatorframework.io in CSV, but by default operatorframework.io/arch.amd64 will be added 
+        // in ocp54544--catalogsource, we have
+        // etcd: operatorframework.io/arch.arm64: supported only
+        // argocd: didn't define operatorframework.io in CSV, but by default operatorframework.io/arch.amd64 will be added
         // infinispan: for all archs
         const allOperatorsList = ['infinispan','argocd', 'etcd'];
         let includedOperatorsList = ['infinispan'];
@@ -64,7 +64,7 @@ describe('Operator Hub tests', () => {
             })
         });
     });
-  
+
     it('(OCP-55684, xiyuzhao) Allow operator to specitfy where to run with CSV suggested namespace template annotation', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
         cy.visit(`operatorhub/subscribe?pkg=flux-operator&catalog=${testParams.catalogName}&catalogNamespace=${testParams.catalogNamespace}&targetNamespace=undefined`)
           .get('[data-test-id="resource-title"]')
@@ -104,7 +104,7 @@ describe('Operator Hub tests', () => {
         cy.get('[data-test-id="operator-modal-box"]').contains('has been installed');
         cy.get('[data-test-id="operator-modal-box"] p a')
           .contains('View it here')
-          .should('have.attr','href')     
+          .should('have.attr','href')
           .then((href) => {
             cy.visit(href);
             cy.byLegacyTestID('horizontal-link-public~Details').should('exist')
@@ -149,5 +149,36 @@ describe('Operator Hub tests', () => {
           .and('contain','- S1')
           .and('contain','- S2')
         cy.adminCLI(`oc delete project ${testParams.testNamespace}`);
+    });
+
+    it('(OCP-62266,xiyuzhao)  Filter operators based on nodes OS type', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+      let nodeOS;
+      const checkFilterResult = (operator: string, state: string) =>{
+        operatorHubPage.filter(operator);
+        cy.contains("No Results Match the Filter Criteria").should(state);
+      }
+      cy.exec(`oc get nodes -o yaml -o jsonpath={.items[*].status.nodeInfo.operatingSystem} | xargs -n 1 | uniq`, { failOnNonZeroExit: false }).then((result) => {
+        return nodeOS = result.stdout;
+      });
+      /* Aqua operator has label operatorframework.io/os.windows: supported
+         which means it will only shown on OperatorHub page when node os has windows type */
+      operatorHubPage.goTo();
+      operatorHubPage.checkSourceCheckBox("custom-auto-source");
+      cy.wrap(nodeOS).then(()=> {
+        if(nodeOS.includes('windows')) {
+          checkFilterResult('aqua','not.exist');
+          cy.contains('1 item').should('exist');
+        }else{
+          checkFilterResult('aqua','exist');
+        }
+      });
+      //Check Server_Flags and configmaps has nodeOperatingSystems
+      cy.window().then((win: any) => {
+        let opt = win.SERVER_FLAGS.nodeOperatingSystems;
+        expect(opt).contain(nodeOS);
+      });
+      cy.exec(`oc get configmaps console-config -n openshift-console -o yaml | awk '$1 == "-"{ if (key == "nodeOperatingSystems:") print $NF; next } {key=$1}'`, { failOnNonZeroExit: false }).then((output) => {
+        expect(output.stdout).to.include(nodeOS);
+      })
     });
 })
