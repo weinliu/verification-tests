@@ -3266,12 +3266,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("3) Creating a CatalogSource")
+		csWithoutDefaultchannel := catalogSourceDescription{
+			name:      "scenario3",
+			namespace: "scenario3",
+		}
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", csNamespaced).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		csWithoutDefaultchannel.setSCCRestricted(oc)
 
 		g.By("4) Checking CatalogSource error statement due to the absence of a default channel")
-		o.Expect(err).NotTo(o.HaveOccurred())
-
 		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l olm.catalogSource=scenario3", "-n", "scenario3").Output()
 			if err != nil {
