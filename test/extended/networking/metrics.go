@@ -599,4 +599,82 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		})
 		exutil.AssertWaitPollNoErr(metricDecOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricDecOutput))
 	})
+
+	g.It("NonPreRelease-Longduration-Author:qiowang-Medium-60708-Verify metrics ovnkube_resource_retry_failures_total. [Serial] [Slow]", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		var (
+			namespace           = "openshift-ovn-kubernetes"
+			metricName          = "ovnkube_resource_retry_failures_total"
+			egressNodeLabel     = "k8s.ovn.org/egress-assignable"
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressIPTemplate    = filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		)
+
+		g.By("1. Get the metrics of " + metricName + " before resource retry failure occur")
+		prometheusURL := "localhost:29102/metrics"
+		ovnMasterPodName := getOVNKMasterPod(oc)
+		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy", ovnMasterPodName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+		metricValue1 := strings.TrimSpace(string(metricOutput1))
+		e2e.Logf("The output of the %s is : %v", metricName, metricValue1)
+
+		g.By("2. Configure egressip with invalid ip address to trigger resource retry")
+		g.By("2.1 Label EgressIP node")
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeName, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeName, egressNodeLabel, "true")
+
+		g.By("2.2 Create new namespace and apply label")
+		oc.SetupProject()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name-").Output()
+		_, labelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name=test").Output()
+		o.Expect(labelErr).NotTo(o.HaveOccurred())
+
+		g.By("2.3 Create egressip object with invalid ip address")
+		egressipName := "egressip-" + getRandomString()
+		egressip := egressIPResource1{
+			name:      egressipName,
+			template:  egressIPTemplate,
+			egressIP1: "a.b.c.d",
+			egressIP2: "a.b.0.1",
+		}
+		defer egressip.deleteEgressIPObject1(oc)
+		egressip.createEgressIPObject1(oc)
+
+		g.By("3. Waiting for ovn resource retry failure")
+		targetLog := egressipName + ": exceeded number of failed attempts"
+		checkErr := wait.Poll(2*time.Minute, 16*time.Minute, func() (bool, error) {
+			podLogs, logErr := exutil.GetSpecificPodLogs(oc, namespace, "ovnkube-master", ovnMasterPodName, "'"+targetLog+"'")
+			if len(podLogs) == 0 || logErr != nil {
+				e2e.Logf("did not get expected podLogs, or have err: %v, try again", logErr)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("fail to get expected log in pod %v, err: %v", ovnMasterPodName, checkErr))
+
+		g.By("4. Get the metrics of " + metricName + " again when resource retry failure occur")
+		metricValue1Int, _ := strconv.Atoi(metricValue1)
+		expectedIncValue := strconv.Itoa(metricValue1Int + 1)
+		e2e.Logf("The expected value of the %s is : %v", metricName, expectedIncValue)
+		metricIncOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			output2, err2 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy", ovnMasterPodName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
+			o.Expect(err2).NotTo(o.HaveOccurred())
+			metricOutput2, _ := exec.Command("bash", "-c", "cat "+output2+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+			metricValue2 := strings.TrimSpace(string(metricOutput2))
+			e2e.Logf("The output of the %s is : %v", metricName, metricValue2)
+			if metricValue2 == expectedIncValue {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
+	})
 })
