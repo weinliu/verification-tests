@@ -2,23 +2,25 @@ package hive
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
-
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -56,6 +58,85 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		//Get OCP Image for Hive testing
 		testOCPImage = getTestOCPImage()
+	})
+
+	//author: fxie@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "25210"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-25210-[aws]Collect ClusterOperator Status for Hive Managed Clusters [Serial]", func() {
+		testCaseID := "25210"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Creating install-config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		g.By("Creating ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 3,
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Making sure the cluster is installed and in the \"Running\" powerstate ...")
+		newCheck("expect", "get", asAdmin, false, compare, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
+		newCheck("expect", "get", asAdmin, false, compare, "Running", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.status.powerState}"}).check(oc)
+
+		g.By("Extracting kubeconfig ...")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpDir)
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+
+		g.By("Comparing conditions obtained from ClusterOperator and ClusterState ...")
+		var clusterStateConditions, clusterOperatorConditions map[string][]map[string]string
+		clusterStateJSONPath := `{"{"}{range .status.clusterOperators[:-1]}"{.name}":{.conditions},{end}{range .status.clusterOperators[-1]}"{.name}":{.conditions}{end}{"}"}`
+		clusterOperatorJSONPath := `{"{"}{range .items[:-1]}"{.metadata.name}":{.status.conditions},{end}{range .items[-1]}"{.metadata.name}":{.status.conditions}{end}{"}"}`
+
+		/*
+			stdout[any-index] =
+			{
+					"operator-name": [
+						{
+							"lastTransitionTime": ...
+							...
+						}
+					]
+			}
+		*/
+		checkConditionEquality := func() bool {
+			stdout, _, err := oc.AsAdmin().Run("get").Args("ClusterState", cdName, "-o", "jsonpath="+clusterStateJSONPath).Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = json.Unmarshal([]byte(stdout), &clusterStateConditions)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			stdout, _, err = oc.AsAdmin().Run("get").Args("ClusterOperator", "-o", "jsonpath="+clusterOperatorJSONPath, "--kubeconfig="+kubeconfig).Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = json.Unmarshal([]byte(stdout), &clusterOperatorConditions)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			return reflect.DeepEqual(clusterOperatorConditions, clusterStateConditions)
+		}
+		o.Eventually(checkConditionEquality).WithTimeout(20 * time.Minute).WithPolling(time.Minute).Should(o.BeTrue())
 	})
 
 	//author: jshu@redhat.com
