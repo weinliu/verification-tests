@@ -192,14 +192,15 @@ func (fi1 *fileintegrity) getConfigmapFromFileintegritynodestatus(oc *exutil.CLI
 }
 
 func (fi1 *fileintegrity) getDataFromConfigmap(oc *exutil.CLI, cmName string, expected string) {
+	var aideResult string
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-		aideResult, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/"+cmName, "-n", fi1.namespace, "-o=jsonpath={.data}").Output()
+		aideResult, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/"+cmName, "-n", fi1.namespace, "-o=jsonpath={.data}").Output()
 		if matched, _ := regexp.MatchString(expected, aideResult); matched {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cm %s does not include %s", cmName, expected))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("aideResult %s does not include %s", aideResult, expected))
 }
 
 func getOneWorkerNodeName(oc *exutil.CLI) string {
@@ -521,4 +522,77 @@ func (fi1 *fileintegrity) checkDBBackupResult(oc *exutil.CLI, nodeName string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("the DB backup result for node %s does not exist", nodeName))
+}
+
+func (fi1 *fileintegrity) getDBBackupLists(oc *exutil.CLI, nodeName string, dbReinitiated bool) ([]string, bool) {
+	var dbGzBackupList []string
+	isNewFIO := false
+	maxBackups, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.spec.config.maxBackups}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	maxBackupsInt, _ := strconv.Atoi(maxBackups)
+
+	errWait := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		dbBackup, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(`node/`+nodeName, "-n", fi1.namespace, "--", "chroot", "/host", "find", "/etc/kubernetes/", "-maxdepth", "1").Output()
+		if err != nil {
+			return false, nil
+		}
+		dbGzBackupList = getMatchedFiles("aide.db.gz.backup.*", dbBackup)
+		if dbReinitiated == false {
+			dbGzFilesList := getMatchedFiles("aide.db.gz.*", dbBackup)
+			if len(dbGzFilesList) == 0 {
+				isNewFIO = true
+			}
+		}
+
+		if len(dbGzBackupList) > maxBackupsInt && dbReinitiated == true {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("the DB backup result for node %s is invalid", nodeName))
+	return dbGzBackupList, isNewFIO
+}
+
+func getMatchedFiles(pattern string, filesList string) []string {
+	var matchedFileList []string
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		e2e.Failf("Error while extracting files using pattern %s", pattern)
+	}
+	matchedFileList = regex.FindAllString(filesList, -1)
+	return matchedFileList
+}
+
+func checkDBFilesUpdated(oc *exutil.CLI, fi1 fileintegrity, oldDbBackupfiles []string, nodeName string, dbReinitiated bool, isNewFIO bool) {
+	var newBackupFilesCount int
+	var foundCommonFile bool
+	var errorMsg string
+	errWait := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		newDBBackupfiles, _ := fi1.getDBBackupLists(oc, nodeName, dbReinitiated)
+		for i := range newDBBackupfiles {
+			foundCommonFile = false
+			for j := range oldDbBackupfiles {
+				if oldDbBackupfiles[j] == newDBBackupfiles[i] {
+					foundCommonFile = true
+				}
+			}
+			if foundCommonFile == false {
+				newBackupFilesCount++
+				e2e.Logf("the DB backup files for node %s has updated", nodeName)
+				break
+			}
+		}
+		if newBackupFilesCount == 0 {
+			if dbReinitiated == true {
+				errorMsg = "DB files not updated. It should be updated"
+				return false, nil
+			}
+			e2e.Logf("the DB backup files for node %s has not updated", nodeName)
+		} else if newBackupFilesCount != 0 && dbReinitiated == false && isNewFIO == false {
+			errorMsg = "DB files updated. It should not be updated"
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("%s", errorMsg))
 }

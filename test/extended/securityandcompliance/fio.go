@@ -2,10 +2,11 @@ package securityandcompliance
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -653,7 +654,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		nodeName := getOneRhcosWorkerNodeName(oc)
-		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
+		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
+		assertKeywordsExists(oc, 300, fileintegrityNodeStatusName, "fileintegritynodestatuses", "-o=jsonpath={.items[*].metadata.name}", "-n", fi1.namespace)
+
+		g.By("Check DB backup results")
+		dbReinit := true
+		dbInitialBackupList, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
 
 		g.By("trigger reinit by applying aide config")
 		fi1.configname = "myconf"
@@ -663,24 +669,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createFIOWithConfig(oc, itName, dr)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		checkDBFilesUpdated(oc, fi1, dbInitialBackupList, nodeName, dbReinit, isNewFIO)
+		dbBackupListAfterInit1, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
+		assertKeywordsExists(oc, 300, fileintegrityNodeStatusName, "fileintegritynodestatuses", "-o=jsonpath={.items[*].metadata.name}", "-n", fi1.namespace)
 
 		g.By("trigger fileintegrity failure on node")
-		var pod1, pod2 podModify = podModifyD, podModifyD
-		pod1.namespace = oc.Namespace()
-		pod1.name = "pod-modify"
-		pod1.nodeName = nodeName
-		var filePath = "/hostroot/root/test/test" + getRandomString()
-		pod1.args = "mkdir -p " + filePath
-		defer func() {
-			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod1.name})
-			pod2.name = "pod-recover"
-			pod2.namespace = oc.Namespace()
-			pod2.nodeName = nodeName
-			pod2.args = "rm -rf " + filePath
-			pod2.doActionsOnNode(oc, "Succeeded", dr)
-			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
-		}()
-		pod1.doActionsOnNode(oc, "Succeeded", dr)
+		var filePath = "/root/test" + getRandomString()
+		defer exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath)
+		_, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Failed", ok, []string{"fileintegritynodestatuses", fileintegrityNodeStatusName, "-n", fi1.namespace, "-o=jsonpath={.lastResult.condition}"}).check(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		cmName := fi1.getConfigmapFromFileintegritynodestatus(oc, nodeName)
 		fi1.getDataFromConfigmap(oc, cmName, filePath)
@@ -692,7 +690,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkConfigmapCreated(oc)
 		fi1.createFIOWithConfig(oc, itName, dr)
 		fi1.checkFileintegrityStatus(oc, "running")
-		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		checkDBFilesUpdated(oc, fi1, dbBackupListAfterInit1, nodeName, dbReinit, isNewFIO)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Failed", ok, []string{"fileintegritynodestatuses", fileintegrityNodeStatusName, "-n", fi1.namespace, "-o=jsonpath={.lastResult.condition}"}).check(oc)
 		fi1.expectedStringNotExistInConfigmap(oc, cmName, filePath)
 	})
 
