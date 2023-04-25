@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -958,8 +959,14 @@ func labelNameSpace(oc *exutil.CLI, namespace string, label string) {
 
 }
 
-func getSAToken(oc *exutil.CLI, account string, namespace string) string {
-	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", account, "-n", namespace).Output()
+func getSAToken(oc *exutil.CLI, account string, ns string) string {
+	e2e.Logf("Getting a token assgined to specific serviceaccount from %s namespace...", ns)
+	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", account, "-n", ns).Output()
+	if err != nil {
+		if strings.Contains(token, "unknown command") {
+			token, err = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", account, "-n", ns).Output()
+		}
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(token).NotTo(o.BeEmpty())
 	return token
@@ -1062,5 +1069,15 @@ func assertEventMessageRegexpMatch(oc *exutil.CLI, expected string, parameters .
 	if matched, _ := regexp.MatchString(expected, eventsMessage); !matched {
 		e2e.Logf("The %s NOT match to regexp %s", eventsMessage, expected)
 		o.Expect(matched).To(o.BeTrue())
+	}
+}
+
+// skip cluster when apiserver encryption type is eqauls to aescbc as enable/disable encryption is destructive and time consuming
+// will add support for aesgcm when the related bug https://issues.redhat.com/browse/OCPBUGS-11696 fixed
+func skipEtcdEncryptionOn(oc *exutil.CLI) {
+	encryptionType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if encryptionType != "aescbc" {
+		g.Skip(fmt.Sprintf("EncryptionType %s is not aescbc, SKIP!", encryptionType))
 	}
 }
