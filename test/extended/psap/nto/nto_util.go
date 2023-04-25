@@ -726,10 +726,11 @@ func compareCertificateBetweenOpenSSLandTLSSecret(oc *exutil.CLI, ntoNamespace s
 }
 
 // assertIFChannel
-func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string, shouldMatch bool) bool {
+func assertIFChannelQueuesStatus(oc *exutil.CLI, namespace string, tunedNodeName string) bool {
 
 	var isMatch bool
 	ifNameList, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-a", "-not", "-name", "enP*", "-printf", `%f"\n"`).Output()
+	e2e.Logf("Physical network list is: %v", ifNameList)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(ifNameList).NotTo(o.BeEmpty())
 
@@ -738,19 +739,22 @@ func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string, sho
 	o.Expect(ifNameStr).NotTo(o.BeEmpty())
 	//Check all physical nic
 	ifNames := strings.Split(ifNameStr, "\n")
+	e2e.Logf("ifNames is: %v", ifNames)
 	o.Expect(ifNames).NotTo(o.BeEmpty())
 
 	for i := 0; i < len(ifNames); {
-		ethToolsOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "ethtool", "-l", ifNames[i]).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ethToolsOutput).NotTo(o.BeEmpty())
-		e2e.Logf("ethtool -l %v:, \n%v", ifNames[i], ethToolsOutput)
+		if len(ifNames[i]) > 0 {
+			ethToolsOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "ethtool", "-l", ifNames[i]).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(ethToolsOutput).NotTo(o.BeEmpty())
+			e2e.Logf("ethtool -l %v:, \n%v", ifNames[i], ethToolsOutput)
 
-		regChannel, err := regexp.Compile("Combined:.*1")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		isMatch = regChannel.MatchString(ethToolsOutput)
-		if isMatch == shouldMatch {
-			break
+			regChannel, err := regexp.Compile("Combined:.*1")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			isMatch = regChannel.MatchString(ethToolsOutput)
+			if isMatch {
+				break
+			}
 		}
 		i++
 	}

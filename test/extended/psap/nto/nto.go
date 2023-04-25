@@ -1987,6 +1987,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
+		g.By("Check default channel for host network adapter, not expected Combined: 1, if so, skip testing ...")
+		//assertIFChannelQueuesStatus is used for checking if match Combined: 1
+		//If match <Combined: 1>, skip testing
+		isMatch := assertIFChannelQueuesStatus(oc, ntoNamespace, tunedNodeName)
+		if isMatch {
+			g.Skip("Only one NIC queues or Unsupported NIC - skipping test ...")
+		}
+
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", tunedPodName, "-n", ntoNamespace, "node-role.kubernetes.io/netplugin-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "net-plugin", "-n", ntoNamespace, "--ignore-not-found").Execute()
 
@@ -2015,6 +2023,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
+		g.By("Assert tuned.plugins.base: instance net: assigning devices match in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "18", 300, "tuned.plugins.base: instance net: assigning devices")
+
 		g.By("Assert active and recommended profile (net-plugin) match in tuned pod log")
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `profile 'net-plugin' applied|profile \(net-plugin\) match`)
 
@@ -2034,15 +2045,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check channel for host network adapter, expected Combined: 1")
-		isMatch := assertIFChannel(oc, ntoNamespace, tunedNodeName, true)
-		o.Expect(isMatch).To(o.BeTrue())
+		o.Expect(assertIFChannelQueuesStatus(oc, ntoNamespace, tunedNodeName)).To(o.BeTrue())
 
 		g.By("Delete tuned net-plugin and check channel for host network adapater again")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "net-plugin", "-n", ntoNamespace, "--ignore-not-found").Execute()
 
 		g.By("Check channel for host network adapter, not expected Combined: 1")
-		isMatch = assertIFChannel(oc, ntoNamespace, tunedNodeName, false)
-		o.Expect(isMatch).To(o.BeFalse())
+		o.Expect(assertIFChannelQueuesStatus(oc, ntoNamespace, tunedNodeName)).To(o.BeFalse())
+
 	})
 
 	g.It("NonHyperShiftHOST-Author:liqcui-Medium-49617-NTO support cloud-provider specific profiles for NTO/TuneD. [Disruptive]", func() {
