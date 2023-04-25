@@ -892,13 +892,13 @@ func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters
 	err = wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
 		result, err = doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
-			e2e.Logf("output is %v, error is %v, and try next", result, err)
+			e2e.Logf("The output is %v, error is %v, and try next", result, err)
 			return false, nil
 		}
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get %v", parameters))
-	e2e.Logf("$oc get %v, the returned resource:%v", parameters, result)
+	e2e.Logf("The resource returned:\n%v", result)
 	return result
 }
 

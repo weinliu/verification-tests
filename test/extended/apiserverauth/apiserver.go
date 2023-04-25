@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -16,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -4948,5 +4949,69 @@ type: kubernetes.io/service-account-token`
 				e2e.Failf("Component name not presents in klog headers for :: %v :: %v", comps, masterNodeLogs)
 			}
 		}
+	})
+
+	// author: kewang@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11289-[origin_platformexp_407] [Apiserver] Check the imagestreams of quota in the project after build image", func() {
+		var (
+			caseID                  = "ocp-11289"
+			dirname                 = "/tmp/-" + caseID
+			ocpObjectCountsYamlFile = dirname + "openshift-object-counts.yaml"
+		)
+		g.By("1) Create a new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		g.By("2) Create a ResourceQuota count of image stream")
+		ocpObjectCountsYaml := `apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: openshift-object-counts
+spec:
+  hard:
+    openshift.io/imagestreams: "10"
+`
+		f, err := os.Create(ocpObjectCountsYamlFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		_, err = fmt.Fprintf(w, "%s", ocpObjectCountsYaml)
+		w.Flush()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().Run("delete").Args("-f", ocpObjectCountsYamlFile, "-n", namespace).Execute()
+		quotaErr := oc.AsAdmin().Run("create").Args("-f", ocpObjectCountsYamlFile, "-n", namespace).Execute()
+		o.Expect(quotaErr).NotTo(o.HaveOccurred())
+
+		g.By("3. Checking the created Resource Quota of the Image Stream")
+		quota := getResource(oc, asAdmin, withoutNamespace, "quota", "openshift-object-counts", `--template={{.status.used}}`, "-n", namespace)
+		o.Expect(quota).Should(o.ContainSubstring("openshift.io/imagestreams:0"), "openshift-object-counts")
+
+		checkImageStreamQuota := func(buildName string, step string) {
+			buildErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+				bs := getResource(oc, asAdmin, withoutNamespace, "builds", buildName, "-ojsonpath={.status.phase}", "-n", namespace)
+				if strings.Contains(bs, "Complete") {
+					e2e.Logf("Building of %s status:%v", buildName, bs)
+					return true, nil
+				}
+				e2e.Logf("Building of %s is still not complete, continue to monitor ...", buildName)
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(buildErr, fmt.Sprintf("ERROR: Build status of %s is not complete!", buildName))
+
+			g.By(fmt.Sprintf("%s.1 Checking the created Resource Quota of the Image Stream", step))
+			quota := getResource(oc, asAdmin, withoutNamespace, "quota", "openshift-object-counts", `--template={{.status.used}}`, "-n", namespace)
+			o.Expect(quota).Should(o.ContainSubstring("openshift.io/imagestreams:2"), "openshift-object-counts")
+		}
+
+		g.By("4. Create a source build using source code and check the build info")
+		imgErr := oc.AsAdmin().WithoutNamespace().Run("new-build").Args(`quay.io/openshifttest/ruby-27:1.2.0~https://github.com/sclorg/ruby-ex.git`, "-n", namespace).Execute()
+		o.Expect(imgErr).NotTo(o.HaveOccurred())
+		checkImageStreamQuota("ruby-ex-1", "4")
+
+		g.By("5. Starts a new build for the provided build config")
+		sbErr := oc.AsAdmin().WithoutNamespace().Run("start-build").Args("ruby-ex", "-n", namespace).Execute()
+		o.Expect(sbErr).NotTo(o.HaveOccurred())
+		checkImageStreamQuota("ruby-ex-2", "5")
 	})
 })
