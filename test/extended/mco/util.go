@@ -505,11 +505,25 @@ func isFIPSEnabledInClusterConfig(oc *exutil.CLI) bool {
 // preChecks executes some basic checks to make sure the the cluster is healthy enough to run MCO test cases
 func preChecks(oc *exutil.CLI) {
 	g.By("MCO Preconditions Checks")
+
+	allMCPs, err := NewMachineConfigPoolList(oc.AsAdmin()).GetAll()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the list of MachineConfigPools")
+
+	for _, pool := range allMCPs {
+		logger.Infof("Check that %s pool is not degraded", pool.GetName())
+		o.EventuallyWithOffset(1, pool.GetDegradedStatus, "3m", "20s").Should(o.Equal("False"), "%s pool is degraded:\n%s", pool.GetName(), pool.PrettyString())
+
+		logger.Infof("Check that %s pool is updated", pool.GetName())
+		o.EventuallyWithOffset(1, pool.GetUpdatedStatus, "5m", "20s").Should(o.Equal("True"), "%s pool is not updated:\n%s", pool.GetName(), pool.PrettyString())
+
+	}
+
+	logger.Infof("Check that all nodes are running")
 	nodes, err := NewNodeList(oc).GetAllLinux()
 	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "It is not possible to get the list of nodes in the cluster")
 
 	for _, node := range nodes {
-		o.ExpectWithOffset(1, node.IsReady()).To(o.BeTrue(), "Node %s is not Ready. We can't continue testing.", node.GetName())
+		o.EventuallyWithOffset(1, node.IsReady, "2m", "20s").Should(o.BeTrue(), "Node %s is not Ready. We can't continue testing.", node.GetName())
 	}
 	logger.Infof("End Of MCO Preconditions")
 }
