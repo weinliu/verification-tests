@@ -1045,6 +1045,49 @@ func assertKubeletLogLevel(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(waitErr, "KUBELET_LOG_LEVEL is not expected")
 }
 
+// this function create VPA(Vertical Pod Autoscaler) operator
+func createVpaOperator(oc *exutil.CLI) {
+	buildPruningBaseDir := exutil.FixturePath("testdata", "node")
+	operatorGroup := filepath.Join(buildPruningBaseDir, "vpa-operatorgroup.yaml")
+	subscription := filepath.Join(buildPruningBaseDir, "vpa-subscription.yaml")
+	nsOperator := filepath.Join(buildPruningBaseDir, "ns-vpa-operator.yaml")
+	operatorNamespace := "openshift-vertical-pod-autoscaler"
+
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", nsOperator).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroup).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	// checking subscription status
+	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "vertical-pod-autoscaler", "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(subState, "AtLatestKnown") == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription vertical-pod-autoscaler is not correct status"))
+
+	// checking csv status
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "vertical-pod-autoscaler", "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(csvName).NotTo(o.BeEmpty())
+	errCheck = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(csvState, "Succeeded") == 0 {
+			e2e.Logf("CSV check complete!!!")
+			return true, nil
+		}
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
+}
+
 // this function is for  updating the runtimeRequestTimeout parameter using KubeletConfig CR
 
 func runTimeTimeout(oc *exutil.CLI) {

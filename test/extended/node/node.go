@@ -802,3 +802,18 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		g.By("keda operator is installed successfully")
 	})
 })
+
+var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
+
+	defer g.GinkgoRecover()
+	var (
+		oc = exutil.NewCLI("vpa-operator", exutil.KubeConfigPath())
+	)
+	g.BeforeEach(func() {
+		createVpaOperator(oc)
+	})
+	// author: weinliu@redhat.com
+	g.It("ConnectedOnly-Author:weinliu-High-60991-VPA Install", func() {
+		g.By("VPA operator is installed successfully")
+	})
+})
