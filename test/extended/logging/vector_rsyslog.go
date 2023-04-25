@@ -96,7 +96,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clf.clear(oc)
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tcp://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:514")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterlogforwarder/instance", "-o", `jsonpath='{.spec.outputs[0].syslog.rfc}'`).Output()
+			clf.WaitForResourceToAppear(oc)
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", clf.namespace, "clusterlogforwarder/instance", "-o", `jsonpath='{.spec.outputs[0].syslog.rfc}'`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(output, "RFC5424")).Should(o.BeTrue())
 

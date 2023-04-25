@@ -16,7 +16,7 @@ objects:
         rfc: ${RFC}
         facility: ${FACILITY}
         severity: ${SEVERITY}
-        addLogSource: ${ADDLOGSOURCE}
+        addLogSource: ${{ADDLOGSOURCE}}
       url: ${URL}
     pipelines:
     - inputRefs:
