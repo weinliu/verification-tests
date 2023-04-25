@@ -38,7 +38,7 @@ export const operatorHubPage = {
       .type(name)
   },
   // pass operator name that matches the Title on UI
-  install: (name: string) => {
+  install: (name: string, metrics: boolean = false) => {
     cy.get('input[type="text"]').type(name + "{enter}")
     cy.get('[role="gridcell"]').first().within(noo => {
       cy.contains(name).should('exist').click()
@@ -52,6 +52,9 @@ export const operatorHubPage = {
     cy.get('.co-catalog-page__overlay-actions > .pf-c-button').should('have.attr', 'href').then((href) => {
       cy.visit(String(href))
     })
+    if(metrics){
+      cy.get('#enable-monitoring-checkbox').should('exist').check()
+    }
     cy.byTestID('Enable-radio-input').click()
     cy.byTestID('install-operator').trigger('click')
     cy.get('#operator-install-page').should('exist')

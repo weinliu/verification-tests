@@ -25,14 +25,9 @@ function getTopologyResourceScopeGroupURL(groups: string): string {
 // NETOBSERV-784 bug can fail some cases where some topoloigy tests may crash console.
 
 describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOBSERV'] }, function () {
-    // bug NETOBSERV-779 could fail some tests
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-        cy.adminCLI(`oc new-project ${project}`)
-
-        // deploy loki
-        cy.adminCLI(`oc create -f ./fixtures/netobserv/loki.yaml -n ${project}`)
         cy.switchPerspective('Administrator');
 
         // sepcify --env noo_catalog_src=upstream to run tests 
@@ -79,7 +74,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         // Advance options menu remains visible throughout the test
     })
 
-    it.only("should verify topology page features", function () {
+    it("should verify topology page features", function () {
         cy.byTestID('search-topology-element-input').should('exist')
         cy.contains('Display options').should('exist').click()
 
@@ -310,11 +305,6 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
     })
 
     after("after all tests are done", function () {
-        Operator.deleteFlowCollector()
-        Operator.uninstall()
-        cy.adminCLI('oc delete crd/flowcollectors.flows.netobserv.io')
-        cy.adminCLI(`oc delete project ${project}`)
-        cy.adminCLI('oc delete project openshift-netobserv-operator')
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.logout()
     })

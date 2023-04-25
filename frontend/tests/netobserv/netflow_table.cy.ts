@@ -1,20 +1,16 @@
 import { Operator } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
-import { netflowPage, genSelectors, colSelectors, querySumSelectors } from "../../views/netflow-page"
+import { netflowPage, genSelectors, colSelectors, querySumSelectors, histogramSelectors } from "../../views/netflow-page"
 
 // if project name is changed here, it also needs to be changed 
 // under fixture/flowcollector.ts and topology_view.spec.ts
 const project = 'netobserv'
 
-describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests', { tags: ['NETOBSERV'] }, function () {
+describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table view tests', { tags: ['NETOBSERV'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-        cy.adminCLI(`oc new-project ${project}`)
-
-        // deploy loki
-        cy.adminCLI(`oc create -f ./fixtures/netobserv/loki.yaml -n ${project}`)
         cy.switchPerspective('Administrator');
 
         // sepcify --env noo_release=upstream to run tests 
@@ -31,6 +27,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
         else {
             catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
         }
+
         Operator.install(catalogDisplayName)
         Operator.createFlowcollector(project)
     })
@@ -229,6 +226,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
 
             cy.byTestID('clear-all-filters-button').click()
             cy.get('div.custom-chip').should('not.exist')
+            cy.get('#reset-filters-button').should('exist').click()
         })
 
         it("should validate localstorage for plugin", { tags: ['e2e', 'admin'] }, function () {
@@ -272,15 +270,87 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
                 expect(settings['netflow-traffic-columns']).to.include('StartTime')
             })
         })
+
+        it("should verify histogram", function () {
+            cy.byTestID("show-histogram-button").should('exist').click()
+            cy.get("#refresh-dropdown button").should('be.disabled')
+            cy.get('#popover-netobserv-tour-popover-body').should('exist')
+            // close tour
+            cy.get("#popover-netobserv-tour-popover-header > div > div:nth-child(2) > button").should("exist").click()
+            // get current refreshed time
+            let lastRefresh = Cypress.$("#lastRefresh").text()
+
+            cy.get("#chart-histogram").should('exist')
+            // move histogram slider
+            cy.get("#chart-histogram  rect").should('exist').then(hist => {
+                const histWidth = cy.$$('#chart-histogram').prop("clientWidth")
+                const clientX = histWidth / 2
+                cy.wrap(hist).trigger('mousedown').trigger("mousemove", { clientX: clientX, clientY: 45 }).trigger("mouseup", { waitForAnimations: true })
+                cy.wait(5000)
+                let newRefresh = Cypress.$("#lastRefresh").text()
+                cy.wrap(lastRefresh).should("not.eq", newRefresh)
+                lastRefresh = newRefresh
+            })
+            // zoom out 
+            cy.get(histogramSelectors.zoomout).should('exist').then(zoomout => {
+                cy.wrap(zoomout).click()
+                cy.wait(5000)
+                let newRefresh = Cypress.$("#lastRefresh").text()
+                cy.wrap(lastRefresh).should("not.eq", newRefresh)
+                lastRefresh = newRefresh
+            })
+            // zoom in
+            cy.get(histogramSelectors.zoomin).should('exist').then(zoomin => {
+                cy.wrap(zoomin).click().trigger("mouseleave")
+                cy.wait(5000)
+                let newRefresh = Cypress.$("#lastRefresh").text()
+                cy.wrap(lastRefresh).should("not.eq", newRefresh)
+                lastRefresh = newRefresh
+            })
+
+            // time shift single right arrow
+            cy.get(histogramSelectors.singleRightShift).should('exist').then(sRightShift => {
+                cy.wrap(sRightShift).click()
+                cy.wait(5000)
+                let newRefresh = Cypress.$("#lastRefresh").text()
+                cy.wrap(lastRefresh).should("not.eq", newRefresh)
+                lastRefresh = newRefresh
+            })
+            // time shift double right arrow
+            cy.get(histogramSelectors.doubleRightShift).should('exist').then(dblRightShift => {
+                cy.wrap(dblRightShift).click()
+                cy.wait(5000)
+                let newRefresh = Cypress.$("#lastRefresh").text()
+                cy.wrap(lastRefresh).should("not.eq", newRefresh)
+                lastRefresh = newRefresh
+            })
+
+            // time shift single left right arrow
+            cy.get(histogramSelectors.singleLeftShift).should('exist').then(sLeftShift => {
+                cy.wrap(sLeftShift).click()
+                cy.wait(5000)
+                let newRefresh = Cypress.$("#lastRefresh").text()
+                cy.wrap(lastRefresh).should("not.eq", newRefresh)
+                lastRefresh = newRefresh
+            })
+            // time shift double left arrow
+            cy.get(histogramSelectors.doubleLeftShift).should('exist').then(dblLeftShift => {
+                cy.wrap(dblLeftShift).click()
+                cy.wait(5000)
+                let newRefresh = Cypress.$("#lastRefresh").text()
+                cy.wrap(lastRefresh).should("not.eq", newRefresh)
+                lastRefresh = newRefresh
+            })
+            // hide histogram
+            cy.byTestID("show-histogram-button").should('exist').click().then(() => {
+                cy.byTestID("time-range-dropdown-dropdown").should('exist').click()
+                cy.get("#5m").should("exist").click()
+                cy.byTestID("refresh-dropdown-dropdown").should('exist').should('not.be.disabled')
+            })
+        })
     })
 
     after("delete flowcollector and NetObs Operator", function () {
-        // uninstall operator and all resources 
-        Operator.deleteFlowCollector()
-        Operator.uninstall()
-        cy.adminCLI('oc delete crd/flowcollectors.flows.netobserv.io')
-        cy.adminCLI(`oc delete project ${project}`)
-        cy.adminCLI('oc delete project openshift-netobserv-operator')
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.logout()
 

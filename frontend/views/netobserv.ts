@@ -1,8 +1,6 @@
 import { PVC, LokiConfigMap, LokiDeployment, LokiService, flowcollector } from "../fixtures/flowcollector"
 import { OCCli, OCCreds } from "./cluster-cliops"
 import { operatorHubPage } from "../views/operator-hub-page"
-import { netflowPage, genSelectors } from "../views/netflow-page"
-
 
 export class NetObserv {
     creds: OCCreds
@@ -45,18 +43,24 @@ export const Operator = {
             return "NetObserv Operator"
         }
         else {
-            return "Network observability"
+            return "Network Observability"
         }
     },
     install: (catalogSourceDisplayName: string) => {
-        operatorHubPage.goTo()
-        const catalogSourceSelectorCheckbox = `input[title="${catalogSourceDisplayName}"]`
-        cy.get(catalogSourceSelectorCheckbox).check()
-        operatorHubPage.install(Operator.name())
+        cy.visit(`/k8s/ns/openshift-netobserv-operator/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+        //  don't install again if its already installed
+        cy.get("div.loading-box").should('be.visible').then(loading => {
+            if (Cypress.$('td[role="gridcell"]').length == 0) {
+                operatorHubPage.goTo()
+                const catalogSourceSelectorCheckbox = `input[title="${catalogSourceDisplayName}"]`
+                cy.get(catalogSourceSelectorCheckbox).check()
+                operatorHubPage.install(Operator.name(), true)
+            }
+        })
     },
     createFlowcollector: (namespace: string) => {
         // this assumes Loki is already deployed in netobserv NS
-        cy.visit('k8s/ns/openshift-operators/operators.coreos.com~v1alpha1~ClusterServiceVersion')
+        cy.visit('k8s/ns/openshift-netobserv-operator/operators.coreos.com~v1alpha1~ClusterServiceVersion')
         const selector = '[data-test-operator-row="' + Operator.name() + '"]'
         cy.get(selector).invoke('attr', 'href').then(href => {
             cy.visit(href)
@@ -65,23 +69,30 @@ export const Operator = {
         cy.contains('Flow Collector').invoke('attr', 'href').then(href => {
             cy.visit(href)
         })
+        // don't create flowcollector if already exists
+        cy.get('div.loading-box:nth-child(1)').should('be.visible').then(() => {
+            if (Cypress.$('td[role="gridcell"]').length == 0) {
+                cy.adminCLI(`oc new-project ${namespace}`)
+                // deploy loki
+                cy.adminCLI(`oc create -f ./fixtures/netobserv/loki.yaml -n ${namespace}`)
+                cy.byTestID('item-create').should('exist').click()
+                cy.get('#form').click() // bug in console where yaml view is default
+                cy.get('#root_spec_agent_accordion-toggle').click()
+                cy.get('#root_spec_agent_type').should('have.text', 'EBPF')
+                cy.get('#root_spec_agent_ebpf_accordion-toggle').click()
+                cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
+                cy.get('#root_spec_loki_accordion-toggle').click()
+                cy.get('#root_spec_loki_url').clear().type(`http://loki.${namespace}.svc:3100/`)
+                cy.get('#root_spec_namespace').clear().type(namespace)
+                cy.byTestID('create-dynamic-form').click()
+                cy.byTestID('status-text').should('exist').should('have.text', 'Ready')
 
-        cy.byTestID('item-create').should('exist').click()
-        cy.get('#form').click() // bug in console where yaml view is default
-        cy.get('#root_spec_agent_accordion-toggle').click()
-        cy.get('#root_spec_agent_type').should('have.text', 'EBPF')
-        cy.get('#root_spec_agent_ebpf_accordion-toggle').click()
-        cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
-        cy.get('#root_spec_loki_accordion-toggle').click()
-        cy.get('#root_spec_loki_url').clear().type(`http://loki.${namespace}.svc:3100/`)
-        cy.get('#root_spec_namespace').clear().type(namespace)
-        cy.byTestID('create-dynamic-form').click()
-        cy.byTestID('status-text').should('exist').should('have.text', 'Ready')
-
-        cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
-        // for OCP <= 4.12 refresh-web-console element doesn't exist, use toast-action instead.
-        // cy.byTestID('toast-action', { timeout: 60000 }).should('exist')
-        cy.reload(true)
+                cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
+                // for OCP <= 4.12 refresh-web-console element doesn't exist, use toast-action instead.
+                // cy.byTestID('toast-action', { timeout: 60000 }).should('exist')
+                cy.reload(true)
+            }
+        })
     },
     deleteFlowCollector: () => {
         cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')
