@@ -508,7 +508,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(log.Message == "ㄅㄉˇˋㄓˊ˙ㄚㄞㄢㄦㄆ 中国 883.317µs ā á ǎ à ō ó ▅ ▆ ▇ █ 々").Should(o.BeTrue())
 			o.Expect(log.OpenShift.ClusterID == clusterID).Should(o.BeTrue())
 			o.Expect(log.OpenShift.Sequence > 0).Should(o.BeTrue())
-			o.Expect(log.Kubernetes.NamespaceLabels["app_kubernetes_io/instance"] == "logging-apps-test").Should(o.BeTrue())
+			o.Expect(log.Kubernetes.NamespaceLabels["app_kubernetes_io_instance"] == "logging-apps-test").Should(o.BeTrue())
 			o.Expect(log.Kubernetes.NamespaceLabels["app_test"] == "test").Should(o.BeTrue())
 			infraLogs := searchDocByQuery(cloNS, podList.Items[0].Name, "infra-00", "")
 			o.Expect(infraLogs.Hits.DataHits[0].Source.OpenShift.ClusterID == clusterID).Should(o.BeTrue())
@@ -1190,6 +1190,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				"run":                          "test-51740",
 				"test":                         "test-logging-51740",
 			}
+
+			processedLabels := map[string]string{
+				"app_kubernetes_io_name":       "test",
+				"app_kubernetes_io_instance":   "functionaltest",
+				"app_kubernetes_io_version":    "123",
+				"app_kubernetes_io_component":  "thecomponent",
+				"app_kubernetes_io_part-of":    "clusterlogging",
+				"app_kubernetes_io_managed-by": "clusterloggingoperator",
+				"app_kubernetes_io_created-by": "anoperator",
+				"run":                          "test-51740",
+				"test":                         "test-logging-51740",
+			}
 			labelJSON, _ := json.Marshal(labels)
 			labelStr := string(labelJSON)
 			app := oc.Namespace()
@@ -1240,7 +1252,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				res := strings.Split(flatLabel, "=")
 				flatLabelsMap[res[0]] = res[1]
 			}
-			o.Expect(reflect.DeepEqual(labels, flatLabelsMap)).Should(o.BeTrue())
+			o.Expect(reflect.DeepEqual(processedLabels, flatLabelsMap)).Should(o.BeTrue())
 
 			g.By("check data in Loki")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -1259,7 +1271,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			dataInLoki, _ := lc.searchByNamespace("", app)
 			lokiLog := extractLogEntities(dataInLoki)
 			k8sLabelsInLoki := lokiLog[0].Kubernetes.Lables
-			o.Expect(reflect.DeepEqual(labels, k8sLabelsInLoki)).Should(o.BeTrue())
+			o.Expect(reflect.DeepEqual(processedLabels, k8sLabelsInLoki)).Should(o.BeTrue())
 			flatLabelsInLoki := lokiLog[0].Kubernetes.FlatLabels
 			o.Expect(len(flatLabelsInLoki) == 0).Should(o.BeTrue())
 		})
