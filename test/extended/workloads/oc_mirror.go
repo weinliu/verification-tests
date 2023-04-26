@@ -274,8 +274,15 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Mirroring selected operator and helm image")
 		defer os.RemoveAll("oc-mirror-workspace")
-		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", operatorConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--continue-on-error").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(30*time.Second, 150*time.Second, func() (bool, error) {
+			err1 := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", operatorConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--continue-on-error").Execute()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "oc-mirror command still falied")
 	})
 	g.It("NonHyperShiftHOST-Author:yinzhou-NonPreRelease-Medium-37372-High-40322-oc adm release extract pull from localregistry when given a localregistry image [Disruptive]", func() {
 		var imageDigest string
@@ -391,7 +398,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		ociFullConfig := filepath.Join(ocmirrorBaseDir, "config-oci-all.yaml")
 		defer os.RemoveAll("oc-mirror-workspace")
-		defer os.RemoveAll(".oc-mirror.log")
 		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFullConfig, "docker://"+serInfo.serviceName, "--use-oci-feature", "--dest-skip-tls", "--dry-run").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
