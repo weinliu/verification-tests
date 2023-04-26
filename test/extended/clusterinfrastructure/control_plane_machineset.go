@@ -119,6 +119,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "azure":
 			changeInstanceType = "Standard_D4s_v3"
 			backupInstanceType = "Standard_D8s_v3"
+			if getArchitectureType(oc) == "arm64" {
+				changeInstanceType = "Standard_D4ps_v5"
+				backupInstanceType = "Standard_D8ps_v5"
+			}
 			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}"
 			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`
 			patchstrSuffix = `"}}}}}}}`
@@ -221,6 +225,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "azure":
 			changeInstanceType = "Standard_D4s_v3"
 			backupInstanceType = "Standard_D8s_v3"
+			if getArchitectureType(oc) == "arm64" {
+				changeInstanceType = "Standard_D4ps_v5"
+				backupInstanceType = "Standard_D8ps_v5"
+			}
 			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}"
 			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`
 			patchstrSuffix = `"}}}}}}}`
