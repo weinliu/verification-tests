@@ -62,6 +62,11 @@ const (
 	ok               = true
 )
 
+type User struct {
+	Username string
+	Password string
+}
+
 // createAdmissionWebhookFromTemplate : Used for creating different admission hooks from pre-existing template.
 func (admissionHook *admissionWebhook) createAdmissionWebhookFromTemplate(oc *exutil.CLI) {
 	exutil.CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", admissionHook.template, "-p", "NAME="+admissionHook.name, "WEBHOOKNAME="+admissionHook.webhookname,
@@ -968,7 +973,7 @@ func setAuditProfile(oc *exutil.CLI, patchNamespace string, patch string) string
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(patchOutput, "patched") {
 		e2e.Logf("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after audit profile change")
-		g.By("5.1 Checking kube-apiserver operator should be in Progressing in 100 seconds")
+		g.By("Checking kube-apiserver operator should be in Progressing in 100 seconds")
 		err = waitCoBecomes(oc, "kube-apiserver", 100, expectedProgCoStatus)
 		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
 		e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
@@ -984,4 +989,79 @@ func setAuditProfile(oc *exutil.CLI, patchNamespace string, patch string) string
 		return patchOutput
 	}
 	return patchOutput
+}
+
+func getNewUser(oc *exutil.CLI, count int) ([]User, string, string) {
+	usersDirPath := "/tmp/" + exutil.GetRandomString()
+	usersHTpassFile := usersDirPath + "/htpasswd"
+	err := os.MkdirAll(usersDirPath, 0o755)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	htPassSecret, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("oauth/cluster", "-o", "jsonpath={.spec.identityProviders[0].htpasswd.fileData.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if htPassSecret == "" {
+		htPassSecret = "htpass-secret"
+		os.Create(usersHTpassFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-config", "secret", "generic", htPassSecret, "--from-file", "htpasswd="+usersHTpassFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("--type=json", "-p", `[{"op": "add", "path": "/spec/identityProviders", "value": [{"htpasswd": {"fileData": {"name": "htpass-secret"}}, "mappingMethod": "claim", "name": "htpasswd", "type": "HTPasswd"}]}]`, "oauth/cluster").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Checking authentication operator should be in Progressing in 180 seconds")
+		err = waitCoBecomes(oc, "authentication", 180, map[string]string{"Progressing": "True"})
+		exutil.AssertWaitPollNoErr(err, "authentication operator is not start progressing in 180 seconds")
+		e2e.Logf("Checking authentication operator should be Available in 600 seconds")
+		err = waitCoBecomes(oc, "authentication", 600, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
+		exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 600 seconds")
+	} else {
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", "openshift-config", "secret/"+htPassSecret, "--to", usersDirPath, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+
+	users := make([]User, count)
+
+	for i := 0; i < count; i++ {
+		// Generate new username and password
+		users[i].Username = fmt.Sprintf("testuser-%v-%v", i, exutil.GetRandomString())
+		users[i].Password = exutil.GetRandomString()
+
+		// Add new user to htpasswd file in the temp directory
+		cmd := fmt.Sprintf("htpasswd -b %v %v %v", usersHTpassFile, users[i].Username, users[i].Password)
+		err := exec.Command("bash", "-c", cmd).Run()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+
+	// Update htpass-secret with the modified htpasswd file
+	err = oc.AsAdmin().WithoutNamespace().Run("set").Args("-n", "openshift-config", "data", "secret/"+htPassSecret, "--from-file", "htpasswd="+usersHTpassFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	g.By("Checking authentication operator should be in Progressing in 180 seconds")
+	err = waitCoBecomes(oc, "authentication", 180, map[string]string{"Progressing": "True"})
+	exutil.AssertWaitPollNoErr(err, "authentication operator is not start progressing in 180 seconds")
+	e2e.Logf("Checking authentication operator should be Available in 600 seconds")
+	err = waitCoBecomes(oc, "authentication", 600, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
+	exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 600 seconds")
+
+	return users, usersHTpassFile, htPassSecret
+}
+
+func userCleanup(oc *exutil.CLI, users []User, usersHTpassFile string, htPassSecret string) {
+	defer os.RemoveAll(usersHTpassFile)
+	for _, user := range users {
+		// Add new user to htpasswd file in the temp directory
+		cmd := fmt.Sprintf("htpasswd -D %v %v", usersHTpassFile, user.Username)
+		err := exec.Command("bash", "-c", cmd).Run()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+
+	// Update htpass-secret with the modified htpasswd file
+	err := oc.AsAdmin().WithoutNamespace().Run("set").Args("-n", "openshift-config", "data", "secret/"+htPassSecret, "--from-file", "htpasswd="+usersHTpassFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	g.By("Checking authentication operator should be in Progressing in 180 seconds")
+	err = waitCoBecomes(oc, "authentication", 180, map[string]string{"Progressing": "True"})
+	exutil.AssertWaitPollNoErr(err, "authentication operator is not start progressing in 180 seconds")
+	e2e.Logf("Checking authentication operator should be Available in 600 seconds")
+	err = waitCoBecomes(oc, "authentication", 600, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
+	exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 600 seconds")
 }

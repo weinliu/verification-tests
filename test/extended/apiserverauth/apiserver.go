@@ -5014,4 +5014,82 @@ spec:
 		o.Expect(sbErr).NotTo(o.HaveOccurred())
 		checkImageStreamQuota("ruby-ex-2", "5")
 	})
+
+	// author: dpunia@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-Author:dpunia-High-43336-Support customRules list for by-group profiles to the audit configuration [Disruptive][Slow]", func() {
+		defer func() {
+			contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
+			o.Expect(contextErr).NotTo(o.HaveOccurred())
+			contextOutput, contextErr := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-context").Output()
+			o.Expect(contextErr).NotTo(o.HaveOccurred())
+			e2e.Logf("Context after rollack :: %v", contextOutput)
+
+			//Reset customRules profile to default one.
+			output := setAuditProfile(oc, "apiserver/cluster", `[{"op": "remove", "path": "/spec/audit"}]`)
+			if strings.Contains(output, "patched (no change)") {
+				e2e.Logf("Apiserver/cluster's audit profile not changed from the default values")
+			}
+		}()
+
+		// Function to get audit event logs for user login.
+		checkAuditEventCount := func(logGroup string, user string, pass string) int {
+			var count int
+			now := time.Now().UTC().Unix()
+			errUser := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", user, "-p", pass).NotShowInfo().Execute()
+			o.Expect(errUser).NotTo(o.HaveOccurred())
+
+			script := fmt.Sprintf(`rm /tmp/OCP-43336-*.json; for logpath in kube-apiserver oauth-apiserver openshift-apiserver; do sleep 5; grep -h "%v" /var/log/${logpath}/audit*.log | jq -c 'select (.requestReceivedTimestamp | .[0:19] + "Z" | fromdateiso8601 > %v)' >> /tmp/OCP-43336-$logpath.json; done; cat /tmp/OCP-43336-*.json`, logGroup, now)
+			contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
+			o.Expect(contextErr).NotTo(o.HaveOccurred())
+
+			e2e.Logf("Get all master nodes.")
+			masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+			o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+			o.Expect(masterNodes).NotTo(o.BeEmpty())
+			for _, masterNode := range masterNodes {
+				_, eventCount := checkAuditLogs(oc, script, masterNode, "openshift-kube-apiserver")
+				count += eventCount
+			}
+			return count
+		}
+
+		// Get user detail used by the test and cleanup after execution.
+		users, usersHTpassFile, htPassSecret := getNewUser(oc, 4)
+		defer userCleanup(oc, users, usersHTpassFile, htPassSecret)
+
+		g.By("1. Configure audit config for customRules system:authenticated:oauth profile as None and audit profile as Default")
+		patchCustomRules := `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "None"}],"profile": "Default"}}]`
+		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
+
+		g.By("2. Check audit events should be zero after login operation")
+		auditEventCount := checkAuditEventCount("system:authenticated:oauth", users[0].Username, users[0].Password)
+		o.Expect(auditEventCount).To(o.BeNumerically("==", 0))
+
+		g.By("3. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as Default")
+		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}],"profile": "Default"}}]`
+		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
+
+		g.By("4. Check audit events should be greater than zero after login operation")
+		auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[1].Username, users[1].Password)
+		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
+
+		g.By("5. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as None")
+		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}],"profile": "None"}}]`
+		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
+
+		g.By("6. Check audit events should be greater than zero after login operation")
+		auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[2].Username, users[2].Password)
+		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
+
+		g.By("7. Configure audit config for customRules system:authenticated:oauth profile as Default & system:serviceaccounts:openshift-console-operator as WriteRequestBodies and audit profile as None")
+		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}, {"group": "system:serviceaccounts:openshift-console-operator","profile": "WriteRequestBodies"}],"profile": "None"}}]`
+		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
+
+		g.By("8. Check audit events should be greater than zero after login operation")
+		auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[3].Username, users[3].Password)
+		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
+
+		auditEventCount = checkAuditEventCount("system:serviceaccounts:openshift-console-operator", users[3].Username, users[3].Password)
+		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
+	})
 })
