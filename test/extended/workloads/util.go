@@ -1240,3 +1240,51 @@ func getLatestMultiPayload() string {
 	pullSpec := gjson.Get(string(body), `pullSpec`).String()
 	return pullSpec
 }
+
+func (registry *registry) createregistrySpecifyName(oc *exutil.CLI, registryname string) serviceInfo {
+	err := oc.AsAdmin().Run("new-app").Args("--image", registry.dockerImage, "REGISTRY_STORAGE_DELETE_ENABLED=true", "--name", registryname, "-n", registry.namespace).Execute()
+	if err != nil {
+		e2e.Failf("Failed to create the registry server")
+	}
+	err = oc.AsAdmin().Run("set").Args("probe", "deploy/"+registryname, "--readiness", "--liveness", "--get-url="+"http://:5000/v2", "-n", registry.namespace).Execute()
+	if err != nil {
+		e2e.Failf("Failed to config the registry")
+	}
+	if ok := waitForAvailableRsRunning(oc, "deployment", registryname, registry.namespace, "1"); ok {
+		e2e.Logf("All pods are runnnig now\n")
+	} else {
+		e2e.Failf("private registry pod is not running even afer waiting for about 3 minutes")
+	}
+
+	e2e.Logf("Get the service info of the registry")
+	regSvcIP, err := oc.AsAdmin().Run("get").Args("svc", registryname, "-n", registry.namespace, "-o=jsonpath={.spec.clusterIP}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = oc.AsAdmin().Run("create").Args("route", "edge", registryname, "--service="+registryname, "-n", registry.namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	regSvcPort, err := oc.AsAdmin().Run("get").Args("svc", registryname, "-n", registry.namespace, "-o=jsonpath={.spec.ports[0].port}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	regRoute, err := oc.AsAdmin().Run("get").Args("route", registryname, "-n", registry.namespace, "-o=jsonpath={.spec.host}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Check the route of registry available")
+	ingressOpratorPod, err := oc.AsAdmin().Run("get").Args("pod", "-l", "name=ingress-operator", "-n", "openshift-ingress-operator", "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitErr := wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
+		err := oc.AsAdmin().Run("exec").Args("pod/"+ingressOpratorPod, "-n", "openshift-ingress-operator", "--", "curl", "-v", "https://"+regRoute, "-I", "-k").Execute()
+		if err != nil {
+			e2e.Logf("route is not yet resolving, retrying...")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the route is not reachable"))
+
+	regSvcURL := regSvcIP + ":" + regSvcPort
+	svc := serviceInfo{
+		serviceIP:   regSvcIP,
+		namespace:   registry.namespace,
+		servicePort: regSvcPort,
+		serviceURL:  regSvcURL,
+		serviceName: regRoute,
+	}
+	return svc
+}

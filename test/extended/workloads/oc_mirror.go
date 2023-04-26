@@ -558,4 +558,66 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			e2e.Failf("Should not find the prune log\n")
 		}
 	})
+
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-Medium-60611-Medium-62694-oc mirror for oci fbc catalogs should work fine with registries.conf[Serial]", func() {
+		g.By("Set registry config")
+		dirname := "/tmp/case60611"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, _, err = locateDockerCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Copy the registry as OCI FBC")
+		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.12 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			_, err := exec.Command("bash", "-c", command).Output()
+			if err != nil {
+				e2e.Logf("copy failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the skopeo copy still failed")
+
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		g.By("Trying to launch the first registry app")
+		serInfo := registry.createregistry(oc)
+		g.By("Trying to launch the second registry app")
+		secondSerInfo := registry.createregistrySpecifyName(oc, "secondregistry")
+		g.By("Prepare test data to first registry")
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads/case60611")
+		ociConfig := filepath.Join(ocmirrorBaseDir, "config.yaml")
+		registryConfig := filepath.Join(ocmirrorBaseDir, "registry.conf")
+		digestConfig := filepath.Join(ocmirrorBaseDir, "config-62694.yaml")
+		defer os.RemoveAll("oc-mirror-workspace")
+		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, serInfo.serviceName, registryConfig)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+serInfo.serviceName, "--use-oci-feature", "--dest-skip-tls", "--dry-run").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.WithoutNamespace().Run("image").Args("mirror", "-f", "oc-mirror-workspace/mapping.txt", "--insecure").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Use oc-mirror with registry.conf")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+secondSerInfo.serviceName, "--use-oci-feature", "--dest-skip-tls", "--oci-registries-config", registryConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Make sure data forword from local registry")
+		logOut, err := oc.Run("logs").Args("deploy/registry", "--tail=50").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(logOut, "http.request.method=GET")).To(o.BeTrue())
+
+		g.By("Checkpoint for 62694")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", digestConfig, "file://").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
+
 })
