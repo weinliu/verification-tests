@@ -12117,6 +12117,76 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	})
 
+	g.It("VMonly-Author:xzha-ConnectedOnly-Medium-62947-opm serve FBC should not fail if cachedir not provided", func() {
+		architecture.SkipNonAmd64SingleArch(oc)
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+		var (
+			olmDataDir        = exutil.FixturePath("testdata", "olm")
+			buildIndexBaseDir = filepath.Join(olmDataDir, "62947")
+			indexImageTag     = "quay.io/olmqe/nginxolm-operator-index:62947-" + getRandomString()
+			quayCLI           = container.NewQuayCLI()
+		)
+
+		g.By("Build and push the index image")
+		podmanCLI := container.NewPodmanCLI()
+		podmanCLI.ExecCommandPath = buildIndexBaseDir
+		dockerconfigjsonpath := filepath.Join(buildIndexBaseDir, ".dockerconfigjson")
+		defer exec.Command("rm", "-f", dockerconfigjsonpath).Output()
+		_, err := oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+buildIndexBaseDir).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		output, err := podmanCLI.Run("build").Args(".", "-f", "catalog.Dockerfile", "-t", indexImageTag, "--authfile", dockerconfigjsonpath).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully"))
+
+		defer quayCLI.DeleteTag(strings.Replace(indexImageTag, "quay.io/", "", 1))
+		output, err = podmanCLI.Run("push").Args(indexImageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+
+		g.By("create namespace and catsrc")
+		itName := g.CurrentSpecReport().FullText()
+		catsrcTemplate := filepath.Join(olmDataDir, "catalogsource-image.yaml")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		catsrc := catalogSourceDescription{
+			name:        "catsrc-62947",
+			namespace:   ns,
+			displayName: "Test Catsrc 62947 Operators",
+			publisher:   "Red Hat",
+			sourceType:  "grpc",
+			address:     indexImageTag,
+			template:    catsrcTemplate,
+		}
+		oc.SetupProject()
+		defer catsrc.delete(itName, dr)
+		catsrc.createWithCheck(oc, itName, dr)
+
+		g.By("check packagemanifest")
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--selector=catalog=catsrc-62947", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "Test Catsrc 62947 Operators") {
+				e2e.Logf(output)
+				return true, nil
+			}
+			e2e.Logf("packagemanifest of Test Catsrc 62947 Operators doesn't exist, go next round")
+			return false, nil
+		})
+		if err != nil {
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", ns, "-o=jsonpath={.status}").Output()
+			e2e.Logf(output)
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns).Output()
+			e2e.Logf(output)
+		}
+		exutil.AssertWaitPollNoErr(err, "packagemanifest of Test Catsrc 62947 Operators doesn't exist")
+
+		g.By("62947 SUCCESS")
+
+	})
+
 	// Test case: OCP-30835, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-30835-complete operator upgrades automatically based on SemVer setting default channel in opm alpha bundle build", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
