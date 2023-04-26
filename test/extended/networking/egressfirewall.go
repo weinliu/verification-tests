@@ -2,6 +2,7 @@ package networking
 
 import (
 	"fmt"
+	"net"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -967,5 +968,302 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.google.com --connect-timeout 5")
 			return err == nil
 		}, "120s", "10s").Should(o.BeTrue(), "Allow rule did not work correctly after restart!!")
+	})
+
+	// author: jechen@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-37774-Set EgressFirewall to limit the pod connection to specific CIDR ranges in different namespaces.", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall5-template.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		url1 := "www.salesforce.com" // used as Deny rule for first namespace
+		url2 := "www.ericsson.com"   // used as Deny rule for second namespace
+		url3 := "www.google.com"     // is not used as Deny rule in either namespace
+
+		g.By("1. nslookup obtain dns server ip for url1 and url2\n")
+		ips1, err := net.LookupIP(url1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ip address from nslookup for %v: %v", url1, ips1)
+
+		ips2, err := net.LookupIP(url2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ip address from lookup for %v: %v", url2, ips2)
+
+		ips3, err := net.LookupIP(url3)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ip address from lookup for %v: %v", url3, ips3)
+
+		ipStackType := checkIPStackType(oc)
+		e2e.Logf("\n ipStackType: %v\n", ipStackType)
+
+		var cidrValue1, cidrValue2, cidrValue3, cidrValue4, ip1, ip2, ip3, ip4, ip5, ip6 string
+		if ipStackType == "ipv6single" {
+			ip1 = ips1[len(ips1)-1].String()
+			ip2 = ips2[len(ips2)-1].String()
+			ip3 = ips3[len(ips3)-1].String()
+			cidrValue1 = ip1 + "/128"
+			cidrValue2 = ip2 + "/128"
+
+			ip4 = ips1[len(ips1)-2].String()
+			ip5 = ips2[len(ips2)-2].String()
+			ip6 = ips3[len(ips3)-2].String()
+			cidrValue3 = ip4 + "/128"
+			cidrValue4 = ip5 + "/128"
+		} else if ipStackType == "ipv4single" {
+			ip1 = ips1[0].String()
+			ip2 = ips2[0].String()
+			ip3 = ips3[0].String()
+			cidrValue1 = ip1 + "/32"
+			cidrValue2 = ip2 + "/32"
+
+			ip4 = ips1[1].String()
+			ip5 = ips2[1].String()
+			ip6 = ips3[1].String()
+			cidrValue3 = ip4 + "/32"
+			cidrValue4 = ip5 + "/32"
+		} else if ipStackType == "dualstack" {
+			// ip1, ip2, ip3 store IPv4 addresses of their hosts above
+			ip1 = ips1[0].String()
+			ip2 = ips2[0].String()
+			ip3 = ips3[0].String()
+			cidrValue1 = ip1 + "/32"
+			cidrValue2 = ip2 + "/32"
+
+			// ip4, ip5, ip6 store IPv4 addresses of their hosts above
+			ip4 = ips1[len(ips1)-1].String()
+			ip5 = ips2[len(ips2)-1].String()
+			ip6 = ips3[len(ips3)-1].String()
+			cidrValue3 = ip4 + "/128"
+			cidrValue4 = ip5 + "/128"
+		}
+		e2e.Logf("\n cidrValue1: %v,  cidrValue2: %v\n", cidrValue1, cidrValue2)
+		e2e.Logf("\n IP1: %v,  IP2: %v, IP3: %v\n", ip1, ip2, ip3)
+		e2e.Logf("\n cidrValue3: %v,  cidrValue4: %v\n", cidrValue3, cidrValue4)
+		e2e.Logf("\n IP4: %v,  IP5: %v, IP6: %v\n", ip4, ip5, ip6)
+
+		g.By("2. Obtain first namespace, create egressfirewall1 in it\n")
+		ns1 := oc.Namespace()
+
+		egressFW1 := egressFirewall5{
+			name:        "default",
+			namespace:   ns1,
+			ruletype1:   "Deny",
+			rulename1:   "cidrSelector",
+			rulevalue1:  cidrValue1,
+			protocol1:   "TCP",
+			portnumber1: 443,
+			ruletype2:   "Allow",
+			rulename2:   "dnsName",
+			rulevalue2:  "www.redhat.com",
+			protocol2:   "TCP",
+			portnumber2: 443,
+			template:    egressFWTemplate,
+		}
+
+		defer removeResource(oc, true, true, "egressfirewall", egressFW1.name, "-n", egressFW1.namespace)
+		egressFW1.createEgressFW5Object(oc)
+		efErr := waitEgressFirewallApplied(oc, egressFW1.name, ns1)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n egressfirewall is applied\n")
+
+		g.By("3. Create a test pod in first namespace")
+		pod1ns1 := pingPodResource{
+			name:      "hello-pod1",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1ns1.createPingPod(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1ns1.name, "-n", pod1ns1.namespace).Execute()
+		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+		g.By("4. Create a second namespace, and create egressfirewall2 in it\n")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		egressFW2 := egressFirewall5{
+			name:        "default",
+			namespace:   ns2,
+			ruletype1:   "Deny",
+			rulename1:   "cidrSelector",
+			rulevalue1:  cidrValue2,
+			protocol1:   "TCP",
+			portnumber1: 443,
+			ruletype2:   "Deny",
+			rulename2:   "dnsName",
+			rulevalue2:  "www.redhat.com",
+			protocol2:   "TCP",
+			portnumber2: 443,
+			template:    egressFWTemplate,
+		}
+
+		defer removeResource(oc, true, true, "egressfirewall", egressFW2.name, "-n", egressFW2.namespace)
+		egressFW2.createEgressFW5Object(oc)
+		efErr = waitEgressFirewallApplied(oc, egressFW2.name, ns2)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n egressfirewall is applied\n")
+
+		g.By("5. Create a test pod in second namespace")
+		pod2ns2 := pingPodResource{
+			name:      "hello-pod2",
+			namespace: ns2,
+			template:  pingPodTemplate,
+		}
+		pod2ns2.createPingPod(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod2ns2.name, "-n", pod2ns2.namespace).Execute()
+		waitPodReady(oc, pod2ns2.namespace, pod2ns2.name)
+
+		// for v4 single, test v4 CIDR first, then test it be replaced by another v4 CIDR
+		// for V6 single, test v4 CIDR first, then test it be replaced by another v4 CIDR
+		// for dualStack, test v4 CIDR first, then test it be replaced by another v6 CIDR
+		var curlCmd1, curlCmd2, curlCmd3, newCurlCmd1, newCurlCmd2, newCurlCmd3 string
+		if ipStackType == "ipv4single" {
+			curlCmd1 = "curl -I -4 -k https://" + url1 + " --resolve " + url1 + ":443:" + ip1 + " --connect-timeout 5"
+			curlCmd2 = "curl -I -4 -k https://" + url2 + " --resolve " + url2 + ":443:" + ip2 + " --connect-timeout 5"
+			curlCmd3 = "curl -I -4 -k https://" + url3 + " --resolve " + url3 + ":443:" + ip3 + " --connect-timeout 5"
+
+			newCurlCmd1 = "curl -I -4 -k https://" + url1 + " --resolve " + url1 + ":443:" + ip4 + " --connect-timeout 5"
+			newCurlCmd2 = "curl -I -4 -k https://" + url2 + " --resolve " + url2 + ":443:" + ip5 + " --connect-timeout 5"
+			newCurlCmd3 = "curl -I -4 -k https://" + url3 + " --resolve " + url3 + ":443:" + ip6 + " --connect-timeout 5"
+		} else if ipStackType == "ipv6single" {
+			curlCmd1 = "curl -I -6 -k https://" + url1 + " --resolve " + url1 + ":443:[" + ip1 + "] --connect-timeout 5"
+			curlCmd2 = "curl -I -6 -k https://" + url2 + " --resolve " + url2 + ":443:[" + ip2 + "] --connect-timeout 5"
+			curlCmd3 = "curl -I -6 -k https://" + url3 + " --resolve " + url3 + ":443:[" + ip3 + "] --connect-timeout 5"
+
+			newCurlCmd1 = "curl -I -6 -k https://" + url1 + " --resolve " + url1 + ":443:[" + ip4 + "] --connect-timeout 5"
+			newCurlCmd2 = "curl -I -6 -k https://" + url2 + " --resolve " + url2 + ":443:[" + ip5 + "] --connect-timeout 5"
+			newCurlCmd3 = "curl -I -6 -k https://" + url3 + " --resolve " + url3 + ":443:[" + ip6 + "] --connect-timeout 5"
+		} else if ipStackType == "dualstack" { // for dualstack, use v6 CIDR to replace v4 CIDR
+			curlCmd1 = "curl -I -4 -k https://" + url1 + " --resolve " + url1 + ":443:" + ip1 + " --connect-timeout 5"
+			curlCmd2 = "curl -I -4 -k https://" + url2 + " --resolve " + url2 + ":443:" + ip2 + " --connect-timeout 5"
+			curlCmd3 = "curl -I -4 -k https://" + url3 + " --resolve " + url3 + ":443:" + ip3 + " --connect-timeout 5"
+
+			newCurlCmd1 = "curl -I -6 -k https://" + url1 + " --resolve " + url1 + ":443:[" + ip4 + "] --connect-timeout 5"
+			newCurlCmd2 = "curl -I -6 -k https://" + url2 + " --resolve " + url2 + ":443:[" + ip5 + "] --connect-timeout 5"
+			newCurlCmd3 = "curl -I -6 -k https://" + url3 + " --resolve " + url3 + ":443:[" + ip6 + "] --connect-timeout 5"
+		}
+
+		g.By("\n6.1. Check deny rule of first namespace is blocked from test pod of first namespace because of the deny rule in first namespace\n")
+		_, err1 := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, curlCmd1)
+		o.Expect(err1).To(o.HaveOccurred(), "curl the deny rule of first namespace from first namespace failed")
+
+		g.By("\n6.2. Check deny rule of second namespce is allowed from test pod of first namespace, it is not affected by deny rile in second namespace\n")
+		_, err2 := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, curlCmd2)
+		o.Expect(err2).NotTo(o.HaveOccurred(), "curl the deny rule of second namespace from first namespace failed")
+
+		g.By("\n6.3. Check url3 is allowed from test pod of first namespace, it is not affected by either deny rule of two namespaces\n")
+		_, err3 := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, curlCmd3)
+		o.Expect(err3).NotTo(o.HaveOccurred(), "curl url3 from first namesapce failed")
+
+		g.By("\n7.1. Check deny rule of first namespace is allowed from test pod of second namespace, it is not affected by deny rule in first namespace\n")
+		_, err1 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, curlCmd1)
+		o.Expect(err1).NotTo(o.HaveOccurred(), "curl the deny rule of second namespace from first namespace failed")
+
+		g.By("\n7.2. Check deny rule in second namespace is blocked from test pod of second namespace because of the deny rule in second namespace\n")
+		_, err2 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, curlCmd2)
+		o.Expect(err2).To(o.HaveOccurred(), "curl the deny rule of second namespace from second namespace failed")
+
+		g.By("\n7.3. Check url3 is allowed from test pod of second namespace, it is not affected by either deny rule of two namespaces\n")
+		_, err3 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, curlCmd3)
+		o.Expect(err3).NotTo(o.HaveOccurred(), "curl url3 from first namesapce failed")
+
+		g.By("\n\n8. Replace CIDR of first rule of each egressfirewall with another CIDR \n\n")
+		change1 := "[{\"op\":\"replace\",\"path\":\"/spec/egress/0/to/cidrSelector\", \"value\":\"" + cidrValue3 + "\"}]"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns1, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", change1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		change2 := "[{\"op\":\"replace\",\"path\":\"/spec/egress/0/to/cidrSelector\", \"value\":\"" + cidrValue4 + "\"}]"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns2, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", change2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		newCidr, cidrErr := oc.AsAdmin().Run("get").Args("-n", ns1, "egressfirewall.k8s.ovn.org/default", "-o=jsonpath={.spec.egress[0].to.cidrSelector}").Output()
+		o.Expect(cidrErr).NotTo(o.HaveOccurred())
+		o.Expect(newCidr == cidrValue3).Should(o.BeTrue())
+		e2e.Logf("\n\nnew CIDR for first rule in first namespace %v is %v\n\n", ns1, newCidr)
+
+		newCidr, cidrErr = oc.AsAdmin().Run("get").Args("-n", ns2, "egressfirewall.k8s.ovn.org/default", "-o=jsonpath={.spec.egress[0].to.cidrSelector}").Output()
+		o.Expect(cidrErr).NotTo(o.HaveOccurred())
+		o.Expect(newCidr == cidrValue4).Should(o.BeTrue())
+		e2e.Logf("\n\nnew CIDR for first rule in second namespace %v is %v\n\n", ns2, newCidr)
+
+		g.By("\n\n Repeat curl tests with after CIDR update \n\n")
+		g.By("\n8.1 Curl deny rule of first namespace from first namespace\n")
+		_, err1 = e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, newCurlCmd1)
+		o.Expect(err1).To(o.HaveOccurred(), "curl the deny rule of first namespace from first namespace failed after CIDR update")
+
+		g.By("\n8.2 Curl deny rule of second namespace from first namespace\n")
+		_, err2 = e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, newCurlCmd2)
+		o.Expect(err2).NotTo(o.HaveOccurred(), "curl the deny rule of second namespace from first namespace failed after CIDR update")
+
+		g.By("\n8.3 Curl url with no rule from first namespace\n")
+		_, err3 = e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, newCurlCmd3)
+		o.Expect(err3).NotTo(o.HaveOccurred(), "curl url3 from first namesapce failed after CIDR update")
+
+		g.By("\n8.4 Curl deny rule of first namespace from second namespace\n")
+		_, err1 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, newCurlCmd1)
+		o.Expect(err1).NotTo(o.HaveOccurred(), "curl the deny rule of first namespace from second namespace failed after CIDR update")
+
+		g.By("\n8.5 Curl deny rule of second namespace from second namespace\n")
+		_, err2 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, newCurlCmd2)
+		o.Expect(err2).To(o.HaveOccurred(), "curl the deny rule of second namespace from second namespace failed after CIDR update")
+
+		g.By("\n8.6 Curl url with no rule from second namespace\n")
+		_, err3 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, newCurlCmd3)
+		o.Expect(err3).NotTo(o.HaveOccurred(), "curl url3 from second namesapce failed after CIDR update")
+
+		g.By("\n9. Change the Allow rule of egressfirewall of first namespace to be denied\n")
+		change := "[{\"op\":\"replace\",\"path\":\"/spec/egress/1/type\", \"value\":\"Deny\"}]"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns1, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", change).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// After second rule in first namespace is changed from Allow to Deny, access to www.redhat.com should be blocked from first namespace
+		o.Eventually(func() bool {
+			_, err := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, "curl -I -4 https://www.redhat.com --connect-timeout 5")
+			return err != nil
+		}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work as expected in first namespace after rule change for IPv4!!")
+
+		o.Eventually(func() bool {
+			_, err := e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, "curl -I -4 https://www.redhat.com --connect-timeout 5")
+			return err != nil
+		}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work as expected in second namespace for IPv4!!")
+
+		if ipStackType == "dualstack" {
+			o.Eventually(func() bool {
+				_, err := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, "curl -I -6  https://www.redhat.com --connect-timeout 5")
+				return err != nil
+			}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work as expected in first namespace after rule change for IPv6 !!")
+
+			o.Eventually(func() bool {
+				_, err := e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, "curl -I -6 https://www.redhat.com --connect-timeout 5")
+				return err != nil
+			}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work as expected in second namespace for IPv6!!")
+		}
+
+		g.By("\n10. Change the second Deny rule of egressfirewall of second namespace to be allowed\n")
+		change = "[{\"op\":\"replace\",\"path\":\"/spec/egress/1/type\", \"value\":\"Allow\"}]"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns2, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", change).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// After second rule in second namespace is changed from Deny to Allow, access to www.redhat.com should be still be blocked from first namespace but allowed from second namespace
+		o.Eventually(func() bool {
+			_, err := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, "curl -I -4 https://www.redhat.com/en --connect-timeout 5")
+			return err != nil
+		}, "120s", "10s").Should(o.BeTrue(), "After rule change, Allow rule in second namespace does not affect first namespace for IPv4!!")
+
+		o.Eventually(func() bool {
+			_, err := e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, "curl -I -4 https://www.redhat.com/en --connect-timeout 5")
+			return err == nil
+		}, "120s", "10s").Should(o.BeTrue(), "Allow rule did not work as expected in second namespace after rule change for IPv4!!")
+
+		if ipStackType == "dualstack" {
+			o.Eventually(func() bool {
+				_, err := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, "curl -I -6 https://www.redhat.com/en --connect-timeout 5")
+				return err != nil
+			}, "120s", "10s").Should(o.BeTrue(), "After rule change, Allow rule in second namespace does not affect first namespace for IPv6!!")
+
+			o.Eventually(func() bool {
+				_, err := e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, "curl -I -6 https://www.redhat.com/en --connect-timeout 5")
+				return err == nil
+			}, "120s", "10s").Should(o.BeTrue(), "Allow rule did not work as expected in second namespace after rule change for IPv6 !!")
+		}
 	})
 })
