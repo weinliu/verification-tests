@@ -3945,10 +3945,12 @@ EOF`, dcpolicyrepo)
 		tmpnamespace := "ocp-10350" + exutil.GetRandomString()
 		defer oc.AsAdmin().Run("delete").Args("ns", tmpnamespace, "--ignore-not-found").Execute()
 		g.By("1.) Create new namespace")
+		// Description of case: detail see PR https://github.com/openshift/cucushift/pull/9495
 		// We observe how long it takes to delete one Terminating namespace that has Terminating pod when cluster is under some load.
 		// Thus wait up to 200 seconds and also calculate the actual time so that when it FIRST hits > 200 seconds, we fail it IMMEDIATELY.
 		// Through this way we know the actual time DIRECTLY from the test logs, useful to file a performance bug with PRESENT evidence already, meanwhile the scenario will not cost really long time.
-		expectedOutageTime := 200
+		// Temporarily increase the assertion to 200 seconds to make it not often fail and to reduce debugging effort. Once the bug (Ref:2038780) is fixed, we will revert to 90.
+		expectedOutageTime := 90
 		for i := 0; i < 15; i++ {
 			var namespaceErr error
 			projectSuccTime := time.Now()
