@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"github.com/tidwall/gjson"
 
 	"github.com/blang/semver"
 	"github.com/google/go-github/github"
@@ -10167,6 +10168,23 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	})
 
+	// It will cover test case: OCP-62974, author: kuiwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:kuiwang-Medium-62974-olm sets invalid scc label on its namespaces", func() {
+		g.By("https://issues.redhat.com/browse/OCPBUGS-948 automated")
+		labelKey := "openshift\\.io\\/scc"
+
+		for _, ns := range []string{"openshift-operators", "openshift-operator-lifecycle-manager"} {
+			g.By("check label openshift.io/scc is empty on " + ns)
+			sccLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", ns, "-o=jsonpath={.metadata.labels}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(sccLabel).NotTo(o.BeEmpty())
+			e2e.Logf("the lables: %v", sccLabel)
+			gResult := gjson.Get(sccLabel, labelKey)
+			if gResult.Exists() && gResult.String() != "" {
+				o.Expect("the value of label openshift.io/scc").To(o.BeEmpty(), fmt.Sprintf("there is label openshift.io/scc on %v and is not empty on", ns))
+			}
+		}
+	})
 })
 
 var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func() {
