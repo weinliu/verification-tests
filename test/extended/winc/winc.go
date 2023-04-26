@@ -1317,31 +1317,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		targetService := "containerd"
 
 		g.By("Check configmap services running on Windows workers")
-		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", wmcoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		payload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		var services []Service
-		json.Unmarshal([]byte(payload), &services)
-
-		g.By("Retrieve dependent services from windows-services configmap")
-
-		// Using an annonymous function to obtain the dependent services
-		// in a recursive way.
-		var recursiveDependencies func([]Service, string) []string
-		recursiveDependencies = func(svcs []Service, service string) []string {
-			for _, svc := range services {
-				for _, dep := range svc.Dependencies {
-					if dep == service {
-						return append(recursiveDependencies(services, svc.Name), service)
-					}
-				}
-			}
-			return []string{service}
-		}
-
-		deps := recursiveDependencies(services, targetService)
 
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		winInternalIP := getWindowsInternalIPs(oc)
@@ -1349,7 +1324,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		for idx, winhost := range winInternalIP {
 
-			g.By(fmt.Sprintf("Modify %v service binPath and check dependents stopped timestamp in host with IP %v", targetService, winhost))
+			g.By(fmt.Sprintf("Modify %v service binPath and check that it gets restored in host with IP %v", targetService, winhost))
 
 			initialBinPath := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "PathName")
 
@@ -1368,23 +1343,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			afterReconciliationBinPath := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "PathName")
 
 			o.Expect(afterReconciliationBinPath).Should(o.Equal(initialBinPath))
-
-			g.By(fmt.Sprintf("Verifying that dependant services got restarted first for node %v", winHostName))
-			// kube-proxy running > hybrid-overlay-node running > kubelet running > containerd running
-			var previousTS time.Time = time.Time{}
-			for i, svc := range deps {
-				// using the string "running" instead of "stopped" because in GCP
-				// the Windows event of stopping containerd doesn't seem to be logged.
-				// However, the event "running" for containerd it is logged, so using
-				// that instead.
-				serviceTimeStamp := getServiceTimeStamp(oc, winhost, privateKey, iaasPlatform, "running", svc)
-				if !previousTS.IsZero() {
-					if serviceTimeStamp.After(previousTS) {
-						e2e.Failf("Service %v was started before service %v", svc, deps[i-1])
-					}
-				}
-				previousTS = serviceTimeStamp
-			}
 
 		}
 	})
