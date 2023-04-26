@@ -497,6 +497,32 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				g.By("able to see the metrics")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version'", token, "prometheus-example-app", 2*uwmLoadTime)
 			})
+
+			// author: tagao@redhat.com
+			g.It("Author:tagao-Medium-44805-Expose tenancy-aware labels and values of api v1 label endpoints for Thanos query", func() {
+				var (
+					rolebinding = filepath.Join(monitoringBaseDir, "rolebinding.yaml")
+				)
+				g.By("add RoleBinding to specific user")
+				createResourceFromYaml(oc, ns, rolebinding)
+				//oc -n ns1 patch RoleBinding view -p '{"subjects":[{"apiGroup":"rbac.authorization.k8s.io","kind":"User","name":"${user}"}]}'
+				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("RoleBinding", "view", "-p", `{"subjects":[{"apiGroup":"rbac.authorization.k8s.io","kind":"User","name":"`+oc.Username()+`"}]}`, "--type=merge", "-n", ns).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				g.By("get user API token")
+				token := oc.UserConfig().BearerToken
+
+				g.By("check namespace labels") //There are many labels, only check the few ones
+				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/labels?namespace="+oc.Namespace()+"\"", token, `"__name__"`, 2*uwmLoadTime)
+				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/labels?namespace="+oc.Namespace()+"\"", token, `"version"`, 2*uwmLoadTime)
+				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/labels?namespace="+oc.Namespace()+"\"", token, `"cluster_ip"`, 2*uwmLoadTime)
+
+				g.By("show label value")
+				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/label/version/values?namespace="+oc.Namespace()+"\"", token, `"v0.4.1"`, 2*uwmLoadTime)
+
+				g.By("check with a specific series")
+				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/series?match[]=version&namespace="+oc.Namespace()+"\"", token, `"service":"prometheus-example-app"`, 2*uwmLoadTime)
+			})
 		})
 
 		// author: hongyli@redhat.com
