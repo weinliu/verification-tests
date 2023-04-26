@@ -4629,6 +4629,40 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 		newCheck("expect", asAdmin, withoutNamespace, compare, olmVersion, ok, []string{"clusteroperator", fmt.Sprintf("-o=jsonpath={.items[?(@.metadata.name==\"%s\")].status.versions[?(@.name==\"operator\")].version}", olmClusterOperatorName)}).check(oc)
 	})
 
+	g.It("NonHyperShiftHOST-Author:xzha-Medium-62945-OLM version rule is clear", func() {
+		g.By("get the cluster version")
+		clusterVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
+		o.Expect(clusterVersion).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterVersionShort := strings.Split(clusterVersion, "-")[0]
+		e2e.Logf("cluster verison is %s", clusterVersionShort)
+
+		subPods := []string{"catalog-operator", "olm-operator", "packageserver"}
+		for _, v := range subPods {
+			podName, err := oc.AsAdmin().Run("get").Args("-n", "openshift-operator-lifecycle-manager", "pods", "-l", fmt.Sprintf("app=%s", v), "-o=jsonpath={.items[0].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("get pod name:%s", podName)
+
+			g.By(fmt.Sprintf("get olm version from the %s pod", v))
+			commands := []string{"-n", "openshift-operator-lifecycle-manager", "exec", podName, "--", "olm", "--version"}
+			output, err := oc.AsAdmin().Run(commands...).Args().Output()
+			o.Expect(output).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+			olmVersionString := strings.Split(output, "\n")[0]
+			olmVersion := strings.TrimSpace(strings.Split(olmVersionString, ":")[1])
+			e2e.Logf("olm verison is %s", olmVersion)
+			o.Expect(strings.HasPrefix(olmVersion, clusterVersionShort)).To(o.BeTrue())
+		}
+
+		clusterOperators := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog"}
+		for _, co := range clusterOperators {
+			version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", co, `-o=jsonpath={.status.versions[?(@.name=="operator-lifecycle-manager")].version}`).Output()
+			e2e.Logf("verison is %s", version)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.HasPrefix(version, clusterVersionShort)).To(o.BeTrue())
+		}
+	})
+
 	// It will cover test case: OCP-29775 and OCP-29786, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-29775-Medium-29786-as oc user on linux to mirror catalog image", func() {
 		var (
