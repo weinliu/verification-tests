@@ -954,13 +954,15 @@ func (ck checkDescription) checkWithoutAssert(oc *exutil.CLI) error {
 type checkList []checkDescription
 
 // the method is to add one check
-func (cl checkList) add(ck checkDescription) {
+func (cl checkList) add(ck checkDescription) checkList {
 	cl = append(cl, ck)
+	return cl
 }
 
 // the method is to make check list empty.
-func (cl checkList) empty() {
+func (cl checkList) empty() checkList {
 	cl = cl[0:0]
+	return cl
 }
 
 // the method is to execute all the check in parallel.
@@ -1484,4 +1486,23 @@ func isSNOCluster(oc *exutil.CLI) bool {
 		return true
 	}
 	return false
+}
+
+func assertOrCheckMCP(oc *exutil.CLI, mcp string, is int, dm int, skip bool) {
+	var machineCount string
+	err := wait.Poll(time.Duration(is)*time.Second, time.Duration(dm)*time.Minute, func() (bool, error) {
+		machineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcp, "-o=jsonpath={.status.machineCount}{\" \"}{.status.readyMachineCount}{\" \"}{.status.unavailableMachineCount}{\" \"}{.status.degradedMachineCount}").Output()
+		indexCount := strings.Fields(machineCount)
+		if strings.Compare(indexCount[0], indexCount[1]) == 0 && strings.Compare(indexCount[2], "0") == 0 && strings.Compare(indexCount[3], "0") == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	e2e.Logf("MachineCount:ReadyMachineCountunavailableMachineCountdegradedMachineCount: %v", machineCount)
+	if err != nil {
+		if skip {
+			g.Skip(fmt.Sprintf("the mcp %v is not correct status, so skip it", machineCount))
+		}
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("macineconfigpool %v update failed", mcp))
+	}
 }
