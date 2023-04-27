@@ -37,8 +37,9 @@ func getCredentialFromCluster(oc *exutil.CLI) {
 	switch cloudProvider {
 	case "aws":
 		credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
-		// Disconnected and STS type test clusters
-		if strings.Contains(interfaceToString(err), "not found") {
+		// Disconnected, STS and CCO mode mint type test clusters get credential from storage csi driver
+		if gjson.Get(credential, `metadata.annotations.cloudcredential\.openshift\.io/mode`).String() == "mint" || strings.Contains(interfaceToString(err), "not found") {
+			e2e.Logf("Get credential from storage csi driver")
 			credential, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/ebs-cloud-credentials", "-n", "openshift-cluster-csi-drivers", "-o", "json").Output()
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
