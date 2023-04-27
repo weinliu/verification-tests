@@ -338,21 +338,29 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsBefore)
 		waitForClusterStable(oc)
 
-		g.By("Add the failureDomain back to check OnDelete strategy rebalance the machines")
-		availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, newMachineNameRolledWithFailureDomain, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		labelsAfter = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
-		oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		g.By("Check if it will rebalance the machines")
+		availabilityZones = getCPMSAvailabilityZones(oc, iaasPlatform)
+		if len(availabilityZones) >= 3 {
+			e2e.Logf("availabilityZones>=3 means the three master machines are in different zones now, it will not rebalance when adding new zone")
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+			o.Expect(checkIfCPMSCoIsStable(oc)).To(o.BeTrue())
+		} else {
+			g.By("Add the failureDomain back to check OnDelete strategy rebalance the machines")
+			availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, newMachineNameRolledWithFailureDomain, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			labelsAfter = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
 
-		g.By("Delete the new created master machine ")
-		exutil.DeleteMachine(oc, newMachineNameRolledWithFailureDomain)
+			g.By("Delete the new created master machine ")
+			exutil.DeleteMachine(oc, newMachineNameRolledWithFailureDomain)
 
-		g.By("Check new master will be created in new added zone and old master will be deleted")
-		newMachineNameRolledBalancedFailureDomain := exutil.WaitForMachinesRunningByLabel(oc, 1, labelsBefore)[0]
-		e2e.Logf("updatedMachineName:%s", newMachineNameRolledBalancedFailureDomain)
-		suffix = getMachineSuffix(oc, newMachineNameRolledBalancedFailureDomain)
-		exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsAfter)
-		waitForClusterStable(oc)
+			g.By("Check new master will be created in new added zone and old master will be deleted")
+			newMachineNameRolledBalancedFailureDomain := exutil.WaitForMachinesRunningByLabel(oc, 1, labelsBefore)[0]
+			e2e.Logf("updatedMachineName:%s", newMachineNameRolledBalancedFailureDomain)
+			suffix = getMachineSuffix(oc, newMachineNameRolledBalancedFailureDomain)
+			exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsAfter)
+			waitForClusterStable(oc)
+		}
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 
@@ -544,16 +552,24 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsBefore)
 		waitForClusterStable(oc)
 
-		g.By("Add the failureDomain back to check RollingUpdate strategy rebalance the machines")
-		availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, newMachineNameRolledWithFailureDomain, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		labelsAfter = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
-		oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
-		newMachineNameRolledBalancedFailureDomain := exutil.WaitForMachinesRunningByLabel(oc, 1, labelsBefore)[0]
-		e2e.Logf("updatedMachineName:%s", newMachineNameRolledBalancedFailureDomain)
-		suffix = getMachineSuffix(oc, newMachineNameRolledBalancedFailureDomain)
-		exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsAfter)
-		waitForClusterStable(oc)
+		g.By("Check if it will rebalance the machines")
+		availabilityZones = getCPMSAvailabilityZones(oc, iaasPlatform)
+		if len(availabilityZones) >= 3 {
+			e2e.Logf("availabilityZones>=3 means the three master machines are in different zones now, it will not rebalance when adding new zone")
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+			o.Expect(checkIfCPMSCoIsStable(oc)).To(o.BeTrue())
+		} else {
+			g.By("Add the failureDomain back to check RollingUpdate strategy rebalance the machines")
+			availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, newMachineNameRolledWithFailureDomain, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			labelsAfter = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+			newMachineNameRolledBalancedFailureDomain := exutil.WaitForMachinesRunningByLabel(oc, 1, labelsBefore)[0]
+			e2e.Logf("updatedMachineName:%s", newMachineNameRolledBalancedFailureDomain)
+			suffix = getMachineSuffix(oc, newMachineNameRolledBalancedFailureDomain)
+			exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsAfter)
+			waitForClusterStable(oc)
+		}
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 })

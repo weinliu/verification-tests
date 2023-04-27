@@ -130,6 +130,9 @@ func getZoneAndMachineFromCPMSZones(oc *exutil.CLI, availabilityZones []string) 
 	for key, value = range availabilityZones {
 		labels := "machine.openshift.io/zone=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
 		machineNamesStr, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		if machineNamesStr == "" {
+			continue
+		}
 		machineNames := strings.Split(machineNamesStr, " ")
 		machineName = machineNames[0]
 		number := len(machineNames)
@@ -259,6 +262,18 @@ func skipForClusterNotStable(oc *exutil.CLI) {
 	if !(strings.Contains(authenticationState, "TrueFalseFalse") && strings.Contains(etcdState, "TrueFalseFalse") && strings.Contains(kubeapiserverState, "TrueFalseFalse") && strings.Contains(openshiftapiserverState, "TrueFalseFalse")) {
 		g.Skip("Skip for cluster is not stable!")
 	}
+}
+
+// checkIfCPMSCoIsStable check if some replicas need update, if no replicas need update, return true, else return false
+func checkIfCPMSCoIsStable(oc *exutil.CLI) bool {
+	cpmsState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(cpmsState, "TrueFalseFalse") {
+		return true
+	}
+	message, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set").Output()
+	e2e.Logf("%v", message)
+	return false
 }
 
 // waitMasterNodeReady wait all master node ready
