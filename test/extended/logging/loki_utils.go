@@ -71,24 +71,6 @@ func getAWSCredentialFromCluster(oc *exutil.CLI) s3Credential {
 	return cred
 }
 
-func getODFCreds(oc *exutil.CLI) s3Credential {
-	dirname := "/tmp/" + oc.Namespace() + "-creds"
-	defer os.RemoveAll(dirname)
-	err := os.MkdirAll(dirname, 0777)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/noobaa-admin", "-n", "openshift-storage", "--confirm", "--to="+dirname).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	accessKeyID, err := os.ReadFile(dirname + "/AWS_ACCESS_KEY_ID")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	secretAccessKey, err := os.ReadFile(dirname + "/AWS_SECRET_ACCESS_KEY")
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	endpoint := "http://" + getRouteAddress(oc, "openshift-storage", "s3")
-	return s3Credential{Endpoint: endpoint, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
-}
-
 func getMinIOCreds(oc *exutil.CLI, ns string) s3Credential {
 	dirname := "/tmp/" + oc.Namespace() + "-creds"
 	defer os.RemoveAll(dirname)
@@ -240,7 +222,7 @@ func createSecretForODFBucket(oc *exutil.CLI, bucketName, secretName, ns string)
 	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/noobaa-admin", "-n", "openshift-storage", "--confirm", "--to="+dirname).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	endpoint := "http://s3.openshift-storage.svc"
+	endpoint := "http://s3.openshift-storage.svc:80"
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/AWS_ACCESS_KEY_ID", "--from-file=access_key_secret="+dirname+"/AWS_SECRET_ACCESS_KEY", "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
 }
 
@@ -315,20 +297,50 @@ func createSecretForSwiftContainer(oc *exutil.CLI, containerName, secretName, ns
 // checkODF check if the ODF is installed in the cluster or not
 // here only checks the sc/ocs-storagecluster-ceph-rbd and svc/s3
 func checkODF(oc *exutil.CLI) bool {
-	scFound, svcFound := false, false
+	svcFound := false
+	expectedSC := []string{"openshift-storage.noobaa.io", "ocs-storagecluster-ceph-rbd", "ocs-storagecluster-cephfs"}
+	var scInCluster []string
 	scs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(context.Background(), metav1.ListOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
+
 	for _, sc := range scs.Items {
-		if sc.Name == "ocs-storagecluster-ceph-rbd" {
-			scFound = true
-			break
+		scInCluster = append(scInCluster, sc.Name)
+	}
+
+	for _, s := range expectedSC {
+		if !contain(scInCluster, s) {
+			return false
 		}
 	}
+
 	_, err = oc.AdminKubeClient().CoreV1().Services("openshift-storage").Get(context.Background(), "s3", metav1.GetOptions{})
 	if err == nil {
 		svcFound = true
 	}
-	return scFound && svcFound
+	return svcFound
+}
+
+func createObjectBucketClaim(oc *exutil.CLI, ns, name string) error {
+	template := exutil.FixturePath("testdata", "logging", "odf", "objectBucketClaim.yaml")
+	obc := resource{"objectbucketclaims", name, ns}
+
+	err := obc.applyFromTemplate(oc, "-f", template, "-n", ns, "-p", "NAME="+name, "NAMESPACE="+ns)
+	if err != nil {
+		return err
+	}
+	obc.WaitForResourceToAppear(oc)
+	resource{"objectbuckets", "obc-" + ns + "-" + name, ns}.WaitForResourceToAppear(oc)
+	obc.assertResourceStatus(oc, "jsonpath={.status.phase}", "Bound")
+	return nil
+}
+
+func deleteObjectBucketClaim(oc *exutil.CLI, ns, name string) error {
+	obc := resource{"objectbucketclaims", name, ns}
+	err := obc.clear(oc)
+	if err != nil {
+		return err
+	}
+	return obc.WaitUntilResourceIsGone(oc)
 }
 
 // checkMinIO
@@ -452,9 +464,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 		}
 	case "odf":
 		{
-			cred := getODFCreds(oc)
-			client := newS3Client(oc, cred)
-			err = createS3Bucket(client, l.bucketName, cred)
+			err = createObjectBucketClaim(oc, l.namespace, l.bucketName)
 			if err != nil {
 				return err
 			}
@@ -540,9 +550,7 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 		}
 	case "odf":
 		{
-			cred := getODFCreds(oc)
-			client := newS3Client(oc, cred)
-			err = deleteS3Bucket(client, l.bucketName)
+			err = deleteObjectBucketClaim(oc, l.namespace, l.bucketName)
 		}
 	case "minio":
 		{
@@ -989,7 +997,7 @@ func compareClusterResources(oc *exutil.CLI, cpu, memory string) bool {
 // validateInfraAndResourcesForLoki checks cluster remaning resources and platform type
 // validateInfraAndResourcesForLoki checks cluster remaning resources and platform type
 // supportedPlatforms the platform types which the case can be executed on, if it's empty, then skip this check
-func validateInfraAndResourcesForLoki(oc *exutil.CLI, supportedPlatforms []string, reqMemory, reqCPU string) bool {
+func validateInfraAndResourcesForLoki(oc *exutil.CLI, reqMemory, reqCPU string, supportedPlatforms ...string) bool {
 	currentPlatform := exutil.CheckPlatform(oc)
 	if currentPlatform == "aws" {
 		// skip the case on aws sts clusters

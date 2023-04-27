@@ -800,7 +800,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		if len(getStorageType(oc)) == 0 {
 			g.Skip("Current cluster doesn't have a proper object storage for this test!")
 		}
-		if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
+		if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
 			g.Skip("The cluster doesn't have sufficient CPU/Memory for this test!")
 		}
 		clo := SubscriptionObjects{
@@ -870,8 +870,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		g.By("Deploy lokistack")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-		ls := lokiStack{"loki-53407", "openshift-logging", "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53407-" + getInfrastructureName(oc), lokiStackTemplate}
+		ls := lokiStack{
+			name:          "lok-53407",
+			namespace:     "openshift-logging",
+			tSize:         "1x.extra-small",
+			storageType:   getStorageType(oc),
+			storageSecret: "storage-secret-53407",
+			storageClass:  sc,
+			bucketName:    "logging-loki-53407-" + getInfrastructureName(oc),
+			template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+		}
 		defer ls.removeObjectStorage(oc)
 		err = ls.prepareResourcesForLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -988,8 +996,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		g.By("Deploy lokistack")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-		ls := lokiStack{"loki-53404", "openshift-logging", "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53404-" + getInfrastructureName(oc), lokiStackTemplate}
+		ls := lokiStack{
+			name:          "lok-53404",
+			namespace:     "openshift-logging",
+			tSize:         "1x.extra-small",
+			storageType:   getStorageType(oc),
+			storageSecret: "storage-secret-53404",
+			storageClass:  sc,
+			bucketName:    "logging-loki-53404-" + getInfrastructureName(oc),
+			template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+		}
 		defer ls.removeObjectStorage(oc)
 		err = ls.prepareResourcesForLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())

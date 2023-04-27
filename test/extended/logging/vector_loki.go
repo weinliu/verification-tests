@@ -288,13 +288,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("vector-lokistack", exutil.KubeConfigPath())
+	var (
+		oc    = exutil.NewCLI("vector-lokistack", exutil.KubeConfigPath())
+		s, sc string
+	)
 
 	g.Context("test forward logs to lokistack with vector", func() {
 		g.BeforeEach(func() {
-			s := getStorageType(oc)
+			s = getStorageType(oc)
 			if len(s) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
+			sc, _ = getStorageClassName(oc)
+			if len(sc) == 0 {
+				g.Skip("The cluster doesn't have a storage class for this test!")
+			}
+			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
 			CLO := SubscriptionObjects{
@@ -319,9 +329,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Medium-48646-High-49486-Deploy lokistack under different namespace and Vector Forward logs to LokiStack using CLF with gateway[Serial]", func() {
-			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
-			}
 			var (
 				cloNS       = "openshift-logging"
 				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
@@ -330,8 +337,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("deploy loki stack")
 			oc.SetupProject()
 			lokiNS := oc.Namespace()
@@ -339,7 +344,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				name:          "loki-49486",
 				namespace:     lokiNS,
 				tSize:         "1x.extra-small",
-				storageType:   getStorageType(oc),
+				storageType:   s,
 				storageSecret: "storage-49486",
 				storageClass:  sc,
 				bucketName:    "logging-loki-49486-" + getInfrastructureName(oc),
@@ -400,11 +405,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 	})
+
 	g.Context("ClusterLogging and Loki Integration tests with vector", func() {
 		g.BeforeEach(func() {
-			s := getStorageType(oc)
+			s = getStorageType(oc)
 			if len(s) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
+			sc, _ = getStorageClassName(oc)
+			if len(sc) == 0 {
+				g.Skip("The cluster doesn't have a storage class for this test!")
+			}
+			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
 			CLO := SubscriptionObjects{
@@ -428,10 +441,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53128-CLO Loki Integration-Verify that by default only app and infra logs are sent to Loki (vector)[Serial]", func() {
-
-			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
-			}
 			var (
 				cloNS       = "openshift-logging"
 				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
@@ -440,12 +449,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{
+				name:          "loki-53128",
+				namespace:     cloNS,
+				tSize:         "1x.extra-small",
+				storageType:   s,
+				storageSecret: "storage-secret-53128",
+				storageClass:  sc,
+				bucketName:    "logging-loki-53128-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -504,10 +519,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53146-Medium-54663-CLO Loki Integration-CLF works when send log to default-- vector[Serial]", func() {
-
-			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
-			}
 			var (
 				cloNS       = "openshift-logging"
 				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
@@ -516,12 +527,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53146-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{
+				name:          "loki-53146",
+				namespace:     cloNS,
+				tSize:         "1x.extra-small",
+				storageType:   s,
+				storageSecret: "storage-secret-53146",
+				storageClass:  sc,
+				bucketName:    "logging-loki-53146-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -587,9 +604,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-High-57063-Forward app logs to Loki with namespace selectors (vector)[Serial]", func() {
 			cloNS := "openshift-logging"
-			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
-			}
 			g.By("Creating 2 applications..")
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 
@@ -602,12 +616,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53145-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{
+				name:          "loki-57063",
+				namespace:     cloNS,
+				tSize:         "1x.extra-small",
+				storageType:   s,
+				storageSecret: "storage-secret-57063",
+				storageClass:  sc,
+				bucketName:    "logging-loki-57063-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -869,16 +889,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("lokistack-tlssecurity", exutil.KubeConfigPath())
+	var (
+		oc    = exutil.NewCLI("lokistack-tlssecurity", exutil.KubeConfigPath())
+		s, sc string
+	)
 
 	g.Context("ClusterLogging LokiStack tlsSecurityProfile tests", func() {
 		g.BeforeEach(func() {
-			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
-			}
-			s := getStorageType(oc)
+			s = getStorageType(oc)
 			if len(s) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
+			sc, _ = getStorageClassName(oc)
+			if len(sc) == 0 {
+				g.Skip("The cluster doesn't have a storage class for this test!")
+			}
+			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
 			CLO := SubscriptionObjects{
@@ -924,10 +951,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(er).NotTo(o.HaveOccurred())
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{
+				name:          "loki-54523",
+				namespace:     cloNS,
+				tSize:         "1x.extra-small",
+				storageType:   s,
+				storageSecret: "storage-secret-54523",
+				storageClass:  sc,
+				bucketName:    "logging-loki-54523-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1034,10 +1068,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(er).NotTo(o.HaveOccurred())
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{
+				name:          "loki-54525",
+				namespace:     cloNS,
+				tSize:         "1x.extra-small",
+				storageType:   s,
+				storageSecret: "storage-secret-54525",
+				storageClass:  sc,
+				bucketName:    "logging-loki-54525-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1144,10 +1185,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(er).NotTo(o.HaveOccurred())
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{
+				name:          "loki-54526",
+				namespace:     cloNS,
+				tSize:         "1x.extra-small",
+				storageType:   s,
+				storageSecret: "storage-secret-54526",
+				storageClass:  sc,
+				bucketName:    "logging-loki-54526-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1254,10 +1302,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(er).NotTo(o.HaveOccurred())
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{
+				name:          "loki-54527",
+				namespace:     cloNS,
+				tSize:         "1x.extra-small",
+				storageType:   s,
+				storageSecret: "storage-secret-54527",
+				storageClass:  sc,
+				bucketName:    "logging-loki-54527-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())

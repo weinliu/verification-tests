@@ -45,7 +45,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 	// author qitang@redhat.com
 	g.It("Author:qitang-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
-		if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
+		if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
 			g.Skip("Current cluster doesn't have sufficient cpu/memory for this test!")
 		}
 		s := getStorageType(oc)
@@ -81,7 +81,16 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 		g.By("deploy loki stack")
 		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-		ls := lokiStack{"loki-53817", cloNS, "1x.extra-small", s, "storage-secret", sc, "logging-loki-53817-" + getInfrastructureName(oc), lokiStackTemplate}
+		ls := lokiStack{
+			name:          "lok-53817",
+			namespace:     cloNS,
+			tSize:         "1x.extra-small",
+			storageType:   s,
+			storageSecret: "storage-secret-53817",
+			storageClass:  sc,
+			bucketName:    "logging-loki-53817-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
 		defer ls.removeObjectStorage(oc)
 		err = ls.prepareResourcesForLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
