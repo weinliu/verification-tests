@@ -5,8 +5,8 @@ storageConfig:
     path: /tmp/46770test
 mirror:
   operators:
-    - catalog: quay.io/olmqe/nginx-ok-index:v1399-fbc
+    - catalog: quay.io/redhatgov/oc-mirror-dev:test-catalog-latest
       packages:
-        - name: nginx-ok1-1399
+        - name: foo
           channels:
-          - name: alpha
+          - name: beta
