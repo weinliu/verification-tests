@@ -17,7 +17,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-kata] Kata", func() {
+var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	defer g.GinkgoRecover()
 
 	var (
