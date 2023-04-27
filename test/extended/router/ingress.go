@@ -54,6 +54,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("NotFound"))
 	})
+
+	// bug: 1820075
 	// author: hongli@redhat.com
 	g.It("Author:hongli-Critical-41109-use IngressClass controller for ingress-to-route", func() {
 		var (
@@ -80,6 +82,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ingress-with-class"))
+
+		// bug:- 1820075
+		g.By("Confirm the address field is getting populated with the Router domain details")
+		baseDomain := getBaseDomain(oc)
+		ingressOut := getIngress(oc, oc.Namespace())
+		o.Expect(ingressOut).To(o.ContainSubstring("router-default.apps." + baseDomain))
 	})
 
 	// author: mjoseph@redhat.com
