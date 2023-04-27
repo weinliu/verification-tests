@@ -350,6 +350,29 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).NotTo(o.ContainSubstring("valid-test-config"))
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Low-62957-Prometheus and Alertmanager should configure ExternalURL correctly", func() {
+		g.By("get console route")
+		consoleURL, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "console", `-ojsonpath={.spec.host}`, "-n", "openshift-console").Output()
+		e2e.Logf("console route is: %v", consoleURL)
+
+		g.By("get externalUrl for alertmanager main")
+		alertExternalUrl, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanager", "main", `-ojsonpath={.spec.externalUrl}`, "-n", "openshift-monitoring").Output()
+		e2e.Logf("alertmanager main externalUrl is: %v", alertExternalUrl)
+		o.Expect(alertExternalUrl).To(o.ContainSubstring("https://" + consoleURL))
+
+		g.By("get externalUrl for prometheus k8s")
+		prometheusExternalUrl, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", `-ojsonpath={.spec.externalUrl}`, "-n", "openshift-monitoring").Output()
+		e2e.Logf("prometheus k8s externalUrl is: %v", prometheusExternalUrl)
+		o.Expect(prometheusExternalUrl).To(o.ContainSubstring("https://" + consoleURL))
+
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("check from alertmanager API, the generatorURL should include https://${consoleURL}")
+		checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?&filter={alertname="Watchdog"}`, token, `"generatorURL":"https://`+consoleURL, 2*platformLoadTime)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
