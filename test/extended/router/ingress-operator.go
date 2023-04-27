@@ -2,6 +2,8 @@ package router
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -998,5 +1000,78 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Check the connectionIdleTimeout value is '0s' in the controller status")
 		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, ".status.endpointPublishingStrategy.loadBalancer.providerParameters.aws.classicLoadBalancer.connectionIdleTimeout", "0s")
+	})
+
+	// OCPBUGS-853
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-Critical-62530-openshift ingress operator is failing to update router-certs [Serial]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp62530",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontroller/" + ingctrl.name
+			ingctrlCert     = "custom-cert-62530"
+			dirname         = "/tmp/-OCP-62530-ca/"
+			name            = dirname + "custom62530"
+			validity        = 3650
+			caSubj          = "/CN=NE-Test-Root-CA"
+			userCert        = dirname + "test"
+			userSubj        = "/CN=*.ocp62530.example.com"
+			customKey       = userCert + ".key"
+			customCert      = userCert + ".crt"
+		)
+
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Try to create custom key and custom certification by openssl, create a new self-signed CA at first, creating the CA key")
+		// Generation of a new self-signed CA, in case a corporate or another CA is already existing can be used.
+		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 4096`, name)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the CA certificate")
+		opensslCmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %d -out %s-ca.crt -subj %s`, name, validity, name, caSubj)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a new user certificate, crearing the user CSR with the private user key")
+		opensslCmd = fmt.Sprintf(`openssl req -nodes -newkey rsa:2048 -keyout %s.key -subj %s -out %s.csr`, userCert, userSubj, userCert)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Sign the user CSR and generate the certificate")
+		opensslCmd = fmt.Sprintf(`openssl x509 -extfile <(printf "subjectAltName = DNS:*.ocp62530.example.com") -req -in %s.csr -CA %s-ca.crt -CAkey %s-ca.key -CAcreateserial -out %s.crt -days %d -sha256`, userCert, name, name, userCert, validity)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a tls secret in openshift-ingress ns")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-ingress", "secret", ingctrlCert).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-ingress", "secret", "tls", ingctrlCert, "--cert="+customCert, "--key="+customKey).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a custom ingresscontroller")
+		ingctrl.domain = ingctrl.name + ".example.com"
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Patch defaultCertificate with custom secret to the IC")
+		routerpod := getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"defaultCertificate\":{\"name\": \""+ingctrlCert+"\"}}}")
+		waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		secret := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, ".spec.defaultCertificate.name")
+		o.Expect(secret).To(o.ContainSubstring(ingctrlCert))
+
+		g.By("Check the router-certs in the openshift-config-managed namespace, the data is 1, which should not be increased")
+		output, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-config-managed", "secret", "router-certs", "-o=go-template='{{len .data}}'").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(strings.Trim(output, "'")).To(o.Equal("1"))
 	})
 })
