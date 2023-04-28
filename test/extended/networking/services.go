@@ -342,4 +342,117 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			}
 		}
 	})
+	// author: asood@redhat.com
+	g.It("Longduration-NonPreRelease-Author:asood-High-62293-Validate all the constructs are created on logical routers and logical switches for a service type loadbalancer. [Disruptive]", func() {
+		// Bug: https://issues.redhat.com/browse/OCPBUGS-5930 (Duplicate bug https://issues.redhat.com/browse/OCPBUGS-7000)
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			svcEndpoints           []string
+			lsConstructs           []string
+			lrConstructs           []string
+		)
+		platform := exutil.CheckPlatform(oc)
+		//vSphere does not have LB service support yet
+		e2e.Logf("platform %s", platform)
+		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "aws") || strings.Contains(platform, "azure")) {
+			g.Skip("Skip for non-supported auto scaling machineset platforms!!")
+		}
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("OVN constructs would not be on the cluster")
+		}
+		workerNodes, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		allNodes, errNodes := exutil.GetAllNodes(oc)
+		o.Expect(errNodes).NotTo(o.HaveOccurred())
+
+		if len(workerNodes) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		g.By("Get namespace")
+		ns := oc.Namespace()
+
+		g.By("create 1st hello pod in ns1")
+
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns,
+			nodename:  workerNodes[0],
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod1.name)
+
+		g.By("Create a test service which is in front of the above pods")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "LoadBalancer",
+			ipFamilyPolicy:        "SingleStack",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "Cluster",
+			template:              genericServiceTemplate,
+		}
+		svc.createServiceFromParams(oc)
+
+		g.By("Get endpoints of loadbalancer services")
+		svcEndpoints = append(svcEndpoints, getServiceEndpoints(oc, svc.servicename, svc.namespace))
+		svcEndpoints = append(svcEndpoints, getServiceEndpoints(oc, "kubernetes", "default"))
+
+		g.By("Get logical routes and switches existing nodes")
+		lsConstructs = getOVNConstruct(oc, "ls-list", allNodes)
+		o.Expect(lsConstructs).NotTo(o.BeEmpty())
+		o.Expect(len(lsConstructs) == len(allNodes)).Should(o.BeTrue())
+		//Get logical routes only for worker nodes as kube API service does not have entries for master nodes
+		lrConstructs = getOVNConstruct(oc, "lr-list", workerNodes)
+		o.Expect(lrConstructs).NotTo(o.BeEmpty())
+		o.Expect(len(lsConstructs) == len(allNodes)).Should(o.BeTrue())
+
+		g.By("Validate all the entries are created for user created service and kubernetes/ kube API")
+		for i := 0; i < len(svcEndpoints); i++ {
+			o.Expect(getOVNLBContructs(oc, "ls-lb-list", svcEndpoints[i], lsConstructs)).To(o.BeTrue())
+			o.Expect(getOVNLBContructs(oc, "lr-lb-list", svcEndpoints[i], lrConstructs)).To(o.BeTrue())
+		}
+
+		g.By("Create a new machineset with 2")
+		var newNodes []string
+		exutil.SkipConditionally(oc)
+		machinesetName := "machineset-62293"
+		ms := exutil.MachineSetDescription{machinesetName, 2}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
+		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
+		nodeName1 := exutil.GetNodeNameFromMachine(oc, machineName[1])
+		newNodes = append(newNodes, nodeName0)
+		newNodes = append(newNodes, nodeName1)
+		e2e.Logf("The nodes %s and %s added successfully", nodeName0, nodeName1)
+
+		g.By("Get logical routes and switches new nodes")
+		lsConstructs = getOVNConstruct(oc, "ls-list", newNodes)
+		o.Expect(lsConstructs).NotTo(o.BeEmpty())
+		o.Expect(len(lsConstructs) == len(newNodes)).Should(o.BeTrue())
+		lrConstructs = getOVNConstruct(oc, "lr-list", newNodes)
+		o.Expect(lrConstructs).NotTo(o.BeEmpty())
+		o.Expect(len(lrConstructs) == len(newNodes)).Should(o.BeTrue())
+
+		g.By("Validate all the entries are created for service new nodes")
+		for i := 0; i < len(svcEndpoints); i++ {
+			o.Expect(getOVNLBContructs(oc, "ls-lb-list", svcEndpoints[i], lsConstructs)).To(o.BeTrue())
+			o.Expect(getOVNLBContructs(oc, "lr-lb-list", svcEndpoints[i], lrConstructs)).To(o.BeTrue())
+		}
+		g.By("Validate kubernetes service is reachable from new nodes")
+		for i := 0; i < len(newNodes); i++ {
+			output, err := exutil.DebugNodeWithChroot(oc, newNodes[i], "bash", "-c", "curl -s -k https://172.30.0.1/healthz --connect-timeout 5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(output, "ok")).To(o.BeTrue())
+		}
+
+	})
 })

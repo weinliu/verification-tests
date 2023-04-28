@@ -1307,8 +1307,16 @@ func getSvcIP(oc *exutil.CLI, namespace string, svcName string) (string, string)
 	} else {
 		//Loadbalancer will be supported for single stack Ipv4 here for mostly GCP,Azure. We can take further enhancements wrt Metal platforms in Metallb utils later
 		e2e.Logf("The serviceType is LoadBalancer")
+		platform := exutil.CheckPlatform(oc)
+		var jsonString string
+		if platform == "aws" {
+			jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}"
+		} else {
+			jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].ip}"
+		}
+
 		err := wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-			svcIP, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}").Output()
+			svcIP, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, jsonString).Output()
 			o.Expect(er).NotTo(o.HaveOccurred())
 			if svcIP == "" {
 				e2e.Logf("Waiting for lb service IP assignment. Trying again...")
@@ -1317,7 +1325,7 @@ func getSvcIP(oc *exutil.CLI, namespace string, svcName string) (string, string)
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to assign lb svc IP to %v", svcName))
-		lbSvcIP, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}").Output()
+		lbSvcIP, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, jsonString).Output()
 		e2e.Logf("The %s lb service Ingress VIP in namespace %s is %q", svcName, namespace, lbSvcIP)
 		return lbSvcIP, ""
 	}
@@ -2499,4 +2507,85 @@ func getOVNAlertNetworkingRules(oc *exutil.CLI, alertName string) (string, strin
 
 		return severity, expr
 	}
+}
+
+// returns all the logical routers and switches on all the nodes
+func getOVNConstruct(oc *exutil.CLI, constructType string, nodeNames []string) []string {
+	var ovnConstructs []string
+	var matchStr string
+	//var cmdOutput string
+
+	getCmd := "ovn-nbctl --no-leader-only " + constructType
+	ovnPod := getOVNLeaderPod(oc, "north")
+	o.Expect(ovnPod).ShouldNot(o.Equal(""))
+	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+		cmdOutput, cmdErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, getCmd)
+		if cmdErr != nil {
+			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
+			return false, nil
+		}
+		o.Expect(cmdOutput).ShouldNot(o.Equal(""))
+		for _, index := range strings.Split(cmdOutput, "\n") {
+			for _, node := range nodeNames {
+				if constructType == "ls-list" {
+					matchStr = fmt.Sprintf("\\((%s\\))", node)
+				} else {
+					matchStr = fmt.Sprintf("\\((GR_%s\\))", node)
+				}
+				re := regexp.MustCompile(matchStr)
+				if re.FindString(index) != "" {
+					ovnConstruct := strings.Fields(index)
+					ovnConstructs = append(ovnConstructs, ovnConstruct[0])
+				}
+			}
+		}
+		return true, nil
+	})
+	if checkOVNDbErr != nil {
+		e2e.Logf("The result in ovndb is not expected ! See below output \n %s ", checkOVNDbErr)
+	}
+	return ovnConstructs
+}
+
+// returns load balancer entries created for LB service type on routers and switches
+func getOVNLBContructs(oc *exutil.CLI, constructType string, endPoint string, ovnConstruct []string) bool {
+	var result bool
+	ovnPod := getOVNLeaderPod(oc, "north")
+	o.Expect(ovnPod).ShouldNot(o.Equal(""))
+	//only if the count for any of output is less than three the success will be false
+	result = true
+	for _, construct := range ovnConstruct {
+		checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			getCmd := "ovn-nbctl --no-leader-only " + constructType + " " + construct + " | grep " + endPoint
+			cmdOutput, cmdErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnPod, "northd", getCmd)
+			if cmdErr != nil {
+				e2e.Logf("%v,Waiting for expected result to be synced, try next ...,", cmdErr)
+				result = false
+				return false, nil
+			}
+			if len(strings.Split(cmdOutput, "\n")) >= 2 {
+				e2e.Logf("Required entries %s were created for service on %s", constructType, construct)
+				result = true
+			} else {
+				e2e.Logf("Required entries %s were not created for service on %s", constructType, construct)
+				result = false
+			}
+			return true, nil
+		})
+		if checkOVNDbErr != nil {
+			e2e.Logf("The command check result in ovndb is not expected ! See below output \n %s ", checkOVNDbErr)
+			result = false
+		}
+
+	}
+	return result
+}
+
+func getServiceEndpoints(oc *exutil.CLI, serviceName string, serviceNamespace string) string {
+	serviceEndpoint, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ep", serviceName, "-n", serviceNamespace, "--no-headers").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(serviceEndpoint).ShouldNot(o.BeEmpty())
+	e2e.Logf("Service endpoint %v", serviceEndpoint)
+	result := strings.Fields(serviceEndpoint)
+	return result[1]
 }
