@@ -61,6 +61,105 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: fxie@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "25145"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-25145-[aws]Dynamically detect change to global pull secret content [Serial]", func() {
+		testCaseID := "25145"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Preparing an incomplete pull-secret ...")
+		var pullSecretMapIncomplete map[string]map[string]map[string]string
+		stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to", "-").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = json.Unmarshal([]byte(stdout), &pullSecretMapIncomplete)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		delete(pullSecretMapIncomplete["auths"], "registry.ci.openshift.org")
+
+		g.By("Creating an incomplete pull-secret in Hive's namespace and the temporary project's namespace respectively ...")
+		pullSecretBsIncomplete, _ := json.Marshal(pullSecretMapIncomplete)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", PullSecret, "-n", HiveNamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", PullSecret, "--from-literal=.dockerconfigjson="+string(pullSecretBsIncomplete), "-n", HiveNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.Run("delete").Args("secret", PullSecret).Execute()
+		err = oc.Run("create").Args("secret", "generic", PullSecret, "--from-literal=.dockerconfigjson="+string(pullSecretBsIncomplete)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Patching HiveConfig so that it refers to an incomplete global pull-secret ...")
+		patch := `
+spec:
+  globalPullSecretRef:
+    name: ` + PullSecret
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/globalPullSecretRef"}]`).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Creating ClusterImageSet ...")
+		clusterImageSetName := cdName + "-imageset"
+		imageSet := clusterImageSet{
+			name:         clusterImageSetName,
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
+		imageSet.create(oc)
+
+		g.By("Creating install-config Secret ...")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Copying AWS credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		g.By("Creating ClusterDeployment with an incomplete pull-secret ...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 1,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+
+		g.By("Waiting for the cluster installation to fail ...")
+		waitForAPIWaitFailure := func() bool {
+			condition := getCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "ProvisionFailed")
+			if status, ok := condition["status"]; !ok || status != "True" {
+				e2e.Logf("For condition ProvisionFailed, expected status is True, actual status is %v, retrying ...", status)
+				return false
+			}
+			if reason, ok := condition["reason"]; !ok || reason != "KubeAPIWaitFailed" {
+				e2e.Logf("For condition ProvisionFailed, expected reason is KubeAPIWaitFailed, actual reason is %v, retrying ...", reason)
+				return false
+			}
+			if message, ok := condition["message"]; !ok || strings.Compare(message, "Failed waiting for Kubernetes API. This error usually happens when there is a problem on the bootstrap host that prevents creating a temporary control plane") != 0 {
+				e2e.Logf("For condition ProvisionFailed, expected message is \nFailed waiting for Kubernetes API. This error usually happens when there is a problem on the bootstrap host that prevents creating a temporary control plane, \nactual reason is %v\n, retrying ...", message)
+				return false
+			}
+			e2e.Logf("For condition ProvisionFailed, fields status, reason & message all expected, proceeding to the next step ...")
+			return true
+		}
+		o.Eventually(waitForAPIWaitFailure).WithTimeout(ClusterInstallTimeout * time.Second).WithPolling(3 * time.Minute).Should(o.BeTrue())
+	})
+
+	//author: fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "25210"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-25210-[aws]Collect ClusterOperator Status for Hive Managed Clusters [Serial]", func() {
 		testCaseID := "25210"
@@ -253,7 +352,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		e2e.Logf("Cluster infraID: " + infraID)
 
 		// Extract AWS credentials
-		AWSAccessKeyId, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_access_key_id", "--to=-").Outputs()
+		AWSAccessKeyID, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_access_key_id", "--to=-").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		AWSSecretAccessKey, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_secret_access_key", "--to=-").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -261,7 +360,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		// AWS clients
 		cfg, err := config.LoadDefaultConfig(
 			context.Background(),
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(AWSAccessKeyId, AWSSecretAccessKey, "")),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(AWSAccessKeyID, AWSSecretAccessKey, "")),
 			config.WithRegion(AWSRegion),
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())

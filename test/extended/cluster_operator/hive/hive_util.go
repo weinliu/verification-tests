@@ -1354,3 +1354,15 @@ func getTestOCPImage() string {
 	}
 	return testOCPImage
 }
+
+func getCondition(oc *exutil.CLI, kind, resourceName, namespace, conditionType string) map[string]string {
+	e2e.Logf("Extracting the %v condition from %v/%v in namespace %v", conditionType, kind, resourceName, namespace)
+	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, resourceName, "-n", namespace, fmt.Sprintf("-o=jsonpath={.status.conditions[?(@.type==\"%s\")]}", conditionType)).Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var condition map[string]string
+	err = json.Unmarshal([]byte(stdout), &condition)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	return condition
+}
