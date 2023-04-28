@@ -1065,3 +1065,16 @@ func userCleanup(oc *exutil.CLI, users []User, usersHTpassFile string, htPassSec
 	err = waitCoBecomes(oc, "authentication", 600, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
 	exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 600 seconds")
 }
+
+func isConnectedInternet(oc *exutil.CLI) bool {
+	masterNode, masterErr := exutil.GetFirstMasterNode(oc)
+	o.Expect(masterErr).NotTo(o.HaveOccurred())
+
+	cmd := `timeout 9 curl -k https://github.com/openshift/ruby-hello-world/ > /dev/null;[ $? -eq 0 ] && echo "connected"`
+	output, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", cmd)
+	if matched, _ := regexp.MatchString("connected", output); !matched {
+		// Failed to access to the internet in the cluster.
+		return false
+	}
+	return true
+}

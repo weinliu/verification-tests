@@ -4990,7 +4990,7 @@ spec:
 		o.Expect(quota).Should(o.ContainSubstring("openshift.io/imagestreams:0"), "openshift-object-counts")
 
 		checkImageStreamQuota := func(buildName string, step string) {
-			buildErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			buildErr := wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
 				bs := getResource(oc, asAdmin, withoutNamespace, "builds", buildName, "-ojsonpath={.status.phase}", "-n", namespace)
 				if strings.Contains(bs, "Complete") {
 					e2e.Logf("Building of %s status:%v", buildName, bs)
@@ -5008,6 +5008,11 @@ spec:
 
 		g.By("4. Create a source build using source code and check the build info")
 		imgErr := oc.AsAdmin().WithoutNamespace().Run("new-build").Args(`quay.io/openshifttest/ruby-27:1.2.0~https://github.com/sclorg/ruby-ex.git`, "-n", namespace).Execute()
+		if imgErr != nil {
+			if !isConnectedInternet(oc) {
+				e2e.Failf("Failed to access to the internet, something wrong with the connectivity of the cluster! Please check!")
+			}
+		}
 		o.Expect(imgErr).NotTo(o.HaveOccurred())
 		checkImageStreamQuota("ruby-ex-1", "4")
 
