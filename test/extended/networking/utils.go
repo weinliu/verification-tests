@@ -2589,3 +2589,21 @@ func getServiceEndpoints(oc *exutil.CLI, serviceName string, serviceNamespace st
 	result := strings.Fields(serviceEndpoint)
 	return result[1]
 }
+
+func getOVNMetricsInSpecificContainer(oc *exutil.CLI, containerName string, podName string, url string, metricName string) string {
+	var metricValue string
+	metricsErr := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ovn-kubernetes", "-c", containerName, podName, "--", "curl", url).OutputToFile("metrics.txt")
+		if err != nil {
+			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
+			return false, nil
+		}
+		metricOutput, getMetricErr := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+		o.Expect(getMetricErr).NotTo(o.HaveOccurred())
+		metricValue = strings.TrimSpace(string(metricOutput))
+		e2e.Logf("The output of the %s is : %v", metricName, metricValue)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
+	return metricValue
+}

@@ -481,12 +481,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("2. Get the metrics of " + metricName + " when ovn controller connected to SB DB")
 		prometheusURL := "localhost:29105/metrics"
+		containerName := "kube-rbac-proxy-ovn-metrics"
 		metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-			metricValue := strings.TrimSpace(string(metricOutput))
-			e2e.Logf("The output of the %s is : %v", metricName, metricValue)
+			metricValue := getOVNMetricsInSpecificContainer(oc, containerName, podName, prometheusURL, metricName)
 			if metricValue == "1" {
 				return true, nil
 			}
@@ -509,11 +506,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("5. Get the metrics of " + metricName + " when ovn controller disconnected to SB DB")
 		metricsOutput1 := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-			output1, err1 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
-			o.Expect(err1).NotTo(o.HaveOccurred())
-			metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-			metricValue1 := strings.TrimSpace(string(metricOutput1))
-			e2e.Logf("The output of the %s is : %v", metricName, metricValue1)
+			metricValue1 := getOVNMetricsInSpecificContainer(oc, containerName, podName, prometheusURL, metricName)
 			if metricValue1 == "0" {
 				return true, nil
 			}
@@ -543,11 +536,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("1. Get the metrics of " + metricName + " before creating new pod on the node")
 		prometheusURL := "localhost:29105/metrics"
-		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-		metricValue1 := strings.TrimSpace(string(metricOutput1))
-		e2e.Logf("The output of the %s is : %v", metricName, metricValue1)
+		containerName := "kube-rbac-proxy-ovn-metrics"
+		metricValue1 := getOVNMetricsInSpecificContainer(oc, containerName, podName, prometheusURL, metricName)
 
 		g.By("2. Create a pod on the node")
 		ns := oc.Namespace()
@@ -566,11 +556,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		expectedIncValue := strconv.Itoa(metricValue1Int + 1)
 		e2e.Logf("The expected value of the %s is : %v", metricName, expectedIncValue)
 		metricIncOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			output2, err2 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
-			o.Expect(err2).NotTo(o.HaveOccurred())
-			metricOutput2, _ := exec.Command("bash", "-c", "cat "+output2+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-			metricValue2 := strings.TrimSpace(string(metricOutput2))
-			e2e.Logf("The output of the %s is : %v", metricName, metricValue2)
+			metricValue2 := getOVNMetricsInSpecificContainer(oc, containerName, podName, prometheusURL, metricName)
 			if metricValue2 == expectedIncValue {
 				return true, nil
 			}
@@ -617,11 +603,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("1. Get the metrics of " + metricName + " before resource retry failure occur")
 		prometheusURL := "localhost:29102/metrics"
 		ovnMasterPodName := getOVNKMasterPod(oc)
-		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy", ovnMasterPodName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-		metricValue1 := strings.TrimSpace(string(metricOutput1))
-		e2e.Logf("The output of the %s is : %v", metricName, metricValue1)
+		containerName := "kube-rbac-proxy"
+		metricValue1 := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName)
 
 		g.By("2. Configure egressip with invalid ip address to trigger resource retry")
 		g.By("2.1 Label EgressIP node")
@@ -664,15 +647,117 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		expectedIncValue := strconv.Itoa(metricValue1Int + 1)
 		e2e.Logf("The expected value of the %s is : %v", metricName, expectedIncValue)
 		metricIncOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			output2, err2 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy", ovnMasterPodName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
-			o.Expect(err2).NotTo(o.HaveOccurred())
-			metricOutput2, _ := exec.Command("bash", "-c", "cat "+output2+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-			metricValue2 := strings.TrimSpace(string(metricOutput2))
-			e2e.Logf("The output of the %s is : %v", metricName, metricValue2)
+			metricValue2 := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName)
 			if metricValue2 == expectedIncValue {
 				return true, nil
 			}
 			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
+	})
+
+	g.It("NonHyperShiftHOST-Author:qiowang-Medium-60192-Verify metrics for egress ip unreachable and re-balance total [Disruptive] [Slow]", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		var (
+			metricName1         = "ovnkube_master_egress_ips_node_unreachable_total"
+			metricName2         = "ovnkube_master_egress_ips_rebalance_total"
+			egressNodeLabel     = "k8s.ovn.org/egress-assignable"
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+		)
+
+		g.By("1. Get list of nodes")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+
+		g.By("2. Configure egressip")
+		g.By("2.1 Label one EgressIP node")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
+
+		g.By("2.2 Create new namespace and apply label")
+		oc.SetupProject()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "org-").Execute()
+		nsLabelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "org=qe").Execute()
+		o.Expect(nsLabelErr).NotTo(o.HaveOccurred())
+
+		g.By("2.3 Create egressip object")
+		ipStackType := checkIPStackType(oc)
+		var freeIPs []string
+		if ipStackType == "ipv6single" {
+			freeIPs = findFreeIPv6s(oc, egressNodes[0], 1)
+		} else {
+			freeIPs = findFreeIPs(oc, egressNodes[0], 1)
+		}
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+		egressip1 := egressIPResource1{
+			name:          "egressip-60192",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "purple",
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject2(oc)
+
+		g.By("2.4. Check egressip is assigned to the egress node")
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+		egressipAssignedNode1 := egressIPMaps1[0]["node"]
+		e2e.Logf("egressip is assigned to:%v", egressipAssignedNode1)
+		o.Expect(egressipAssignedNode1).To(o.ContainSubstring(egressNodes[0]))
+
+		g.By("3. Get the metrics before egressip re-balance")
+		prometheusURL := "localhost:29102/metrics"
+		ovnMasterPodName := getOVNKMasterPod(oc)
+		containerName := "kube-rbac-proxy"
+		metric1BeforeReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName1)
+		metric2BeforeReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName2)
+
+		g.By("4. Label one more EgressIP node")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
+
+		g.By("5. Reboot the egressip assigned node, to trigger egressip unreachable and rebalance")
+		defer checkNodeStatus(oc, egressNodes[0], "Ready")
+		rebootNode(oc, egressNodes[0])
+		checkNodeStatus(oc, egressNodes[0], "NotReady")
+		checkNodeStatus(oc, egressNodes[0], "Ready")
+
+		g.By("6. Check egressip failover to a new egress node")
+		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps2)).Should(o.Equal(1))
+		egressipAssignedNode2 := egressIPMaps2[0]["node"]
+		e2e.Logf("egressip is assigned to:%v", egressipAssignedNode2)
+		o.Expect(egressipAssignedNode2).To(o.ContainSubstring(egressNodes[1]))
+
+		g.By("7. Get the metrics after egressip re-balance")
+		metric1ValueInt, parseIntErr1 := strconv.Atoi(metric1BeforeReboot)
+		o.Expect(parseIntErr1).NotTo(o.HaveOccurred())
+		expectedMetric1Value := strconv.Itoa(metric1ValueInt + 1)
+		e2e.Logf("The expected value of the %s is : %v", metricName1, expectedMetric1Value)
+		metric2ValueInt, parseIntErr2 := strconv.Atoi(metric2BeforeReboot)
+		o.Expect(parseIntErr2).NotTo(o.HaveOccurred())
+		expectedMetric2Value := strconv.Itoa(metric2ValueInt + 1)
+		e2e.Logf("The expected value of the %s is : %v", metricName2, expectedMetric2Value)
+		metricIncOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			metric1AfterReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName1)
+			metric2AfterReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName2)
+			if (metric1AfterReboot == expectedMetric1Value) && (metric2AfterReboot == expectedMetric2Value) {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s or %s, try again", metricName1, metricName2)
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
