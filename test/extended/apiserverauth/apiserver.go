@@ -5094,4 +5094,80 @@ spec:
 		auditEventCount = checkAuditEventCount("system:serviceaccounts:openshift-console-operator", users[3].Username, users[3].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Author:rgangwar-Medium-62959-[Apiserver] Remove search logic for configuration file [Disruptive]", func() {
+		var (
+			e2eTestNamespace = "microshift-ocp62959"
+			chkConfigCmd     = `su - redhat -c "/usr/bin/microshift show-config --mode effective|grep -i memoryLimitMB"`
+			valCfg           = "180"
+			etcConfigYaml    = "/etc/microshift/config.yaml"
+			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
+		)
+		g.By("1. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("2. Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		defer func() {
+			etcdConfigCMD := fmt.Sprintf(`
+configfile=%v
+configfilebak=%v
+if [ -f $configfilebak ]; then
+	cp $configfilebak $configfile
+	rm -f $configfilebak 
+else 
+	rm -f $configfile 
+fi`, etcConfigYaml, etcConfigYamlbak)
+			_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
+			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+		}()
+
+		defer func() {
+			_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", `su - redhat -c "rm -f ~/.microshift/config.yaml"`)
+			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("3. Check default config values for etcd")
+		mchkConfigdefault, mchkConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
+
+		g.By("4. Configure the memoryLimitMB field in user config path")
+		configDir := "~/.microshift"
+		configFile := "config.yaml"
+		etcdConfigCMD := fmt.Sprintf(`su - redhat -c "mkdir -p %v && touch %v/%v && cat > %v/%v << EOF
+etcd:
+  memoryLimitMB: %v
+EOF"`, configDir, configDir, configFile, configDir, configFile, valCfg)
+		_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
+		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+
+		g.By("5. Check config values for etcd should not change from default values")
+		mchkConfig, mchkConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
+		o.Expect(mchkConfig).Should(o.ContainSubstring(mchkConfigdefault))
+
+		g.By("6. Configure the memoryLimitMB field in default config path")
+		etcdConfigCMD = fmt.Sprintf(`
+configfile=%v
+configfilebak=%v
+if [ -f $configfile ]; then
+	cp $configfile $configfilebak
+fi
+cat > $configfile << EOF
+etcd:
+  memoryLimitMB: %v
+EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
+		_, mchgConfigErr = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
+		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+
+		g.By("7. Check config values for etcd should change from default values")
+		mchkConfig, mchkConfigErr = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
+		o.Expect(mchkConfig).Should(o.ContainSubstring(`memoryLimitMB: ` + valCfg))
+	})
 })
