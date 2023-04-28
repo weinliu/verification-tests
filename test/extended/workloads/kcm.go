@@ -140,6 +140,8 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "p43092-1").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		checkPodStatus(oc, "deployment=hello-openshift", "p43092-1", "Running")
+
 		g.By("Get the rs references")
 		var refer string
 		err = wait.Poll(2*time.Second, 20*time.Second, func() (bool, error) {
