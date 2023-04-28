@@ -1158,7 +1158,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-43135-PackageServer respects single-node configuration [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-High-Longduration-NonPreRelease-43135-PackageServer respects single-node configuration [Disruptive]", func() {
 		g.By("1) get the cluster infrastructure")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
@@ -1193,15 +1193,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			// oc get csv packageserver -o=jsonpath={.spec.install.spec.deployments[?(@.name==\"packageserver\")].spec.replicas}
 			// oc patch csv/packageserver -p '{"spec":{"install":{"spec":{"deployments":[{"name":"packageserver", "spec":{"replicas":3, "template":{}, "selector":{"matchLabels":{"app":"packageserver"}}}}]}}}}' --type=merge
 			// oc patch deploy/packageserver -p '{"spec":{"replicas":3}}' --type=merge
+			// should update CSV
+			patchResource(oc, asAdmin, withoutNamespace, "-n", "openshift-operator-lifecycle-manager", "csv", "packageserver", "-p", "{\"spec\":{\"install\":{\"spec\":{\"deployments\":[{\"name\":\"packageserver\", \"spec\":{\"replicas\":3, \"template\":{}, \"selector\":{\"matchLabels\":{\"app\":\"packageserver\"}}}}]}}}}", "--type=merge")
 			patchResource(oc, asAdmin, withoutNamespace, "-n", "openshift-operator-lifecycle-manager", "deployment", "packageserver", "-p", "{\"spec\":{\"replicas\":3}}", "--type=merge")
 			err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 				num, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.availableReplicas}").Output()
+				e2e.Logf("packageserver replicas is %s", num)
 				if num != "3" {
 					return false, nil
 				}
 				return true, nil
 			})
-			exutil.AssertWaitPollNoErr(err, "packageserver replicas is 3")
+			exutil.AssertWaitPollNoErr(err, "packageserver replicas is not 3")
 			g.By("6) enable CVO")
 			_, err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas", "1", "deployment/cluster-version-operator", "-n", "openshift-cluster-version").Output()
 			if err != nil {
@@ -1215,16 +1218,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				}
 				return true, nil
 			})
-			exutil.AssertWaitPollNoErr(err, "package-server-manager replicas is 1")
+			exutil.AssertWaitPollNoErr(err, "package-server-manager replicas is not reback to 1")
 			g.By("8) check if the packageserver pods number back to 1")
-			err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+			// for some SNO clusters, reback may take 10 mins around
+			err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
 				num, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.availableReplicas}").Output()
 				if num != "1" {
 					return false, nil
 				}
 				return true, nil
 			})
-			exutil.AssertWaitPollNoErr(err, "packageserver replicas is 1")
+			exutil.AssertWaitPollNoErr(err, "packageserver replicas is not reback to 1")
 		} else {
 			// HighlyAvailable
 			e2e.Logf("This is HA cluster, not SNO")
