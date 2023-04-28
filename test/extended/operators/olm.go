@@ -37,6 +37,44 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-Medium-63001-workload annotation missing from platform operator deployments", func() {
+		// Now, 2023-04-27, the platform operator is TP, need to be enabled via the featuregate, so check it.
+		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the featureSet: %s, error:%v", featureSet, err)
+		}
+		// skip it if featureSet is empty
+		if featureSet == "" {
+			g.Skip("featureSet is empty, skip it")
+		}
+		// The FeatureGate "cluster" is invalid: spec.featureSet: Forbidden: once enabled, custom feature gates may not be disabled
+		if featureSet != "" && featureSet != "TechPreviewNoUpgrade" {
+			g.Skip(fmt.Sprintf("featureSet is not TechPreviewNoUpgrade, but %s", featureSet))
+		}
+		annotations, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-platform-operators", "-o=jsonpath={.metadata.annotations}").Output()
+		if err != nil {
+			e2e.Failf("fail to get openshift-platform-operators project's annotations, error:%v", err)
+		}
+		if !strings.Contains(annotations, "workload.openshift.io/allowed") {
+			e2e.Failf("The openshift-platform-operators project missing workload.openshift.io/allowed annotation!")
+		}
+		deploys := []string{
+			"platform-operators-controller-manager",
+			"platform-operators-rukpak-core",
+			"platform-operators-rukpak-webhooks",
+		}
+		for _, deploy := range deploys {
+			annotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", deploy, "-n", "openshift-platform-operators", "-o=jsonpath={.spec.template.metadata.annotations}").Output()
+			if err != nil {
+				e2e.Failf("fail to get %s's annotation, error:%v", deploy, err)
+			}
+			if !strings.Contains(annotation, "target.workload.openshift.io") {
+				e2e.Failf("The %s missing target.workload.openshift.io annotation!", deploy)
+			}
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-High-59413-Default CatalogSource aren't created in restricted mode [Serial]", func() {
 		defaultCatalogSources := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		g.By("step 1 -> check if the SCC is restricted")
