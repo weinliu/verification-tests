@@ -16,6 +16,7 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"github.com/tidwall/gjson"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -989,5 +990,47 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 		err = oc.Run("rsh").Args("-n", testNamespace, "-c", "ephemeral-pod-debugger", "hello-openshift").Execute()
 		o.Expect(err).To(o.HaveOccurred(), "rsh into ephemeral containers without required privileges should fail")
+	})
+
+	// author: zxiao@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-High-22470-The basic challenge will be shown when user pass the X-CSRF-TOKEN http header", func() {
+		e2e.Logf("Using OpenShift cluster with a default identity provider that supports 'challenge: true'")
+
+		g.By("1. Get authentication url")
+		rawAuthServerJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--raw=/.well-known/oauth-authorization-server").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		authUrl := gjson.Get(rawAuthServerJson, `issuer`).String()
+		o.Expect(authUrl).To(o.ContainSubstring("https://"))
+
+		g.By("2. Check if the basic challenge will be shown when no X-CSRF-TOKEN http header")
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			},
+		}
+		requestURL := authUrl + "/oauth/authorize?response_type=token&client_id=openshift-challenging-client"
+		respond, err := httpClient.Get(requestURL)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer respond.Body.Close()
+		o.Expect(respond.StatusCode).To(o.Equal(401))
+		body, err := ioutil.ReadAll(respond.Body)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(body)).To(o.MatchRegexp(`A non-empty X-CSRF-Token header is required to receive basic-auth challenges`))
+
+		g.By("3. Check if the basic challenge will be shown when give X-CSRF-TOKEN http header")
+		request, err := http.NewRequest("GET", requestURL, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		request.Header.Set("X-CSRF-Token", "1")
+
+		respond, err = httpClient.Do(request)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer respond.Body.Close()
+		o.Expect(respond.StatusCode).To(o.Equal(401))
+		respondAuthHeader := respond.Header.Get("Www-Authenticate")
+		o.Expect(respondAuthHeader).To(o.ContainSubstring(`Basic realm="openshift"`))
 	})
 })
