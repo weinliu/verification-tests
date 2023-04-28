@@ -154,15 +154,12 @@ func (pvc *persistentVolumeClaim) createWithCloneDataSourceWithoutVolumeMode(oc 
 	if pvc.namespace == "" {
 		pvc.namespace = oc.Namespace()
 	}
-	dataSource := map[string]string{
+	dataSource := map[string]interface{}{
 		"kind": "PersistentVolumeClaim",
 		"name": pvc.dataSourceName,
 	}
-	extraParameters := map[string]interface{}{
-		"dataSource": dataSource,
-	}
-	jsonPathsAndActions := []map[string]string{{"items.0.spec.volumeMode": "delete"}, {"items.0.spec.dataSource": "set"}}
-	multiExtraParameters := []map[string]interface{}{{}, extraParameters}
+	jsonPathsAndActions := []map[string]string{{"items.0.spec.volumeMode": "delete"}, {"items.0.spec.dataSource.": "set"}}
+	multiExtraParameters := []map[string]interface{}{{}, dataSource}
 	o.Expect(applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "PVCNAME="+pvc.name, "PVCNAMESPACE="+pvc.namespace, "SCNAME="+pvc.scname,
 		"ACCESSMODE="+pvc.accessmode, "PVCCAPACITY="+pvc.capacity)).Should(o.ContainSubstring("created"))
 }
@@ -333,6 +330,19 @@ func (pvc *persistentVolumeClaim) checkVolumeModeAsexpected(oc *exutil.CLI, vm s
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The pvc.spec.volumeMode is %s", pvcVM)
 	o.Expect(pvcVM).To(o.Equal(vm))
+}
+
+// Check the Event as Expected
+func (pvc *persistentVolumeClaim) checkEventAsExpected(oc *exutil.CLI, status string, event string) {
+	pvc.waitStatusAsExpected(oc, status)
+	o.Consistently(func() string {
+		pvcState, _ := pvc.getStatus(oc)
+		return pvcState
+	}, 20*time.Second, 5*time.Second).Should(o.Equal(status))
+	o.Eventually(func() (string, error) {
+		return pvc.getDescription(oc)
+	}, 30*time.Second, 5*time.Second).Should(o.ContainSubstring(event))
+
 }
 
 // Wait for PVC capacity expand successfully
