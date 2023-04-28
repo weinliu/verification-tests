@@ -407,6 +407,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("ClusterLogging and Loki Integration tests with vector", func() {
+
 		g.BeforeEach(func() {
 			s = getStorageType(oc)
 			if len(s) == 0 {
@@ -688,6 +689,135 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
+		//author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-61968-Vector should support multiline error detection.[Serial][Slow]", func() {
+			MULTILINE_LOG_TYPES := map[string][]string{
+				"java":   {JAVA_EXC, COMPLEX_JAVA_EXC, NESTED_JAVA_EXC},
+				"go":     {GO_EXC, GO_ON_GAE_EXC, GO_SIGNAL_EXC, GO_HTTP},
+				"ruby":   {RUBY_EXC, RAILS_EXC},
+				"js":     {CLIENT_JS_EXC, NODE_JS_EXC, V8_JS_EXC},
+				"csharp": {CSHARP_ASYNC_EXC, CSHARP_NESTED_EXC, CSHARP_EXC},
+				"python": {PYTHON_EXC},
+				//"php":    {PHP_EXC, PHP_ON_GAE_EXC},
+				"dart": {
+					DART_ABSTRACT_CLASS_ERR,
+					DART_ARGUMENT_ERR,
+					DART_ASSERTION_ERR,
+					DART_ASYNC_ERR,
+					DART_CONCURRENT_MODIFICATION_ERR,
+					DART_DIVIDE_BY_ZERO_ERR,
+					DART_ERR,
+					DART_TYPE_ERR,
+					DART_EXC,
+					DART_UNSUPPORTED_ERR,
+					DART_UNIMPLEMENTED_ERROR,
+					DART_OOM_ERR,
+					DART_RANGE_ERR,
+					DART_READ_STATIC_ERR,
+					DART_STACK_OVERFLOW_ERR,
+					DART_FALLTHROUGH_ERR,
+					DART_FORMAT_ERR,
+					DART_FORMAT_WITH_CODE_ERR,
+					DART_NO_METHOD_ERR,
+					DART_NO_METHOD_GLOBAL_ERR,
+				},
+			}
+			cloNS := "openshift-logging"
+
+			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{
+				name:          "loki-61968",
+				namespace:     cloNS,
+				tSize:         "1x.extra-small",
+				storageType:   s,
+				storageSecret: "storage-secret-61968",
+				storageClass:  sc,
+				bucketName:    "logging-loki-61968-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
+			defer ls.removeObjectStorage(oc)
+			err := ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Create ClusterLogging instance with Loki as logstore")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			g.By("create CLF and enable detectMultilineErrors")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DETECT_MULTILINE_ERRORS=true")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("create some pods to generate multiline error")
+			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
+			for k := range MULTILINE_LOG_TYPES {
+				ns := "multiline-log-" + k + "-61968"
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "deploy/multiline-log", "cm/multiline-log").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "LOG_TYPE="+k, "-p", "RATE=60.00").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			g.By("check data in Loki")
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			for k, v := range MULTILINE_LOG_TYPES {
+				g.By("check " + k + " logs\n")
+				err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+					appLogs, err := lc.searchByNamespace("application", "multiline-log-"+k+"-61968")
+					if err != nil {
+						return false, err
+					}
+					if appLogs.Status == "success" && len(appLogs.Data.Result) > 0 {
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, "can't find "+k+" logs")
+				for _, log := range v {
+					var messages []string
+					err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+						dataInLoki, _ := lc.queryRange("application", "{kubernetes_namespace_name=\"multiline-log-"+k+"-61968\"}", len(v)*2, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
+						lokiLog := extractLogEntities(dataInLoki)
+						var messages []string
+						for _, log := range lokiLog {
+							messages = append(messages, log.Message)
+						}
+						if len(messages) == 0 {
+							return false, nil
+						}
+						if !containSubstring(messages, log) {
+							e2e.Logf("can't find log\n%s, try next round", log)
+							return false, nil
+						}
+						return true, nil
+					})
+					if err != nil {
+						e2e.Logf("\n\nlogs in Loki:\n\n")
+						for _, m := range messages {
+							e2e.Logf(m)
+						}
+						e2e.Failf("%s logs are not parsed", k)
+					}
+				}
+				e2e.Logf("\nfound %s logs in Loki\n", k)
+			}
+		})
+
 	})
 })
 
@@ -895,6 +1025,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	)
 
 	g.Context("ClusterLogging LokiStack tlsSecurityProfile tests", func() {
+
 		g.BeforeEach(func() {
 			s = getStorageType(oc)
 			if len(s) == 0 {

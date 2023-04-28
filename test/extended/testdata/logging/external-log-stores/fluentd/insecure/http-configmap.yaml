@@ -27,7 +27,7 @@ objects:
       <match logs.infra>
         @type file
         append true
-        path /fluentd/log/infra.*log
+        path /fluentd/log/infra.*.log
         symlink_path /fluentd/log/infra.log
       </match>
       <match logs.audit>

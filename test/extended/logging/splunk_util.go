@@ -80,7 +80,7 @@ func (s *splunkPodServer) requestSearchTask(query string) (string, error) {
 	params := url.Values{}
 	params.Set("search", "search "+query)
 
-	resp, err := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs", "", "POST", false, 2, strings.NewReader(params.Encode()))
+	resp, err := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs", "", "POST", false, 2, strings.NewReader(params.Encode()), 201)
 
 	if err != nil {
 		return "", err
@@ -103,7 +103,7 @@ func (s *splunkPodServer) extractSearchResponse(searchID string, out interface{}
 	)
 	params := url.Values{}
 	params.Add("output_mode", "json")
-	resp, err := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs/"+searchID+"/results", params.Encode(), "GET", true, 3, nil)
+	resp, err := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs/"+searchID+"/results", params.Encode(), "GET", true, 3, nil, 200)
 	if err != nil {
 		return err
 	}

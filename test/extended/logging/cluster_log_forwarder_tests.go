@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -172,6 +173,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(logCount == 0).Should(o.BeTrue())
 
 		})
+
 	})
 
 	g.Context("test forward logs to external log stores", func() {
@@ -270,6 +272,259 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprint("The ovn audit logs are not collected", ""))
+		})
+
+		//author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-45256-[fluentd]Forward logs to log store for multiline log assembly[Serial][Slow]", func() {
+			MULTILINE_LOG_TYPES := map[string][]string{
+				"java":   {JAVA_EXC, COMPLEX_JAVA_EXC, NESTED_JAVA_EXC},
+				"go":     {GO_EXC, GO_ON_GAE_EXC, GO_SIGNAL_EXC, GO_HTTP},
+				"ruby":   {RUBY_EXC, RAILS_EXC},
+				"js":     {CLIENT_JS_EXC, NODE_JS_EXC, V8_JS_EXC},
+				"csharp": {CSHARP_ASYNC_EXC, CSHARP_NESTED_EXC, CSHARP_EXC},
+				"python": {PYTHON_EXC},
+				"php":    {PHP_EXC, PHP_ON_GAE_EXC},
+				"dart": {
+					DART_ABSTRACT_CLASS_ERR,
+					DART_ARGUMENT_ERR,
+					DART_ASSERTION_ERR,
+					DART_ASYNC_ERR,
+					DART_CONCURRENT_MODIFICATION_ERR,
+					DART_DIVIDE_BY_ZERO_ERR,
+					DART_ERR,
+					DART_TYPE_ERR,
+					DART_EXC,
+					DART_UNSUPPORTED_ERR,
+					DART_UNIMPLEMENTED_ERROR,
+					DART_OOM_ERR,
+					DART_RANGE_ERR,
+					DART_READ_STATIC_ERR,
+					DART_STACK_OVERFLOW_ERR,
+					DART_FALLTHROUGH_ERR,
+					DART_FORMAT_ERR,
+					DART_FORMAT_WITH_CODE_ERR,
+					DART_NO_METHOD_ERR,
+					DART_NO_METHOD_GLOBAL_ERR,
+				},
+			}
+
+			g.By("deploy EFK pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
+
+			g.By("create CLF and enable detectMultilineErrors")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DETECT_MULTILINE_ERRORS=true")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("waiting for the EFK pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cl.namespace)
+			defer resource{"route", "elasticsearch", cl.namespace}.clear(oc)
+			exposeESService(oc, cl.namespace)
+
+			g.By("create some pods to generate multiline error")
+			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
+			for k := range MULTILINE_LOG_TYPES {
+				ns := "multiline-log-" + k + "-45256"
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "deploy/multiline-log", "cm/multiline-log").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "LOG_TYPE="+k, "-p", "RATE=60.00").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			g.By("check data in ES")
+			esPods, err := getPodNames(oc, cl.namespace, "es-node-master=true")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, esPods[0], "app-00")
+
+			esRoute := "https://" + getRouteAddress(oc, cl.namespace, "elasticsearch")
+			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			token := getSAToken(oc, "default", oc.Namespace())
+			for k, v := range MULTILINE_LOG_TYPES {
+				g.By("check " + k + " logs\n")
+				waitForProjectLogsAppear(cl.namespace, esPods[0], "multiline-log-"+k+"-45256", "app-00")
+				for _, log := range v {
+					if log == V8_JS_EXC {
+						continue // skip as there is a known issue in fluentd
+					}
+					var messages []string
+					err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+						indices, err := getIndexNamesViaRoute(esRoute, token, "app")
+						o.Expect(err).NotTo(o.HaveOccurred())
+						resp, err := queryInESViaRoute(esRoute, token, indices, "_search", "{\"size\": "+strconv.Itoa(len(v)*2+7)+", \"sort\": [{\"@timestamp\": {\"order\": \"desc\"}}], \"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"multiline-log-"+k+"-45256\"}}}", "post")
+						o.Expect(err).NotTo(o.HaveOccurred())
+						var multilineLog SearchResult
+						json.Unmarshal([]byte(resp), &multilineLog)
+						for _, msg := range multilineLog.Hits.DataHits {
+							messages = append(messages, msg.Source.Message)
+						}
+						if len(messages) == 0 {
+							return false, nil
+						}
+						if !containSubstring(messages, log) {
+							e2e.Logf("can't find log\n%s, try next round", log)
+							return false, nil
+						}
+						return true, nil
+					})
+					if err != nil {
+						e2e.Logf("\n\nlogs in ES:\n\n")
+						for _, m := range messages {
+							e2e.Logf(m)
+						}
+						e2e.Failf("%s logs are not parsed", k)
+					}
+				}
+				e2e.Logf("\nfound %s logs\n", k)
+			}
+		})
+
+		//author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-49040-High-49041-Forward logs to multiple log stores for multiline log assembly[Serial][Slow]", func() {
+			MULTILINE_LOG_TYPES := map[string][]string{
+				"java":   {JAVA_EXC, COMPLEX_JAVA_EXC, NESTED_JAVA_EXC},
+				"go":     {GO_EXC, GO_ON_GAE_EXC, GO_SIGNAL_EXC, GO_HTTP},
+				"ruby":   {RUBY_EXC, RAILS_EXC},
+				"python": {PYTHON_EXC},
+				"js":     {CLIENT_JS_EXC, NODE_JS_EXC, V8_JS_EXC},
+				"php":    {PHP_EXC, PHP_ON_GAE_EXC},
+			}
+
+			g.By("Create Loki project and deploy Loki Server")
+			oc.SetupProject()
+			lokiNS := oc.Namespace()
+			loki := externalLoki{"loki-server", lokiNS}
+			defer loki.remove(oc)
+			loki.deployLoki(oc)
+
+			logsToLoki, _ := json.Marshal([]string{"multiline-log-java-49040", "multiline-log-go-49040", "multiline-log-ruby-49040"})
+			logsToEs, _ := json.Marshal([]string{"multiline-log-python-49040", "multiline-log-js-49040", "multiline-log-php-49040"})
+
+			g.By("deploy EFK pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
+			g.By("create CLF and enable detectMultilineErrors")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "49040.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100",
+				"-p", "NAMESPACES_LOKI="+string(logsToLoki), "-p", "NAMESPACES_ES="+string(logsToEs))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("wait for the EFK pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cl.namespace)
+			defer resource{"route", "elasticsearch", cl.namespace}.clear(oc)
+			exposeESService(oc, cl.namespace)
+
+			g.By("create some pods to generate multiline error")
+			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
+			for k := range MULTILINE_LOG_TYPES {
+				ns := "multiline-log-" + k + "-49040"
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "deploy/multiline-log", "cm/multiline-log").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "LOG_TYPE="+k, "-p", "RATE=60.00").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			g.By("check data in ES")
+			esPods, err := getPodNames(oc, cl.namespace, "es-node-master=true")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, esPods[0], "app-00")
+			esRoute := "https://" + getRouteAddress(oc, cl.namespace, "elasticsearch")
+			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			token := getSAToken(oc, "default", oc.Namespace())
+			for _, l := range []string{"python", "js", "php"} {
+				g.By("check " + l + " logs\n")
+				waitForProjectLogsAppear(cl.namespace, esPods[0], "multiline-log-"+l+"-49040", "app-00")
+				for _, log := range MULTILINE_LOG_TYPES[l] {
+					if log == V8_JS_EXC {
+						continue // skip as there is a known issue in fluentd
+					}
+					var messages []string
+					err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+						indices, err := getIndexNamesViaRoute(esRoute, token, "app")
+						o.Expect(err).NotTo(o.HaveOccurred())
+						resp, err := queryInESViaRoute(esRoute, token, indices, "_search", "{\"size\": "+strconv.Itoa(len(MULTILINE_LOG_TYPES[l])*2+7)+", \"sort\": [{\"@timestamp\": {\"order\": \"desc\"}}], \"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"multiline-log-"+l+"-49040\"}}}", "post")
+						o.Expect(err).NotTo(o.HaveOccurred())
+						var multilineLog SearchResult
+						json.Unmarshal([]byte(resp), &multilineLog)
+						for _, msg := range multilineLog.Hits.DataHits {
+							messages = append(messages, msg.Source.Message)
+						}
+						if len(messages) == 0 {
+							return false, nil
+						}
+						if !containSubstring(messages, log) {
+							e2e.Logf("can't find log\n%s, try next round", log)
+							return false, nil
+						}
+						return true, nil
+					})
+					if err != nil {
+						e2e.Logf("\n\nlogs in ES:\n\n")
+						for _, m := range messages {
+							e2e.Logf(m)
+						}
+						e2e.Failf("%s logs are not parsed", l)
+					}
+				}
+				e2e.Logf("\nfound %s logs in ES\n", l)
+			}
+
+			g.By("check data in loki")
+			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+			lc := newLokiClient(route)
+			for _, t := range []string{"java", "go", "ruby"} {
+				err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+					appLogs, err := lc.searchByNamespace("", "multiline-log-"+t+"-49040")
+					if err != nil {
+						return false, err
+					}
+					if appLogs.Status == "success" && len(appLogs.Data.Result) > 0 {
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, "can't find "+t+" logs")
+				for _, log := range MULTILINE_LOG_TYPES[t] {
+					var messages []string
+					err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+						dataInLoki, _ := lc.queryRange("", "{kubernetes_namespace_name=\"multiline-log-"+t+"-49040\"}", len(MULTILINE_LOG_TYPES[t])*2, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
+						lokiLog := extractLogEntities(dataInLoki)
+						var messages []string
+						for _, log := range lokiLog {
+							messages = append(messages, log.Message)
+						}
+						if len(messages) == 0 {
+							return false, nil
+						}
+						if !containSubstring(messages, log) {
+							e2e.Logf("can't find log\n%s, try next round", log)
+							return false, nil
+						}
+						return true, nil
+					})
+					if err != nil {
+						e2e.Logf("\n\nlogs in Loki:\n\n")
+						for _, m := range messages {
+							e2e.Logf(m)
+						}
+						e2e.Failf("%s logs are not parsed", t)
+					}
+				}
+				e2e.Logf("\nfound %s logs in Loki\n", t)
+			}
 		})
 
 		// author qitang@redhat.com
@@ -468,6 +723,66 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(fluentConf).Should(o.ContainSubstring("client_cert_key_password"))
 		})
 
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-43250-Forward logs to fluentd enable mTLS with shared_key and tls_client_private_key_passphrase[Serial]", func() {
+			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("deploy fluentd server")
+			oc.SetupProject()
+			fluentdProj := oc.Namespace()
+			fluentd := fluentdServer{
+				serverName:                 "fluentdtest",
+				namespace:                  fluentdProj,
+				serverAuth:                 true,
+				clientAuth:                 true,
+				clientPrivateKeyPassphrase: "testOCP43250",
+				secretName:                 "fluentd-43250",
+				loggingNS:                  cloNS,
+				inPluginType:               "forward",
+			}
+			defer fluentd.remove(oc)
+			fluentd.deploy(oc)
+
+			g.By("create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-fluentdforward.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tls://"+fluentd.serverName+"."+fluentd.namespace+".svc:24224", "-p", "OUTPUT_SECRET="+fluentd.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("check logs in fluentd server")
+			fluentd.checkData(oc, true, "app.log")
+			fluentd.checkData(oc, true, "infra-container.log")
+			fluentd.checkData(oc, true, "audit.log")
+			fluentd.checkData(oc, true, "infra.log")
+		})
+	})
+
+	g.Context("Log Forward to user-managed loki", func() {
+		cloNS := "openshift-logging"
+
+		g.BeforeEach(func() {
+			g.By("deploy CLO and EO")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			CLO.SubscribeOperator(oc)
+		})
+
 		//Author: kbharti@redhat.com
 		g.It("CPaasrunOnly-Author:kbharti-High-43745-Forward to Loki using default value via http[Serial]", func() {
 			//create a project and app to generate some logs
@@ -534,50 +849,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(infraLogs.Data.Result[0].Stream.LogType).Should(o.Equal("infrastructure"))
 			o.Expect(infraLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
 			e2e.Logf("Infra Logs Query is a success")
-		})
-
-		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-High-43250-Forward logs to fluentd enable mTLS with shared_key and tls_client_private_key_passphrase[Serial]", func() {
-			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("deploy fluentd server")
-			oc.SetupProject()
-			fluentdProj := oc.Namespace()
-			fluentd := fluentdServer{
-				serverName:                 "fluentdtest",
-				namespace:                  fluentdProj,
-				serverAuth:                 true,
-				clientAuth:                 true,
-				clientPrivateKeyPassphrase: "testOCP43250",
-				secretName:                 "fluentd-43250",
-				loggingNS:                  cloNS,
-				inPluginType:               "forward",
-			}
-			defer fluentd.remove(oc)
-			fluentd.deploy(oc)
-
-			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-fluentdforward.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tls://"+fluentd.serverName+"."+fluentd.namespace+".svc:24224", "-p", "OUTPUT_SECRET="+fluentd.secretName)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
-
-			g.By("check logs in fluentd server")
-			fluentd.checkData(oc, true, "app.log")
-			fluentd.checkData(oc, true, "infra-container.log")
-			fluentd.checkData(oc, true, "audit.log")
-			fluentd.checkData(oc, true, "infra.log")
 		})
 
 		//Author: kbharti@redhat.com
@@ -779,19 +1050,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			CLO.SubscribeOperator(oc)
 			oc.SetupProject()
 			g.By("init Cloudwatch test spec")
-			cw = cw.init(oc)
+			cw.init(oc)
 		})
 
 		g.AfterEach(func() {
 			cw.deleteGroups()
 		})
 
-		g.It("CPaasrunOnly-Author:anli-High-43839-Fluentd logs to Cloudwatch group by namespaceName and groupPrefix [Serial][Slow]", func() {
-			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
-			cw.groupPrefix = "qeauto" + getInfrastructureName(oc)
-			cw.groupType = "namespaceName"
+		g.It("CPaasrunOnly-Author:anli-High-43839-Fluentd logs to Cloudwatch group by namespaceName and groupPrefix [Serial]", func() {
+			cw.setGroupPrefix("logging-43839-" + getInfrastructureName(oc))
+			cw.setGroupType("namespaceName")
 			// Disable audit, so the test be more stable
-			cw.logTypes = []string{"infrastructure", "application"}
+			cw.setLogTypes("infrastructure", "application")
 
 			g.By("create log producer")
 			appProj := oc.Namespace()
@@ -800,8 +1070,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("create clusterlogforwarder/instance")
-			s := resource{"secret", cw.secretName, cw.secretNamespace}
-			defer s.clear(oc)
+			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch.yaml")
@@ -821,12 +1090,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(cw.logsFound()).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:anli-High-43840-Forward logs to Cloudwatch group by namespaceUUID and groupPrefix [Serial][Slow]", func() {
-			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
-			cw.groupPrefix = "qeauto" + getInfrastructureName(oc)
-			cw.groupType = "namespaceUUID"
+		g.It("CPaasrunOnly-Author:anli-High-43840-Forward logs to Cloudwatch group by namespaceUUID and groupPrefix [Serial]", func() {
+			cw.setGroupPrefix("logging-43840-" + getInfrastructureName(oc))
+			cw.setGroupType("namespaceUUID")
 			// Disable audit, so the test be more stable
-			cw.logTypes = []string{"infrastructure", "application"}
+			cw.setLogTypes("infrastructure", "application")
 
 			g.By("create log producer")
 			appProj := oc.Namespace()
@@ -838,8 +1106,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cw.selNamespacesUUID = []string{uuid}
 
 			g.By("create clusterlogforwarder/instance")
-			s := resource{"secret", cw.secretName, cw.secretNamespace}
-			defer s.clear(oc)
+			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch.yaml")
@@ -858,6 +1125,58 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check logs in Cloudwatch")
 			o.Expect(cw.logsFound()).To(o.BeTrue())
 		})
+
+		//author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-47052-[fluentd]CLF API change for Opt-in to multiline error detection (Forward to CloudWatch)[Serial]", func() {
+			cw.setGroupPrefix("logging-47052-" + getInfrastructureName(oc))
+			cw.setGroupType("logType")
+			cw.setLogTypes("infrastructure", "audit", "application")
+
+			g.By("create clusterlogforwarder/instance")
+			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
+			cw.createClfSecret(oc)
+
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+cw.secretName, "-p", "REGION="+cw.awsRegion, "-p", "PREFIX="+cw.groupPrefix, "-p", "GROUPTYPE="+cw.groupType, "-p", "DETECT_MULTILINE_ERRORS=true")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			MULTILINE_LOG_TYPES := map[string][]string{
+				"java": {JAVA_EXC, COMPLEX_JAVA_EXC, NESTED_JAVA_EXC},
+			}
+
+			g.By("create a pod to generate multiline error")
+			ns := oc.Namespace()
+			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
+			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "LOG_TYPE=java", "-p", "RATE=120").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			WaitForDeploymentPodsToBeReady(oc, ns, "multiline-log")
+			cw.selAppNamespaces = []string{ns}
+
+			g.By("check logs in Cloudwatch")
+			logGroupName := cw.groupPrefix + ".application"
+			o.Expect(cw.logsFound()).To(o.BeTrue())
+
+			filteredLogs, err := cw.getLogRecordsFromCloudwatchByNamespace(30, logGroupName, ns)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(filteredLogs) > 0).Should(o.BeTrue(), "couldn't filter logs by namespace")
+			var filteredMessages []string
+			for _, f := range filteredLogs {
+				filteredMessages = append(filteredMessages, f.Message)
+			}
+			for _, msg := range MULTILINE_LOG_TYPES["java"] {
+				o.Expect(containSubstring(filteredMessages, msg)).Should(o.BeTrue(), "%s log is not found", msg)
+			}
+		})
+
 	})
 
 	g.Context("Log Forward to Kafka", func() {
@@ -1258,6 +1577,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check logs in splunk")
 			o.Expect(sp.anyLogFound()).To(o.BeTrue())
 		})
+
 		g.It("CPaasrunOnly-Author:anli-Medium-56248-vector forward logs to splunk 8.2 over TLS - SkipVerify [Serial][Slow]", func() {
 			g.By("Test Environment Prepare")
 
@@ -1318,6 +1638,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(sp.anyLogFound()).To(o.BeTrue())
 		})
 	})
+
 	g.Context("forward logs to external store over http", func() {
 		cloNS := "openshift-logging"
 
@@ -1375,6 +1696,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "audit.log")
 			fluentdS.checkData(oc, true, "infra.log")
 		})
+
 		g.It("CPaasrunOnly-Author:anli-High-60933-vector Forward logs to fluentd over http - https[Serial]", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
@@ -1415,6 +1737,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "audit.log")
 			fluentdS.checkData(oc, true, "infra.log")
 		})
+
 		g.It("CPaasrunOnly-Author:anli-Medium-60926-vector Forward logs to fluentd over http - http[Serial]", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
@@ -1455,6 +1778,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "audit.log")
 			fluentdS.checkData(oc, true, "infra.log")
 		})
+
 		g.It("CPaasrunOnly-Author:anli-Medium-60936-vector Forward logs to fluentd over http - TLSSkipVerify[Serial]", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")

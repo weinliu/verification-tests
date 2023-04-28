@@ -30,18 +30,6 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-const (
-	apiPath         = "/api/logs/v1/"
-	queryPath       = "/loki/api/v1/query"
-	queryRangePath  = "/loki/api/v1/query_range"
-	labelsPath      = "/loki/api/v1/labels"
-	labelValuesPath = "/loki/api/v1/label/%s/values"
-	seriesPath      = "/loki/api/v1/series"
-	tailPath        = "/loki/api/v1/tail"
-	minioNS         = "minio-aosqe"
-	minioSecret     = "minio-creds"
-)
-
 // s3Credential defines the s3 credentials
 type s3Credential struct {
 	Region          string
@@ -271,8 +259,7 @@ func createSecretForAzureContainer(oc *exutil.CLI, bucketName, secretName, ns st
 	if err1 != nil {
 		return fmt.Errorf("can't get azure storage account from cluster: %v", err1)
 	}
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, secretName, "--from-literal=environment="+environment, "--from-literal=container="+bucketName, "--from-literal=account_name="+accountName, "--from-literal=account_key="+accountKey).Execute()
-	return err
+	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, secretName, "--from-literal=environment="+environment, "--from-literal=container="+bucketName, "--from-literal=account_name="+accountName, "--from-literal=account_key="+accountKey).Execute()
 }
 
 func createSecretForSwiftContainer(oc *exutil.CLI, containerName, secretName, ns string, cred *exutil.OpenstackCredentials) error {
@@ -674,7 +661,7 @@ func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) 
 		return err
 	}
 
-	resp, err := doHTTPRequest(h, c.address, path, query, "GET", quiet, c.retries, nil)
+	resp, err := doHTTPRequest(h, c.address, path, query, "GET", quiet, c.retries, nil, 200)
 	if err != nil {
 		return err
 	}
@@ -732,7 +719,7 @@ func (c *lokiClient) queryRange(logType string, queryStr string, limit int, star
 	params.setInt("start", start.UnixNano())
 	params.setInt("end", end.UnixNano())
 	params.setString("direction", direction())
-	logPath := ""
+	var logPath string
 	if len(logType) > 0 {
 		logPath = apiPath + logType + queryRangePath
 	} else {
@@ -844,7 +831,7 @@ func (c *lokiClient) listLabels(logType, labelName string) ([]string, error) {
 	return labelResponse.Data, err
 }
 
-func doHTTPRequest(header http.Header, address, path, query, method string, quiet bool, attempts int, requestBody io.Reader) ([]byte, error) {
+func doHTTPRequest(header http.Header, address, path, query, method string, quiet bool, attempts int, requestBody io.Reader, expectedStatusCode int) ([]byte, error) {
 	us, err := buildURL(address, path, query)
 	if err != nil {
 		return nil, err
@@ -879,18 +866,6 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 
 	var resp *http.Response
 	success := false
-
-	var expectedStatusCode int
-	switch strings.ToUpper(method) {
-	case "GET":
-		{
-			expectedStatusCode = 200
-		}
-	case "POST":
-		{
-			expectedStatusCode = 201
-		}
-	}
 
 	for attempts > 0 {
 		attempts--

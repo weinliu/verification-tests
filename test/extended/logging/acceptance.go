@@ -221,10 +221,12 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
 		}
 
-		var cw cloudwatchSpec
-		g.By("init Cloudwatch test spec")
-		cw = cw.init(oc)
-		cw.awsKeyID, cw.awsKey = getAWSKey(oc)
+		cw := cloudwatchSpec{
+			groupPrefix: getInfrastructureName(oc),
+			groupType:   "logType",
+			logTypes:    []string{"infrastructure", "application", "audit"},
+		}
+		cw.init(oc)
 		defer cw.deleteGroups()
 
 		g.By("create log producer")
@@ -234,8 +236,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("create clusterlogforwarder/instance")
-		s := resource{"secret", cw.secretName, cw.secretNamespace}
-		defer s.clear(oc)
+		defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 		cw.createClfSecret(oc)
 
 		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml")
@@ -265,10 +266,12 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
 		}
 
-		var cw cloudwatchSpec
-		g.By("init Cloudwatch test spec")
-		cw = cw.init(oc)
-		cw.awsKeyID, cw.awsKey = getAWSKey(oc)
+		cw := cloudwatchSpec{
+			groupPrefix: getInfrastructureName(oc),
+			groupType:   "logType",
+			logTypes:    []string{"infrastructure", "application", "audit"},
+		}
+		cw.init(oc)
 		defer cw.deleteGroups()
 
 		g.By("Create log producer")
@@ -278,8 +281,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create clusterlogforwarder/instance")
-		s := resource{"secret", cw.secretName, cw.secretNamespace}
-		defer s.clear(oc)
+		defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 		cw.createClfSecret(oc)
 
 		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml")

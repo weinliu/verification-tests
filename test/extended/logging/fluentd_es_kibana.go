@@ -829,7 +829,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Kibana should"
 		g.By("check kibana status")
 		kibanaRoute := "https://" + getRouteAddress(oc, cloNS, "kibana")
 		kStatus := kibanaStatus{}
-		resp, err := doHTTPRequest(nil, kibanaRoute, "/api/status", "", "GET", false, 6, nil)
+		resp, err := doHTTPRequest(nil, kibanaRoute, "/api/status", "", "GET", false, 6, nil, 200)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = json.Unmarshal(resp, &kStatus)
 		o.Expect(err).NotTo(o.HaveOccurred())

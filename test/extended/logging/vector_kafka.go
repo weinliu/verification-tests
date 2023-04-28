@@ -215,14 +215,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			kafkaClusterName := "kafka-cluster"
-			defer deleteNamespace(oc, amqNS)
 			//defer amq.uninstallOperator(oc)
 			amq.SubscribeOperator(oc)
 			// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
 			checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
 			kafka := resource{"kafka", kafkaClusterName, amqNS}
 			kafkaTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
-			//defer kafka.clear(oc)
+			defer kafka.clear(oc)
 			kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.2.3", "MESSAGE_VERSION=3.2.3")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// create topics
@@ -230,7 +229,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			for _, topicName := range topicNames {
 				topicTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")
 				topic := resource{"Kafkatopic", topicName, amqNS}
-				//defer topic.clear(oc)
+				defer topic.clear(oc)
 				err = topic.applyFromTemplate(oc, "-n", topic.namespace, "-f", topicTemplate, "-p", "NAME="+topic.name, "CLUSTER_NAME="+kafka.name, "NAMESPACE="+topic.namespace)
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
@@ -240,7 +239,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			for _, topicName := range topicNames {
 				consumerTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka", "amqstreams", "topic-consumer.yaml")
 				consumer := resource{"job", topicName + "-consumer", amqNS}
-				//defer consumer.clear(oc)
+				defer consumer.clear(oc)
 				err = consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "NAMESPACE="+consumer.namespace, "KAFKA_TOPIC="+topicName, "CLUSTER_NAME="+kafkaClusterName)
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
@@ -313,7 +312,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			// avode hitting https://issues.redhat.com/browse/LOG-3025, set replicas to 3
+			// avoid hitting https://issues.redhat.com/browse/LOG-3025, set replicas to 3
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile, "-p", "REPLICAS=3").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 

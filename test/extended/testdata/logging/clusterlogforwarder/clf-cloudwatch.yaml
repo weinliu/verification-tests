@@ -22,6 +22,7 @@ objects:
       inputRefs: ${{INPUT_REFS}}
       outputRefs:
       - cw
+      detectMultilineErrors: ${{DETECT_MULTILINE_ERRORS}}
 parameters:
 - name: SECRETNAME
   value: "cw-secret"
@@ -33,3 +34,5 @@ parameters:
   value: "logType"
 - name: INPUT_REFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
+- name: DETECT_MULTILINE_ERRORS
+  value: "false"

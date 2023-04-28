@@ -1,9 +1,11 @@
 package logging
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,6 +91,7 @@ func searchDocByQuery(ns string, pod string, indexName string, queryString strin
 	//_ = json.NewDecoder(data).Decode(&res)
 	json.Unmarshal([]byte(stdout), &res)
 	return res
+
 }
 
 func queryInES(ns, pod, queryString string) (SearchResult, error) {
@@ -100,6 +103,66 @@ func queryInES(ns, pod, queryString string) (SearchResult, error) {
 	}
 	err = json.Unmarshal([]byte(stdout), &res)
 	return res, err
+}
+
+func exposeESService(oc *exutil.CLI, ns string) {
+	// create a temporary directory
+	dirname := "/tmp/" + oc.Namespace() + "-es"
+	defer os.RemoveAll(dirname)
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/elasticsearch", "-n", ns, "--confirm", "--to="+dirname, "--keys=admin-ca").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	routeFile := exutil.FixturePath("testdata", "logging", "elasticsearch", "route.yaml")
+	err = exec.Command("bash", "-c", fmt.Sprintf("cat %s/admin-ca | sed -e \"s/^/      /\"  >> %s", dirname, routeFile)).Run()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", routeFile, "-n", ns).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func queryInESViaRoute(route, token string, indices []string, path, query, action string) ([]byte, error) {
+	h := make(http.Header)
+	h.Add("Content-Type", "application/json")
+	h.Add("Authorization", "Bearer "+token)
+
+	var index string
+	if len(indices) > 0 {
+		index = strings.Join(indices, ",")
+	}
+
+	if len(path) == 0 {
+		path = "_search"
+	}
+
+	if len(action) == 0 {
+		action = "POST"
+	}
+
+	resp, err := doHTTPRequest(h, route, index+"/"+path, "", strings.ToUpper(action), true, 5, bytes.NewReader([]byte(query)), 200)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func getIndexNamesViaRoute(route, token, prefix string) ([]string, error) {
+	params := newQueryStringBuilder()
+	params.values.Set("format", "json")
+	indexResp, err := queryInESViaRoute(route, token, []string{}, "_cat/indices", params.encode(), "get")
+	if err != nil {
+		return []string{}, err
+	}
+	var esIndices []ESIndex
+	json.Unmarshal([]byte(indexResp), &esIndices)
+	var indices []string
+	for _, i := range esIndices {
+		if strings.HasPrefix(i.Index, prefix) {
+			indices = append(indices, i.Index)
+		}
+	}
+	return indices, nil
 }
 
 type externalES struct {

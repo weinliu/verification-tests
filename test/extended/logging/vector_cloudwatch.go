@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			CLO.SubscribeOperator(oc)
 			oc.SetupProject()
 			g.By("init Cloudwatch test spec")
-			cw = cw.init(oc)
+			cw.init(oc)
 		})
 
 		g.AfterEach(func() {
@@ -51,10 +51,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Critical-51977-Vector logs to Cloudwatch group by namespaceName and groupPrefix [Serial]", func() {
-			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
-			cw.groupPrefix = "vectorcw" + getInfrastructureName(oc)
-			cw.groupType = "namespaceName"
-			cw.logTypes = []string{"infrastructure", "application", "audit"}
+			cw.setGroupPrefix("logging-51977-" + getInfrastructureName(oc))
+			cw.setGroupType("namespaceName")
+			cw.setLogTypes("infrastructure", "application", "audit")
 
 			g.By("Create log producer")
 			appProj := oc.Namespace()
@@ -63,8 +62,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create clusterlogforwarder/instance")
-			s := resource{"secret", cw.secretName, cw.secretNamespace}
-			defer s.clear(oc)
+			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch.yaml")
@@ -88,10 +86,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-High-51978-Vector Forward logs to Cloudwatch using namespaceUUID and groupPrefix[Serial]", func() {
 			g.Skip("Known issue: https://issues.redhat.com/browse/LOG-2701")
 
-			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
-			cw.groupPrefix = "51978-" + getInfrastructureName(oc)
-			cw.groupType = "namespaceUUID"
-			cw.logTypes = []string{"application", "infrastructure", "audit"}
+			cw.setGroupPrefix("logging-51978-" + getInfrastructureName(oc))
+			cw.setGroupType("namespaceUUID")
+			cw.setLogTypes("application", "infrastructure", "audit")
 
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			g.By("Create log producer")
@@ -103,8 +100,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cw.selNamespacesUUID = []string{uuid}
 
 			g.By("Create clusterlogforwarder/instance")
-			s := resource{"secret", cw.secretName, cw.secretNamespace}
-			defer s.clear(oc)
+			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch.yaml")
@@ -126,10 +122,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-52380-Vector Forward logs from specified pods using label selector to Cloudwatch group [Serial]", func() {
-			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
-			cw.groupPrefix = "52380-" + getInfrastructureName(oc)
-			cw.groupType = "logType"
-			cw.logTypes = []string{"application"}
+			cw.setGroupPrefix("logging-52380-" + getInfrastructureName(oc))
+			cw.setGroupType("logType")
+			cw.setLogTypes("application")
 
 			testLabel := "{\"run\":\"test-52380\",\"test\":\"test-52380\"}"
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
@@ -146,8 +141,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cw.disAppNamespaces = []string{appProj2}
 
 			g.By("Create clusterlogforwarder/instance")
-			s := resource{"secret", cw.secretName, cw.secretNamespace}
-			defer s.clear(oc)
+			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch-label-selector.yaml")
@@ -169,10 +163,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Critical-52132-Vector Forward logs from specified pods using namespace selector to Cloudwatch group[Serial]", func() {
-			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
-			cw.groupPrefix = "52132-" + getInfrastructureName(oc)
-			cw.groupType = "logType"
-			cw.logTypes = []string{"application"}
+			cw.setGroupPrefix("logging-52132-" + getInfrastructureName(oc))
+			cw.setGroupType("logType")
+			cw.setLogTypes("application")
 
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			g.By("Create log producer")
