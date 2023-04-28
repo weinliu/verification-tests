@@ -41,7 +41,7 @@ const (
 // Kubeadmin user use oc client apply yaml template
 func applyResourceFromTemplateAsAdmin(oc *exutil.CLI, parameters ...string) error {
 	var configFile string
-	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+	if isCRDSpecificFieldExist(oc, "template.apiVersion") {
 		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "config.json")
 			if err != nil {
@@ -65,7 +65,7 @@ func applyResourceFromTemplateAsAdmin(oc *exutil.CLI, parameters ...string) erro
 // Common user use oc client apply yaml template
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	var configFile string
-	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+	if isCRDSpecificFieldExist(oc, "template.apiVersion") {
 		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 			output, err := oc.Run("process").Args(parameters...).OutputToFile(getRandomString() + "config.json")
 			if err != nil {
@@ -88,7 +88,7 @@ func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 // Common user use oc client apply yaml template and return output
 func applyResourceFromTemplateWithOutput(oc *exutil.CLI, parameters ...string) (string, error) {
 	var configFile string
-	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+	if isCRDSpecificFieldExist(oc, "template.apiVersion") {
 		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 			output, err := oc.Run("process").Args(parameters...).OutputToFile(getRandomString() + "config.json")
 			if err != nil {
@@ -349,7 +349,7 @@ func jsonDeletePathsToFile(jsonInput string, deletePaths []string) (string, erro
 // Kubeadmin user use oc client apply yaml template delete parameters
 func applyResourceFromTemplateDeleteParametersAsAdmin(oc *exutil.CLI, deletePaths []string, parameters ...string) error {
 	var configFile, tempJSONOutput string
-	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+	if isCRDSpecificFieldExist(oc, "template.apiVersion") {
 		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
 			if err != nil {
@@ -376,7 +376,7 @@ func applyResourceFromTemplateDeleteParametersAsAdmin(oc *exutil.CLI, deletePath
 // Kubeadmin user use oc client apply yaml template with extra parameters
 func applyResourceFromTemplateWithExtraParametersAsAdmin(oc *exutil.CLI, extraParameters map[string]interface{}, parameters ...string) error {
 	var configFile, tempJSONOutput string
-	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+	if isCRDSpecificFieldExist(oc, "template.apiVersion") {
 		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
 			if err != nil {
@@ -402,7 +402,7 @@ func applyResourceFromTemplateWithExtraParametersAsAdmin(oc *exutil.CLI, extraPa
 // Use oc client apply yaml template with multi extra parameters
 func applyResourceFromTemplateWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}, parameters ...string) (string, error) {
 	var configFile, tempJSONOutput string
-	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+	if isCRDSpecificFieldExist(oc, "template.apiVersion") {
 		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
 			if err != nil {
@@ -960,10 +960,22 @@ func isSpecifiedAPIExist(oc *exutil.CLI, apiNameAndVersion string) bool {
 	return strings.Contains(output, apiNameAndVersion)
 }
 
+// isCRDSpecificFieldExist checks whether the CRD specified field exist, returns bool
+func isCRDSpecificFieldExist(oc *exutil.CLI, crdFieldPath string) bool {
+	crdFieldInfo, getInfoErr := oc.AsAdmin().WithoutNamespace().Run("explain").Args(crdFieldPath).Output()
+	if getInfoErr != nil {
+		if strings.Contains(crdFieldInfo, "the server doesn't have a resource type") {
+			return false
+		}
+		o.Expect(getInfoErr).NotTo(o.HaveOccurred())
+	}
+	return true
+}
+
 // isMicroShiftCluster judges whether the test cluster is microshift cluster
 // TODO: It's not a precise judgment, just a temp solution, need to do more research and enhance later
 func isMicroshiftCluster(oc *exutil.CLI) bool {
-	return !isSpecifiedAPIExist(oc, "template.openshift.io/v1")
+	return !isCRDSpecificFieldExist(oc, "template.apiVersion")
 }
 
 // Set the specified csi driver ManagementState
