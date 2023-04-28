@@ -7,6 +7,7 @@ declare global {
             cliLogin();
             cliLogout();
             adminCLI(command: string);
+            hasWindowsNode();
         }
     }
 }
@@ -43,4 +44,19 @@ Cypress.Commands.add("cliLogout", () => {
 Cypress.Commands.add("adminCLI", (command: string) => {
   cy.log(`Run admin command: ${command}`)
   cy.exec(`${command} --kubeconfig ${kubeconfig}`)
+});
+
+const hasWindowsNode = () :boolean => {
+  cy.exec(`oc get node -l kubernetes.io/os=windows --kubeconfig ${kubeconfig}`).then((result) => {
+      if(!result.stdout){
+        cy.log("Testing on cluster without windows node. Skip this windows scenario!");
+        return false;
+      } else {
+        cy.log("Testing on cluster with windows node.");
+        return cy.wrap(true);
+      }
+  });
+};
+Cypress.Commands.add("hasWindowsNode", () => {
+  return hasWindowsNode();
 });

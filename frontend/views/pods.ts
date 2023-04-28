@@ -35,4 +35,7 @@ export const podsPage = {
     isLoaded: () => {
         cy.get('.pf-c-table__text').should('exist')
     },
+    goToPodDetails: (namespace, podName) => {
+      cy.visit('/k8s/ns/'+namespace+'/pods/'+podName);
+    },
 }
