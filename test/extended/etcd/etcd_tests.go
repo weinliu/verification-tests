@@ -1,6 +1,7 @@
 package etcd
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -184,4 +185,80 @@ var _ = g.Describe("[sig-etcd] ETCD Microshift", func() {
 			e2e.Failf("Test Failed to get micorshift-etcd log.")
 		}
 	})
+
+	// author: skundu@redhat.com
+	g.It("MicroShiftOnly-Author:skundu-Medium-62547-[ETCD] verify etcd quota size is configurable. [Disruptive]", func() {
+		var (
+			e2eTestNamespace = "microshift-ocp62547"
+			valCfg           = 180
+			MemoryHighValue  = valCfg * 1024 * 1024
+		)
+		g.By("1. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("2. Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+		masterNode := masterNodes[0]
+		g.By("3. Check microshift is running actively")
+		output, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "systemctl status microshift")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Active: active (running)") {
+			e2e.Logf("microshift status is: %v ", output)
+		} else {
+			e2e.Failf("Test Failed to get microshift status.")
+		}
+		g.By("4. Check etcd status is running and active")
+		output, err = exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "systemctl status microshift-etcd.scope")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Active: active (running)") {
+			e2e.Logf("microshift-etcd.scope status is: %v ", output)
+		} else {
+			e2e.Failf("Test Failed to get microshift-etcd.scope status.")
+		}
+
+		g.By("5. Configure the memoryLimitMB field")
+		configYaml := "/etc/microshift/config.yaml"
+		etcdConfigCMD := fmt.Sprintf(`cat > %v << EOF
+etcd:
+  memoryLimitMB: %v`, configYaml, valCfg)
+
+		defer waitForMicroshiftAfterRestart(oc, masterNodes[0])
+		defer exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "rm -f /etc/microshift/config.yaml")
+		_, etcdConfigcmdErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", etcdConfigCMD)
+		o.Expect(etcdConfigcmdErr).NotTo(o.HaveOccurred())
+
+		g.By("6. Restart microshift")
+		waitForMicroshiftAfterRestart(oc, masterNodes[0])
+		g.By("7. Check etcd status is running and active, after successful restart")
+		opStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "systemctl status microshift-etcd.scope")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(opStatus, "Active: active (running)") {
+			e2e.Logf("microshift-etcd.scope status is: %v ", opStatus)
+		} else {
+			e2e.Failf("Test Failed to get microshift-etcd.scope status.")
+		}
+
+		g.By("8. Verify the value of memoryLimitMB field is corrcetly configured")
+		opConfig, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "/usr/bin/microshift show-config --mode effective")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(opConfig, "memoryLimitMB: "+fmt.Sprint(valCfg)) {
+			e2e.Logf("memoryLimitMB is successfully verified")
+		} else {
+			e2e.Failf("Test Failed to set memoryLimitMB field")
+		}
+
+		g.By("9. Verify the value of memoryLimitMB field is corrcetly configured")
+		opStat, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "systemctl show microshift-etcd.scope | grep MemoryHigh")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(opStat, fmt.Sprint(MemoryHighValue)) {
+			e2e.Logf("stat MemoryHigh is successfully verified")
+		} else {
+			e2e.Failf("Failed to verify stat MemoryHigh")
+		}
+
+	})
+
 })

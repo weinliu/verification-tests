@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"encoding/json"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -135,4 +136,17 @@ func logPrometheusResult(data PrometheusQueryResult) {
 			e2e.Logf(fmt.Sprintf("index: %d value: %s", i, v.Value[1].(string)))
 		}
 	}
+}
+
+func waitForMicroshiftAfterRestart(oc *exutil.CLI, nodename string) {
+	exutil.DebugNodeWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl restart microshift")
+	mStatusErr := wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
+		output, _ := exutil.DebugNodeWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl status microshift")
+		if strings.Contains(output, "Active: active (running)") {
+			e2e.Logf("microshift status is: %v ", output)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(mStatusErr, fmt.Sprintf("Microshift failed to restart: %v", mStatusErr))
 }
