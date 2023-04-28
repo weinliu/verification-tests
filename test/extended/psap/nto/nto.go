@@ -1225,9 +1225,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			err           error
 		)
 
+		isSNO := exutil.IsSNOCluster(oc)
 		//Use the last worker node as labeled node
 		//Support 3 master/worker node, no dedicated worker nodes.
-		if is3Master {
+		if is3Master || isSNO {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
