@@ -722,4 +722,178 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		verifyTime(oc, namespace, ls.Name, forwardCRB.ServiceAccountName, ls.Namespace)
 
 	})
+
+	g.It("NonPreRelease-Author:aramesha-High-57397-Verify network-flows export with Kafka [Serial]", func() {
+		namespace := oc.Namespace()
+		// validate resources for lokiStack
+		// Update this section when changing clouds
+		if !validateInfraAndResourcesForLoki(oc, []string{"aws"}, "10Gi", "6") {
+			g.Skip("Current platform not supported/resources not available for this test!")
+		}
+
+		g.By("Deploy loki operator")
+		lokiSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     lokiNS,
+			PackageName:   lokiPackageName,
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
+			CatalogSource: lokiSource,
+		}
+
+		// Check if Loki Operator is already present
+		existing := checkOperatorStatus(oc, lokiNS, lokiPackageName)
+		// Defer Uninstall of Loki operator if created by tests
+		defer func(existing bool) {
+			if !existing {
+				LO.uninstallOperator(oc)
+			}
+		}(existing)
+
+		LO.SubscribeOperator(oc)
+		waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
+
+		g.By("Deploy lokiStack")
+		// get storageClass Name
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		lokiStackTemplate := filePath.Join(lokiDir, "lokistack-simple.yaml")
+		ls := lokiStack{lokiStackName, namespace, "1x.extra-small", "s3", "s3-secret", sc, "netobserv-loki-53597-" + getInfrastructureName(oc), lokiStackTemplate}
+		// deploy lokiStack
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Subscribe to AMQ operator")
+		catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
+		amq := SubscriptionObjects{
+			OperatorName:  "amq-streams-cluster-operator",
+			Namespace:     namespace,
+			PackageName:   "amq-streams",
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "singlenamespace-og.yaml"),
+			CatalogSource: catsrc,
+		}
+
+		defer amq.uninstallOperator(oc)
+		amq.SubscribeOperator(oc)
+		// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
+		checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
+
+		g.By("Deploy KAFKA")
+		// Kafka metrics config Template path
+		kafkaMetricsPath := filePath.Join(kafkaDir, "kafka-metrics-config.yaml")
+
+		kafkaMetrics := KafkaMetrics{
+			Namespace: namespace,
+			Template:  kafkaMetricsPath,
+		}
+
+		// Kafka Template path
+		kafkaPath := filePath.Join(kafkaDir, "kafka-default.yaml")
+
+		kafka := Kafka{
+			Name:         "kafka-cluster",
+			Namespace:    namespace,
+			Template:     kafkaPath,
+			StorageClass: sc,
+		}
+
+		// Kafka Topic path
+		kafkaTopicPath := filePath.Join(kafkaDir, "kafka-topic.yaml")
+
+		// deploy kafka topic
+		kafkaTopic1 := KafkaTopic{
+			TopicName: "network-flows",
+			Name:      kafka.Name,
+			Namespace: namespace,
+			Template:  kafkaTopicPath,
+		}
+
+		// deploy kafka topic for export
+		kafkaTopic2 := KafkaTopic{
+			TopicName: "network-flows-export",
+			Name:      kafka.Name,
+			Namespace: namespace,
+			Template:  kafkaTopicPath,
+		}
+
+		defer kafkaTopic1.deleteKafkaTopic(oc)
+		defer kafkaTopic2.deleteKafkaTopic(oc)
+		defer kafka.deleteKafka(oc)
+		kafkaMetrics.deployKafkaMetrics(oc)
+		kafka.deployKafka(oc)
+		kafkaTopic1.deployKafkaTopic(oc)
+		kafkaTopic1.deployKafkaTopic(oc)
+		kafkaTopic2.deployKafkaTopic(oc)
+
+		g.By("Check if Kafka and Kafka topic are ready")
+		// Wait for Kafka and KafkaTopic to be ready
+		waitForKafkaReady(oc, kafka.Name, kafka.Namespace)
+		waitForKafkaTopicReady(oc, kafkaTopic1.TopicName, kafkaTopic1.Namespace)
+		waitForKafkaTopicReady(oc, kafkaTopic2.TopicName, kafkaTopic2.Namespace)
+
+		g.By("Deploy FlowCollector")
+		// loki URL
+		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", lokiStackName, namespace)
+
+		flow := Flowcollector{
+			Namespace:           namespace,
+			DeploymentModel:     "KAFKA",
+			Template:            flowFixturePath,
+			MetricServerTLSType: "AUTO",
+			LokiURL:             lokiURL,
+			LokiAuthToken:       "FORWARD",
+			LokiTLSEnable:       true,
+			LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName),
+			KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s", namespace),
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+
+		// Patch flowcollector exporters value
+		patchValue := fmt.Sprintf(`[{"kafka":{"address": "` + flow.KafkaAddress + `", "topic": "network-flows-export"},"type": "KAFKA"}]`)
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/exporters", "value": `+patchValue+`}]`, "--type=json").Output()
+
+		g.By("Deploy FORWARD clusterRoleBinding")
+		// Forward clusterRoleBinding Template path
+		forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
+
+		forwardCRB := ForwardClusterRoleBinding{
+			Namespace:          namespace,
+			ServiceAccountName: "flowlogs-pipeline-transformer",
+			Template:           forwardCRBPath,
+		}
+
+		forwardCRB.deployForwardCRB(oc)
+
+		g.By("Ensure flows are observed and all pods are running")
+		exutil.AssertAllPodsToBeReady(oc, namespace)
+		// ensure eBPF pods are ready
+		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+
+		g.By("Verify loki and KAFKA logs")
+		verifyTime(oc, namespace, ls.Name, forwardCRB.ServiceAccountName, ls.Namespace)
+
+		consumerTemplate := filePath.Join(kafkaDir, "topic-consumer.yaml")
+		consumer := resource{"job", kafkaTopic2.TopicName + "-consumer", namespace}
+		defer consumer.clear(oc)
+		err = consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "NAMESPACE="+consumer.namespace, "KAFKA_TOPIC="+kafkaTopic2.TopicName, "CLUSTER_NAME="+kafka.Name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		waitForPodReadyWithLabel(oc, namespace, "job-name="+kafkaTopic2.TopicName+"-consumer")
+
+		consumerPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "job-name=network-flows-export-consumer", "-o=jsonpath={.items[0].metadata.name}").Output()
+
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", consumerPodName, `'{"AgentIP":'`)
+		exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with job-name=network-flows-export-consumer label")
+		verifyFlowRecord(podLogs)
+	})
 })
