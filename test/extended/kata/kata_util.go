@@ -272,7 +272,6 @@ func checkKataInstalled(oc *exutil.CLI, sub SubscriptionDescription, kcName stri
 		jsonpathKataconfig = "-o=jsonpath={.status.installationStatus.IsInProgress}{.status.unInstallationStatus.inProgress.status}"
 		expectSubState     = "AtLatestKnown"
 		expectCsvState     = "SucceededInstallSucceeded"
-		expectKataconfig   = "false"
 	)
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, jsonpathSubState).Output()
 	if err != nil || msg != expectSubState {
@@ -287,10 +286,11 @@ func checkKataInstalled(oc *exutil.CLI, sub SubscriptionDescription, kcName stri
 				e2e.Logf("Error: CSV in wrong state, expected: %v actual: %v %v", expectCsvState, msg, err)
 			} else {
 				msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, jsonpathKataconfig).Output()
-				if err == nil && msg == expectKataconfig {
+				// DEBUG upper or lowercase the msg so just 1 comparision
+				if err == nil && strings.ToLower(msg) == "false" {
 					return true
 				}
-				e2e.Logf("Error: Kataconfig in wrong state, expected: %v actual: %v error: %v", expectKataconfig, msg, err)
+				e2e.Logf("Error: Kataconfig in wrong state, expected: false actual: %v error: %v", msg, err)
 			}
 		}
 	}
@@ -364,7 +364,7 @@ func subscriptionIsFinished(oc *exutil.CLI, sub SubscriptionDescription) (msg st
 	g.By("(2.3) Check that " + controlPod + " is ready")
 	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", controlPod, "-o=jsonpath={.status.containerStatuses}", "-n", sub.namespace).Output()
-		if !strings.Contains(msg, "false") {
+		if !strings.Contains(strings.ToLower(msg), "false") {
 			return true, nil
 		}
 		return false, nil
@@ -566,10 +566,10 @@ func waitForKataconfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
 	errCheck := wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-o=jsonpath={.status.installationStatus.IsInProgress}{.status.unInstallationStatus.inProgress.status}").Output()
-		// false, "" is done
-		// true, "" install is in progress
-		// falseTrue uninstall (delete) is in progress
-		if msg == "false" {
+		// false || False, "" is done
+		// true || True, "" install is in progress
+		// FalseTrue uninstall (delete) is in progress
+		if strings.ToLower(msg) == "false" {
 			return true, nil
 		}
 		return false, nil
