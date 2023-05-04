@@ -522,6 +522,10 @@ func getSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 		supportProvisioners = deleteElement(supportProvisioners, "efs.csi.aws.com")
 		e2e.Logf("***%s \"AWS-EFS CSI Driver\" not installed, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
 	}
+	if cloudProvider == "gcp" && !checkCSIDriverInstalled(oc, []string{"filestore.csi.storage.gke.io"}) {
+		supportProvisioners = deleteElement(supportProvisioners, "filestore.csi.storage.gke.io")
+		e2e.Logf("***%s \"GCP File store CSI Driver\" not installed, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
+	}
 	// AzureStack test clusters don't support azure file storage
 	// Ref: https://learn.microsoft.com/en-us/azure-stack/user/azure-stack-acs-differences?view=azs-2108
 	if cloudProvider == "azure" && (isAzureStackCluster(oc) || checkFips(oc)) {
