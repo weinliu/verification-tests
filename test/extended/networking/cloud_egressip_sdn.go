@@ -3071,7 +3071,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-PstChkUpgrade-Author:jechen-High-46710-OVN egressIP should still be functional post upgrade. [Disruptive]", func() {
+	g.It("NonPreRelease-PstChkUpgrade-Author:jechen-High-46710-SDN egressIP should still be functional post upgrade. [Disruptive]", func() {
 
 		ns := "46710-upgrade-ns"
 		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
