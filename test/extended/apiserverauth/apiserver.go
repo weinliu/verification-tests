@@ -5175,4 +5175,76 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 		o.Expect(mchkConfig).Should(o.ContainSubstring(`memoryLimitMB: ` + valCfg))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Author:rgangwar-Medium-62987-[Apiserver] Remove search logic for data directory [Disruptive]", func() {
+		var (
+			e2eTestNamespace           = "microshift-ocp62987"
+			userDataDir                = `/root/.microshift/data/`
+			chkContentUserDatadirCmd   = `ls ` + userDataDir
+			globalDataDir              = `/var/lib/microshift/`
+			chkContentGlobalDatadirCmd = `ls ` + globalDataDir + `resources/`
+			userDataDirCmd             = `mkdir -p ` + userDataDir
+			globalDataDirDelCmd        = `rm -rf ` + globalDataDir + `resources/*`
+			userDataDirDelCmd          = `rm -rf ` + userDataDir + `*`
+		)
+
+		g.By("1. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("2. Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("3. Check user data dir")
+		// Check if the directory exists
+		chkUserDatadirCmd := fmt.Sprintf(`if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi`, userDataDir)
+		checkDirOutput, checkDirErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserDatadirCmd)
+		o.Expect(checkDirErr).NotTo(o.HaveOccurred())
+
+		if strings.Contains(checkDirOutput, "Directory exists") {
+			// Directory exists, so delete the contents
+			_, deldirerr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", userDataDirDelCmd)
+			o.Expect(deldirerr).NotTo(o.HaveOccurred())
+			chkContentOutput, chkContentErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentUserDatadirCmd)
+			o.Expect(chkContentErr).NotTo(o.HaveOccurred())
+			o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
+		} else {
+			// Directory does not exist, so create it
+			_, mkdirerr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", userDataDirCmd)
+			o.Expect(mkdirerr).NotTo(o.HaveOccurred())
+		}
+
+		g.By("4. Check global data dir")
+		// Check if the directory exists
+		chkUserGlobalDatadirCmd := fmt.Sprintf(`if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi`, globalDataDir)
+		checkGlobalDirOutput, checkGlobalDirErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserGlobalDatadirCmd)
+		o.Expect(checkGlobalDirErr).NotTo(o.HaveOccurred())
+
+		if !strings.Contains(checkGlobalDirOutput, "Directory exists") {
+			e2e.Failf("Globaldatadir %v should exist :: %v", globalDataDir, checkGlobalDirOutput)
+		}
+
+		// Directory exists, so delete the contents it can restore automatically after restart
+		_, deldirerr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", globalDataDirDelCmd)
+		o.Expect(deldirerr).NotTo(o.HaveOccurred())
+		chkContentOutput, chkContentErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentGlobalDatadirCmd)
+		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
+
+		g.By("5. Restart Microshift")
+		restartMicroshift(oc, masterNodes[0])
+
+		g.By("6. Ensure that userdatadir is empty and globaldatadir is restored after Microshift is restarted")
+		chkContentOutput, chkContentErr = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentUserDatadirCmd)
+		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
+		e2e.Logf("Userdatadir %v be empty.", userDataDir)
+		chkContentOutput, chkContentErr = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentGlobalDatadirCmd)
+		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.TrimSpace(chkContentOutput)).NotTo(o.BeEmpty())
+		e2e.Logf("Globaldatadir %v not empty, it is restored :: %v", globalDataDir, chkContentOutput)
+	})
 })
