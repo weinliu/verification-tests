@@ -1,42 +1,5 @@
-import { PVC, LokiConfigMap, LokiDeployment, LokiService, flowcollector } from "../fixtures/flowcollector"
-import { OCCli, OCCreds } from "./cluster-cliops"
 import { operatorHubPage } from "../views/operator-hub-page"
 
-export class NetObserv {
-    creds: OCCreds
-    oc: OCCli
-
-    constructor(oc?: OCCli, creds?: OCCreds) {
-        this.creds = creds || undefined
-        if (creds) {
-            this.oc = new OCCli(creds)
-        }
-        else if (!oc) {
-            throw 'must pass creds: OCCreds property or oc: OCli'
-        }
-        else {
-            this.oc = oc
-
-        }
-    }
-
-    deploy_loki(): void {
-        this.oc.apply_manifest(PVC)
-        this.oc.apply_manifest(LokiConfigMap)
-        this.oc.apply_manifest(LokiDeployment)
-        this.oc.apply_manifest(LokiService)
-    }
-    undeploy_loki(): void {
-        this.oc.delete_resources(LokiService)
-        this.oc.delete_resources(LokiDeployment)
-        this.oc.delete_resources(LokiConfigMap)
-        this.oc.delete_resources(PVC)
-    }
-
-    deploy_flowcollector(): void {
-        this.oc.apply_manifest(flowcollector)
-    }
-}
 export const Operator = {
     name: () => {
         if (Cypress.env('noo_catalog_src') == "upstream") {

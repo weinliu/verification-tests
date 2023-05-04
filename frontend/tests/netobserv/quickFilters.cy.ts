@@ -1,0 +1,101 @@
+import { Operator } from "../../views/netobserv"
+import { catalogSources } from "../../views/catalog-source"
+import { netflowPage } from "../../views/netflow-page"
+
+// if project name is changed here, it also needs to be changed 
+// under all netobserv specs
+const project = 'netobserv'
+var patch = [{
+    "op": "$op",
+    "path": "/spec/consolePlugin/quickFilters",
+    "value": [
+        {
+            "default": true,
+            "filter": {
+                "dst_namespace": "test-client",
+                "src_namespace": "test-server"
+            },
+            "name": "Test NS"
+        }
+    ]
+}]
+
+describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, function () {
+
+    before('any test', function () {
+        cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
+        cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
+        cy.switchPerspective('Administrator');
+        // create test server and client pods
+        cy.adminCLI('oc create -f ./fixtures/netobserv/test-server-client.yaml')
+
+        // sepcify --env noo_release=upstream to run tests 
+        // from most recent "main" image
+        let catalogImg
+        let catalogDisplayName = "Production Operators"
+        const catSrc = Cypress.env('noo_catalog_src')
+        if (catSrc == "upstream") {
+            catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
+            this.catalogSource = "netobserv-test"
+            catalogDisplayName = "NetObserv QE"
+            catalogSources.createCustomCatalog(catalogImg, this.catalogSource, catalogDisplayName)
+        }
+        else {
+            catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
+        }
+
+        Operator.install(catalogDisplayName)
+        Operator.createFlowcollector(project)
+
+    })
+    beforeEach('any netflow table test', function () {
+        netflowPage.visit()
+        cy.get('#tabs-container li:nth-child(2)').click()
+        cy.byTestID("table-composable").should('exist')
+    })
+
+
+    it("should verify quick filters add", function () {
+        const addQuickFilterPatch = JSON.stringify(patch).replace('$op', 'add')
+        cy.adminCLI(`oc patch flowcollector/cluster --type json -p \'${addQuickFilterPatch}\'`)
+        // wait 10 seconds for plugin pod to get restarted
+        cy.wait(10000)
+        cy.reload()
+        cy.contains("Quick filters").should('exist').click()
+        cy.get('#quick-filters-dropdown').should('exist').contains("Test NS").children('[type="checkbox"]').check()
+
+        // verify source namespace and destination NS are test-server and test-client
+        cy.get('td:nth-child(3) span.co-resource-item__resource-name').should('exist').each(row => {
+            cy.wrap(row).should('have.text', "test-server")
+        })
+        cy.get('td:nth-child(6) span.co-resource-item__resource-name').should('exist').each(row => {
+            cy.wrap(row).should('have.text', "test-client")
+        })
+
+        cy.get('[role="listbox"]').contains("Test NS").children('[type="checkbox"]').uncheck()
+        cy.get('#filters > div').should('not.have.class', 'custom-chip-group')
+    })
+
+    it("should verify quick filters remove", function () {
+        const addQuickFilterPatch = JSON.stringify(patch).replace('$op', 'remove')
+        cy.adminCLI(`oc patch flowcollector/cluster --type json -p \'${addQuickFilterPatch}\'`)
+
+        // wait 10 seconds for plugin pod to get restarted
+        cy.wait(10000)
+        cy.reload()
+        cy.contains("Quick filters").should('exist').click()
+        cy.get('#quick-filters-dropdown label').should('exist').each((ele, index, $list) => {
+            cy.wrap(ele).should('not.contain', "Test NS")
+        })
+    })
+
+    afterEach("test", function () {
+        cy.get('#reset-filters-button').should('exist').click()
+    })
+
+    after("all tests", function () {
+        cy.adminCLI('oc delete -f ./fixtures/netobserv/test-server-client.yaml')
+        cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
+        cy.logout()
+    })
+})
