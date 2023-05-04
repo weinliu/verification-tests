@@ -294,4 +294,36 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// confirm the canary pod is still present in the infra node
 		searchInDescribeResource(oc, "node", infraNode, "canary")
 	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Medium-63004-Ipv6 addresses are also acceptable for whitelisting", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			output              string
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		)
+
+		g.By("Create a server pod")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+
+		g.By("expose a service in the project")
+		exposeRoute(oc, project1, "svc/service-unsecure")
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("service-unsecure"))
+
+		g.By("Annotate the route with Ipv6 subnet and verify it")
+		setAnnotation(oc, project1, "route/service-unsecure", "haproxy.router.openshift.io/ip_whitelist=2600:14a0::/40")
+		output, err = oc.Run("get").Args("route", "service-unsecure", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`"haproxy.router.openshift.io/ip_whitelist":"2600:14a0::/40"`))
+
+		g.By("Verify the acl whitelist parameter inside router pod with Ipv6 address")
+		defaultPod := getRouterPod(oc, "default")
+		backendName := "be_http:" + project1 + ":service-unsecure"
+		output = readHaproxyConfig(oc, defaultPod, backendName, "-A5", "acl whitelist src")
+		o.Expect(output).To(o.ContainSubstring(`acl whitelist src 2600:14a0::/40`))
+	})
 })
