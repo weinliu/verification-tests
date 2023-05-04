@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("ConnectedOnly-Author:jiazha-High-59413-Default CatalogSource aren't created in restricted mode [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-High-59413-Default CatalogSource aren't created in restricted mode [Serial]", func() {
 		defaultCatalogSources := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		g.By("step 1 -> check if the SCC is restricted")
 		for _, cs := range defaultCatalogSources {
