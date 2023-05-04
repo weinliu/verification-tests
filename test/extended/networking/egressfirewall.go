@@ -505,10 +505,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("3. No synax error message should be found in ovnkube-node -c ovn-controller log after egressFirewall is deleted.")
 		readyErr := waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 		exutil.AssertWaitPollNoErr(readyErr, "ovnkube-node pods are not ready")
-		podlog, logErr := oc.AsAdmin().Run("logs").Args("-n", "openshift-ovn-kubernetes", "-l", "app=ovnkube-node", "-c", "ovn-controller", "--tail=-1").Output()
+		podlog, logErr := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ovn-kubernetes", "-l", "app=ovnkube-node", "-c", "ovn-controller", "--tail=-1").Output()
 		o.Expect(logErr).NotTo(o.HaveOccurred())
 		if strings.Contains(podlog, "Syntax error") {
-			e2e.Failf("there is syntax error")
+			e2e.Failf("There is syntax error in ovnkube node-log, test failed")
 		}
 	})
 
