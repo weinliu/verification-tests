@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1297,6 +1298,90 @@ spec:
 		difference := dnsNotReadyTimedOuTimestamp.Sub(creationTimestamp)
 		e2e.Logf("default timeout is %v mins", difference.Minutes())
 		o.Expect(difference.Minutes()).Should(o.BeNumerically(">=", 10))
+	})
+
+	//author: fxie@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run | grep "23970" | ./bin/extended-platform-tests run --timeout 10m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:fxie-High-23970-[AWS]The cluster name is limited by 63 characters[Serial]", func() {
+		testCaseID := "23970"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Creating ClusterImageSet ...")
+		clusterImageSetName := cdName + "-imageset"
+		imageSet := clusterImageSet{
+			name:         clusterImageSetName,
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
+		imageSet.create(oc)
+
+		g.By("Creating install-config Secret ...")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Creating pull-secret ...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Copying AWS credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		g.By("Creating ClusterDeployment with a 64-character-long cluster name ...")
+		clusterName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen] + "-" + "123456789012345678901234567890123456789012345"
+		clusterDeployment := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          clusterName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 3,
+		}
+
+		parameters := []string{
+			"--ignore-unknown-parameters=true",
+			"-f", clusterDeployment.template,
+			"-p", "FAKE=" + clusterDeployment.fake,
+			"NAME=" + clusterDeployment.name,
+			"NAMESPACE=" + clusterDeployment.namespace,
+			"BASEDOMAIN=" + clusterDeployment.baseDomain,
+			"CLUSTERNAME=" + clusterDeployment.clusterName,
+			"MANAGEDNS=" + strconv.FormatBool(clusterDeployment.manageDNS),
+			"PLATFORMTYPE=" + clusterDeployment.platformType,
+			"CREDREF=" + clusterDeployment.credRef,
+			"REGION=" + clusterDeployment.region,
+			"IMAGESETREF=" + clusterDeployment.imageSetRef,
+			"INSTALLCONFIGSECRET=" + clusterDeployment.installConfigSecret,
+			"PULLSECRETREF=" + clusterDeployment.pullSecretRef,
+			"INSTALLATTEMPTSLIMIT=" + strconv.Itoa(clusterDeployment.installAttemptsLimit),
+		}
+
+		// Manually create CD to capture the output of oc apply -f cd_manifest_file
+		var cfgFileJSON string
+		defer os.Remove(cfgFileJSON)
+		cfgFileJSON, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "-hive-resource-cfg.json")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		_, stderr, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", cfgFileJSON).Outputs()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(stderr).To(o.ContainSubstring("Invalid cluster name (.spec.clusterName): must be no more than 63 characters"))
 	})
 
 	//author: fxie@redhat.com
