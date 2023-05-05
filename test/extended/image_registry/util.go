@@ -293,8 +293,15 @@ func recoverRegistryDefaultReplicas(oc *exutil.CLI) {
 	platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if !platforms[platformtype] {
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("config.imageregistry/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check if cluster is sno")
+		workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
+		if len(workerNodes) == 1 {
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("config.imageregistry/cluster", "-p", `{"spec":{"replicas":1}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("config.imageregistry/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
