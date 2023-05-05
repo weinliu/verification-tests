@@ -3,6 +3,7 @@ package networking
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -2606,4 +2607,92 @@ func getOVNMetricsInSpecificContainer(oc *exutil.CLI, containerName string, podN
 	})
 	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
 	return metricValue
+}
+
+// CurlNodePortPass checks nodeport svc reacability from a node regardless of network addressing type on cluster
+func CurlNodePortPass(oc *exutil.CLI, nodeNameFrom string, nodeNameTo string, nodePort string) {
+	nodeIP1, nodeIP2 := getNodeIP(oc, nodeNameTo)
+	if nodeIP1 != "" {
+		nodev6URL := net.JoinHostPort(nodeIP1, nodePort)
+		nodev4URL := net.JoinHostPort(nodeIP2, nodePort)
+		output, _ := exutil.DebugNode(oc, nodeNameFrom, "curl", nodev4URL, "-s", "--connect-timeout", "5")
+		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+		output, _ = exutil.DebugNode(oc, nodeNameFrom, "curl", nodev6URL, "-s", "--connect-timeout", "5")
+		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+	} else {
+		nodeURL := net.JoinHostPort(nodeIP2, nodePort)
+		output, _ := exutil.DebugNode(oc, nodeNameFrom, "curl", nodeURL, "-s", "--connect-timeout", "5")
+		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+	}
+}
+
+// CurlNodePortFail checks nodeport svc unreacability from a node regardless of network addressing type on cluster
+func CurlNodePortFail(oc *exutil.CLI, nodeNameFrom string, nodeNameTo string, nodePort string) {
+	nodeIP1, nodeIP2 := getNodeIP(oc, nodeNameTo)
+	if nodeIP1 != "" {
+		nodev6URL := net.JoinHostPort(nodeIP1, nodePort)
+		nodev4URL := net.JoinHostPort(nodeIP2, nodePort)
+		output, _ := exutil.DebugNode(oc, nodeNameFrom, "curl", nodev4URL, "--connect-timeout", "5")
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("timed out")))
+		output, _ = exutil.DebugNode(oc, nodeNameFrom, "curl", nodev6URL, "--connect-timeout", "5")
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("timed out")))
+	} else {
+		nodeURL := net.JoinHostPort(nodeIP2, nodePort)
+		output, _ := exutil.DebugNode(oc, nodeNameFrom, "curl", nodeURL, "--connect-timeout", "5")
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("timed out")))
+	}
+}
+
+// get primary NIC interface name
+func getPrimaryNICname(oc *exutil.CLI) string {
+	masterNode, getMasterNodeErr := exutil.GetFirstMasterNode(oc)
+	o.Expect(getMasterNodeErr).NotTo(o.HaveOccurred())
+	primary_int, err := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "nmcli -g connection.interface-name c show ovs-if-phys0")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	primary_inf_name := strings.Split(primary_int, "\n")
+	e2e.Logf("Primary Inteface name is : %s", primary_inf_name[0])
+	return primary_inf_name[0]
+}
+
+// get file contents to be modified for SCTP
+func getFileContentforSCTP(baseDir string, name string) (fileContent string) {
+	filePath := filepath.Join(exutil.FixturePath("testdata", "networking", baseDir), name)
+	fileOpen, err := os.Open(filePath)
+	defer fileOpen.Close()
+	if err != nil {
+		e2e.Failf("Failed to open file: %s", filePath)
+	}
+	fileRead, _ := io.ReadAll(fileOpen)
+	if err != nil {
+		e2e.Failf("Failed to read file: %s", filePath)
+	}
+	return string(fileRead)
+}
+
+// get generic sctpclient pod yaml file, replace variables as per requirements
+func createSCTPclientOnNode(oc *exutil.CLI, pod_pmtrs map[string]string) (err error) {
+	PodGenericYaml := getFileContentforSCTP("sctp", "sctpclientspecificnode.yaml")
+	for rep, value := range pod_pmtrs {
+		PodGenericYaml = strings.ReplaceAll(PodGenericYaml, rep, value)
+	}
+	podFileName := "temp-sctp-client-pod-" + getRandomString() + ".yaml"
+	defer os.Remove(podFileName)
+	os.WriteFile(podFileName, []byte(PodGenericYaml), 0644)
+	// create ping pod for Microshift
+	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", podFileName).Output()
+	return err
+}
+
+// get generic sctpserver pod yaml file, replace variables as per requirements
+func createSCTPserverOnNode(oc *exutil.CLI, pod_pmtrs map[string]string) (err error) {
+	PodGenericYaml := getFileContentforSCTP("sctp", "sctpserverspecificnode.yaml")
+	for rep, value := range pod_pmtrs {
+		PodGenericYaml = strings.ReplaceAll(PodGenericYaml, rep, value)
+	}
+	podFileName := "temp-sctp-server-pod-" + getRandomString() + ".yaml"
+	defer os.Remove(podFileName)
+	os.WriteFile(podFileName, []byte(PodGenericYaml), 0644)
+	// create ping pod for Microshift
+	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", podFileName).Output()
+	return err
 }
