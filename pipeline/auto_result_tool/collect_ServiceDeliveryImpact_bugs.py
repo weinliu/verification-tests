@@ -35,8 +35,8 @@ class JIRAManager:
     def getIssues(self, filter=""):
         issues = dict()
         if not filter:
-            filter = "labels = ServiceDeliveryImpact AND created >= startOfYear() ORDER BY Created DESC"
-        issues_jira  = self.jira.search_issues(filter)
+            filter = "labels in (ServiceDeliveryImpact, ServiceDeliveryBlocker) AND created >= startOfYear() ORDER BY Created DESC"
+        issues_jira  = self.jira.search_issues(filter, maxResults=1000)
         for issue in issues_jira:
             if "OSDOCS" in issue.key:
                 continue
