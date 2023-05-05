@@ -138,17 +138,25 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	})
 
 	// author: pmali@redhat.com
-	g.It("Author:pmali-High-37290-mco should cope with ContainerRuntimeConfig whose finalizer > 63 characters", func() {
+	g.It("Longduration-NonPreRelease-Author:pmali-High-37290-mco should cope with ContainerRuntimeConfig whose finalizer > 63 characters[Disruptive][Slow]", func() {
 
 		ctrcfg.name = "finalizer-test"
 		ctrcfg.loglevel = "debug"
 		ctrcfg.overlay = "2G"
 		ctrcfg.logsizemax = "-1"
+
 		g.By("Create Container Runtime Config \n")
 		ctrcfg.create(oc)
-		defer cleanupObjectsClusterScope(oc, objectTableRefcscope{"ContainerRuntimeConfig", "finalizer-test"})
+		defer func() {
+			cleanupObjectsClusterScope(oc, objectTableRefcscope{"ContainerRuntimeConfig", "finalizer-test"})
+			err := getmcpStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "mcp is not updated")
+		}()
+		err := getmcpStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, "mcp is not updated")
+
 		g.By("Verify that ContainerRuntimeConfig is successfully created without any error message\n")
-		err := ctrcfg.checkCtrcfgStatus(oc)
+		err = ctrcfg.checkCtrcfgStatus(oc)
 		exutil.AssertWaitPollNoErr(err, "Config is failed")
 	})
 

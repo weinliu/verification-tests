@@ -424,3 +424,17 @@ func checkProxy(oc *exutil.CLI) bool {
 	}
 	return false
 }
+
+func getmcpStatus(oc *exutil.CLI, nodeSelector string) error {
+	return wait.Poll(10*time.Second, 15*time.Minute, func() (bool, error) {
+		mCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.machineCount}").Output()
+		unmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.unavailableMachineCount}").Output()
+		dmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.degradedMachineCount}").Output()
+		rmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.readyMachineCount}").Output()
+		e2e.Logf("MachineCount:%v unavailableMachineCount:%v degradedMachineCount:%v ReadyMachineCount:%v", mCount, unmCount, dmCount, rmCount)
+		if strings.Compare(mCount, rmCount) == 0 && strings.Compare(unmCount, dmCount) == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+}
