@@ -17,16 +17,15 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-	v "github.com/openshift/openshift-tests-private/test/extended/mco"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var (
-	winVersion       = "2019"
 	wmcoNamespace    = "openshift-windows-machine-config-operator"
 	wmcoDeployment   = "windows-machine-config-operator"
+	mcoNamespace     = "openshift-machine-api"
 	defaultNamespace = "winc-test"
 	windowsWorkloads = "win-webserver"
 	linuxWorkloads   = "linux-webserver"
@@ -290,7 +289,7 @@ func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string
 		windowsWebServer = strings.ReplaceAll(windowsWebServer, rep, value)
 	}
 	tempFileName := namespace + "-windows-workload"
-	defer os.Remove(namespace + "-windows-workload")
+	defer os.Remove(tempFileName)
 	os.WriteFile(tempFileName, []byte(windowsWebServer), 0644)
 	oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
 	// Wait up to 15 minutes for Windows workload ready in case of Windows image is not pre-pulled
@@ -344,7 +343,7 @@ func scaleDeployment(oc *exutil.CLI, deploymentName string, replicas int, namesp
 }
 
 func scaleWindowsMachineSet(oc *exutil.CLI, windowsMachineSetName string, deadTime int, replicas int, skipWait bool) {
-	err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), exutil.MapiMachineset, windowsMachineSetName, "-n", "openshift-machine-api").Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), exutil.MapiMachineset, windowsMachineSetName, "-n", mcoNamespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if !skipWait {
 		waitForMachinesetReady(oc, windowsMachineSetName, deadTime, replicas)
@@ -394,10 +393,8 @@ func truncatedVersion(s string) string {
 	return strings.Join(str[:], ".")
 }
 
-func configureMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetName string, fileName string, imageOrder string) error {
+func configureMachineset(oc *exutil.CLI, iaasPlatform, machineSetName string, fileName string, imageID string) error {
 	infrastructureID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-	// imageOrder parameter stores if we request the primary or secondary image/container
-	imageID := getConfigMapData(oc, imageOrder+"_windows_image")
 
 	if iaasPlatform == "aws" {
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
@@ -405,7 +402,7 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machin
 			e2e.Logf("Using default AWS region: us-east-2")
 			region = "us-east-2"
 		}
-		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 		if err != nil {
 			e2e.Logf("Using default AWS zone: us-east-2a")
 			zone = "us-east-2a"
@@ -417,7 +414,6 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machin
 			map[string]string{"<windows_image_with_container_runtime_installed>": imageID},
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile).Execute()
 		defer os.Remove(manifestFile)
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -432,7 +428,6 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machin
 			map[string]string{"<location>": location}, map[string]string{"<SKU>": imageID}, map[string]string{"<name>": machineSetName},
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile).Execute()
 		defer os.Remove(manifestFile)
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -444,13 +439,12 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machin
 			map[string]string{"<name>": machineSetName},
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile).Execute()
 		defer os.Remove(manifestFile)
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else if iaasPlatform == "gcp" {
 
-		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.gcp.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -464,7 +458,6 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machin
 			map[string]string{"<name>": machineSetName},
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile).Execute()
 		defer os.Remove(manifestFile)
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -474,9 +467,16 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machin
 	return err
 }
 
+func deleteResource(oc *exutil.CLI, resourceType string, resourceName string, namespace string, optionalParameters ...string) {
+	cmdArgs := []string{resourceType, resourceName, "-n", namespace}
+	cmdArgs = append(cmdArgs, optionalParameters...)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(cmdArgs...).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int, expectedReplicas int) {
 	pollErr := wait.Poll(30*time.Second, time.Duration(deadTime)*time.Minute, func() (bool, error) {
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachineset, machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", "openshift-machine-api").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachineset, machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", mcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		numberOfMachines := 0
 		if msg != "" {
@@ -550,7 +550,7 @@ func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []s
 	machineAddresses := ""
 	pollErr := wait.Poll(5*time.Second, 200*time.Second, func() (bool, error) {
 		var err error
-		machineAddresses, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
+		machineAddresses, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", mcoNamespace).Output()
 		if err != nil || machineAddresses == "" {
 			e2e.Logf("Did not get address, trying next round")
 			return false, nil
@@ -693,19 +693,12 @@ func getEndpointsIPs(oc *exutil.CLI, namespace string) string {
 	return endpoints
 }
 
-func setBYOH(oc *exutil.CLI, iaasPlatform string, addressesType []string, machinesetName string) []string {
+func setBYOH(oc *exutil.CLI, iaasPlatform string, addressesType []string, machinesetName string, winVersion string) []string {
 	user := getAdministratorNameByPlatform(iaasPlatform)
-	clusterVersions, _, err := exutil.GetClusterVersion(oc)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if v.CompareVersions(clusterVersions, ">", "4.9") {
-		winVersion = "2022"
-	} else if v.CompareVersions(clusterVersions, "<=", "4.9") && iaasPlatform == "vsphere" {
-		winVersion = "2004"
-	}
 	machinesetFileName := iaasPlatform + "_byoh_machineset.yaml"
 
 	// here we need to use a hardcoded machineset 'byoh' since AWS machineset name is too long.
-	err = configureMachineset(oc, iaasPlatform, winVersion, "byoh", machinesetFileName, "primary")
+	err := configureMachineset(oc, iaasPlatform, "byoh", machinesetFileName, winVersion)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var addressesArray []string
 	var manifestFile string
@@ -728,7 +721,6 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressesType []string, machin
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	}
-	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile).Execute()
 	defer os.Remove(manifestFile)
 	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -737,9 +729,9 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressesType []string, machin
 	return addressesArray
 }
 
-func setMachineset(oc *exutil.CLI, iaasPlatform string, machinesetName string) {
+func setMachineset(oc *exutil.CLI, iaasPlatform string, machinesetName string, winVersion string) {
 	machinesetFileName := iaasPlatform + "_windows_machineset.yaml"
-	err := configureMachineset(oc, iaasPlatform, winVersion, "winc", machinesetFileName, "primary")
+	err := configureMachineset(oc, iaasPlatform, "winc", machinesetFileName, winVersion)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -749,14 +741,14 @@ func createWindowsAutoscaller(oc *exutil.CLI, machineSetName, namespace string) 
 	o.Expect(err).NotTo(o.HaveOccurred())
 	machineAutoscaller, err := exutil.GenerateManifestFile(oc, "winc", "machine-autoscaler.yaml", map[string]string{"<windows_machineset_name>": machineSetName})
 	o.Expect(err).NotTo(o.HaveOccurred())
-	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", machineAutoscaller, "--ignore-not-found").Execute()
+	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineautoscaler", machineAutoscaller, "-n", mcoNamespace, "--ignore-not-found").Execute()
 	defer os.Remove(machineAutoscaller)
-	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineAutoscaller, "-n", "openshift-machine-api").Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineAutoscaller, "-n", mcoNamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func destroyWindowsAutoscaller(oc *exutil.CLI) {
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineautoscaler", "winc-default-machineautoscaler", "-n", "openshift-machine-api").Output()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineautoscaler", "winc-default-machineautoscaler", "-n", mcoNamespace).Output()
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterautoscalers.autoscaling.openshift.io", "default").Output()
 }
 
@@ -918,7 +910,6 @@ func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey str
 	// create new namespace
 	manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "namespace.yaml", map[string]string{"<namespace>": namespace})
 	o.Expect(err).NotTo(o.HaveOccurred())
-	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile).Execute()
 	defer os.Remove(manifestFile)
 	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -929,7 +920,6 @@ func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey str
 	// create new operatorgroup
 	manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "operatorgroup.yaml", map[string]string{"<namespace>": namespace})
 	o.Expect(err).NotTo(o.HaveOccurred())
-	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile).Execute()
 	defer os.Remove(manifestFile)
 	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -937,7 +927,6 @@ func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey str
 	// create subscription
 	manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "subscription.yaml", map[string]string{"<namespace>": namespace, "<source>": source})
 	o.Expect(err).NotTo(o.HaveOccurred())
-	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile).Execute()
 	defer os.Remove(manifestFile)
 	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
