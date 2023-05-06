@@ -17,3 +17,10 @@ export namespace helperfuncs {
         });
     }
 }
+export const actionList = {
+  clickActionItem: (itemName) => {
+    cy.byLegacyTestID('actions-menu-button').click();
+    cy.get(`button[data-test-action="${itemName}"]`).click();
+  },
+  submitAction: () => cy.get('button[type="submit"]').click(),
+}

@@ -8,6 +8,7 @@ declare global {
             cliLogout();
             adminCLI(command: string);
             hasWindowsNode();
+            isEdgeCluster();
         }
     }
 }
@@ -60,3 +61,16 @@ const hasWindowsNode = () :boolean => {
 Cypress.Commands.add("hasWindowsNode", () => {
   return hasWindowsNode();
 });
+Cypress.Commands.add("isEdgeCluster", () => {
+  cy.exec(`oc get infrastructure cluster -o jsonpath={.spec.platformSpec.type} --kubeconfig ${kubeconfig}`, { failOnNonZeroExit: false }).then((result) => {
+      cy.log(result.stdout);
+      if ( result.stdout == 'BareMetal' ){
+         cy.log("Testing on Edge cluster.");
+         return cy.wrap(true);
+      }else {
+         cy.log("It's not Edge cluster. Skip!");
+         return cy.wrap(false);
+      }
+    });
+});
+
