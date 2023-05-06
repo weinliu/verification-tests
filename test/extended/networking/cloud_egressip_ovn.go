@@ -2153,8 +2153,26 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
 		g.By("6. Create an egressip object\n")
-		freeIPs := findFreeIPs(oc, egressNodes[0], 2)
-		o.Expect(len(freeIPs)).Should(o.Equal(2))
+		ipStackType := checkIPStackType(oc)
+		var freeIPs []string
+		lspExpNum := 10
+		switch ipStackType {
+		case "ipv4single":
+			freeIPs = findFreeIPs(oc, egressNodes[0], 2)
+			o.Expect(len(freeIPs)).Should(o.Equal(2))
+		case "dualstack":
+			//Get one IPv6 address for second node
+			freeIPv6s := findFreeIPv6s(oc, egressNodes[1], 1)
+			o.Expect(len(freeIPv6s)).Should(o.Equal(1))
+			//Get one IPv4 address
+			freeIPs = findFreeIPs(oc, egressNodes[0], 1)
+			o.Expect(len(freeIPs)).Should(o.Equal(1))
+			freeIPs = append(freeIPs, freeIPv6s[0])
+			lspExpNum = 20
+		case "ipv6single":
+			freeIPs = findFreeIPv6s(oc, egressNodes[0], 2)
+			o.Expect(len(freeIPs)).Should(o.Equal(2))
+		}
 		egressip1 := egressIPResource1{
 			name:      "egressip-55030",
 			template:  egressIP1Template,
@@ -2175,7 +2193,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 
 		g.By("6. Check lr-policy-list and snat in northdb. \n")
 		lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep -v inport"
-		lspErr := searchOVNDBForSpecCmd(oc, lspCmd, "100 ", 10)
+		lspErr := searchOVNDBForSpecCmd(oc, lspCmd, "100 ", lspExpNum)
 		exutil.AssertWaitPollNoErr(lspErr, ("The lr-policy-list was not synced correctly! "))
 		snatCmd := "ovn-nbctl --format=csv --no-heading find nat external_ids:name=" + egressip1.name
 		snatErr := searchOVNDBForSpecCmd(oc, snatCmd, egressip1.name, 20)
@@ -2753,4 +2771,104 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		o.Expect(podLogs).To(o.ContainSubstring(expectedCloseConnectString))
 	})
 
+})
+
+var _ = g.Describe("[sig-networking] SDN OVN EgressIP IPv6", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc              = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+		egressNodeLabel = "k8s.ovn.org/egress-assignable"
+		rduBastionHost  = "2620:52:0:800:3673:5aff:fe99:92f0"
+	)
+
+	g.BeforeEach(func() {
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+		if err != nil || !(strings.Contains(msg, "sriov.openshift-qe.sdn.com") || strings.Contains(msg, "offload.openshift-qe.sdn.com")) {
+			g.Skip("This case will only run on rdu1 or rdu2 dual stack cluster. , skip for other envrionment!!!")
+		}
+		if strings.Contains(msg, "offload.openshift-qe.sdn.com") {
+			rduBastionHost = "2620:52:0:800:3673:5aff:fe98:d2d0"
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:huirwang-Medium-43466-EgressIP works well with ipv6 address. [Serial]", func() {
+		ipStackType := checkIPStackType(oc)
+		//We already have many egressIP cases cover ipv4 addresses on both ipv4 and dualstack clusters,so this case focuses on dualstack cluster for ipv6 addresses.
+		if ipStackType != "dualstack" {
+			g.Skip("Current env is not dualsatck cluster, skip this test!!!")
+		}
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		g.By("create new namespace")
+		ns := oc.Namespace()
+
+		g.By("Label EgressIP node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		egressNode1 := nodeList.Items[0].Name
+
+		g.By("Apply EgressLabel Key for this test on one node.")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
+
+		g.By("Apply label to namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create an egressip object")
+		freeIPv6s := findFreeIPv6s(oc, egressNode1, 1)
+		o.Expect(len(freeIPv6s)).Should(o.Equal(1))
+
+		egressip1 := egressIPResource1{
+			name:          "egressip-43466",
+			template:      egressIP2Template,
+			egressIP1:     freeIPv6s[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+
+		g.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: oc.Namespace(),
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("Apply label to pod")
+		err = exutil.LabelPod(oc, ns, pod1.name, "color=pink")
+		defer exutil.LabelPod(oc, ns, pod1.name, "color-")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Start tcpdump on node1")
+		e2e.Logf("Trying to get physical interface on the node,%s", egressNode1)
+		phyInf, nicError := getSnifPhyInf(oc, egressNode1)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s icmp6 and dst %s", phyInf, rduBastionHost)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+egressNode1, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check source IP is EgressIP")
+		pingCmd := fmt.Sprintf("ping -c4 %s", rduBastionHost)
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdErr := cmdTcpdump.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring(freeIPv6s[0]))
+
+	})
 })
