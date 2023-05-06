@@ -32,7 +32,7 @@ class JIRAManager:
         }            
         self.jira = JIRA(options=options, token_auth=token_auth)
         
-    def getIssues(self, filter=""):
+    def get_issues(self, filter=""):
         issues = dict()
         if not filter:
             filter = "labels in (ServiceDeliveryImpact, ServiceDeliveryBlocker) AND created >= startOfYear() ORDER BY Created DESC"
@@ -81,12 +81,48 @@ class JIRAManager:
         self.logger.debug(pprint.pformat(issues, indent=1))
         self.logger.debug(json.dumps(issue.raw['fields'], indent=4, sort_keys=True))
         return issues
-
+    
+    def create_sub_task(self, bug_id):
+        self.logger.info("Create sub task for %s", bug_id)
+        if not bug_id:
+            return
+        parent_issue = self.jira.issue('OCPQE-14652')
+        project_key = parent_issue.fields.project.key
+        parent_issue_key = parent_issue.key
+        self.logger.debug(json.dumps(parent_issue.raw['fields'], indent=4, sort_keys=True))
+        qe_contact = ""
+        qe_displayname = ""
+        try:
+            bug_issue = self.jira.issue(bug_id)
+            self.logger.debug(json.dumps(bug_issue.raw['fields'], indent=4, sort_keys=True))
+            qe_contact = bug_issue.fields.customfield_12315948.name
+            qe_displayname = bug_issue.fields.customfield_12315948.displayName
+        except Exception as e:
+            self.logger.error("cannot get qe_contact for bug %s, %s", bug_id, e.text)
+            return
+        description_str = """
+Hi, {qe}
+To support Objective 1, OKR 3 ServiceDeliveryImpacted ServiceDeliveryBlocker Bugs created since Jan 1, 2023 are RCAed, tested and automated, please make sure {bug} is RCAed, tested and automated.
+Please update column I-M of bellow spreadsheet , thanks.
+https://docs.google.com/spreadsheets/d/1tU0IvHR9XahcBM_8kYZQXGIZiu79PG4X1X14XnZ1jeM/edit#gid=0
+""".format(qe=qe_displayname, bug=bug_id)
+        subtask = self.jira.create_issue(
+                        project=project_key,
+                        summary=bug_id+' is RCAed, tested and automated',
+                        description=description_str,
+                        issuetype={'name': 'Sub-task'},
+                        parent={'key': parent_issue_key},
+                        assignee= {"name": qe_contact}
+        )
+        self.logger.info("--------- Sub-task %s is created SUCCESS ----------", subtask.key)
+        self.logger.debug(json.dumps(subtask.raw['fields'], indent=4, sort_keys=True))
+        return subtask.key
 class CollectClient:
     def __init__(self, args):
         self.logger = get_logger()
         self.token = args.token
         self.key = args.key
+        self.create_jira = args.create_jira
         self.target_file = 'https://docs.google.com/spreadsheets/d/1tU0IvHR9XahcBM_8kYZQXGIZiu79PG4X1X14XnZ1jeM/edit#gid=0'
         self.jiraManager = JIRAManager("https://issues.redhat.com", self.token, self.logger)
         
@@ -140,8 +176,8 @@ class CollectClient:
             self.logger.info("================ update %s ======================", bug_id)
             time.sleep(5)
     
-    def collectIssues(self):
-        issues = self.jiraManager.getIssues()
+    def collect_issues(self):
+        issues = self.jiraManager.get_issues()
         self.write_e2e_google_sheet(issues)
         
     def request_debug(self):
@@ -169,9 +205,26 @@ Automated: the new test case is automated, if the case is manual only, please ma
                 if not rcaed or not tested or not automated:
                     message_list.append(bug_id + " "+ component +" @" +qa_contact.split(os.linesep)[0])
         self.logger.info(os.linesep.join(message_list))
-            
-            
-        
+    
+    def create_issue(self):
+        if not self.create_jira:
+            self.logger.warning("create jira is empty!")
+            return
+        spreadsheet = self.gclient.open_by_url(self.target_file)
+        worksheet = spreadsheet.worksheet("ServiceDeliveryImpact Bugs")
+        values_list_all = worksheet.get_all_values()
+        for row in range(1, len(values_list_all)):
+            values_list = values_list_all[row]
+            bug_id = values_list[0]
+            if bug_id == self.create_jira:
+                subtask_id = self.jiraManager.create_sub_task(bug_id)
+                if subtask_id:
+                    worksheet.update_acell("N"+str(row+1), "https://issues.redhat.com/browse/"+subtask_id)
+                else:
+                    self.logger.error("create sub-task for %s failed", bug_id)
+                return
+        self.logger.error("There is no %s in worksheet", self.create_jira)
+    
 
 ########################################################################################################################################
 if __name__ == "__main__":
@@ -179,10 +232,14 @@ if __name__ == "__main__":
     parser.add_argument("-t","--token", required=True, help="the jira token")
     parser.add_argument("-k","--key", default="", required=False, help="the key file path")
     parser.add_argument("-r","--request_debug", dest='request_debug', default=False, action='store_true', help="the flag to request debug")
+    parser.add_argument("-c", "--create_jira", default="", required=False, help="create jira ticket")
     args=parser.parse_args()
-
+        
     cclient = CollectClient(args)
-    if not args.request_debug:
-        cclient.collectIssues()
-    cclient.request_debug()
+    if args.create_jira:
+       cclient.create_issue()
+    else:
+        if not args.request_debug:
+            cclient.collect_issues()
+        cclient.request_debug()
     exit(0)  
