@@ -61,6 +61,120 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		testOCPImage = getTestOCPImage()
 	})
 
+	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "25443"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Low-25443-[aws]Clusterdeployment contains Status.Condition of SyncSet status in case of sysncset is invalid [Serial]", func() {
+		testCaseID := "25443"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		g.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Create SyncSet for resource apply......")
+		syncSetName := testCaseID + "-syncset1"
+		configMapName := testCaseID + "-configmap1"
+		configMapNamespace := testCaseID + "-configmap1-ns"
+		resourceMode := "Sync"
+		syncTemp := filepath.Join(testDataDir, "syncset-resource.yaml")
+		syncResource := syncSetResource{
+			name:        syncSetName,
+			namespace:   oc.Namespace(),
+			namespace2:  configMapNamespace,
+			cdrefname:   cdName,
+			cmname:      configMapName,
+			cmnamespace: configMapNamespace,
+			ramode:      resourceMode,
+			template:    syncTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetName})
+		syncResource.create(oc)
+		e2e.Logf("Check ClusterDeployment is installed.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		e2e.Logf("Check if SyncSetPatch is created successfully.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName, ok, DefaultTimeout, []string{"SyncSet", syncSetName, "-n", oc.Namespace()}).check(oc)
+		e2e.Logf("Check if Syncset is not failed before applying the patch.")
+		waitForSyncsetSuccess := func() bool {
+			condition := getCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "SyncSetFailed")
+			if status, ok := condition["status"]; !ok || status != "False" {
+				e2e.Logf("For condition SyncSetFailed, expected status is False, actual status is %v, retrying ...", status)
+				return false
+			}
+			if reason, ok := condition["reason"]; !ok || reason != "SyncSetApplySuccess" {
+				e2e.Logf("For condition SyncSetFailed, expected reason is SyncSetApplySuccess, actual reason is %v, retrying ...", reason)
+				return false
+			}
+			if message, ok := condition["message"]; !ok || strings.Compare(message, "SyncSet apply is successful") != 0 {
+				e2e.Logf("For condition SyncSetFailed, expected message is \nSyncSet apply is successful, \nactual reason is %v\n, retrying ...", message)
+				return false
+			}
+			e2e.Logf("For condition SyncSetFailed, fields status, reason & message all expected, proceeding to the next step ...")
+			return true
+		}
+		o.Eventually(waitForSyncsetSuccess).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+		syncSetPatchName := testCaseID + "-syncset-patch"
+		syncPatchTemp := filepath.Join(testDataDir, "syncset-patch.yaml")
+		patchContent := ` { "data": { "foo": "new-bar" }`
+		patchType := "merge"
+		syncPatch := syncSetPatch{
+			name:        syncSetPatchName,
+			namespace:   oc.Namespace(),
+			cdrefname:   cdName,
+			cmname:      configMapName,
+			cmnamespace: configMapNamespace,
+			pcontent:    patchContent,
+			patchType:   patchType,
+			template:    syncPatchTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetPatchName})
+		syncPatch.create(oc)
+		e2e.Logf("Check if Syncset is failed.")
+		waitForSyncsetFail := func() bool {
+			condition := getCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "SyncSetFailed")
+			if status, ok := condition["status"]; !ok || status != "True" {
+				e2e.Logf("For condition SyncSetFailed, expected status is True, actual status is %v, retrying ...", status)
+				return false
+			}
+			if reason, ok := condition["reason"]; !ok || reason != "SyncSetApplyFailure" {
+				e2e.Logf("For condition SyncSetFailed, expected reason is SyncSetApplyFailure, actual reason is %v, retrying ...", reason)
+				return false
+			}
+			if message, ok := condition["message"]; !ok || strings.Compare(message, "One of the SyncSet applies has failed") != 0 {
+				e2e.Logf("For condition SyncSetFailed, expected message is \nOne of the SyncSet applies has failed, \nactual reason is %v\n, retrying ...", message)
+				return false
+			}
+			e2e.Logf("For condition SyncSetFailed, fields status, reason & message all expected, proceeding to the next step ...")
+			return true
+		}
+		o.Eventually(waitForSyncsetFail).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+	})
+
 	//author: fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "25145"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-25145-[aws]Dynamically detect change to global pull secret content [Serial]", func() {
