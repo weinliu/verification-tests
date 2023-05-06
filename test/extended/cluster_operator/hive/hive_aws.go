@@ -532,13 +532,25 @@ spec:
 		o.Expect(*listUserTagsOutput.Tags[0].Value).To(o.Equal("owned"))
 	})
 
-	//author: jshu@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//author: jshu@redhat.com fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "25310"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-25310-High-33374-High-39747-Medium-23165-[aws]Hive ClusterDeployment Check installed and version [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-25310-High-33374-High-39747-Medium-23165-High-22760-[aws]Hive ClusterDeployment Check installed and version [Serial]", func() {
 		testCaseID := "25310"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
+
+		g.By("Selecting a custom OCP version to install ...")
+		ocpVersion := extractRelfromImg(testOCPImage)
+		xyzVersion := strings.Split(ocpVersion, ".")
+		majorVersion := xyzVersion[0]
+		minorVersion := xyzVersion[1]
+		patchVersion := xyzVersion[2]
+		minorVersionInt, err := strconv.Atoi(minorVersion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		minorVersion = strconv.Itoa(minorVersionInt - 1)
+		customOCPImage, err := exutil.GetLatestNightlyImage(majorVersion + "." + minorVersion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Will install OCP version " + customOCPImage)
 
 		g.By("config Install-Config Secret...")
 		installConfigSecret := installConfig{
@@ -566,7 +578,7 @@ spec:
 			installAttemptsLimit: 3,
 		}
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
-		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+		createCD(testDataDir, customOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 		g.By("hive.go namespace..." + oc.Namespace())
 
 		g.By("Create worker and infra MachinePool ...")
@@ -595,7 +607,7 @@ spec:
 		//newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		e2e.Logf("test OCP-33374")
-		ocpVersion := extractRelfromImg(testOCPImage)
+		ocpVersion = majorVersion + "." + minorVersion + "." + patchVersion
 		if ocpVersion == "" {
 			g.Fail("Case failed because no OCP version extracted from Image")
 		}
@@ -610,7 +622,7 @@ spec:
 
 		g.By("OCP-23165:Hive supports remote Machine Set Management for AWS")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
-		err := os.MkdirAll(tmpDir, 0777)
+		err = os.MkdirAll(tmpDir, 0777)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
@@ -650,6 +662,10 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
 		e2e.Logf("Check 2 machines in Running status")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+
+		e2e.Logf("OCP-22760: Use custom cluster image set to deploy cluster")
+		fullImgString := customOCPImage[strings.Index(customOCPImage, ":")+1:]
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, fullImgString, ok, DefaultTimeout, []string{"ClusterVersion", "version", "-o=jsonpath={.status.desired.version}", "--kubeconfig=" + kubeconfig}).check(oc)
 	})
 
 	//author: jshu@redhat.com
