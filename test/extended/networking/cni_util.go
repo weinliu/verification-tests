@@ -151,11 +151,9 @@ func multihomingBeforeCheck(oc *exutil.CLI) ([]string, []string, []string, []str
 	g.By("Check if the new OVN switch is created")
 	ovnMasterPodName := getOVNLeaderPod(oc, "north")
 	o.Expect(ovnMasterPodName).ShouldNot(o.Equal(""))
-	if checkOVNSwitch(oc, nadName, ovnMasterPodName) {
-		e2e.Logf("The correct OVN switch is created")
-	} else {
-		e2e.Failf("The correct OVN switch is not created")
-	}
+	o.Eventually(func() bool {
+		return checkOVNSwitch(oc, nadName, ovnMasterPodName)
+	}, 30*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch is not created")
 
 	g.By("Create 1st pod consuming above network-attach-defintion in ns1")
 	pod1 := testMultihomingPod{
@@ -216,14 +214,11 @@ func multihomingBeforeCheck(oc *exutil.CLI) ([]string, []string, []string, []str
 
 	g.By("Check if the new OVN switch ports is created")
 	listSWCmd := "ovn-nbctl show | grep port | grep " + nadName + " "
-	listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd)
-	o.Expect(listErr).NotTo(o.HaveOccurred())
-	podname := []string{pod1Name[0], pod2Name[0], pod3Name[0]}
-	if checkOVNswitchPorts(podname, listOutput) {
-		e2e.Logf("The correct OVN switch ports are create")
-	} else {
-		e2e.Failf("The correct OVN switch ports are not created")
-	}
+	podName := []string{pod1Name[0], pod2Name[0], pod3Name[0]}
+	o.Eventually(func() bool {
+		listOutput, _ := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd)
+		return checkOVNswitchPorts(podName, listOutput)
+	}, 30*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch ports are not created")
 
 	g.By("Checking connectivity from pod1 to pod2")
 	CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod2IPv4, "net1", pod2.podenvname)
@@ -249,7 +244,6 @@ func multihomingBeforeCheck(oc *exutil.CLI) ([]string, []string, []string, []str
 	CurlMultusPod2PodPass(oc, ns1, pod3Name[0], pod2IPv4, "net1", pod2.podenvname)
 	CurlMultusPod2PodPass(oc, ns1, pod3Name[0], pod2IPv6, "net1", pod2.podenvname)
 
-	podName := []string{pod1Name[0], pod2Name[0], pod3Name[0]}
 	podEnvName := []string{pod1.podenvname, pod2.podenvname, pod3.podenvname}
 	podIPv4 := []string{pod1IPv4, pod2IPv4, pod3IPv4}
 	podIPv6 := []string{pod1IPv6, pod2IPv6, pod3IPv6}
@@ -299,6 +293,7 @@ func multihomingAfterCheck(oc *exutil.CLI, podName []string, podEnvName []string
 	o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--all", "-n", ns).Execute()).NotTo(o.HaveOccurred())
 	//After deleting pods, it will take several seconds to delete the switch ports
 	ovnMasterPodNewName := getOVNLeaderPod(oc, "north")
+	o.Expect(ovnMasterPodNewName).ShouldNot(o.Equal(""))
 	listSWCmd := "ovn-nbctl show | grep port | grep " + nadName + " "
 	o.Eventually(func() bool {
 		listOutput, _ := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodNewName, listSWCmd)
@@ -314,9 +309,7 @@ func multihomingAfterCheck(oc *exutil.CLI, podName []string, podEnvName []string
 	}
 
 	g.By("Check if the new created OVN switch is deleted")
-	if !checkOVNSwitch(oc, nadName, ovnMasterPodNewName) {
-		e2e.Logf("The correct OVN switch is deleted")
-	} else {
-		e2e.Failf("The correct OVN switch is not deleted")
-	}
+	o.Eventually(func() bool {
+		return checkOVNSwitch(oc, nadName, ovnMasterPodNewName)
+	}, 30*time.Second, 5*time.Second).ShouldNot(o.BeTrue(), "The correct OVN switch is not deleted")
 }

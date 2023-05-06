@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Create a test namespace")
 		ns1 := oc.Namespace()
 
-		nadName := "layer2ipv4network"
+		nadName := "layer2ipv4network60505"
 		nsWithnad := ns1 + "/" + nadName
 
 		g.By("Create a custom resource network-attach-defintion in tested namespace")
@@ -69,11 +69,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Check if the new OVN switch is created")
 		ovnMasterPodName := getOVNLeaderPod(oc, "north")
 		o.Expect(ovnMasterPodName).ShouldNot(o.Equal(""))
-		if checkOVNSwitch(oc, nadName, ovnMasterPodName) {
-			e2e.Logf("The correct OVN switch is created")
-		} else {
-			e2e.Failf("The correct OVN switch is not created")
-		}
+		o.Eventually(func() bool {
+			return checkOVNSwitch(oc, nadName, ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch is not created")
 
 		g.By("Create 1st pod consuming above network-attach-defintion in ns1")
 		pod1 := testMultihomingPod{
@@ -131,14 +129,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("Check if the new OVN switch ports is created")
 		listSWCmd := "ovn-nbctl show | grep port | grep " + nadName + " "
-		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd)
-		o.Expect(listErr).NotTo(o.HaveOccurred())
 		podname := []string{pod1Name[0], pod2Name[0], pod3Name[0]}
-		if checkOVNswitchPorts(podname, listOutput) {
-			e2e.Logf("The correct OVN switch ports are create")
-		} else {
-			e2e.Failf("The correct OVN switch ports are not created")
-		}
+		o.Eventually(func() bool {
+			listOutput, _ := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd)
+			return checkOVNswitchPorts(podname, listOutput)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch ports are not created")
 
 		g.By("Checking connectivity from pod1 to pod2")
 		CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod2IPv4, "net1", pod2.podenvname)
@@ -175,11 +170,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		g.By("Check if the new created OVN switch is deleted")
-		if !checkOVNSwitch(oc, nadName, ovnMasterPodName) {
-			e2e.Logf("The correct OVN switch is deleted")
-		} else {
-			e2e.Failf("The correct OVN switch is not deleted")
-		}
+		o.Eventually(func() bool {
+			return checkOVNSwitch(oc, nadName, ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).ShouldNot(o.BeTrue(), "The correct OVN switch is not deleted")
 	})
 
 	// author: weliang@redhat.com
@@ -200,7 +193,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Create a test namespace")
 		ns1 := oc.Namespace()
 
-		nadName := "layer2ipv6network"
+		nadName := "layer2ipv6network60506"
 		nsWithnad := ns1 + "/" + nadName
 
 		g.By("Create a custom resource network-attach-defintion in tested namespace")
@@ -226,11 +219,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Check if the new OVN switch is created")
 		ovnMasterPodName := getOVNLeaderPod(oc, "north")
 		o.Expect(ovnMasterPodName).ShouldNot(o.Equal(""))
-		if checkOVNSwitch(oc, nadName, ovnMasterPodName) {
-			e2e.Logf("The correct OVN switch is created")
-		} else {
-			e2e.Failf("The correct OVN switch is not created")
-		}
+		o.Eventually(func() bool {
+			return checkOVNSwitch(oc, nadName, ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch is not created")
 
 		g.By("Create 1st pod consuming above network-attach-defintion in ns1")
 		pod1 := testMultihomingPod{
@@ -288,14 +279,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("Check if the new OVN switch ports is created")
 		listSWCmd := "ovn-nbctl show | grep port | grep " + nadName + " "
-		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd)
-		o.Expect(listErr).NotTo(o.HaveOccurred())
 		podname := []string{pod1Name[0], pod2Name[0], pod3Name[0]}
-		if checkOVNswitchPorts(podname, listOutput) {
-			e2e.Logf("The correct OVN switch ports are create")
-		} else {
-			e2e.Failf("The correct OVN switch ports are not created")
-		}
+		o.Eventually(func() bool {
+			listOutput, _ := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd)
+			return checkOVNswitchPorts(podname, listOutput)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch ports are not created")
 
 		g.By("Checking connectivity from pod1 to pod2")
 		CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod2IPv6, "net1", pod2.podenvname)
@@ -332,15 +320,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		g.By("Check if the new created OVN switch is deleted")
-		if !checkOVNSwitch(oc, nadName, ovnMasterPodName) {
-			e2e.Logf("The correct OVN switch is deleted")
-		} else {
-			e2e.Failf("The correct OVN switch is not deleted")
-		}
+		o.Eventually(func() bool {
+			return checkOVNSwitch(oc, nadName, ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).ShouldNot(o.BeTrue(), "The correct OVN switch is not deleted")
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-Author:weliang-Medium-60507-Multihoming Verify multihoming pods dualstack connectivity", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-60507-Multihoming Verify multihoming pods dualstack connectivity.[Disruptive]", func() {
 		var podName, podEnvName, podIPv4, podIPv6 []string
 		var ovnMasterPodName, ns, nadName string
 
@@ -367,7 +353,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Create a test namespace")
 		ns1 := oc.Namespace()
 
-		nadName := "layer2excludeipv4network"
+		nadName := "layer2excludeipv4network60508"
 		nsWithnad := ns1 + "/" + nadName
 
 		g.By("Create a custom resource network-attach-defintion in tested namespace")
@@ -474,7 +460,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Create a test namespace")
 		ns1 := oc.Namespace()
 
-		nadName := "layer2excludeipv6network"
+		nadName := "layer2excludeipv6network60509"
 		nsWithnad := ns1 + "/" + nadName
 
 		g.By("Create a custom resource network-attach-defintion in tested namespace")
@@ -626,16 +612,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Check if two new OVN switchs are created")
 		ovnMasterPodName := getOVNLeaderPod(oc, "north")
 		o.Expect(ovnMasterPodName).ShouldNot(o.Equal(""))
-		if checkOVNSwitch(oc, nadName1, ovnMasterPodName) {
-			e2e.Logf("The correct OVN switch: %s is created", nadName1)
-		} else {
-			e2e.Failf("The correct OVN switch: %s is not created", nadName1)
-		}
-		if checkOVNSwitch(oc, nadName2, ovnMasterPodName) {
-			e2e.Logf("The correct OVN switch: %s is created", nadName2)
-		} else {
-			e2e.Failf("The correct OVN switch: %s is not created", nadName2)
-		}
+		o.Eventually(func() bool {
+			return checkOVNSwitch(oc, nadName1, ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch1 is not created")
+		o.Eventually(func() bool {
+			return checkOVNSwitch(oc, nadName2, ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch2 is not created")
 
 		g.By("Create 1st pod consuming above network-attach-defintions in ns1")
 		pod1 := testMultihomingPod{
@@ -696,22 +678,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("Check if the new OVN switch ports is created")
 		listSWCmd := "ovn-nbctl show | grep port | grep " + nadName1 + " "
-		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd)
-		o.Expect(listErr).NotTo(o.HaveOccurred())
 		podname := []string{pod1Name[0], pod2Name[0], pod3Name[0]}
-		if checkOVNswitchPorts(podname, listOutput) {
-			e2e.Logf("The correct OVN switch ports are create")
-		} else {
-			e2e.Failf("The correct OVN switch ports are not created")
-		}
+		o.Eventually(func() bool {
+			listOutput, _ := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd)
+			return checkOVNswitchPorts(podname, listOutput)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch ports are not created")
 		listSWCmd1 := "ovn-nbctl show | grep port | grep " + nadName2 + " "
-		listOutput1, listErr1 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd1)
-		o.Expect(listErr1).NotTo(o.HaveOccurred())
-		if checkOVNswitchPorts(podname, listOutput1) {
-			e2e.Logf("The correct OVN switch ports are create")
-		} else {
-			e2e.Failf("The correct OVN switch ports are not created")
-		}
+		o.Eventually(func() bool {
+			listOutput, _ := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd1)
+			return checkOVNswitchPorts(podname, listOutput)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch ports are not created")
 
 		g.By("Checking net1 connectivity from pod1 to pod2")
 		CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod2Net1IPv4, "net1", pod2.podenvname)
@@ -831,16 +807,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		g.By("Check if the new created OVN switch is deleted")
-		if !checkOVNSwitch(oc, nadName1, ovnMasterPodName) {
-			e2e.Logf("The correct OVN switch: %v is deleted!", nadName1)
-		} else {
-			e2e.Failf("The correct OVN switch: %v is not deleted!", nadName1)
-		}
-		if !checkOVNSwitch(oc, nadName2, ovnMasterPodName) {
-			e2e.Logf("The correct OVN switch: %v is deleted!", nadName2)
-		} else {
-			e2e.Failf("The correct OVN switch: %v is not deleted!", nadName2)
-		}
+		o.Eventually(func() bool {
+			return checkOVNSwitch(oc, nadName1, ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).ShouldNot(o.BeTrue(), "The correct OVN switch1 is not deleted")
+		o.Eventually(func() bool {
+			return checkOVNSwitch(oc, nadName2, ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).ShouldNot(o.BeTrue(), "The correct OVN switch2 is not deleted")
 	})
 
 	// author: weliang@redhat.com
