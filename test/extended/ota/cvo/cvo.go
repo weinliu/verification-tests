@@ -1518,7 +1518,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer ocJSONPatch(oc, resourceNamespace, fmt.Sprintf("%s/%s", resourceKind, resourceName), []JSONp{
-			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "1"},
+			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", 1},
 		})
 
 		g.By("Check the deployment will not be reconciled back.")

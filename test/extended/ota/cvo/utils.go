@@ -137,6 +137,7 @@ func waitForAlert(oc *exutil.CLI, alertString string, interval time.Duration, ti
 
 // Check if operator's condition is expected until timeout or return ture or an error happened.
 func waitForCondition(interval time.Duration, timeout time.Duration, expectedCondition string, parameters string) error {
+	e2e.Logf("Checking condition for: %s", parameters)
 	err := wait.Poll(interval*time.Second, timeout*time.Second, func() (bool, error) {
 		output, err := exec.Command("bash", "-c", parameters).Output()
 		if err != nil {
@@ -145,7 +146,7 @@ func waitForCondition(interval time.Duration, timeout time.Duration, expectedCon
 		}
 		condition := strings.Replace(string(output), "\n", "", -1)
 		if strings.Compare(condition, expectedCondition) != 0 {
-			e2e.Logf("Current condition is: %v.Waiting for condition to be enabled...", condition)
+			e2e.Logf("Current condition is: '%s' Waiting for condition to be '%s'...", condition, expectedCondition)
 			return false, nil
 		}
 		e2e.Logf("Current condition is: %v", condition)
@@ -659,7 +660,31 @@ func changeCap(oc *exutil.CLI, base bool, cap interface{}) (string, error) {
 // 	return result, nil
 // }
 
-func setCVOverrides(oc *exutil.CLI, resourceKind string, resourceName string, resourceNamespace string) error {
+// waits for string 'message' to appear in CVO 'jsonpath'.
+// or waits for message to disappear if waitingToAppear=false.
+// returns error if any.
+func waitForCVOStatus(oc *exutil.CLI, interval time.Duration, timeout time.Duration, message string, jsonpath string, waitingToAppear bool) (err error) {
+	var prefix, out string
+	if !waitingToAppear {
+		prefix = "not "
+	}
+	e2e.Logf("Waiting for CVO '%s' %sto contain '%s'", jsonpath, prefix, message)
+	err = wait.Poll(interval*time.Second, timeout*time.Second, func() (bool, error) {
+		out, err = getCVObyJP(oc, jsonpath)
+		return strings.Contains(out, message) == waitingToAppear, err
+	})
+	if err != nil {
+		if strings.Compare(err.Error(), "timed out waiting for the condition") == 0 {
+			err = fmt.Errorf("reached time limit of %s waiting for CVO %sto contain '%s', dumping output:\n%s", timeout*time.Second, prefix, message, out)
+			return
+		}
+		err = fmt.Errorf("while waiting for CVO %sto contain '%s', an error was received: %s %s", prefix, message, out, err.Error())
+		e2e.Logf(err.Error())
+	}
+	return
+}
+
+func setCVOverrides(oc *exutil.CLI, resourceKind string, resourceName string, resourceNamespace string) (err error) {
 	type ovrd struct {
 		Ki string `json:"kind"`
 		Na string `json:"name"`
@@ -667,40 +692,30 @@ func setCVOverrides(oc *exutil.CLI, resourceKind string, resourceName string, re
 		Un bool   `json:"unmanaged"`
 		Gr string `json:"group"`
 	}
-	_, err := ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
-		{"add", "/spec/overrides", []ovrd{{resourceKind, resourceName, resourceNamespace, true, "apps"}}},
-	})
-	if err != nil {
-		e2e.Logf("Patch spec/overrides failed: %v.", err)
-		return err
+	var ovPatch string
+	if ovPatch, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
+		{"add", "/spec/overrides", []ovrd{{resourceKind, resourceName, resourceNamespace, true, "apps"}}}}); err != nil {
+		return fmt.Errorf("patching /spec/overrides failed with: %s %v", ovPatch, err)
 	}
 
-	e2e.Logf("Wait for Upgradeable=false...")
-	err = waitForCondition(30, 480, "False",
-		"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Upgradeable\").status'")
-	if err != nil {
-		e2e.Logf("Upgradeable condition is not false in 8m: %v", err)
-		return err
+	// upgradeable .reason may be ClusterVersionOverridesSet or MultipleReasons, but .message have to contain "overrides"
+	e2e.Logf("Waiting for Upgradeable to contain overrides message...")
+	if err = waitForCVOStatus(oc, 30, 8*60,
+		"Disabling ownership via cluster version overrides prevents upgrades",
+		".status.conditions[?(.type=='Upgradeable')].message", true); err != nil {
+		return
 	}
 
-	upgStatusOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
-	if err != nil {
-		return err
-	}
-	if !strings.Contains(upgStatusOutput, "ClusterVersionOverridesSet") {
-		e2e.Logf("No expected msg ClusterVersionOverridesSet!")
-		return fmt.Errorf("no expected msg ClusterVersionOverridesSet")
+	e2e.Logf("Waiting for ClusterVersionOverridesSet in oc adm upgrade...")
+	if !checkUpdates(oc, false, 30, 8*60, "ClusterVersionOverridesSet") {
+		return fmt.Errorf("no overrides message in oc adm upgrade within 8m")
 	}
 
-	e2e.Logf("Wait for Progressing=false...")
+	e2e.Logf("Waiting for Progressing=false...")
 	//to workaround the fake upgrade by cv.overrrides, refer to https://issues.redhat.com/browse/OTA-586
-	err = waitForCondition(30, 240, "False",
-		"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Progressing\").status'")
-	if err != nil {
-		e2e.Logf("Progressing condition is not false in 4m: %v", err)
-		return err
-	}
-	return nil
+	err = waitForCVOStatus(oc, 30, 8*60, "False",
+		".status.conditions[?(.type=='Progressing')].status", true)
+	return
 }
 
 func unsetCVOverrides(oc *exutil.CLI) {
@@ -708,10 +723,11 @@ func unsetCVOverrides(oc *exutil.CLI) {
 	_, err := ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/overrides", nil}})
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	e2e.Logf("Wait for Upgradeable=false disappear...")
-	err = waitForCondition(30, 480, "",
-		"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Upgradeable\").status'")
-	exutil.AssertWaitPollNoErr(err, "upgradeable=false condition does not disappear in 8m")
+	e2e.Logf("Waiting overrides to disappear from cluster conditions...")
+	err = waitForCVOStatus(oc, 30, 8*60,
+		"Disabling ownership via cluster version overrides prevents upgrades",
+		".status.conditions[?(.type=='Upgradeable')].message", false)
+	o.Expect(err).NotTo(o.HaveOccurred())
 
 	e2e.Logf("Check no ClusterVersionOverridesSet in `oc adm upgrade` msg...")
 	upgStatusOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
