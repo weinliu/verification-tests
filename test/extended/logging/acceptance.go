@@ -82,7 +82,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		g.By("deploy loki stack")
 		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
-			name:          "lok-53817",
+			name:          "loki-53817",
 			namespace:     cloNS,
 			tSize:         "1x.extra-small",
 			storageType:   s,

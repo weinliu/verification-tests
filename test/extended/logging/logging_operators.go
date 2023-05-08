@@ -871,7 +871,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls := lokiStack{
-			name:          "lok-53407",
+			name:          "loki-53407",
 			namespace:     "openshift-logging",
 			tSize:         "1x.extra-small",
 			storageType:   getStorageType(oc),
@@ -997,7 +997,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls := lokiStack{
-			name:          "lok-53404",
+			name:          "loki-53404",
 			namespace:     "openshift-logging",
 			tSize:         "1x.extra-small",
 			storageType:   getStorageType(oc),

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -148,14 +149,19 @@ func queryInESViaRoute(route, token string, indices []string, path, query, actio
 }
 
 func getIndexNamesViaRoute(route, token, prefix string) ([]string, error) {
-	params := newQueryStringBuilder()
-	params.values.Set("format", "json")
-	indexResp, err := queryInESViaRoute(route, token, []string{}, "_cat/indices", params.encode(), "get")
+	h := make(http.Header)
+	h.Add("Content-Type", "application/json")
+	h.Add("Authorization", "Bearer "+token)
+
+	params := url.Values{}
+	params.Add("format", "json")
+
+	resp, err := doHTTPRequest(h, route, "_cat/indices", params.Encode(), "GET", true, 5, nil, 200)
 	if err != nil {
-		return []string{}, err
+		return nil, err
 	}
 	var esIndices []ESIndex
-	json.Unmarshal([]byte(indexResp), &esIndices)
+	json.Unmarshal([]byte(resp), &esIndices)
 	var indices []string
 	for _, i := range esIndices {
 		if strings.HasPrefix(i.Index, prefix) {
