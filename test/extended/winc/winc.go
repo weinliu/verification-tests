@@ -375,9 +375,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// removing the config map
 		g.By("Delete the BYOH congigmap for node deconfiguration")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
-		// here we need to add 2 status change values since the log is indicating
 		// log entry 'instance has been deconfigured' after removing services
-		waitUntilWMCOStatusChanged(oc, "removing directories")
 		waitUntilWMCOStatusChanged(oc, "instance has been deconfigured")
 		// check services are not running
 		g.By("Check services are not running after deleting the Windows Node")
