@@ -5130,6 +5130,7 @@ else
 fi`, etcConfigYaml, etcConfigYamlbak)
 			_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+			restartMicroshift(oc, masterNodes[0])
 		}()
 
 		defer func() {
@@ -5246,5 +5247,76 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).NotTo(o.BeEmpty())
 		e2e.Logf("Globaldatadir %v not empty, it is restored :: %v", globalDataDir, chkContentOutput)
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Longduration-NonPreRelease-Author:rgangwar-Medium-63099-make logging config more resilient [Disruptive][Slow]", func() {
+		var (
+			e2eTestNamespace = "microshift-ocp63099"
+			etcConfigYaml    = "/etc/microshift/config.yaml"
+			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
+		)
+
+		g.By("1. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("2. Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		defer func() {
+			etcConfigCMD := fmt.Sprintf(`configfile=%v;
+			configfilebak=%v;
+			if [ -f $configfilebak ]; then
+				cp $configfilebak $configfile; 
+				rm -f $configfilebak;
+			else
+				rm -f $configfile;
+			fi`, etcConfigYaml, etcConfigYamlbak)
+			_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+			restartMicroshift(oc, masterNodes[0])
+		}()
+
+		g.By("3. Take backup of config file")
+		etcConfigCMD := fmt.Sprintf(`configfile=%v;
+		configfilebak=%v;
+		if [ -f $configfile ]; then 
+			cp $configfile $configfilebak;
+		fi`, etcConfigYaml, etcConfigYamlbak)
+		_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+
+		logLevels := []string{"Normal", "normal", "NORMAL", "debug", "DEBUG", "Trace", "trace", "TRACE", "TraceAll", "traceall", "TRACEALL"}
+		for stepn, level := range logLevels {
+			g.By(fmt.Sprintf("%v.1 Configure the logLevel %v in default config path", stepn+4, level))
+			etcConfigCMD = fmt.Sprintf(`
+configfile=%v
+cat > $configfile << EOF
+debugging:
+  logLevel: %v
+EOF`, etcConfigYaml, level)
+
+			_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+
+			unixTimestamp := time.Now().Unix()
+			g.By(fmt.Sprintf("%v.2 Restart Microshift", stepn+4))
+			restartMicroshift(oc, masterNodes[0])
+
+			g.By(fmt.Sprintf("%v.3 Check logLevel should change to %v", stepn+4, level))
+			chkConfigCmd := fmt.Sprintf(`journalctl -u microshift -b -S @%vs | grep "logLevel: %v"|grep -iv journalctl|tail -1`, unixTimestamp, level)
+			getlogErr := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+				mchkConfig, mchkConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+				if mchkConfigErr == nil && strings.Contains(mchkConfig, "logLevel: "+level) {
+					e2e.Logf("LogLevel changed to %v :: %v", level, mchkConfig)
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(getlogErr, fmt.Sprintf("LogLevel not changed to %v :: %v", level, mchgConfigErr))
+		}
 	})
 })
