@@ -275,8 +275,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check metric up==0, return null")
-		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query= up == 0'", token, `"result":[]`, 2*uwmLoadTime)
+		g.By("check metric up==0 under the test project, return null")
+		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=up{namespace=\"56168-upgrade-ns\"}==0'", token, `"result":[]`, 2*uwmLoadTime)
 
 		g.By("check no alert 'TargetDown'")
 		checkAlertNotExist(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/alerts", token, "TargetDown", uwmLoadTime)
