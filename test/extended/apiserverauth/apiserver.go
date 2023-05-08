@@ -5319,4 +5319,69 @@ EOF`, etcConfigYaml, level)
 			exutil.AssertWaitPollNoErr(getlogErr, fmt.Sprintf("LogLevel not changed to %v :: %v", level, mchgConfigErr))
 		}
 	})
+
+	// author: dpunia@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-High-11887-Could delete all the resource when deleting the project [Serial]", func() {
+		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
+		o.Expect(contxtErr).NotTo(o.HaveOccurred())
+		defer func() {
+			useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
+			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("1) Create a project")
+		projectName := "project-11887"
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", projectName, "--ignore-not-found").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("new-project").Args(projectName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2) Create new app")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-openshift", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3) Build hello-world from external source")
+		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
+		imageError := oc.Run("new-build").Args(helloWorldSource, "--name=ocp-11887-test-"+strings.ToLower(exutil.RandStr(5)), "-n", projectName).Execute()
+		if imageError != nil {
+			if !isConnectedInternet(oc) {
+				e2e.Failf("Failed to access to the internet, something wrong with the connectivity of the cluster! Please check!")
+			}
+		}
+
+		g.By("4) Get project resource")
+		resourceSlice := []string{"pods", "services", "buildConfig", "deployments"}
+		for _, resource := range resourceSlice {
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", projectName, resource, "-o", `jsonpath={.items[*].metadata.name}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			count := len(strings.TrimSpace(out))
+			o.Expect(count).To(o.BeNumerically(">", 0))
+		}
+
+		g.By("5) Delete the project")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", projectName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("5.1) Check project is deleted")
+		err = wait.Poll(2*time.Second, 60*time.Second, func() (bool, error) {
+			out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", projectName).Output()
+			if matched, _ := regexp.MatchString("namespaces .* not found", out); matched {
+				e2e.Logf("Step 5.1. Test Passed, project is deleted")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Step 5.1. Test Failed, Project is not deleted")
+
+		g.By("6) Get project resource after project is deleted")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", projectName, "all", "--no-headers").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.ContainSubstring("No resources found"))
+
+		g.By("7) Create a project with same name, no context for this new one")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-project").Args(projectName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		out, err = oc.AsAdmin().WithoutNamespace().Run("status").Args("-n", projectName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.ContainSubstring("no services, deployment"))
+	})
 })
