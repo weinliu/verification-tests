@@ -1,8 +1,10 @@
 package node
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -795,11 +797,35 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		oc = exutil.NewCLI("keda-operator", exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+		if strings.Contains(output, "NotFound") {
+			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
+		}
 		createKedaOperator(oc)
 	})
 	// author: weinliu@redhat.com
 	g.It("ConnectedOnly-Author:weinliu-High-52383-Keda Install", func() {
-		g.By("keda operator is installed successfully")
+		g.By("CMA (Keda) operator has been installed successfully")
+	})
+
+	// author: weinliu@redhat.com
+	g.It("ConnectedOnly-Author:weinliu-High-62570-Verify must-gather tool works with CMA", func() {
+		var (
+			mustgatherName = "mustgather" + getRandomString()
+			mustgatherDir  = "/tmp/" + mustgatherName
+			mustgatherLog  = mustgatherName + ".log"
+			logFile        string
+		)
+		g.By("Get the mustGatherImage")
+		mustGatherImage, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("packagemanifest", "-n=openshift-marketplace", "openshift-custom-metrics-autoscaler-operator", "-o=jsonpath={.status.channels[?(.name=='stable')].currentCSVDesc.annotations.containerImage}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Running the must gather command \n")
+		defer os.RemoveAll(mustgatherDir)
+		logFile, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir="+mustgatherDir, "--image="+mustGatherImage).Output()
+		if err != nil {
+			e2e.Logf("mustgather created from image %v in %v logged to %v,%v %v", mustGatherImage, mustgatherDir, mustgatherLog, logFile, err)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 	})
 })
 
@@ -810,6 +836,10 @@ var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
 		oc = exutil.NewCLI("vpa-operator", exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+		if strings.Contains(output, "NotFound") {
+			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
+		}
 		createVpaOperator(oc)
 	})
 	// author: weinliu@redhat.com
