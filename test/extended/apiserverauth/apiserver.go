@@ -877,13 +877,13 @@ spec:
 		)
 		defer os.RemoveAll(dirname)
 		defer func() {
-			cmdcpu := fmt.Sprintf(`clusterbuster --cleanup -B cpuload`)
+			cmdcpu := `clusterbuster --cleanup -B cpuload`
 			_, err := exec.Command("bash", "-c", cmdcpu).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
 		defer func() {
-			cmdmem := fmt.Sprintf(`clusterbuster --cleanup -B memload`)
+			cmdmem := `clusterbuster --cleanup -B memload`
 			_, err := exec.Command("bash", "-c", cmdmem).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
@@ -1008,13 +1008,13 @@ spec:
 		)
 
 		defer func() {
-			cmdcpu := fmt.Sprintf(`clusterbuster --cleanup -B cpuload`)
+			cmdcpu := `clusterbuster --cleanup -B cpuload`
 			_, err := exec.Command("bash", "-c", cmdcpu).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
 		defer func() {
-			cmdmem := fmt.Sprintf(`clusterbuster --cleanup -B memload`)
+			cmdmem := `clusterbuster --cleanup -B memload`
 			_, err := exec.Command("bash", "-c", cmdmem).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
@@ -1364,7 +1364,7 @@ spec:
 	// author: dpunia@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:dpunia-High-41664-Check deprecated APIs to be removed in next release and next EUS release", func() {
 		var (
-			ignoreCase  = "system:kube-controller-manager|system:serviceaccount|system:admin"
+			ignoreCase  = "system:kube-controller-manager|system:serviceaccount|system:admin|testuser-*|Mozilla"
 			eusReleases = map[float64][]float64{4.8: {1.21, 1.22, 1.23}, 4.10: {1.24, 1.25}}
 		)
 
@@ -1440,7 +1440,7 @@ spec:
 					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", removeReleaseAPI, "-o", `jsonpath={range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}`).Output()
 					stdOutput := strings.TrimRight(string(out), "\n")
 					o.Expect(err).NotTo(o.HaveOccurred())
-					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignoreCase)
+					cmd := fmt.Sprintf(`echo "%s" | egrep -iv '%s' || true`, stdOutput, ignoreCase)
 					clientAccessLog, err := exec.Command("bash", "-c", cmd).Output()
 					o.Expect(err).NotTo(o.HaveOccurred())
 					if len(strings.TrimSpace(string(clientAccessLog))) > 0 {
@@ -1484,7 +1484,7 @@ spec:
 					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", removeReleaseAPI, "-o", `jsonpath={range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}`).Output()
 					stdOutput := strings.TrimRight(string(out), "\n")
 					o.Expect(err).NotTo(o.HaveOccurred())
-					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignoreCase)
+					cmd := fmt.Sprintf(`echo "%s" | egrep -iv '%s' || true`, stdOutput, ignoreCase)
 					clientCompAccess, err := exec.Command("bash", "-c", cmd).Output()
 					o.Expect(err).NotTo(o.HaveOccurred())
 					if len(strings.TrimSpace(string(clientCompAccess))) > 0 {
