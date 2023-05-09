@@ -28,6 +28,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// setup iSCSI server before each test case
 	g.BeforeEach(func() {
 		cloudProvider = getCloudProvider(oc)
+		// [RFE][C2S]`oc image mirror` can't pull image from the mirror registry
+		// https://issues.redhat.com/browse/OCPBUGS-339
+		// As the known issue won't fix skip LSO tests on disconnected c2s/sc2s CI test clusters
+		// Checked all current CI jobs all the c2s/sc2s are disconnected, so only check region is enough
+		if strings.Contains(cloudProvider, "aws") && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
+			g.Skip("Skipped: AWS C2S/SC2S disconnected clusters are not satisfied for the testsuit")
+		}
 		storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
 		pvTemplate = filepath.Join(storageTeamBaseDir, "csi-pv-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")

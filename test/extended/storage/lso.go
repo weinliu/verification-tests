@@ -34,6 +34,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if !strings.Contains(cloudProvider, "aws") {
 			g.Skip("Skip for non-supported cloud provider for LSO test: *" + cloudProvider + "* !!!")
 		}
+		// [RFE][C2S]`oc image mirror` can't pull image from the mirror registry
+		// https://issues.redhat.com/browse/OCPBUGS-339
+		// As the known issue won't fix skip LSO tests on disconnected c2s/sc2s CI test clusters
+		// Checked all current CI jobs all the c2s/sc2s are disconnected, so only check region is enough
+		if strings.HasPrefix(getClusterRegion(oc), "us-iso") {
+			g.Skip("Skipped: AWS C2S/SC2S disconnected clusters are not satisfied for the testsuit")
+		}
 		lsoBaseDir = exutil.FixturePath("testdata", "storage")
 		lsoTemplate = filepath.Join(lsoBaseDir, "/lso/lso-subscription-template.yaml")
 		testChannel = getClusterVersionChannel(oc)
