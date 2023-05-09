@@ -268,7 +268,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "us-east-1", "us-iso-east-1":
 			amiID = "ami-0e09e139aca053387"
 		case "us-east-2":
-			amiID = "ami-0191b19432fb00e69"
+			amiID = "ami-0f1eb4d7403348cd2"
 		case "cn-north-1":
 			amiID = "ami-07a0c9b547ce24896"
 		case "us-gov-west-1":
