@@ -1477,10 +1477,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		egressNode1 := egressNodes[0]
 
-		g.By("1. Choose a node as EgressIP node, label the node to be egress assignable")
+		g.By("1. Create a namespace, apply namespace label to it that matches the one defined in egressip object.")
+		oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2. Choose a node as EgressIP node, label the node to be egress assignable")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
 
-		g.By("2. Create an egressip object")
+		g.By("3. Create an egressip object")
 		freeIPs := findFreeIPs(oc, egressNode1, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -1495,13 +1502,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressip1.createEgressIPObject2(oc)
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
-
-		g.By("3. Create a namespace, apply namespace label to it that matches the one defined in egressip object created in step 2.")
-		oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
-		exutil.SetNamespacePrivileged(oc, ns)
-
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("4. Create a pod in the namespace and apply pod label to the pod that matches the podLabel defined in egressip object created in step 2.")
 		createResourceFromFile(oc, ns, statefulSetHelloPod)
@@ -1542,13 +1542,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	// author: jechen@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:jechen-High-56875-OVN egressIP should still be functional post upgrade. [Disruptive]", func() {
 
-		nodeNum := 2
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(nodeList.Items) < nodeNum {
-			g.Skip("Not enough worker nodes for this test, skip the case!!")
-		}
-
 		ns := "56875-upgrade-ns"
 		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
 		if nsErr != nil {
@@ -1562,6 +1555,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressNodeList := exutil.GetNodeListByLabel(oc, egressNodeLabel)
 		for _, labelledEgressNode := range egressNodeList {
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, labelledEgressNode, egressNodeLabel)
+		}
+
+		nodeNum := 2
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
 
 		g.By("1. Check EgressIP in EIP object, sourceIP contains one IP. \n")
@@ -1606,25 +1606,36 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		g.By("3. Find another scheduleable node that is in the same subnet of first egress node, label it as the second egress node")
-		firstSub := getIfaddrFromNode(egressNode1, oc)
-
 		var egressNode2 string
-		for _, v := range nodeList.Items {
-			secondSub := getIfaddrFromNode(v.Name, oc)
-			if v.Name == egressNode1 || secondSub != firstSub {
-				continue
-			} else {
-				egressNode2 = v.Name
-				e2e.Logf("\n secondEgressNode is %v\n", egressNode2)
-				defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
-				e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel, "true")
-				break
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") {
+			firstSub := getIfaddrFromNode(egressNode1, oc)
+			for _, v := range nodeList.Items {
+				secondSub := getIfaddrFromNode(v.Name, oc)
+				if v.Name == egressNode1 || secondSub != firstSub {
+					continue
+				} else {
+					egressNode2 = v.Name
+					break
+				}
+			}
+		} else { // On other BM, vSphere platforms, worker nodes are on same subnet
+			for _, v := range nodeList.Items {
+				if v.Name == egressNode1 {
+					continue
+				} else {
+					egressNode2 = v.Name
+					break
+				}
 			}
 		}
 
 		if egressNode2 == "" {
 			g.Skip("Did not find a scheduleable second node that is on same subnet as the first egress node, skip the rest of the test!!")
 		}
+		e2e.Logf("\n secondEgressNode is %v\n", egressNode2)
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel, "true")
 
 		egressNodeList = exutil.GetNodeListByLabel(oc, egressNodeLabel)
 		o.Expect(len(egressNodeList) == 2).Should(o.BeTrue())
