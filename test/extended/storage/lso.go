@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -736,7 +737,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Check whether the test cluster satisfy the test scenario
 		// STS, C2S etc. profiles the credentials don't have permission to reboot the node
 		if !isSpecifiedResourceExist(oc, "secret/aws-creds", "kube-system") {
-			g.Skip("Skipped: the cluster not satisfy the test scenario")
+			g.Skip("Skipped: the cluster doesn't have the root credentials not satisfy the test scenario")
+		}
+
+		getAwsCredentialFromSpecifiedSecret(oc, "kube-system", "aws-creds")
+		ac = newAwsClient()
+
+		if err := dryRunRebootInstance(ac, getOneSchedulableWorker(allNodes).instanceID, true); !strings.Contains(fmt.Sprintf("%s", err), "DryRunOperation: Request would have succeeded, but DryRun flag is set") {
+			g.Skip("Skipped: the test cluster credential permission doesn't satisfy the test scenario")
 		}
 
 		// Set the resource definition for the scenario

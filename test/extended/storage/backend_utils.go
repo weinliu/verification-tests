@@ -114,6 +114,22 @@ func getCredentialFromCluster(oc *exutil.CLI) {
 	}
 }
 
+// GetAwsCredentialFromSpecifiedSecret gets the aws credential from specified secret in the test cluster, doesn't support sts,c2s,sc2s clusters
+func getAwsCredentialFromSpecifiedSecret(oc *exutil.CLI, secretNamespace string, secretName string) {
+	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/"+secretName, "-n", secretNamespace, "-o", "json").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	clusterRegion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	os.Setenv("AWS_REGION", clusterRegion)
+	accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
+	accessKeyID, err := base64.StdEncoding.DecodeString(accessKeyIDBase64)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	secureKey, err := base64.StdEncoding.DecodeString(secureKeyBase64)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyID))
+	os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
+}
+
 // getRootSecretNameByCloudProvider gets the root secret name by cloudProvider
 func getRootSecretNameByCloudProvider() (rootSecret string) {
 	switch cloudProvider {
@@ -644,8 +660,14 @@ func (vol *ebsVolume) expandSucceed(ac *ec2.EC2, expandCapacity int64) {
 
 // Send reboot instance request
 func rebootInstance(ac *ec2.EC2, instanceID string) error {
+	return dryRunRebootInstance(ac, instanceID, false)
+}
+
+// dryRunRebootInstance sends reboot instance request with DryRun parameter
+func dryRunRebootInstance(ac *ec2.EC2, instanceID string, dryRun bool) error {
 	rebootInstancesInput := &ec2.RebootInstancesInput{
 		InstanceIds: []*string{aws.String(instanceID)},
+		DryRun:      aws.Bool(dryRun),
 	}
 	req, resp := ac.RebootInstancesRequest(rebootInstancesInput)
 	err := req.Send()
