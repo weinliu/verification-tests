@@ -45,3 +45,29 @@ spec:
             path: otherCustomConditions
             x-descriptors:
               - 'urn:alm:descriptor:io.kubernetes.conditions'
+        specDescriptors:
+          - path: k8sResourcePrefixNoFilter
+            description: k8sResourcePrefix without filter
+            displayName: Generated K8s Resource Prefix without filters
+            x-descriptors:
+              - "urn:alm:descriptor:io.kubernetes:Secret"
+          - path: k8sResourcePrefixEquityFilter
+            description: k8sResourcePrefix with equity filters
+            displayName: K8s Resource Prefix with equity based label selector filtering
+            x-descriptors:
+              - "urn:alm:descriptor:io.kubernetes:Secret?test=true,level!=production"
+          - path: k8sResourcePrefixSetFilter
+            description: k8sResourcePrefix with set filters
+            displayName: K8s Resource Prefix with set-based label selector filtering
+            x-descriptors:
+              - "urn:alm:descriptor:io.kubernetes:Secret?level in (production,staging)"
+          - path: k8sResourcePrefixMixedFilter
+            description: k8sResourcePrefix with mixed filters
+            displayName: K8s Resource Prefix with mixed label selector filtering
+            x-descriptors:
+              - "urn:alm:descriptor:io.kubernetes:Secret?!test,level=qa"
+          - path: k8sResourcePrefixNone
+            description: k8sResourcePrefix with filters
+            displayName: K8s Resource Prefix with selector filtering no resources found
+            x-descriptors:
+              - "urn:alm:descriptor:io.kubernetes:Secret?testlabel"

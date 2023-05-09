@@ -39,5 +39,13 @@ spec:
             spec:
               type: object
               properties:
-                foo:
+                k8sResourcePrefixNoFilter:
+                  type: string
+                k8sResourcePrefixEquityFilter:
+                  type: string
+                k8sResourcePrefixSetFilter:
+                  type: string
+                k8sResourcePrefixMixedFilter:
+                  type: string
+                k8sResourcePrefixNone:
                   type: string
