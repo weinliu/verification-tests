@@ -261,4 +261,39 @@ etcd:
 
 	})
 
+	// author: skundu@redhat.com
+	g.It("MicroShiftOnly-Author:skundu-Medium-60945-[ETCD] etcd should start stop automatically when microshift is started or stopped. [Disruptive]", func() {
+		g.By("1. Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+		masterNode := masterNodes[0]
+		g.By("2. Check microshift is running actively")
+		output, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "systemctl status microshift")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Active: active (running)") {
+			e2e.Logf("microshift status is: %v ", output)
+		} else {
+			e2e.Failf("Failed to get microshift status.")
+		}
+		g.By("3. Check etcd status is running and active")
+		output, err = exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "systemctl status microshift-etcd.scope")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Active: active (running)") {
+			e2e.Logf("microshift-etcd.scope status is: %v ", output)
+		} else {
+			e2e.Failf("Failed to get microshift-etcd.scope status.")
+		}
+		g.By("4. Restart microshift")
+		waitForMicroshiftAfterRestart(oc, masterNodes[0])
+		g.By("5. Check etcd status is running and active, after successful restart")
+		opStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-q"}, "bash", "-c", "systemctl status microshift-etcd.scope")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(opStatus, "Active: active (running)") {
+			e2e.Logf("microshift-etcd.scope status is: %v ", opStatus)
+		} else {
+			e2e.Failf("Failed to get microshift-etcd.scope status.")
+		}
+	})
+
 })
