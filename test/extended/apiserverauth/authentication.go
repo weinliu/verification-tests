@@ -1011,12 +1011,12 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			},
 		}
 		requestURL := authUrl + "/oauth/authorize?response_type=token&client_id=openshift-challenging-client"
-		respond, err := httpClient.Get(requestURL)
+		respond1, err := httpClient.Get(requestURL)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		defer respond.Body.Close()
-		o.Expect(respond.StatusCode).To(o.Equal(401))
-		body, err := ioutil.ReadAll(respond.Body)
+		defer respond1.Body.Close()
+		o.Expect(respond1.StatusCode).To(o.Equal(401))
+		body, err := ioutil.ReadAll(respond1.Body)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(body)).To(o.MatchRegexp(`A non-empty X-CSRF-Token header is required to receive basic-auth challenges`))
 
@@ -1025,12 +1025,12 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		request.Header.Set("X-CSRF-Token", "1")
 
-		respond, err = httpClient.Do(request)
+		respond2, err := httpClient.Do(request)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		defer respond.Body.Close()
-		o.Expect(respond.StatusCode).To(o.Equal(401))
-		respondAuthHeader := respond.Header.Get("Www-Authenticate")
+		defer respond2.Body.Close()
+		o.Expect(respond2.StatusCode).To(o.Equal(401))
+		respondAuthHeader := respond2.Header.Get("Www-Authenticate")
 		o.Expect(respondAuthHeader).To(o.ContainSubstring(`Basic realm="openshift"`))
 	})
 })
