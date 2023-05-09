@@ -662,16 +662,26 @@ func CreateCustomNodePoolInHypershift(oc *CLI, cloudProvider, guestClusterName, 
 
 // AssertIfNodePoolIsReadyByName checks if the Nodepool is ready
 func AssertIfNodePoolIsReadyByName(oc *CLI, nodePoolName string, timeDurationSec int, clustersNS string) {
-	err := wait.Poll(20*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+
+	o.Expect(timeDurationSec).Should(o.BeNumerically(">=", 10), "Disaster error: specify the value of timeDurationSec great than 10.")
+
+	err := wait.Poll(time.Duration(timeDurationSec/10)*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+
 		var (
-			isNodePoolReady string
-			err             error
+			isNodePoolReady   string
+			isAllNodesHealthy string
+			err               error
 		)
+		isAllNodesHealthy, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", nodePoolName, "-n", clustersNS, `-ojsonpath='{.status.conditions[?(@.type=="AllNodesHealthy")].status}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(isAllNodesHealthy).NotTo(o.BeEmpty())
+
 		isNodePoolReady, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", nodePoolName, "-n", clustersNS, `-ojsonpath='{.status.conditions[?(@.type=="Ready")].status}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(isNodePoolReady).NotTo(o.BeEmpty())
+
 		//For master node, only make sure one of master is ready.
-		if strings.Contains(isNodePoolReady, "True") {
+		if strings.Contains(isNodePoolReady, "True") && strings.Contains(isAllNodesHealthy, "True") {
 			return true, nil
 		}
 		e2e.Logf("Node Pool [%v] checks failed, the following values were found (read type should be true '%v')", nodePoolName, isNodePoolReady)
@@ -682,19 +692,34 @@ func AssertIfNodePoolIsReadyByName(oc *CLI, nodePoolName string, timeDurationSec
 
 // AssertIfNodePoolUpdatingConfigByName checks if the Nodepool is ready
 func AssertIfNodePoolUpdatingConfigByName(oc *CLI, nodePoolName string, timeDurationSec int, clustersNS string) {
-	err := wait.Poll(20*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+
+	o.Expect(timeDurationSec).Should(o.BeNumerically(">=", 10), "Disaster error: specify the value of timeDurationSec great than 10.")
+
+	err := wait.Poll(time.Duration(timeDurationSec/10)*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+
 		var (
-			isNodePoolUpdatingConfig string
-			err                      error
+			isNodePoolUpdatingConfig  string
+			isNodePoolAllNodesHealthy string
+			isNodePoolReady           string
+			err                       error
 		)
 		isNodePoolUpdatingConfig, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", nodePoolName, "-n", clustersNS, `-ojsonpath='{.status.conditions[?(@.type=="UpdatingConfig")].status}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(isNodePoolUpdatingConfig).NotTo(o.BeEmpty())
-		//For master node, only make sure one of master is ready.
-		if !strings.Contains(isNodePoolUpdatingConfig, "True") {
+
+		isNodePoolAllNodesHealthy, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", nodePoolName, "-n", clustersNS, `-ojsonpath='{.status.conditions[?(@.type=="AllNodesHealthy")].status}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(isNodePoolAllNodesHealthy).NotTo(o.BeEmpty())
+
+		isNodePoolReady, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", nodePoolName, "-n", clustersNS, `-ojsonpath='{.status.conditions[?(@.type=="Ready")].status}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(isNodePoolAllNodesHealthy).NotTo(o.BeEmpty())
+
+		if !strings.Contains(isNodePoolUpdatingConfig, "True") && strings.Contains(isNodePoolAllNodesHealthy, "True") && strings.Contains(isNodePoolReady, "True") {
+			e2e.Logf("Node Pool [%v] status isNodePoolUpdatingConfig: %v isNodePoolAllNodesHealthy: %v isNodePoolReady: %v')", nodePoolName, isNodePoolUpdatingConfig, isNodePoolAllNodesHealthy, isNodePoolReady)
 			return true, nil
 		}
-		e2e.Logf("Node Pool [%v] checks failed, the following values were found (read type should be empty '%v')", nodePoolName, isNodePoolUpdatingConfig)
+		e2e.Logf("Node Pool [%v] checks failed, the following values were found (ready type should be empty '%v')", nodePoolName, isNodePoolUpdatingConfig)
 		return false, nil
 	})
 	AssertWaitPollNoErr(err, "Nodepool checks were not successful within timeout limit")

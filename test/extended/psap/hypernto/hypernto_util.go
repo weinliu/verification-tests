@@ -109,25 +109,23 @@ func compareSpecifiedValueByNameOnLabelNodeWithRetryInHostedCluster(oc *exutil.C
 }
 
 // assertIfTunedProfileAppliedOnSpecifiedNode use to check if custom profile applied to a node
-func assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc *exutil.CLI, namespace string, tunedNodeName string, tunedName string) {
+func assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc *exutil.CLI, namespace string, tunedNodeName string, expectedTunedName string) {
 
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		expectedTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
+		currentTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(expectedTunedName).NotTo(o.BeEmpty())
-		e2e.Logf("The profile name on each node is: \n %v ", expectedTunedName)
-		matchTunedProfile := strings.Contains(expectedTunedName, tunedName)
+		o.Expect(currentTunedName).NotTo(o.BeEmpty())
+		e2e.Logf("The profile name on the node %v is: \n %v ", tunedNodeName, currentTunedName)
 
 		expectedAppliedStatus, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(expectedAppliedStatus).NotTo(o.BeEmpty())
-		matchAppliedStatus := strings.Contains(expectedAppliedStatus, "True")
 
-		if !matchTunedProfile && !matchAppliedStatus {
-			e2e.Logf("Profile '%s' has not yet been applied to %s - retrying...", tunedName, tunedNodeName)
+		if currentTunedName != expectedTunedName && expectedAppliedStatus != "True" {
+			e2e.Logf("Profile '%s' has not yet been applied to %s - retrying...", expectedTunedName, tunedNodeName)
 			return false, nil
 		}
-		e2e.Logf("Profile '%s' has been applied to %s - continuing...", tunedName, tunedNodeName)
+		e2e.Logf("Profile '%s' has been applied to %s - continuing...", expectedTunedName, tunedNodeName)
 		tunedProfiles, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(expectedAppliedStatus).NotTo(o.BeEmpty())
@@ -169,35 +167,41 @@ func getTunedRenderInHostedCluster(oc *exutil.CLI, namespace string) (string, er
 }
 
 // assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster use to check if custom profile applied to a node
-func assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc *exutil.CLI, namespace string, nodePoolName string, tunedName string) {
+func assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc *exutil.CLI, namespace string, nodePoolName string, expectedTunedName string) {
 
 	var (
-		matchTunedProfile     bool
-		matchAppliedStatus    bool
-		matchNum              int
-		expectedAppliedStatus string
+		matchTunedProfile    bool
+		matchAppliedStatus   bool
+		matchNum             int
+		currentAppliedStatus string
 	)
 
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		nodeNames, err := exutil.GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The nodes in nodepool [%v] is:\n%v", nodePoolName, nodeNames)
+
+		currentProfiles, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile").Output()
+		e2e.Logf("The currentProfiles in nodepool [%v] is:\n%v", nodePoolName, currentProfiles)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		matchNum = 0
 		for i := 0; i < len(nodeNames); i++ {
-			expectedTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", nodeNames[i], "-ojsonpath={.status.tunedProfile}").Output()
+			currentTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", nodeNames[i], "-ojsonpath={.status.tunedProfile}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(expectedTunedName).NotTo(o.BeEmpty())
-			matchTunedProfile = strings.Contains(expectedTunedName, tunedName)
+			o.Expect(currentTunedName).NotTo(o.BeEmpty())
+			matchTunedProfile = strings.Contains(currentTunedName, expectedTunedName)
 
-			expectedAppliedStatus, err = oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", nodeNames[i], `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+			currentAppliedStatus, err = oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", nodeNames[i], `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(expectedAppliedStatus).NotTo(o.BeEmpty())
-			matchAppliedStatus = strings.Contains(expectedAppliedStatus, "True")
+			o.Expect(currentAppliedStatus).NotTo(o.BeEmpty())
+			matchAppliedStatus = strings.Contains(currentAppliedStatus, "True")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(expectedAppliedStatus).NotTo(o.BeEmpty())
+			o.Expect(currentAppliedStatus).NotTo(o.BeEmpty())
 
 			if matchTunedProfile && matchAppliedStatus {
 				matchNum++
-				e2e.Logf("Profile '%s' matchs on  %s - match times is:%v", tunedName, nodeNames[i], matchNum)
+				e2e.Logf("Profile '%s' matchs on  %s - match times is:%v", expectedTunedName, nodeNames[i], matchNum)
 
 			}
 		}
@@ -297,4 +301,26 @@ func assertNTOPodLogsLastLinesInManagementCluster(oc *exutil.CLI, namespace stri
 
 	e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, logLineStr[0])
 	exutil.AssertWaitPollNoErr(err, "The tuned pod's log doesn't contain the keywords, please check")
+}
+
+// AssertIfNodeIsReadyByNodeNameInHostedCluster checks if the worker node is ready
+func AssertIfNodeIsReadyByNodeNameInHostedCluster(oc *exutil.CLI, tunedNodeName string, timeDurationSec int) {
+
+	o.Expect(timeDurationSec).Should(o.BeNumerically(">=", 10), "Disaster error: specify the value of timeDurationSec great than 10.")
+
+	err := wait.Poll(time.Duration(timeDurationSec/10)*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+
+		workerNodeStatus, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("nodes", tunedNodeName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(workerNodeStatus).NotTo(o.BeEmpty())
+
+		if !strings.Contains(workerNodeStatus, "SchedulingDisabled") && strings.Contains(workerNodeStatus, "Ready") {
+			e2e.Logf("The node [%v] status is %v in hosted clusters)", tunedNodeName, workerNodeStatus)
+			return true, nil
+		}
+		e2e.Logf("worker node [%v] in hosted cluster checks failed, the worker node status should be Ready)", tunedNodeName)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Worker node checks were not successful within timeout limit")
+
 }

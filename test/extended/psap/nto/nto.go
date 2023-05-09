@@ -2761,4 +2761,60 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Assert if isolcpus was applied in labled node...")
 		o.Expect(AssertTunedAppliedToNode(oc, tunedNodeName, "cpus=")).To(o.Equal(false))
 	})
+
+	g.It("ROSA-Author:liqcui-Medium-63223-NTO support tuning sysctl and kernel bools that applied to all nodes of nodepool-level settings in hypershift. [Disruptive]", func() {
+		//Only execute on ROSA hosted cluster
+		isROSA := isROSAHostedCluster(oc)
+		if !isROSA {
+			g.Skip("It's not ROSA hosted cluster - skipping test ...")
+		}
+
+		//For ROSA Environment, we are unable to access management cluster, so discussed with ROSA team,
+		//ROSA team create pre-defined configmap and applied to specified nodepool with hardcode profile name.
+		//NTO will only check if all setting applied to the worker node on hosted cluster.
+		g.By("Check if the tuned hc-nodepool-vmdratio is created in hosted cluster nodepool")
+		tunedNameList, err := oc.AsAdmin().Run("get").Args("tuned", "-n", ntoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNameList).NotTo(o.BeEmpty())
+		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
+		o.Expect(tunedNameList).To(o.And(o.ContainSubstring("hc-nodepool-vmdratio"),
+			o.ContainSubstring("tuned-hugepages")))
+
+		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
+		o.Expect(renderCheck).To(o.And(o.ContainSubstring("hc-nodepool-vmdratio"),
+			o.ContainSubstring("openshift-node-hugepages")))
+
+		appliedProfileList, err := oc.AsAdmin().Run("get").Args("profile", "-n", ntoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(appliedProfileList).NotTo(o.BeEmpty())
+		o.Expect(appliedProfileList).To(o.And(o.ContainSubstring("hc-nodepool-vmdratio"),
+			o.ContainSubstring("openshift-node-hugepages")))
+
+		g.By("Get the node name that applied to the profile hc-nodepool-vmdratio")
+		tunedNodeNameStdOut, err := oc.AsAdmin().Run("get").Args("profile", "-n", ntoNamespace, `-ojsonpath='{.items[?(@..status.tunedProfile=="hc-nodepool-vmdratio")].metadata.name}'`).Output()
+		tunedNodeName := strings.Trim(tunedNodeNameStdOut, "'")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+
+		g.By("Assert the value of sysctl vm.dirty_ratio, the expecte value should be 55")
+		debugNodeStdout, err := oc.AsAdmin().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "sysctl", "vm.dirty_ratio").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The value of sysctl vm.dirty_ratio on node %v is: \n%v\n", tunedNodeName, debugNodeStdout)
+		o.Expect(debugNodeStdout).To(o.ContainSubstring("vm.dirty_ratio = 55"))
+
+		g.By("Get the node name that applied to the profile openshift-node-hugepages")
+		tunedNodeNameStdOut, err = oc.AsAdmin().Run("get").Args("profile", "-n", ntoNamespace, `-ojsonpath='{.items[?(@..status.tunedProfile=="openshift-node-hugepages")].metadata.name}'`).Output()
+		tunedNodeName = strings.Trim(tunedNodeNameStdOut, "'")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+
+		g.By("Assert the value of cat /proc/cmdline, the expecte value should be hugepagesz=2M hugepages=50")
+		debugNodeStdout, err = oc.AsAdmin().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "cat", "/proc/cmdline").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The value of /proc/cmdline on node %v is: \n%v\n", tunedNodeName, debugNodeStdout)
+		o.Expect(debugNodeStdout).To(o.ContainSubstring("hugepagesz=2M hugepages=50"))
+	})
 })

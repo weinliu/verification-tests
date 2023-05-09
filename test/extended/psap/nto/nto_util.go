@@ -3,6 +3,8 @@ package nto
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -993,4 +995,20 @@ func assertNTOCustomProfileStatus(oc *exutil.CLI, ntoNamespace string, tunedNode
 	o.Expect(degradedStatus).NotTo(o.BeEmpty())
 
 	return appliedStatus == expectedAppliedStatus && degradedStatus == expectedDegradedStatus && currentProfile == expectedProfile
+}
+
+func isROSAHostedCluster(oc *exutil.CLI) bool {
+
+	clusterType := ""
+	//Check if it's ROSA hosted cluster
+	sharedDir := os.Getenv("SHARED_DIR")
+	if len(sharedDir) != 0 {
+		fmt.Println("SHARED_DIR was found ")
+		byteArray, err := ioutil.ReadFile(sharedDir + "/cluster-type")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		clusterType = string(byteArray)
+		clusterType = strings.ToLower(clusterType)
+	}
+	return strings.Contains(clusterType, "rosa")
 }
