@@ -2289,11 +2289,8 @@ func checkClusterStatus(oc *exutil.CLI, expectedStatus string) {
 
 func getLeaderOVNMasterPodOnMgmtCluster(oc *exutil.CLI, namespace, cmName, hyperShiftMgmtNS string) string {
 	// get leader node on hypershift hosted cluster
-	output1, err1 := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
-	o.Expect(err1).NotTo(o.HaveOccurred())
-	output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
-	o.Expect(err2).NotTo(o.HaveOccurred())
-	leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
+	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
+	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
 	e2e.Logf("The leader node name is %s", leaderNodeName)
 
 	// get OVNkube-master pod on this leader node
