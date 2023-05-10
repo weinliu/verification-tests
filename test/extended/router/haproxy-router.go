@@ -540,7 +540,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: shudili@redhat.com
 	g.It("Author:shudili-Low-49131-check haproxy's version", func() {
-		var expVersion = "haproxy22-2.2.24-3.rhaos4.14.el8.x86_64"
+		var expVersion = "haproxy22-2.2.24-3.rhaos4.14.el8"
 		g.By("Try to get HAProxy's version in a default router pod")
 		haproxyVer := getHAProxyRPMVersion(oc)
 		g.By("show haproxy version(" + haproxyVer + "), and check if it is updated successfully")
