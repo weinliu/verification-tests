@@ -115,6 +115,14 @@ func getClusterID(oc *exutil.CLI) (string, error) {
 	return oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-ojsonpath={.spec.clusterID}").Output()
 }
 
+func isFipsEnabled(oc *exutil.CLI) bool {
+	nodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	fips, err := exutil.DebugNodeWithChroot(oc, nodes[0].Name, "bash", "-c", "fips-mode-setup --check")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Contains(fips, "FIPS mode is enabled.")
+}
+
 // waitForPackagemanifestAppear waits for the packagemanifest to appear in the cluster
 // chSource: bool value, true means the packagemanifests' source name must match the so.CatalogSource.SourceName, e.g.: oc get packagemanifests xxxx -l catalog=$source-name
 func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSource bool) {

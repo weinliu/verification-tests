@@ -217,6 +217,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafkaClusterName := "kafka-cluster"
 			//defer amq.uninstallOperator(oc)
 			amq.SubscribeOperator(oc)
+			if isFipsEnabled(oc) {
+				//disable FIPS_MODE due to "java.io.IOException: getPBEAlgorithmParameters failed: PBEWithHmacSHA256AndAES_256 AlgorithmParameters not available"
+				err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub/"+amq.PackageName, "-n", amq.Namespace, "-p", "{\"spec\": {\"config\": {\"env\": [{\"name\": \"FIPS_MODE\", \"value\": \"disabled\"}]}}}", "--type=merge").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 			// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
 			checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
 			kafka := resource{"kafka", kafkaClusterName, amqNS}
@@ -339,10 +344,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 			topicName := "topic-logging-app"
 			kafkaClusterName := "kafka-cluster"
+			fips := isFipsEnabled(oc)
 			for _, amq := range []SubscriptionObjects{amq1, amq2} {
 				defer deleteNamespace(oc, amq.Namespace)
 				//defer amq.uninstallOperator(oc)
 				amq.SubscribeOperator(oc)
+				if fips {
+					//disable FIPS_MODE due to "java.io.IOException: getPBEAlgorithmParameters failed: PBEWithHmacSHA256AndAES_256 AlgorithmParameters not available"
+					err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub/"+amq.PackageName, "-n", amq.Namespace, "-p", "{\"spec\": {\"config\": {\"env\": [{\"name\": \"FIPS_MODE\", \"value\": \"disabled\"}]}}}", "--type=merge").Execute()
+					o.Expect(err).NotTo(o.HaveOccurred())
+				}
 				// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
 				checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
 				kafka := resource{"kafka", kafkaClusterName, amq.Namespace}
