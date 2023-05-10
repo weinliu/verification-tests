@@ -95,11 +95,15 @@ class JIRAManager:
         try:
             bug_issue = self.jira.issue(bug_id)
             self.logger.debug(json.dumps(bug_issue.raw['fields'], indent=4, sort_keys=True))
-            qe_contact = bug_issue.fields.customfield_12315948.name
-            qe_displayname = bug_issue.fields.customfield_12315948.displayName
         except Exception as e:
             self.logger.error("cannot get qe_contact for bug %s, %s", bug_id, e.text)
             return
+        try:
+            qe_contact = bug_issue.fields.customfield_12315948.name
+            qe_displayname = bug_issue.fields.customfield_12315948.displayName
+        except:
+            qe_contact = "rhn-support-xzha"
+            qe_displayname = ""
         description_str = """
 Hi, {qe}
 To support Objective 1, OKR 3 ServiceDeliveryImpacted ServiceDeliveryBlocker Bugs created since Jan 1, 2023 are RCAed, tested and automated, please make sure {bug} is RCAed, tested and automated.
