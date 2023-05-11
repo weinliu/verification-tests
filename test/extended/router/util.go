@@ -192,6 +192,18 @@ func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
 	})
 }
 
+func waitForPodWithLabelAppear(oc *exutil.CLI, ns, label string) error {
+	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+		podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
+		e2e.Logf("the pod list is %v", podList)
+		if err != nil || len(podList) < 1 {
+			e2e.Logf("failed to get pod: %v, retrying...", err)
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
 // wait for the named resource is disappeared, e.g. used while router deployment rolled out
 func waitForResourceToDisappear(oc *exutil.CLI, ns, rsname string) error {
 	return wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
