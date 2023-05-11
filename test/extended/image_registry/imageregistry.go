@@ -5,13 +5,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -3786,5 +3787,94 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Failed to push large image")
+	})
+
+	g.It("Author:xiuwang-ConnectedOnly-Critical-61973-High-61974-import-mode add to new-app/new-build to support manifest list", func() {
+		cmds := [2]string{"new-app", "new-build"}
+		for _, cmd := range cmds {
+			g.By("With bad import mode")
+			defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "badm"+cmd, "--ignore-not-found").Execute()
+			nsError := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", "badm"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+			output, err := oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=registry.redhat.io/ubi8/httpd-24:latest~https://github.com/openshift/httpd-ex.git", "--import-mode=DoesNotExist", "--name=isi-bad-mode", "-n", "badm"+cmd).Output()
+			o.Expect(err).To(o.HaveOccurred())
+			if !strings.Contains(output, "error: valid ImportMode values are Legacy or PreserveOriginal") {
+				e2e.Failf("The import mode shouldn't be correct")
+			}
+			nsError = oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "badm"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+
+			g.By("PreserveOriginal mode with ManifestList image")
+			defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "pm"+cmd, "--ignore-not-found").Execute()
+			nsError = oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", "pm"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+			output, err = oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=registry.redhat.io/ubi8/httpd-24:latest~https://github.com/openshift/httpd-ex.git", "--import-mode=PreserveOriginal", "--name=isi-preserve-original-mode", "-n", "pm"+cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, `httpd-24" created`) {
+				e2e.Failf("The application with PreserveOriginal of ManifestList create failed with %s", cmd)
+			}
+			newCheck("expect", asAdmin, withoutNamespace, contain, "httpd-24:latest", ok, []string{"istag", "-n", "pm" + cmd}).check(oc)
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("istag", "httpd-24:latest", "-n", "pm"+cmd, "-o=jsonpath={..importMode} {..dockerImageManifests[*].architecture}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "PreserveOriginal") || !strings.Contains(output, "amd64 arm64") {
+				e2e.Failf("The imagestream with PreserveOriginal of ManifestList imported error with %s", cmd)
+			}
+			nsError = oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "pm"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+
+			g.By("Legacy mode with ManifestList image")
+			defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "lm"+cmd, "--ignore-not-found").Execute()
+			nsError = oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", "lm"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+			output, err = oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=registry.redhat.io/ubi8/httpd-24:latest~https://github.com/openshift/httpd-ex.git", "--import-mode=Legacy", "--name=isi-legacy", "-n", "lm"+cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, `httpd-24" created`) {
+				e2e.Failf("The application with Legacy of ManifestList create failed with %s", cmd)
+			}
+			newCheck("expect", asAdmin, withoutNamespace, contain, "httpd-24:latest", ok, []string{"istag", "-n", "lm" + cmd}).check(oc)
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("istag", "httpd-24:latest", "-n", "lm"+cmd, "-o=jsonpath={..importMode} {..dockerImageManifests[*].architecture}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "Legacy") || strings.Contains(output, "amd64 arm64") {
+				e2e.Failf("The imagestream with Legacy of ManifestList imported error with %s", cmd)
+			}
+			nsError = oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "lm"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+
+			g.By("PreserveOriginal Mode without ManifestList")
+			defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "pwom"+cmd, "--ignore-not-found").Execute()
+			nsError = oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", "pwom"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+			output, err = oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=quay.io/openshifttest/httpd-24@sha256:a4d1a67d994983b38fc462f1d54361632ccc9bf7f6e88bbaed9dea40d5568e80~https://github.com/openshift/httpd-ex.git", "--import-mode=PreserveOriginal", "--name=isi-preserve-mode-non", "-n", "pwom"+cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, `httpd-24" created`) {
+				e2e.Failf("The application with Legacy of ManifestList create failed with %s", cmd)
+			}
+			newCheck("expect", asAdmin, withoutNamespace, contain, "httpd-24:latest", ok, []string{"istag", "-n", "pwom" + cmd}).check(oc)
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("istag", "httpd-24:latest", "-n", "pwom"+cmd, "-o=jsonpath={..importMode} {..dockerImageManifests[*].architecture}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "PreserveOriginal") || strings.Contains(output, "amd64 arm64") {
+				e2e.Failf("The imagestream with PreserveOriginal without ManifestList imported error with %s", cmd)
+			}
+			nsError = oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "pwom"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+
+			g.By("Legacy mode without ManifestList image")
+			defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "lwom"+cmd, "--ignore-not-found").Execute()
+			nsError = oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", "lwom"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+			output, err = oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=quay.io/openshifttest/httpd-24@sha256:a4d1a67d994983b38fc462f1d54361632ccc9bf7f6e88bbaed9dea40d5568e80~https://github.com/openshift/httpd-ex.git", "--import-mode=Legacy", "--name=isi-legacy-non", "-n", "lwom"+cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, `httpd-24" created`) {
+				e2e.Failf("The application with Legacy of ManifestList create failed with %s", cmd)
+			}
+			newCheck("expect", asAdmin, withoutNamespace, contain, "httpd-24:latest", ok, []string{"istag", "-n", "lwom" + cmd}).check(oc)
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("istag", "httpd-24:latest", "-n", "lwom"+cmd, "-o=jsonpath={..importMode} {..dockerImageManifests[*].architecture}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "Legacy") || strings.Contains(output, "amd64 arm64") {
+				e2e.Failf("The imagestream with Legacy without ManifestList imported error with %s", cmd)
+			}
+			nsError = oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "lwom"+cmd).Execute()
+			o.Expect(nsError).NotTo(o.HaveOccurred())
+		}
 	})
 })
