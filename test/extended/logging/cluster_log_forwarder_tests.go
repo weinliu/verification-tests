@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -1516,136 +1514,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 	})
 
-	g.Context("Log Forward to splunk", func() {
-		cloNS := "openshift-logging"
-		// author anli@redhat.com
-		g.BeforeEach(func() {
-			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if nodes.Items[0].Status.NodeInfo.Architecture != "amd64" {
-				g.Skip("Warning: Only AMD64 is supported currently!")
-			}
-			g.By("deploy CLO")
-			CLO := SubscriptionObjects{
-				OperatorName:  "cluster-logging-operator",
-				Namespace:     "openshift-logging",
-				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
-			}
-			CLO.SubscribeOperator(oc)
-		})
-
-		g.It("CPaasrunOnly-Author:anli-High-54980-Vector forward logs to Splunk 9.0 over HTTP[Serial][Slow]", func() {
-			g.By("Test Environment Prepare")
-			oc.SetupProject()
-			splunkProject := oc.Namespace()
-			sp := splunkPodServer{
-				namespace: splunkProject,
-				name:      "default-http",
-				authType:  "http",
-				version:   "9.0",
-			}
-			sp.init()
-
-			g.By("Deploy splunk")
-			defer sp.destroy(oc)
-			sp.deploy(oc)
-
-			g.By("forward logs to splunk")
-			s := resource{"secret", "to-splunk-secret", cloNS}
-			defer s.clear(oc)
-			//createToSplunkSecret(oc *exutil.CLI, secretNamespace string, secretName string, hecToken string, caFile string, keyFile string, certFile string, passphrase string)
-			createToSplunkSecret(oc, cloNS, s.name, sp.hecToken, "", "", "", "")
-
-			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_to-splunk_template.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err := clf.applyFromTemplate(oc, "-f", clfTemplate, "-p", "URL=http://"+sp.serviceName+"."+sp.namespace+".svc:8088")
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("create clusterlogging/instance")
-			instanceFile := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.clear(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instanceFile, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector")
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
-
-			g.By("create log producer")
-			oc.SetupProject()
-			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("check logs in splunk")
-			o.Expect(sp.anyLogFound()).To(o.BeTrue())
-		})
-
-		g.It("CPaasrunOnly-Author:anli-Medium-56248-vector forward logs to splunk 8.2 over TLS - SkipVerify [Serial][Slow]", func() {
-			g.By("Test Environment Prepare")
-
-			oc.SetupProject()
-			splunkProject := oc.Namespace()
-
-			keysPath := filepath.Join("/tmp/temp" + getRandomString())
-			defer exec.Command("rm", "-r", keysPath).Output()
-			err := os.MkdirAll(keysPath, 0755)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			//Method 1: generate certs as below when authType != http
-			//cert := certsConf{sp.service, sp.namespace, ""}
-			//cert.generateCerts(oc, keysPath)
-			//Method 2: forward using route and specify kube-root-ca, we use method 2 here
-			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/kube-root-ca.crt", "-n", cloNS, "--confirm", "--to="+keysPath).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			sp := splunkPodServer{
-				namespace: splunkProject,
-				name:      "default-http",
-				authType:  "http",
-				version:   "8.2",
-			}
-			sp.init()
-
-			g.By("Deploy splunk")
-			defer sp.destroy(oc)
-			sp.deploy(oc)
-
-			g.By("forward logs to splunk")
-			s := resource{"secret", "to-splunk-secret", cloNS}
-			defer s.clear(oc)
-			createToSplunkSecret(oc, cloNS, s.name, sp.hecToken, keysPath+"/ca.crt", "", "", "")
-
-			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_to-splunk_skipverify_template.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-f", clfTemplate, "-p", "URL=https://"+sp.hecRoute)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("create clusterlogging/instance")
-			instanceFile := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.clear(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instanceFile, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector")
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
-
-			g.By("create log producer")
-			oc.SetupProject()
-			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("check logs in splunk")
-			o.Expect(sp.anyLogFound()).To(o.BeTrue())
-		})
-	})
-
-	g.Context("forward logs to external store over http", func() {
+	g.Context("fluentd forward logs to external store over http", func() {
 		cloNS := "openshift-logging"
 
 		g.BeforeEach(func() {
@@ -1659,51 +1528,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 			CLO.SubscribeOperator(oc)
 		})
-		// author anli@redhat.com
-		g.It("CPaasrunOnly-Author:anli-Critical-61253-vector forward logs to fluentdserver over http - mtls[Serial]", func() {
-			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("deploy fluentd server")
-			oc.SetupProject()
-			fluentdProj := oc.Namespace()
-			keyPassphase := getRandomString()
-			fluentdS := fluentdServer{
-				serverName:                 "fluentdtest",
-				namespace:                  fluentdProj,
-				serverAuth:                 true,
-				clientAuth:                 true,
-				clientPrivateKeyPassphrase: keyPassphase,
-				secretName:                 "to-fluentd-61253",
-				loggingNS:                  cloNS,
-				inPluginType:               "http",
-			}
-			defer fluentdS.remove(oc)
-			fluentdS.deploy(oc)
-
-			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-forward-all-over-https-template.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224", "-p", "OUTPUT_SECRET="+fluentdS.secretName)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
-
-			g.By("check logs in fluentd server")
-			fluentdS.checkData(oc, true, "app.log")
-			fluentdS.checkData(oc, true, "audit.log")
-			fluentdS.checkData(oc, true, "infra.log")
-		})
-
-		g.It("CPaasrunOnly-Author:anli-High-60933-vector Forward logs to fluentd over http - https[Serial]", func() {
+		g.It("CPaasrunOnly-Author:anli-Medium-60934-fluentd Forward logs to fluentd over http - https[Serial]", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1717,7 +1542,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:    fluentdProj,
 				serverAuth:   true,
 				clientAuth:   false,
-				secretName:   "to-fluentd-60933",
+				secretName:   "to-fluentd-60934",
 				loggingNS:    cloNS,
 				inPluginType: "http",
 			}
@@ -1735,7 +1560,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=fluentd")
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
 			g.By("check logs in fluentd server")
@@ -1744,7 +1569,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Medium-60926-vector Forward logs to fluentd over http - http[Serial]", func() {
+		g.It("CPaasrunOnly-Author:anli-Medium-60925-fluentd Forward logs to fluentd over http - http[Serial]", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1758,7 +1583,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:    fluentdProj,
 				serverAuth:   false,
 				clientAuth:   false,
-				secretName:   "to-fluentd-60926",
+				secretName:   "to-fluentd-60925",
 				loggingNS:    cloNS,
 				inPluginType: "http",
 			}
@@ -1776,7 +1601,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=fluentd")
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
 			g.By("check logs in fluentd server")
@@ -1785,7 +1610,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Medium-60936-vector Forward logs to fluentd over http - TLSSkipVerify[Serial]", func() {
+		g.It("CPaasrunOnly-Author:anli-Medium-60935-fluentd Forward logs to fluentd over http - TLSSkipVerify[Serial]", func() {
+			g.Skip("Skip for bug LOG-3827!!!")
 			appProj := oc.Namespace()
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1799,7 +1625,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:    fluentdProj,
 				serverAuth:   true,
 				clientAuth:   false,
-				secretName:   "to-fluentd-60936",
+				secretName:   "to-fluentd-60935",
 				loggingNS:    cloNS,
 				inPluginType: "http",
 			}
@@ -1812,7 +1638,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clf.clear(oc)
 
 			//Create a fake secret from root ca which is used for TLSSkipVerify
-			fakeSecret := resource{"secret", "fake-bundle-60936", cloNS}
+			fakeSecret := resource{"secret", "fake-bundle-60935", cloNS}
 			defer fakeSecret.clear(oc)
 			dirname := "/tmp/60936-keys"
 			defer os.RemoveAll(dirname)
@@ -1830,7 +1656,51 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=fluentd")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("check logs in fluentd server")
+			fluentdS.checkData(oc, true, "app.log")
+			fluentdS.checkData(oc, true, "audit.log")
+			fluentdS.checkData(oc, true, "infra.log")
+		})
+		// author anli@redhat.com
+		g.It("CPaasrunOnly-Author:anli-Medium-60937-fluentd forward logs to fluentdserver over http - mtls[Serial]", func() {
+			g.Skip("Skip for bug LOG-3827!!!")
+			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("deploy fluentd server")
+			oc.SetupProject()
+			fluentdProj := oc.Namespace()
+			keyPassphase := getRandomString()
+			fluentdS := fluentdServer{
+				serverName:                 "fluentdtest",
+				namespace:                  fluentdProj,
+				serverAuth:                 true,
+				clientAuth:                 true,
+				clientPrivateKeyPassphrase: keyPassphase,
+				secretName:                 "to-fluentd-60937",
+				loggingNS:                  cloNS,
+				inPluginType:               "http",
+			}
+			defer fluentdS.remove(oc)
+			fluentdS.deploy(oc)
+
+			g.By("create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-forward-all-over-https-template.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224", "-p", "OUTPUT_SECRET="+fluentdS.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=fluentd")
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
 			g.By("check logs in fluentd server")
