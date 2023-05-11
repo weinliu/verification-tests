@@ -2135,4 +2135,103 @@ spec:
 		e2e.Logf("Check metric %s Value equal to 6", query)
 		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "6", token, thanosQuerierURL, query)
 	})
+
+	//author: kcui@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "27770"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-Medium-27770-[AWS]Hive should set Condition when given ClusterImageSet or image doesn't exist[Serial]", func() {
+		testCaseID := "27770"
+		cdName1 := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		cdName2 := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Config cd1 Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName1 + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName1,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		g.By("Config ClusterDeployment1...")
+		clusterImageSetName1 := cdName1 + "-imageset" + "-non-exist"
+		cluster1 := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName1,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName1,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName1,
+			installConfigSecret:  cdName1 + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 1,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster1.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster1.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster1)
+
+		g.By("Creating cd2 install-config Secret ...")
+		installConfigSecretName := cdName2 + "-install-config"
+		installConfigSecret = installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName2,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Creating cd2 ClusterImageSet with WrongReleaseImage...")
+		clusterImageSetName2 := cdName2 + "-imageset"
+		WrongReleaseImage := "registry.ci.openshift.org/ocp/release:4.13.0-0.nightly-2023-02-26-081527-non-exist"
+		imageSet := clusterImageSet{
+			name:         clusterImageSetName2,
+			releaseImage: WrongReleaseImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName2})
+		imageSet.create(oc)
+
+		g.By("Creating cd2 with an incomplete pull-secret ...")
+		cluster2 := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName2,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName2,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName2,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 1,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName2})
+		cluster2.create(oc)
+
+		g.By("Check cd1 conditions with type 'RequirementsMet',return the message 'ClusterImageSet clusterImageSetName is not available'")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, fmt.Sprintf("ClusterImageSet %s is not available", clusterImageSetName1), ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"RequirementsMet\")].message}'"}).check(oc)
+		g.By("Check cd1 conditions with type 'RequirementsMet',return the reason 'ClusterImageSetNotFound'")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterImageSetNotFound", ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"RequirementsMet\")].reason}'"}).check(oc)
+		g.By("Check cd1 conditions with type 'RequirementsMet',return the status 'False'")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"RequirementsMet\")].status}'"}).check(oc)
+		g.By("Check cd1 conditions with type 'ClusterImageSetNotFound', return no output")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "", ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ClusterImageSetNotFound\")]}'"}).check(oc)
+
+		g.By("Check pod pf cd2, return the status 'failed with Init:ImagePullBackOff'")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Init:ImagePullBackOff", ok, DefaultTimeout, []string{"pod", "-n", oc.Namespace(), "--selector", "hive.openshift.io/imageset=true", "--selector", fmt.Sprintf("hive.openshift.io/cluster-deployment-name=%s", cdName2), "--no-headers"}).check(oc)
+		g.By("Check cd2 conditions with type 'installImagesNotResolved',return the reason 'JobToResolveImagesFailed'")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "JobToResolveImagesFailed", ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"InstallImagesNotResolved\")].reason}'"}).check(oc)
+		g.By("Check cd2 conditions with type 'RequirementsMet',return the status 'True'")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"InstallImagesNotResolved\")].status}'"}).check(oc)
+
+	})
 })
