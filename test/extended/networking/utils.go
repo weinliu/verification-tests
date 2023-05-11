@@ -197,6 +197,17 @@ type egressrouterMultipleDst struct {
 	template       string
 }
 
+type egressrouterRedSDN struct {
+	name          string
+	namespace     string
+	reservedip    string
+	gateway       string
+	destinationip string
+	labelkey      string
+	labelvalue    string
+	template      string
+}
+
 type egressFirewall5 struct {
 	name        string
 	namespace   string
@@ -466,6 +477,18 @@ func (service *windowGenericServiceResource) createWinServiceFromParams(oc *exut
 func (egressrouter *egressrouterMultipleDst) createEgressRouterMultipeDst(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", egressrouter.template, "-p", "NAME="+egressrouter.name, "NAMESPACE="+egressrouter.namespace, "RESERVEDIP="+egressrouter.reservedip, "GATEWAY="+egressrouter.gateway, "DSTIP1="+egressrouter.destinationip1, "DSTIP2="+egressrouter.destinationip2, "DSTIP3="+egressrouter.destinationip3)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create egressrouter %v", egressrouter.name))
+}
+
+func (egressrouter *egressrouterRedSDN) createEgressRouterRedSDN(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", egressrouter.template, "-p", "NAME="+egressrouter.name, "NAMESPACE="+egressrouter.namespace, "RESERVEDIP="+egressrouter.reservedip, "GATEWAY="+egressrouter.gateway, "DSTIP="+egressrouter.destinationip, "LABELKEY="+egressrouter.labelkey, "LABELVALUE="+egressrouter.labelvalue)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
