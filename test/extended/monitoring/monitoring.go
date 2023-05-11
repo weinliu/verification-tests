@@ -919,6 +919,9 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			createResourceFromYaml(oc, ns, exampleAlert)
 			createResourceFromYaml(oc, ns, AlertmanagerConfig)
 
+			g.By("check all pods are created")
+			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
+
 			g.By("check the alerts could be found in alertmanager under openshift-user-workload-monitoring project")
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 			checkMetric(oc, `https://alertmanager-user-workload.openshift-user-workload-monitoring.svc:9095/api/v2/alerts`, token, "TestAlert1", 3*uwmLoadTime)
@@ -994,8 +997,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("deploy ThanosRuler under namespace as a common user (non-admin)")
 		oc.SetupProject()
 		ns = oc.Namespace()
-		output, _ = oc.Run("apply").Args("-n", ns, "-f", deployThanosRuler).Output()
-		o.Expect(output).To(o.ContainSubstring("Error from server (Forbidden):"))
+		oc.Run("apply").Args("-n", ns, "-f", deployThanosRuler).Execute()
+
+		g.By("check ThanosRuler is not created")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ThanosRuler", "user-workload", "-n", ns).Output()
+		o.Expect(output).To(o.ContainSubstring("thanosrulers.monitoring.coreos.com \"user-workload\" not found"))
+
 	})
 
 	//author: tagao@redhat.com
