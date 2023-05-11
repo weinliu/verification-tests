@@ -826,4 +826,43 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("delete").Args("logicalvolume", pv.name).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-59669-[MicroShift] Run pod with specific SELinux by using securityContext
+	g.It("MicroShiftOnly-Author:rdeore-Critical-59669-[MicroShift] Run pod with specific SELinux by using securityContext", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID           = "59669"
+			e2eTestNamespace = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate      = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate      = filepath.Join(storageMicroshiftBaseDir, "pod-with-scc-template.yaml")
+		)
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("#. Define storage resources")
+		presetStorageClass := newStorageClass(setStorageClassName("topolvm-provisioner"), setStorageClassProvisioner(topolvmProvisioner))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimStorageClassName(presetStorageClass.name), setPersistentVolumeClaimCapacity("1Gi"))
+		pod := newPod(setPodTemplate(podTemplate), setPodNamespace(e2eTestNamespace), setPodPersistentVolumeClaim(pvc.name))
+
+		g.By("#. Create a pvc with presetStorageClass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("#. Create Pod with the pvc and wait for the pod ready")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		g.By("Write file to volume and execute")
+		pod.checkMountedVolumeHaveExecRight(oc)
+		pod.execCommand(oc, "sync")
+
+		g.By("#. Check SELinux security context level on pod mounted volume")
+		o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, "ls -lZd "+pod.mountPath)).To(o.ContainSubstring("s0:c345,c789"))
+		o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, "ls -lZ "+pod.mountPath+"/hello")).To(o.ContainSubstring("s0:c345,c789"))
+	})
 })
