@@ -5511,7 +5511,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover part of test case: OCP-21404, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-21404-csv will be RequirementsNotMet after role rule is delete", func() {
+	g.It("ConnectedOnly-Author:kuiwang-Medium-21404-csv will be RequirementsNotMet after role rule is delete[Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
