@@ -766,9 +766,11 @@ func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 				updatedAttrList = append(updatedAttrList, []string{dnspodname, output})
 				primary = true
 			} else {
-				// reduce the logs
+				// reduce the logs and run sync command on the dns pod again
 				if count%10 == 1 {
 					e2e.Logf(dnspodname + " Corefile isn't updated , wait and try again...")
+					err = oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", "sync").Execute()
+					o.Expect(err).NotTo(o.HaveOccurred())
 				}
 			}
 			return primary, nil
