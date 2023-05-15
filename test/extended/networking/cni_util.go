@@ -36,6 +36,18 @@ type testMultihomingPod struct {
 	template   string
 }
 
+type testMultihomingStaticPod struct {
+	name       string
+	namespace  string
+	podlabel   string
+	nadname    string
+	podenvname string
+	nodename   string
+	macaddress string
+	ipaddress  string
+	template   string
+}
+
 func (nad *multihomingNAD) createMultihomingNAD(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NAMESPACE="+nad.namespace, "NADNAME="+nad.nadname, "SUBNETS="+nad.subnets, "NSWITHNADNAME="+nad.nswithnadname, "EXCLUDESUBNETS="+nad.excludeSubnets, "TOPOLOGY="+nad.topology)
@@ -51,6 +63,18 @@ func (nad *multihomingNAD) createMultihomingNAD(oc *exutil.CLI) {
 func (pod *testMultihomingPod) createTestMultihomingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "PODLABEL="+pod.podlabel, "NADNAME="+pod.nadname, "PODENVNAME="+pod.podenvname, "NODENAME="+pod.nodename)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
+func (pod *testMultihomingStaticPod) createTestMultihomingStaticPod(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "PODLABEL="+pod.podlabel, "NADNAME="+pod.nadname, "PODENVNAME="+pod.podenvname, "NODENAME="+pod.nodename, "MACADDRESS="+pod.macaddress, "IPADDRESS="+pod.ipaddress)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -270,12 +294,7 @@ func multihomingAfterCheck(oc *exutil.CLI, podName []string, podEnvName []string
 		return podName
 	}, "120s", "5s").Should(o.ContainSubstring("ovnkube-master"), fmt.Sprintf("Failed to get correct OVN leader pod"))
 
-	g.By("Checking connectivity from pod to pod after deleting  all ovnkube-node pods")
-	e2e.Logf("pod1Name is %s", pod1Name)
-	e2e.Logf("pod2IPv4 is  %s", pod2IPv4)
-	e2e.Logf("pod2IPv4 is %s", pod2envname)
-	e2e.Logf("ns is %s", ns)
-
+	g.By("Checking connectivity from pod to pod after deleting")
 	CurlMultusPod2PodPass(oc, ns, pod1Name, pod2IPv4, "net1", pod2envname)
 	CurlMultusPod2PodPass(oc, ns, pod1Name, pod2IPv6, "net1", pod2envname)
 	CurlMultusPod2PodPass(oc, ns, pod1Name, pod3IPv4, "net1", pod3envname)
@@ -312,4 +331,14 @@ func multihomingAfterCheck(oc *exutil.CLI, podName []string, podEnvName []string
 	o.Eventually(func() bool {
 		return checkOVNSwitch(oc, nadName, ovnMasterPodNewName)
 	}, 30*time.Second, 5*time.Second).ShouldNot(o.BeTrue(), "The correct OVN switch is not deleted")
+}
+
+// This is for a negtive case which the pods can't be running using the wrong NAD
+func getPodMultiNetworkFail(oc *exutil.CLI, namespace string, podName string) {
+	cmd1 := "ip a sho net1 | awk 'NR==3{print $2}' |grep -Eo '((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])'"
+	cmd2 := "ip a sho net1 | awk 'NR==5{print $2}' |grep -Eo '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
+	_, ipv4Err := e2eoutput.RunHostCmd(namespace, podName, cmd1)
+	o.Expect(ipv4Err).To(o.HaveOccurred())
+	_, ipv6Err := e2eoutput.RunHostCmd(namespace, podName, cmd2)
+	o.Expect(ipv6Err).To(o.HaveOccurred())
 }
