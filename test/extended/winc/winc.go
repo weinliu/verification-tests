@@ -221,7 +221,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Author:sgao-Low-32554-wmco run in a pod with HostNetwork", func() {
 		winInternalIP := getWindowsInternalIPs(oc)[0]
 		curlDest := winInternalIP + ":22"
-		command := []string{"exec", "-n", wmcoNamespace, "deployment.apps/windows-machine-config-operator", "--", "curl", curlDest}
+		command := []string{"exec", "-n", wmcoNamespace, "deployment.apps/windows-machine-config-operator", "--", "curl", "--http0.9", curlDest}
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		if !strings.Contains(msg, "SSH-2.0-OpenSSH") {
 			e2e.Failf("Failed to check WMCO run in a pod with HostNetwork: %s", msg)
