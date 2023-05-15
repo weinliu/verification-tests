@@ -32,7 +32,7 @@ func (e Event) String() string {
 	e.oc.NotShowInfo()
 	defer e.oc.SetShowInfo()
 
-	description, err := e.Get(`{.metadata.creationTimestamp} Type: {.type} Reason: {.reason} Namespace: {.metadata.namespace} Involves: {.involvedObject.kind}/{.involvedObject.name}`)
+	description, err := e.Get(`{.metadata.creationTimestamp} {.lastTimestamp} Type: {.type} Reason: {.reason} Namespace: {.metadata.namespace} Involves: {.involvedObject.kind}/{.involvedObject.name}`)
 	if err != nil {
 		logger.Errorf("Event %s/%s does not exist anymore", e.GetNamespace(), e.GetName())
 		return ""
@@ -41,15 +41,33 @@ func (e Event) String() string {
 	return description
 }
 
+// GetLastTimestamp returns the last occurrence of this event
+func (e Event) GetLastTimestamp() (time.Time, error) {
+	lastOccurrence, err := e.Get(`{.lastTimestamp}`)
+	if err != nil {
+		logger.Errorf("Error parsing event %s/%s. Error: %s", e.GetNamespace(), e.GetName(), err)
+		return time.Time{}, err
+	}
+
+	parsedLastOccurrence, perr := time.Parse(time.RFC3339, lastOccurrence)
+	if perr != nil {
+		logger.Errorf("Error parsing event '%s' -n '%s' lastTimestamp: %s", e.GetName(), e.GetNamespace(), perr)
+		return time.Time{}, perr
+
+	}
+
+	return parsedLastOccurrence, nil
+}
+
 // NewEventList construct a new node list struct to handle all existing nodes
 func NewEventList(oc *exutil.CLI, namespace string) *EventList {
 	return &EventList{*NewNamespacedResourceList(oc, "Event", namespace)}
 }
 
-// GetAll returns a []Event list with all existing events sorted by creation time
+// GetAll returns a []Event list with all existing events sorted by last occurrence
 // the first element will be the most recent one
 func (el *EventList) GetAll() ([]Event, error) {
-	el.ResourceList.SortByTimestamp()
+	el.SortByLastTimestamp()
 	allEventResources, err := el.ResourceList.GetAll()
 	if err != nil {
 		return nil, err
@@ -63,6 +81,11 @@ func (el *EventList) GetAll() ([]Event, error) {
 	allEvents = reverseEventsList(allEvents)
 
 	return allEvents, nil
+}
+
+// SortByLastTimestamp configures the list to be sorted by lastTimestamp field
+func (el *EventList) SortByLastTimestamp() {
+	el.ResourceList.SortBy("lastTimestamp")
 }
 
 // GetLatest returns the latest event that occurred. Nil if no event exists.
@@ -105,6 +128,9 @@ func (el *EventList) GetAllEventsSinceEvent(sinceEvent *Event) ([]Event, error) 
 
 // GetAllSince return a list of the events that happened since the provided duration
 func (el EventList) GetAllSince(since time.Time) ([]Event, error) {
+	// Remove log noise
+	el.oc.NotShowInfo()
+	defer el.oc.SetShowInfo()
 
 	allEvents, lerr := el.GetAll()
 	if lerr != nil {
@@ -113,22 +139,23 @@ func (el EventList) GetAllSince(since time.Time) ([]Event, error) {
 	}
 
 	returnEvents := []Event{}
-	for _, event := range allEvents {
-		creationTime, err := event.Get(`{.metadata.creationTimestamp}`)
+	for _, loopEvent := range allEvents {
+		event := loopEvent // this is to make sure that we execute defer in all events, and not only in the last one
+		// Remove log noise
+		event.oc.NotShowInfo()
+		defer event.oc.SetShowInfo()
+
+		lastOccurrence, err := event.GetLastTimestamp()
 		if err != nil {
-			logger.Errorf("Error parsing event %s/%s. Error: %s", event.GetNamespace(), event.GetName(), err)
+			logger.Errorf("Error getting lastTimestamp in event %s/%s. Error: %s", event.GetNamespace(), event.GetName(), err)
 			continue
 		}
 
-		parsedCreation, perr := time.Parse(time.RFC3339, creationTime)
-		if perr != nil {
-			logger.Errorf("Error parsing event '%s' -n '%s' creation time: %s", event.GetName(), event.GetNamespace(), perr)
-			return nil, perr
+		if lastOccurrence.Before(since) {
+			break
+		}
 
-		}
-		if parsedCreation.After(since) {
-			returnEvents = append(returnEvents, event)
-		}
+		returnEvents = append(returnEvents, event)
 	}
 
 	return returnEvents, nil
@@ -152,19 +179,19 @@ func HaveEventsSequence(sequence ...string) types.GomegaMatcher {
 
 // struct to cache and sort events information
 type tmpEvent struct {
-	creationTimestamp time.Time
-	reason            string
+	lastTimestamp time.Time
+	reason        string
 }
 
-func (t tmpEvent) String() string { return fmt.Sprintf("%s - %s", t.creationTimestamp, t.reason) }
+func (t tmpEvent) String() string { return fmt.Sprintf("%s - %s", t.lastTimestamp, t.reason) }
 
 // sorter to sort the chache event list
-type byCreationTime []tmpEvent
+type byLastTimestamp []tmpEvent
 
-func (a byCreationTime) Len() int      { return len(a) }
-func (a byCreationTime) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a byCreationTime) Less(i, j int) bool {
-	return a[i].creationTimestamp.Before(a[j].creationTimestamp)
+func (a byLastTimestamp) Len() int      { return len(a) }
+func (a byLastTimestamp) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a byLastTimestamp) Less(i, j int) bool {
+	return a[i].lastTimestamp.Before(a[j].lastTimestamp)
 }
 
 // struct implementing gomaega matcher interface
@@ -180,7 +207,7 @@ func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success boo
 		return false, fmt.Errorf("HaveSequence matcher expects a slice of Events in test case %v", g.CurrentSpecReport().FullText())
 	}
 
-	// To avoid too many "oc" executions we store the events information in a cached struct list with "creationTimestamp" and "reason" fields.
+	// To avoid too many "oc" executions we store the events information in a cached struct list with "lastTimestamp" and "reason" fields.
 	tmpEvents := []tmpEvent{}
 	for _, loopEvent := range events {
 		event := loopEvent // this is to make sure that we execute defer in all events, and not only in the last one
@@ -192,19 +219,16 @@ func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success boo
 		if err != nil {
 			return false, err
 		}
-		creationStamp, cerr := event.Get(`{.metadata.creationTimestamp}`)
-		if cerr != nil {
-			return false, cerr
-		}
-		creation, perr := time.Parse(time.RFC3339, creationStamp)
-		if perr != nil {
+
+		lastTimestamp, err := event.GetLastTimestamp()
+		if err != nil {
 			return false, err
 		}
-		tmpEvents = append(tmpEvents, tmpEvent{creationTimestamp: creation, reason: reason})
+		tmpEvents = append(tmpEvents, tmpEvent{lastTimestamp: lastTimestamp, reason: reason})
 	}
 
 	// We sort the cached list. Oldest event first
-	sort.Sort(byCreationTime(tmpEvents))
+	sort.Sort(byLastTimestamp(tmpEvents))
 
 	// Several events can be created in the same second, hence, we need to take into account
 	// that 2 events in the same second can match any order.
@@ -215,10 +239,10 @@ func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success boo
 		found := false
 		for _, event := range tmpEvents {
 			if seqReason == event.reason &&
-				(lastEventTime.Before(event.creationTimestamp) || lastEventTime.Equal(event.creationTimestamp)) {
-				logger.Infof("Found! %s event in time %s", seqReason, event.creationTimestamp)
+				(lastEventTime.Before(event.lastTimestamp) || lastEventTime.Equal(event.lastTimestamp)) {
+				logger.Infof("Found! %s event in time %s", seqReason, event.lastTimestamp)
 
-				lastEventTime = event.creationTimestamp
+				lastEventTime = event.lastTimestamp
 				found = true
 				break
 			}

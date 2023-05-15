@@ -17,7 +17,7 @@ import (
 // Node is used to handle node OCP resources
 type Node struct {
 	Resource
-	eventCheckpoint *Event
+	eventCheckpoint time.Time
 }
 
 // NodeList handles list of nodes
@@ -27,7 +27,7 @@ type NodeList struct {
 
 // NewNode construct a new node struct
 func NewNode(oc *exutil.CLI, name string) *Node {
-	return &Node{*NewResource(oc, "node", name), nil}
+	return &Node{*NewResource(oc, "node", name), time.Time{}}
 }
 
 // NewNodeList construct a new node list struct to handle all existing nodes
@@ -447,14 +447,18 @@ func (n Node) GetLatestEvent() (*Event, error) {
 //
 //	If IgnoreEventsBeforeNow() is not called, it returns all existing events for this node.
 func (n *Node) GetEvents() ([]Event, error) {
-	return n.GetAllEventsSinceEvent(n.eventCheckpoint)
+	return n.GetAllEventsSince(n.eventCheckpoint)
 }
 
 func (n *Node) IgnoreEventsBeforeNow() error {
 	var err error
-	n.eventCheckpoint, err = n.GetLatestEvent()
-	logger.Infof("Latest event that occurred in node %s was: %s", n.GetName(), n.eventCheckpoint)
+	latestEvent, lerr := n.GetLatestEvent()
+	if lerr != nil {
+		return lerr
+	}
+	logger.Infof("Latest event in node %s was: %s", n.GetName(), latestEvent)
 	logger.Infof("Ignoring all previous events!")
+	n.eventCheckpoint, err = latestEvent.GetLastTimestamp()
 	return err
 }
 

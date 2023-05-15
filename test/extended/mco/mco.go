@@ -85,6 +85,10 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("verify that drain and reboot events were triggered")
 		nodeEvents, eErr := workerNode.GetEvents()
+		logger.Infof("All events for  node %s since: %s", workerNode.GetName(), workerNode.eventCheckpoint)
+		for _, event := range nodeEvents {
+			logger.Infof("-         %s", event)
+		}
 		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", workerNode.GetName())
 		o.Expect(nodeEvents).To(HaveEventsSequence("Cordon", "Drain",
 			"Reboot", "Uncordon"))

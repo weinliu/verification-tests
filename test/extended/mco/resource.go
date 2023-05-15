@@ -259,12 +259,17 @@ func (l *ResourceList) CleanParams() {
 
 // SortByTimestamp will configure the list to be sorted by creation timestamp
 func (l *ResourceList) SortByTimestamp() {
-	l.extraParams = append(l.extraParams, "--sort-by=metadata.creationTimestamp")
+	l.SortBy("metadata.creationTimestamp")
 }
 
 // SortByZone will configure the list to be sorted by HA topology zone
 func (l *ResourceList) SortByZone() {
-	l.extraParams = append(l.extraParams, `--sort-by=.metadata.labels.topology\.kubernetes\.io/zone`)
+	l.SortBy(`.metadata.labels.topology\.kubernetes\.io/zone`)
+}
+
+// SortBy will configure the list to be sorted by the given field
+func (l *ResourceList) SortBy(field string) {
+	l.extraParams = append(l.extraParams, fmt.Sprintf(`--sort-by=%s`, field))
 }
 
 // ByLabel will use the given label to filter the list
