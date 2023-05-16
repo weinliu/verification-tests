@@ -166,7 +166,7 @@ class CollectClient:
         for bug_id in issues.keys():
             self.logger.info("insert record with %s", str(issues[bug_id]))
             link = issues[bug_id]['link']
-            summary = issues[bug_id]['summary']
+            summary = issues[bug_id]['summary'].replace('"','')
             update_record = [bug_id,
                              '',
                              issues[bug_id]['type'],
