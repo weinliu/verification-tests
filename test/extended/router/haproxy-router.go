@@ -1398,6 +1398,79 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
+	// OCPBUGS-4573
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-62926-Ingress controller stats port is not set according to endpointPublishingStrategy", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-hostnetwork-only.yaml")
+			ingctrlhp           = ingctrlHostPortDescription{
+				name:      "ocp62926",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				httpport:  16080,
+				httpsport: 16443,
+				statsport: 16936,
+				template:  customTemp,
+			}
+
+			ingctrlResource = "ingresscontrollers/" + ingctrlhp.name
+		)
+
+		g.By("Pre-flight check for the platform type and number of worker nodes in the environment")
+		platformtype := exutil.CheckPlatform(oc)
+		platforms := map[string]bool{
+			// ‘None’ also for Baremetal
+			"none":      true,
+			"baremetal": true,
+			"vsphere":   true,
+			"openstack": true,
+			"nutanix":   true,
+		}
+		if !platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount < 1 {
+			g.Skip("Skipping as we atleast need one worker node")
+		}
+
+		g.By("Create a custom ingress-controller")
+		baseDomain := getBaseDomain(oc)
+		ingctrlhp.domain = ingctrlhp.name + "." + baseDomain
+		defer ingctrlhp.delete(oc)
+		ingctrlhp.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrlhp.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp.name))
+
+		g.By("Patch the the custom ingress-controller with httpPort 17080, httpsPort 17443 and statsPort 17936")
+		routerpod := getRouterPod(oc, ingctrlhp.name)
+		jsonPath := "{\"spec\":{\"endpointPublishingStrategy\":{\"hostNetwork\":{\"httpPort\":17080, \"httpsPort\":17443, \"statsPort\":17936}}}}"
+		patchResourceAsAdmin(oc, ingctrlhp.namespace, ingctrlResource, jsonPath)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+
+		g.By("Check STATS_PORT env under a custom router pod, which should be 17936")
+		routerpod = getRouterPod(oc, ingctrlhp.name)
+		jsonPath = ".spec.containers[].env[?(@.name==\"STATS_PORT\")].value"
+		output := fetchJSONPathValue(oc, "openshift-ingress", "pod/"+routerpod, jsonPath)
+		o.Expect(output).To(o.ContainSubstring("17936"))
+
+		g.By("Check http/https/metrics ports under a custom router pod, which should be 17080/17443/17936")
+		jsonPath = ".spec.containers[].ports[?(@.name==\"http\")].hostPort}-{.spec.containers[].ports[?(@.name==\"https\")].hostPort}-{.spec.containers[].ports[?(@.name==\"metrics\")].hostPort"
+		output = fetchJSONPathValue(oc, "openshift-ingress", "pod/"+routerpod, jsonPath)
+		o.Expect(output).To(o.ContainSubstring("17080-17443-17936"))
+
+		g.By("Check the custom router-internal service, make sure the targetPort of the metrics port is changed to metrics instead of port number 1936")
+		jsonPath = ".spec.ports[?(@.name==\"metrics\")].targetPort"
+		output = fetchJSONPathValue(oc, "openshift-ingress", "service/router-internal-"+ingctrlhp.name, jsonPath)
+		o.Expect(output).To(o.ContainSubstring("metrics"))
+
+		g.By("Check http/https/metrics ports under the router endpoints, which should be 17080/17443/17936")
+		jsonPath = ".subsets[].ports[?(@.name==\"http\")].port}-{.subsets[].ports[?(@.name==\"https\")].port}-{.subsets[].ports[?(@.name==\"metrics\")].port"
+		output = fetchJSONPathValue(oc, "openshift-ingress", "endpoints/router-internal-"+ingctrlhp.name, jsonPath)
+		o.Expect(output).To(o.ContainSubstring("17080-17443-17936"))
+	})
+
 	// author: shudili@redhat.com
 	g.It("Author:shudili-High-43454-The logEmptyRequests option only gets applied when the access logging is configured for the ingresscontroller", func() {
 		var (
