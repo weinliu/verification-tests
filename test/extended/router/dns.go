@@ -479,7 +479,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		defer restoreDNSOperatorDefault(oc)
 
 		g.By("Patch dns operator with postive and negative cache values")
+		podList := getAllDNSPodsNames(oc)
+		attrList := getAllCorefilesStat(oc, podList)
 		patchGlobalResourceAsAdmin(oc, resourceName, cacheValue)
+		waitAllCorefilesUpdated(oc, attrList)
 
 		g.By("Check updated value in dns config map")
 		output1 := waitForConfigMapOutput(oc, "openshift-dns", "cm/dns-default", ".data.Corefile")
@@ -487,7 +490,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output1).To(o.ContainSubstring("604801"))
 
 		g.By("Check the cache value in Corefile of coredns under all dns-default-xxx pods")
-		podList := getAllDNSPodsNames(oc)
 		keepSearchInAllDNSPods(oc, podList, "1800")
 		keepSearchInAllDNSPods(oc, podList, "604801")
 

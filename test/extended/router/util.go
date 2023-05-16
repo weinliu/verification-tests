@@ -745,6 +745,18 @@ func getOneCorefileStat(oc *exutil.CLI, dnspodname string) [][]string {
 	return append(attrList, []string{dnspodname, output})
 }
 
+// this function to get all Corefiles' info related to modified time, it looks like  {{"dns-default-0001", "2021-12-30 18.011111 Modified"}, {"dns-default-0002", "2021-12-30 18.021111 Modified"}}
+func getAllCorefilesStat(oc *exutil.CLI, podList []string) [][]string {
+	attrList := [][]string{}
+	cmd := "stat /etc/coredns/..data/Corefile | grep Modify"
+	for _, dnspodname := range podList {
+		output, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		attrList = append(attrList, []string{dnspodname, output})
+	}
+	return attrList
+}
+
 // this function is to make sure all Corefiles(or one Corefile) of the dns pods are updated
 // the value of parameter attrList should be from the getOneCorefileStat or getAllCorefilesStat function, it is related to the time before patching something to the dns operator
 func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
