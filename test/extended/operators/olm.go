@@ -528,6 +528,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-49687-Make the marketplace operator optional", func() {
+		exutil.SkipBaselineCaps(oc, "None")
 		g.By("1, check if the marketplace disabled")
 		cap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
 		if err != nil {
@@ -12859,6 +12860,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// author: tbuskey@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiazha-High-21953-Ensure that operator deployment is in the master node", func() {
+		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			err            error
 			msg            string
