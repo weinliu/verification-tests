@@ -1,4 +1,4 @@
-# OpenShift Console tests
+# OpenShift Console Tests
 openshift web tests relies on upstream [openshift/console](https://github.com/openshift/console/tree/master) which provides fundamental configurations, views that we can reuse in openshift-tests-private web tests
 
 ## Prerequisite
@@ -14,7 +14,7 @@ openshift web tests relies on upstream [openshift/console](https://github.com/op
 
 **[Note] ALL following steps will run in `frontend` directory of openshift-tests-private repo**
 ## Install dependencies
-all required dependencies are defined in `packege.json` in order to run Cypress tests, run `yarn install` so that dependencies will be installed in `node_modules` folder
+all required dependencies are defined in `package.json` in order to run Cypress tests, run `yarn install` so that dependencies will be installed in `node_modules` folder
 ```bash
 $ yarn install
 $ ls -ltr
