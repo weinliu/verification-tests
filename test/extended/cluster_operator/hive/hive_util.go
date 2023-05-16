@@ -762,6 +762,62 @@ func printProvisionPodLogs(oc *exutil.CLI, provisionPodOutput, namespace string)
 	}
 }
 
+func getProvisionPodName(oc *exutil.CLI, cdName, namespace string) string {
+	provisionPodName, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=provision", "-l", "hive.openshift.io/cluster-deployment-name="+cdName, "-n", namespace, "-o=jsonpath={.items[0].metadata.name}").Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(provisionPodName).To(o.ContainSubstring("provision"))
+	o.Expect(provisionPodName).To(o.ContainSubstring(cdName))
+
+	return provisionPodName
+}
+
+/*
+Looks for targetLines in the transformed provision log stream with a timeout.
+Default lineTransformation is the identity function.
+Suitable for test cases for which logs can be checked before the provision is finished.
+
+Example:
+
+Provision logs (logStream.r's underlying data) = "foo\nbar\nbaz\nquux";
+targetLines = []string{"ar", "baz", "qu"};
+lineTransformation = nil;
+targetLines found in provision logs -> returns true
+*/
+func assertLogs(logStream *os.File, targetLines []string, lineTransformation func(line string) string, timeout time.Duration) bool {
+	// Set timeout (applies to future AND currently-blocked Read calls)
+	endTime := time.Now().Add(timeout)
+	err := logStream.SetReadDeadline(endTime)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Default line transformation: the identity function
+	if lineTransformation == nil {
+		e2e.Logf("Using default line transformation (the identity function)")
+		lineTransformation = func(line string) string { return line }
+	}
+
+	// Line scanning
+	scanner := bufio.NewScanner(logStream)
+	targetIdx := 0
+	// In case of timeout, current & subsequent Read calls error out, resulting in scanner.Scan() returning false immediately
+	for scanner.Scan() {
+		switch tranformedLine, targetLine := lineTransformation(scanner.Text()), targetLines[targetIdx]; {
+		// We have a match, proceed to the next target line
+		case targetIdx == 0 && strings.HasSuffix(tranformedLine, targetLine) ||
+			targetIdx == len(targetLines)-1 && strings.HasPrefix(tranformedLine, targetLine) ||
+			tranformedLine == targetLine:
+			if targetIdx++; targetIdx == len(targetLines) {
+				e2e.Logf("Found substring [%v] in the logs", strings.Join(targetLines, "\n"))
+				return true
+			}
+		// Restart from target line 0
+		default:
+			targetIdx = 0
+		}
+	}
+
+	return false
+}
+
 func removeResource(oc *exutil.CLI, parameters ...string) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(parameters...).Output()
 	if err != nil && (strings.Contains(output, "NotFound") || strings.Contains(output, "No resources found")) {

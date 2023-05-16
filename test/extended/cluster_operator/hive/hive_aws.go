@@ -1119,10 +1119,9 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"pods", "-n", oc.Namespace()}).check(oc)
 	})
 
-	//author: liangli@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//author: liangli@redhat.com fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "32223"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-32223-Medium-35193-[aws]Hive ClusterDeployment Check installed and uninstalled [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-32223-Medium-35193-High-23308-[aws]Hive ClusterDeployment Check installed and uninstalled [Serial]", func() {
 		testCaseID := "32223"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -1157,6 +1156,21 @@ spec:
 
 		g.By("Check if ClusterDeployment created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("test OCP-23308: Hive install log does not contain admin credentials, but contains REDACTED LINE OF OUTPUT")
+		provisionPodName := getProvisionPodName(oc, cdName, oc.Namespace())
+		cmd, stdout, err := oc.Run("logs").Args("-f", provisionPodName, "-c", "hive").BackgroundRC()
+		defer cmd.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		f := stdout.(*os.File)
+		defer f.Close()
+		targetLines := []string{
+			fmt.Sprintf("Access the OpenShift web-console here: https://console-openshift-console.apps.%v.%v\"", cdName, AWSBaseDomain),
+			"REDACTED LINE OF OUTPUT",
+		}
+		targetFound := assertLogs(f, targetLines, nil, 3*time.Minute)
+		o.Expect(targetFound).To(o.BeTrue())
+
 		g.By("test OCP-32223 check install")
 		provisionName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.provisionRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
