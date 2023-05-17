@@ -1575,13 +1575,32 @@ spec:
 		o.Expect(output).To(o.ContainSubstring("Attempted to change ClusterDeployment.Spec which is immutable"))
 	})
 
-	//author: lwan@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//author: lwan@redhat.com fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "22381"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-22381-Medium-34882-[AWS]Hive additional machinepool test [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-22381-Medium-34882-High-24693-[AWS]Hive additional machinepool test [Serial]", func() {
 		testCaseID := "34882"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
+
+		g.By("OCP-24693: Support a global pull secret override")
+
+		e2e.Logf("Granting temp user permission to create secret in Hive's namespace ...")
+		// This is done so that the createPullSecret function can be used on Hive's namespace
+		err := oc.AsAdmin().WithoutNamespace().Run("adm", "policy").Args("add-role-to-user", "edit", oc.Username(), "-n", HiveNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Creating global pull-secret ...")
+		defer oc.AsAdmin().Run("delete").Args("secret", "pull-secret", "-n", HiveNamespace).Execute()
+		createPullSecret(oc, HiveNamespace)
+
+		e2e.Logf("Patching Hiveconfig ...")
+		patch := `
+spec:
+  globalPullSecretRef:
+    name: pull-secret`
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "-n=hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/globalPullSecretRef"}]`).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "-n=hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
