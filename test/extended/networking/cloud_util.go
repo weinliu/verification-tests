@@ -231,7 +231,7 @@ func findFreeIPs(oc *exutil.CLI, nodeName string, number int) []string {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		freeIPs = findUnUsedIPs(oc, sub1, number)
 
-	} else if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
+	} else if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") || strings.Contains(platform, "nutanix") {
 		ipv4Sub, _ := getPrimaryIfaddrFromBMNode(oc, nodeName)
 		tempSlice := strings.Split(ipv4Sub, "/")
 		o.Expect(len(tempSlice) > 1).Should(o.BeTrue())
@@ -821,7 +821,7 @@ func getRequestURL(domainName string) (string, string) {
 
 func waitCloudPrivateIPconfigUpdate(oc *exutil.CLI, egressIP string, exist bool) {
 	platform := exutil.CheckPlatform(oc)
-	if strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") {
+	if strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "nutanix") {
 		e2e.Logf("Baremetal and Vsphere platform don't have cloudprivateipconfig, no need check cloudprivateipconfig!")
 	} else {
 		egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
