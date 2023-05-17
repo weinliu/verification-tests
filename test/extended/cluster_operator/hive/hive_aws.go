@@ -2248,4 +2248,83 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"InstallImagesNotResolved\")].status}'"}).check(oc)
 
 	})
+
+	//author: kcui@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "28845"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-High-28845-[AWS]Hive give a way to override the API URL of managed cluster[Serial]", func() {
+		testCaseID := "28845"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Config cd Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		g.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 1,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Check install status...")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("edit the cd CRs apiURLOverride field with a vaild apiURL")
+		ValidApiUrl := "https://api." + cdName + ".qe.devcluster.openshift.com:6443"
+		stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cd", cdName, "-n", oc.Namespace(), "--type=merge", "-p", fmt.Sprintf("{\"spec\":{\"controlPlaneConfig\":{\"apiURLOverride\": \"%s\"}}}", ValidApiUrl)).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stdout).To(o.ContainSubstring("clusterdeployment.hive.openshift.io/" + cdName + " patched"))
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].status}'"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterReachable", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].reason}'"}).check(oc)
+
+		g.By("edit the cd CRs apiURLOverride field with an invaild apiURL")
+		InvalidApiUrl := "https://api." + cdName + "-non-exist.qe.devcluster.openshift.com:6443"
+		stdout, _, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cd", cdName, "-n", oc.Namespace(), "--type=merge", "-p", fmt.Sprintf("{\"spec\":{\"controlPlaneConfig\":{\"apiURLOverride\": \"%s\"}}}", InvalidApiUrl)).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stdout).To(o.ContainSubstring("clusterdeployment.hive.openshift.io/" + cdName + " patched"))
+		waitForAPIWaitFailure := func() bool {
+			condition := getCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "ActiveAPIURLOverride")
+			if status, ok := condition["status"]; !ok || status != "False" {
+				e2e.Logf("For condition ActiveAPIURLOverride, expected status is False, actual status is %v, retrying ...", status)
+				return false
+			}
+			if reason, ok := condition["reason"]; !ok || reason != "ErrorConnectingToCluster" {
+				e2e.Logf("For condition ActiveAPIURLOverride, expected reason is ErrorConnectingToCluster, actual reason is %v, retrying ...", reason)
+				return false
+			}
+			if message, ok := condition["message"]; !ok || !strings.Contains(message, "no such host") {
+				e2e.Logf("For condition ActiveAPIURLOverride, expected message is no such host, actual reason is %v, retrying ...", message)
+				return false
+			}
+			e2e.Logf("For condition ActiveAPIURLOverride, fields status, reason & message all expected, proceeding to the next step ...")
+			return true
+		}
+		o.Eventually(waitForAPIWaitFailure).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+		g.By("edit the cd CRs apiURLOverride field with a vaild apiURL again")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, fmt.Sprintf("clusterdeployment.hive.openshift.io/"+cdName+" patched"), ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", fmt.Sprintf("{\"spec\":{\"controlPlaneConfig\":{\"apiURLOverride\": \"%s\"}}}", ValidApiUrl)}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].status}'"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterReachable", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].reason}'"}).check(oc)
+
+	})
+
 })
