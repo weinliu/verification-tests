@@ -1930,18 +1930,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-31693-Check CSV information on the PackageManifest", func() {
+		exutil.SkipBaselineCaps(oc, "None")
 		g.By("1) The relatedImages should exist")
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.relatedImages}").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.relatedImages}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.BeEmpty())
 
 		g.By("2) The minKubeVersion should exist")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.minKubeVersion}").Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.minKubeVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.BeEmpty())
 
 		g.By("3) In this case, nativeAPI is optional, and prometheus does not have any nativeAPIs, which is ok.")
-		oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.nativeAPIs}").Output()
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.nativeAPIs}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -4323,7 +4324,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		g.By("3) check status of marketplace operator")
 		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
-			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests")
+			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "-n", "openshift-marketplace")
 			if catsrcS == "" || packages == "" {
 				e2e.Logf("get catsrc or packagemanifests failed")
 				return false, nil
@@ -4424,7 +4425,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		g.By("3) check status of marketplace operator")
 		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
-			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests")
+			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "-n", "openshift-marketplace")
 			if catsrcS == "" || packages == "" {
 				e2e.Logf("get catsrc or packagemanifests failed")
 				return false, nil
@@ -10911,7 +10912,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			}
 			err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 				catalogstrings := []string{"Certified Operators", "Community Operators", "Red Hat Operators", "Red Hat Marketplace"}
-				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests").Output()
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				for _, catalogstring := range catalogstrings {
 					if !strings.Contains(output, catalogstring) {
