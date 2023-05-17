@@ -224,6 +224,15 @@ type egressFirewall5 struct {
 	template    string
 }
 
+type egressNetworkpolicy struct {
+	name      string
+	namespace string
+	ruletype  string
+	rulename  string
+	rulevalue string
+	template  string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -356,6 +365,19 @@ func (EFW *egressFirewall5) createEgressFW5Object(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create EgressFW2 %v", EFW.name))
+}
+
+func (eNPL *egressNetworkpolicy) createEgressNetworkPolicyObj(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		parameters := []string{"--ignore-unknown-parameters=true", "-f", eNPL.template, "-p", "NAME=" + eNPL.name, "NAMESPACE=" + eNPL.namespace, "RULETYPE=" + eNPL.ruletype, "RULENAME=" + eNPL.rulename, "RULEVALUE=" + eNPL.rulevalue}
+		err1 := applyResourceFromTemplateByAdmin(oc, parameters...)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create EgressNetworkPolicy %v in Namespace %v", eNPL.name, eNPL.namespace))
 }
 
 func (ipBlock_ingress_policy *ipBlockIngressDual) createipBlockIngressObjectDual(oc *exutil.CLI) {
@@ -2092,7 +2114,7 @@ func getOVNGatewayMode(oc *exutil.CLI) string {
 func getEgressCIDRsForNode(oc *exutil.CLI, nodeName string) string {
 	var sub1 string
 	platform := exutil.CheckPlatform(oc)
-	if strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") {
+	if strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "nutanix") {
 		defaultSubnetV4, err := getDefaultSubnet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, ipNet, err1 := net.ParseCIDR(defaultSubnetV4)

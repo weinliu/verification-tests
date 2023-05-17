@@ -20,7 +20,7 @@ import (
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
-var _ = g.Describe("[sig-networking] SDN", func() {
+var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-egressfirewall", exutil.KubeConfigPath())
@@ -1266,4 +1266,74 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			}, "120s", "10s").Should(o.BeTrue(), "Allow rule did not work as expected in second namespace after rule change for IPv6 !!")
 		}
 	})
+})
+
+var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLI("networking-egressnetworkpolicy", exutil.KubeConfigPath())
+	g.BeforeEach(func() {
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if !strings.Contains(networkType, "sdn") {
+			g.Skip("EgressNetworkpolicy should run on SDN network cluster, skipped for other network plugin clusters.")
+		}
+		if checkProxy(oc) {
+			g.Skip("This is proxy cluster, egressNetworkpolicy cannot be tested on proxy cluster, skip the test.")
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-63742-High-62896-EgressNetworkPolicy DNS resolution should fall back to TCP for truncated responses,updating egressnetworkpolicy should delete the old version egressnetworkpolicy.", func() {
+		// From customer bugs
+		// https://issues.redhat.com/browse/OCPBUGS-12435
+		// https://issues.redhat.com/browse/OCPBUGS-11887
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressNPTemplate    = filepath.Join(buildPruningBaseDir, "egressnetworkpolicy-template.yaml")
+		)
+
+		g.By("Get namespace")
+		ns := oc.Namespace()
+
+		g.By("Create an EgressNetworkpolicy object with a dnsName")
+		egressNetworkpolicy := egressNetworkpolicy{
+			name:      "egressnetworkpolicy-63742",
+			namespace: ns,
+			ruletype:  "Deny",
+			rulename:  "dnsName",
+			rulevalue: "aerserv-bc-us-east.bidswitch.net",
+			template:  egressNPTemplate,
+		}
+		defer removeResource(oc, true, true, "egressnetworkpolicy", egressNetworkpolicy.name, "-n", egressNetworkpolicy.namespace)
+		egressNetworkpolicy.createEgressNetworkPolicyObj(oc)
+
+		g.By("Checking SDN logs, should no trancted message for dns")
+		sdnPod := getPodName(oc, "openshift-sdn", "app=sdn")
+		o.Consistently(func() bool {
+			podlogs, _ := oc.AsAdmin().Run("logs").Args(sdnPod[0], "-n", "openshift-sdn", "-c", "sdn", "--since", "60s").Output()
+			result := strings.Contains(podlogs, "dns: failed to unpack truncated message")
+			if result {
+				e2e.Logf("The SDN logs is :%s \n", podlogs)
+			}
+			return result
+		}, 30*time.Second, 10*time.Second).ShouldNot(o.BeTrue())
+
+		g.By("Update egressnetworkpolicy")
+		errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressnetworkpolicy.network.openshift.io/"+egressNetworkpolicy.name+"", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.cnn.com\"}},{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.facebook.com\"}}]}}", "--type=merge").Execute()
+		o.Expect(errPatch).NotTo(o.HaveOccurred())
+		errPatch = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressnetworkpolicy.network.openshift.io/"+egressNetworkpolicy.name+"", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.yahoo.com\"}},{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.redhat.com\"}}]}}", "--type=merge").Execute()
+		o.Expect(errPatch).NotTo(o.HaveOccurred())
+
+		g.By("Checking SDN logs, should no cannot find netid message for egressnetworkpolicy.")
+		o.Consistently(func() bool {
+			podlogs, _ := oc.AsAdmin().Run("logs").Args(sdnPod[0], "-n", "openshift-sdn", "-c", "sdn", "--since", "60s").Output()
+			result := strings.Contains(podlogs, "Could not find netid for namespace \"\": failed to find netid for namespace: , resource name may not be empty")
+			if result {
+				e2e.Logf("The SDN logs is :%s \n", podlogs)
+			}
+			return result
+		}, 30*time.Second, 10*time.Second).ShouldNot(o.BeTrue())
+	})
+
 })
