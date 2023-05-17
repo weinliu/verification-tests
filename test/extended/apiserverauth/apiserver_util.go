@@ -395,7 +395,7 @@ func isTargetPortAvailable(oc *exutil.CLI, port int) bool {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, masterNode := range masterNodes {
 		cmd := fmt.Sprintf("netstat -tulpn | grep LISTEN | { grep :%d || true; }", port)
-		checkPortResult, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+		checkPortResult, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkPortResult = strings.Trim(strings.Trim(checkPortResult, "\n"), " ")
 		if checkPortResult != "" {
@@ -959,7 +959,7 @@ func checkApiserversAuditPolicies(oc *exutil.CLI, auditPolicyName string) {
 
 func checkAuditLogs(oc *exutil.CLI, script string, masterNode string, namespace string) (string, int) {
 	g.By(fmt.Sprintf("Get audit log file from %s", masterNode))
-	masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", script)
+	masterNodeLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", script)
 	o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 	errCount := len(strings.TrimSpace(masterNodeLogs))
 	return masterNodeLogs, errCount
@@ -1080,10 +1080,10 @@ func isConnectedInternet(oc *exutil.CLI) bool {
 }
 
 func restartMicroshift(oc *exutil.CLI, nodename string) {
-	_, restartErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl restart microshift")
+	_, restartErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl restart microshift")
 	o.Expect(restartErr).NotTo(o.HaveOccurred())
 	mstatusErr := wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
-		output, err := exutil.DebugNodeWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl is-active microshift")
+		output, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl is-active microshift")
 		if err == nil && strings.TrimSpace(output) == "active" {
 			e2e.Logf("microshift status is: %v ", output)
 			return true, nil
@@ -1091,4 +1091,46 @@ func restartMicroshift(oc *exutil.CLI, nodename string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(mstatusErr, fmt.Sprintf("Failed to restart Microshift: %v", mstatusErr))
+}
+
+func replacePatternInfile(oc *exutil.CLI, microshiftFilePathYaml string, oldPattern string, newPattern string) {
+	content, err := ioutil.ReadFile(microshiftFilePathYaml)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	re := regexp.MustCompile(oldPattern)
+	newContent := re.ReplaceAll(content, []byte(newPattern))
+
+	err = ioutil.WriteFile(microshiftFilePathYaml, newContent, 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Get the pods List by label
+func getPodsList(oc *exutil.CLI, namespace string) []string {
+	podsOp := getResource(oc, asAdmin, withoutNamespace, "pod", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}")
+	podNames := strings.Split(strings.TrimSpace(podsOp), " ")
+	e2e.Logf("Namespace %s pods are: %s", namespace, string(podsOp))
+	return podNames
+}
+
+func changeMicroshiftConfig(oc *exutil.CLI, configStr string, nodeName string, namespace string, configPath string) {
+	etcConfigCMD := fmt.Sprintf(`
+configfile=%v
+cat > $configfile << EOF
+%v
+EOF`, configPath, configStr)
+	_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", etcConfigCMD)
+	o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+}
+
+func addKustomizationToMicroshift(oc *exutil.CLI, nodeName string, namespace string, kustomizationFiles map[string][]string) {
+	for key, file := range kustomizationFiles {
+		tmpFileName := getTestDataFilePath(file[0])
+		replacePatternInfile(oc, tmpFileName, file[2], file[3])
+		fileOutput, err := exec.Command("bash", "-c", fmt.Sprintf(`cat %s`, tmpFileName)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		destFile := file[1] + strings.Split(key, ".")[0] + ".yaml"
+		fileCmd := fmt.Sprintf(`echo '%s' | tee %s `, string(fileOutput), destFile)
+		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", fileCmd)
+		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+	}
 }

@@ -1752,7 +1752,7 @@ spec:
 				failedRevision, _ := strconv.Atoi(annotations)
 				o.Expect(failedRevision - 1).Should(o.BeNumerically("==", PreRevision))
 				g.By("Check created soft-link kube-apiserver-last-known-good to the last good revision")
-				out, fileChkError := exutil.DebugNodeWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, "bash", "-c", "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good")
+				out, fileChkError := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, "bash", "-c", "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good")
 				o.Expect(fileChkError).NotTo(o.HaveOccurred())
 				o.Expect(out).To(o.ContainSubstring("kube-apiserver-pod.yaml"))
 				e2e.Logf("Step 3, Test Passed: Cluster is fall back to last good revision")
@@ -1764,7 +1764,7 @@ spec:
 
 		g.By("4: Check startup-monitor pod was created during fallback and currently in Stopped/Removed state")
 		cmd := fmt.Sprintf("journalctl -u crio --since '10min ago'| grep 'startup-monitor' | egrep %v", keyWords)
-		out, journalctlErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, cmd)
+		out, journalctlErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, cmd)
 		o.Expect(journalctlErr).NotTo(o.HaveOccurred())
 		o.Expect(out).ShouldNot(o.BeEmpty())
 		e2e.Logf("Step 4, Test Passed : Startup-monitor pod was created and Stopped/Removed state")
@@ -1976,7 +1976,7 @@ spec:
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Master node is %v : ", masterNode)
 		cmd := `lscpu | grep '^CPU(s):'`
-		cpuCores, cpuErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+		cpuCores, cpuErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(cpuErr).NotTo(o.HaveOccurred())
 		regexStr := regexp.MustCompile(`CPU\S+\s+\S+`)
 		cpuCore := strings.Split(regexStr.FindString(cpuCores), ":")
@@ -2225,7 +2225,7 @@ spec:
 
 		g.By("3) Check the kube-apiserver-last-known-good link file exists and is linked to a good version.")
 		cmd := "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good"
-		output, debugNodeWithChrootErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+		output, debugNodeWithChrootErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(debugNodeWithChrootErr).NotTo(o.HaveOccurred())
 
 		g.By("3.1) Check kube-apiserver-last-known-good file exists.")
@@ -2347,7 +2347,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
-		podLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+		podLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
@@ -2373,7 +2373,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
-			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2403,7 +2403,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
-			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			externalLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2430,7 +2430,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
-			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			auditLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2571,7 +2571,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
-		podLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+		podLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
@@ -2601,7 +2601,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
-			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			externalLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2627,7 +2627,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
-			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2653,7 +2653,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
-			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			auditLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2710,7 +2710,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("4.%d -> step 1) Get log file from %s", i+1, masterNode))
-			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("4.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2740,7 +2740,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
-			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			externalLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2767,7 +2767,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
-			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			auditLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -4188,7 +4188,7 @@ EOF`, dcpolicyrepo)
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		cmd := `iptables-save | grep -iE 'proxy|kube-proxy' || true`
-		proxy, proxyErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", cmd)
+		proxy, proxyErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", cmd)
 		o.Expect(proxyErr).NotTo(o.HaveOccurred())
 		proxy = regexp.MustCompile(`\n`).ReplaceAllString(string(proxy), "")
 		e2e.Logf("test ::%v::test", proxy)
@@ -4445,7 +4445,7 @@ roleRef:
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNode).ShouldNot(o.BeEmpty())
 		kaslogfile := "ls -l /var/log/kube-apiserver/audit.log"
-		masterDebugNode, debugNodeErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", kaslogfile)
+		masterDebugNode, debugNodeErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", kaslogfile)
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
 		o.Expect(masterDebugNode).ShouldNot(o.BeEmpty())
 		parts := strings.Fields(masterDebugNode)
@@ -4829,7 +4829,7 @@ type: kubernetes.io/service-account-token`
 		counter := 0
 		for _, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("4.2 Get audit log file from %s", masterNode))
-			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", script)
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", script)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 			errCount := strings.Count(strings.TrimSpace(masterNodeLogs), "\n")
 			if errCount > 0 {
@@ -4942,7 +4942,7 @@ type: kubernetes.io/service-account-token`
 		g.By("3. Checking component name presents in klog headers")
 		for _, comps := range components {
 			script := `journalctl -u microshift.service|grep -i "microshift.*: ` + comps + `"|tail -1`
-			masterNodeLogs, checkLogErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", script)
+			masterNodeLogs, checkLogErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", script)
 			o.Expect(checkLogErr).NotTo(o.HaveOccurred())
 			count := len(strings.TrimSpace(masterNodeLogs))
 			if count > 0 {
@@ -5128,18 +5128,18 @@ if [ -f $configfilebak ]; then
 else 
 	rm -f $configfile 
 fi`, etcConfigYaml, etcConfigYamlbak)
-			_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
+			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 			restartMicroshift(oc, masterNodes[0])
 		}()
 
 		defer func() {
-			_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", `su - redhat -c "rm -f ~/.microshift/config.yaml"`)
+			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", `su - redhat -c "rm -f ~/.microshift/config.yaml"`)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 		}()
 
 		g.By("3. Check default config values for etcd")
-		mchkConfigdefault, mchkConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		mchkConfigdefault, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 
 		g.By("4. Configure the memoryLimitMB field in user config path")
@@ -5149,11 +5149,11 @@ fi`, etcConfigYaml, etcConfigYamlbak)
 etcd:
   memoryLimitMB: %v
 EOF"`, configDir, configDir, configFile, configDir, configFile, valCfg)
-		_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
+		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 		g.By("5. Check config values for etcd should not change from default values")
-		mchkConfig, mchkConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 		o.Expect(mchkConfig).Should(o.ContainSubstring(mchkConfigdefault))
 
@@ -5168,11 +5168,11 @@ cat > $configfile << EOF
 etcd:
   memoryLimitMB: %v
 EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
-		_, mchgConfigErr = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
+		_, mchgConfigErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 		g.By("7. Check config values for etcd should change from default values")
-		mchkConfig, mchkConfigErr = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		mchkConfig, mchkConfigErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 		o.Expect(mchkConfig).Should(o.ContainSubstring(`memoryLimitMB: ` + valCfg))
 	})
@@ -5202,26 +5202,26 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		g.By("3. Check user data dir")
 		// Check if the directory exists
 		chkUserDatadirCmd := fmt.Sprintf(`if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi`, userDataDir)
-		checkDirOutput, checkDirErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserDatadirCmd)
+		checkDirOutput, checkDirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserDatadirCmd)
 		o.Expect(checkDirErr).NotTo(o.HaveOccurred())
 
 		if strings.Contains(checkDirOutput, "Directory exists") {
 			// Directory exists, so delete the contents
-			_, deldirerr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", userDataDirDelCmd)
+			_, deldirerr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", userDataDirDelCmd)
 			o.Expect(deldirerr).NotTo(o.HaveOccurred())
-			chkContentOutput, chkContentErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentUserDatadirCmd)
+			chkContentOutput, chkContentErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentUserDatadirCmd)
 			o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 			o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
 		} else {
 			// Directory does not exist, so create it
-			_, mkdirerr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", userDataDirCmd)
+			_, mkdirerr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", userDataDirCmd)
 			o.Expect(mkdirerr).NotTo(o.HaveOccurred())
 		}
 
 		g.By("4. Check global data dir")
 		// Check if the directory exists
 		chkUserGlobalDatadirCmd := fmt.Sprintf(`if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi`, globalDataDir)
-		checkGlobalDirOutput, checkGlobalDirErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserGlobalDatadirCmd)
+		checkGlobalDirOutput, checkGlobalDirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserGlobalDatadirCmd)
 		o.Expect(checkGlobalDirErr).NotTo(o.HaveOccurred())
 
 		if !strings.Contains(checkGlobalDirOutput, "Directory exists") {
@@ -5229,9 +5229,9 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		}
 
 		// Directory exists, so delete the contents it can restore automatically after restart
-		_, deldirerr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", globalDataDirDelCmd)
+		_, deldirerr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", globalDataDirDelCmd)
 		o.Expect(deldirerr).NotTo(o.HaveOccurred())
-		chkContentOutput, chkContentErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentGlobalDatadirCmd)
+		chkContentOutput, chkContentErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentGlobalDatadirCmd)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
 
@@ -5239,11 +5239,11 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		restartMicroshift(oc, masterNodes[0])
 
 		g.By("6. Ensure that userdatadir is empty and globaldatadir is restored after Microshift is restarted")
-		chkContentOutput, chkContentErr = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentUserDatadirCmd)
+		chkContentOutput, chkContentErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentUserDatadirCmd)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
 		e2e.Logf("Userdatadir %v be empty.", userDataDir)
-		chkContentOutput, chkContentErr = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentGlobalDatadirCmd)
+		chkContentOutput, chkContentErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentGlobalDatadirCmd)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).NotTo(o.BeEmpty())
 		e2e.Logf("Globaldatadir %v not empty, it is restored :: %v", globalDataDir, chkContentOutput)
@@ -5275,7 +5275,7 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 			else
 				rm -f $configfile;
 			fi`, etcConfigYaml, etcConfigYamlbak)
-			_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 			restartMicroshift(oc, masterNodes[0])
 		}()
@@ -5286,7 +5286,7 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		if [ -f $configfile ]; then 
 			cp $configfile $configfilebak;
 		fi`, etcConfigYaml, etcConfigYamlbak)
-		_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 		logLevels := []string{"Normal", "normal", "NORMAL", "debug", "DEBUG", "Trace", "trace", "TRACE", "TraceAll", "traceall", "TRACEALL"}
@@ -5299,7 +5299,7 @@ debugging:
   logLevel: %v
 EOF`, etcConfigYaml, level)
 
-			_, mchgConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 			unixTimestamp := time.Now().Unix()
@@ -5309,7 +5309,7 @@ EOF`, etcConfigYaml, level)
 			g.By(fmt.Sprintf("%v.3 Check logLevel should change to %v", stepn+4, level))
 			chkConfigCmd := fmt.Sprintf(`journalctl -u microshift -b -S @%vs | grep "logLevel: %v"|grep -iv journalctl|tail -1`, unixTimestamp, level)
 			getlogErr := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
-				mchkConfig, mchkConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+				mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
 				if mchkConfigErr == nil && strings.Contains(mchkConfig, "logLevel: "+level) {
 					e2e.Logf("LogLevel changed to %v :: %v", level, mchkConfig)
 					return true, nil
@@ -5383,5 +5383,230 @@ EOF`, etcConfigYaml, level)
 		out, err = oc.AsAdmin().WithoutNamespace().Run("status").Args("-n", projectName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring("no services, deployment"))
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Longduration-NonPreRelease-Author:rgangwar-Medium-63217-[Apiserver] configurable manifest sources [Disruptive][Slow]", func() {
+		var (
+			e2eTestNamespace = "microshift-ocp63217"
+			etcConfigYaml    = "/etc/microshift/config.yaml"
+			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
+			tmpManifestPath  = "/var/lib/microshift/manifests/manifestocp63217/"
+			chkConfigCmd     = `/usr/bin/microshift show-config --mode effective`
+		)
+
+		g.By("1. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		g.By("2. Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		defer func() {
+			baseName := "busybox-scenario"
+			numbers := []int{1, 2, 3}
+			for _, number := range numbers {
+				ns := fmt.Sprintf("%s%d-ocp63217", baseName, number)
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+			}
+			baseName = "hello-openshift-scenario"
+			for _, number := range numbers {
+				ns := fmt.Sprintf("%s%d-ocp63217", baseName, number)
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+			}
+		}()
+
+		defer func() {
+			etcConfigCMD := fmt.Sprintf(`configfile=%v;
+			configfilebak=%v;
+			if [ -f $configfilebak ]; then
+				cp $configfilebak $configfile; 
+				rm -f $configfilebak;
+			else
+				rm -f $configfile;
+			fi`, etcConfigYaml, etcConfigYamlbak)
+			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+			restartMicroshift(oc, masterNodes[0])
+		}()
+
+		defer func() {
+			dirCmd := "rm -rf /etc/microshift/manifests/kustomization.yaml /etc/microshift/manifests/busybox.yaml " + tmpManifestPath
+			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", dirCmd)
+			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("3. Take backup of config file")
+		etcConfigCMD := fmt.Sprintf(`configfile=%v;
+		configfilebak=%v;
+		if [ -f $configfile ]; then 
+			cp $configfile $configfilebak;
+		fi`, etcConfigYaml, etcConfigYamlbak)
+		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+
+		g.By("4. Create tmp manifest path on node")
+		_, dirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo mkdir -p "+tmpManifestPath)
+		o.Expect(dirErr).NotTo(o.HaveOccurred())
+
+		// set the manifest option value to an empty list should disable loading
+		g.By("5.1 :: Scenario-1 :: Set an empty list value to the manifest option in config")
+		tmpNamespace := "scenario1-ocp63217"
+		etcConfigCMD = fmt.Sprintf(`
+manifests:
+    kustomizePaths: []`)
+		changeMicroshiftConfig(oc, etcConfigCMD, masterNodes[0], e2eTestNamespace, etcConfigYaml)
+
+		g.By("5.2 :: Scenario-1 :: Create kustomization and deployemnt files")
+		newSrcFiles := map[string][]string{
+			"busybox.yaml": {
+				"microshift-busybox-deployment.yaml",
+				"/etc/microshift/manifests/",
+				"NAMESPACEVAR",
+				tmpNamespace,
+			},
+			"kustomization.yaml": {
+				"microshift-busybox-kustomization.yaml",
+				"/etc/microshift/manifests/",
+				"NAMESPACEVAR",
+				tmpNamespace,
+			},
+		}
+		addKustomizationToMicroshift(oc, masterNodes[0], e2eTestNamespace, newSrcFiles)
+		restartMicroshift(oc, masterNodes[0])
+		g.By("5.3 :: Scenario-1 :: Check pods after microshift restart")
+		podsOutput := getPodsList(oc, "busybox-"+tmpNamespace)
+		o.Expect(podsOutput[0]).To(o.BeEmpty(), "Scenario-1 :: Failed :: Pods are created, manifests are not disabled")
+		e2e.Logf("Scenario-1 :: Passed :: Pods should not be created, manifests are disabled")
+
+		// Setting the manifest option value to a single value should only load manifests from that location
+		g.By("6.1 :: Scenario-2 :: Set a single value to the manifest option in config")
+		tmpNamespace = "scenario2-ocp63217"
+		etcConfigCMD = fmt.Sprintf(`
+  kustomizePaths:
+  - /etc/microshift/manifests`)
+		changeMicroshiftConfig(oc, etcConfigCMD, masterNodes[0], e2eTestNamespace, etcConfigYaml)
+
+		g.By("6.2 :: Scenario-2 :: Create kustomization and deployemnt files")
+		newSrcFiles = map[string][]string{
+			"busybox.yaml": {
+				"microshift-busybox-deployment.yaml",
+				"/etc/microshift/manifests/",
+				"scenario1-ocp63217",
+				tmpNamespace,
+			},
+			"kustomization.yaml": {
+				"microshift-busybox-kustomization.yaml",
+				"/etc/microshift/manifests/",
+				"scenario1-ocp63217",
+				tmpNamespace,
+			},
+		}
+
+		addKustomizationToMicroshift(oc, masterNodes[0], e2eTestNamespace, newSrcFiles)
+		restartMicroshift(oc, masterNodes[0])
+
+		g.By("6.3 :: Scenario-2 :: Check pods after microshift restart")
+		podsOutput = getPodsList(oc, "busybox-"+tmpNamespace)
+		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-2 :: Failed :: Pods are not created, manifests are not loaded from defined location")
+		e2e.Logf("Scenario-2 :: Passed :: Pods are created, manifests are loaded from defined location :: %s", podsOutput[0])
+
+		//  Setting the option value to multiple values should load manifests from all of them.
+		g.By("7.1 Scenario-3 :: Set multiple values to the manifest option in config")
+		etcConfigCMD = fmt.Sprintf(`
+manifests:
+  kustomizePaths:
+  - /etc/microshift/manifests
+  - %v`, tmpManifestPath)
+		changeMicroshiftConfig(oc, etcConfigCMD, masterNodes[0], e2eTestNamespace, etcConfigYaml)
+
+		tmpNamespace = "scenario3-ocp63217"
+		newSrcFiles = map[string][]string{
+			"busybox.yaml": {
+				"microshift-busybox-deployment.yaml",
+				"/etc/microshift/manifests/",
+				"scenario2-ocp63217",
+				tmpNamespace,
+			},
+			"kustomization.yaml": {
+				"microshift-busybox-kustomization.yaml",
+				"/etc/microshift/manifests/",
+				"scenario2-ocp63217",
+				tmpNamespace,
+			},
+			"hello-openshift.yaml": {
+				"microshift-hello-openshift.yaml",
+				tmpManifestPath,
+				"NAMESPACEVAR",
+				tmpNamespace,
+			},
+			"kustomization": {
+				"microshift-hello-openshift-kustomization.yaml",
+				tmpManifestPath,
+				"NAMESPACEVAR",
+				tmpNamespace,
+			},
+		}
+		g.By("7.2 :: Scenario-3 :: Create kustomization and deployemnt files")
+		addKustomizationToMicroshift(oc, masterNodes[0], e2eTestNamespace, newSrcFiles)
+		restartMicroshift(oc, masterNodes[0])
+
+		g.By("7.3 Scenario-3 :: Check pods after microshift restart")
+		podsOutput = getPodsList(oc, "hello-openshift-"+tmpNamespace)
+		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-3 :: Failed :: Pods are not created, manifests are not loaded from defined location")
+		podsOutput = getPodsList(oc, "busybox-"+tmpNamespace)
+		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-3 :: Failed :: Pods are not created, manifests are not loaded from defined location")
+		e2e.Logf("Scenario-3 :: Passed :: Pods are created, manifests are loaded from defined location :: %s", podsOutput[0])
+
+		// If the option includes a manifest path that exists but does not contain a kustomization.yaml file, it should be ignored.
+		g.By("8.1 Scenario-4 :: Set option includes a manifest path that exists but does not contain a kustomization.yaml file")
+		_, delFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo rm "+tmpManifestPath+"kustomization.yaml")
+		o.Expect(delFileErr).NotTo(o.HaveOccurred())
+		delNsErr := oc.WithoutNamespace().Run("delete").Args("ns", "hello-openshift-scenario3-ocp63217", "--ignore-not-found").Execute()
+		o.Expect(delNsErr).NotTo(o.HaveOccurred())
+		restartMicroshift(oc, masterNodes[0])
+
+		g.By("8.2 Scenario-4 :: Check pods after microshift restart")
+		podsOutput = getPodsList(oc, "hello-openshift-"+tmpNamespace)
+		o.Expect(podsOutput[0]).To(o.BeEmpty(), "Scenario-4 :: Failed :: Pods are created, manifests not ignored defined location")
+		e2e.Logf("Scenario-4 :: Passed :: Pods are not created, manifests ignored defined location :: %s", podsOutput[0])
+
+		//  If the option includes a manifest path that does not exist, it should be ignored.
+		g.By("9.1 Scenario-5 :: Set option includes a manifest path that does not exists")
+		_, delDirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo rm -rf "+tmpManifestPath)
+		o.Expect(delDirErr).NotTo(o.HaveOccurred())
+		restartMicroshift(oc, masterNodes[0])
+
+		g.By("9.2 Scenario-5 :: Check pods after microshift restart")
+		podsOutput = getPodsList(oc, "hello-openshift-"+tmpNamespace)
+		o.Expect(podsOutput[0]).To(o.BeEmpty(), "Scenario-5 :: Failed :: Pods are created, manifests not ignored defined location")
+		e2e.Logf("Scenario-5 :: Passed :: Pods are not created, manifests ignored defined location :: %s", podsOutput[0])
+
+		// If the option is not specified, the default locations of /etc/microshift/manifests/kustomization.yaml and /usr/lib/microshift/manifests/kustomization.yaml should be loaded
+		g.By("10.1 :: Scenario-6 :: Set the manifest option value to an empty for manifest in config")
+		etcConfigCMD = fmt.Sprintf(`
+manifests:
+    kustomizePaths:`)
+		changeMicroshiftConfig(oc, etcConfigCMD, masterNodes[0], e2eTestNamespace, etcConfigYaml)
+		delNsErr = oc.WithoutNamespace().Run("delete").Args("ns", "busy-scenario3-ocp63217", "--ignore-not-found").Execute()
+		o.Expect(delNsErr).NotTo(o.HaveOccurred())
+		restartMicroshift(oc, masterNodes[0])
+
+		g.By("10.2 :: Scenario-6 :: Check manifest config")
+		pattern := `kustomizePaths:\s*\n\s*- /usr/lib/microshift/manifests\s*\n\s*- /etc/microshift/manifests`
+		re := regexp.MustCompile(pattern)
+		mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
+		match := re.MatchString(mchkConfig)
+		if !match {
+			e2e.Failf("Manifest config not reset to default :: \n" + mchkConfig)
+		}
+
+		g.By("10.3 :: Scenario-6 :: Check pods after microshift restart")
+		podsOutput = getPodsList(oc, "busybox-"+tmpNamespace)
+		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-6 :: Failed :: Pods are not created, manifests are not set to default")
+		e2e.Logf("Scenario-6 :: Passed :: Pods should be created, manifests are loaded from default location")
 	})
 })

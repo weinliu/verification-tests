@@ -2,11 +2,14 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	o "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -76,6 +79,23 @@ func DebugNodeWithOptions(oc *CLI, nodeName string, options []string, cmd ...str
 // DebugNodeWithOptionsAndChroot launches debug container using chroot and with options e.g. --image
 func DebugNodeWithOptionsAndChroot(oc *CLI, nodeName string, options []string, cmd ...string) (string, error) {
 	stdOut, stdErr, err := debugNode(oc, nodeName, options, true, true, cmd...)
+	return strings.Join([]string{stdOut, stdErr}, "\n"), err
+}
+
+// DebugNodeRetryWithOptionsAndChroot launches debug container using chroot and with options
+// And waitPoll to avoid "error: unable to create the debug pod" and do retry
+func DebugNodeRetryWithOptionsAndChroot(oc *CLI, nodeName string, options []string, cmd ...string) (string, error) {
+	var stdErr string
+	var stdOut string
+	var err error
+	errWait := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		stdOut, stdErr, err = debugNode(oc, nodeName, options, true, true, cmd...)
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	AssertWaitPollNoErr(errWait, fmt.Sprintf("Failed to debug node : %v", errWait))
 	return strings.Join([]string{stdOut, stdErr}, "\n"), err
 }
 
