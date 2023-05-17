@@ -84,12 +84,21 @@ func getTuningConfigMapNameWithRetry(oc *exutil.CLI, namespace string, filter st
 // getTunedSystemSetValueByParamNameInHostedCluster
 func getTunedSystemSetValueByParamNameInHostedCluster(oc *exutil.CLI, ntoNamespace, nodeName, oscommand, sysctlparm string) string {
 
-	debugNodeStdout, err := oc.AsAdmin().AsGuestKubeconf().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", oscommand, sysctlparm).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	var matchResult string
+	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 
-	regexpstr, _ := regexp.Compile(sysctlparm + " =.*")
-	matchResult := regexpstr.FindString(debugNodeStdout)
-	e2e.Logf("The value of %v is %v on %v", sysctlparm, matchResult, nodeName)
+		debugNodeStdout, err := oc.AsAdmin().AsGuestKubeconf().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", oscommand, sysctlparm).Output()
+		o.Expect(debugNodeStdout).NotTo(o.BeEmpty())
+		if err == nil {
+			regexpstr, _ := regexp.Compile(sysctlparm + " =.*")
+			matchResult = regexpstr.FindString(debugNodeStdout)
+			e2e.Logf("The value of [ %v ] is [ %v ] on [ %v ]", sysctlparm, matchResult, nodeName)
+			return true, nil
+		}
+		e2e.Logf("The debug node threw BadRequest ContainerCreating or other error, try next")
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Fail to execute debug node, keep threw error BadRequest ContainerCreating, please check")
 	return matchResult
 }
 
@@ -99,6 +108,8 @@ func compareSpecifiedValueByNameOnLabelNodeWithRetryInHostedCluster(oc *exutil.C
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 
 		tunedSettings := getTunedSystemSetValueByParamNameInHostedCluster(oc, ntoNamespace, nodeName, oscommand, sysctlparm)
+		o.Expect(tunedSettings).NotTo(o.BeEmpty())
+
 		expectedSettings := sysctlparm + " = " + specifiedvalue
 		if strings.Contains(tunedSettings, expectedSettings) {
 			return true, nil
@@ -156,8 +167,10 @@ func assertNTOPodLogsLastLinesInHostedCluster(oc *exutil.CLI, namespace string, 
 		e2e.Logf("The keywords of nto pod isn't found, try next ...")
 		return false, nil
 	})
+	if len(logLineStr) > 0 {
+		e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, logLineStr[0])
+	}
 
-	e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, logLineStr[0])
 	exutil.AssertWaitPollNoErr(err, "The tuned pod's log doesn't contain the keywords, please check")
 }
 
@@ -260,20 +273,29 @@ func assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(
 }
 
 // assertIfMatchKenelBootOnNodePoolLevelInHostedCluster used to compare if match the keywords
-func assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, expectedMisMatchValue string, isMatch bool) {
+func assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, expectedMatchValue string, isMatch bool) {
 	nodeNames, err := exutil.GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
 	o.Expect(err).NotTo(o.HaveOccurred())
+
 	nodesNum := len(nodeNames)
 	for i := 0; i < nodesNum; i++ {
-		debugNodeStdout, err := oc.AsAdmin().AsGuestKubeconf().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+nodeNames[i], "--", "cat", "/proc/cmdline").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(debugNodeStdout).NotTo(o.BeEmpty())
-		if isMatch {
-			o.Expect(debugNodeStdout).To(o.ContainSubstring(expectedMisMatchValue))
-		} else {
-			o.Expect(debugNodeStdout).NotTo(o.ContainSubstring(expectedMisMatchValue))
-		}
+		err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
+			debugNodeStdout, err := oc.AsAdmin().AsGuestKubeconf().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+nodeNames[i], "--", "chroot", "/host", "cat", "/proc/cmdline").Output()
+			o.Expect(debugNodeStdout).NotTo(o.BeEmpty())
 
+			if err == nil {
+				e2e.Logf("The output of debug node is :\n%v)", debugNodeStdout)
+				if isMatch {
+					o.Expect(debugNodeStdout).To(o.ContainSubstring(expectedMatchValue))
+				} else {
+					o.Expect(debugNodeStdout).NotTo(o.ContainSubstring(expectedMatchValue))
+				}
+				return true, nil
+			}
+			e2e.Logf("The debug node threw BadRequest ContainerCreating or other error, try next")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Fail to execute debug node, keep threw error BadRequest ContainerCreating, please check")
 	}
 }
 
