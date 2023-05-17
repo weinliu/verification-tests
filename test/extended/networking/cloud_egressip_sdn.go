@@ -3014,7 +3014,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:jechen-High-46710-SDN egressIP should still be functional post upgrade. [Disruptive]", func() {
+	g.It("NonPreRelease-ConnectedOnly-PreChkUpgrade-Author:jechen-High-46710-SDN egressIP should still be functional post upgrade. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		statefulSetHelloPod := filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
@@ -3071,7 +3071,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-PstChkUpgrade-Author:jechen-High-46710-SDN egressIP should still be functional post upgrade. [Disruptive]", func() {
+	g.It("NonPreRelease-ConnectedOnly-PstChkUpgrade-Author:jechen-High-46710-SDN egressIP should still be functional post upgrade. [Disruptive]", func() {
 
 		ns := "46710-upgrade-ns"
 		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
