@@ -3,50 +3,35 @@ import { ClusterSettingPage } from './../../views/cluster-setting';
 import { mcp } from "../../views/machine-config-pools";
 
 describe("Improve MachineConfigPool list table for update status", () => {
-  const params = {
-    fileName: 'machine-config-pools',
-    testName: 'infra-test',
-    testMCPName: 'infra-test'
-  };
-  const {fileName, testMCPName} = params;
-
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env("LOGIN_USERNAME")}`);
-    cy.adminCLI(`oc create -f ./fixtures/${fileName}.yaml`);
     cy.login(Cypress.env("LOGIN_IDP"), Cypress.env("LOGIN_USERNAME"), Cypress.env("LOGIN_PASSWORD"));
   });
-  
+
   after(() => {
-    cy.adminCLI(`oc delete machineconfigpools ${params.testName}`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout();
   });
 
   it("(OCP-51395, xiyuzhao) Improve MachineConfigPool list table for update status", {tags: ['e2e','admin'] }, () => {
-    cy.visit('/settings/cluster')
-    ClusterSettingPage.editUpstreamConfig()
-    ClusterSettingPage.configureChannel()
-    cy.visit('/settings/cluster')
-    cy.contains(/Up to date|Available updates|Not retrieving updates/g).should('be.visible')
+    const alertmsg = "Node updates are paused"
+    ClusterSettingPage.goToClusterSettingDetails();
+    ClusterSettingPage.editUpstreamConfig();
+    ClusterSettingPage.configureChannel();
 
-    mcp.listPage.goToMCPPage()
-    // Old columns should not exist
-    cy.get('thead').contains('Update status').should('be.visible')
-      .contains(/Updated|Updating|Paused/).should('not.exist')
+    mcp.listPage.goToMCPPage();
+    cy.get('thead').should('contain','Update status');
+    cy.get('[aria-label="MachineConfigPools"]').should('not.contain',/Updated|Updating|Paused/);
+    mcp.listPage.checkAlertMsg('not.exist',alertmsg);
+    listPage.rows.clickKebabAction("worker", 'Pause updates');
+    mcp.listPage.checkUpdateStatus("worker", 'Paused');
+    mcp.listPage.checkAlertMsg('contain',alertmsg);
+    ClusterSettingPage.goToClusterSettingDetails();
+    ClusterSettingPage.checkAlertMsg(alertmsg);
 
-    cy.get("Node updates are paused").should("not.exist")
-    
-    listPage.rows.clickKebabAction(testMCPName, 'Pause updates')
-    cy.contains('Node updates are paused').should('be.visible')
-    mcp.listPage.checkUpdateStatus(testMCPName, 'Paused')
-    
-    cy.visit('/settings/cluster')
-    cy.contains('Node updates are paused').should('be.visible')
-    
-    mcp.listPage.goToMCPPage()
-    cy.byLegacyTestID('cluster-settings-alerts-paused-nodes').within(() => {
-      cy.byButtonText('Resume all updates').click()
-    })
-    mcp.listPage.checkUpdateStatus(testMCPName, 'Up to date')
+    cy.go('back');
+    cy.get('[data-test-id="cluster-settings-alerts-paused-nodes"] button')
+      .should('contain','Resume all updates')
+      .click();
+    mcp.listPage.checkUpdateStatus("worker", 'Up to date');
   });
 });

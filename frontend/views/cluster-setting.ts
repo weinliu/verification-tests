@@ -1,4 +1,5 @@
 export const ClusterSettingPage = {
+  goToClusterSettingDetails: () => cy.visit('/settings/cluster'),
   isLoaded: () => {
     cy.get('.co-cluster-settings', {timeout: 30000}).should('be.visible');
     cy.get('.co-m-pane__body-group', {timeout: 30000}).should('be.visible');
