@@ -13,7 +13,7 @@ describe('Operator Hub tests', () => {
 
     before(() => {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-        cy.adminCLI(`oc create -f ./fixtures/operators/custom-catalog-source.json`)
+        cy.adminCLI('oc create -f ./fixtures/operators/custom-catalog-source.json')
           .its('stdout')
           .should('contain', 'created');
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));

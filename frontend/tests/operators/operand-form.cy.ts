@@ -11,6 +11,7 @@ describe('operand form view', () => {
     before(() => {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+        cy.createProject(params.namespace);
         cy.adminCLI(`oc create -f ./fixtures/operators/${params.crdFileName}`);
         cy.adminCLI(`oc create -f ./fixtures/operators/${params.csvFileName} -n ${params.namespace}`);
     })
@@ -21,7 +22,6 @@ describe('operand form view', () => {
     })
 
     it('(OCP-29819,yapei) Dynamically Generate Create Operand Form', {tags: ['e2e','admin','@osd-ccs']}, () => {
-        cy.createProject(params.namespace);
         cy.visit(`/k8s/ns/${params.namespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion/mock-operator/test.tectonic.com~v1~MockResource`)
         cy.byTestID('item-create').click()
         Operand.switchToFormView()
@@ -41,7 +41,7 @@ describe('operand form view', () => {
             //    - requiredText (has specDescriptors in CSV)
             //    - optionalRequiredText (without specDescriptors in CSV)
             // in CSV specDescriptors, we have order: select -> password -> requiredText
-            // CSV yaml matters? not CRD yaml 
+            // CSV yaml matters? not CRD yaml
             // so the final order in form is: select -> password -> requiredText -> optionalRequiredText
             expect(alldivs[0].textContent).to.include('Select')
             expect(alldivs[1].textContent).to.include('Password')
