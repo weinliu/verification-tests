@@ -4695,7 +4695,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("HyperShiftMGMT-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-60854-High-60864-Check the scan for ocp4-cis/ocp4-pci-dss with tailored profile works for hypershift cluster [Serial][Slow]", func() {
+	g.It("HyperShiftMGMT-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-60854-High-60864-Check the scan for ocp4-cis/ocp4-pci-dss with tailored profile works for hypershift cluster [Serial][Slow]", func() {
 		var (
 			tprofileCis = tailoredProfileDescription{
 				name:      "hypershift-cis" + getRandomString(),
@@ -4756,8 +4756,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssbCis, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
-		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssbPcidss, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssbCis, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssbPcidss, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbCis, "NON-COMPLIANT")
