@@ -242,16 +242,15 @@ func createLoadBalancerService(oc *exutil.CLI, loadBalancerSvc loadBalancerServi
 }
 
 func checkLoadBalancerSvcStatus(oc *exutil.CLI, namespace string, svcName string) error {
-
 	return wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
 		e2e.Logf("Checking status of service %s", svcName)
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}").Output()
 		if err != nil {
-			e2e.Logf("MetalLB failed to get service status, error:%s. Trying again", err)
+			e2e.Logf("Failed to get service status, error:%s. Trying again", err)
 			return false, nil
 		}
-		if strings.Contains(output, "Pending") {
-			e2e.Logf("MetalLB failed to assign address to service, error:%s. Trying again", err)
+		if strings.Contains(output, "Pending") || output == "" {
+			e2e.Logf("Failed to assign address to service, error:%s. Trying again", err)
 			return false, nil
 		}
 		return true, nil

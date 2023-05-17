@@ -2,6 +2,7 @@ package networking
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -455,4 +456,80 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 	})
+	// author: asood@redhat.com
+	g.It("Longduration-NonPreRelease-Author:asood-High-63156-Verify the nodeport is not allocated to VIP based LoadBalancer service type. [Disruptive]", func() {
+		// LoadBalancer service implementation are different on cloud provider and bare metal platform
+		// https://issues.redhat.com/browse/OCPBUGS-10874 (aws and azure pending support)
+		var (
+			testDataDir                 = exutil.FixturePath("testdata", "networking/metallb")
+			loadBalancerServiceTemplate = filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
+			serviceLabelKey             = "environ"
+			serviceLabelValue           = "Test"
+			svc_names                   = [2]string{"hello-world-cluster", "hello-world-local"}
+			svc_etp                     = [2]string{"Cluster", "Local"}
+			namespaces                  []string
+		)
+		platform := exutil.CheckPlatform(oc)
+		e2e.Logf("platform %s", platform)
+		if !(strings.Contains(platform, "gcp")) {
+			g.Skip("Skip for non-supported platorms!")
+		}
+		masterNodes, err := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get first namespace and create another")
+		ns := oc.Namespace()
+		namespaces = append(namespaces, ns)
+		oc.SetupProject()
+		ns = oc.Namespace()
+		namespaces = append(namespaces, ns)
+		var desiredMode string
+		origMode := getOVNGatewayMode(oc)
+		defer switchOVNGatewayMode(oc, origMode)
+		g.By("Validate services in original gateway mode " + origMode)
+		for j := 0; j < 2; j++ {
+			for i := 0; i < 2; i++ {
+				svcName := svc_names[i] + "-" + strconv.Itoa(j)
+				g.By("Create a service " + svc_names[i] + " with ExternalTrafficPolicy " + svc_etp[i])
+				svc := loadBalancerServiceResource{
+					name:                          svcName,
+					namespace:                     namespaces[i],
+					externaltrafficpolicy:         svc_etp[i],
+					labelKey:                      serviceLabelKey,
+					labelValue:                    serviceLabelValue,
+					allocateLoadBalancerNodePorts: false,
+					template:                      loadBalancerServiceTemplate,
+				}
+				result := createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+				o.Expect(result).To(o.BeTrue())
+
+				g.By("Check LoadBalancer service status")
+				err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				g.By("Get LoadBalancer service IP")
+				svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+				g.By("Validate service")
+				result = validateService(oc, masterNodes[0], svcIP)
+				o.Expect(result).To(o.BeTrue())
+				g.By("Check nodePort is not assigned to service")
+				nodePort := getLoadBalancerSvcNodePort(oc, svc.namespace, svc.name)
+				o.Expect(nodePort).To(o.BeEmpty())
+			}
+			if j == 0 {
+				g.By("Change the shared gateway mode to local gateway mode")
+				if origMode == "local" {
+					desiredMode = "shared"
+				} else {
+					desiredMode = "local"
+				}
+				e2e.Logf("Cluster is currently on gateway mode %s", origMode)
+				e2e.Logf("Desired mode is %s", desiredMode)
+
+				switchOVNGatewayMode(oc, desiredMode)
+				g.By("Validate services in modified gateway mode " + desiredMode)
+			}
+		}
+
+	})
+
 })
