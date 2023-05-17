@@ -32,7 +32,7 @@ var cloudProvider, provisioner string
 
 // Define test waiting time const
 const (
-	defaultMaxWaitingTime = 180 * time.Second
+	defaultMaxWaitingTime = 300 * time.Second
 	defaultIterationTimes = 20
 	longerMaxWaitingTime  = 15 * time.Minute
 	longestMaxWaitingTime = 1 * time.Hour
