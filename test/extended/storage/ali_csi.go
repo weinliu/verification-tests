@@ -290,8 +290,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	alivolTypeTestSuit := map[string]string{
 		"52375": "cloud_essd",       // High-52375-[Alibaba-CSI-Driver] [Dynamic PV] cloud_essd type volumes should store data and allow exec of file
 		"51205": "cloud_efficiency", // High-51205-[Alibaba-CSI-Driver] [Dynamic PV] cloud_efficiency type volumes should store data and allow exec of file
+		"63684": "cloud_ssd",        // High-63684-[Alibaba-CSI-Driver] [Dynamic PV] cloud_ssd type volumes should store data and allow exec of file
 	}
-	caseIds := []string{"52375", "51205"}
+	caseIds := []string{"52375", "51205", "63684"}
 	for i := 0; i < len(caseIds); i++ {
 		volumeType := alivolTypeTestSuit[caseIds[i]]
 		// author: ropatil@redhat.com
