@@ -19,7 +19,7 @@ describe('Dynamic plugins features', () => {
         .then(result => { expect(result.stdout).contain("created")})
     });
     cy.adminCLI('oc apply -f ./fixtures/console-customization-plugin-manifest.yaml');
-    
+
     // login via web
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
@@ -38,7 +38,7 @@ describe('Dynamic plugins features', () => {
         url: '/locales/resource.json?lng=en&ns=plugin__console-customization'
       },
       {}
-    ).as('getConsoleCustomizaitonPluginLocales');    
+    ).as('getConsoleCustomizaitonPluginLocales');
   });
   after(() => {
     cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge`);
@@ -53,7 +53,7 @@ describe('Dynamic plugins features', () => {
       listPage.rows.shouldExist('console-demo-plugin')
       cy.exec(`oc get consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -o yaml | grep 'apiVersion'`)
         .its('stdout')
-        .should('contain', 'apiVersion: console.openshift.io/v1')        
+        .should('contain', 'apiVersion: console.openshift.io/v1')
   })
 
   it('(OCP-51743,yapei) Implement check for the new i18n annotation for dynamic plugins', {tags: ['e2e','admin','@osd-ccs']},() => {
@@ -117,14 +117,13 @@ describe('Dynamic plugins features', () => {
     // Demo Plugin nav is rendered after Workloads, before Networking
     cy.contains('button', 'Demo Plugin').should('have.attr', 'data-test', 'nav-demo-plugin');
     cy.get('button.pf-c-nav__link')
-      .eq(2)
-      .should('have.text', 'Workloads');
-    cy.get('button.pf-c-nav__link')
-      .eq(3)
-      .should('have.text', 'Demo Plugin');
-    cy.get('button.pf-c-nav__link')
-      .eq(4)
-      .should('have.text', 'Networking');
+      .then(($els) => {
+        const original_array = Cypress._.map(Cypress.$.makeArray($els), 'innerText');
+        const filtered_array = original_array.filter((word) => word ==='Workloads' || word === 'Demo Plugin' || word === 'Networking')
+        return filtered_array;
+      })
+      .should('be.an', 'array')
+      .and('have.ordered.members', ['Workloads', 'Demo Plugin', 'Networking']);
   });
 
   it('(OCP-54322,yapei) Expose ErrorBoundary and improve overview detail extension', {tags: ['e2e','admin','@osd-ccs']}, () => {
@@ -156,7 +155,7 @@ describe('Dynamic plugins features', () => {
       cy.contains(`${2}/${total} enabled`).should('exist')
     })
   });
-  
+
   it('(OCP-56239,yapei) Add dynamic plugin info to About modal', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
     cy.switchPerspective('Administrator')
     Overview.toggleAbout()
