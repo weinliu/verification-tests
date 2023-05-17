@@ -583,27 +583,24 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		oc.SetupProject()
 
 		var (
-			crioFile              string
-			crioRuntimeConfigName = "crio-debug-42167"
-			crioRuntimeLogLevel   = "debug"
-			crioTemplate          = filepath.Join(testDataDir, "containerruntimeconfig_template.yaml")
-			deployConfigFile      = ""
-			deployName            = "mg-42167-" + getRandomString()
-			deploymentFile        = getRandomString() + "dep-common.json"
-			err                   error
-			fails                 = 0
-			kcLogLevel            = "{\"spec\":{\"logLevel\":\"debug\"}}"
-			logFile               string
-			mustgatherFiles       = []string{""}
-			mustgatherName        = "mustgather" + getRandomString()
-			mustgatherDir         = "/tmp/" + mustgatherName
-			mustgatherLog         = mustgatherName + ".log"
-			mustgatherTopdir      string
-			msg                   string
-			nodeControlCount      int
-			nodeWorkerCount       int
-			podNs                 = oc.Namespace()
-			singleNode            = false
+			deployConfigFile = ""
+			deployName       = "mg-42167-" + getRandomString()
+			deploymentFile   = getRandomString() + "dep-common.json"
+			err              error
+			fails            = 0
+			kcLogLevel       = "{\"spec\":{\"logLevel\":\"debug\"}}"
+			logFile          string
+			mustgatherFiles  = []string{""}
+			mustgatherName   = "mustgather" + getRandomString()
+			mustgatherDir    = "/tmp/" + mustgatherName
+			mustgatherLog    = mustgatherName + ".log"
+			mustgatherTopdir string
+			msg              string
+			nodeControlCount int
+			nodeWorkerCount  int
+			podNs            = oc.Namespace()
+			singleNode       = false
+			isWorker         = false
 		)
 
 		mustgatherChecks := counts{
@@ -644,21 +641,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			mustgatherExpected.crio = nodeWorkerCount
 		}
 
-		g.By("Create ContainerRuntimeConfig to put worker nodes into debug mode")
-		// or logLevel: debug in kataconfig for 1.3 will already do it
-		crioFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", crioTemplate, "-p", "NAME="+crioRuntimeConfigName, "LOGLEVEL="+crioRuntimeLogLevel, "-n", subscription.namespace).OutputToFile(getRandomString() + "-crioRuntimeConfigFile.json")
-		e2e.Logf("Created the ContainerRuntimeConfig yaml %s, %v", crioFile, err)
+		g.By("Patch kataconfig to put worker nodes into debug mode")
+		// oc patch kataconfig example-kataconfig --type merge --patch '{"spec":{"logLevel":"debug"}}'
 
-		g.By("Applying ContainerRuntimeConfig yaml")
-		// no need to check for an existing one
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crioFile).Output()
-		e2e.Logf("Applied ContainerRuntimeConfig %v: %v, %v", crioFile, msg, err)
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("containerruntimeconfig", crioRuntimeConfigName, "-n", subscription.namespace, "--ignore-not-found").Execute()
-		// 4.12 needs the loglevel
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kataconfig", kataconfig.name, "-n", subscription.namespace, "--type", "merge", "--patch", kcLogLevel).Output()
 		e2e.Logf("kcLogLevel patched: %v %v", msg, err)
-
-		// oc patch kataconfig example-kataconfig --type merge --patch '{"spec":{"logLevel":"debug"}}'
 
 		g.By("Wait for worker nodes to be in crio debug mode")
 		msg, err = waitForNodesInDebug(oc, subscription.namespace, workerLabel)
@@ -716,9 +703,17 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				return err
 			}
 
+			isWorker = false
+			for _, worker := range nodeWorkerList {
+				if strings.Contains(path, worker) {
+					isWorker = true
+					break
+				}
+			}
+
 			// qemu will create a directory but might not create files
 			if info.IsDir() {
-				if strings.Contains(path, "worker") && strings.Contains(path, "/run/vc/crio/fifo") && !strings.Contains(path, "/run/vc/crio/fifo/io") {
+				if isWorker == true && strings.Contains(path, "/run/vc/crio/fifo") && !strings.Contains(path, "/run/vc/crio/fifo/io") {
 					mustgatherChecks.qemuLogs++
 				}
 				if strings.Contains(path, "audit") {
@@ -746,7 +741,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 						mustgatherChecks.crio++
 					}
 					// in SNO, no worker, just master
-					if (strings.Contains(path, "worker") || (singleNode == true && strings.Contains(path, "master"))) && strings.Contains(path, "/version") {
+					if (isWorker == true || (singleNode == true && isWorker != true)) && strings.Contains(path, "/version") {
 						mustgatherChecks.qemuVersion++
 						// read file to extract kata-containers-* and qemu-kvm-core-* ?
 					}
@@ -838,7 +833,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		g.By("Tear down pod")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName).Execute()
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("containerruntimeconfig", crioRuntimeConfigName, "-n", subscription.namespace).Execute()
 		os.RemoveAll(mustgatherDir)
 
 		g.By("SUCCESS")
