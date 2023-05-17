@@ -133,8 +133,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-60189 - [vSphere-csi-driver-operator] should check topology conflict in csidriver and infrastructure in vsphere_topology_tags metric for alerter raising by CSO
 	// author: wduan@redhat.com
 	g.It("NonHyperShiftHOST-Author:wduan-medium-60189-[vSphere-CSI-Driver-Operator] should check topology conflict in csidriver and infrastructure in vsphere_topology_tags metric for alerter raising by CSO [Serial]", func() {
-		fdNum := getVsphereFailureDomainsNum(oc)
-		if fdNum < 1 {
+		if !isVsphereTopologyConfigured(oc) {
 			g.Skip("There is no FailureDomains defined in infrastructure, skipped!")
 		}
 		// Get clustercsidriver.spec.driverConfig to recover

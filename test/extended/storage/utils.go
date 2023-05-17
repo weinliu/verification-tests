@@ -1037,15 +1037,17 @@ func getByokKeyIDFromClusterCSIDriver(oc *exutil.CLI, driverProvisioner string) 
 }
 
 // get vSphere infrastructure.spec.platformSpec.vsphere.failureDomains, which is supported from 4.12
+// 4.13+ even if there's no failureDomains set when install, it will auto generate the "generated-failure-domain"
 func getVsphereFailureDomainsNum(oc *exutil.CLI) (fdNum int64) {
-	fdcontent, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-ojson").Output()
+	fdNames, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath={.spec.platformSpec.vsphere.failureDomains[*].name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if !gjson.Get(fdcontent, "spec.platformSpec.vsphere.failureDomains").Exists() {
-		fdNum = 0
-	} else {
-		fdNum = gjson.Get(fdcontent, "spec.platformSpec.vsphere.failureDomains.#").Int()
-	}
-	return fdNum
+	e2e.Logf("The vSphere cluster failureDomains are: [%s]", fdNames)
+	return int64(len(strings.Fields(fdNames)))
+}
+
+// isVsphereTopologyConfigured judges whether the vSphere cluster configured infrastructure.spec.platformSpec.vsphere.failureDomains when install
+func isVsphereTopologyConfigured(oc *exutil.CLI) bool {
+	return getVsphereFailureDomainsNum(oc) >= 2
 }
 
 // isTechPreviewNoUpgrade checks if a cluster is a TechPreviewNoUpgrade cluster
