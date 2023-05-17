@@ -1,0 +1,39 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: clusterlogforwarder-template
+objects:
+- apiVersion: logging.openshift.io/v1
+  kind: ClusterLogForwarder
+  metadata:
+    name: ${NAME}
+    namespace: ${NAMESPACE}
+    annotations:
+      logging.openshift.io/preview-tls-security-profile: enabled
+  spec:
+    outputs:
+    - http:
+        headers:
+          h1: v1
+          h2: v2
+        method: POST
+      name: httpout-app
+      secret:
+        name: ${OUTPUT_SECRET}
+      type: http
+      url: ${URL}/logs/app
+    pipelines:
+    - inputRefs:
+      - application
+      name: app-logs
+      outputRefs:
+      - httpout-app
+parameters:
+- name: NAME
+  value: instance
+- name: NAMESPACE
+  value: openshift-logging
+- name: URL
+  value: https://fluentdserver.openshift-logging.svc:24224
+- name: OUTPUT_SECRET
+  value: to-fluentdserver

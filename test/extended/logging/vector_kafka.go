@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -412,6 +413,134 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				})
 				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", consumer.namespace, consumer.name))
 			}
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-61549-Collector-External Kafka output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+
+			cloNS := "openshift-logging"
+			g.By("Create log producer")
+			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+
+			g.By("Deploy the log generator app")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Configure the global tlsSecurityProfile to use custom profile")
+			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			if ogTLS == "" {
+				ogTLS = "null"
+			}
+			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
+			defer func() {
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+				waitForOperatorsRunning(oc)
+			}()
+			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS12"},"type":"Custom"}}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
+			waitForOperatorsRunning(oc)
+
+			g.By("Deploy zookeeper")
+			kafka := kafka{
+				namespace:      cloNS,
+				kafkasvcName:   "kafka",
+				zoosvcName:     "zookeeper",
+				authtype:       "sasl-ssl",
+				pipelineSecret: "vector-kafka",
+				collectorType:  "vector",
+				loggingNS:      cloNS,
+			}
+			defer kafka.removeZookeeper(oc)
+			kafka.deployZookeeper(oc)
+			g.By("Deploy kafka")
+			defer kafka.removeKafka(oc)
+			kafka.deployKafka(oc)
+			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9093/clo-topic"
+
+			g.By("Create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRET_NAME="+kafka.pipelineSecret, "URL="+kafkaEndpoint, "NAMESPACE="+clf.namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("The Kafka sink in Vector config must use the Custom tlsSecurityProfile")
+			searchString := `[sinks.kafka_app.tls]
+			enabled = true
+			min_tls_version = "VersionTLS12"
+			ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"
+			key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
+			crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
+			ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
+			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("Check app logs in kafka consumer pod")
+			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj)
+				if err != nil {
+					return false, err
+				}
+				return len(appLogs) > 0, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
+
+			g.By("Set Old tlsSecurityProfile for the External Kafka output.")
+			patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Old"}}}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cl.namespace, "clusterlogforwarder/instance", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("Deploy the log generator app")
+			oc.SetupProject()
+			appProj1 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("The Kafka sink in Vector config must use the Old tlsSecurityProfile")
+			searchString = `[sinks.kafka_app.tls]
+			enabled = true
+			min_tls_version = "VersionTLS10"
+			ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256,AES128-SHA,AES256-SHA,DES-CBC3-SHA"
+			key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
+			crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
+			ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
+			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("Check for errors in collector pod logs.")
+			e2e.Logf("Wait for a minute before the collector logs are generated.")
+			time.Sleep(60 * time.Second)
+			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Kafka server.")
+
+			g.By("Check app logs in kafka consumer pod")
+			consumerPodPodName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj1)
+				if err != nil {
+					return false, err
+				}
+				return len(appLogs) > 0, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
 	})
 })

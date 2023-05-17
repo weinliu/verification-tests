@@ -1012,6 +1012,248 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Application Logs Query is a success")
 		})
 
+		g.It("CPaasrunOnly-Author:ikanse-High-62975-Collector connects to the remote output using the cipher defined in the tlsSecurityPrfoile [Slow][Disruptive]", func() {
+
+			g.Skip("Skip until known issue is fixed https://issues.redhat.com/browse/LOG-4011")
+
+			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
+			waitForOperatorsRunning(oc)
+
+			var (
+				cloNS            = "openshift-logging"
+				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
+
+			g.By("Fetch and set the Grafana Loki credentials")
+			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiURL := "https://logs-prod3.grafana.net"
+
+			g.By("Create project for app logs and deploy the log generator app")
+			appProj := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create secret with external Grafana Loki instance credentials")
+			sct := resource{"secret", "loki-client", cloNS}
+			defer sct.clear(oc)
+			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			sct.WaitForResourceToAppear(oc)
+
+			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "62975.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			inputRefs := "[\"application\"]"
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LOKI_URL="+lokiURL+"", "-p", "INPUTREFS="+inputRefs+"")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", "openshift-logging"}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_AES_128_CCM_SHA256")
+			searchString := `[sinks.loki_server.tls]
+			enabled = true
+			min_tls_version = "VersionTLS12"
+			ciphersuites = "TLS_AES_128_CCM_SHA256"`
+			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("Check for errors in collector pod logs.")
+			e2e.Logf("Wait for a minute before the collector logs are generated.")
+			time.Sleep(60 * time.Second)
+			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).Should(o.BeTrue(), "Collector shouldn't connect to the external Loki server.")
+
+			g.By("Searching for Application Logs in Loki")
+			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
+			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+				appLogs, err := lc.searchByNamespace("", appProj)
+				if err != nil {
+					return false, err
+				}
+				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond == 0 {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "Failed searching for application logs in Loki")
+			e2e.Logf("Application Logs Query is a success")
+
+			g.By("Set the Custom tlsSecurityProfile for Loki output")
+			patch := `{"spec":{"outputs":[{"name":"loki-server","secret":{"name":"loki-client"},"tls":{"securityProfile":{"custom":{"ciphers":["TLS_CHACHA20_POLY1305_SHA256"],"minTLSVersion":"VersionTLS13"},"type":"Custom"}},"type":"loki","url":"https://logs-prod3.grafana.net"}],"tlsSecurityProfile":null}}`
+			er := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cl.namespace, "clusterlogforwarder/instance", "--type=merge", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_CHACHA20_POLY1305_SHA256")
+			searchString = `[sinks.loki_server.tls]
+			enabled = true
+			min_tls_version = "VersionTLS13"
+			ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
+			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("Check for errors in collector pod logs.")
+			e2e.Logf("Wait for a minute before the collector logs are generated.")
+			time.Sleep(60 * time.Second)
+			collectorLogs, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Loki server.")
+
+			g.By("Searching for Application Logs in Loki")
+			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+				appLogs, err := lc.searchByNamespace("", appProj)
+				if err != nil {
+					return false, err
+				}
+				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "failed searching for application logs in Loki")
+			e2e.Logf("Application Logs Query is a success")
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-61476-Collector-External Loki output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+
+			var (
+				cloNS            = "openshift-logging"
+				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
+
+			g.By("Configure the global tlsSecurityProfile to use Intermediate profile")
+			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			if ogTLS == "" {
+				ogTLS = "null"
+			}
+			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
+			defer func() {
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+				waitForOperatorsRunning(oc)
+			}()
+			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"intermediate":{},"type":"Intermediate"}}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
+			waitForOperatorsRunning(oc)
+
+			g.By("Fetch and set the Grafana Loki credentials")
+			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiURL := "https://logs-prod3.grafana.net"
+
+			g.By("Create project for app logs and deploy the log generator app")
+			appProj := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create secret with external Grafana Loki instance credentials")
+			sct := resource{"secret", "loki-client", cloNS}
+			defer sct.clear(oc)
+			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			sct.WaitForResourceToAppear(oc)
+
+			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-with-secret.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			inputRefs := "[\"application\"]"
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LOKI_URL="+lokiURL+"", "-p", "INPUTREFS="+inputRefs+"")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", "openshift-logging"}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("The Loki sink in Vector config must use the intermediate tlsSecurityProfile")
+			searchString := `[sinks.loki_server.tls]
+			enabled = true
+			min_tls_version = "VersionTLS12"
+			ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
+			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("Searching for Application Logs in Loki")
+			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
+			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+				appLogs, err := lc.searchByNamespace("", appProj)
+				if err != nil {
+					return false, err
+				}
+				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "failed searching for application logs in Loki")
+			e2e.Logf("Application Logs Query is a success")
+
+			g.By("Set the Modern tlsSecurityProfile for Loki output")
+			patch = `{"spec":{"outputs":[{"name":"loki-server","secret":{"name":"loki-client"},"tls":{"securityProfile":{"type":"Modern"}},"type":"loki","url":"https://logs-prod3.grafana.net"}],"tlsSecurityProfile":null}}`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cl.namespace, "clusterlogforwarder/instance", "--type=merge", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj1 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("The Loki sink in Vector config must use the Modern tlsSecurityProfile")
+			searchString = `[sinks.loki_server.tls]
+			enabled = true
+			min_tls_version = "VersionTLS13"
+			ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"`
+			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("Check for errors in collector pod logs.")
+			e2e.Logf("Wait for a minute before the collector logs are generated.")
+			time.Sleep(60 * time.Second)
+			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Loki server.")
+
+			g.By("Searching for Application Logs in Loki")
+			appPodName, err = oc.AdminKubeClient().CoreV1().Pods(appProj1).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+				appLogs, err := lc.searchByNamespace("", appProj1)
+				if err != nil {
+					return false, err
+				}
+				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "failed searching for application logs in Loki")
+			e2e.Logf("Application Logs Query is a success")
+		})
+
 	})
 
 })

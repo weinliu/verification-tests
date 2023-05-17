@@ -1,10 +1,12 @@
 package logging
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -2409,4 +2411,82 @@ func checkTLSProfile(oc *exutil.CLI, profile string, algo string, server string,
 		return false
 	}
 	return true
+}
+
+func checkCollectorTLSProfile(oc *exutil.CLI, ns, searchString string) (bool, error) {
+
+	// Parse the vector.toml file
+	dirname := "/tmp/" + oc.Namespace() + "-vectortoml"
+	defer os.RemoveAll(dirname)
+	err := os.MkdirAll(dirname, 0777)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/collector-config", "-n", ns, "--confirm", "--to="+dirname).Output()
+	if err != nil {
+		return false, err
+	}
+
+	filename := filepath.Join(dirname, "vector.toml")
+	file, err := os.Open(filename)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return false, err
+	}
+
+	for _, s := range strings.Split(searchString, "\n") {
+		exactString := strings.TrimSpace(s)
+		found := false
+		scanner := bufio.NewScanner(strings.NewReader(string(content)))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == exactString {
+				found = true
+				break
+			}
+		}
+		if !found {
+			e2e.Logf("String %s not found in file", s)
+			return false, fmt.Errorf("string '%s' not found in file %s", s, filename)
+		}
+	}
+
+	return true, nil
+}
+
+func checkOperatorsRunning(oc *exutil.CLI) (bool, error) {
+	jpath := `{range .items[*]}{.metadata.name}:{.status.conditions[?(@.type=='Available')].status}{':'}{.status.conditions[?(@.type=='Degraded')].status}{'\n'}{end}`
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperators.config.openshift.io", "-o", "jsonpath="+jpath).Output()
+	if err != nil {
+		return false, fmt.Errorf("failed to execute 'oc get clusteroperators.config.openshift.io' command: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		e2e.Logf("%s", line)
+		parts := strings.Split(line, ":")
+		available := parts[1] == "True"
+		degraded := parts[2] == "False"
+
+		if !available || !degraded {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+func waitForOperatorsRunning(oc *exutil.CLI) {
+	e2e.Logf("Wait a minute to allow the cluster to reconcile the config changes.")
+	time.Sleep(1 * time.Minute)
+	err := wait.Poll(3*time.Minute, 21*time.Minute, func() (bool, error) {
+		return checkOperatorsRunning(oc)
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to wait for operators to be running: %v", err))
 }

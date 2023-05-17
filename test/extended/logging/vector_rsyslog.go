@@ -1,13 +1,16 @@
 package logging
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
@@ -212,6 +215,111 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(strings.Contains(string(data), "/var/run/ocp-collector/secrets/"+rsyslog.secretName+"/tls.crt")).Should(o.BeTrue())
 			o.Expect(strings.Contains(string(data), "/var/run/ocp-collector/secrets/"+rsyslog.secretName+"/ca-bundle.crt")).Should(o.BeTrue())
 			o.Expect(strings.Contains(string(data), rsyslog.clientKeyPassphrase)).Should(o.BeTrue())
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-62527-Collector External syslog output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+
+			g.By("Configure the global tlsSecurityProfile to use custom profile")
+			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			if ogTLS == "" {
+				ogTLS = "null"
+			}
+			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
+			defer func() {
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+				waitForOperatorsRunning(oc)
+			}()
+			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS12"},"type":"Custom"}}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
+			waitForOperatorsRunning(oc)
+
+			cloNS := "openshift-logging"
+			g.By("Create log producer")
+			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy rsyslog server")
+			oc.SetupProject()
+			syslogProj := oc.Namespace()
+			rsyslog := rsyslog{
+				serverName: "rsyslog",
+				namespace:  syslogProj,
+				tls:        true,
+				secretName: "rsyslog-tls",
+				loggingNS:  cloNS,
+			}
+			defer rsyslog.remove(oc)
+			rsyslog.deploy(oc)
+
+			g.By("Create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-rsyslog-with-secret.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514", "-p", "OUTPUT_SECRET="+rsyslog.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("The Syslog sink in Vector config must use the Custom tlsSecurityProfile")
+			searchString := `[sinks.external_syslog.tls]
+			enabled = true
+			min_tls_version = "VersionTLS12"
+			ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"
+			ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
+			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("Check logs in rsyslog server")
+			rsyslog.checkData(oc, true, "app-container.log")
+			rsyslog.checkData(oc, true, "infra-container.log")
+			rsyslog.checkData(oc, true, "audit.log")
+			rsyslog.checkData(oc, true, "infra.log")
+
+			g.By("Set Intermediate tlsSecurityProfile for the External Syslog output.")
+			patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Intermediate"}}}]`
+			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cl.namespace, "clusterlogforwarder/instance", "--type=json", "-p", patch).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("The Syslog sink in Vector config must use the Intermediate tlsSecurityProfile")
+			searchString = `[sinks.external_syslog.tls]
+			enabled = true
+			min_tls_version = "VersionTLS12"
+			ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"
+			ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
+			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.BeTrue())
+
+			g.By("Check for errors in collector pod logs.")
+			e2e.Logf("Wait for a minute before the collector logs are generated.")
+			time.Sleep(60 * time.Second)
+			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Syslog server.")
+
+			g.By("Delete the rsyslog pod to recollect logs")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-n", syslogProj, "-l", "component=rsyslog").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForPodReadyWithLabel(oc, syslogProj, "component=rsyslog")
+
+			g.By("Check logs in rsyslog server")
+			rsyslog.checkData(oc, true, "app-container.log")
+			rsyslog.checkData(oc, true, "infra-container.log")
+			rsyslog.checkData(oc, true, "audit.log")
+			rsyslog.checkData(oc, true, "infra.log")
 		})
 	})
 })
