@@ -322,10 +322,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author rrasouli@redhat.com
 
 	g.It("Smokerun-Longduration-Author:rrasouli-NonPreRelease-High-37096-Schedule Windows workloads with cluster running multiple Windows OS variants [Slow][Disruptive]", func() {
-		if iaasPlatform != "azure" {
-			// Currently vSphere and GCP supports only Windows 2022, AWS support for Windows 2022
-			// was dropped. Support for AWS will be added in the next release.
-			g.Skip("Only Azure supports multiple operating systems, skipping")
+		if iaasPlatform != "azure" && iaasPlatform != "aws" {
+			// Currently vSphere and GCP supports only Windows 2022
+			g.Skip("Only Azure and AWS are supporting multiple operating systems, skipping")
 		}
 		// we assume 2 Windows Nodes created with the default server 2019 image, here we create new server
 		namespace := "winc-37096"
