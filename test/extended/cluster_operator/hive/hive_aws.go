@@ -1518,7 +1518,11 @@ spec:
 
 		// Manually create CD to capture the output of oc apply -f cd_manifest_file
 		var cfgFileJSON string
-		defer os.Remove(cfgFileJSON)
+		defer func() {
+			if err := os.RemoveAll(cfgFileJSON); err != nil {
+				e2e.Logf("Error removing file %v: %v", cfgFileJSON, err.Error())
+			}
+		}()
 		cfgFileJSON, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "-hive-resource-cfg.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1968,7 +1972,8 @@ spec:
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "27559"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-27559-[aws]hive controllers can be disabled through a hiveconfig option [Serial][Disruptive]", func() {
-		e2e.Logf("Add \"maintenanceMode: true\"  in hiveconfig.spec")
+		e2e.Logf("Add \"maintenanceMode: true\" in hiveconfig.spec")
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig/hive", "--type", "json", "-p", `[{"op":"remove", "path": "/spec/maintenanceMode"}]`).Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig/hive", "--type", `merge`, `--patch={"spec": {"maintenanceMode": true}}`).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check modifying is successful")
