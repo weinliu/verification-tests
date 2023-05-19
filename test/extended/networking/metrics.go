@@ -762,4 +762,55 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		})
 		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
 	})
+
+	g.It("Author:qiowang-Medium-60704-Verify metrics ovs_vswitchd_interface_up_wait_seconds_total. [Serial]", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		var (
+			namespace           = "openshift-ovn-kubernetes"
+			metricName          = "ovs_vswitchd_interface_up_wait_seconds_total"
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+		)
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		podName, getPodNameErr := exutil.GetPodName(oc, namespace, "app=ovnkube-node", nodeName)
+		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+
+		g.By("1. Get the metrics of " + metricName + " before creating new pods on the node")
+		prometheusURL := "localhost:29105/metrics"
+		containerName := "kube-rbac-proxy-ovn-metrics"
+		metricValue1 := getOVNMetricsInSpecificContainer(oc, containerName, podName, prometheusURL, metricName)
+
+		g.By("2. Create test pods and scale test pods to 30")
+		ns := oc.Namespace()
+		createResourceFromFile(oc, ns, testPodFile)
+		podReadyErr1 := waitForPodWithLabelReady(oc, ns, "name=test-pods")
+		exutil.AssertWaitPollNoErr(podReadyErr1, "this pod with label name=test-pods not ready")
+		_, scaleUpErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("replicationcontroller/test-rc", "-n", ns, "-p", "{\"spec\":{\"replicas\":30,\"template\":{\"spec\":{\"nodeSelector\":{\"kubernetes.io/hostname\":\""+nodeName+"\"}}}}}", "--type=merge").Output()
+		o.Expect(scaleUpErr).NotTo(o.HaveOccurred())
+		podReadyErr2 := waitForPodWithLabelReady(oc, ns, "name=test-pods")
+		exutil.AssertWaitPollNoErr(podReadyErr2, "this pod with label name=test-pods not all ready")
+
+		g.By("3. Get the metrics of " + metricName + " after creating new pods on the node")
+		metricValue1Float, parseErr1 := strconv.ParseFloat(metricValue1, 64)
+		o.Expect(parseErr1).NotTo(o.HaveOccurred())
+		e2e.Logf("The expected value of the %s should be greater than %v", metricName, metricValue1)
+		metricIncOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			metricValue2 := getOVNMetricsInSpecificContainer(oc, containerName, podName, prometheusURL, metricName)
+			metricValue2Float, parseErr2 := strconv.ParseFloat(metricValue2, 64)
+			o.Expect(parseErr2).NotTo(o.HaveOccurred())
+			if metricValue2Float > metricValue1Float {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
+	})
+
 })
