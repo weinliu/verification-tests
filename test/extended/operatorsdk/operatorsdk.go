@@ -769,7 +769,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-34462-SDK playbook ansible operator generate the catalog", func() {
 
-		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
+		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "operatorsdk")
 			catalogofcatalog    = filepath.Join(buildPruningBaseDir, "catalogsource.yaml")
