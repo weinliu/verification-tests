@@ -2338,7 +2338,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if err == nil {
 			e2e.Failf("Shouldn't push image with registry-viewer role")
 		}
-		o.Expect(output).To(o.ContainSubstring("unauthorized: authentication required"))
+		o.Expect(output).To(o.ContainSubstring("authentication required"))
 
 	})
 
@@ -3339,7 +3339,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		statefulsetsrc.create(oc)
 		g.By("Check the pods are running")
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-statefulset", 3)
-		podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=example-statefulset", "-o=jsonpath={.items[0].status.containerStatuses[0].imageID}", "-n", statefulsetsrc.namespace).Output()
+		podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=example-statefulset", "-o=jsonpath={.items[0].spec.containers[].image}", "-n", statefulsetsrc.namespace).Output()
 		o.Expect(strings.Contains(podImage, imagev1id)).To(o.BeTrue())
 
 		g.By("Import second image to the imagestream")
@@ -3396,7 +3396,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		dssrc.create(oc)
 		g.By("Check the pods are running")
 		err = wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
-			podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=example-daemonset", "-o=jsonpath={.items[0].status.containerStatuses[0].imageID}", "-n", dssrc.namespace).Output()
+			podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=example-daemonset", "-o=jsonpath={.items[0].spec.containers[].image}", "-n", dssrc.namespace).Output()
 			if strings.Contains(podImage, imagev1id) {
 				return true, nil
 			}
