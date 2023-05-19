@@ -95,5 +95,16 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			e2e.Failf("Rate limiting should not be set")
 		}
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-Medium-63778-cloud-controller-manager should be Upgradeable is True on None clusters", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "None")
+		g.By("Check Upgradeable status is True")
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "cloud-controller-manager", `-o=jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(status, "True") != 0 {
+			e2e.Failf("Upgradeable status is not True")
+		}
+
+	})
 
 })
