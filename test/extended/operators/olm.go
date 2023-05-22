@@ -4701,13 +4701,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 
 		subPods := []string{"catalog-operator", "olm-operator", "packageserver"}
 		for _, v := range subPods {
-			podName, err := oc.AsAdmin().Run("get").Args("-n", "openshift-operator-lifecycle-manager", "pods", "-l", fmt.Sprintf("app=%s", v), "-o=jsonpath={.items[0].metadata.name}").Output()
+			podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-operator-lifecycle-manager", "pods", "-l", fmt.Sprintf("app=%s", v), "-o=jsonpath={.items[0].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("get pod name:%s", podName)
 
 			g.By(fmt.Sprintf("get olm version from the %s pod", v))
 			commands := []string{"-n", "openshift-operator-lifecycle-manager", "exec", podName, "--", "olm", "--version"}
-			output, err := oc.AsAdmin().Run(commands...).Args().Output()
+			output, err := oc.AsAdmin().WithoutNamespace().Run(commands...).Args().Output()
 			o.Expect(output).NotTo(o.BeEmpty())
 			o.Expect(err).NotTo(o.HaveOccurred())
 			olmVersionString := strings.Split(output, "\n")[0]
