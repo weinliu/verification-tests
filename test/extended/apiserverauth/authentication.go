@@ -1033,4 +1033,43 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		respondAuthHeader := respond2.Header.Get("Www-Authenticate")
 		o.Expect(respondAuthHeader).To(o.ContainSubstring(`Basic realm="openshift"`))
 	})
+
+	//author: dmukherj@redhat.com
+	g.It("Author:dmukherj-Critical-52452-Payload namespaces do not respect pod security admission autolabel's opt-in/opt-out", func() {
+		g.By("1. Check the project labels for payload namespace openshift-monitoring")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", "openshift-monitoring", "-o=jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/audit\":\"privileged\""))
+		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/enforce\":\"privileged\""))
+		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/warn\":\"privileged\""))
+
+		g.By("2. Opt out of the autolabelling explicitly")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", "openshift-monitoring", "security.openshift.io/scc.podSecurityLabelSync=false", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Opt out of the autolabelling in openshift-monitoring namespace failed")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", "openshift-monitoring", "security.openshift.io/scc.podSecurityLabelSync-").Execute()
+
+		g.By("3. Change any one label's value")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", "openshift-monitoring", "pod-security.kubernetes.io/warn=restricted", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("4. Wait for some time till the project labels for openshift-monitoring namespace are restored to original values")
+		err = wait.Poll(15*time.Second, 5*time.Minute, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", "openshift-monitoring", "-o=jsonpath={.metadata.labels}").Output()
+			if err != nil {
+				e2e.Logf("Failed to get project labels of openshift-monitoring namespace: %s. Trying again", err)
+				return false, nil
+			}
+			matched1, _ := regexp.MatchString("\"pod-security.kubernetes.io/audit\":\"privileged\"", output)
+			matched2, _ := regexp.MatchString("\"pod-security.kubernetes.io/enforce\":\"privileged\"", output)
+			matched3, _ := regexp.MatchString("\"pod-security.kubernetes.io/warn\":\"privileged\"", output)
+			if matched1 && matched2 && matched3 {
+				e2e.Logf("Changes of pod-security.kubernetes.io labels are auto reverted to original values\n")
+				return true, nil
+			} else {
+				e2e.Logf("Changes of pod-security.kubernetes.io labels are not auto reverted to original values yet\n")
+				return false, nil
+			}
+		})
+		exutil.AssertWaitPollNoErr(err, "Timed out to check whether the pod-security.kubernetes.io labels of openshift-monitoring namespace are restored or not")
+	})
 })
