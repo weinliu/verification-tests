@@ -1777,9 +1777,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		case "swift":
 			storageclient = "redhat.com"
 		case "s3":
-			bucket, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.bucket}").Output()
+			cloudFrontset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.cloudFront}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			storageclient = bucket + ".s3"
+			if cloudFrontset != "" {
+				storageclient = "cloudfront.net"
+			} else {
+				bucket, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.bucket}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				storageclient = bucket + ".s3"
+			}
 		default:
 			e2e.Failf("Image Registry is using unknown storage type")
 		}
