@@ -1864,3 +1864,337 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	})
 })
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLI("loki-log-alerts-vector", exutil.KubeConfigPath())
+
+	g.Context("Loki Log Alerts testing", func() {
+		g.BeforeEach(func() {
+			s := getStorageType(oc)
+			if len(s) == 0 {
+				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
+			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
+			}
+
+			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  subTemplate,
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			LO := SubscriptionObjects{
+				OperatorName:  "loki-operator-controller-manager",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "loki-operator",
+				Subscription:  subTemplate,
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			}
+			g.By("deploy CLO and LO")
+			CLO.SubscribeOperator(oc)
+			LO.SubscribeOperator(oc)
+			oc.SetupProject()
+		})
+
+		g.It("CPaasrunOnly-Author:kbharti-High-52779-High-55393-Loki Operator - Validate alert and recording rules in LokiRuler configmap and Rules API(cluster-admin)[Serial]", func() {
+
+			lokiOperatorNS := "openshift-operators-redhat"
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			appProj := oc.Namespace()
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR")
+			ls := lokiStack{
+				name:          "loki-52779",
+				namespace:     "openshift-logging",
+				tSize:         "1x.extra-small",
+				storageType:   getStorageType(oc),
+				storageSecret: "storage-52779",
+				storageClass:  sc,
+				bucketName:    "logging-loki-52779-" + getInfrastructureName(oc),
+				template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+			}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Create Loki Alert and recording rules")
+			appAlertingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
+			appAlertRule := resource{"alertingrule", "my-app-workload-alert", appProj}
+			defer appAlertRule.clear(oc)
+			err = appAlertRule.applyFromTemplate(oc, "-n", appAlertRule.namespace, "-f", appAlertingTemplate, "-p", "NAMESPACE="+appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			appRecordingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-recording-rule-template.yaml")
+			appRecordRule := resource{"recordingrule", "my-app-workload-record", appProj}
+			defer appRecordRule.clear(oc)
+			err = appRecordRule.applyFromTemplate(oc, "-n", appRecordRule.namespace, "-f", appRecordingTemplate, "-p", "NAMESPACE="+appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			infraAlertingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-infra-alerting-rule-template.yaml")
+			infraAlertRule := resource{"alertingrule", "my-infra-workload-alert", lokiOperatorNS}
+			defer infraAlertRule.clear(oc)
+			err = infraAlertRule.applyFromTemplate(oc, "-n", infraAlertRule.namespace, "-f", infraAlertingTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			infraRecordingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-infra-recording-rule-template.yaml")
+			infraRecordRule := resource{"recordingrule", "my-infra-workload-record", lokiOperatorNS}
+			defer infraRecordRule.clear(oc)
+			err = infraRecordRule.applyFromTemplate(oc, "-n", infraRecordRule.namespace, "-f", infraRecordingTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			ls.waitForLokiStackToBeReady(oc)
+
+			g.By("Create ClusterLogging instance with Loki as logstore")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+			cl := resource{"clusterlogging", "instance", "openshift-logging"}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
+			collector := resource{"daemonset", "collector", cl.namespace}
+			collector.WaitForResourceToAppear(oc)
+			e2e.Logf("waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("Validating loki rules configmap")
+			expectedRules := []string{appProj + "-my-app-workload-alert", appProj + "-my-app-workload-record", lokiOperatorNS + "-my-infra-workload-alert", lokiOperatorNS + "-my-infra-workload-record"}
+			rulesCM, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", ls.namespace, ls.name+"-rules-0", "-o=jsonpath={.data}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, expectedRule := range expectedRules {
+				if !strings.Contains(string(rulesCM), expectedRule) {
+					g.Fail("Response is missing " + expectedRule)
+				}
+			}
+			e2e.Logf("Data has been validated in the rules configmap")
+
+			g.By("Querying rules API for application alerting/recording rules")
+			// Ruler token does not have access to infra/audit rules on the cluster. Granting permissions here to ruler SA
+			defer removeLokiStackPermissionFromSA(oc, "my-loki-tenant-logs")
+			grantLokiPermissionsToSA(oc, "my-loki-tenant-logs", ls.name+"-ruler", ls.namespace)
+
+			token := getSAToken(oc, ls.name+"-ruler", ls.namespace)
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			cmd := "curl -k " + route + "/api/logs/v1/application/loki/api/v1/rules " + "-H \"Authorization: Bearer " + token + "\""
+			output, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ls.namespace, ls.name+"-ruler-0", "--", "bash", "-c", cmd).Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			matchDataInResponse := []string{"name: MyAppLogVolumeAlert", "alert: MyAppLogVolumeIsHigh", "tenantId: application", "name: HighAppLogsToLoki1m", "record: loki:operator:applogs:rate1m"}
+			for _, matchedData := range matchDataInResponse {
+				if !strings.Contains(string(output), matchedData) {
+					g.Fail("Response is missing " + matchedData)
+				}
+			}
+			cmd = "curl -k " + route + "/api/logs/v1/infrastructure/loki/api/v1/rules " + "-H \"Authorization: Bearer " + token + "\""
+			output, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ls.namespace, ls.name+"-ruler-0", "--", "bash", "-c", cmd).Outputs()
+			fmt.Println("infra api query: " + string(output))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			matchDataInResponse = []string{"name: LokiOperatorLogsHigh", "alert: LokiOperatorLogsAreHigh", "tenantId: infrastructure", "name: LokiOperatorLogsAreHigh1m", "record: loki:operator:infralogs:rate1m"}
+			for _, matchedData := range matchDataInResponse {
+				if !strings.Contains(string(output), matchedData) {
+					g.Fail("Response is missing " + matchedData)
+				}
+			}
+			e2e.Logf("Rules API response validated succesfully")
+		})
+
+		g.It("CPaasrunOnly-Author:kbharti-Critical-55415-Loki Operator - Validate AlertManager support for cluster-monitoring is decoupled from User-workload monitoring[Serial]", func() {
+
+			cloNS := "openshift-logging"
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			appProj := oc.Namespace()
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR")
+			ls := lokiStack{
+				name:          "loki-55415",
+				namespace:     "openshift-logging",
+				tSize:         "1x.extra-small",
+				storageType:   getStorageType(oc),
+				storageSecret: "storage-55415",
+				storageClass:  sc,
+				bucketName:    "logging-loki-55415-" + getInfrastructureName(oc),
+				template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+			}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Create ClusterLogging instance with Loki as logstore")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
+			collector := resource{"daemonset", "collector", cl.namespace}
+			collector.WaitForResourceToAppear(oc)
+			e2e.Logf("waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("Create Loki Alert and recording rules")
+			alertingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
+			alertRule := resource{"alertingrule", "my-app-workload-alert", appProj}
+			defer alertRule.clear(oc)
+			err = alertRule.applyFromTemplate(oc, "-n", alertRule.namespace, "-f", alertingTemplate, "-p", "NAMESPACE="+appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			recordingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-recording-rule-template.yaml")
+			recordingRule := resource{"recordingrule", "my-app-workload-record", appProj}
+			defer recordingRule.clear(oc)
+			err = recordingRule.applyFromTemplate(oc, "-n", recordingRule.namespace, "-f", recordingTemplate, "-p", "NAMESPACE="+appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			ls.waitForLokiStackToBeReady(oc)
+
+			g.By("Validate AlertManager support for Cluster-Monitoring under openshift-monitoring")
+			dirname := "/tmp/" + oc.Namespace() + "-log-alerts"
+			defer os.RemoveAll(dirname)
+			err = os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", cl.namespace, "--confirm", "--to="+dirname).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			files, err := os.ReadDir(dirname)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(files)).To(o.Equal(2)) //since we have config and runtime-config under lokistack-config cm
+
+			amURL := "alertmanager_url: https://_web._tcp.alertmanager-operated.openshift-monitoring.svc"
+
+			for _, file := range files {
+				if file.Name() == "config.yaml" {
+					lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(string(lokiStackConf), amURL)).Should(o.BeTrue())
+				}
+				if file.Name() == "runtime-config.yaml" {
+					lokiStackConf, err := os.ReadFile(dirname + "/runtime-config.yaml")
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(string(lokiStackConf), "alertmanager_url")).ShouldNot(o.BeTrue())
+				}
+			}
+
+			g.By("Query AlertManager for Firing Alerts")
+			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			queryAlertManagerForActiveAlerts(oc, token, false, "MyAppLogVolumeIsHigh", 5)
+		})
+
+		g.It("CPaasrunOnly-Author:kbharti-Critical-61435-Loki Operator - Validate AlertManager support for User-workload monitoring[Serial]", func() {
+
+			cloNS := "openshift-logging"
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			appProj := oc.Namespace()
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR")
+			ls := lokiStack{
+				name:          "loki-61435",
+				namespace:     "openshift-logging",
+				tSize:         "1x.extra-small",
+				storageType:   getStorageType(oc),
+				storageSecret: "storage-61435",
+				storageClass:  sc,
+				bucketName:    "logging-loki-61435-" + getInfrastructureName(oc),
+				template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+			}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Create ClusterLogging instance with Loki as logstore")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
+			collector := resource{"daemonset", "collector", cl.namespace}
+			collector.WaitForResourceToAppear(oc)
+			e2e.Logf("waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("Enable User Workload Monitoring")
+			enableUserWorkloadMonitoringForLogging(oc)
+			defer deleteUserWorkloadManifests(oc)
+
+			g.By("Create Loki Alert and recording rules")
+			alertingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
+			alertRule := resource{"alertingrule", "my-app-workload-alert", appProj}
+			defer alertRule.clear(oc)
+			err = alertRule.applyFromTemplate(oc, "-n", alertRule.namespace, "-f", alertingTemplate, "-p", "NAMESPACE="+appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			recordingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-recording-rule-template.yaml")
+			recordingRule := resource{"recordingrule", "my-app-workload-record", appProj}
+			defer recordingRule.clear(oc)
+			err = recordingRule.applyFromTemplate(oc, "-n", recordingRule.namespace, "-f", recordingTemplate, "-p", "NAMESPACE="+appProj)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			ls.waitForLokiStackToBeReady(oc)
+
+			g.By("Validate AlertManager support for Cluster-Monitoring under openshift-monitoring")
+			dirname := "/tmp/" + oc.Namespace() + "-log-alerts"
+			defer os.RemoveAll(dirname)
+			err = os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", cl.namespace, "--confirm", "--to="+dirname).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			files, err := os.ReadDir(dirname)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(files)).To(o.Equal(2)) //since we have config and runtime-config under lokistack-config cm
+
+			amURL := "alertmanager_url: https://_web._tcp.alertmanager-operated.openshift-monitoring.svc"
+			userWorkloadAMURL := "alertmanager_url: https://_web._tcp.alertmanager-operated.openshift-user-workload-monitoring.svc"
+
+			for _, file := range files {
+				if file.Name() == "config.yaml" {
+					lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(string(lokiStackConf), amURL)).Should(o.BeTrue())
+				}
+				if file.Name() == "runtime-config.yaml" {
+					lokiStackConf, err := os.ReadFile(dirname + "/runtime-config.yaml")
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(string(lokiStackConf), userWorkloadAMURL)).Should(o.BeTrue())
+				}
+			}
+
+			g.By("Query User workload AlertManager for Firing Alerts")
+			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			queryAlertManagerForActiveAlerts(oc, token, true, "MyAppLogVolumeIsHigh", 5)
+		})
+
+	})
+
+})

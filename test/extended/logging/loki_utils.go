@@ -27,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -1070,4 +1071,54 @@ func deployMinIO(oc *exutil.CLI) {
 
 func removeMinIO(oc *exutil.CLI) {
 	deleteNamespace(oc, minioNS)
+}
+
+// queryAlertManagerForLokiAlerts() queries user-workload alert-manager if isUserWorkloadAM parameter is true.
+// All active alerts should be returned when querying Alert Managers
+func queryAlertManagerForActiveAlerts(oc *exutil.CLI, token string, isUserWorkloadAM bool, alertName string, timeInMinutes int) {
+	authBearer := " \"Authorization: Bearer " + token + "\""
+	var cmd string
+	if !isUserWorkloadAM {
+		alertManagerRoute := getRouteAddress(oc, "openshift-monitoring", "alertmanager-main")
+		amURL := "https://" + alertManagerRoute + "/api/v1/alerts"
+		cmd = "curl -k -H" + authBearer + " " + amURL
+	} else {
+		userWorkloadAlertManagerURL := "https://alertmanager-user-workload.openshift-user-workload-monitoring.svc:9095/api/v2/alerts"
+		cmd = "curl -k -H" + authBearer + " " + userWorkloadAlertManagerURL
+	}
+	err := wait.Poll(30*time.Second, time.Duration(timeInMinutes)*time.Minute, func() (bool, error) {
+		alerts, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", cmd)
+		if err != nil {
+			return false, err
+		}
+		if strings.Contains(string(alerts), alertName) {
+			return true, nil
+		}
+		e2e.Logf("Waiting for alert %s to be in Firing state", alertName)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Alert %s is not firing after %d minutes", alertName, timeInMinutes))
+}
+
+// Deletes cluster-monitoring-config and user-workload-monitoring-config if exists and recreates configmaps.
+// deleteUserWorkloadManifests() should be called once resources are created by enableUserWorkloadMonitoringForLogging()
+func enableUserWorkloadMonitoringForLogging(oc *exutil.CLI) {
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("ConfigMap", "cluster-monitoring-config", "-n", "openshift-monitoring", "--ignore-not-found").Execute()
+	clusterMonitoringConfigPath := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "cluster-monitoring-config.yaml")
+	clusterMonitoringConfig := resource{"configmap", "cluster-monitoring-config", "openshift-monitoring"}
+	err := clusterMonitoringConfig.applyFromTemplate(oc, "-n", clusterMonitoringConfig.namespace, "-f", clusterMonitoringConfigPath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("ConfigMap", "user-workload-monitoring-config", "-n", "openshift-user-workload-monitoring", "--ignore-not-found").Execute()
+	userWorkloadMConfigPath := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "user-workload-monitoring-config.yaml")
+	userworkloadConfig := resource{"configmap", "user-workload-monitoring-config", "openshift-user-workload-monitoring"}
+	err = userworkloadConfig.applyFromTemplate(oc, "-n", userworkloadConfig.namespace, "-f", userWorkloadMConfigPath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func deleteUserWorkloadManifests(oc *exutil.CLI) {
+	clusterMonitoringConfig := resource{"configmap", "cluster-monitoring-config", "openshift-monitoring"}
+	clusterMonitoringConfig.clear(oc)
+	userworkloadConfig := resource{"configmap", "user-workload-monitoring-config", "openshift-user-workload-monitoring"}
+	userworkloadConfig.clear(oc)
 }
