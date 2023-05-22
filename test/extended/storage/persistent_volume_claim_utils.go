@@ -332,17 +332,13 @@ func (pvc *persistentVolumeClaim) checkVolumeModeAsexpected(oc *exutil.CLI, vm s
 	o.Expect(pvcVM).To(o.Equal(vm))
 }
 
-// Check the Event as Expected
-func (pvc *persistentVolumeClaim) checkEventAsExpected(oc *exutil.CLI, status string, event string) {
+// Check the status as Expected
+func (pvc *persistentVolumeClaim) checkStatusAsExpectedConsistently(oc *exutil.CLI, status string) {
 	pvc.waitStatusAsExpected(oc, status)
 	o.Consistently(func() string {
 		pvcState, _ := pvc.getStatus(oc)
 		return pvcState
 	}, 20*time.Second, 5*time.Second).Should(o.Equal(status))
-	o.Eventually(func() (string, error) {
-		return pvc.getDescription(oc)
-	}, 30*time.Second, 5*time.Second).Should(o.ContainSubstring(event))
-
 }
 
 // Wait for PVC capacity expand successfully

@@ -739,6 +739,23 @@ func checkCSIDriverInstalled(oc *exutil.CLI, supportProvisioners []string) bool 
 	return true
 }
 
+// check resource event as expected
+func waitResourceSpecifiedEventsOccurred(oc *exutil.CLI, namespace string, resourceName string, events ...string) {
+	o.Eventually(func() bool {
+		Info, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", namespace, "--field-selector=involvedObject.name="+resourceName).Output()
+		if err != nil {
+			e2e.Logf("The events of %s are %s", resourceName, Info)
+			return false
+		}
+		for count := range events {
+			if !strings.Contains(Info, events[count]) {
+				return false
+			}
+		}
+		return true
+	}, 60*time.Second, 10*time.Second).Should(o.BeTrue())
+}
+
 // Get the Resource Group id value
 // https://bugzilla.redhat.com/show_bug.cgi?id=2110899
 // If skip/empty value it will create in default resource group id

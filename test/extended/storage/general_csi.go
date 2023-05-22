@@ -771,10 +771,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			status := "Pending"
 			event := "the source PVC and destination PVCs must have the same volume mode for cloning"
-			pvcVmFsClone.checkEventAsExpected(oc, status, event)
-			pvcVmBlCloneA.checkEventAsExpected(oc, status, event)
-			pvcVmBlCloneB.checkEventAsExpected(oc, status, event)
-			pvcVmNullClone.checkEventAsExpected(oc, status, event)
+			pvcVmFsClone.checkStatusAsExpectedConsistently(oc, status)
+			waitResourceSpecifiedEventsOccurred(oc, pvcVmFsClone.namespace, pvcVmFsClone.name, event)
+			pvcVmBlCloneA.checkStatusAsExpectedConsistently(oc, status)
+			waitResourceSpecifiedEventsOccurred(oc, pvcVmBlCloneA.namespace, pvcVmBlCloneA.name, event)
+			pvcVmBlCloneB.checkStatusAsExpectedConsistently(oc, status)
+			waitResourceSpecifiedEventsOccurred(oc, pvcVmBlCloneB.namespace, pvcVmBlCloneB.name, event)
+			pvcVmNullClone.checkStatusAsExpectedConsistently(oc, status)
+			waitResourceSpecifiedEventsOccurred(oc, pvcVmNullClone.namespace, pvcVmNullClone.name, event)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -3906,6 +3910,64 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+
+	// author: jiasun@redhat.com
+	// OCP-37576 [GCP CSI Driver] ROX and RWX volumes should not be provisioned
+	g.It("ROSA-OSD_CCS-ARO-Author:jiasun-High-37576-[CSI-Driver] ROX and RWX volumes should not be provisioned by block type CSI Driver", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"pd.csi.storage.gke.io", "ebs.csi.aws.com", "disk.csi.azure.com", "vpc.block.csi.ibm.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner = range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			g.By("# Create the storageClass with volumeBingingMode Immediate ")
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+			storageClass.create(oc)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+			g.By("# Create the pvc with accessMode ReadOnlyMany and ReadWriteMany ")
+			pvcROM := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimName("my-pvc-readonlymany"), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimAccessmode("ReadOnlyMany"))
+			pvcRWM := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimName("my-pvc-readwritemany"), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
+
+			pvcROM.create(oc)
+			defer pvcROM.deleteAsAdmin(oc)
+			pvcRWM.create(oc)
+			defer pvcRWM.deleteAsAdmin(oc)
+
+			g.By("# Check the pvc status and event as expected")
+			pvcROM.checkStatusAsExpectedConsistently(oc, "Pending")
+			pvcRWM.checkStatusAsExpectedConsistently(oc, "Pending")
+			switch {
+			case provisioner == "pd.csi.storage.gke.io":
+				waitResourceSpecifiedEventsOccurred(oc, pvcROM.namespace, pvcROM.name, "ProvisioningFailed", "VolumeContentSource must be provided when AccessMode is set to read only")
+				waitResourceSpecifiedEventsOccurred(oc, pvcRWM.namespace, pvcRWM.name, "ProvisioningFailed", "specified multi writer with mount access type")
+			case provisioner == "ebs.csi.aws.com":
+				waitResourceSpecifiedEventsOccurred(oc, pvcROM.namespace, pvcROM.name, "ProvisioningFailed", "Only AccessModes[ReadWriteOnce] supported.")
+				waitResourceSpecifiedEventsOccurred(oc, pvcRWM.namespace, pvcRWM.name, "ProvisioningFailed", "Only AccessModes[ReadWriteOnce] supported.")
+			case provisioner == "disk.csi.azure.com":
+				waitResourceSpecifiedEventsOccurred(oc, pvcROM.namespace, pvcROM.name, "ProvisioningFailed", "Volume capability not supported")
+				waitResourceSpecifiedEventsOccurred(oc, pvcRWM.namespace, pvcRWM.name, "ProvisioningFailed", "Volume capability not supported")
+			default:
+				waitResourceSpecifiedEventsOccurred(oc, pvcROM.namespace, pvcROM.name, "ProvisioningFailed", "Volume capabilities not supported")
+				waitResourceSpecifiedEventsOccurred(oc, pvcRWM.namespace, pvcRWM.name, "ProvisioningFailed", "Volume capabilities not supported")
+			}
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 	// author: chaoyang@redhat.com
 	// [CSI-Driver] [Dynamic PV] [Filesystem with RWX Accessmode] volumes resize on-line
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-High-51258-[CSI-Driver] [Dynamic PV] [Filesystem] volumes resize with RWX access mode", func() {
