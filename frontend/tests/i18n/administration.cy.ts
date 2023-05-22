@@ -4,13 +4,13 @@ import { listPage, ListPageSelector } from '../../upstream/views/list-page';
 describe('Administration pages pesudo translation', () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-  	cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     cy.switchPerspective('Administrator');
   });
 
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-  	cy.logout;
+    cy.logout;
   });
 
   it('(OCP-35766,yapei) administration pages pesudo translation', {tags: ['e2e','admin','@osd-ccs']}, () => {
@@ -55,7 +55,7 @@ describe('Administration pages pesudo translation', () => {
     // RoleBindings tab
     cy.visit(`/k8s/cluster/namespaces/${test_ns}/roles?pseudolocalization=true&lng=en`);
     listPage.rows.shouldBeLoaded();
-    cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);    
+    cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);
 
     // ResourceQuota and LimitRange has been covered in resource-crud.spec
     cy.log('CustomResourceDefinitions list and details pesudo translation');
@@ -75,6 +75,6 @@ describe('Administration pages pesudo translation', () => {
     // Instances page
     cy.visit(`/k8s/cluster/customresourcedefinitions/${CRD_kind_group}/instances?pseudolocalization=true&lng=en`);
     listPage.rows.shouldBeLoaded();
-    cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);  
+    cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);
   });
 })

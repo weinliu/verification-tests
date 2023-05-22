@@ -21,7 +21,7 @@ describe("yaml editor tests", () => {
   it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page", {tags: ['e2e','@osd-ccs','@rosa']}, () => {
     cy.visit(`/k8s/ns/${testName}/import`)
       .contains('[data-test-id="resource-title"]', "Import YAML");
-    importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");  
+    importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");
     importYamlPage.checkDangerAlert(/Maximum|size|exceeded|limit/gi);
 
     cy.fixture('default_operatorgroup.yaml').then((resourcesYAML) => {
@@ -45,7 +45,7 @@ describe("yaml editor tests", () => {
       .should('have.attr', 'href', `/k8s/ns/${testName}/deploymentconfigs/example-dc`);
     cy.byLegacyTestID(`${testName}`)
       .should('have.attr', 'href', `/k8s/cluster/namespaces/${testName}`);
-    
+
     // retry failed, this time it will fail on yaml creation page
     cy.byTestID('retry-failed-resources').click().then(() => {
       yamlEditor.isImportLoaded();
@@ -53,7 +53,7 @@ describe("yaml editor tests", () => {
     });
     cy.get('@failureMsg').should('exist');
     yamlEditor.clickCancelButton();
-    
+
     // import more resources
     cy.byTestID('import-yaml').click();
     yamlEditor.isImportLoaded();

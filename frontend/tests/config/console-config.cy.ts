@@ -18,8 +18,6 @@ describe('console configs features', () => {
     cy.exec(`oc get configmaps console-config -n openshift-console -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | awk '$1 == "-"{ if (key == "nodeArchitectures:") print $NF; next } {key=$1}'`, { failOnNonZeroExit: false }).then((output) => {
       expect(output.stdout).to.include($architectureType);
     });
-
   });
-
 })
 

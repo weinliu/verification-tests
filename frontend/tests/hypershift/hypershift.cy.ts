@@ -13,7 +13,7 @@ describe('Check on hypershift provisined cluster', () => {
   });
 
   it('(OCP-51733,yanpzhan) Check no idp alert for temporary administrative user on HyperShift Provisioned Clusters', {tags: ['HyperShiftGUEST','admin']}, () => {
-  cy.contains('logged in as a temporary administrative user').should('not.exist');
-  cy.get('div').should('not.contain', 'allow others to log in');
+    cy.contains('logged in as a temporary administrative user').should('not.exist');
+    cy.get('div').should('not.contain', 'allow others to log in');
   });
 })

@@ -11,10 +11,10 @@ describe('console feature on sno cluster', () => {
     cy.exec(`oc get infrastructures.config.openshift.io cluster --template={{.status.controlPlaneTopology}} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       if(result.stdout == 'SingleReplica') {
         cy.log("Testing on SNO cluster.");
-        cy.exec(`oc get deployments -n openshift-console -o jsonpath='{.items[*].spec.replicas}' --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((output) => { 
+        cy.exec(`oc get deployments -n openshift-console -o jsonpath='{.items[*].spec.replicas}' --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((output) => {
           expect(output.stdout).to.equal('1 1');
         });
-        cy.exec(`oc get deployments -n openshift-console -o jsonpath='{.items[*].spec.template.spec.affinity}' --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((output) => {                                                                            
+        cy.exec(`oc get deployments -n openshift-console -o jsonpath='{.items[*].spec.template.spec.affinity}' --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((output) => {
           expect(output.stdout).to.equal('{} {}');
         });
       } else {

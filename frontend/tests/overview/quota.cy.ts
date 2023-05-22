@@ -50,7 +50,5 @@ describe('quota related feature', () => {
     quota1_resources.forEach(function (resourcename) {
       quotaPage.checkResourceQuotaListed(`${resourcename}`);
     });
-
   });
-
 })

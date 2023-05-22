@@ -1,7 +1,6 @@
 import { operatorHubPage } from "views/operator-hub-page"
 
 describe('Display All Namespace Operands for Global Operators', () => {
-  
   const params = {
     anotherNamespace: 'argocd-another',
     operatorName: 'argocd-operator',
@@ -17,7 +16,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
     cy.adminCLI(`oc new-project ${params.anotherNamespace}`)
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
   })
-  
+
   after(() => {
     cy.adminCLI(`oc delete project ${params.anotherNamespace}`)
     cy.adminCLI(`oc delete csv argocd-operator.v0.0.15 -n openshift-operators`)
@@ -30,10 +29,8 @@ describe('Display All Namespace Operands for Global Operators', () => {
     operatorHubPage.installOperator(params.operatorName, params.catalogSourceName)
     // wait for operator to install
     cy.contains('View Operator').click()
-
     // install the operands
     cy.adminCLI(`oc apply -f ./fixtures/${params.operandFile}`)
-
     // check namespace radio button is selected for operand on the operator page
     cy.byLegacyTestID('horizontal-link-olm~All instances').click()
     // checkpoint 1: Improved Column

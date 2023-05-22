@@ -10,7 +10,7 @@ describe('Workload Secrets test', () => {
     guidedTour.close();
     cy.switchPerspective('Administrator');
     cy.createProject(testName);
-    cy.adminCLI(`oc create -f ./fixtures/secret-tls.yaml -n ${testName}`);   
+    cy.adminCLI(`oc create -f ./fixtures/secret-tls.yaml -n ${testName}`);
     cy.adminCLI(`oc create secret generic test1 -n ${testName} --from-file=data1=./fixtures/original.jks`)
     cy.adminCLI(`oc get secret -n ${testName} test1 -o yaml > /tmp/secret1.yaml`)
   });
@@ -27,7 +27,7 @@ describe('Workload Secrets test', () => {
 
     listPage.rows.clickKebabAction('tlssecret','Edit Secret')
     cy.url().should('include',`/tlssecret/edit`);
-    
+
     Secrets.addKeyValue("keyfortest", "valuefortest");
     cy.get('#save-changes').click();
     detailsPage.isLoaded();
