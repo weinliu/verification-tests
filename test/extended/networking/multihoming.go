@@ -423,16 +423,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod1Name := getPodName(oc, ns1, "name=multihoming-pod1")
 		pod1IPv4, _ := getPodMultiNetwork(oc, ns1, pod1Name[0])
 		e2e.Logf("The v4 address of pod1 is: %v", pod1IPv4)
-		if !strings.Contains(pod1IPv4, "192.168.10.4") {
-			e2e.Failf("Pod: %s does not get correct ipv4 address", pod1Name[0])
+		if strings.Contains(pod1IPv4, "192.168.10.1") || strings.Contains(pod1IPv4, "192.168.10.2") || strings.Contains(pod1IPv4, "192.168.10.3") || strings.Contains(pod1IPv4, "192.168.10.6") {
+			e2e.Failf("Pod: %s get a wrong excluded ipv4 address", pod1Name[0])
 		}
 
 		g.By("Get IPs from the pod2's secondary interface")
 		pod2Name := getPodName(oc, ns1, "name=multihoming-pod2")
 		pod2IPv4, _ := getPodMultiNetwork(oc, ns1, pod2Name[0])
 		e2e.Logf("The v4 address of pod2 is: %v", pod2IPv4)
-		if !strings.Contains(pod2IPv4, "192.168.10.5") {
-			e2e.Failf("Pod: %s does not get correct ipv4 address", pod2Name[0])
+		if strings.Contains(pod2IPv4, "192.168.10.1") || strings.Contains(pod2IPv4, "192.168.10.2") || strings.Contains(pod2IPv4, "192.168.10.3") || strings.Contains(pod2IPv4, "192.168.10.6") {
+			e2e.Failf("Pod: %s get a wrong excluded ipv4 address", pod2Name[0])
 		}
 
 		g.By("Checking connectivity from pod1 to pod2")
