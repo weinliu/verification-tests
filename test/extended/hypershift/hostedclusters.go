@@ -225,6 +225,22 @@ func (h *hostedCluster) createAwsNodePool(name string, nodeCount int) {
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 }
 
+func (h *hostedCluster) createAwsNodePoolWithoutDefaultSG(name string, nodeCount int, dir string) {
+	npFile := dir + "/np.yaml"
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift create nodepool aws --name %s --namespace %s --cluster-name %s --node-count %d --render > %s", name, h.namespace, h.name, nodeCount, npFile)
+	_, err := bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	//delete default sg sed '/securityGroups/, +1d'
+	cmdSed := fmt.Sprintf("sed -i '/securityGroups/, +1d' %s", npFile)
+	_, err = bashClient.Run(cmdSed).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	err = h.oc.AsAdmin().WithoutNamespace().Run(OcpApply).Args("-f", npFile).Execute()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
 func (h *hostedCluster) deleteNodePool(name string) {
 	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpDelete).Args("--ignore-not-found", "nodepool", "-n", h.namespace, name).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())

@@ -12,9 +12,10 @@ type NodePool struct {
 	ClusterName string `param:"cluster-name"`
 	Namespace   string `param:"namespace"`
 	//root-disk-size is for azure only, will op it later and move it to azureNodePool
-	RootDiskSize *int   `param:"root-disk-size"`
-	NodeCount    *int   `param:"node-count"`
-	ReleaseImage string `param:"release-image"`
+	RootDiskSize    *int   `param:"root-disk-size"`
+	NodeCount       *int   `param:"node-count"`
+	ReleaseImage    string `param:"release-image"`
+	SecuritygroupId string `param:"securitygroup-id"`
 }
 
 func (c *NodePool) WithName(name string) *NodePool {
@@ -89,6 +90,11 @@ func (a *AWSNodePool) WithNodeCount(nodeCount *int) *AWSNodePool {
 
 func (a *AWSNodePool) WithReleaseImage(releaseImage string) *AWSNodePool {
 	a.ReleaseImage = releaseImage
+	return a
+}
+
+func (a *AWSNodePool) WithSecuritygroupID(securitygroupID string) *AWSNodePool {
+	a.SecuritygroupId = securitygroupID
 	return a
 }
 

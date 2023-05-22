@@ -331,6 +331,26 @@ func (a *AwsClient) AssociateDhcpOptions(vpcID, dhcpOptionsID string) error {
 	return err
 }
 
+func (a *AwsClient) CreateSecurityGroup(groupName, vpcID, description string) (string, error) {
+	createRes, err := a.svc.CreateSecurityGroup(&ec2.CreateSecurityGroupInput{
+		GroupName:   aws.String(groupName),
+		Description: aws.String(description),
+		VpcId:       aws.String(vpcID),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return *createRes.GroupId, nil
+}
+
+func (a *AwsClient) DeleteSecurityGroup(groupID string) error {
+	_, err := a.svc.DeleteSecurityGroup(&ec2.DeleteSecurityGroupInput{
+		GroupId: aws.String(groupID),
+	})
+	return err
+}
+
 // S3Client struct for S3 storage operations
 type S3Client struct {
 	svc *s3.S3

@@ -994,4 +994,63 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(doOcpReq(oc, OcpGet, true, "node", nodeName, "-o", "jsonpath={.spec.taints[0].value}", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)).Should(o.Equal("foo"))
 	})
+
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-60140-[AWS]: create default security group when no security group is specified in a nodepool[Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while ocp-60140 is for AWS - skipping test ...")
+		}
+
+		caseID := "60140"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check hosted cluster's default worker securitygroup ID")
+		defaultSG := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.status.platform.aws.defaultWorkerSecurityGroupID}`)
+		e2e.Logf("defaultWorkerSecurityGroupID in hostedcluster is %s", defaultSG)
+
+		g.By("check nodepool and awsmachinetemplate's securitygroup ID")
+		nodepoolName := doOcpReq(oc, OcpGet, true, "nodepool", "-n", "--ignore-not-found", hostedcluster.namespace, fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].metadata.name}`, hostedcluster.name))
+		o.Expect(nodepoolName).ShouldNot(o.BeEmpty())
+		if arr := strings.Split(nodepoolName, " "); len(arr) > 1 {
+			nodepoolName = arr[0]
+		}
+		npSecurityGroupID := doOcpReq(oc, OcpGet, true, "nodepool", "-n", hostedcluster.namespace, nodepoolName, "--ignore-not-found", `-ojsonpath={.spec.platform.aws.securityGroups[0].id}`)
+		e2e.Logf("nodepool %s SecurityGroups: %s", nodepoolName, npSecurityGroupID)
+		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, nodepoolName, `-ojsonpath={.spec.template.spec.additionalSecurityGroups[0].id}`)).Should(o.Equal(npSecurityGroupID))
+
+		g.By("create nodepool without default securitygroup")
+		npCount := 1
+		npWithoutSG := "np-60140-default-sg"
+		defer func() {
+			hostedcluster.deleteNodePool(npWithoutSG)
+			o.Eventually(hostedcluster.pollCheckDeletedNodePool(npWithoutSG), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
+		}()
+		hostedcluster.createAwsNodePoolWithoutDefaultSG(npWithoutSG, npCount, dir)
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npWithoutSG), LongTimeout, LongTimeout/10).Should(o.BeTrue(), " check np ready error")
+
+		g.By("check the new nodepool should use the default sg in the hosted cluster")
+		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, npWithoutSG, `-ojsonpath={.spec.template.spec.additionalSecurityGroups[0].id}`)).Should(o.Equal(defaultSG))
+
+		g.By("create sg by aws client and use it to create a nodepool")
+		vpcID := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.spec.platform.aws.cloudProviderConfig.vpc}`)
+
+		exutil.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		groupID, err := awsClient.CreateSecurityGroup("ocp-60140-sg", vpcID, "hypershift ocp-60140")
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		defer awsClient.DeleteSecurityGroup(groupID)
+
+		npWithExistingSG := "np-60140-existing-sg"
+		defer func() {
+			hostedcluster.deleteNodePool(npWithExistingSG)
+			o.Eventually(hostedcluster.pollCheckDeletedNodePool(npWithExistingSG), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
+		}()
+
+		NewAWSNodePool(npWithExistingSG, hostedcluster.name, hostedcluster.namespace).WithNodeCount(&npCount).WithSecuritygroupID(groupID).CreateAWSNodePool()
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npWithExistingSG), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npWithExistingSG))
+		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, npWithExistingSG, `-ojsonpath={.spec.template.spec.additionalSecurityGroups[0].id}`)).Should(o.Equal(groupID))
+		g.By("nodepool security group test passed")
+	})
 })
