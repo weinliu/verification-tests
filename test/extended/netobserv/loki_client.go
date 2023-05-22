@@ -49,7 +49,7 @@ func compareClusterResources(oc *exutil.CLI, cpu, memory string) bool {
 
 // ValidateInfraAndResourcesForLoki checks cluster remaning resources and platform type
 // supportedPlatforms the platform types which the case can be executed on, if it's empty, then skip this check
-func validateInfraAndResourcesForLoki(oc *exutil.CLI, supportedPlatforms []string, reqMemory, reqCPU string) bool {
+func validateInfraAndResourcesForLoki(oc *exutil.CLI, reqMemory, reqCPU string, supportedPlatforms ...string) bool {
 	currentPlatform := exutil.CheckPlatform(oc)
 	if currentPlatform == "aws" {
 		// skip the case on aws sts clusters
@@ -82,15 +82,14 @@ type lokiQueryResponse struct {
 		ResultType string `json:"resultType"`
 		Result     []struct {
 			Stream struct {
-				LogType                 string `json:"log_type"`
-				Tag                     string `json:"tag"`
-				FluentdThread           string `json:"fluentd_thread"`
-				KubernetesContainerName string `json:"kubernetes_container_name,omitempty"`
-				KubernetesHost          string `json:"kubernetes_host"`
-				KubernetesNamespaceName string `json:"kubernetes_namespace_name,omitempty"`
-				KubernetesPodName       string `json:"kubernetes_pod_name,omitempty"`
+				App              string `json:"app"`
+				DstK8S_Namespace string `json:"DstK8S_Namespace"`
+				FlowDirection    string `json:"FlowDirection"`
+				SrcK8S_Namespace string `json:"SrcK8S_Namespace"`
+				SrcK8S_OwnerName string `json:"SrcK8S_OwnerName"`
+				DstK8S_OwnerName string `json:"kubernetes_pod_name"`
 			} `json:"stream"`
-			Values []interface{} `json:"values"`
+			Values [][]string `json:"values"`
 		} `json:"result"`
 		Stats struct {
 			Summary struct {
@@ -273,7 +272,6 @@ func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) 
 
 	for attempts > 0 {
 		attempts--
-
 		resp, err = client.Do(req)
 		if err != nil {
 			e2e.Logf("error sending request %v", err)
@@ -344,7 +342,7 @@ func (c *lokiClient) queryRange(logType string, queryStr string, limit int, star
 }
 
 func (c *lokiClient) searchLogsInLoki(logType, query string) (*lokiQueryResponse, error) {
-	res, err := c.queryRange(logType, query, 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+	res, err := c.queryRange(logType, query, 50, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 	return res, err
 }
 

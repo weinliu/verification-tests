@@ -1,9 +1,12 @@
 package netobserv
 
 import (
+	"encoding/json"
 	"fmt"
+	filePath "path/filepath"
 	"strconv"
 
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -59,6 +62,42 @@ type HostClusterRoleBinding struct {
 	Template           string
 }
 
+type Flowlog struct {
+	Packets          int
+	SrcPort          int
+	DstMac           string
+	TimeReceived     int
+	IcmpType         int
+	DstK8S_Name      string
+	DstPort          int
+	DstK8S_HostIP    string
+	Bytes            int
+	SrcK8S_Type      string
+	DstK8S_HostName  string
+	Proto            int
+	DstAddr          string
+	Interface        string
+	SrcAddr          string
+	TimeFlowEndMs    int
+	DstK8S_OwnerType string
+	Flags            int
+	Etype            int
+	DstK8S_Type      string
+	IfDirection      int
+	SrcMac           string
+	SrcK8S_OwnerType string
+	SrcK8S_Name      string
+	Duplicate        bool
+	TimeFlowStartMs  int
+	AgentIP          string
+	IcmpCode         int
+}
+
+type FlowRecord struct {
+	Timestamp int64
+	Flowlog   Flowlog
+}
+
 // create flowcollector CRD for a given manifest file
 func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", flow.Template, "-p", "NAMESPACE=" + flow.Namespace}
@@ -77,6 +116,23 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 
 	if flow.LokiAuthToken != "" {
 		parameters = append(parameters, "LOKI_AUTH_TOKEN="+flow.LokiAuthToken)
+		baseDir := exutil.FixturePath("testdata", "netobserv")
+		if flow.LokiAuthToken == "FORWARD" {
+			forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
+			forwardCRB := ForwardClusterRoleBinding{
+				Namespace: oc.Namespace(),
+				Template:  forwardCRBPath,
+			}
+			forwardCRB.deployForwardCRB(oc)
+		} else if flow.LokiAuthToken == "HOST" {
+			hostCRBPath := filePath.Join(baseDir, "clusterRoleBinding-HOST.yaml")
+
+			hostCRB := HostClusterRoleBinding{
+				Namespace: oc.Namespace(),
+				Template:  hostCRBPath,
+			}
+			hostCRB.deployHostCRB(oc)
+		}
 	}
 
 	if strconv.FormatBool(flow.LokiTLSEnable) != "" {
@@ -182,4 +238,24 @@ func (crb *HostClusterRoleBinding) deployHostCRB(oc *exutil.CLI) {
 	}
 
 	exutil.ApplyNsResourceFromTemplate(oc, crb.Namespace, parameters...)
+}
+
+func getFlowRecords(lokiValues [][]string) ([]FlowRecord, error) {
+	flowRecords := []FlowRecord{}
+	for _, values := range lokiValues {
+		e2e.Logf("Flow values are %s", values[1])
+		timestamp, _ := strconv.ParseInt(values[0], 10, 64)
+		var flowlog Flowlog
+		err := json.Unmarshal([]byte(values[1]), &flowlog)
+		if err != nil {
+			return []FlowRecord{}, err
+		}
+		o.Expect(err).ToNot(o.HaveOccurred())
+		flowRecord := FlowRecord{
+			Timestamp: timestamp,
+			Flowlog:   flowlog,
+		}
+		flowRecords = append(flowRecords, flowRecord)
+	}
+	return flowRecords, nil
 }

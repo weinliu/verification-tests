@@ -17,7 +17,7 @@ objects:
         type: ${STORAGE_TYPE}
     storageClassName: ${STORAGE_CLASS}
     tenants:
-      mode: "openshift-network"
+      mode: ${TENANT}
 parameters:
 - name: NAME
   value: "lokistack"
@@ -31,3 +31,5 @@ parameters:
   value: "s3"
 - name: STORAGE_CLASS
   value: "gp2"
+- name: TENANT
+  value: openshift-network

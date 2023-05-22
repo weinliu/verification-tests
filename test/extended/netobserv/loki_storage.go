@@ -482,3 +482,76 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+
+// return the storage type per different platform
+func getStorageType(oc *exutil.CLI) string {
+	platform := exutil.CheckPlatform(oc)
+	switch platform {
+	case "aws":
+		{
+			return "s3"
+		}
+	case "gcp":
+		{
+			return "gcs"
+		}
+	case "azure":
+		{
+			return "azure"
+		}
+	case "openstack":
+		{
+			return "swift"
+		}
+	default:
+		{
+			if checkODF(oc) {
+				return "odf"
+			}
+			if checkMinIO(oc, minioNS) {
+				return "minio"
+			}
+			return ""
+		}
+	}
+}
+
+// checkODF check if the ODF is installed in the cluster or not
+// here only checks the sc/ocs-storagecluster-ceph-rbd and svc/s3
+func checkODF(oc *exutil.CLI) bool {
+	svcFound := false
+	expectedSC := []string{"openshift-storage.noobaa.io", "ocs-storagecluster-ceph-rbd", "ocs-storagecluster-cephfs"}
+	var scInCluster []string
+	scs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(context.Background(), metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	for _, sc := range scs.Items {
+		scInCluster = append(scInCluster, sc.Name)
+	}
+
+	for _, s := range expectedSC {
+		if !contain(scInCluster, s) {
+			return false
+		}
+	}
+
+	_, err = oc.AdminKubeClient().CoreV1().Services("openshift-storage").Get(context.Background(), "s3", metav1.GetOptions{})
+	if err == nil {
+		svcFound = true
+	}
+	return svcFound
+}
+
+func checkMinIO(oc *exutil.CLI, ns string) bool {
+	podReady, svcFound := false, false
+	pod, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "app=minio"})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(pod.Items) > 0 && pod.Items[0].Status.Phase == "Running" {
+		podReady = true
+	}
+	_, err = oc.AdminKubeClient().CoreV1().Services(ns).Get(context.Background(), "minio", metav1.GetOptions{})
+	if err == nil {
+		svcFound = true
+	}
+	return podReady && svcFound
+}

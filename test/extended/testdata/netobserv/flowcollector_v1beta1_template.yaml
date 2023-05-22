@@ -25,7 +25,7 @@ objects:
         ebpf:
           imagePullPolicy: IfNotPresent
           sampling: 1
-          cacheActiveTimeout: 5s
+          cacheActiveTimeout: ${EBPF_CACHEACTIVETIMEOUT}
           cacheMaxFlows: 100000
           interfaces: [ ]
           excludeInterfaces: ["lo"]
@@ -178,3 +178,5 @@ parameters:
     value: "lokistack-query-frontend-http"
   - name: KAFKA_ADDRESS
     value: "kafka-cluster-kafka-bootstrap.netobserv"
+  - name: EBPF_CACHEACTIVETIMEOUT
+    value: 15s

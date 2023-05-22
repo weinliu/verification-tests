@@ -21,6 +21,13 @@ type flowlogsPipelineDescription struct {
 	template  string
 }
 
+type TestClientServerTemplate struct {
+	ServerNS   string
+	ClientNS   string
+	ObjectSize string
+	Template   string
+}
+
 // returns ture/false if flowcollector API exists.
 func isFlowCollectorAPIExists(oc *exutil.CLI) (bool, error) {
 	stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "-o", "jsonpath='{.items[*].spec.names.kind}'").Output()
@@ -50,8 +57,8 @@ func getFlowlogsPipelinePod(oc *exutil.CLI, ns, name string) string {
 	return podName
 }
 
-// Verify some key and deterministic fields and their values
-func verifyFlowRecord(podLog string) {
+// Verify flow records from logs
+func verifyFlowRecordFromLogs(podLog string) {
 	re := regexp.MustCompile("{\"AgentIP\":.*")
 	//e2e.Logf("the logs of flowlogs-pipeline pods are: %v", podLog)
 	flowRecords := re.FindAllString(podLog, -3)
@@ -69,6 +76,20 @@ func verifyFlowRecord(podLog string) {
 			o.MatchRegexp("TimeFlowStartMs.:[1-9][0-9]+"),
 			o.MatchRegexp("TimeReceived.:[1-9][0-9]+")))
 	}
+}
+
+// Verify some key and deterministic fields and their values
+func (flowlog *Flowlog) verifyFlowRecord() {
+	o.Expect(flowlog.AgentIP).To(o.Equal(flowlog.DstK8S_HostIP))
+	o.Expect(flowlog.Bytes).Should(o.BeNumerically(">", 0))
+	var testDuplicate bool
+	o.Expect(flowlog.Duplicate).To(o.BeAssignableToTypeOf(testDuplicate))
+	now := time.Now()
+	compareTime := now.Add(time.Duration(-2) * time.Hour)
+	compareTimeMs := compareTime.UnixMilli()
+	o.Expect(flowlog.TimeFlowEndMs).Should(o.BeNumerically(">", compareTimeMs))
+	o.Expect(flowlog.TimeFlowStartMs).Should(o.BeNumerically(">", compareTimeMs))
+	o.Expect(flowlog.TimeReceived).Should(o.BeNumerically(">", compareTime.Unix()))
 }
 
 // Verify metrics by doing curl commands
@@ -113,36 +134,36 @@ func verifyCurl(oc *exutil.CLI, podName, ns, curlDest, CertPath string) {
 }
 
 // Verify loki records and if it was written in the last 5 minutes
-func verifyTime(oc *exutil.CLI, namespace, lokiStackName, serviceAccountName, lokiStackNS string) {
-	var s string
+func verifyTime(oc *exutil.CLI, namespace, lokiStackName, serviceAccountName, lokiStackNS string) error {
 	bearerToken := getSAToken(oc, serviceAccountName, namespace)
 	route := "https://" + getRouteAddress(oc, lokiStackNS, lokiStackName)
 	lc := newLokiClient(route).withToken(bearerToken).retry(5)
 	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\"}")
+
+	if err != nil {
+		return err
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if len(res.Data.Result) == 0 {
 		exutil.AssertWaitPollNoErr(err, "network logs are not found")
 	}
+	flowRecords := []FlowRecord{}
 
-	for _, r := range res.Data.Result {
-		e2e.Logf("\nlog is : %v\n", r.Values[0])
-		s = fmt.Sprint(r.Values[0])
-	}
-	l := strings.Split(s, " ")
-
-	ltime := strings.Replace(l[0], "[", "", 1)
-
-	logtime, err := strconv.ParseInt(ltime, 10, 64)
-	if err == nil {
-		e2e.Logf("%d of type %T", logtime, logtime)
+	for _, result := range res.Data.Result {
+		flowRecords, err = getFlowRecords(result.Values)
+		if err != nil {
+			return err
+		}
 	}
 
-	now := time.Now().UnixNano()
-
-	// check if the record is written in the last 5 mins
-	timeminus := now - logtime
-	o.Expect(timeminus).Should(o.BeNumerically(">", 0))
-	o.Expect(timeminus).Should(o.BeNumerically("<=", 300000000000))
+	for _, flowlog := range flowRecords {
+		now := time.Now().UnixNano()
+		// check if the record is written in the last 5 mins
+		timeminus := now - flowlog.Timestamp
+		o.Expect(timeminus).Should(o.BeNumerically(">", 0))
+		o.Expect(timeminus).Should(o.BeNumerically("<=", 300000000000))
+	}
+	return nil
 }
 
 // get flow collector port
@@ -253,4 +274,14 @@ func getEBPFCollectorIP(oc *exutil.CLI, flowlogsPipelineDeployedAs string) ([]st
 	}
 	collectors = strings.Split(stdout, " ")
 	return collectors, nil
+}
+
+func (testTemplate *TestClientServerTemplate) createTestClientServer(oc *exutil.CLI) error {
+	configFile := exutil.ProcessTemplate(oc, "--ignore-unknown-parameters=true", "-f", testTemplate.Template, "-p", "SERVERNS="+testTemplate.ServerNS, "-p", "CLIENTNS="+testTemplate.ClientNS, "-p", "OBJECT_SIZE="+testTemplate.ObjectSize)
+
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
+	if err != nil {
+		return err
+	}
+	return nil
 }

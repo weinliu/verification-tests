@@ -30,7 +30,6 @@ objects:
         transaction.state.log.min.isr: 1
         default.replication.factor: 1
         min.insync.replicas: 1
-        inter.broker.protocol.version: "3.2"
         auto.create.topics.enable: false
         log.cleaner.backoff.ms: 15000
         log.cleaner.dedupe.buffer.size: 134217728

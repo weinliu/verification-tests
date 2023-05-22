@@ -18,6 +18,7 @@ type lokiStack struct {
 	StorageSecret string // the secret name for loki to use to connect to backend storage
 	StorageClass  string // storage class name
 	BucketName    string // the butcket or the container name where loki stores it's data in
+	Tenant        string // Loki tenant name
 	Template      string // the file used to create the loki stack
 }
 
