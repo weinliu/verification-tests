@@ -2,10 +2,11 @@ package securityandcompliance
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -31,6 +32,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		podWithSelinuxProfileTemplate string
 		profileRecordingTemplate      string
 		saRoleRolebindingTemplate     string
+		selinuxProfileCustomTemplate  string
 		workloadDaeTemplate           string
 		workloadDeployTemplate        string
 
@@ -47,6 +49,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		secProfileStackTemplate = filepath.Join(buildPruningBaseDir, "seccompprofilestack.yaml")
 		podWithProfileTemplate = filepath.Join(buildPruningBaseDir, "pod-with-seccompprofile.yaml")
 		selinuxProfileNginxTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-nginx.yaml")
+		selinuxProfileCustomTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-with-custom-policy-template.yaml")
 		podWithSelinuxProfileTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-with-selinux-profile.yaml")
 		profileRecordingTemplate = filepath.Join(buildPruningBaseDir, "/spo/profile-recording.yaml")
 		saRoleRolebindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/sa-previleged-role-rolebinding.yaml")
@@ -460,6 +463,47 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		checkPrfolieStatus(oc, "SelinuxProfile", ns2, "Installed")
 		checkPrfolieNumbers(oc, "SelinuxProfile", ns1, linuxWorkerCount*2)
 		checkPrfolieNumbers(oc, "SelinuxProfile", ns2, 6)
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Medium-61581-Verify a custom container-selinux policy templates could be used [Serial]", func() {
+		ns := "net-container-policy-" + getRandomString()
+		selinuxProfileName := "net-container-policy"
+
+		g.By("Create selinuxprofile !!!")
+		defer deleteNamespace(oc, ns)
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofile", selinuxProfileName, "-n", ns, "--ignore-not-found").Execute()
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxProfileCustomTemplate, "-p", "NAME="+selinuxProfileName, "NAMESPACE="+ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertKeywordsExists(oc, 300, "Error", "selinuxprofiles", selinuxProfileName, "-o=jsonpath={.status.status}", "-n", ns)
+
+		g.By("Patch the allowedSystemProfiles and recreate the selinux profile !!!\n")
+		nodeCount := getNodeCount(oc)
+		defer func() {
+			g.By("Recover the default allowedSystemProfiles.. !!!\n")
+			patchRecover := fmt.Sprintf("{\"spec\":{\"selinuxOptions\":{\"allowedSystemProfiles\":[\"container\"]}}}")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patchRecover)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "[\"container\"]", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.selinuxOptions.allowedSystemProfiles}"}).check(oc)
+			checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		}()
+		//patch  oc -n openshift-security-profiles patch spod spod --type=merge -p '{"spec":{"selinuxOptions":{"allowedSystemProfiles":["container","net_container"]}}}'
+		patch := fmt.Sprintf("{\"spec\":{\"selinuxOptions\":{\"allowedSystemProfiles\":[\"container\",\"net_container\"]}}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+
+		g.By("Recreate the selinux profile !!!\n")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofile", selinuxProfileName, "-n", ns, "--ignore-not-found").Execute()
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"selinuxprofile", "-n", ns}).check(oc)
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxProfileCustomTemplate, "-p", "NAME="+selinuxProfileName, "NAMESPACE="+ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxProfileName, "-o=jsonpath={.status.status}", "-n", ns)
+		usage := selinuxProfileName + "_" + ns + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, usage, ok, []string{"selinuxprofiles", selinuxProfileName, "-n",
+			ns, "-o=jsonpath={.status.usage}"}).check(oc)
+		fileName := selinuxProfileName + "_" + ns + ".cil"
+		assertKeywordsExistsInSelinuxFile(oc, "blockinherit net_container", "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "cat", "/etc/selinux.d/"+fileName)
+		assertKeywordsExistsInSelinuxFile(oc, selinuxProfileName+"_"+ns, "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "semodule", "-l")
 	})
 
 	// author: minmli@redhat.com
