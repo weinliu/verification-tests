@@ -1318,10 +1318,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				ogTLS = "null"
 			}
 			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
-			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+			defer func() {
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+				waitForOperatorsRunning(oc)
+			}()
 			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": null}]`
 			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
 			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
+			waitForOperatorsRunning(oc)
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
@@ -1435,10 +1441,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				ogTLS = "null"
 			}
 			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
-			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+			defer func() {
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+				waitForOperatorsRunning(oc)
+			}()
 			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"old":{},"type":"Old"}}]`
 			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
 			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
+			waitForOperatorsRunning(oc)
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
@@ -1552,10 +1564,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				ogTLS = "null"
 			}
 			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
-			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+			defer func() {
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+				waitForOperatorsRunning(oc)
+			}()
 			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS12"},"type":"Custom"}}]`
 			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
 			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
+			waitForOperatorsRunning(oc)
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
@@ -1669,10 +1687,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				ogTLS = "null"
 			}
 			ogPatch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": %s}]`, ogTLS)
-			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+			defer func() {
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", ogPatch).Execute()
+				waitForOperatorsRunning(oc)
+			}()
 			patch := `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"old":{},"type":"Old"}}]`
 			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
 			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
+			waitForOperatorsRunning(oc)
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
@@ -1772,9 +1796,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			patch = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value": {"intermediate":{},"type":"Intermediate"}}]`
 			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
 			o.Expect(er).NotTo(o.HaveOccurred())
-			//Sleep for 3 minutes to allow LokiStack to reconcile and use the changed tlsSecurityProfile config.
+
+			e2e.Logf("Sleep for 3 minutes to allow LokiStack to reconcile and use the changed tlsSecurityProfile config.")
 			time.Sleep(3 * time.Minute)
 			ls.waitForLokiStackToBeReady(oc)
+			waitForOperatorsRunning(oc)
 
 			g.By("checking app, audit and infra logs in loki")
 			bearerToken = getSAToken(oc, "logcollector", cl.namespace)

@@ -159,18 +159,38 @@ func deleteS3Bucket(client *s3.Client, bucketName string) error {
 }
 
 func emptyS3Bucket(client *s3.Client, bucketName string) error {
-	// list objects in the bucket
-	objects, err := client.ListObjects(context.TODO(), &s3.ListObjectsInput{Bucket: &bucketName})
-	o.Expect(err).NotTo(o.HaveOccurred())
-	// remove objects in the bucket
-	newObjects := []types.ObjectIdentifier{}
-	for _, object := range objects.Contents {
-		newObjects = append(newObjects, types.ObjectIdentifier{Key: object.Key})
-	}
-	if len(newObjects) > 0 {
-		_, err = client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{Bucket: &bucketName, Delete: &types.Delete{Quiet: true, Objects: newObjects}})
+	// List objects in the bucket
+	objects, err := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: &bucketName,
+	})
+	if err != nil {
 		return err
 	}
+
+	// Delete objects in the bucket
+	if len(objects.Contents) > 0 {
+		objectIdentifiers := make([]types.ObjectIdentifier, len(objects.Contents))
+		for i, object := range objects.Contents {
+			objectIdentifiers[i] = types.ObjectIdentifier{Key: object.Key}
+		}
+
+		_, err = client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{
+			Bucket: &bucketName,
+			Delete: &types.Delete{
+				Objects: objectIdentifiers,
+				Quiet:   true,
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Check if there are more objects to delete and handle pagination
+	if objects.IsTruncated {
+		return emptyS3Bucket(client, bucketName)
+	}
+
 	return nil
 }
 
