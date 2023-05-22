@@ -38,8 +38,11 @@ RUN oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hype
     curl -s -k -L ${CLIENTURL}/oc-mirror.tar.gz -o oc-mirror.tar.gz && \
     tar -C /usr/bin -xzvf opm-linux.tar.gz && rm -fr opm-linux.tar.gz /usr/bin/oc && \
     tar -C /usr/bin/ -xzvf oc-mirror.tar.gz && chmod +x /usr/bin/oc-mirror && rm -f oc-mirror.tar.gz && \
-    curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/operator-sdk/ -o sdk.html && \
-    curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/operator-sdk/pre-release/operator-sdk-linux-x86_64.tar.gz -o opt-sdk.tar.gz && \
+    SDKURL=${MIRRORURL}/x86_64/clients/operator-sdk/pre-release && \
+    curl -s -k -L ${MIRRORURL}/x86_64/clients/operator-sdk/ -o sdk.html && \
+    optsdkver=$(grep -E "<a href=\"4\.14" sdk.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo ${optsdkver} && \
+    if [ "V${optsdkver}V" != "VV"  ]; then SDKURL=${MIRRORURL}/x86_64/clients/operator-sdk/${optsdkver}; fi && \
+    curl -s -k -L ${SDKURL}/operator-sdk-linux-x86_64.tar.gz -o opt-sdk.tar.gz && \
     tar -C ./ -xzvf opt-sdk.tar.gz && mv ./x86_64/operator-sdk /usr/bin && rm -fr opt-sdk.tar.gz ./x86_64
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
     unzip -q awscliv2.zip && \
