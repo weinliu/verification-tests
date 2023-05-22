@@ -457,11 +457,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(cloNS, esPods.Items[0].Name, "app-"+containerName)
 
 			g.By("check data in ES")
-			for _, proj := range []string{app1, app2} {
-				count, err := getDocCountByQuery(cloNS, esPods.Items[0].Name, "app-"+containerName, "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj+"\"}}}")
-				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(count > 0).To(o.BeTrue())
-			}
+			waitForProjectLogsAppear(cl.namespace, esPods.Items[0].Name, app1, "app-"+containerName)
+			waitForProjectLogsAppear(cl.namespace, esPods.Items[0].Name, app2, "app-"+containerName)
 		})
 	})
 

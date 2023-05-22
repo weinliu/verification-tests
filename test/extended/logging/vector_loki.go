@@ -691,35 +691,35 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-61968-Vector should support multiline error detection.[Serial][Slow]", func() {
-			MULTILINE_LOG_TYPES := map[string][]string{
-				"java":   {JAVA_EXC, COMPLEX_JAVA_EXC, NESTED_JAVA_EXC},
-				"go":     {GO_EXC, GO_ON_GAE_EXC, GO_SIGNAL_EXC, GO_HTTP},
-				"ruby":   {RUBY_EXC, RAILS_EXC},
-				"js":     {CLIENT_JS_EXC, NODE_JS_EXC, V8_JS_EXC},
-				"csharp": {CSHARP_ASYNC_EXC, CSHARP_NESTED_EXC, CSHARP_EXC},
-				"python": {PYTHON_EXC},
-				//"php":    {PHP_EXC, PHP_ON_GAE_EXC},
+			multilineLogTypes := map[string][]string{
+				"java":   {javaExc, complexJavaExc, nestedJavaExc},
+				"go":     {goExc, goOnGaeExc, goSignalExc, goHTTP},
+				"ruby":   {rubyExc, railsExc},
+				"js":     {clientJsExc, nodeJsExc, v8JsExc},
+				"csharp": {csharpAsyncExc, csharpNestedExc, csharpExc},
+				"python": {pythonExc},
+				"php":    {phpOnGaeExc, phpExc},
 				"dart": {
-					DART_ABSTRACT_CLASS_ERR,
-					DART_ARGUMENT_ERR,
-					DART_ASSERTION_ERR,
-					DART_ASYNC_ERR,
-					DART_CONCURRENT_MODIFICATION_ERR,
-					DART_DIVIDE_BY_ZERO_ERR,
-					DART_ERR,
-					DART_TYPE_ERR,
-					DART_EXC,
-					DART_UNSUPPORTED_ERR,
-					DART_UNIMPLEMENTED_ERROR,
-					DART_OOM_ERR,
-					DART_RANGE_ERR,
-					DART_READ_STATIC_ERR,
-					DART_STACK_OVERFLOW_ERR,
-					DART_FALLTHROUGH_ERR,
-					DART_FORMAT_ERR,
-					DART_FORMAT_WITH_CODE_ERR,
-					DART_NO_METHOD_ERR,
-					DART_NO_METHOD_GLOBAL_ERR,
+					dartAbstractClassErr,
+					dartArgumentErr,
+					dartAssertionErr,
+					dartAsyncErr,
+					dartConcurrentModificationErr,
+					dartDivideByZeroErr,
+					dartErr,
+					dartTypeErr,
+					dartExc,
+					dartUnsupportedErr,
+					dartUnimplementedErr,
+					dartOOMErr,
+					dartRangeErr,
+					dartReadStaticErr,
+					dartStackOverflowErr,
+					dartFallthroughErr,
+					dartFormatErr,
+					dartFormatWithCodeErr,
+					dartNoMethodErr,
+					dartNoMethodGlobalErr,
 				},
 			}
 			cloNS := "openshift-logging"
@@ -761,7 +761,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("create some pods to generate multiline error")
 			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
-			for k := range MULTILINE_LOG_TYPES {
+			for k := range multilineLogTypes {
 				ns := "multiline-log-" + k + "-61968"
 				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
 				err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
@@ -775,7 +775,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
-			for k, v := range MULTILINE_LOG_TYPES {
+			for k, v := range multilineLogTypes {
 				g.By("check " + k + " logs\n")
 				err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 					appLogs, err := lc.searchByNamespace("application", "multiline-log-"+k+"-61968")
@@ -1301,7 +1301,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54523-LokiStack Cluster Logging comply with the intermediate TLS security profile when global API Server has no tlsSecurityProfile defined[Serial][Slow][Disruptive]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54523-LokiStack Cluster Logging comply with the intermediate TLS security profile when global API Server has no tlsSecurityProfile defined[Slow][Disruptive]", func() {
 
 			var (
 				cloNS       = "openshift-logging"
@@ -1424,7 +1424,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54525-LokiStack Cluster Logging comply with the old tlsSecurityProfile when configured in the global API server configuration[Serial][Slow][Disruptive]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54525-LokiStack Cluster Logging comply with the old tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
 
 			var (
 				cloNS       = "openshift-logging"
@@ -1547,7 +1547,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54526-LokiStack Cluster Logging comply with the custom tlsSecurityProfile when configured in the global API server configuration[Serial][Slow][Disruptive]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54526-LokiStack Cluster Logging comply with the custom tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
 
 			var (
 				cloNS       = "openshift-logging"
@@ -1670,7 +1670,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54527-LokiStack Cluster Logging comply with the global tlsSecurityProfile - old to intermediate[Serial][Slow][Disruptive]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54527-LokiStack Cluster Logging comply with the global tlsSecurityProfile - old to intermediate[Slow][Disruptive]", func() {
 
 			var (
 				cloNS       = "openshift-logging"

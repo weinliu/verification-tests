@@ -187,7 +187,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 	})
 
 	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-High-41659-release locks on indices when disk utilization falls below flood watermark threshold[Serial][Slow]", func() {
+	g.It("Longduration-CPaasrunOnly-Author:qitang-High-41659-release locks on indices when disk utilization falls below flood watermark threshold[Serial][Slow]", func() {
 		g.By("deploy EFK pods")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -489,18 +489,22 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
 		g.By("waiting for the EFK pods to be ready...")
 		WaitForECKPodsToBeReady(oc, cloNS)
-		esPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "component=elasticsearch"})
+		esPODs, _ := getPodNames(oc, cloNS, "component=elasticsearch")
 		signingES := resource{"secret", "signing-elasticsearch", cloNS}
 		esSVC := "https://elasticsearch." + cloNS + ".svc:9200"
 
 		g.By("remove secret/signing-elasticsearch, and wait for it to be recreated")
 		signingES.clear(oc)
 		signingES.WaitForResourceToAppear(oc)
-		resource{"pod", esPODs.Items[0].Name, cloNS}.WaitUntilResourceIsGone(oc)
+		resource{"pod", esPODs[0], cloNS}.WaitUntilResourceIsGone(oc)
+		waitForPodReadyWithLabel(oc, cloNS, "component=elasticsearch")
+
+		newESPods, _ := getPodNames(oc, cloNS, "component=elasticsearch")
 
 		g.By("remove secret/signing-elasticsearch again, then wait for the logging pods to be recreated")
 		signingES.clear(oc)
 		signingES.WaitForResourceToAppear(oc)
+		resource{"pod", newESPods[0], cloNS}.WaitUntilResourceIsGone(oc)
 		waitForPodReadyWithLabel(oc, cloNS, "component=elasticsearch")
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
 
@@ -667,6 +671,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		currentEoCSV := getCurrentCSVFromPackage(oc, "qe-app-registry", targetchannel, preEO.PackageName)
 
 		var upgraded = false
+		var esPods []string
 		//change source to qe-app-registry if needed, and wait for the new operators to be ready
 		if preCloCSV != currentCloCSV {
 			g.By(fmt.Sprintf("upgrade CLO to %s", currentCloCSV))
@@ -677,6 +682,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			upgraded = true
 		}
 		if preEoCSV != currentEoCSV {
+			esPods, err = getPodNames(oc, cl.namespace, "component=elasticsearch")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("Before upgrade, ES pods are: %v", esPods)
 			g.By(fmt.Sprintf("upgrade EO to %s", currentEoCSV))
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preEO.Namespace, "sub/"+preEO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -687,6 +695,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 
 		if upgraded {
 			g.By("waiting for the ECK pods to be ready after upgrade")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			for _, pod := range esPods {
+				err := resource{"pod", pod, cl.namespace}.WaitUntilResourceIsGone(oc)
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s is not removed", pod))
+			}
 			WaitForECKPodsToBeReady(oc, cl.namespace)
 			checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 			//check PVC count, it should be equal to ES node count
@@ -707,7 +720,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Medium-40508-upgrade from prior version to current version[Serial][Slow]", func() {
-		// to add logging 5.6, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
+		// to add logging 5.7, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
 		tag, err := getIndexImageTag(oc)
@@ -716,8 +729,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
-		// for 5.7, test upgrade from 5.6 to 5.7
-		preSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
+		// for 5.8, test upgrade from 5.7 to 5.8
+		preSource := CatalogSourceObjects{"stable-5.7", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
 		preCLO := SubscriptionObjects{
@@ -749,9 +762,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
 		WaitForECKPodsToBeReady(oc, preCLO.Namespace)
+		esPods, err := getPodNames(oc, cl.namespace, "component=elasticsearch")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Before upgrade, ES pods are: %v", esPods)
 
 		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable-5.7", "qe-app-registry", "openshift-marketplace"}
+		var source = CatalogSourceObjects{"stable", "qe-app-registry", "openshift-marketplace"}
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&EO to %s", source.Channel))
@@ -773,6 +789,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		WaitForDeploymentPodsToBeReady(oc, preEO.Namespace, preEO.OperatorName)
 
 		g.By("waiting for the ECK pods to be ready after upgrade")
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		for _, pod := range esPods {
+			err := resource{"pod", pod, cl.namespace}.WaitUntilResourceIsGone(oc)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s is not removed", pod))
+		}
 		WaitForECKPodsToBeReady(oc, cl.namespace)
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 
@@ -959,7 +980,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53404-Cluster Logging upgrade with Vector as collector - major version.[Serial][Slow]", func() {
-		// to add logging 5.6, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
+		// to add logging 5.7, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
 		tag, err := getIndexImageTag(oc)
@@ -968,8 +989,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
-		// for 5.7, test upgrade from 5.6 to 5.7
-		preSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
+		// for 5.8, test upgrade from 5.7 to 5.8
+		preSource := CatalogSourceObjects{"stable-5.7", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
 		preCLO := SubscriptionObjects{
@@ -1025,7 +1046,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable-5.7", "qe-app-registry", "openshift-marketplace"}
+		var source = CatalogSourceObjects{"stable", "qe-app-registry", "openshift-marketplace"}
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&LO to %s", source.Channel))

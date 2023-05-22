@@ -274,35 +274,35 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-45256-[fluentd]Forward logs to log store for multiline log assembly[Serial][Slow]", func() {
-			MULTILINE_LOG_TYPES := map[string][]string{
-				"java":   {JAVA_EXC, COMPLEX_JAVA_EXC, NESTED_JAVA_EXC},
-				"go":     {GO_EXC, GO_ON_GAE_EXC, GO_SIGNAL_EXC, GO_HTTP},
-				"ruby":   {RUBY_EXC, RAILS_EXC},
-				"js":     {CLIENT_JS_EXC, NODE_JS_EXC, V8_JS_EXC},
-				"csharp": {CSHARP_ASYNC_EXC, CSHARP_NESTED_EXC, CSHARP_EXC},
-				"python": {PYTHON_EXC},
-				"php":    {PHP_EXC, PHP_ON_GAE_EXC},
+			multilineLogTypes := map[string][]string{
+				"java":   {javaExc, complexJavaExc, nestedJavaExc},
+				"go":     {goExc, goOnGaeExc, goSignalExc, goHTTP},
+				"ruby":   {rubyExc, railsExc},
+				"js":     {clientJsExc, nodeJsExc, v8JsExc},
+				"csharp": {csharpAsyncExc, csharpNestedExc, csharpExc},
+				"python": {pythonExc},
+				"php":    {phpOnGaeExc, phpExc},
 				"dart": {
-					DART_ABSTRACT_CLASS_ERR,
-					DART_ARGUMENT_ERR,
-					DART_ASSERTION_ERR,
-					DART_ASYNC_ERR,
-					DART_CONCURRENT_MODIFICATION_ERR,
-					DART_DIVIDE_BY_ZERO_ERR,
-					DART_ERR,
-					DART_TYPE_ERR,
-					DART_EXC,
-					DART_UNSUPPORTED_ERR,
-					DART_UNIMPLEMENTED_ERROR,
-					DART_OOM_ERR,
-					DART_RANGE_ERR,
-					DART_READ_STATIC_ERR,
-					DART_STACK_OVERFLOW_ERR,
-					DART_FALLTHROUGH_ERR,
-					DART_FORMAT_ERR,
-					DART_FORMAT_WITH_CODE_ERR,
-					DART_NO_METHOD_ERR,
-					DART_NO_METHOD_GLOBAL_ERR,
+					dartAbstractClassErr,
+					dartArgumentErr,
+					dartAssertionErr,
+					dartAsyncErr,
+					dartConcurrentModificationErr,
+					dartDivideByZeroErr,
+					dartErr,
+					dartTypeErr,
+					dartExc,
+					dartUnsupportedErr,
+					dartUnimplementedErr,
+					dartOOMErr,
+					dartRangeErr,
+					dartReadStaticErr,
+					dartStackOverflowErr,
+					dartFallthroughErr,
+					dartFormatErr,
+					dartFormatWithCodeErr,
+					dartNoMethodErr,
+					dartNoMethodGlobalErr,
 				},
 			}
 
@@ -326,7 +326,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("create some pods to generate multiline error")
 			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
-			for k := range MULTILINE_LOG_TYPES {
+			for k := range multilineLogTypes {
 				ns := "multiline-log-" + k + "-45256"
 				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
 				err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
@@ -345,11 +345,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			token := getSAToken(oc, "default", oc.Namespace())
-			for k, v := range MULTILINE_LOG_TYPES {
+			for k, v := range multilineLogTypes {
 				g.By("check " + k + " logs\n")
 				waitForProjectLogsAppear(cl.namespace, esPods[0], "multiline-log-"+k+"-45256", "app-00")
 				for _, log := range v {
-					if log == V8_JS_EXC {
+					if log == v8JsExc {
 						continue // skip as there is a known issue in fluentd
 					}
 					var messages []string
@@ -386,13 +386,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-49040-High-49041-Forward logs to multiple log stores for multiline log assembly[Serial][Slow]", func() {
-			MULTILINE_LOG_TYPES := map[string][]string{
-				"java":   {JAVA_EXC, COMPLEX_JAVA_EXC, NESTED_JAVA_EXC},
-				"go":     {GO_EXC, GO_ON_GAE_EXC, GO_SIGNAL_EXC, GO_HTTP},
-				"ruby":   {RUBY_EXC, RAILS_EXC},
-				"python": {PYTHON_EXC},
-				"js":     {CLIENT_JS_EXC, NODE_JS_EXC, V8_JS_EXC},
-				"php":    {PHP_EXC, PHP_ON_GAE_EXC},
+			multilineLogTypes := map[string][]string{
+				"java":   {javaExc, complexJavaExc, nestedJavaExc},
+				"go":     {goExc, goOnGaeExc, goSignalExc, goHTTP},
+				"ruby":   {rubyExc, railsExc},
+				"js":     {clientJsExc, nodeJsExc, v8JsExc},
+				"python": {pythonExc},
+				"php":    {phpOnGaeExc, phpExc},
 			}
 
 			g.By("Create Loki project and deploy Loki Server")
@@ -424,7 +424,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("create some pods to generate multiline error")
 			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
-			for k := range MULTILINE_LOG_TYPES {
+			for k := range multilineLogTypes {
 				ns := "multiline-log-" + k + "-49040"
 				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
 				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
@@ -445,15 +445,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			for _, l := range []string{"python", "js", "php"} {
 				g.By("check " + l + " logs\n")
 				waitForProjectLogsAppear(cl.namespace, esPods[0], "multiline-log-"+l+"-49040", "app-00")
-				for _, log := range MULTILINE_LOG_TYPES[l] {
-					if log == V8_JS_EXC {
+				for _, log := range multilineLogTypes[l] {
+					if log == v8JsExc {
 						continue // skip as there is a known issue in fluentd
 					}
 					var messages []string
 					err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 						indices, err := getIndexNamesViaRoute(esRoute, token, "app")
 						o.Expect(err).NotTo(o.HaveOccurred())
-						resp, err := queryInESViaRoute(esRoute, token, indices, "_search", "{\"size\": "+strconv.Itoa(len(MULTILINE_LOG_TYPES[l])*2+7)+", \"sort\": [{\"@timestamp\": {\"order\": \"desc\"}}], \"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"multiline-log-"+l+"-49040\"}}}", "post")
+						resp, err := queryInESViaRoute(esRoute, token, indices, "_search", "{\"size\": "+strconv.Itoa(len(multilineLogTypes[l])*2+7)+", \"sort\": [{\"@timestamp\": {\"order\": \"desc\"}}], \"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"multiline-log-"+l+"-49040\"}}}", "post")
 						o.Expect(err).NotTo(o.HaveOccurred())
 						var multilineLog SearchResult
 						json.Unmarshal([]byte(resp), &multilineLog)
@@ -495,10 +495,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					return false, nil
 				})
 				exutil.AssertWaitPollNoErr(err, "can't find "+t+" logs")
-				for _, log := range MULTILINE_LOG_TYPES[t] {
+				for _, log := range multilineLogTypes[t] {
 					var messages []string
 					err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-						dataInLoki, _ := lc.queryRange("", "{kubernetes_namespace_name=\"multiline-log-"+t+"-49040\"}", len(MULTILINE_LOG_TYPES[t])*2, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
+						dataInLoki, _ := lc.queryRange("", "{kubernetes_namespace_name=\"multiline-log-"+t+"-49040\"}", len(multilineLogTypes[t])*2, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
 						lokiLog := extractLogEntities(dataInLoki)
 						var messages []string
 						for _, log := range lokiLog {
@@ -1147,8 +1147,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
-			MULTILINE_LOG_TYPES := map[string][]string{
-				"java": {JAVA_EXC, COMPLEX_JAVA_EXC, NESTED_JAVA_EXC},
+			multilineLogTypes := map[string][]string{
+				"java": {javaExc, complexJavaExc, nestedJavaExc},
 			}
 
 			g.By("create a pod to generate multiline error")
@@ -1170,7 +1170,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			for _, f := range filteredLogs {
 				filteredMessages = append(filteredMessages, f.Message)
 			}
-			for _, msg := range MULTILINE_LOG_TYPES["java"] {
+			for _, msg := range multilineLogTypes["java"] {
 				o.Expect(containSubstring(filteredMessages, msg)).Should(o.BeTrue(), "%s log is not found", msg)
 			}
 		})

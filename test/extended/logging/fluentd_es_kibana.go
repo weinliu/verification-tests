@@ -306,10 +306,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			collector := resource{"secret", "collector", cloNS}
 			signingES := resource{"secret", "signing-elasticsearch", cloNS}
 			g.By("remove secrets elasticsearch and collector, then check if theses secrets can be recreated or not")
-			elasticsearch.clear(oc)
-			collector.clear(oc)
-			elasticsearch.WaitForResourceToAppear(oc)
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "-n", cloNS, elasticsearch.name, collector.name).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			collector.WaitForResourceToAppear(oc)
+			elasticsearch.WaitForResourceToAppear(oc)
 			WaitForECKPodsToBeReady(oc, cloNS)
 			esSVC := "https://elasticsearch." + cloNS + ".svc:9200"
 
