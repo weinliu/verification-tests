@@ -5609,4 +5609,76 @@ manifests:
 		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-6 :: Failed :: Pods are not created, manifests are not set to default")
 		e2e.Logf("Scenario-6 :: Passed :: Pods should be created, manifests are loaded from default location")
 	})
+
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:dpunia-High-63273-Test etcd encryption migration [Slow][Disruptive]", func() {
+		// only run this case in Etcd Encryption On cluster
+		g.By("1) Check if cluster is Etcd Encryption On")
+		encryptionType, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if encryptionType != "aescbc" && encryptionType != "aesgcm" {
+			g.Skip("The cluster is Etcd Encryption Off, this case intentionally runs nothing")
+		}
+		e2e.Logf("Etcd Encryption with type %s is on!", encryptionType)
+
+		g.By("2) Check encryption-config and key secrets before Migration")
+		encSecretOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", "openshift-config-managed", "-l", "encryption.apiserver.operator.openshift.io/component", "-o", `jsonpath={.items[*].metadata.name}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		encSecretCount := strings.Count(encSecretOut, "encryption")
+		o.Expect(encSecretCount).To(o.BeNumerically(">", 0))
+
+		g.By("3) Create Secret & Check in etcd database before Migration")
+		defer oc.WithoutNamespace().Run("delete").Args("-n", "default", "secret", "secret-63273").Execute()
+		err = oc.WithoutNamespace().Run("create").Args("-n", "default", "secret", "generic", "secret-63273", "--from-literal", "pass=secret123").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		etcdPods := getPodsListByLabel(oc, "openshift-etcd", "etcd=true")
+		execCmdOutput := ExecCommandOnPod(oc, etcdPods[0], "openshift-etcd", "etcdctl get /kubernetes.io/secrets/default/secret-63273")
+		o.Expect(execCmdOutput).ShouldNot(o.ContainSubstring("secret123"))
+
+		g.By("4) Migrate encryption if current encryption is aescbc to aesgcm or vice versa")
+		migrateEncTo := "aesgcm"
+		if encryptionType == "aesgcm" {
+			migrateEncTo = "aescbc"
+		}
+		oasEncNumber, err := GetEncryptionKeyNumber(oc, `encryption-key-openshift-apiserver-[^ ]*`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		kasEncNumber, err1 := GetEncryptionKeyNumber(oc, `encryption-key-openshift-kube-apiserver-[^ ]*`)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Starting Etcd Encryption migration to %v", migrateEncTo)
+		patchArg := fmt.Sprintf(`{"spec":{"encryption": {"type":"%v"}}}`, migrateEncTo)
+		encMigrateOut, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=merge", "-p", patchArg).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(encMigrateOut).Should(o.ContainSubstring("patched"))
+
+		g.By("5.) Check the new encryption key secrets appear")
+		newOASEncSecretName := "encryption-key-openshift-apiserver-" + strconv.Itoa(oasEncNumber+1)
+		newKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber+1)
+		err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+			output, err := oc.WithoutNamespace().Run("get").Args("secrets", newOASEncSecretName, newKASEncSecretName, "-n", "openshift-config-managed").Output()
+			if err != nil {
+				e2e.Logf("Fail to get new encryption-key-* secrets, error: %s. Trying again", err)
+				return false, nil
+			}
+			e2e.Logf("Got new encryption-key-* secrets:\n%s", output)
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("new encryption key secrets %s, %s not found", newOASEncSecretName, newKASEncSecretName))
+
+		completed, errOAS := WaitEncryptionKeyMigration(oc, newOASEncSecretName)
+		exutil.AssertWaitPollNoErr(errOAS, fmt.Sprintf("saw all migrated-resources for %s", newOASEncSecretName))
+		o.Expect(completed).Should(o.Equal(true))
+		completed, errKas := WaitEncryptionKeyMigration(oc, newKASEncSecretName)
+		exutil.AssertWaitPollNoErr(errKas, fmt.Sprintf("saw all migrated-resources for %s", newKASEncSecretName))
+		o.Expect(completed).Should(o.Equal(true))
+
+		e2e.Logf("Checking kube-apiserver operator should be Available")
+		err = waitCoBecomes(oc, "kube-apiserver", 1500, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available")
+
+		g.By("6) Check secret in etcd after Migration")
+		etcdPods = getPodsListByLabel(oc, "openshift-etcd", "etcd=true")
+		execCmdOutput = ExecCommandOnPod(oc, etcdPods[0], "openshift-etcd", "etcdctl get /kubernetes.io/secrets/default/secret-63273")
+		o.Expect(execCmdOutput).ShouldNot(o.ContainSubstring("secret123"))
+	})
 })
