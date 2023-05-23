@@ -3883,4 +3883,56 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			o.Expect(nsError).NotTo(o.HaveOccurred())
 		}
 	})
+
+	g.It("Author:xiuwang-Low-22862-CloudFront storage configuration with invalid values [Disruptive]", func() {
+		g.By("Skip test if it's not cloudfront setting")
+		cloudFrontset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.cloudFront}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if cloudFrontset == "" {
+			g.Skip("Skip for the aws cluster with STS credential")
+		}
+
+		g.By("Set invalid duraion")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"cloudFront":{"duration":300}}}}}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`duration: Invalid value: "int64`))
+
+		g.By("Set invalid privateKey")
+		keyvalue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.cloudFront.privateKey.key}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		keyname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.cloudFront.privateKey.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		defer func() {
+			g.By("Remove proxy for imageregistry cluster")
+			err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"cloudFront":{"privateKey":{"key":"`+keyvalue+`","name":"`+keyname+`"}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"cloudFront":{"privateKey":{"key":"invalid.pem"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "docker-registry=default", "-n", "openshift-image-registry").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "references non-existent secret key: invalid.pem") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "private key set error")
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"cloudFront":{"privateKey":{"key":"`+keyvalue+`"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"cloudFront":{"privateKey":{"name":"notexisted"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "docker-registry=default", "-n", "openshift-image-registry").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, `"registry-cloudfront" : secret "notexisted" not found`) {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "privatekey name set error")
+	})
 })
