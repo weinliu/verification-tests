@@ -118,7 +118,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-37627-SDK run bundle upgrade test", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-37627-SDK run bundle upgrade test [Serial]", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
@@ -142,7 +142,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-38054-SDK run bundle create pods and csv and registry image pod", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-38054-SDK run bundle create pods and csv and registry image pod [Serial]", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/podcsvcheck-bundle:v0.0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
@@ -1625,7 +1625,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:xzha-Critical-38101-implement IndexImageCatalogCreator", func() {
+	g.It("VMonly-ConnectedOnly-Author:xzha-Critical-38101-implement IndexImageCatalogCreator [Serial]", func() {
 		operatorsdkCLI.showInfo = true
 		g.By("0) check the cluster proxy configuration")
 		httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
@@ -3062,7 +3062,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jitli-High-51295-SDK-Run bundle-upgrade from bundle installation without index image", func() {
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-51295-SDK-Run bundle-upgrade from bundle installation without index image [Serial]", func() {
 
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
@@ -3081,7 +3081,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jitli-High-51296-SDK-Run bundle-upgrade from bundle installation with index image", func() {
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-51296-SDK-Run bundle-upgrade from bundle installation with index image [Serial]", func() {
 
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
@@ -4730,7 +4730,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-Author:jitli-Critical-59885-Run bundle on different security level namespaces", func() {
+	g.It("VMonly-Author:jitli-Critical-59885-Run bundle on different security level namespaces [Serial]", func() {
 
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
