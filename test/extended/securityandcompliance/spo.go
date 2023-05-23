@@ -506,6 +506,74 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		assertKeywordsExistsInSelinuxFile(oc, selinuxProfileName+"_"+ns, "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "semodule", "-l")
 	})
 
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Medium-61579-Set a custom priority class name for spod daemon pod [Serial]", func() {
+		var (
+			priorityClassTemplate = filepath.Join(buildPruningBaseDir, "priorityclass.yaml")
+			prioritym             = priorityClassDescription{
+				name:         "my-priority-class" + getRandomString(),
+				namespace:    subD.namespace,
+				prirotyValue: 99,
+				template:     priorityClassTemplate,
+			}
+		)
+
+		g.By("Check the default piorityClassName.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "system-node-critical", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.priorityClassName}"}).check(oc)
+		assertParameterValueForBulkPods(oc, "system-node-critical", "pod", "-l", "name=spod", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
+		assertParameterValueForBulkPods(oc, strconv.Itoa(2000001000), "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+
+		g.By("Create priorityclass and patch spod!!!\n")
+		nodeCount := getNodeCount(oc)
+		patchRecover := fmt.Sprintf("{\"spec\":{\"priorityClassName\":\"system-node-critical\"}}")
+		defer func() {
+			g.By("Recover the default config of priorityclass.. !!!\n")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patchRecover)
+			cleanupObjects(oc, objectTableRef{"priorityclass", prioritym.name, subD.namespace})
+			newCheck("expect", asAdmin, withoutNamespace, contain, "system-node-critical", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.priorityClassName}"}).check(oc)
+			checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		}()
+		prioritym.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, prioritym.name, ok, []string{"priorityclass", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		patch := fmt.Sprintf("{\"spec\":{\"priorityClassName\":\"") + prioritym.name + fmt.Sprintf("\"}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+
+		g.By("Check priorityclass in use!!!\n")
+		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		newCheck("expect", asAdmin, withoutNamespace, contain, prioritym.name, ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.priorityClassName}"}).check(oc)
+		assertParameterValueForBulkPods(oc, prioritym.name, "pod", "-l", "name=spod", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
+		assertParameterValueForBulkPods(oc, strconv.Itoa(prioritym.prirotyValue), "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Medium-61580-Set a non-exist priority class name for spod daemon pod [Serial]", func() {
+		var priorityClassNotExist = "priority-not-exist-" + getRandomString()
+
+		g.By("Check the default piorityClassName.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "system-node-critical", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.priorityClassName}"}).check(oc)
+		assertParameterValueForBulkPods(oc, "system-node-critical", "pod", "-l", "name=spod", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
+		assertParameterValueForBulkPods(oc, strconv.Itoa(2000001000), "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
+
+		g.By("Patch a not exist priorityclass to spod!!!\n")
+		nodeCount := getNodeCount(oc)
+		defer func() {
+			g.By("Recover the default config of priorityclass.. !!!\n")
+			patchRecover := fmt.Sprintf("{\"spec\":{\"priorityClassName\":\"system-node-critical\"}}")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patchRecover)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "system-node-critical", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.priorityClassName}"}).check(oc)
+			checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		}()
+		patch := fmt.Sprintf("{\"spec\":{\"priorityClassName\":\"") + priorityClassNotExist + fmt.Sprintf("\"}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+
+		g.By("Check and priorityclass in use and event !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, priorityClassNotExist, ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.priorityClassName}"}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"pod", "-l", "name=spod", "-n", subD.namespace}).check(oc)
+		message := "no PriorityClass with name " + priorityClassNotExist + " was found"
+		assertEventMessageRegexpMatch(oc, message, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name=spod,reason=FailedCreate", "-o=jsonpath={.items[*].message}")
+	})
+
 	// author: minmli@redhat.com
 	g.It("Author:minmli-High-50397-check security profiles operator could be deleted successfully [Serial]", func() {
 		defer func() {

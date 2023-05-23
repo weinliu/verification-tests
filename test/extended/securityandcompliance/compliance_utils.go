@@ -1064,11 +1064,18 @@ func assertParameterValueForBulkPods(oc *exutil.CLI, expected string, parameters
 }
 
 func assertEventMessageRegexpMatch(oc *exutil.CLI, expected string, parameters ...string) {
-	eventsMessage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if matched, _ := regexp.MatchString(expected, eventsMessage); !matched {
-		e2e.Logf("The %s NOT match to regexp %s", eventsMessage, expected)
-		o.Expect(matched).To(o.BeTrue())
+	var eventsMessage string
+	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		eventsMessage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(expected, eventsMessage); matched {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		e2e.Logf("The event %s NOT to contain %s", eventsMessage, expected)
+		exutil.AssertWaitPollNoErr(err, "the expected message is missed")
 	}
 }
 
