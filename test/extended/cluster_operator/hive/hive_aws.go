@@ -1265,10 +1265,9 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
 	})
 
-	//author: mihuang@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//author: mihuang@redhat.com fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "49471"|./bin/extended-platform-tests run --timeout 70m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-49471-[aws]Change EC2RootVolume: make IOPS optional [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-49471-High-23677-[aws]Change EC2RootVolume: make IOPS optional [Serial]", func() {
 		testCaseID := "49471"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -1332,6 +1331,37 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.spec.platform.aws.rootVolume.iops}"}).check(oc)
 		e2e.Logf("Check infra machinepool .spec.platform.aws.rootVolume.iops = 1")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.spec.platform.aws.rootVolume.iops}"}).check(oc)
+
+		g.By("OCP-23677: Allow modification of machine pool labels and taints")
+		e2e.Logf("Patching machinepool ...")
+		patchYaml := `
+spec:
+  taints:
+  - effect: foo
+    key: bar
+  labels:
+    baz: qux`
+		err := oc.AsAdmin().Run("patch").Args("MachinePool", cdName+"-worker", "--type", "merge", "-p", patchYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Extracting kubeconfig from remote cluster ...")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		defer os.RemoveAll(tmpDir)
+		err = os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+
+		infraID, _, err := oc.AsAdmin().Run("get").Args("cd", cdName, "-o", "jsonpath='{.spec.clusterMetadata.infraID}'").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		infraID = strings.Trim(infraID, "'")
+		machineSetName := infraID + "-worker-" + AWSRegion + "a"
+
+		e2e.Logf("Checking taints & labels on MachineSet %v ...", machineSetName)
+		expectedTaints := "{\"effect\":\"foo\",\"key\":\"bar\"}"
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedTaints, ok, DefaultTimeout, []string{"MachineSet", machineSetName, "-n=openshift-machine-api", "--kubeconfig=" + kubeconfig, "-o=jsonpath='{.spec.template.spec.taints[0]}'"}).check(oc)
+		expectedLabels := "{\"baz\":\"qux\"}"
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedLabels, ok, DefaultTimeout, []string{"MachineSet", machineSetName, "-n=openshift-machine-api", "--kubeconfig=" + kubeconfig, "-o=jsonpath='{.spec.template.spec.metadata.labels}'"}).check(oc)
 	})
 
 	//author: mihuang@redhat.com jshu@redhat.com
