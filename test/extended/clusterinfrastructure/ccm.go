@@ -142,4 +142,28 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(owner).To(o.ContainSubstring("Cluster Cloud Controller Manager Operator owns cloud controllers"))
 
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-Medium-63829-Target workload annotation should be present in deployments of ccm	", func() {
+		SkipIfCloudControllerManagerNotDeployed(oc)
+		checkDeployments := []struct {
+			namespace  string
+			deployment string
+		}{
+			{
+				namespace:  "openshift-controller-manager",
+				deployment: "controller-manager",
+			},
+			{
+				namespace:  "openshift-controller-manager-operator",
+				deployment: "openshift-controller-manager-operator",
+			},
+		}
+
+		for _, checkDeployment := range checkDeployments {
+			g.By("Check target.workload annotation is present in yaml definition of deployment -  " + checkDeployment.deployment)
+			WorkloadAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", checkDeployment.deployment, "-n", checkDeployment.namespace, "-o=jsonpath={.spec.template.metadata.annotations}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(WorkloadAnnotation).To(o.ContainSubstring("\"target.workload.openshift.io/management\":\"{\\\"effect\\\": \\\"PreferredDuringScheduling\\\"}"))
+		}
+	})
 })
