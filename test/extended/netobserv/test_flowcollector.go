@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -278,8 +280,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	})
 
 	g.It("NonPreRelease-Author:aramesha-High-53597-Verify network flows are captured with Kafka [Serial]", func() {
-		namespace := oc.Namespace()
+		g.By("Skip if test is running on an arm64 cluster (unsupported processor architecture for AMQ Streams)")
+		architecture.SkipArchitectures(oc, architecture.ARM64)
 		g.By("Subscribe to AMQ operator")
+		namespace := oc.Namespace()
 		catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
 		amq := SubscriptionObjects{
 			OperatorName:  "amq-streams-cluster-operator",
@@ -500,8 +504,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	})
 
 	g.It("NonPreRelease-Author:aramesha-High-57397-Verify network-flows export with Kafka [Serial]", func() {
-		namespace := oc.Namespace()
+		g.By("Skip if test is running on an arm64 cluster (unsupported processor architecture for AMQ Streams)")
+		architecture.SkipArchitectures(oc, architecture.ARM64)
 		g.By("Subscribe to AMQ operator")
+		namespace := oc.Namespace()
 		catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
 		amq := SubscriptionObjects{
 			OperatorName:  "amq-streams-cluster-operator",
