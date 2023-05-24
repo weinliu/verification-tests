@@ -134,7 +134,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-NonPreRelease-Medium-46873-Configure operatorLogLevel under the default dns operator and check the logs flag [Disruptive]", func() {
+	// no dns operator namespace on HyperShift guest cluster so this case is not available
+	g.It("NonHyperShiftHOST-Author:shudili-NonPreRelease-Medium-46873-Configure operatorLogLevel under the default dns operator and check the logs flag [Disruptive]", func() {
 		var (
 			resourceName        = "dns.operator.openshift.io/default"
 			cfgOploglevelDebug  = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"Debug\"}]"
