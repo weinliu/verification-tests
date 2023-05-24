@@ -37,7 +37,7 @@ objects:
             capabilities:
               drop: ["ALL"]
               privileged: false
-          image: quay.io/rhn_support_memodi/nginx
+          image: quay.io/openshifttest/nginx-alpine:latest
           imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 8080
@@ -52,7 +52,7 @@ objects:
     type: NodePort
     ports:
     - protocol: TCP
-      port: 80
+      port: 8080
       targetPort: 8080
 - apiVersion: route.openshift.io/v1
   kind: Route
@@ -86,7 +86,7 @@ objects:
         - -c
         - "
           \  while : ; do\n
-          \        curl nginx-service.test-server.svc:80/data/${OBJECT_SIZE}  2>&1 >  /dev/null ; sleep 5 \n
+          \        curl nginx-service.${SERVER_NS}.svc:8080/data/${OBJECT_SIZE}  2>&1 >  /dev/null ; sleep 5 \n
           \  done"
       image: quay.io/openshifttest/hello-openshift:multiarch
       securityContext:
