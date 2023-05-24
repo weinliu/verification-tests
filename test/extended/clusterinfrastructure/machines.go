@@ -269,10 +269,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			amiID = "ami-0e09e139aca053387"
 		case "us-east-2":
 			amiID = "ami-0f1eb4d7403348cd2"
-		case "cn-north-1":
-			amiID = "ami-07a0c9b547ce24896"
-		case "us-gov-west-1":
-			amiID = "ami-040d6045c342dceaa"
 		default:
 			e2e.Logf("Not support region for the case for now.")
 			g.Skip("Not support region for the case for now.")
