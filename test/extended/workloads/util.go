@@ -1225,8 +1225,7 @@ func getOauthAudit(mustgatherDir string) []string {
 	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to read the destDir")
 	return files
 }
-func getLatestMultiPayload() string {
-	url := "https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest"
+func getLatestPayload(url string) string {
 	res, err := http.Get(url)
 	if err != nil {
 		e2e.Failf("unable to get http with error: %v", err)

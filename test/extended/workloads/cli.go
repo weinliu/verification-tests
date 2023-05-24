@@ -854,7 +854,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		pullSpec := getLatestMultiPayload()
+		pullSpec := getLatestPayload("https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest")
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "-a", extractTmpDirName+"/.dockerconfigjson", "--command=oc", "--to="+extractTmpDirName, pullSpec).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check oc executable to make sure match the platform")
@@ -932,7 +932,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		defer os.RemoveAll(extractTmpDirName)
 		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		pullSpec := getLatestMultiPayload()
+		pullSpec := getLatestPayload("https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest")
 		registry := registry{
 			dockerImage: "quay.io/openshifttest/registry:1.2.0",
 			namespace:   oc.Namespace(),
@@ -956,6 +956,53 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		_, standerr, err := oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("info", "-a", extractTmpDirName+"/.dockerconfigjson", serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev", "--insecure").Outputs()
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(standerr).To(o.ContainSubstring("use --filter-by-os to select"))
+	})
+	// author: yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:yinzhou-Medium-60499-oc with icsp mapping scope should match openshift icsp mapping scope", func() {
+		extractTmpDirName := "/tmp/case60499"
+		err := os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		pullSpec := getLatestPayload("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry:1.2.0",
+			namespace:   oc.Namespace(),
+		}
+		g.By("Trying to launch a registry app")
+		serInfo := registry.createregistry(oc)
+		defer registry.deleteregistry(oc)
+		g.By("Make sure mirror succeed")
+		err = wait.PollImmediate(1200*time.Second, 3600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "mirror", "-a", extractTmpDirName+"/.dockerconfigjson", "--from="+pullSpec, "--to="+serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev", "--insecure").Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "mirror failed")
+
+		imageD, err := exec.Command("bash", "-c", "oc image info "+pullSpec+" | grep Digest |awk '{print $2}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		imageDigest := strings.Replace(string(imageD), "\n", "", -1)
+
+		_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "--command=oc", "--to="+extractTmpDirName, "--insecure", "--from="+serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev@"+imageDigest).Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(outErr).To(o.ContainSubstring("access to the requested resource is not authorized"))
+
+		ocBaseDir := exutil.FixturePath("testdata", "workloads")
+		icspConfig := filepath.Join(ocBaseDir, "icsp60499.yaml")
+		sedCmd := fmt.Sprintf(`sed -i 's/localhost:5000/%s/g' %s`, serInfo.serviceName, icspConfig)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "--command=oc", "--icsp-file="+icspConfig, "--to="+extractTmpDirName, "--insecure", "--from="+serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev@"+imageDigest).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err := exec.Command("bash", "-c", "stat "+extractTmpDirName+"/oc").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("No events in project: %v", string(output))
+		o.Expect(strings.Contains(string(output), "File: /tmp/case60499/oc")).To(o.BeTrue())
 	})
 
 })
