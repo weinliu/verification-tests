@@ -18,7 +18,7 @@ objects:
       type: elasticsearch
       url: ${ES_URL}
       secret:
-        name: ${ES_SECRET}
+        name: ${SECRET_NAME}
       elasticsearch:
         version: ${{ES_VERSION}}
     pipelines:
@@ -38,7 +38,7 @@ parameters:
   value: "openshift-logging"
 - name: ES_URL
   value: "https://elasticsearch-server.es-aosqe-qa.svc:9200"
-- name: ES_SECRET
+- name: SECRET_NAME
   value: "pipelinesecret"
 - name: TYPE_KEY
   value: "kubernetes.namespace_name"

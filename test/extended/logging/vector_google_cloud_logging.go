@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -12,22 +13,26 @@ import (
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
-	var oc = exutil.NewCLI("vector-to-google-cloud-logging", exutil.KubeConfigPath())
+	var (
+		oc             = exutil.NewCLI("vector-to-google-cloud-logging", exutil.KubeConfigPath())
+		loggingBaseDir string
+	)
 
 	g.BeforeEach(func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "gcp" {
 			g.Skip("Skip for non-supported platform, the supported platform is GCP!!!")
 		}
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 
 		g.By("deploy CLO")
-		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 		CLO := SubscriptionObjects{
 			OperatorName:  "cluster-logging-operator",
 			Namespace:     "openshift-logging",
 			PackageName:   "cluster-logging",
 			Subscription:  subTemplate,
-			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 		}
 		CLO.SubscribeOperator(oc)
 		oc.SetupProject()
@@ -37,7 +42,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	g.It("CPaasrunOnly-Author:qitang-Critical-53731-Forward logs to Google Cloud Logging using different logName for each log type and using Service Account authentication.[Serial]", func() {
 		g.By("Create log producer")
 		appProj := oc.Namespace()
-		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -54,18 +59,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-google-cloud-logging-multi-logids.yaml")
-		clf := resource{"clusterlogforwarder", "instance", "openshift-logging"}
-		defer clf.clear(oc)
-		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+gcpSecret.name, "PROJECT_ID="+projectID, "LOG_ID="+logName, "NAMESPACE="+clf.namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    "openshift-logging",
+			secretName:   gcpSecret.name,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-multi-logids.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "PROJECT_ID="+projectID, "LOG_ID="+logName)
 
 		g.By("Deploy collector pods")
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-		cl := resource{"clusterlogging", "instance", "openshift-logging"}
-		defer cl.deleteClusterLogging(oc)
-		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     "openshift-logging",
+			collectorType: "vector",
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
 
 		for _, logType := range logTypes {
 			gcl := googleCloudLogging{
@@ -85,7 +97,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	//author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-High-53903-Forward logs to Google Cloud Logging using namespace selector.[Serial]", func() {
-		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		g.By("Create log producer")
 		appProj1 := oc.Namespace()
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
@@ -108,18 +120,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml")
-		clf := resource{"clusterlogforwarder", "instance", "openshift-logging"}
-		defer clf.clear(oc)
-		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+gcpSecret.name, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "NAMESPACE="+clf.namespace, "DATA_PROJECT="+appProj1)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    "openshift-logging",
+			secretName:   gcpSecret.name,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1)
 
 		g.By("Deploy collector pods")
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-		cl := resource{"clusterlogging", "instance", "openshift-logging"}
-		defer cl.deleteClusterLogging(oc)
-		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     "openshift-logging",
+			collectorType: "vector",
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
 
 		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
 			logs, err := gcl.getLogByType("application")
@@ -141,7 +160,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	//author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-High-53904-Forward logs to Google Cloud Logging using label selector.[Serial]", func() {
-		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		testLabel := "{\"run\":\"test-53904\",\"test\":\"test-53904\"}"
 		g.By("Create log producer")
 		appProj := oc.Namespace()
@@ -163,18 +182,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-google-cloud-logging-label-selector.yaml")
-		clf := resource{"clusterlogforwarder", "instance", "openshift-logging"}
-		defer clf.clear(oc)
-		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+gcpSecret.name, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "NAMESPACE="+clf.namespace, "LABELS="+string(testLabel))
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    "openshift-logging",
+			secretName:   gcpSecret.name,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-label-selector.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "LABELS="+string(testLabel))
 
 		g.By("Deploy collector pods")
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-		cl := resource{"clusterlogging", "instance", "openshift-logging"}
-		defer cl.deleteClusterLogging(oc)
-		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     "openshift-logging",
+			collectorType: "vector",
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
 
 		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
 			logs, err := gcl.getLogByType("application")
@@ -214,7 +240,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
 		waitForOperatorsRunning(oc)
 
-		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		g.By("Create log producer")
 		appProj1 := oc.Namespace()
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
@@ -232,18 +258,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml")
-		clf := resource{"clusterlogforwarder", "instance", "openshift-logging"}
-		defer clf.clear(oc)
-		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+gcpSecret.name, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "NAMESPACE="+clf.namespace, "DATA_PROJECT="+appProj1)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    "openshift-logging",
+			secretName:   gcpSecret.name,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1)
 
 		g.By("Deploy collector pods")
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-		cl := resource{"clusterlogging", "instance", "openshift-logging"}
-		defer cl.deleteClusterLogging(oc)
-		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     "openshift-logging",
+			collectorType: "vector",
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
 
 		g.By("The Google Cloud sink in Vector config must use the intermediate tlsSecurityProfile")
 		searchString := `[sinks.gcp_logging.tls]
@@ -269,8 +302,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.By("Set Modern tlsSecurityProfile for the External Google Cloud logging output.")
 		patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Modern"}}}]`
-		er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cl.namespace, "clusterlogforwarder/instance", "--type=json", "-p", patch).Execute()
-		o.Expect(er).NotTo(o.HaveOccurred())
+		clf.update(oc, "", patch, "--type=json")
 		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 		g.By("Delete logs from Google Cloud Logging")

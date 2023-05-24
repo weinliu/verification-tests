@@ -14,10 +14,13 @@ import (
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
-	var oc = exutil.NewCLI("logfwdsplunk-namespace", exutil.KubeConfigPath())
-
+	var (
+		oc             = exutil.NewCLI("vector-splunk", exutil.KubeConfigPath())
+		cloNS          = "openshift-logging"
+		loggingBaseDir string
+	)
 	g.Context("Log Forward to splunk", func() {
-		cloNS := "openshift-logging"
+
 		// author anli@redhat.com
 		g.BeforeEach(func() {
 			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
@@ -25,13 +28,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if nodes.Items[0].Status.NodeInfo.Architecture != "amd64" {
 				g.Skip("Warning: Only AMD64 is supported currently!")
 			}
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 		})
@@ -59,25 +63,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			createToSplunkSecret(oc, cloNS, s.name, sp.hecToken, "", "", "", "")
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_to-splunk_template.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err := clf.applyFromTemplate(oc, "-f", clfTemplate, "-p", "URL=http://"+sp.serviceName+"."+sp.namespace+".svc:8088")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+sp.serviceName+"."+sp.namespace+".svc:8088")
 
 			g.By("create clusterlogging/instance")
-			instanceFile := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.clear(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instanceFile, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector")
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("create log producer")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("check logs in splunk")
@@ -119,24 +128,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			createToSplunkSecret(oc, cloNS, s.name, sp.hecToken, keysPath+"/ca.crt", "", "", "")
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_to-splunk_skipverify_template.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-f", clfTemplate, "-p", "URL=https://"+sp.hecRoute)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_skipverify_template.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=https://"+sp.hecRoute)
 
 			g.By("create clusterlogging/instance")
-			instanceFile := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.clear(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instanceFile, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector")
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("create log producer")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 

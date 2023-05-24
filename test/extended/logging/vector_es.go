@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -22,25 +23,29 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("vector-es-namespace", exutil.KubeConfigPath())
+	var (
+		oc             = exutil.NewCLI("vector-es-namespace", exutil.KubeConfigPath())
+		cloNS          = "openshift-logging"
+		loggingBaseDir string
+	)
 
 	g.Context("Vector collector tests", func() {
-		cloNS := "openshift-logging"
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO and EO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     "openshift-operators-redhat",
 				PackageName:   "elasticsearch-operator",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
@@ -50,21 +55,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-Critical-49368-Low-46880-Vector Deploy Cluster Logging with Vector as collector using CLI and exclude Vector logs from collection[Serial]", func() {
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Make sure the Elasticsearch cluster is healthy")
-			cl.assertResourceStatus(oc, "jsonpath={.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
+			assertResourceStatus(oc, "clusterlogging", cl.name, cl.namespace, "{.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
 
 			g.By("Check priorityClass in ds/collector")
 			pri, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/collector", "-n", cl.namespace, "-ojsonpath={.spec.template.spec.priorityClassName}").Output()
@@ -90,24 +100,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-49390-Vector Collecting Kubernetes events using event router[Serial][Slow]", func() {
-			eventrouterTemplate := exutil.FixturePath("testdata", "logging", "eventrouter", "eventrouter.yaml")
+			eventrouterTemplate := filepath.Join(loggingBaseDir, "eventrouter", "eventrouter.yaml")
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Make sure the Elasticsearch cluster is healthy")
-			cl.assertResourceStatus(oc, "jsonpath={.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
+			assertResourceStatus(oc, "clusterlogging", cl.name, cl.namespace, "{.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
 
 			g.By("Deploy the Event Router")
 			evt := resource{"deployment", "eventrouter", cloNS}
@@ -138,19 +153,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-Critical-53311-Vector Configure Vector collector with CPU/Memory requests/limits[Serial]", func() {
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "COLLECTOR_LIMITS_MEMORY=750Mi", "-p", "COLLECTOR_LIMITS_CPU=150m", "-p", "COLLECTOR_REQUESTS_CPU=150m", "-p", "COLLECTOR_REQUESTS_MEMORY=750Mi", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				waitForReady:  true,
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc, "COLLECTOR_LIMITS_MEMORY=750Mi", "COLLECTOR_LIMITS_CPU=150m", "COLLECTOR_REQUESTS_CPU=150m", "COLLECTOR_REQUESTS_MEMORY=750Mi")
 
 			g.By("Check collector CPU/memory requests/limits")
-			col := resource{"daemonset", "collector", cloNS}
-			col.assertResourceStatus(oc, "jsonpath={.spec.template.spec.containers[].resources.limits.cpu}", "150m")
-			col.assertResourceStatus(oc, "jsonpath={.spec.template.spec.containers[].resources.requests.cpu}", "150m")
-			col.assertResourceStatus(oc, "jsonpath={.spec.template.spec.containers[].resources.limits.memory}", "750Mi")
-			col.assertResourceStatus(oc, "jsonpath={.spec.template.spec.containers[].resources.requests.memory}", "750Mi")
+			assertResourceStatus(oc, "daemonset", "collector", cloNS, "{.spec.template.spec.containers[].resources.limits.cpu}", "150m")
+			assertResourceStatus(oc, "daemonset", "collector", cloNS, "{.spec.template.spec.containers[].resources.requests.cpu}", "150m")
+			assertResourceStatus(oc, "daemonset", "collector", cloNS, "{.spec.template.spec.containers[].resources.limits.memory}", "750Mi")
+			assertResourceStatus(oc, "daemonset", "collector", cloNS, "{.spec.template.spec.containers[].resources.requests.memory}", "750Mi")
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-53312-Vector Deploy Vector collector with nodeSelector[Serial]", func() {
@@ -160,11 +179,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-collector-nodeselector.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NODE_LABEL={\"vector\": \"deploy\"}", "-p", "NAMESPACE="+cl.namespace)
-
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-collector-nodeselector.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc, "NODE_LABEL={\"vector\": \"deploy\"}")
 			g.By("Check Collector daemonset has no running pods")
 			esDeployNames := GetDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
 			for _, name := range esDeployNames {
@@ -224,8 +248,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset collector is not available with output:\n %s", output))
 
 			g.By("Patch Cluster Logging instance to use nodeSelector vector: deploy1")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging", "instance", "--type=merge", "-p", "{\"spec\":{\"collection\":{\"nodeSelector\":{\"vector\":\"deploy1\"}}}}", "-n", cloNS).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			cl.update(oc, "", "{\"spec\":{\"collection\":{\"nodeSelector\":{\"vector\":\"deploy1\"}}}}", "--type=merge")
 
 			g.By("Check Collector daemonset pods are running")
 			WaitForECKPodsToBeReady(oc, cloNS)
@@ -240,17 +263,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			g.By("Create clusterlogforwarder instance to forward OVN audit logs to default Elasticsearch instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
 
 			g.By("Deploy ClusterLogging instance.")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 			g.By("waiting for the EFK pods to be ready...")
 			WaitForECKPodsToBeReady(oc, cloNS)
 
@@ -263,7 +294,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 			ovnProj := oc.Namespace()
 			ovn := resource{"deployment", "ovn-app", ovnProj}
-			esTemplate := exutil.FixturePath("testdata", "logging", "generatelog", "42981.yaml")
+			esTemplate := filepath.Join(loggingBaseDir, "generatelog", "42981.yaml")
 			err = ovn.applyFromTemplate(oc, "-n", ovn.namespace, "-f", esTemplate, "-p", "NAMESPACE="+ovn.namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			WaitForDeploymentPodsToBeReady(oc, ovnProj, ovn.name)
@@ -321,10 +352,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 			g.By("Waiting for the Logging pods to be ready...")
 			WaitForECKPodsToBeReady(oc, cl.namespace)
 
@@ -334,8 +371,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(chkCollector).Should(o.BeEmpty())
 
 			g.By("Add toleration for collector for the taint vector=deploy:NoSchedule")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", cl.namespace, "-p", "{\"spec\":{\"collection\":{\"tolerations\":[{\"effect\":\"NoSchedule\",\"key\":\"vector\",\"operator\":\"Equal\",\"value\":\"deploy\"}]}}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			cl.update(oc, "", "{\"spec\":{\"collection\":{\"tolerations\":[{\"effect\":\"NoSchedule\",\"key\":\"vector\",\"operator\":\"Equal\",\"value\":\"deploy\"}]}}}", "--type=merge")
 			WaitForECKPodsToBeReady(oc, cl.namespace)
 
 			g.By(fmt.Sprintf("Make sure that the collector pod is scheduled on the node %s after applying toleration for taint vector=deploy:NoSchedule", taintNode))
@@ -347,15 +383,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-Medium-47063-Vector ServiceMonitor object for Vector is deployed along with Cluster Logging[Serial]", func() {
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cl.namespace)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Make sure the Elasticsearch cluster is healthy")
-			resource{"elasticsearch", "elasticsearch", cloNS}.assertResourceStatus(oc, "jsonpath={.status.cluster.status}", "green")
+			assertResourceStatus(oc, "elasticsearch", "elasticsearch", cloNS, "{.status.cluster.status}", "green")
 
 			g.By("Check if the ServiceMonitor object for Vector is created.")
 			resource{"servicemonitor", "collector", cl.namespace}.WaitForResourceToAppear(oc)
@@ -394,12 +435,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Critical-47060-All node logs have been sent to Elasticsearch[Serial]", func() {
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", "openshift-logging"}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cl.namespace)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				waitForReady:  true,
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check indices in ES pod")
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -472,7 +518,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// to test fix for LOG-3463, add labels to the app project
 			_, err := exutil.AddLabelsToSpecificResource(oc, "ns/"+app, "", "app=logging-apps", "app.kubernetes.io/instance=logging-apps-test", "app.test=test")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_non_json_log_template.json")
 			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -480,21 +526,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create clusterlogforwarder instance to forward all logs to default Elasticsearch")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
 
 			g.By("deploy EFK pods")
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "STORAGE_CLASS="+sc, "COLLECTOR=vector")
-			g.By("waiting for the EFK pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:             "instance",
+				namespace:        "openshift-logging",
+				collectorType:    "vector",
+				logStoreType:     "elasticsearch",
+				storageClassName: sc,
+				waitForReady:     true,
+				esNodeCount:      1,
+				templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in ES")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -527,10 +581,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-High-55396-Vector alert rule CollectorNodeDown [Serial][Slow]", func() {
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "COLLECTOR_LIMITS_MEMORY=750Gi", "-p", "COLLECTOR_LIMITS_CPU=150m", "-p", "COLLECTOR_REQUESTS_CPU=150m", "-p", "COLLECTOR_REQUESTS_MEMORY=750Gi", "-p", "NAMESPACE="+cl.namespace)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc, "COLLECTOR_LIMITS_MEMORY=750Gi", "COLLECTOR_LIMITS_CPU=150m", "COLLECTOR_REQUESTS_CPU=150m", "COLLECTOR_REQUESTS_MEMORY=750Gi")
 
 			g.By("Check Collector daemonset has no running pods")
 			esDeployNames := GetDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
@@ -541,8 +601,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			checkResource(oc, true, true, "0", []string{"ds", "collector", "-n", cloNS, "-ojsonpath={.status.numberReady}"})
 
 			g.By("Set the ClusterLoging instance managementState to Unmanaged to avoid prometheus overwrite")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", cloNS, "-p", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			cl.update(oc, "", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge")
 
 			g.By("Patch the collector Prometheus Rule for alert CollectorNodeDown to set alert firing time to 2m")
 			patch := `[{"op": "replace", "path": "/spec/groups/0/rules/0/for", "value":"2m"}]`
@@ -557,22 +616,22 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("Vector Elasticsearch tests", func() {
-		cloNS := "openshift-logging"
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO and EO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     "openshift-operators-redhat",
 				PackageName:   "elasticsearch-operator",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
@@ -595,25 +654,32 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-exteranl-es-and-default.yaml"),
+			}
+			defer clf.delete(oc)
 			//use "ES_URL=http://"+getRouteAddress(oc, ees.namespace, ees.serverName)+":80" once LOG-3381 is fixed
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -628,8 +694,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "audit-000")
 
 			g.By("Add pipeline labels to the ClusterLogForwarder instance")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogforwarders/instance", "-n", cloNS, "-p", "{\"spec\":{\"pipelines\":[{\"inputRefs\":[\"infrastructure\",\"application\",\"audit\"],\"labels\":{\"logging-labels\":\"test-labels\"},\"name\":\"forward-to-external-es\",\"outputRefs\":[\"es-created-by-user\",\"default\"]}]}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.update(oc, "", "{\"spec\":{\"pipelines\":[{\"inputRefs\":[\"infrastructure\",\"application\",\"audit\"],\"labels\":{\"logging-labels\":\"test-labels\"},\"name\":\"forward-to-external-es\",\"outputRefs\":[\"es-created-by-user\",\"default\"]}]}}", "--type=merge")
 
 			g.By("Wait for collector pods to pick new ClusterLogForwarder config changes")
 			WaitForECKPodsToBeReady(oc, cloNS)
@@ -681,24 +746,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48593.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "48593.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -713,8 +785,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "audit-000")
 
 			g.By("Add pipeline labels to the ClusterLogForwarder instance")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogforwarders/instance", "-n", cloNS, "-p", "{\"spec\":{\"pipelines\":[{\"inputRefs\":[\"application\"],\"labels\":{\"logging\":\"app-logs\"},\"name\":\"forward-app-logs\",\"outputRefs\":[\"es-created-by-user\",\"default\"]},{\"inputRefs\":[\"infrastructure\"],\"labels\":{\"logging\":\"infra-logs\"},\"name\":\"forward-infra-logs\",\"outputRefs\":[\"es-created-by-user\",\"default\"]},{\"inputRefs\":[\"audit\"],\"labels\":{\"logging\":\"audit-logs\"},\"name\":\"forward-audit-logs\",\"outputRefs\":[\"es-created-by-user\",\"default\"]}]}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.update(oc, "", "{\"spec\":{\"pipelines\":[{\"inputRefs\":[\"application\"],\"labels\":{\"logging\":\"app-logs\"},\"name\":\"forward-app-logs\",\"outputRefs\":[\"es-created-by-user\",\"default\"]},{\"inputRefs\":[\"infrastructure\"],\"labels\":{\"logging\":\"infra-logs\"},\"name\":\"forward-infra-logs\",\"outputRefs\":[\"es-created-by-user\",\"default\"]},{\"inputRefs\":[\"audit\"],\"labels\":{\"logging\":\"audit-logs\"},\"name\":\"forward-audit-logs\",\"outputRefs\":[\"es-created-by-user\",\"default\"]}]}}", "--type=merge")
 
 			g.By("Wait for collector pods to pick new ClusterLogForwarder config changes")
 			WaitForECKPodsToBeReady(oc, cloNS)
@@ -767,24 +838,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -811,24 +887,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:   ees.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -840,7 +922,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-High-48768-Vector ClusterLogForwarder Collect app logs from a predefined namespace[Serial][Slow]", func() {
 
 			g.By("Create project1 for app logs and deploy the log generator app")
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			oc.SetupProject()
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", loglabeltemplate).Execute()
@@ -853,19 +935,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_ns_selector_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "CUSTOM_APP="+appProj1)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_ns_selector_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "CUSTOM_APP="+appProj1)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check the app index in default ES")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -887,7 +976,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48786-Vector Forward logs from specified pods using label selector[Serial][Slow]", func() {
 
 			g.By("Create project1 for app logs and deploy the log generator app with run=centos-logtest-qa label")
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			oc.SetupProject()
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-qa\"}", "-f", loglabeltemplate).Execute()
@@ -900,19 +989,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48786.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "48786.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check the app index in default ES")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -934,7 +1030,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48787-Vector Forward logs from specified pods using label and namespace selectors[Serial][Slow]", func() {
 
 			g.By("Create project1 for app logs and deploy the log generator app with run=centos-logtest-qa and run=centos-logtest-stage labels")
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			oc.SetupProject()
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", loglabeltemplate).Execute()
@@ -949,19 +1045,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48787.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-p", "APP_NAMESPACE="+appProj1+"", "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "48787.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "APP_NAMESPACE="+appProj1)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check the app index in default ES")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -1005,24 +1108,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:   ees.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -1052,24 +1161,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:   ees.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -1100,24 +1215,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:   ees.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -1142,24 +1263,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Create ClusterLogForwarder instance to forward logs to both default and external log store")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-exteranl-es-and-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
 			g.By("Check logs in default ES")
@@ -1178,7 +1306,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Critical-51740-Vector Preserve k8s Common Labels[Serial]", func() {
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			labels := map[string]string{
 				"app.kubernetes.io/name":       "test",
 				"app.kubernetes.io/instance":   "functionaltest",
@@ -1190,7 +1318,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				"run":                          "test-51740",
 				"test":                         "test-logging-51740",
 			}
-
 			processedLabels := map[string]string{
 				"app_kubernetes_io_name":       "test",
 				"app_kubernetes_io_instance":   "functionaltest",
@@ -1218,21 +1345,28 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			loki.deployLoki(oc)
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml"),
+			}
+			defer clf.delete(oc)
 			inputs, _ := json.Marshal([]string{"application"})
 			outputs, _ := json.Marshal([]string{"loki-server", "default"})
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "-p", "INPUTREFS="+string(inputs), "-p", "OUTPUTREFS="+string(outputs))
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.create(oc, "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "INPUTREFS="+string(inputs), "OUTPUTREFS="+string(outputs))
 
 			// create clusterlogging instance
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
-			g.By("waiting for the ECK pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cl.namespace)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check data in ES")
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -1280,7 +1414,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-High-48724-Vector ClusterLogForwarder Message label with multiple log stores.[Serial][Slow]", func() {
 			g.By("Deploy a pod to generate some logs")
 			appNS := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", appNS).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1309,18 +1443,27 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafkaEndpoint := "http://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9092/clo-topic"
 
 			g.By("Create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48724.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "KAFKA_SECRET_NAME="+kafka.pipelineSecret, "KAFKA_URL="+kafkaEndpoint, "NAMESPACE="+clf.namespace, "LOKI_URL=http://"+loki.name+"."+loki.namespace+".svc:3100")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "48724.yaml"),
+				secretName:   kafka.pipelineSecret,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "KAFKA_URL="+kafkaEndpoint, "LOKI_URL=http://"+loki.name+"."+loki.namespace+".svc:3100")
 
 			g.By("Deploy logging pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			WaitForECKPodsToBeReady(oc, cl.namespace)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check data in ES")
 			esPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", cl.namespace, "-l", "es-node-master=true", "-ojsonpath={.items[0].metadata.name}").Output()
@@ -1409,24 +1552,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:   ees.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("The Elasticsearch sink in Vector config must use the Custom tlsSecurityProfile")
 			searchString := `[sinks.es_created_by_user.tls]
@@ -1445,8 +1594,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Set Old tlsSecurityProfile for the External ES output.")
 			patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Old"}}}]`
-			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cl.namespace, "clusterlogforwarder/instance", "--type=json", "-p", patch).Execute()
-			o.Expect(er).NotTo(o.HaveOccurred())
+			clf.update(oc, "", patch, "--type=json")
+
 			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("The Elasticsearch sink in Vector config must use the Old tlsSecurityProfile")
@@ -1481,22 +1630,22 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("JSON log tests", func() {
-		cloNS := "openshift-logging"
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO and EO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     "openshift-operators-redhat",
 				PackageName:   "elasticsearch-operator",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
@@ -1507,24 +1656,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-High-52128-Vector Send JSON logs from containers in the same pod to separate indices -- outputDefaults[Serial][Slow]", func() {
 			app := oc.Namespace()
 			containerName := "log-52128-" + getRandomString()
-			multiContainerJSONLog := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
+			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=true")
 
 			// create clusterlogging instance
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
-			g.By("waiting for the ECK pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check indices in ES pod")
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -1570,7 +1726,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-Medium-52129-Vector Send JSON logs from containers in the same pod to separate indices[Serial]", func() {
 			app := oc.Namespace()
 			containerName := "log-52129-" + getRandomString()
-			multiContainerJSONLog := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
+			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1589,18 +1745,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-logs.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true", "URL="+eesURL, "SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-logs.yaml"),
+				secretName:   ees.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=true", "URL="+eesURL, "ES_VERSION="+ees.version)
 
 			// create clusterlogging instance
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check indices in externale ES")
 			ees.waitForIndexAppear(oc, containerName+"-0")
@@ -1643,24 +1806,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-Medium-52130-Vector JSON logs from containers in the same pod are not sent to separate indices when enableStructuredContainerLogs is false[Serial]", func() {
 			app := oc.Namespace()
 			containerName := "log-52130-" + getRandomString()
-			multiContainerJSONLog := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
+			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=false")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=false")
 
 			// create clusterlogging instance
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
-			g.By("waiting for the ECK pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check indices in ES pod")
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -1684,7 +1854,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-52131-Vector Logs from different projects are forwarded to the same index if the pods have same annotation[Serial]", func() {
 			containerName := "log-52131-" + getRandomString()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			app1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app1, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1695,19 +1865,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=true")
 
 			// create clusterlogging instance
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
-			g.By("waiting for the ECK pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check indices in ES pod")
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -1727,7 +1904,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project1 for app logs and deploy the log generator app with test=centos-logtest-qa and run=centos-logtest-stage labels")
 			oc.SetupProject()
 			appProj1 := oc.Namespace()
-			jsonLogFileUnAnnoted := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template_unannoted.json")
+			jsonLogFileUnAnnoted := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template_unannoted.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"test\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", jsonLogFileUnAnnoted).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-stage\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-stage", "-p", "CONFIGMAP=logtest-config-stage", "-p", "CONTAINER=logging-centos-stage", "-f", jsonLogFileUnAnnoted).Execute()
@@ -1740,19 +1917,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true", "-p", "TYPE_KEY=kubernetes.labels.test", "-p", "TYPE_NAME=qa-fallback-index")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=true", "TYPE_KEY=kubernetes.labels.test", "TYPE_NAME=qa-fallback-index")
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check the indices in ES for structured logs")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -1797,24 +1981,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project-qa for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			jsonLogFileUnAnnoted := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template_unannoted.json")
+			jsonLogFileUnAnnoted := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template_unannoted.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-p", "LABELS={\"test\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", jsonLogFileUnAnnoted).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=false", "-p", "TYPE_KEY=kubernetes.container_name", "-p", "TYPE_NAME=qa-index-name")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=false", "TYPE_KEY=kubernetes.container_name", "TYPE_NAME=qa-index-name")
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check the indices in ES for structured logs")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -1837,24 +2028,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project-qa for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
-			jsonLogFileUnAnnoted := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template_unannoted.json")
+			jsonLogFileUnAnnoted := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template_unannoted.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-p", "LABELS={\"test\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", jsonLogFileUnAnnoted).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default-all-logs.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "PROJECT_NAME="+appProj+"", "-p", "STRUCTURED_CONTAINER=false", "-p", "TYPE_KEY=kubernetes.namespace_name", "-p", "TYPE_NAME=qa-index-name")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default-all-logs.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "PROJECT_NAME="+appProj, "STRUCTURED_CONTAINER=false", "TYPE_KEY=kubernetes.namespace_name", "TYPE_NAME=qa-index-name")
 
 			g.By("Create ClusterLogging instance with Vector as collector")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check the indices in ES")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})

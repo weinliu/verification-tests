@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,26 +21,31 @@ import (
 )
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
-	var oc = exutil.NewCLI("logfwd-namespace", exutil.KubeConfigPath())
 	defer g.GinkgoRecover()
+	var (
+		oc             = exutil.NewCLI("logfwd-namespace", exutil.KubeConfigPath())
+		cloNS          = "openshift-logging"
+		loggingBaseDir string
+	)
 
 	g.Context("Log Forward with namespace selector in the CLF", func() {
-		cloNS := "openshift-logging"
+
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO and EO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     "openshift-operators-redhat",
 				PackageName:   "elasticsearch-operator",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
@@ -48,7 +54,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:kbharti-High-41598-forward logs only from specific pods via a label selector inside the Log Forwarding API[Serial]", func() {
 
 			var (
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_non_json_log_template.json")
 			)
 			// Dev label - create a project and pod in the project to generate some logs
 			g.By("create application for logs with dev label")
@@ -65,20 +71,27 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//Create ClusterLogForwarder instance
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "41598.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "41598.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
 
 			//Create ClusterLogging instance
-			g.By("deploy EFK pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			g.By("waiting for the EFK pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			g.By("deploy ECK pods")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "fluentd",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+				waitForReady:  true,
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			//check app index in ES
 			g.By("check indices in ES pod")
@@ -105,7 +118,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:kbharti-High-41599-Forward Logs from specified pods combining namespaces and label selectors[Serial]", func() {
 
 			var (
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_non_json_log_template.json")
 			)
 
 			g.By("create application for logs with dev1 label")
@@ -129,20 +142,27 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//Create ClusterLogForwarder instance
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "41599.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "APP_NAMESPACE_QA="+appProjQa, "-p", "APP_NAMESPACE_DEV="+appProjDev)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "41599.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "APP_NAMESPACE_QA="+appProjQa, "APP_NAMESPACE_DEV="+appProjDev)
 
 			//Create ClusterLogging instance
-			g.By("deploy EFK pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			g.By("waiting for the EFK pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			g.By("deploy ECK pods")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "fluentd",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+				waitForReady:  true,
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			//check app index in ES
 			g.By("check indices in ES pod")
@@ -175,23 +195,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("test forward logs to external log stores", func() {
-		cloNS := "openshift-logging"
 
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO and EO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     "openshift-operators-redhat",
 				PackageName:   "elasticsearch-operator",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
@@ -206,21 +226,28 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			g.By("Create clusterlogforwarder instance to forward OVN audit logs to default Elasticsearch instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
 			source := []string{"audit"}
 			inputs, _ := json.Marshal(source)
-			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "INPUTS="+string(inputs))
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.create(oc, "INPUTS="+string(inputs))
 
-			g.By("Deploy EFK pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			g.By("waiting for the EFK pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			g.By("Deploy ECK pods")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "fluentd",
+				logStoreType:  "elasticsearch",
+				waitForReady:  true,
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check audit index in ES pod")
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -231,7 +258,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 			ovnProj := oc.Namespace()
 			ovn := resource{"deployment", "ovn-app", ovnProj}
-			esTemplate := exutil.FixturePath("testdata", "logging", "generatelog", "42981.yaml")
+			esTemplate := filepath.Join(loggingBaseDir, "generatelog", "42981.yaml")
 			err = ovn.applyFromTemplate(oc, "-n", ovn.namespace, "-f", esTemplate, "-p", "NAMESPACE="+ovn.namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			WaitForDeploymentPodsToBeReady(oc, ovnProj, ovn.name)
@@ -307,17 +334,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			g.By("deploy EFK pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "fluentd",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 			g.By("create CLF and enable detectMultilineErrors")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DETECT_MULTILINE_ERRORS=true")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "DETECT_MULTILINE_ERRORS=true")
 
 			g.By("waiting for the EFK pods to be ready...")
 			WaitForECKPodsToBeReady(oc, cl.namespace)
@@ -325,11 +360,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exposeESService(oc, cl.namespace)
 
 			g.By("create some pods to generate multiline error")
-			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
+			multilineLogFile := filepath.Join(loggingBaseDir, "generatelog", "multiline-error-log.yaml")
 			for k := range multilineLogTypes {
 				ns := "multiline-log-" + k + "-45256"
 				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
-				err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "deploy/multiline-log", "cm/multiline-log").Execute()
 				err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "LOG_TYPE="+k, "-p", "RATE=60.00").Execute()
@@ -406,24 +441,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			logsToEs, _ := json.Marshal([]string{"multiline-log-python-49040", "multiline-log-js-49040", "multiline-log-php-49040"})
 
 			g.By("deploy EFK pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "fluentd",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 			g.By("create CLF and enable detectMultilineErrors")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "49040.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100",
-				"-p", "NAMESPACES_LOKI="+string(logsToLoki), "-p", "NAMESPACES_ES="+string(logsToEs))
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "49040.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "NAMESPACES_LOKI="+string(logsToLoki), "NAMESPACES_ES="+string(logsToEs))
 			g.By("wait for the EFK pods to be ready...")
 			WaitForECKPodsToBeReady(oc, cl.namespace)
 			defer resource{"route", "elasticsearch", cl.namespace}.clear(oc)
 			exposeESService(oc, cl.namespace)
 
 			g.By("create some pods to generate multiline error")
-			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
+			multilineLogFile := filepath.Join(loggingBaseDir, "generatelog", "multiline-error-log.yaml")
 			for k := range multilineLogTypes {
 				ns := "multiline-log-" + k + "-49040"
 				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
@@ -527,7 +569,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-41134-Forward Log under different namespaces to different external Elasticsearch[Serial][Slow]", func() {
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -566,22 +608,28 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ees2.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "41134.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "41134.yaml"),
+			}
+			defer clf.delete(oc)
 			qa := []string{appProj1, appProj2}
 			qaProjects, _ := json.Marshal(qa)
 			dev := []string{appProj1, appProj3}
 			devProjects, _ := json.Marshal(dev)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "QA_NS="+string(qaProjects), "-p", "DEV_NS="+string(devProjects), "-p", "URL_QA=http://"+ees1.serverName+"."+esProj1+".svc:9200", "-p", "URL_DEV=http://"+ees2.serverName+"."+esProj2+".svc:9200")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.create(oc, "QA_NS="+string(qaProjects), "DEV_NS="+string(devProjects), "URL_QA=http://"+ees1.serverName+"."+esProj1+".svc:9200", "URL_DEV=http://"+ees2.serverName+"."+esProj2+".svc:9200")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in external ES")
 			ees1.waitForIndexAppear(oc, "app")
@@ -602,7 +650,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41240-BZ1905615 The application logs can be sent to the default ES when part of projects logs are sent to external aggregator[Serial][Slow]", func() {
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -620,18 +668,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "41240.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "PROJ_NS="+appProj1, "-p", "URL=udp://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:514")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "41240.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "PROJ_NS="+appProj1, "URL=udp://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:514")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForECKPodsToBeReady(oc, cloNS)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "fluentd",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in internal ES")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -649,7 +705,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-45419-ClusterLogForwarder Forward logs to remote syslog with tls[Serial][Slow]", func() {
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -661,18 +717,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-rsyslog-with-secret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514", "-p", "OUTPUT_SECRET="+rsyslog.secretName)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
+				secretName:   rsyslog.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in rsyslog server")
 			rsyslog.checkData(oc, true, "app-container.log")
@@ -684,7 +747,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-55014-[LOG-2843]Forward logs to remote-syslog - mtls with private key passphrase[Serial]", func() {
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -696,18 +759,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-rsyslog-with-secret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514", "-p", "OUTPUT_SECRET="+rsyslog.secretName)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
+				secretName:   rsyslog.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in rsyslog server")
 			rsyslog.checkData(oc, true, "app-container.log")
@@ -724,7 +794,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-43250-Forward logs to fluentd enable mTLS with shared_key and tls_client_private_key_passphrase[Serial]", func() {
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -745,18 +815,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentd.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-fluentdforward.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tls://"+fluentd.serverName+"."+fluentd.namespace+".svc:24224", "-p", "OUTPUT_SECRET="+fluentd.secretName)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-fluentdforward.yaml"),
+				secretName:   fluentd.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=tls://"+fluentd.serverName+"."+fluentd.namespace+".svc:24224")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in fluentd server")
 			fluentd.checkData(oc, true, "app.log")
@@ -767,16 +844,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("Log Forward to user-managed loki", func() {
-		cloNS := "openshift-logging"
 
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO and EO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 		})
@@ -785,7 +862,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:kbharti-High-43745-Forward to Loki using default value via http[Serial]", func() {
 			//create a project and app to generate some logs
 			g.By("create project for app logs")
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_non_json_log_template.json")
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate, "-p", "LABELS=centos-logtest").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -799,20 +876,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//Create ClusterLogForwarder
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 
 			//Create ClusterLogging instance
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			g.By("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Searching for Application Logs in Loki")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -854,7 +936,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			//create a project and app to generate some logs
 			g.By("create project for app logs")
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_non_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate, "-p", "LABELS=centos-logtest").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -868,20 +950,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//Create ClusterLogForwarder
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "-p", "TENANTKEY=kubernetes.pod_name")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "TENANTKEY=kubernetes.pod_name")
 
 			//Create ClusterLogging instance
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			g.By("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd", waitForReady: true,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -906,7 +992,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			//create a project and app to generate some logs
 			g.By("create project for app logs")
 			appProj := oc.Namespace()
-			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_non_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate, "-p", "LABELS=centos-logtest").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -920,20 +1006,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//Create ClusterLogForwarder
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "-p", "TENANTKEY=kubernetes.namespace_name")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "TENANTKEY=kubernetes.namespace_name")
 
 			//Create ClusterLogging instance
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			g.By("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -957,7 +1048,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:kbharti-Low-43770-Forward to Loki using loki.labelKeys which does not exist[Serial]", func() {
 			//This case covers OCP-45697 and OCP-43770
 			//create a project and app to generate some logs
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			g.By("create project1 for app logs")
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile, "-p", "LABELS={\"negative\": \"centos-logtest\"}").Execute()
@@ -979,20 +1070,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//Create ClusterLogForwarder
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-set-labelkey.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "-p", "LABELKEY=kubernetes.labels.positive")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-labelkey.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "LABELKEY=kubernetes.labels.positive")
 
 			//Create ClusterLogging instance
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			g.By("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			//Positive Scenario - Matching labelKeys
 			g.By("Searching for Application Logs in Loki using LabelKey - Postive match")
@@ -1026,7 +1122,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("Log Forward to Cloudwatch", func() {
-		cloNS := "openshift-logging"
 		var cw cloudwatchSpec
 		g.BeforeEach(func() {
 			platform := exutil.CheckPlatform(oc)
@@ -1037,13 +1132,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if apierrors.IsNotFound(err) {
 				g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
 			}
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 			oc.SetupProject()
@@ -1063,7 +1159,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("create log producer")
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1071,18 +1167,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+cw.secretName, "-p", "REGION="+cw.awsRegion, "-p", "PREFIX="+cw.groupPrefix, "-p", "GROUPTYPE="+cw.groupType)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				secretName:   cw.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in Cloudwatch")
 			o.Expect(cw.logsFound()).To(o.BeTrue())
@@ -1096,7 +1199,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("create log producer")
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			uuid, err := oc.WithoutNamespace().Run("get").Args("project", appProj, "-ojsonpath={.metadata.uid}").Output()
@@ -1107,18 +1210,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+cw.secretName, "-p", "REGION="+cw.awsRegion, "-p", "PREFIX="+cw.groupPrefix, "-p", "GROUPTYPE="+cw.groupType)
-			defer clf.clear(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				secretName:   cw.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in Cloudwatch")
 			o.Expect(cw.logsFound()).To(o.BeTrue())
@@ -1134,18 +1244,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-cloudwatch.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRETNAME="+cw.secretName, "-p", "REGION="+cw.awsRegion, "-p", "PREFIX="+cw.groupPrefix, "-p", "GROUPTYPE="+cw.groupType, "-p", "DETECT_MULTILINE_ERRORS=true")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				secretName:   cw.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType, "DETECT_MULTILINE_ERRORS=true")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			multilineLogTypes := map[string][]string{
 				"java": {javaExc, complexJavaExc, nestedJavaExc},
@@ -1153,8 +1270,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("create a pod to generate multiline error")
 			ns := oc.Namespace()
-			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
-			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "LOG_TYPE=java", "-p", "RATE=120").Execute()
+			multilineLogFile := filepath.Join(loggingBaseDir, "generatelog", "multiline-error-log.yaml")
+			err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "LOG_TYPE=java", "-p", "RATE=120").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			WaitForDeploymentPodsToBeReady(oc, ns, "multiline-log")
 			cw.selAppNamespaces = []string{ns}
@@ -1178,16 +1295,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("Log Forward to Kafka", func() {
-		cloNS := "openshift-logging"
 
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 			oc.SetupProject()
@@ -1202,9 +1319,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			var (
-				subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-				SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-				jsonLogFile       = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				subTemplate       = filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
+				SingleNamespaceOG = filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml")
+				jsonLogFile       = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			g.By("create log producer")
 			appProj := oc.Namespace()
@@ -1233,12 +1350,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
 				checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
 				kafka := resource{"kafka", kafkaClusterName, amq.Namespace}
-				kafkaTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
+				kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
 				//defer kafka.clear(oc)
-				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.2.3", "MESSAGE_VERSION=3.2.3")
+				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.3.1", "MESSAGE_VERSION=3.3.1")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				// create topics
-				topicTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")
+				topicTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")
 				topic := resource{"Kafkatopic", topicName, amq.Namespace}
 				//defer topic.clear(oc)
 				err = topic.applyFromTemplate(oc, "-n", topic.namespace, "-f", topicTemplate, "-p", "NAME="+topic.name, "CLUSTER_NAME="+kafka.name, "NAMESPACE="+topic.namespace)
@@ -1247,23 +1364,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReadyWithLabel(oc, kafka.namespace, "app.kubernetes.io/instance="+kafka.name)
 			}
 			g.By("forward logs to Kafkas")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka_multi_brokers.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka_multi_brokers.yaml"),
+			}
+			defer clf.delete(oc)
 			brokers, _ := json.Marshal([]string{"tls://" + kafkaClusterName + "-kafka-bootstrap." + amqNs1 + ".svc:9092", "tls://" + kafkaClusterName + "-kafka-bootstrap." + amqNs2 + ".svc:9092"})
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "TOPIC="+topicName, "BROKERS="+string(brokers))
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.create(oc, "TOPIC="+topicName, "BROKERS="+string(brokers))
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			//create consumer pod
 			for _, ns := range []string{amqNs1, amqNs2} {
-				consumerTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka", "amqstreams", "topic-consumer.yaml")
+				consumerTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "topic-consumer.yaml")
 				consumer := resource{"job", topicName + "-consumer", ns}
 				//defer consumer.clear(oc)
 				err = consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "NAMESPACE="+consumer.namespace, "KAFKA_TOPIC="+topicName, "CLUSTER_NAME="+kafkaClusterName)
@@ -1295,7 +1418,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:gkarager-Medium-45368-Forward logs to kafka using sasl-plaintext[Serial][Slow]", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1317,18 +1440,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9092/clo-topic"
 
 			g.By("Create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRET_NAME="+kafka.pipelineSecret, "URL="+kafkaEndpoint, "NAMESPACE="+clf.namespace)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
+				secretName:   kafka.pipelineSecret,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL="+kafkaEndpoint)
 
 			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
@@ -1352,7 +1482,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:gkarager-Medium-41771-Forward logs to kafka using sasl-ssl[Serial][Slow]", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1374,18 +1504,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9093/clo-topic"
 
 			g.By("Create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRET_NAME="+kafka.pipelineSecret, "URL="+kafkaEndpoint, "NAMESPACE="+clf.namespace)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
+				secretName:   kafka.pipelineSecret,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL="+kafkaEndpoint)
 
 			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
@@ -1409,7 +1546,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:gkarager-Medium-32333-Forward logs to kafka topic via Mutual Chained certificates[Serial][Slow]", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			kafka := kafka{
@@ -1430,18 +1567,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9093/clo-topic"
 
 			g.By("Create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRET_NAME="+kafka.pipelineSecret, "URL="+kafkaEndpoint, "NAMESPACE="+clf.namespace)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
+				secretName:   kafka.pipelineSecret,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL="+kafkaEndpoint)
 
 			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
@@ -1463,16 +1607,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("Log Forward to Logstash", func() {
-		cloNS := "openshift-logging"
 
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     cloNS,
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 			oc.SetupProject()
@@ -1481,7 +1625,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-Medium-48844-Fluentd forward logs to logstash[Serial]", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1495,18 +1639,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer logstash.remove(oc)
 
 			g.By("Create clusterlogforwarder")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-fluentdforward-no-secret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tcp://"+logstash.name+"."+logstash.namespace+".svc:24114", "-p", "NAMESPACE="+clf.namespace)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-fluentdforward-no-secret.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=tcp://"+logstash.name+"."+logstash.namespace+".svc:24114")
 
 			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			logstash.checkData(oc, true, "infra.log")
 			logstash.checkData(oc, true, "audit.log")
@@ -1515,22 +1665,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("fluentd forward logs to external store over http", func() {
-		cloNS := "openshift-logging"
-
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 		g.BeforeEach(func() {
 			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
-				Namespace:     "openshift-logging",
+				Namespace:     cloNS,
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 		})
 		g.It("CPaasrunOnly-Author:anli-Medium-60934-fluentd Forward logs to fluentd over http - https[Serial]", func() {
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1550,18 +1699,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-forward-all-over-https-template.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224", "-p", "OUTPUT_SECRET="+fluentdS.secretName)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-https-template.yaml"),
+				secretName:   fluentdS.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in fluentd server")
 			fluentdS.checkData(oc, true, "app.log")
@@ -1571,7 +1727,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:anli-Medium-60925-fluentd Forward logs to fluentd over http - http[Serial]", func() {
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1583,7 +1739,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:    fluentdProj,
 				serverAuth:   false,
 				clientAuth:   false,
-				secretName:   "to-fluentd-60925",
 				loggingNS:    cloNS,
 				inPluginType: "http",
 			}
@@ -1591,18 +1746,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-forward-all-over-http-template.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-http-template.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in fluentd server")
 			fluentdS.checkData(oc, true, "app.log")
@@ -1613,7 +1774,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:anli-Medium-60935-fluentd Forward logs to fluentd over http - TLSSkipVerify[Serial]", func() {
 			g.Skip("Skip for bug LOG-3827!!!")
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1632,11 +1793,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer fluentdS.remove(oc)
 			fluentdS.deploy(oc)
 
-			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-forward-all-over-https-skipverify-template.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-
 			//Create a fake secret from root ca which is used for TLSSkipVerify
 			fakeSecret := resource{"secret", "fake-bundle-60935", cloNS}
 			defer fakeSecret.clear(oc)
@@ -1649,15 +1805,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", fakeSecret.name, "-n", fakeSecret.namespace, "--from-file=ca-bundle.crt="+dirname+"/ca.crt").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224", "-p", "OUTPUT_SECRET="+fakeSecret.name)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("create clusterlogforwarder/instance")
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-https-skipverify-template.yaml"),
+				secretName:   fakeSecret.name,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in fluentd server")
 			fluentdS.checkData(oc, true, "app.log")
@@ -1668,7 +1835,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:anli-Medium-60937-fluentd forward logs to fluentdserver over http - mtls[Serial]", func() {
 			g.Skip("Skip for bug LOG-3827!!!")
 			appProj := oc.Namespace()
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1690,18 +1857,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-forward-all-over-https-template.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224", "-p", "OUTPUT_SECRET="+fluentdS.secretName)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-https-template.yaml"),
+				secretName:   fluentdS.secretName,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224")
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "fluentd",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("check logs in fluentd server")
 			fluentdS.checkData(oc, true, "app.log")
@@ -1709,4 +1883,5 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "infra.log")
 		})
 	})
+
 })

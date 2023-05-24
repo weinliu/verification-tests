@@ -19,7 +19,7 @@ objects:
         method: POST
       name: httpout-app
       secret:
-        name: ${OUTPUT_SECRET}
+        name: ${SECRET_NAME}
       type: http
       url: ${URL}/logs/app
     pipelines:
@@ -35,5 +35,5 @@ parameters:
   value: openshift-logging
 - name: URL
   value: https://fluentdserver.openshift-logging.svc:24224
-- name: OUTPUT_SECRET
+- name: SECRET_NAME
   value: to-fluentdserver

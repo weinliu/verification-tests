@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,16 +19,21 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("vector-loki-namespace", exutil.KubeConfigPath())
+	var (
+		oc             = exutil.NewCLI("vector-loki-namespace", exutil.KubeConfigPath())
+		cloNS          = "openshift-logging"
+		loggingBaseDir string
+	)
 
 	g.Context("test forward logs to external loki log store", func() {
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			g.By("deploy CLO")
 			CLO.SubscribeOperator(oc)
@@ -36,8 +42,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-High-47760-Vector Forward logs to Loki using default value via HTTP[Serial]", func() {
 			var (
-				cloNS            = "openshift-logging"
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
@@ -52,19 +57,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			loki.deployLoki(oc)
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 
 			g.By("Create ClusterLogging instance")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
@@ -104,8 +114,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48922-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.namespace_name via HTTP[Serial]", func() {
 			var (
-				cloNS            = "openshift-logging"
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
@@ -121,19 +130,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			tenantKey := "kubernetes_namespace_name"
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "TENANTKEY=kubernetes.namespace_name", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "TENANTKEY=kubernetes.namespace_name", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 
 			g.By("Create ClusterLogging instance")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -157,8 +171,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48060-Medium-47801-Vector Forward logs to Loki using loki.labelKeys [Serial]", func() {
 			var (
-				cloNS            = "openshift-logging"
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			g.By("Create project1 for app logs")
 			appProj1 := oc.Namespace()
@@ -181,19 +194,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			podLabel := "centos-logtest"
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-set-labelkey.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LABELKEY=kubernetes.labels.positive", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-labelkey.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "LABELKEY=kubernetes.labels.positive", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 
 			g.By("Create ClusterLogging instance")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Searching for Application Logs in Loki using LabelKey - Postive match")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -230,8 +248,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-High-48925-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.container_name via HTTP[Serial]", func() {
 			var (
-				cloNS            = "openshift-logging"
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
@@ -247,19 +264,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			tenantKey := "kubernetes_container_name"
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "TENANTKEY=kubernetes.container_name", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "TENANTKEY=kubernetes.container_name", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 
 			g.By("Create ClusterLogging instance")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -289,8 +311,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc    = exutil.NewCLI("vector-lokistack", exutil.KubeConfigPath())
-		s, sc string
+		oc                    = exutil.NewCLI("vector-lokistack", exutil.KubeConfigPath())
+		cloNS                 = "openshift-logging"
+		loggingBaseDir, s, sc string
 	)
 
 	g.Context("test forward logs to lokistack with vector", func() {
@@ -306,20 +329,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
-			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
+			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
 				Subscription:  subTemplate,
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			LO := SubscriptionObjects{
 				OperatorName:  "loki-operator-controller-manager",
 				Namespace:     "openshift-operators-redhat",
 				PackageName:   "loki-operator",
 				Subscription:  subTemplate,
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			g.By("deploy CLO and LO")
 			CLO.SubscribeOperator(oc)
@@ -330,8 +354,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Medium-48646-High-49486-Deploy lokistack under different namespace and Vector Forward logs to LokiStack using CLF with gateway[Serial]", func() {
 			var (
-				cloNS       = "openshift-logging"
-				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -348,7 +371,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				storageSecret: "storage-49486",
 				storageClass:  sc,
 				bucketName:    "logging-loki-49486-" + getInfrastructureName(oc),
-				template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+				template:      filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml"),
 			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
@@ -360,25 +383,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("create clusterlogforwarder/instance")
 			lokiGatewaySVC := ls.name + "-gateway-http." + ls.namespace + ".svc:8080"
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "lokistack_gateway_https_no_secret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "GATEWAY_SVC="+lokiGatewaySVC)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "lokistack_gateway_https_no_secret.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "GATEWAY_SVC="+lokiGatewaySVC)
 
 			// deploy collector pods
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
 			defer removeLokiStackPermissionFromSA(oc, "lokistack-dev-tenant-logs")
 			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cl.namespace)
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
-			collector := resource{"daemonset", "collector", cl.namespace}
-			collector.WaitForResourceToAppear(oc)
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, collector.name)
 
 			//check logs in loki stack
 			g.By("check logs in loki")
@@ -420,20 +447,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
-			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
+			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
 				Subscription:  subTemplate,
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			LO := SubscriptionObjects{
 				OperatorName:  "loki-operator-controller-manager",
 				Namespace:     "openshift-operators-redhat",
 				PackageName:   "loki-operator",
 				Subscription:  subTemplate,
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			g.By("deploy CLO and LO")
 			CLO.SubscribeOperator(oc)
@@ -443,15 +471,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53128-CLO Loki Integration-Verify that by default only app and infra logs are sent to Loki (vector)[Serial]", func() {
 			var (
-				cloNS       = "openshift-logging"
-				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-53128",
 				namespace:     cloNS,
@@ -472,12 +499,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			//check default logs (app and infra) in loki stack
 			g.By("checking App and infra logs in loki")
@@ -521,15 +553,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53146-Medium-54663-CLO Loki Integration-CLF works when send log to default-- vector[Serial]", func() {
 			var (
-				cloNS       = "openshift-logging"
-				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-53146",
 				namespace:     cloNS,
@@ -550,19 +581,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create ClusterLogForwarder with Loki as default logstore for all tenants")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("checking app, infra and audit logs in loki")
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
@@ -604,9 +642,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-High-57063-Forward app logs to Loki with namespace selectors (vector)[Serial]", func() {
-			cloNS := "openshift-logging"
 			g.By("Creating 2 applications..")
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
@@ -618,7 +655,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-57063",
 				namespace:     cloNS,
@@ -639,24 +676,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create ClusterLogForwarder with Loki as default logstore for all tenants")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_ns_selector_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "CUSTOM_APP="+appProj2)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_ns_selector_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "CUSTOM_APP="+appProj2)
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
 			defer removeLokiStackPermissionFromSA(oc, "my-loki-tenant-logs")
 			grantLokiPermissionsToSA(oc, "my-loki-tenant-logs", "logcollector", cl.namespace)
-			collector := resource{"daemonset", "collector", cl.namespace}
-			collector.WaitForResourceToAppear(oc)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("checking infra and audit logs in loki")
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
@@ -698,7 +740,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				"js":     {clientJsExc, nodeJsExc, v8JsExc},
 				"csharp": {csharpAsyncExc, csharpNestedExc, csharpExc},
 				"python": {pythonExc},
-				"php":    {phpOnGaeExc, phpExc},
+				// skip php due to https://issues.redhat.com/browse/LOG-3878
+				// "php":    {phpOnGaeExc, phpExc},
 				"dart": {
 					dartAbstractClassErr,
 					dartArgumentErr,
@@ -722,10 +765,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					dartNoMethodGlobalErr,
 				},
 			}
-			cloNS := "openshift-logging"
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-61968",
 				namespace:     cloNS,
@@ -746,21 +788,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 			g.By("create CLF and enable detectMultilineErrors")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DETECT_MULTILINE_ERRORS=true")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "DETECT_MULTILINE_ERRORS=true")
 			e2e.Logf("waiting for the collector pods to be ready...")
 			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("create some pods to generate multiline error")
-			multilineLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "multiline-error-log.yaml")
+			multilineLogFile := filepath.Join(loggingBaseDir, "generatelog", "multiline-error-log.yaml")
 			for k := range multilineLogTypes {
 				ns := "multiline-log-" + k + "-61968"
 				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
@@ -824,16 +874,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("vector-loki-ext-namespace", exutil.KubeConfigPath())
+	var (
+		oc             = exutil.NewCLI("vector-loki-ext-namespace", exutil.KubeConfigPath())
+		cloNS          = "openshift-logging"
+		loggingBaseDir string
+	)
 
 	g.Context("Test forward logs to external Grafana Loki log store", func() {
 		g.BeforeEach(func() {
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
-				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			g.By("deploy CLO")
 			CLO.SubscribeOperator(oc)
@@ -843,8 +898,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48489-Vector Forward logs to Grafana Loki using HTTPS [Serial]", func() {
 
 			var (
-				cloNS            = "openshift-logging"
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
@@ -865,19 +919,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sct.WaitForResourceToAppear(oc)
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-with-secret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
+				secretName:   sct.name,
+			}
+			defer clf.delete(oc)
 			inputRefs := "[\"application\"]"
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LOKI_URL="+lokiURL+"", "-p", "INPUTREFS="+inputRefs+"")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
 
 			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", "openshift-logging"}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By(fmt.Sprintf("Search for the %s project logs in Loki", appProj))
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
@@ -901,8 +962,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48490-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.labels.test [Serial]", func() {
 
 			var (
-				cloNS            = "openshift-logging"
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
@@ -923,18 +983,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sct.WaitForResourceToAppear(oc)
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance with tenantKey kubernetes_labels.test")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LOKI_URL="+lokiURL+"", "-p", "TENANTKEY=kubernetes.labels.test")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
+				secretName:   sct.name,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "LOKI_URL="+lokiURL, "TENANTKEY=kubernetes.labels.test")
 
 			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", "openshift-logging"}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By(fmt.Sprintf("Search for the %s project logs in Loki", appProj))
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
@@ -958,8 +1025,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48923-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.namespace_name[Serial]", func() {
 
 			var (
-				cloNS            = "openshift-logging"
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
@@ -980,18 +1046,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sct.WaitForResourceToAppear(oc)
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance with tenantKey kubernetes_labels.test")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LOKI_URL="+lokiURL+"", "-p", "TENANTKEY=kubernetes.namespace_name")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
+				secretName:   sct.name,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "LOKI_URL="+lokiURL, "TENANTKEY=kubernetes.namespace_name")
 
 			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", "openshift-logging"}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     "openshift-logging",
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By(fmt.Sprintf("Search for the %s project logs in Loki", appProj))
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
@@ -1020,8 +1093,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForOperatorsRunning(oc)
 
 			var (
-				cloNS            = "openshift-logging"
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
@@ -1042,19 +1114,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sct.WaitForResourceToAppear(oc)
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "62975.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "62975.yaml"),
+				secretName:   sct.name,
+			}
+			defer clf.delete(oc)
 			inputRefs := "[\"application\"]"
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LOKI_URL="+lokiURL+"", "-p", "INPUTREFS="+inputRefs+"")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
 
-			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", "openshift-logging"}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			g.By("deploy collector pods")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_AES_128_CCM_SHA256")
 			searchString := `[sinks.loki_server.tls]
@@ -1089,8 +1168,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Set the Custom tlsSecurityProfile for Loki output")
 			patch := `{"spec":{"outputs":[{"name":"loki-server","secret":{"name":"loki-client"},"tls":{"securityProfile":{"custom":{"ciphers":["TLS_CHACHA20_POLY1305_SHA256"],"minTLSVersion":"VersionTLS13"},"type":"Custom"}},"type":"loki","url":"https://logs-prod3.grafana.net"}],"tlsSecurityProfile":null}}`
-			er := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cl.namespace, "clusterlogforwarder/instance", "--type=merge", "-p", patch).Execute()
-			o.Expect(er).NotTo(o.HaveOccurred())
+			clf.update(oc, "", patch, "--type=merge")
 			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_CHACHA20_POLY1305_SHA256")
@@ -1129,8 +1207,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-High-61476-Collector-External Loki output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
 
 			var (
-				cloNS            = "openshift-logging"
-				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 
 			g.By("Configure the global tlsSecurityProfile to use Intermediate profile")
@@ -1169,19 +1246,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sct.WaitForResourceToAppear(oc)
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-with-secret.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
+				secretName:   sct.name,
+			}
+			defer clf.delete(oc)
 			inputRefs := "[\"application\"]"
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LOKI_URL="+lokiURL+"", "-p", "INPUTREFS="+inputRefs+"")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
 
-			g.By("Deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", "openshift-logging"}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			g.By("deploy collector pods")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("The Loki sink in Vector config must use the intermediate tlsSecurityProfile")
 			searchString := `[sinks.loki_server.tls]
@@ -1211,8 +1295,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Set the Modern tlsSecurityProfile for Loki output")
 			patch = `{"spec":{"outputs":[{"name":"loki-server","secret":{"name":"loki-client"},"tls":{"securityProfile":{"type":"Modern"}},"type":"loki","url":"https://logs-prod3.grafana.net"}],"tlsSecurityProfile":null}}`
-			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cl.namespace, "clusterlogforwarder/instance", "--type=merge", "-p", patch).Execute()
-			o.Expect(er).NotTo(o.HaveOccurred())
+			clf.update(oc, "", patch, "--type=merge")
 			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("Create project for app logs and deploy the log generator app")
@@ -1262,8 +1345,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc    = exutil.NewCLI("lokistack-tlssecurity", exutil.KubeConfigPath())
-		s, sc string
+		oc                    = exutil.NewCLI("lokistack-tlssecurity", exutil.KubeConfigPath())
+		cloNS                 = "openshift-logging"
+		loggingBaseDir, s, sc string
 	)
 
 	g.Context("ClusterLogging LokiStack tlsSecurityProfile tests", func() {
@@ -1280,20 +1364,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
-			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
+			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
 				PackageName:   "cluster-logging",
 				Subscription:  subTemplate,
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			LO := SubscriptionObjects{
 				OperatorName:  "loki-operator-controller-manager",
 				Namespace:     "openshift-operators-redhat",
 				PackageName:   "loki-operator",
 				Subscription:  subTemplate,
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			g.By("deploy CLO and LO")
 			CLO.SubscribeOperator(oc)
@@ -1304,8 +1389,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54523-LokiStack Cluster Logging comply with the intermediate TLS security profile when global API Server has no tlsSecurityProfile defined[Slow][Disruptive]", func() {
 
 			var (
-				cloNS       = "openshift-logging"
-				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1330,7 +1414,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForOperatorsRunning(oc)
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-54523",
 				namespace:     cloNS,
@@ -1351,19 +1435,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("checking app, audit and infra logs in loki")
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
@@ -1427,8 +1518,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54525-LokiStack Cluster Logging comply with the old tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
 
 			var (
-				cloNS       = "openshift-logging"
-				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1453,7 +1543,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForOperatorsRunning(oc)
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-54525",
 				namespace:     cloNS,
@@ -1474,19 +1564,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("checking app, audit and infra logs in loki")
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
@@ -1550,8 +1647,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54526-LokiStack Cluster Logging comply with the custom tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
 
 			var (
-				cloNS       = "openshift-logging"
-				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1576,7 +1672,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForOperatorsRunning(oc)
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-54526",
 				namespace:     cloNS,
@@ -1597,19 +1693,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("checking app, audit and infra logs in loki")
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
@@ -1673,8 +1776,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54527-LokiStack Cluster Logging comply with the global tlsSecurityProfile - old to intermediate[Slow][Disruptive]", func() {
 
 			var (
-				cloNS       = "openshift-logging"
-				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1699,7 +1801,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForOperatorsRunning(oc)
 
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
-			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-54527",
 				namespace:     cloNS,
@@ -1720,19 +1822,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    cloNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("checking app, audit and infra logs in loki")
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
@@ -1867,32 +1976,37 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("loki-log-alerts-vector", exutil.KubeConfigPath())
+	var (
+		oc                                       = exutil.NewCLI("loki-log-alerts-vector", exutil.KubeConfigPath())
+		loggingBaseDir, lokiOperatorNS, cloNS, s string
+	)
 
 	g.Context("Loki Log Alerts testing", func() {
 		g.BeforeEach(func() {
-			s := getStorageType(oc)
+			s = getStorageType(oc)
 			if len(s) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
 			}
 			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
+				g.Skip("the cluster doesn't have enough resources for this test!")
 			}
-
-			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			loggingBaseDir = exutil.FixturePath("testdata", "logging")
+			lokiOperatorNS = "openshift-operators-redhat"
+			cloNS = "openshift-logging"
+			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
-				Namespace:     "openshift-logging",
+				Namespace:     cloNS,
 				PackageName:   "cluster-logging",
 				Subscription:  subTemplate,
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			}
 			LO := SubscriptionObjects{
 				OperatorName:  "loki-operator-controller-manager",
-				Namespace:     "openshift-operators-redhat",
+				Namespace:     lokiOperatorNS,
 				PackageName:   "loki-operator",
 				Subscription:  subTemplate,
-				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			g.By("deploy CLO and LO")
 			CLO.SubscribeOperator(oc)
@@ -1901,9 +2015,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:kbharti-High-52779-High-55393-Loki Operator - Validate alert and recording rules in LokiRuler configmap and Rules API(cluster-admin)[Serial]", func() {
-
-			lokiOperatorNS := "openshift-operators-redhat"
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj := oc.Namespace()
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1915,13 +2027,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack CR")
 			ls := lokiStack{
 				name:          "loki-52779",
-				namespace:     "openshift-logging",
+				namespace:     cloNS,
 				tSize:         "1x.extra-small",
-				storageType:   getStorageType(oc),
+				storageType:   s,
 				storageSecret: "storage-52779",
 				storageClass:  sc,
 				bucketName:    "logging-loki-52779-" + getInfrastructureName(oc),
-				template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+				template:      filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml"),
 			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
@@ -1933,25 +2045,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create Loki Alert and recording rules")
-			appAlertingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
+			appAlertingTemplate := filepath.Join(loggingBaseDir, "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
 			appAlertRule := resource{"alertingrule", "my-app-workload-alert", appProj}
 			defer appAlertRule.clear(oc)
 			err = appAlertRule.applyFromTemplate(oc, "-n", appAlertRule.namespace, "-f", appAlertingTemplate, "-p", "NAMESPACE="+appProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			appRecordingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-recording-rule-template.yaml")
+			appRecordingTemplate := filepath.Join(loggingBaseDir, "loki-log-alerts", "loki-app-recording-rule-template.yaml")
 			appRecordRule := resource{"recordingrule", "my-app-workload-record", appProj}
 			defer appRecordRule.clear(oc)
 			err = appRecordRule.applyFromTemplate(oc, "-n", appRecordRule.namespace, "-f", appRecordingTemplate, "-p", "NAMESPACE="+appProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			infraAlertingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-infra-alerting-rule-template.yaml")
+			infraAlertingTemplate := filepath.Join(loggingBaseDir, "loki-log-alerts", "loki-infra-alerting-rule-template.yaml")
 			infraAlertRule := resource{"alertingrule", "my-infra-workload-alert", lokiOperatorNS}
 			defer infraAlertRule.clear(oc)
 			err = infraAlertRule.applyFromTemplate(oc, "-n", infraAlertRule.namespace, "-f", infraAlertingTemplate)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			infraRecordingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-infra-recording-rule-template.yaml")
+			infraRecordingTemplate := filepath.Join(loggingBaseDir, "loki-log-alerts", "loki-infra-recording-rule-template.yaml")
 			infraRecordRule := resource{"recordingrule", "my-infra-workload-record", lokiOperatorNS}
 			defer infraRecordRule.clear(oc)
 			err = infraRecordRule.applyFromTemplate(oc, "-n", infraRecordRule.namespace, "-f", infraRecordingTemplate)
@@ -1960,15 +2072,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ls.waitForLokiStackToBeReady(oc)
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", "openshift-logging"}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
-			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
-			collector := resource{"daemonset", "collector", cl.namespace}
-			collector.WaitForResourceToAppear(oc)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				logStoreType:  "lokistack",
+				collectorType: "vector",
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+				lokistackName: ls.name,
+				waitForReady:  true,
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Validating loki rules configmap")
 			expectedRules := []string{appProj + "-my-app-workload-alert", appProj + "-my-app-workload-record", lokiOperatorNS + "-my-infra-workload-alert", lokiOperatorNS + "-my-infra-workload-record"}
@@ -1988,22 +2102,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			token := getSAToken(oc, ls.name+"-ruler", ls.namespace)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
-			cmd := "curl -k " + route + "/api/logs/v1/application/loki/api/v1/rules " + "-H \"Authorization: Bearer " + token + "\""
-			output, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ls.namespace, ls.name+"-ruler-0", "--", "bash", "-c", cmd).Outputs()
+			lc := newLokiClient(route).withToken(token).retry(5)
+			appRules, err := lc.queryRules("application")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			matchDataInResponse := []string{"name: MyAppLogVolumeAlert", "alert: MyAppLogVolumeIsHigh", "tenantId: application", "name: HighAppLogsToLoki1m", "record: loki:operator:applogs:rate1m"}
 			for _, matchedData := range matchDataInResponse {
-				if !strings.Contains(string(output), matchedData) {
+				if !strings.Contains(string(appRules), matchedData) {
 					g.Fail("Response is missing " + matchedData)
 				}
 			}
-			cmd = "curl -k " + route + "/api/logs/v1/infrastructure/loki/api/v1/rules " + "-H \"Authorization: Bearer " + token + "\""
-			output, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ls.namespace, ls.name+"-ruler-0", "--", "bash", "-c", cmd).Outputs()
-			fmt.Println("infra api query: " + string(output))
+			infraRules, err := lc.queryRules("infrastructure")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			matchDataInResponse = []string{"name: LokiOperatorLogsHigh", "alert: LokiOperatorLogsAreHigh", "tenantId: infrastructure", "name: LokiOperatorLogsAreHigh1m", "record: loki:operator:infralogs:rate1m"}
 			for _, matchedData := range matchDataInResponse {
-				if !strings.Contains(string(output), matchedData) {
+				if !strings.Contains(string(infraRules), matchedData) {
 					g.Fail("Response is missing " + matchedData)
 				}
 			}
@@ -2011,9 +2123,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:kbharti-Critical-55415-Loki Operator - Validate AlertManager support for cluster-monitoring is decoupled from User-workload monitoring[Serial]", func() {
-
-			cloNS := "openshift-logging"
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj := oc.Namespace()
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -2025,13 +2135,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack CR")
 			ls := lokiStack{
 				name:          "loki-55415",
-				namespace:     "openshift-logging",
+				namespace:     cloNS,
 				tSize:         "1x.extra-small",
-				storageType:   getStorageType(oc),
+				storageType:   s,
 				storageSecret: "storage-55415",
 				storageClass:  sc,
 				bucketName:    "logging-loki-55415-" + getInfrastructureName(oc),
-				template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+				template:      filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml"),
 			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
@@ -2043,24 +2153,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
-			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
-			collector := resource{"daemonset", "collector", cl.namespace}
-			collector.WaitForResourceToAppear(oc)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				logStoreType:  "lokistack",
+				collectorType: "vector",
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+				lokistackName: ls.name,
+				waitForReady:  true,
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Create Loki Alert and recording rules")
-			alertingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
+			alertingTemplate := filepath.Join(loggingBaseDir, "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
 			alertRule := resource{"alertingrule", "my-app-workload-alert", appProj}
 			defer alertRule.clear(oc)
 			err = alertRule.applyFromTemplate(oc, "-n", alertRule.namespace, "-f", alertingTemplate, "-p", "NAMESPACE="+appProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			recordingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-recording-rule-template.yaml")
+			recordingTemplate := filepath.Join(loggingBaseDir, "loki-log-alerts", "loki-app-recording-rule-template.yaml")
 			recordingRule := resource{"recordingrule", "my-app-workload-record", appProj}
 			defer recordingRule.clear(oc)
 			err = recordingRule.applyFromTemplate(oc, "-n", recordingRule.namespace, "-f", recordingTemplate, "-p", "NAMESPACE="+appProj)
@@ -2101,9 +2213,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:kbharti-Critical-61435-Loki Operator - Validate AlertManager support for User-workload monitoring[Serial]", func() {
-
-			cloNS := "openshift-logging"
-			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj := oc.Namespace()
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -2117,11 +2227,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				name:          "loki-61435",
 				namespace:     "openshift-logging",
 				tSize:         "1x.extra-small",
-				storageType:   getStorageType(oc),
+				storageType:   s,
 				storageSecret: "storage-61435",
 				storageClass:  sc,
 				bucketName:    "logging-loki-61435-" + getInfrastructureName(oc),
-				template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+				template:      filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml"),
 			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
@@ -2133,28 +2243,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Create ClusterLogging instance with Loki as logstore")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
-			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
-			collector := resource{"daemonset", "collector", cl.namespace}
-			collector.WaitForResourceToAppear(oc)
-			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     cloNS,
+				logStoreType:  "lokistack",
+				collectorType: "vector",
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+				lokistackName: ls.name,
+				waitForReady:  true,
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
 
 			g.By("Enable User Workload Monitoring")
 			enableUserWorkloadMonitoringForLogging(oc)
 			defer deleteUserWorkloadManifests(oc)
 
 			g.By("Create Loki Alert and recording rules")
-			alertingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
+			alertingTemplate := filepath.Join(loggingBaseDir, "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
 			alertRule := resource{"alertingrule", "my-app-workload-alert", appProj}
 			defer alertRule.clear(oc)
 			err = alertRule.applyFromTemplate(oc, "-n", alertRule.namespace, "-f", alertingTemplate, "-p", "NAMESPACE="+appProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			recordingTemplate := exutil.FixturePath("testdata", "logging", "loki-log-alerts", "loki-app-recording-rule-template.yaml")
+			recordingTemplate := filepath.Join(loggingBaseDir, "loki-log-alerts", "loki-app-recording-rule-template.yaml")
 			recordingRule := resource{"recordingrule", "my-app-workload-record", appProj}
 			defer recordingRule.clear(oc)
 			err = recordingRule.applyFromTemplate(oc, "-n", recordingRule.namespace, "-f", recordingTemplate, "-p", "NAMESPACE="+appProj)

@@ -14,7 +14,7 @@ objects:
       type: fluentdForward
       url: ${URL}
       secret:
-        name: ${OUTPUT_SECRET}
+        name: ${SECRET_NAME}
     pipelines:
     - name: forward-to-external-fluentd
       inputRefs: ${{INPUTS}}
@@ -25,7 +25,7 @@ parameters:
   value: "instance"
 - name: NAMESPACE
   value: "openshift-logging"
-- name: OUTPUT_SECRET
+- name: SECRET_NAME
   value: "pipelinesecret"
 - name: URL
   value: "tls://fluentdserver.openshift-logging.svc:24224"

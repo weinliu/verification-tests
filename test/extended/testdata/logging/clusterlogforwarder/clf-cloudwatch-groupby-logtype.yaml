@@ -6,7 +6,8 @@ objects:
 - apiVersion: "logging.openshift.io/v1"
   kind: ClusterLogForwarder
   metadata:
-    name: instance
+    name: ${NAME}
+    namespace: ${NAMESPACE}
   spec:
     outputs:
     - name: cw
@@ -15,7 +16,7 @@ objects:
         groupBy: logType
         region: ${REGION}
       secret:
-        name: ${SECRETNAME}
+        name: ${SECRET_NAME}
     pipelines:
     - name: to-cloudwatch
       inputRefs:
@@ -25,7 +26,11 @@ objects:
       outputRefs:
       - cw
 parameters:
-- name: SECRETNAME
+- name: NAME
+  value: "instance"
+- name: NAMESPACE
+  value: "openshift-logging"
+- name: SECRET_NAME
   value: "cw-secret"
 - name: REGION
   value: "us-east-2"

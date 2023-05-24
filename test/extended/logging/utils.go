@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -91,8 +90,9 @@ func containSubstring(a interface{}, b string) bool {
 
 func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	var configFile string
+	filename := getRandomString() + ".json"
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + ".json")
+		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(filename)
 		if err != nil {
 			e2e.Logf("the err:%v, and try next round", err)
 			return false, nil
@@ -193,6 +193,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			namespaceTemplate := exutil.FixturePath("testdata", "logging", "subscription", "namespace.yaml")
 			namespaceFile, err := processTemplate(oc, "-f", namespaceTemplate, "-p", "NAMESPACE_NAME="+so.Namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			defer os.Remove(namespaceFile)
 			err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
 				output, err := oc.AsAdmin().Run("apply").Args("-f", namespaceFile).Output()
 				if err != nil {
@@ -215,6 +216,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 		// create operator group
 		ogFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.OperatorGroup, "-p", "OG_NAME="+so.Namespace, "NAMESPACE="+so.Namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.Remove(ogFile)
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
 			output, err := oc.AsAdmin().Run("apply").Args("-f", ogFile, "-n", so.Namespace).Output()
 			if err != nil {
@@ -237,6 +239,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			//create subscription object
 			subscriptionFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+so.CatalogSource.Channel, "SOURCE="+so.CatalogSource.SourceName, "SOURCE_NAMESPACE="+so.CatalogSource.SourceNamespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			defer os.Remove(subscriptionFile)
 			err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
 				output, err := oc.AsAdmin().Run("apply").Args("-f", subscriptionFile, "-n", so.Namespace).Output()
 				if err != nil {
@@ -393,6 +396,7 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
 		e2e.Failf("pod with label %s is not ready:\nconditions: %s\ncontainer status: %s", label, podStatus, containerStatus)
 	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod with label %s is not ready", label))
 }
 
 // GetDeploymentsNameByLabel retruns a list of deployment name which have specific labels
@@ -506,35 +510,36 @@ func (r resource) WaitForResourceToAppear(oc *exutil.CLI) {
 func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	parameters = append(parameters, "-n", r.namespace)
 	file, err := processTemplate(oc, parameters...)
+	defer os.Remove(file)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not process %v", parameters))
 	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", r.namespace).Execute()
 	r.WaitForResourceToAppear(oc)
 	return err
 }
 
-// DeleteClusterLogging deletes the clusterlogging instance and ensures the related resources are removed
-func (r resource) deleteClusterLogging(oc *exutil.CLI) {
-	clOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(r.kind, r.name, "-n", r.namespace, "-ojson").Output()
-	if len(clOutput) > 0 && !strings.Contains(clOutput, `clusterloggings.logging.openshift.io "instance" not found`) {
-		err := r.clear(oc)
-		if err != nil {
-			e2e.Logf("could not delete %s/%s", r.kind, r.name)
-		}
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("could not delete %s/%s", r.kind, r.name))
+// deleteClusterLogging deletes the clusterlogging instance which isn't created by `func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string)`
+// and ensures the related resources are removed
+func deleteClusterLogging(oc *exutil.CLI, name, namespace string) {
+	clOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterlogging", name, "-n", namespace, "-ojson").Output()
+	if len(clOutput) > 0 && !strings.Contains(clOutput, fmt.Sprint("clusterloggings.logging.openshift.io \""+name+"\" not found")) {
+		err := resource{"clusterlogging", name, namespace}.clear(oc)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("could not delete clusterlogging/%s in %s project", name, namespace))
 
 		cl := ClusterLogging{}
 		json.Unmarshal([]byte(clOutput), &cl)
 		//make sure other resources are removed
-		resources := []resource{{"daemonset", "collector", r.namespace}}
-		if cl.Spec.LogStoreSpec.Type == "elasticsearch" {
-			resources = append(resources, resource{"elasticsearches.logging.openshift.io", "elasticsearch", r.namespace})
+		resources := []resource{{"daemonset", "collector", namespace}}
+		if *cl.Spec.LogStoreSpec.Type == "elasticsearch" {
+			resources = append(resources, resource{"elasticsearches.logging.openshift.io", "elasticsearch", namespace})
 			if len(cl.Spec.LogStoreSpec.ElasticsearchSpec.Storage.StorageClassName) > 0 {
 				// remove all the pvcs in the namespace
-				_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
+				_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
 			}
 		}
-		if cl.Spec.VisualizationSpec.Type == "kibana" {
-			resources = append(resources, resource{"kibanas.logging.openshift.io", "kibana", r.namespace})
+		if *cl.Spec.VisualizationSpec.Type == "kibana" {
+			resources = append(resources, resource{"kibanas.logging.openshift.io", "kibana", namespace})
+		} else if *cl.Spec.VisualizationSpec.Type == "ocp-console" {
+			resources = append(resources, resource{"deployment", "logging-view-plugin", namespace})
 		}
 		for i := 0; i < len(resources); i++ {
 			err = resources[i].WaitUntilResourceIsGone(oc)
@@ -543,11 +548,227 @@ func (r resource) deleteClusterLogging(oc *exutil.CLI) {
 	}
 }
 
-func (r resource) createClusterLogging(oc *exutil.CLI, parameters ...string) {
-	// delete clusterlogging instance first
-	r.deleteClusterLogging(oc)
-	err := r.applyFromTemplate(oc, parameters...)
-	o.Expect(err).NotTo(o.HaveOccurred())
+type clusterlogging struct {
+	name             string // default: instance
+	namespace        string // default: openshift-logging
+	collectorType    string // default: vector
+	logStoreType     string // `elasticsearch` or `lokistack`, no default value
+	esNodeCount      int    // if it's specified, parameter `ES_NODE_COUNT=${esNodeCount}` will be added when creating the CR
+	storageClassName string // works when the logStoreType is elasticsearch
+	storageSize      string // works when the logStoreType is elasticsearch and the storageClassName is specified
+	lokistackName    string // required value when logStoreType is lokistack
+	templateFile     string // the template used to create clusterlogging, no default value
+	waitForReady     bool   // if true, will wait for all the logging pods to be ready after creating the CR
+}
+
+// create a clusterlogging CR from a template
+func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string) {
+	if cl.name == "" {
+		cl.name = "instance"
+	}
+	if cl.namespace == "" {
+		cl.namespace = "openshift-logging"
+	}
+	// In case of there is a clusterlogging in the namespace, add a step to check&remove the existing CR before creating it.
+	deleteClusterLogging(oc, cl.name, cl.namespace)
+
+	if cl.collectorType == "" {
+		cl.collectorType = "vector"
+	}
+
+	if cl.storageClassName != "" && cl.storageSize == "" {
+		cl.storageSize = "20Gi"
+	}
+	parameters := []string{"-p", "NAME=" + cl.name, "NAMESPACE=" + cl.namespace, "COLLECTOR=" + cl.collectorType}
+	if cl.logStoreType == "elasticsearch" {
+		if cl.esNodeCount > 0 {
+			parameters = append(parameters, "ES_NODE_COUNT="+strconv.Itoa(cl.esNodeCount))
+		}
+		if cl.storageClassName != "" {
+			parameters = append(parameters, "STORAGE_CLASS="+cl.storageClassName, "PVC_SIZE="+cl.storageSize)
+		}
+	}
+	if cl.logStoreType == "lokistack" {
+		if cl.lokistackName == "" {
+			e2e.Failf("lokistack name is not provided")
+		}
+		parameters = append(parameters, "LOKISTACKNAME="+cl.lokistackName)
+	}
+	if len(optionalParameters) > 0 {
+		parameters = append(parameters, optionalParameters...)
+	}
+	//parameters = append(parameters, "-f", cl.templateFile, "--ignore-unknown-parameters=true")
+	parameters = append(parameters, "-f", cl.templateFile)
+	file, processErr := processTemplate(oc, parameters...)
+	defer os.Remove(file)
+	if processErr != nil {
+		e2e.Failf("error processing file: %v", processErr)
+	}
+	err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", cl.namespace).Execute()
+	if err != nil {
+		e2e.Failf("error creating clusterlogging: %v", err)
+	}
+	resource{"clusterlogging", cl.name, cl.namespace}.WaitForResourceToAppear(oc)
+
+	if cl.waitForReady {
+		cl.waitForLoggingReady(oc)
+	}
+}
+
+// update clusterlogging CR
+// if template is specified, then run command `oc process -f template -p patches | oc apply -f -`
+// if template is not specified, then run command `oc patch clusterlogging/${cl.name} -p patches`
+// if use patch, should add `--type=xxxx` in the end of patches
+func (cl *clusterlogging) update(oc *exutil.CLI, template string, patches ...string) {
+	var err error
+	if template != "" {
+		//parameters := []string{"-f", template, "--ignore-unknown-parameters=true", "-p", "NAME=" + cl.name, "NAMESPACE=" + cl.namespace}
+		parameters := []string{"-f", template, "-p", "NAME=" + cl.name, "NAMESPACE=" + cl.namespace}
+		if len(patches) > 0 {
+			parameters = append(parameters, patches...)
+		}
+		file, processErr := processTemplate(oc, parameters...)
+		defer os.Remove(file)
+		if processErr != nil {
+			e2e.Failf("error processing file: %v", processErr)
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", cl.namespace).Execute()
+	} else {
+		parameters := []string{"cl/" + cl.name, "-n", cl.namespace, "-p"}
+		parameters = append(parameters, patches...)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(parameters...).Execute()
+	}
+	if err != nil {
+		e2e.Failf("error updating clusterlogging: %v", err)
+	}
+}
+
+// delete clusterlogging CR
+func (cl *clusterlogging) delete(oc *exutil.CLI) {
+	err := resource{"clusterlogging", cl.name, cl.namespace}.clear(oc)
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("could not delete clusterlogging/%s in %s project", cl.name, cl.namespace))
+
+	resources := []resource{{"daemonset", "collector", cl.namespace}}
+	if cl.logStoreType == "elasticsearch" {
+		resources = append(resources, resource{"elasticsearches.logging.openshift.io", "elasticsearch", cl.namespace}, resource{"kibanas.logging.openshift.io", "kibana", cl.namespace})
+		if cl.storageClassName != "" {
+			// remove all the pvcs in the namespace
+			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", cl.namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
+		}
+	}
+	if cl.logStoreType == "lokistack" {
+		resources = append(resources, resource{"deployment", "logging-view-plugin", cl.namespace})
+	}
+	for i := 0; i < len(resources); i++ {
+		err = resources[i].WaitUntilResourceIsGone(oc)
+		if err != nil {
+			e2e.Logf("%s/%s is not deleted", resources[i].kind, resources[i].name)
+		}
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s is not deleted", resources[i].kind, resources[i].name))
+	}
+}
+
+// wait for the logging pods to be ready
+func (cl *clusterlogging) waitForLoggingReady(oc *exutil.CLI) {
+	if cl.logStoreType == "elasticsearch" {
+		var esDeployNames []string
+		err := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+			esDeployNames = GetDeploymentsNameByLabel(oc, cl.namespace, "cluster-name=elasticsearch")
+			if len(esDeployNames) != cl.esNodeCount {
+				e2e.Logf("expect %d ES deployments, but only find %d, try next time...", cl.esNodeCount, len(esDeployNames))
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "some ES deployments are not created")
+
+		for _, name := range esDeployNames {
+			WaitForDeploymentPodsToBeReady(oc, cl.namespace, name)
+		}
+		// wait for Kibana
+		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "kibana")
+	}
+	// wait for collector
+	WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+	if cl.logStoreType == "lokistack" {
+		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "logging-view-plugin")
+	}
+}
+
+type clusterlogforwarder struct {
+	name         string // default: instance
+	namespace    string // default: openshift-logging
+	templateFile string // the template used to create clusterlogforwarder, no default value
+	secretName   string // optional, if it's specified, when creating CLF, the parameter `"SECRET_NAME="+clf.secretName` will be added automatically
+}
+
+// create clusterlogforwarder CR from a template
+func (clf *clusterlogforwarder) create(oc *exutil.CLI, optionalParameters ...string) {
+	if clf.name == "" {
+		clf.name = "instance"
+	}
+	if clf.namespace == "" {
+		clf.namespace = "openshift-logging"
+	}
+	clf.delete(oc)
+
+	//parameters := []string{"-f", clf.templateFile, "--ignore-unknown-parameters=true", "-p", "NAME=" + clf.name, "NAMESPACE=" + clf.namespace}
+	parameters := []string{"-f", clf.templateFile, "-p", "NAME=" + clf.name, "NAMESPACE=" + clf.namespace}
+	if clf.secretName != "" {
+		parameters = append(parameters, "SECRET_NAME="+clf.secretName)
+	}
+	if len(optionalParameters) > 0 {
+		parameters = append(parameters, optionalParameters...)
+	}
+
+	file, processErr := processTemplate(oc, parameters...)
+	defer os.Remove(file)
+	if processErr != nil {
+		e2e.Failf("error processing file: %v", processErr)
+	}
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file, "-n", clf.namespace).Execute()
+	if err != nil {
+		e2e.Failf("error creating clusterlogforwarder: %v", err)
+	}
+	resource{"clusterlogforwarder", clf.name, clf.namespace}.WaitForResourceToAppear(oc)
+}
+
+// update existing clusterlogforwarder CR
+// if template is specified, then run command `oc process -f template -p patches | oc apply -f -`
+// if template is not specified, then run command `oc patch clusterlogforwarder/${clf.name} -p patches`
+// if use patch, should add `--type=` in the end of patches
+func (clf *clusterlogforwarder) update(oc *exutil.CLI, template string, patches ...string) {
+	var err error
+	if template != "" {
+		//parameters := []string{"-f", template, "--ignore-unknown-parameters=true", "-p", "NAME=" + clf.name, "NAMESPACE=" + clf.namespace}
+		parameters := []string{"-f", template, "-p", "NAME=" + clf.name, "NAMESPACE=" + clf.namespace}
+		if clf.secretName != "" {
+			parameters = append(parameters, "SECRET_NAME="+clf.secretName)
+		}
+		if len(patches) > 0 {
+			parameters = append(parameters, patches...)
+		}
+		file, processErr := processTemplate(oc, parameters...)
+		defer os.Remove(file)
+		if processErr != nil {
+			e2e.Failf("error processing file: %v", processErr)
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", clf.namespace).Execute()
+	} else {
+		parameters := []string{"clf/" + clf.name, "-n", clf.namespace, "-p"}
+		parameters = append(parameters, patches...)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(parameters...).Execute()
+	}
+	if err != nil {
+		e2e.Failf("error updating clusterlogforwarder: %v", err)
+	}
+}
+
+// delete the clusterlogforwarder CR
+func (clf *clusterlogforwarder) delete(oc *exutil.CLI) {
+	err := resource{"clusterlogforwarder", clf.name, clf.namespace}.clear(oc)
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("clusterlogforwarder/%s in project/%s is not deleted", clf.name, clf.namespace))
 }
 
 func deleteNamespace(oc *exutil.CLI, ns string) {
@@ -642,9 +863,13 @@ func getStorageClassName(oc *exutil.CLI) (string, error) {
 }
 
 // Assert the status of a resource
-func (r resource) assertResourceStatus(oc *exutil.CLI, content string, exptdStatus string) {
+func assertResourceStatus(oc *exutil.CLI, kind, name, namespace, jsonpath, exptdStatus string) {
+	parameters := []string{kind, name, "-o", "jsonpath=" + jsonpath}
+	if namespace != "" {
+		parameters = append(parameters, "-n", namespace)
+	}
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-		clStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(r.kind, r.name, "-n", r.namespace, "-o", content).Output()
+		clStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
 		if err != nil {
 			return false, err
 		}
@@ -653,7 +878,7 @@ func (r resource) assertResourceStatus(oc *exutil.CLI, content string, exptdStat
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s %s value for %s is not %s", r.kind, r.name, content, exptdStatus))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s %s value for %s is not %s", kind, name, jsonpath, exptdStatus))
 }
 
 func getRouteAddress(oc *exutil.CLI, ns, routeName string) string {
@@ -1426,7 +1651,7 @@ func (cw cloudwatchSpec) getCloudwatchLogGroupNames(groupPrefix string) []string
 		groupPrefix = cw.groupPrefix
 	}
 	logGroupDesc, err := cw.client.DescribeLogGroups(context.TODO(), &cloudwatchlogs.DescribeLogGroupsInput{
-		LogGroupNamePrefix: aws.String(groupPrefix),
+		LogGroupNamePrefix: &groupPrefix,
 	})
 
 	if err != nil {
@@ -1462,12 +1687,12 @@ func (cw cloudwatchSpec) getCloudwatchLogStreamNames(groupName string, streamPre
 	var logStreamDesc *cloudwatchlogs.DescribeLogStreamsOutput
 	if streamPrefix == "" {
 		logStreamDesc, err = cw.client.DescribeLogStreams(context.TODO(), &cloudwatchlogs.DescribeLogStreamsInput{
-			LogGroupName: aws.String(groupName),
+			LogGroupName: &groupName,
 		})
 	} else {
 		logStreamDesc, err = cw.client.DescribeLogStreams(context.TODO(), &cloudwatchlogs.DescribeLogStreamsInput{
-			LogGroupName:        aws.String(groupName),
-			LogStreamNamePrefix: aws.String(streamPrefix),
+			LogGroupName:        &groupName,
+			LogStreamNamePrefix: &streamPrefix,
 		})
 	}
 	if err != nil {
@@ -2504,7 +2729,7 @@ func checkCollectorTLSProfile(oc *exutil.CLI, ns, searchString string) (bool, er
 	}
 	defer file.Close()
 
-	content, err := ioutil.ReadFile(filename)
+	content, err := os.ReadFile(filename)
 	if err != nil {
 		return false, err
 	}

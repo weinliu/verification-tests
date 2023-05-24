@@ -33,7 +33,7 @@ objects:
       kibana:
         replicas: 1
     collection:
-      type: "fluentd"
+      type: ${COLLECTOR}
       fluentd:
         buffer:
           chunkLimitSize: ${CHUNK_LIMIT_SIZE}
@@ -88,3 +88,5 @@ parameters:
   value: "1s"
 - name: TOTAL_LIMIT_SIZE
   value: "32m"
+- name: COLLECTOR
+  value: "fluentd"

@@ -473,7 +473,7 @@ type ClusterLogging struct {
 			Tolerations  []v1.Toleration   `json:"tolerations,omitempty"`
 		} `json:"collection,omitempty"`
 		LogStoreSpec struct {
-			Type              string `json:"type"`
+			Type              *string `json:"type"`
 			ElasticsearchSpec struct {
 				Resources        ResourcesSpec     `json:"resources"`
 				NodeCount        int32             `json:"nodeCount"`
@@ -496,7 +496,7 @@ type ClusterLogging struct {
 		} `json:"logStore,omitempty"`
 		ManagementState   string `json:"managementState"`
 		VisualizationSpec struct {
-			Type       string `json:"type"`
+			Type       *string `json:"type"`
 			KibanaSpec struct {
 				Resources    ResourcesSpec     `json:"resources"`
 				NodeSelector map[string]string `json:"nodeSelector,omitempty"`

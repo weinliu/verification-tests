@@ -338,7 +338,7 @@ func createObjectBucketClaim(oc *exutil.CLI, ns, name string) error {
 	}
 	obc.WaitForResourceToAppear(oc)
 	resource{"objectbuckets", "obc-" + ns + "-" + name, ns}.WaitForResourceToAppear(oc)
-	obc.assertResourceStatus(oc, "jsonpath={.status.phase}", "Bound")
+	assertResourceStatus(oc, "objectbucketclaims", name, ns, "{.status.phase}", "Bound")
 	return nil
 }
 
@@ -506,6 +506,7 @@ func (l lokiStack) deployLokiStack(oc *exutil.CLI, optionalParameters ...string)
 		parameters = append(parameters, optionalParameters...)
 	}
 	file, err := processTemplate(oc, parameters...)
+	defer os.Remove(file)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not process %v", parameters))
 	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", l.namespace).Execute()
 	ls := resource{"lokistack", l.name, l.namespace}
@@ -573,6 +574,7 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 func grantLokiPermissionsToSA(oc *exutil.CLI, rbacName, sa, ns string) {
 	rbac := exutil.FixturePath("testdata", "logging", "lokistack", "loki-rbac.yaml")
 	file, err := processTemplate(oc, "-f", rbac, "-p", "NAME="+rbacName, "-p", "SA="+sa, "NAMESPACE="+ns)
+	defer os.Remove(file)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -852,6 +854,22 @@ func (c *lokiClient) listLabels(logType, labelName string) ([]string, error) {
 	return labelResponse.Data, err
 }
 
+func (c *lokiClient) queryRules(tenant string) ([]byte, error) {
+	path := apiPath + tenant + rulesPath
+
+	h, err := c.getHTTPRequestHeader()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := doHTTPRequest(h, c.address, path, "", "GET", c.quiet, c.retries, nil, 200)
+	if err != nil {
+		return nil, err
+	}
+	return resp, err
+
+}
+
 func doHTTPRequest(header http.Header, address, path, query, method string, quiet bool, attempts int, requestBody io.Reader, expectedStatusCode int) ([]byte, error) {
 	us, err := buildURL(address, path, query)
 	if err != nil {
@@ -1059,6 +1077,7 @@ func deployMinIO(oc *exutil.CLI) {
 	// deploy minIO
 	deployTemplate := exutil.FixturePath("testdata", "logging", "minIO", "deploy.yaml")
 	deployFile, err := processTemplate(oc, "-n", minioNS, "-f", deployTemplate, "-p", "NAMESPACE="+minioNS, "NAME=minio", "SECRET_NAME="+minioSecret)
+	defer os.Remove(deployFile)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = oc.AsAdmin().Run("apply").Args("-f", deployFile, "-n", minioNS).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())

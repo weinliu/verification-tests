@@ -14,7 +14,7 @@ objects:
       type: kafka
       url: ${KAFKA_URL}
       secret:
-        name: ${KAFKA_SECRET_NAME}
+        name: ${SECRET_NAME}
     - name: loki-audit
       type: "loki"
       url: ${LOKI_URL}
@@ -53,6 +53,6 @@ parameters:
   value: "openshift-logging"
 - name: KAFKA_URL
   value: "tls://kafka.openshift-logging.svc.cluster.local:9093/clo-topic"
-- name: KAFKA_SECRET_NAME
+- name: SECRET_NAME
   value: "kafka-vector"
 - name: LOKI_URL

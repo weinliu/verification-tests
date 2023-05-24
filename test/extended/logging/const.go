@@ -8,6 +8,7 @@ const (
 	labelValuesPath = "/loki/api/v1/label/%s/values"
 	seriesPath      = "/loki/api/v1/series"
 	tailPath        = "/loki/api/v1/tail"
+	rulesPath       = "/loki/api/v1/rules"
 	minioNS         = "minio-aosqe"
 	minioSecret     = "minio-creds"
 

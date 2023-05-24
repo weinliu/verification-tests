@@ -19,7 +19,7 @@ objects:
       type: elasticsearch
       url: ${URL}
       secret:
-        name: ${SECRET}
+        name: ${SECRET_NAME}
     pipelines:
     - name: forward
       inputRefs:
@@ -40,7 +40,7 @@ parameters:
   value: test-json-log
 - name: URL
   value: https://elasticsearch.openshift-logging.svc:9200
-- name: SECRET
+- name: SECRET_NAME
   value: collector
 - name: ES_VERSION
   value: "6"

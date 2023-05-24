@@ -18,7 +18,7 @@ objects:
     - name: gcp-logging
       type: googleCloudLogging
       secret:
-        name: ${SECRETNAME}
+        name: ${SECRET_NAME}
       googleCloudLogging:
         projectId : ${PROJECT_ID}
         logId : ${LOG_ID}
@@ -33,7 +33,7 @@ parameters:
   value: "instance"
 - name: NAMESPACE
   value: "openshift-logging"
-- name: SECRETNAME
+- name: SECRET_NAME
   value: "gcp-secret"
 - name: PROJECT_ID
   value: "openshift-qe"

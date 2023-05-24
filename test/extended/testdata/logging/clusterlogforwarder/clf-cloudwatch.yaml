@@ -6,7 +6,8 @@ objects:
 - apiVersion: "logging.openshift.io/v1"
   kind: ClusterLogForwarder
   metadata:
-    name: instance
+    name: ${NAME}
+    namespace: ${NAMESPACE}
     annotations:
       logging.openshift.io/preview-tls-security-profile: enabled
   spec:
@@ -18,7 +19,7 @@ objects:
         groupPrefix: ${PREFIX}
         region: ${REGION}
       secret:
-        name: ${SECRETNAME}
+        name: ${SECRET_NAME}
     pipelines:
     - name: to-cloudwatch
       inputRefs: ${{INPUT_REFS}}
@@ -26,7 +27,11 @@ objects:
       - cw
       detectMultilineErrors: ${{DETECT_MULTILINE_ERRORS}}
 parameters:
-- name: SECRETNAME
+- name: NAME
+  value: "instance"
+- name: NAMESPACE
+  value: "openshift-logging"
+- name: SECRET_NAME
   value: "cw-secret"
 - name: PREFIX
   value: "qeauto"

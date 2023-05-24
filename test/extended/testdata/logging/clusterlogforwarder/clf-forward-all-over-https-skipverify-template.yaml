@@ -17,7 +17,7 @@ objects:
         method: POST
       name: httpout-app
       secret:
-        name: ${OUTPUT_SECRET}
+        name: ${SECRET_NAME}
       tls:
         insecureSkipVerify: true
       type: http
@@ -29,7 +29,7 @@ objects:
         method: POST
       name: httpout-infra
       secret:
-        name: ${OUTPUT_SECRET}
+        name: ${SECRET_NAME}
       tls:
         insecureSkipVerify: true
       type: http
@@ -41,7 +41,7 @@ objects:
         method: POST
       name: httpout-audit
       secret:
-        name: ${OUTPUT_SECRET}
+        name: ${SECRET_NAME}
       tls:
         insecureSkipVerify: true
       type: http
@@ -69,5 +69,5 @@ parameters:
   value: openshift-logging
 - name: URL
   value: https://fluentdserver.openshift-logging.svc:24224
-- name: OUTPUT_SECRET
+- name: SECRET_NAME
   value: fluentdserver
