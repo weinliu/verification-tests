@@ -206,6 +206,12 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		//based on above rule order 1 should execute and action deny should trigger so we expect CurlNodePortFail to execute sucessfully
 		CurlNodePortFail(oc, nodeList.Items[1].Name, nodeList.Items[0].Name, nodePort)
 
+		//make sure events were logged for Deny events
+		infwDaemon := getinfwDaemonForNode(oc, nodeList.Items[0].Name)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-node-firewall", infwDaemon, "-c", "events").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "ruleId 1 action Drop")).Should(o.BeTrue())
+
 		//Now make action 1 as Allow and make sure it pass
 		infwCR_single.action_1 = "Allow"
 		infwCR_multiple.action_1 = "Allow"
@@ -362,8 +368,6 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-node-firewall", infwDaemon, "-c", "events").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "ruleId 1 action Drop")).Should(o.BeTrue())
-		o.Expect(strings.Contains(output, "ruleId 2 action Drop")).ShouldNot(o.BeTrue())
-
 		//Now make action 1 as Allow and make sure it pass
 
 		infwCR_single.action_1 = "Allow"
@@ -383,10 +387,8 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		infwDaemon = getinfwDaemonForNode(oc, podNodeName)
-		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-node-firewall", infwDaemon, "-c", "events").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-node-firewall", infwDaemon, "-c", "events").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).ShouldNot(o.ContainSubstring("ruleId 1 action Drop"))
-		o.Expect(output).ShouldNot(o.ContainSubstring("ruleId 2 action Drop"))
 
 	})
 
@@ -494,6 +496,12 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 
 		msg, _ := oc.WithoutNamespace().AsAdmin().Run("exec").Args(cmd...).Output()
 		o.Expect(msg).To(o.ContainSubstring("100% packet loss"))
+
+		//make sure events were logged for Deny events
+		infwDaemon := getinfwDaemonForNode(oc, nodeList.Items[1].Name)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-node-firewall", infwDaemon, "-c", "events").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "ruleId 1 action Drop")).Should(o.BeTrue())
 
 		g.By("create infw CR for ICMP again with both Allow actions")
 		if ipStackType == "ipv6single" {
@@ -696,6 +704,15 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		g.By("sctpclient pod start to send sctp traffic")
 		_, err1 = e2eoutput.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'test traffic' | { ncat -v "+sctpServerPodIP1+" 30102 --sctp; }")
 		o.Expect(err1).To(o.HaveOccurred()) //this traffic should be denied based on later created infw policy
+
+		//make sure events were logged for Deny events post daemons restart at line 664, Ref.OCPBUGS-11888
+		podNodeName, getNodeNameErr := exutil.GetPodNodeName(oc, oc.Namespace(), "sctpserver")
+		o.Expect(getNodeNameErr).NotTo(o.HaveOccurred())
+
+		infwDaemon := getinfwDaemonForNode(oc, podNodeName)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-node-firewall", infwDaemon, "-c", "events").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "ruleId 1 action Drop")).Should(o.BeTrue())
 
 	})
 	g.It("Longduration-NonPreRelease-Author:anusaxen-Medium-54973-Make sure events and metrics are logged for ingress-node-firewall-daemon [Serial]", func() {
