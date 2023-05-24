@@ -3470,7 +3470,7 @@ func createMcAndVerifyIgnitionVersion(oc *exutil.CLI, stepText, mcName, ignition
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(mcpDataMap).NotTo(o.BeNil())
 	o.Expect(mcpDataMap["status"].(string)).Should(o.Equal("True"))
-	o.Expect(mcpDataMap["message"].(string)).Should(o.ContainSubstring("parsing Ignition config failed: unknown version. Supported spec versions: 2.2, 3.0, 3.1, 3.2"))
+	o.Expect(mcpDataMap["message"].(string)).Should(o.MatchRegexp(`parsing Ignition config failed: (unknown|invalid) version\. Supported spec versions: 2\.2, 3\.0, 3\.1, 3\.2, 3\.3, 3\.4$`))
 
 	g.By("Get co machine config to verify status and reason for Upgradeable type")
 	mcDataMap, err := getStatusCondition(oc, "co/machine-config", "Upgradeable")
