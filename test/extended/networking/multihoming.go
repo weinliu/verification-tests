@@ -661,20 +661,20 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Get IPs from the pod1's net1 interface")
 		pod1Name := getPodName(oc, ns1, "name=multihoming-pod1")
 		pod1Net1IPv4, pod1Net1IPv6 := getPodMultiNetworks(oc, ns1, pod1Name[0], "net1")
-		e2e.Logf("The v4 address of pod1 is: %v", pod1Net1IPv4)
-		e2e.Logf("The v6 address of pod1 is: %v", pod1Net1IPv6)
+		e2e.Logf("The v4 address of pod1's net1 is: %v", pod1Net1IPv4)
+		e2e.Logf("The v6 address of pod1's net1 is: %v", pod1Net1IPv6)
 
 		g.By("Get IPs from the pod2's net1 interface")
 		pod2Name := getPodName(oc, ns1, "name=multihoming-pod2")
 		pod2Net1IPv4, pod2Net1IPv6 := getPodMultiNetworks(oc, ns1, pod2Name[0], "net1")
-		e2e.Logf("The v4 address of pod1 is: %v", pod2Net1IPv4)
-		e2e.Logf("The v6 address of pod1 is: %v", pod2Net1IPv6)
+		e2e.Logf("The v4 address of pod2's net1 is: %v", pod2Net1IPv4)
+		e2e.Logf("The v6 address of pod2's net1 is: %v", pod2Net1IPv6)
 
 		g.By("Get IPs from the pod3's net1 interface")
 		pod3Name := getPodName(oc, ns1, "name=multihoming-pod3")
 		pod3Net1IPv4, pod3Net1IPv6 := getPodMultiNetworks(oc, ns1, pod3Name[0], "net1")
-		e2e.Logf("The v4 address of pod1 is: %v", pod3Net1IPv4)
-		e2e.Logf("The v6 address of pod1 is: %v", pod3Net1IPv6)
+		e2e.Logf("The v4 address of pod3's net1 is: %v", pod3Net1IPv4)
+		e2e.Logf("The v6 address of pod3's net1 is: %v", pod3Net1IPv6)
 
 		g.By("Check if the new OVN switch ports is created")
 		listSWCmd := "ovn-nbctl show | grep port | grep " + nadName1 + " "
@@ -715,18 +715,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("Get IPs from the pod1's net2 interface")
 		pod1Net2IPv4, pod1Net2IPv6 := getPodMultiNetworks(oc, ns1, pod1Name[0], "net2")
-		e2e.Logf("The v4 address of pod1 is: %v", pod1Net2IPv4, pod1.podenvname)
-		e2e.Logf("The v6 address of pod1 is: %v", pod1Net2IPv6, pod1.podenvname)
+		e2e.Logf("The v4 address of pod1's net2 is: %v", pod1Net2IPv4, pod1.podenvname)
+		e2e.Logf("The v6 address of pod1's net2 is: %v", pod1Net2IPv6, pod1.podenvname)
 
 		g.By("Get IPs from the pod2's net2 interface")
 		pod2Net2IPv4, pod2Net2IPv6 := getPodMultiNetworks(oc, ns1, pod2Name[0], "net2")
-		e2e.Logf("The v4 address of pod1 is: %v", pod2Net2IPv4, pod2.podenvname)
-		e2e.Logf("The v6 address of pod1 is: %v", pod2Net2IPv6, pod2.podenvname)
+		e2e.Logf("The v4 address of pod2's net2 is: %v", pod2Net2IPv4, pod2.podenvname)
+		e2e.Logf("The v6 address of pod2's net2 is: %v", pod2Net2IPv6, pod2.podenvname)
 
 		g.By("Get IPs from the pod3's net2 interface")
 		pod3Net2IPv4, pod3Net2IPv6 := getPodMultiNetworks(oc, ns1, pod3Name[0], "net2")
-		e2e.Logf("The v4 address of pod1 is: %v", pod3Net2IPv4)
-		e2e.Logf("The v6 address of pod1 is: %v", pod3Net2IPv6)
+		e2e.Logf("The v4 address of pod3's net2 is: %v", pod3Net2IPv4)
+		e2e.Logf("The v6 address of pod3's net2 is: %v", pod3Net2IPv6)
 
 		g.By("Checking net2 connectivity from pod1 to pod2")
 		CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod2Net2IPv4, "net2", pod2.podenvname)
