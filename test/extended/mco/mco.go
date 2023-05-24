@@ -2534,7 +2534,7 @@ nulla pariatur.`
 		}
 	})
 
-	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Medium-43279-Alert message of drain error contains pod info [Disruptive]", func() {
+	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Medium-56706-Move MCD drain alert into the MCC, revisit error mode[Disruptive]", func() {
 		var (
 			mcp               = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcc               = NewController(oc.AsAdmin())
@@ -2621,7 +2621,13 @@ nulla pariatur.`
 			"The error reported in the MCP NodeDegraded condition in not the expected one")
 		logger.Infof("OK!\n")
 
-		g.By("Verify that the alert is triggered with the right message")
+		g.By("Verify that the alert is triggered")
+		o.Eventually(getAlertsByName, "5m", "20s").WithArguments(oc, expectedAlertName).
+			Should(o.HaveLen(1),
+				"1 %s alert and only 1 should have been triggered!", expectedAlertName)
+		logger.Infof("OK!\n")
+
+		g.By("Verify that the alert has the right message")
 		alertJSON, err := getAlertsByName(oc, expectedAlertName)
 
 		logger.Infof("Found %s alerts: %s", expectedAlertName, alertJSON)
@@ -2632,8 +2638,12 @@ nulla pariatur.`
 			"One and only one %s alert should be reported because of the eviction problems", expectedAlertName)
 
 		expectedAnnotation := fmt.Sprintf("Drain failed on %s , updates may be blocked. For more details check MachineConfigController pod logs: oc logs -f -n openshift-machine-config-operator machine-config-controller-xxxxx -c machine-config-controller", workerNode.GetName())
-		o.Expect(alertJSON[0].Get("annotations").Get("message")).Should(o.ContainSubstring(expectedAnnotation),
+		o.Expect(alertJSON[0].Get("annotations").Get("message").ToString()).Should(o.ContainSubstring(expectedAnnotation),
 			"The error description should make a reference to the pod info")
+
+		// Since OCPBUGS-904 we need to check that the namespace is reported properly
+		o.Expect(alertJSON[0].Get("labels").Get("namespace").ToString()).Should(o.Equal(MachineConfigNamespace),
+			"The alert's namespace has not the right value")
 		logger.Infof("OK!\n")
 
 		g.By("Remove the  pod disruption budget")
@@ -2644,6 +2654,12 @@ nulla pariatur.`
 		o.Eventually(mcp.pollDegradedStatus(),
 			"10m", "30s").Should(o.Equal("False"),
 			"After removing the PodDisruptionBudget the eviction should have succeeded and the worker pool should stop being degraded")
+		logger.Infof("OK!\n")
+
+		g.By("Verfiy that the alert is not triggered anymore")
+		o.Eventually(getAlertsByName, "5m", "20s").WithArguments(oc, expectedAlertName).
+			Should(o.HaveLen(0),
+				"Alert is not removed after the problem is fixed!")
 		logger.Infof("OK!\n")
 	})
 
