@@ -157,6 +157,16 @@ type runtimeTimeoutDescription struct {
 	template   string
 }
 
+type upgradeMachineconfig1Description struct {
+	name     string
+	template string
+}
+
+type upgradeMachineconfig2Description struct {
+	name     string
+	template string
+}
+
 func (podWkloadCpu *podWkloadCpuDescription) create(oc *exutil.CLI) {
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podWkloadCpu.template, "-p", "NAME="+podWkloadCpu.name, "NAMESPACE="+podWkloadCpu.namespace, "WORKLOADCPU="+podWkloadCpu.workloadcpu)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -224,6 +234,26 @@ func (runtimeTimeout *runtimeTimeoutDescription) create(oc *exutil.CLI) {
 
 func (runtimeTimeout *runtimeTimeoutDescription) delete(oc *exutil.CLI) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", runtimeTimeout.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (upgradeMachineconfig1 *upgradeMachineconfig1Description) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", upgradeMachineconfig1.template, "-p", "NAME="+upgradeMachineconfig1.name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (upgradeMachineconfig1 *upgradeMachineconfig1Description) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", upgradeMachineconfig1.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (upgradeMachineconfig2 *upgradeMachineconfig2Description) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", upgradeMachineconfig2.template, "-p", "NAME="+upgradeMachineconfig2.name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (upgradeMachineconfig2 *upgradeMachineconfig2Description) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", upgradeMachineconfig2.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1164,4 +1194,38 @@ func checkConmonForAllNode(oc *exutil.CLI) {
 		e2e.Logf("conmon string is:\n %v\n", configStr)
 	}
 	exutil.AssertWaitPollNoErr(waitErr, "the conmon is not as expected!")
+}
+
+func checkUpgradeMachineConfig(oc *exutil.CLI) {
+
+	var machineconfig string
+	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+		upgradestatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "machine-config").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Upgrade status is %s\n", upgradestatus)
+		machineconfig, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		if strings.Contains(string(machineconfig), "99-worker-generated-kubelet-1") {
+			re := regexp.MustCompile("99-worker-generated-kubelet")
+			found := re.FindAllString(machineconfig, -1)
+			lenstr := len(found)
+			if lenstr == 2 {
+				e2e.Logf("\n Upgrade happened successfully")
+				return true, nil
+			} else {
+				e2e.Logf("\nError")
+				return false, nil
+			}
+		} else {
+			e2e.Logf(" Upgarde has failed \n")
+			return false, nil
+		}
+
+		return true, nil
+	})
+	if waitErr != nil {
+		e2e.Logf("machine config is %s\n", machineconfig)
+	}
+	exutil.AssertWaitPollNoErr(waitErr, "the machine config is not as expected.")
 }

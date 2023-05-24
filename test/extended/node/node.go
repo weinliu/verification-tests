@@ -19,22 +19,24 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	defer g.GinkgoRecover()
 
 	var (
-		oc                   = exutil.NewCLI("node-"+getRandomString(), exutil.KubeConfigPath())
-		buildPruningBaseDir  = exutil.FixturePath("testdata", "node")
-		customTemp           = filepath.Join(buildPruningBaseDir, "pod-modify.yaml")
-		podTerminationTemp   = filepath.Join(buildPruningBaseDir, "pod-termination.yaml")
-		podInitConTemp       = filepath.Join(buildPruningBaseDir, "pod-initContainer.yaml")
-		podSleepTemp         = filepath.Join(buildPruningBaseDir, "sleepPod46306.yaml")
-		kubeletConfigTemp    = filepath.Join(buildPruningBaseDir, "kubeletconfig-hardeviction.yaml")
-		memHogTemp           = filepath.Join(buildPruningBaseDir, "mem-hog-ocp11600.yaml")
-		podTwoContainersTemp = filepath.Join(buildPruningBaseDir, "pod-with-two-containers.yaml")
-		podUserNSTemp        = filepath.Join(buildPruningBaseDir, "pod-user-namespace.yaml")
-		ctrcfgOverlayTemp    = filepath.Join(buildPruningBaseDir, "containerRuntimeConfig-overlay.yaml")
-		podHelloTemp         = filepath.Join(buildPruningBaseDir, "pod-hello.yaml")
-		podWkloadCpuTemp     = filepath.Join(buildPruningBaseDir, "pod-workload-cpu.yaml")
-		podWkloadCpuNoAnTemp = filepath.Join(buildPruningBaseDir, "pod-workload-cpu-without-anotation.yaml")
-		podNoWkloadCpuTemp   = filepath.Join(buildPruningBaseDir, "pod-without-workload-cpu.yaml")
-		runtimeTimeoutTemp   = filepath.Join(buildPruningBaseDir, "kubeletconfig-runReqTout.yaml")
+		oc                        = exutil.NewCLI("node-"+getRandomString(), exutil.KubeConfigPath())
+		buildPruningBaseDir       = exutil.FixturePath("testdata", "node")
+		customTemp                = filepath.Join(buildPruningBaseDir, "pod-modify.yaml")
+		podTerminationTemp        = filepath.Join(buildPruningBaseDir, "pod-termination.yaml")
+		podInitConTemp            = filepath.Join(buildPruningBaseDir, "pod-initContainer.yaml")
+		podSleepTemp              = filepath.Join(buildPruningBaseDir, "sleepPod46306.yaml")
+		kubeletConfigTemp         = filepath.Join(buildPruningBaseDir, "kubeletconfig-hardeviction.yaml")
+		memHogTemp                = filepath.Join(buildPruningBaseDir, "mem-hog-ocp11600.yaml")
+		podTwoContainersTemp      = filepath.Join(buildPruningBaseDir, "pod-with-two-containers.yaml")
+		podUserNSTemp             = filepath.Join(buildPruningBaseDir, "pod-user-namespace.yaml")
+		ctrcfgOverlayTemp         = filepath.Join(buildPruningBaseDir, "containerRuntimeConfig-overlay.yaml")
+		podHelloTemp              = filepath.Join(buildPruningBaseDir, "pod-hello.yaml")
+		podWkloadCpuTemp          = filepath.Join(buildPruningBaseDir, "pod-workload-cpu.yaml")
+		podWkloadCpuNoAnTemp      = filepath.Join(buildPruningBaseDir, "pod-workload-cpu-without-anotation.yaml")
+		podNoWkloadCpuTemp        = filepath.Join(buildPruningBaseDir, "pod-without-workload-cpu.yaml")
+		runtimeTimeoutTemp        = filepath.Join(buildPruningBaseDir, "kubeletconfig-runReqTout.yaml")
+		upgradeMachineConfigTemp1 = filepath.Join(buildPruningBaseDir, "custom-kubelet-test1.yaml")
+		upgradeMachineConfigTemp2 = filepath.Join(buildPruningBaseDir, "custom-kubelet-test2.yaml")
 
 		podWkloadCpu52313 = podNoWkloadCpuDescription{
 			name:      "",
@@ -136,6 +138,15 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			labelkey:   "",
 			labelvalue: "",
 			template:   runtimeTimeoutTemp,
+		}
+
+		upgradeMachineconfig1 = upgradeMachineconfig1Description{
+			name:     "",
+			template: upgradeMachineConfigTemp1,
+		}
+		upgradeMachineconfig2 = upgradeMachineconfig2Description{
+			name:     "",
+			template: upgradeMachineConfigTemp2,
 		}
 	)
 	// author: pmali@redhat.com
@@ -717,6 +728,53 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		g.By("Check Runtime Request Timeout")
 		runTimeTimeout(oc)
+	})
+
+	//author :asahay@redhat.com
+
+	g.It("NonPreRelease-PreChkUpgrade-Author:asahay-High-45436-Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
+
+		upgradeMachineconfig1.name = "max-pod"
+		upgradeMachineconfig2.name = "max-pod-1"
+		g.By("Create first KubeletConfig \n")
+		upgradeMachineconfig1.create(oc)
+
+		g.By("Check mcp finish rolling out")
+		mcpName := "worker"
+		err := checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		g.By("Create second KubeletConfig \n")
+		upgradeMachineconfig2.create(oc)
+
+		g.By("Check mcp finish rolling out")
+		mcpName1 := "worker"
+		err1 := checkMachineConfigPoolStatus(oc, mcpName1)
+		exutil.AssertWaitPollNoErr(err1, "macineconfigpool worker update failed")
+
+	})
+
+	g.It("NonPreRelease-PstChkUpgrade-Author:asahay-High-45436-post check Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
+		upgradeMachineconfig1.name = "max-pod"
+		defer func() {
+			g.By("Delete the KubeletConfig")
+			cleanupObjectsClusterScope(oc, objectTableRefcscope{"KubeletConfig", upgradeMachineconfig1.name})
+			g.By("Check mcp finish rolling out")
+			err := checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "mcp is not updated")
+		}()
+
+		upgradeMachineconfig2.name = "max-pod-1"
+		defer func() {
+			g.By("Delete the KubeletConfig")
+			cleanupObjectsClusterScope(oc, objectTableRefcscope{"KubeletConfig", upgradeMachineconfig2.name})
+			g.By("Check mcp finish rolling out")
+			err := checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "mcp is not updated")
+		}()
+		g.By("Checking no duplicate machine config")
+		checkUpgradeMachineConfig(oc)
+
 	})
 
 	//author: minmli@redhat.com
