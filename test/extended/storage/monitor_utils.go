@@ -62,16 +62,8 @@ func (mo *monitor) waitSpecifiedMetricValueAsExpected(metricName string, valueJS
 
 // GetSAToken get a token assigned to prometheus-k8s from openshift-monitoring namespace
 func getSAToken(oc *exutil.CLI) string {
-	e2e.Logf("Getting a token assgined to prometheus-k8s from openshift-monitoring namespace...")
-	var (
-		token string
-		err   error
-	)
-	if versionIsAbove(getClientVersion(oc), "4.10") {
-		token, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("token", prometheusK8s, "-n", prometheusNamespace).Output()
-	} else {
-		token, err = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", prometheusK8s, "-n", prometheusNamespace).Output()
-	}
+	e2e.Logf("Create a token for prometheus-k8s sa from openshift-monitoring namespace...")
+	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", prometheusK8s, "-n", prometheusNamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(token).NotTo(o.BeEmpty())
 	return token
