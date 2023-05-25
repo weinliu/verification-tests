@@ -10,7 +10,7 @@ objects:
     namespace: "${NAMESPACE}"
   spec:
     containers:
-      - image: nginxinc/nginx-unprivileged:1.21
+      - image: quay.io/security-profiles-operator/test-nginx-unprivileged:1.21
         name: nginx
         securityContext:
           seLinuxOptions:

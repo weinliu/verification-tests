@@ -35,6 +35,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		selinuxProfileCustomTemplate  string
 		workloadDaeTemplate           string
 		workloadDeployTemplate        string
+		podWithLabelsTemplate         string
+		podWithOneLabelTemplate       string
 
 		ogD                 operatorGroupDescription
 		subD                subscriptionDescription
@@ -51,6 +53,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		selinuxProfileNginxTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-nginx.yaml")
 		selinuxProfileCustomTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-with-custom-policy-template.yaml")
 		podWithSelinuxProfileTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-with-selinux-profile.yaml")
+		podWithLabelsTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-labels.yaml")
+		podWithOneLabelTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-one-label.yaml")
 		profileRecordingTemplate = filepath.Join(buildPruningBaseDir, "/spo/profile-recording.yaml")
 		saRoleRolebindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/sa-previleged-role-rolebinding.yaml")
 		workloadDaeTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-daemonset.yaml")
@@ -463,6 +467,153 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		checkPrfolieStatus(oc, "SelinuxProfile", ns2, "Installed")
 		checkPrfolieNumbers(oc, "SelinuxProfile", ns1, linuxWorkerCount*2)
 		checkPrfolieNumbers(oc, "SelinuxProfile", ns2, 6)
+	})
+
+	// author: xiyuan@redhat.com
+	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-61609-High-61599-check enable memory optimization in spod could work for seccompprofiles/selinuxprofiles recording for pod [Slow][Disruptive]", func() {
+		ns1 := "mytest" + getRandomString()
+		ns2 := "mytest" + getRandomString()
+		var (
+			profileRecordingSec = profileRecordingDescription{
+				name:       "spo-recording-sec-" + getRandomString(),
+				namespace:  ns1,
+				kind:       "SeccompProfile",
+				labelKey:   "app",
+				labelValue: "my-app",
+				template:   profileRecordingTemplate,
+			}
+			podWithoutLabelSec = workloadDescription{
+				name:         "pod-without-label" + getRandomString(),
+				namespace:    ns1,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingSec.labelKey,
+				labelValue:   profileRecordingSec.labelValue,
+				imageName:    "redis",
+				image:        "quay.io/security-profiles-operator/redis:6.2.1",
+				template:     podWithOneLabelTemplate,
+			}
+			podWithLabelsSec = workloadDescription{
+				name:         "pod-with-label" + getRandomString(),
+				namespace:    ns1,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingSec.labelKey,
+				labelValue:   profileRecordingSec.labelValue,
+				labelKey2:    "spo.x-k8s.io/enable-recording",
+				labelValue2:  "true",
+				imageName:    "nginx",
+				image:        "quay.io/security-profiles-operator/test-nginx-unprivileged:1.21",
+				template:     podWithLabelsTemplate,
+			}
+			profileRecordingSel = profileRecordingDescription{
+				name:       "spo-recording-sel-" + getRandomString(),
+				namespace:  ns2,
+				kind:       "SelinuxProfile",
+				labelKey:   "app",
+				labelValue: "my-app",
+				template:   profileRecordingTemplate,
+			}
+			podWithoutLabelSel = workloadDescription{
+				name:         "pod-without-label" + getRandomString(),
+				namespace:    ns2,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingSec.labelKey,
+				labelValue:   profileRecordingSec.labelValue,
+				imageName:    "redis",
+				image:        "quay.io/security-profiles-operator/redis:6.2.1",
+				template:     podWithOneLabelTemplate,
+			}
+			podWithLabelsSel = workloadDescription{
+				name:         "pod-with-label" + getRandomString(),
+				namespace:    ns2,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingSel.labelKey,
+				labelValue:   profileRecordingSel.labelValue,
+				labelKey2:    "spo.x-k8s.io/enable-recording",
+				labelValue2:  "true",
+				imageName:    "nginx",
+				image:        "quay.io/security-profiles-operator/test-nginx-unprivileged:1.21",
+				template:     podWithLabelsTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		defer func() {
+			patch := fmt.Sprintf("{\"spec\":{\"enableMemoryOptimization\":false}}")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+			// trigger spod daemonset restart manually before bug https://issues.redhat.com/browse/OCPBUGS-14063 fixed
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("daemonsets", "spod", "-n", subD.namespace, "--ignore-not-found").Execute()
+			nodeCount := getNodeCount(oc)
+			checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		}()
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true,\"enableMemoryOptimization\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		nodeCount := getNodeCount(oc)
+		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ns", ns1, ns1},
+			objectTableRef{"ns", ns2, ns2})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		exutil.SetNamespacePrivileged(oc, ns1)
+		exutil.SetNamespacePrivileged(oc, ns2)
+
+		g.By("Create profilerecording !!!")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("profilerecording", profileRecordingSec.name, "-n", ns1, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("profilerecording", profileRecordingSel.name, "-n", ns2, "--ignore-not-found").Execute()
+		profileRecordingSec.create(oc)
+		profileRecordingSel.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingSec.name, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingSel.name, "-n", ns2}).check(oc)
+
+		g.By("Create workload !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", ns1, podWithoutLabelSec.name},
+			objectTableRef{"pod", ns1, podWithLabelsSec.name},
+			objectTableRef{"pod", ns2, podWithoutLabelSel.name},
+			objectTableRef{"pod", ns2, podWithLabelsSel.name})
+		podWithoutLabelSec.create(oc)
+		podWithLabelsSec.create(oc)
+		podWithoutLabelSel.create(oc)
+		podWithLabelsSel.create(oc)
+		exutil.AssertPodToBeReady(oc, podWithoutLabelSec.name, ns1)
+		exutil.AssertPodToBeReady(oc, podWithLabelsSec.name, ns1)
+		exutil.AssertPodToBeReady(oc, podWithoutLabelSel.name, ns2)
+		exutil.AssertPodToBeReady(oc, podWithLabelsSel.name, ns2)
+
+		g.By("Check seccompprofile/selinuxprofile recorded !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SeccompProfile", ns1, "--all"})
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SelinuxProfile", ns2, "--all"})
+		//sleep 30s so the selinuxprofiles of the worklod could be recorded
+		time.Sleep(30 * time.Second)
+		cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", ns1, podWithoutLabelSec.name},
+			objectTableRef{"pod", ns1, podWithLabelsSec.name},
+			objectTableRef{"pod", ns2, podWithoutLabelSel.name},
+			objectTableRef{"pod", ns2, podWithLabelsSel.name})
+		checkPrfolieNumbers(oc, "SeccompProfile", ns1, 1)
+		checkPrfolieNumbers(oc, "SelinuxProfile", ns2, 1)
+		checkPrfolieStatus(oc, "SelinuxProfile", ns1, "Installed")
+		checkPrfolieStatus(oc, "SelinuxProfile", ns2, "Installed")
+
+		g.By("Check seccompprofile/selinuxprofile name is expected !!!")
+		spShouldNotExists := profileRecordingSec.name + "-" + podWithoutLabelSel.imageName
+		spShouldExists := profileRecordingSec.name + "-" + podWithLabelsSec.imageName
+		selinuxProfileShouldNotExists := profileRecordingSel.name + "-" + podWithoutLabelSel.imageName
+		selinuxProfileShouldExists := profileRecordingSel.name + "-" + podWithLabelsSel.imageName
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"SeccompProfile", spShouldNotExists, "-n", ns1}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, spShouldExists, ok, []string{"SeccompProfile", "-n", ns1,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"selinuxprofile", selinuxProfileShouldNotExists,
+			"-n", ns2}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, selinuxProfileShouldExists, ok, []string{"selinuxprofiles", "-n", ns2,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 	})
 
 	// author: xiyuan@redhat.com

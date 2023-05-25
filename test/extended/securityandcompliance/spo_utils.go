@@ -35,6 +35,10 @@ type workloadDescription struct {
 	saName       string
 	labelKey     string
 	labelValue   string
+	labelKey2    string
+	labelValue2  string
+	image        string
+	imageName    string
 	template     string
 }
 
@@ -99,7 +103,8 @@ func (saRoleRoleBinding *saRoleRoleBindingDescription) create(oc *exutil.CLI) {
 
 func (workload *workloadDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", workload.template, "-p", "NAME="+workload.name, "NAMESPACE="+workload.namespace,
-		"WORKLOADKIND="+workload.workloadKind, "SANAME="+workload.saName, "LABELKEY="+workload.labelKey, "LABELVALUE="+workload.labelValue)
+		"WORKLOADKIND="+workload.workloadKind, "SANAME="+workload.saName, "LABELKEY="+workload.labelKey, "LABELVALUE="+workload.labelValue, "LABELKEY2="+workload.labelKey2,
+		"LABELVALUE2="+workload.labelValue2, "IMAGE="+workload.image, "IMAGENAME="+workload.imageName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
