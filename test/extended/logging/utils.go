@@ -3,14 +3,17 @@ package logging
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -2783,4 +2786,82 @@ func waitForOperatorsRunning(oc *exutil.CLI) {
 		return checkOperatorsRunning(oc)
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to wait for operators to be running: %v", err))
+}
+
+func doHTTPRequest(header http.Header, address, path, query, method string, quiet bool, attempts int, requestBody io.Reader, expectedStatusCode int) ([]byte, error) {
+	us, err := buildURL(address, path, query)
+	if err != nil {
+		return nil, err
+	}
+	if !quiet {
+		e2e.Logf(us)
+	}
+
+	req, err := http.NewRequest(strings.ToUpper(method), us, requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header = header
+
+	var tr *http.Transport
+	proxy := getProxyFromEnv()
+	if len(proxy) > 0 {
+		proxyURL, err := url.Parse(proxy)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			Proxy:           http.ProxyURL(proxyURL),
+		}
+	} else {
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
+	client := &http.Client{Transport: tr}
+
+	var resp *http.Response
+	success := false
+
+	for attempts > 0 {
+		attempts--
+
+		resp, err = client.Do(req)
+		if err != nil {
+			e2e.Logf("error sending request %v", err)
+			continue
+		}
+		if resp.StatusCode != expectedStatusCode {
+			buf, _ := io.ReadAll(resp.Body) // nolint
+			e2e.Logf("Error response from server: %s %s (%v), attempts remaining: %d", resp.Status, string(buf), err, attempts)
+			if err := resp.Body.Close(); err != nil {
+				e2e.Logf("error closing body", err)
+			}
+			continue
+		}
+		success = true
+		break
+	}
+	if !success {
+		return nil, fmt.Errorf("run out of attempts while querying the server")
+	}
+
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			e2e.Logf("error closing body", err)
+		}
+	}()
+	return io.ReadAll(resp.Body)
+}
+
+// buildURL concats a url `http://foo/bar` with a path `/buzz`.
+func buildURL(u, p, q string) (string, error) {
+	url, err := url.Parse(u)
+	if err != nil {
+		return "", err
+	}
+	url.Path = path.Join(url.Path, p)
+	url.RawQuery = q
+	return url.String(), nil
 }

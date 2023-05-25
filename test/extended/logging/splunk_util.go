@@ -4,32 +4,36 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 func (s *splunkPodServer) checkLogs(query string, quiet bool) bool {
-	var searchResult splunkSearchResult
-	if err := s.doQuery(query, &searchResult); err != nil {
+	e2e.Logf("find logs using query string: %s", query)
+	searchResult, err := s.doQuery(query)
+	if searchResult == nil {
 		if !quiet {
 			e2e.Logf("%v", err)
 		}
-		e2e.Logf("can't find logs with query string: %s", query)
+		e2e.Logf("can't find logs for the query : %s", query)
 		return false
 	}
 	if len(searchResult.Results) == 0 {
-		e2e.Logf("can't find logs with query string: %s : Records.size() = 0", query)
+		e2e.Logf("can't find logs for the query: %s : Records.size() = 0", query)
 		return false
 	}
-	e2e.Logf("find logs with query string: %s", query)
+	e2e.Logf("Found records for the query: %s", query)
 	return true
 }
 
@@ -42,32 +46,44 @@ func (s *splunkPodServer) anyLogFound() bool {
 	return false
 }
 
-func (s *splunkPodServer) allLogsFound(queries []string) bool {
+func (s *splunkPodServer) allQueryFound(queries []string) bool {
 	if len(queries) == 0 {
 		queries = []string{
-			"log_type=infrastructure base-search _SYSTEMD_INVOCATION_ID |head 1",
-			"log_type=infrastructure base-search container_image|head 1",
 			"log_type=application|head 1",
-			"log_type=audit base-search /var/log/audit/audit.log|head 1",
-			"log_type=audit base-search /var/log/ovn/acl-audit-log.log|head 1",
-			"log_type=audit base-search /var/log/kube-apiserver/audit.log|head 1",
-			"log_type=audit base-search /var/log/oauth-server/audit.log|head 1",
+			"log_type=\"infrastructure\" _SYSTEMD_INVOCATION_ID |head 1",
+			"log_type=\"infrastructure\" container_image|head 1",
+			"log_type=\"audit\" .linux-audit.log|head 1",
+			"log_type=\"audit\" .ovn-audit.log|head 1",
+			"log_type=\"audit\" .k8s-audit.log|head 1",
+			"log_type=\"audit\" .openshift-audit.log|head 1",
 		}
 	}
+	//return false if any query fail
+	foundAll := true
 	for _, query := range queries {
-		if !s.checkLogs(query, false) {
-			return false
+		if s.checkLogs(query, false) == false {
+			foundAll = false
 		}
 	}
-	return true
+	return foundAll
 }
 
-func (s *splunkPodServer) doQuery(query string, out interface{}) error {
+func (s *splunkPodServer) allTypeLogsFound() bool {
+	queries := []string{
+		"log_type=\"infrastructure\" _SYSTEMD_INVOCATION_ID |head 1",
+		"log_type=\"infrastructure\" container_image|head 1",
+		"log_type=application|head 1",
+		"log_type=audit|head 1",
+	}
+	return s.allQueryFound(queries)
+}
+
+func (s *splunkPodServer) doQuery(query string) (*splunkSearchResult, error) {
 	searchID, err := s.requestSearchTask(query)
 	if searchID == "" {
-		return err
+		return nil, err
 	}
-	return s.extractSearchResponse(searchID, out)
+	return s.extractSearchResponse(searchID)
 }
 
 func (s *splunkPodServer) requestSearchTask(query string) (string, error) {
@@ -94,7 +110,7 @@ func (s *splunkPodServer) requestSearchTask(query string) (string, error) {
 	return resmap.Sid, err
 }
 
-func (s *splunkPodServer) extractSearchResponse(searchID string, out interface{}) error {
+func (s *splunkPodServer) extractSearchResponse(searchID string) (*splunkSearchResult, error) {
 	h := make(http.Header)
 	h.Add("Content-Type", "application/json")
 	h.Add(
@@ -103,30 +119,30 @@ func (s *splunkPodServer) extractSearchResponse(searchID string, out interface{}
 	)
 	params := url.Values{}
 	params.Add("output_mode", "json")
-	resp, err := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs/"+searchID+"/results", params.Encode(), "GET", true, 3, nil, 200)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(resp, out)
-}
 
-func createToSplunkSecret(oc *exutil.CLI, secretNamespace string, secretName string, hecToken string, caFile string, keyFile string, certFile string, passphrase string) {
-	// create secret to Splunk server
-	secretArgs := []string{"secret", "generic", secretName, "-n", secretNamespace, "--from-literal=hecToken=" + hecToken}
-	if caFile != "" {
-		secretArgs = append(secretArgs, "--from-file=ca-bundle.crt="+caFile)
+	var searchResult *splunkSearchResult
+	err := wait.Poll(15*time.Second, 120*time.Second, func() (bool, error) {
+		resp, err1 := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs/"+searchID+"/results", params.Encode(), "GET", true, 1, nil, 200)
+		if err1 != nil {
+			e2e.Logf("failed to get response: %v, try next round", err1)
+			return false, nil
+		}
+		err2 := json.Unmarshal(resp, &searchResult)
+		if err2 != nil {
+			e2e.Logf("failed to Unmarshal splunk response: %v, try next round", err2)
+			return false, nil
+		}
+
+		if len(searchResult.Results) == 0 {
+			e2e.Logf("no records from splunk server, try next round")
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return searchResult, fmt.Errorf("can't get records from splunk server")
 	}
-	if keyFile != "" {
-		secretArgs = append(secretArgs, "--from-file=tls.key="+keyFile)
-	}
-	if certFile != "" {
-		secretArgs = append(secretArgs, "--from-file=tls.crt="+certFile)
-	}
-	if passphrase != "" {
-		secretArgs = append(secretArgs, "--from-literal=passphrase="+passphrase)
-	}
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args(secretArgs...).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	return searchResult, nil
 }
 
 // Set the default values to the splunkPodServer Object
@@ -135,7 +151,8 @@ func (s *splunkPodServer) init() {
 	s.adminPassword = getRandomString()
 	s.hecToken = uuid.New().String()
 	//https://idelta.co.uk/generate-hec-tokens-with-python/,https://docs.splunk.com/Documentation/SplunkCloud/9.0.2209/Security/Passwordbestpracticesforadministrators
-	s.serviceName = s.name + "-service"
+	s.serviceName = s.name + "-0"
+	s.serviceURL = s.serviceName + "." + s.namespace + ".svc"
 	if s.name == "" {
 		s.name = "splunk-default"
 	}
@@ -149,7 +166,7 @@ func (s *splunkPodServer) init() {
 	}
 
 	//Exit if anyone of caFile, keyFile,CertFile is null
-	if s.authType == "tls_mutual" || s.authType == "tls_serveronly" {
+	if s.authType == "tls_clientauth" || s.authType == "tls_serveronly" {
 		o.Expect(s.caFile == "").To(o.BeFalse())
 		o.Expect(s.keyFile == "").To(o.BeFalse())
 		o.Expect(s.certFile == "").To(o.BeFalse())
@@ -161,9 +178,10 @@ func (s *splunkPodServer) deploy(oc *exutil.CLI) {
 	appDomain, err := getAppDomain(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	//splunkd route URL
-	s.splunkdRoute = s.name + "-splunkd." + s.namespace + "." + appDomain
+	s.splunkdRoute = s.name + "-splunkd-" + s.namespace + "." + appDomain
 	//splunkd hec URL
-	s.hecRoute = s.name + "-hec." + s.namespace + "." + appDomain
+	s.hecRoute = s.name + "-hec-" + s.namespace + "." + appDomain
+	s.webRoute = s.name + "-web-" + s.namespace + "." + appDomain
 
 	err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "nonroot", "-z", "default", "-n", s.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -172,13 +190,15 @@ func (s *splunkPodServer) deploy(oc *exutil.CLI) {
 	switch s.authType {
 	case "http":
 		s.deployHTTPSplunk(oc)
-	case "tls_mutual":
+	case "tls_clientauth":
 		s.deployCustomCertClientForceSplunk(oc)
 	case "tls_serveronly":
 		s.deployCustomCertSplunk(oc)
 	default:
 		s.deployHTTPSplunk(oc)
 	}
+	//In general, it take 1 minutes to be started, here wait 30second before call  waitForStatefulsetReady
+	time.Sleep(30 * time.Second)
 	waitForStatefulsetReady(oc, s.namespace, s.name)
 }
 
@@ -187,7 +207,7 @@ func (s *splunkPodServer) deployHTTPSplunk(oc *exutil.CLI) {
 	//Create secret for splunk Statefulset
 	secretTemplate := filepath.Join(filePath, "secret_splunk_template.yaml")
 	secret := resource{"secret", s.name, s.namespace}
-	err := secret.applyFromTemplate(oc, "-f", secretTemplate, "-p", "NAME="+secret.name, "-p", "HEC_TOKEN="+s.hecToken, "-p", "PASSWORD="+s.adminPassword, "-p", "HEC_SSL=False", "-p", "HTTP_SSL=0")
+	err := secret.applyFromTemplate(oc, "-f", secretTemplate, "-p", "NAME="+secret.name, "-p", "HEC_TOKEN="+s.hecToken, "-p", "PASSWORD="+s.adminPassword)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	//create splunk StatefulSet
@@ -209,16 +229,19 @@ func (s *splunkPodServer) deployHTTPSplunk(oc *exutil.CLI) {
 }
 
 func (s *splunkPodServer) genHecPemFile(hecFile string) error {
-	dat1, err := os.ReadFile(s.caFile)
+	dat1, err := os.ReadFile(s.certFile)
 	if err != nil {
+		e2e.Logf("Can not find the certFile %s", s.certFile)
 		return err
 	}
 	dat2, err := os.ReadFile(s.keyFile)
 	if err != nil {
+		e2e.Logf("Can not find the keyFile %s", s.keyFile)
 		return err
 	}
-	dat3, err := os.ReadFile(s.certFile)
+	dat3, err := os.ReadFile(s.caFile)
 	if err != nil {
+		e2e.Logf("Can not find the caFile %s", s.caFile)
 		return err
 	}
 
@@ -233,20 +256,31 @@ func (s *splunkPodServer) genHecPemFile(hecFile string) error {
 func (s *splunkPodServer) deployCustomCertSplunk(oc *exutil.CLI) {
 	//Create basic secret content for splunk Statefulset
 	filePath := exutil.FixturePath("testdata", "logging", "external-log-stores", "splunk")
-	secretTemplate := filepath.Join(filePath, "secret_splunk_template.yaml")
+	secretTemplate := filepath.Join(filePath, "secret_tls_splunk_template.yaml")
+	if s.passphrase != "" {
+		secretTemplate = filepath.Join(filePath, "secret_tls_passphase_splunk_template.yaml")
+	}
 	secret := resource{"secret", s.name, s.namespace}
-	err := secret.applyFromTemplate(oc, "-f", secretTemplate, "-p", "NAME="+secret.name, "-p", "HEC_TOKEN="+s.hecToken, "-p", "PASSWORD="+s.adminPassword, "-p HEC_SSL=True -p HTTP_SSL=1")
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if s.passphrase != "" {
+		err := secret.applyFromTemplate(oc, "-f", secretTemplate, "-p", "NAME="+secret.name, "-p", "HEC_TOKEN="+s.hecToken, "-p", "PASSWORD="+s.adminPassword, "-p", "PASSPHASE="+s.passphrase)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		err := secret.applyFromTemplate(oc, "-f", secretTemplate, "-p", "NAME="+secret.name, "-p", "HEC_TOKEN="+s.hecToken, "-p", "PASSWORD="+s.adminPassword)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 
+	//HEC need all in one PEM file.
 	hecPemFile := "/tmp/" + getRandomString() + "hecAllKeys.crt"
 	defer os.Remove(hecPemFile)
-	err = s.genHecPemFile(hecPemFile)
+	err := s.genHecPemFile(hecPemFile)
 	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//The secret will be mounted into splunk pods and used in server.conf,inputs.conf
 	args := []string{"data", "secret/" + secret.name, "-n", secret.namespace}
 	args = append(args, "--from-file=hec.pem="+hecPemFile)
 	args = append(args, "--from-file=ca.pem="+s.caFile)
 	args = append(args, "--from-file=key.pem="+s.keyFile)
-	args = append(args, "--from-file=crt.pem="+s.certFile)
+	args = append(args, "--from-file=cert.pem="+s.certFile)
 	if s.passphrase != "" {
 		args = append(args, "--from-literal=passphrase="+s.passphrase)
 	}
@@ -274,20 +308,31 @@ func (s *splunkPodServer) deployCustomCertSplunk(oc *exutil.CLI) {
 func (s *splunkPodServer) deployCustomCertClientForceSplunk(oc *exutil.CLI) {
 	//Create secret for splunk Statefulset
 	filePath := exutil.FixturePath("testdata", "logging", "external-log-stores", "splunk")
-	secretTemplate := filepath.Join(filePath, "secret_splunk_template.yaml")
+	secretTemplate := filepath.Join(filePath, "secret_tls_splunk_template.yaml")
+	if s.passphrase != "" {
+		secretTemplate = filepath.Join(filePath, "secret_tls_passphase_splunk_template.yaml")
+	}
 	secret := resource{"secret", s.name, s.namespace}
-	err := secret.applyFromTemplate(oc, "-f", secretTemplate, "-n", s.namespace, "-p", "NAME="+secret.name, "-p", "HEC_TOKEN="+s.hecToken, "-p", "PASSWORD="+s.adminPassword, "-p HEC_SSL=True -p HTTP_SSL=1 -p HEC_CLIENTAUTH=True")
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if s.passphrase != "" {
+		err := secret.applyFromTemplate(oc, "-f", secretTemplate, "-p", "NAME="+secret.name, "-p", "HEC_TOKEN="+s.hecToken, "-p", "PASSWORD="+s.adminPassword, "-p", "HEC_CLIENTAUTH=True", "-p", "PASSPHASE="+s.passphrase)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		err := secret.applyFromTemplate(oc, "-f", secretTemplate, "-p", "NAME="+secret.name, "-p", "HEC_TOKEN="+s.hecToken, "-p", "PASSWORD="+s.adminPassword, "-p", "HEC_CLIENTAUTH=True")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 
+	//HEC need all in one PEM file.
 	hecPemFile := "/tmp/" + getRandomString() + "hecAllKeys.crt"
 	defer os.Remove(hecPemFile)
-	err = s.genHecPemFile(hecPemFile)
+	err := s.genHecPemFile(hecPemFile)
 	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//The secret will be mounted into splunk pods and used in server.conf,inputs.conf
 	secretArgs := []string{"data", "secret/" + secret.name, "-n", secret.namespace}
 	secretArgs = append(secretArgs, "--from-file=hec.pem="+hecPemFile)
 	secretArgs = append(secretArgs, "--from-file=ca.pem="+s.caFile)
 	secretArgs = append(secretArgs, "--from-file=key.pem="+s.keyFile)
-	secretArgs = append(secretArgs, "--from-file=crt.pem="+s.certFile)
+	secretArgs = append(secretArgs, "--from-file=cert.pem="+s.certFile)
 	if s.passphrase != "" {
 		secretArgs = append(secretArgs, "--from-literal=passphrase="+s.passphrase)
 	}
@@ -318,4 +363,32 @@ func (s *splunkPodServer) destroy(oc *exutil.CLI) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("statefulset", s.name, "-n", "-n", s.namespace).Execute()
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", s.name, "-n", "-n", s.namespace).Execute()
 	oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-scc-from-user", "nonroot", "-z", "default", "-n", s.namespace).Execute()
+}
+
+// Create the secret which is used in CLF
+func (toSp *toSplunkSecret) create(oc *exutil.CLI) {
+	secretArgs := []string{"secret", "generic", toSp.name, "-n", toSp.namespace}
+
+	if toSp.hecToken != "" {
+		secretArgs = append(secretArgs, "--from-literal=hecToken="+toSp.hecToken)
+	}
+	if toSp.caFile != "" {
+		secretArgs = append(secretArgs, "--from-file=ca-bundle.crt="+toSp.caFile)
+	}
+	if toSp.keyFile != "" {
+		secretArgs = append(secretArgs, "--from-file=tls.key="+toSp.keyFile)
+	}
+	if toSp.certFile != "" {
+		secretArgs = append(secretArgs, "--from-file=tls.crt="+toSp.certFile)
+	}
+	if toSp.passphrase != "" {
+		secretArgs = append(secretArgs, "--from-literal=passphrase="+toSp.passphrase)
+	}
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args(secretArgs...).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (toSp *toSplunkSecret) delete(oc *exutil.CLI) {
+	s := resource{"secret", toSp.name, toSp.namespace}
+	s.clear(oc)
 }

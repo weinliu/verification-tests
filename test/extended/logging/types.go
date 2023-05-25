@@ -922,12 +922,25 @@ type splunkPodServer struct {
 	adminUser     string // admin user
 	adminPassword string // admin password
 	serviceName   string // http service name
+	serviceURL    string // http service URL
 	hecRoute      string // hec route
-	splunkdRoute  string // splunkd Route
-	caFile        string // the ca File
-	keyFile       string // the Key File
-	certFile      string // the cert File
-	passphrase    string // the passphase
+	webRoute      string // web route
+	splunkdRoute  string // splunkd route
+	caFile        string // The ca File
+	keyFile       string // The Key File
+	certFile      string // The cert File
+	passphrase    string // The passphase
+}
+
+// The secret used in CLF to splunk server
+type toSplunkSecret struct {
+	name       string // The secret name
+	namespace  string // The namespace where secret will be created
+	hecToken   string // The Splunk hec_token
+	caFile     string // The collector ca_file
+	keyFile    string // The collector Key File
+	certFile   string // The collector cert File
+	passphrase string // The passphase for the collect key
 }
 
 // The splunk response  for a search request.  It includes batch id which can be used to fetch log records

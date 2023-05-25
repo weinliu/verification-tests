@@ -16,7 +16,7 @@ objects:
       type: splunk
       url: ${URL}
       secret:
-        name: to-splunk-secret
+        name: ${SECRET_NAME}
     pipelines:
     - name: pipe1
       inputRefs: ${{INPUTREFS}}
@@ -25,6 +25,8 @@ objects:
 parameters:
 - name: NAME
   value: "instance"
+- name: SECRET_NAME
+  value: "to-splunk-secret"
 - name: NAMESPACE
   value: "openshift-logging"
 - name: URL
