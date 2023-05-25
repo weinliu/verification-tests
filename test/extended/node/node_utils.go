@@ -17,6 +17,37 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
+type liveProbeTermPeriod struct {
+	name                  string
+	namespace             string
+	terminationgrace      int
+	probeterminationgrace int
+	template              string
+}
+
+type startProbeTermPeriod struct {
+	name                  string
+	namespace             string
+	terminationgrace      int
+	probeterminationgrace int
+	template              string
+}
+
+type readProbeTermPeriod struct {
+	name                  string
+	namespace             string
+	terminationgrace      int
+	probeterminationgrace int
+	template              string
+}
+
+type liveProbeNoTermPeriod struct {
+	name             string
+	namespace        string
+	terminationgrace int
+	template         string
+}
+
 type podWkloadCpuNoAnotation struct {
 	name        string
 	namespace   string
@@ -138,6 +169,46 @@ type ctrcfgOverlayDescription struct {
 	name     string
 	overlay  string
 	template string
+}
+
+func (liveProbe *liveProbeTermPeriod) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", liveProbe.template, "-p", "NAME="+liveProbe.name, "NAMESPACE="+liveProbe.namespace, "TERMINATIONGRACE="+strconv.Itoa(liveProbe.terminationgrace), "PROBETERMINATIONGRACE="+strconv.Itoa(liveProbe.probeterminationgrace))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (liveProbe *liveProbeTermPeriod) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", liveProbe.namespace, "pod", liveProbe.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (startProbe *startProbeTermPeriod) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", startProbe.template, "-p", "NAME="+startProbe.name, "NAMESPACE="+startProbe.namespace, "TERMINATIONGRACE="+strconv.Itoa(startProbe.terminationgrace), "PROBETERMINATIONGRACE="+strconv.Itoa(startProbe.probeterminationgrace))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (startProbe *startProbeTermPeriod) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", startProbe.namespace, "pod", startProbe.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (readProbe *readProbeTermPeriod) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", readProbe.template, "-p", "NAME="+readProbe.name, "NAMESPACE="+readProbe.namespace, "TERMINATIONGRACE="+strconv.Itoa(readProbe.terminationgrace), "PROBETERMINATIONGRACE="+strconv.Itoa(readProbe.probeterminationgrace))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (readProbe *readProbeTermPeriod) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", readProbe.namespace, "pod", readProbe.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (liveProbe *liveProbeNoTermPeriod) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", liveProbe.template, "-p", "NAME="+liveProbe.name, "NAMESPACE="+liveProbe.namespace, "TERMINATIONGRACE="+strconv.Itoa(liveProbe.terminationgrace))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (liveProbe *liveProbeNoTermPeriod) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", liveProbe.namespace, "pod", liveProbe.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (podNoWkloadCpu *podNoWkloadCpuDescription) create(oc *exutil.CLI) {
@@ -1228,4 +1299,86 @@ func checkUpgradeMachineConfig(oc *exutil.CLI) {
 		e2e.Logf("machine config is %s\n", machineconfig)
 	}
 	exutil.AssertWaitPollNoErr(waitErr, "the machine config is not as expected.")
+}
+
+func ProbeTerminatePeriod(oc *exutil.CLI, terminatePeriod int, probeterminatePeriod int, podName string, namespace string, flag bool) {
+	var terminate = 0
+	if flag == true {
+		terminate = probeterminatePeriod
+	} else {
+		terminate = terminatePeriod
+	}
+	e2e.Logf("terminate is: %v", terminate)
+
+	waitErr := wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+		podDesc, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", podName, "-n", namespace).OutputToFile("podDesc.txt")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		probeFailT, _ := exec.Command("bash", "-c", "cat "+podDesc+" | grep \"Container.*failed.*probe, will be restarted\"").Output()
+		conStartT, _ := exec.Command("bash", "-c", "cat "+podDesc+" | grep \"Started container test\" ").Output()
+		e2e.Logf("probeFailT is: %v", string(probeFailT))
+		e2e.Logf("conStartT is: %v", string(conStartT))
+		if string(probeFailT) != "" && string(conStartT) != "" {
+			// count probeFailT- conStartT between  [terminate-3, terminate+3]
+			var time1 = strings.Fields(string(probeFailT))[2]
+			var time2 = strings.Fields(string(conStartT))[2]
+			var time1Min string
+			var timeTemp string
+			var time1Sec string
+			var time1MinInt int
+			var time1SecInt int
+			if strings.Contains(time1, "m") {
+				time1Min = strings.Split(time1, "m")[0]
+				timeTemp = strings.Split(time1, "m")[1]
+				time1Sec = strings.Split(timeTemp, "s")[0]
+				time1MinInt, err = strconv.Atoi(time1Min)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				time1SecInt, err = strconv.Atoi(time1Sec)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				time1Sec = strings.Split(time1, "s")[0]
+				time1SecInt, err = strconv.Atoi(time1Sec)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				time1MinInt = 0
+			}
+			e2e.Logf("time1Min:%v, timeTemp:%v, time1Sec:%v, time1MinInt:%v, time1SecInt:%v", time1Min, timeTemp, time1Sec, time1MinInt, time1SecInt)
+			timeSec1 := time1MinInt*60 + time1SecInt
+			e2e.Logf("timeSec1: %v ", timeSec1)
+
+			var time2Min string
+			var time2Sec string
+			var time2MinInt int
+			var time2SecInt int
+			if strings.Contains(time2, "m") {
+				time2Min = strings.Split(time2, "m")[0]
+				timeTemp = strings.Split(time2, "m")[1]
+				time2Sec = strings.Split(timeTemp, "s")[0]
+				time2MinInt, err = strconv.Atoi(time2Min)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				time2SecInt, err = strconv.Atoi(time2Sec)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				time2Sec = strings.Split(time2, "s")[0]
+				time2SecInt, err = strconv.Atoi(time2Sec)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				time2MinInt = 0
+			}
+			e2e.Logf("time2Min:%v, time2Sec:%v, time2MinInt:%v, time2SecInt:%v", time2Min, time2Sec, time2MinInt, time2SecInt)
+			timeSec2 := time2MinInt*60 + time2SecInt
+			e2e.Logf("timeSec2: %v ", timeSec2)
+
+			if ((timeSec1 - timeSec2) >= (terminate - 3)) && ((timeSec1 - timeSec2) <= (terminate + 3)) {
+				e2e.Logf("terminationGracePeriod check pass")
+				return true, nil
+			} else {
+				e2e.Logf("terminationGracePeriod check failed")
+				return false, nil
+			}
+
+		} else {
+			e2e.Logf("not capture data")
+			return false, nil
+		}
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "probe terminationGracePeriod is not as expected!")
 }
