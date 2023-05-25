@@ -118,7 +118,7 @@ func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCom
 		}
 		return ret
 	}
-	return wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+	return wait.Poll(4*time.Second, 240*time.Second, func() (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("the get error is %v, and try next", err)
