@@ -41,6 +41,25 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if strings.HasPrefix(getClusterRegion(oc), "us-iso") {
 			g.Skip("Skipped: AWS C2S/SC2S disconnected clusters are not satisfied for the testsuit")
 		}
+
+		// AWS clusters without marketplace capability enabled couldn't install the LSO
+		if !isEnabledCapability(oc, "marketplace") {
+			g.Skip("Skipped: AWS clusters without marketplace capability enabled are not satisfied the testsuit")
+		}
+
+		// AWS clusters without storage capability enabled doesn't create the openshift-cluster-csi-drivers ns
+		// AWS STS clusters without storage capability enabled don't have enough permission token for LSO test
+		if !isEnabledCapability(oc, "Storage") {
+			if exutil.IsSTSCluster(oc) {
+				g.Skip("Skipped: AWS STS clusters without storage capability enabled are not satisfied the testsuit")
+			} else {
+				getAwsCredentialFromSpecifiedSecret(oc, "kube-system", getRootSecretNameByCloudProvider())
+			}
+		} else {
+			getCredentialFromCluster(oc)
+		}
+
+		ac = newAwsClient()
 		lsoBaseDir = exutil.FixturePath("testdata", "storage")
 		lsoTemplate = filepath.Join(lsoBaseDir, "/lso/lso-subscription-template.yaml")
 		testChannel = getClusterVersionChannel(oc)
@@ -52,9 +71,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		myLso.install(oc)
 		myLso.waitInstallSucceed(oc)
 		allNodes = getAllNodesInfo(oc)
-		// Get the backend credential and init aws ec2 session
-		getCredentialFromCluster(oc)
-		ac = newAwsClient()
 		clusterIDTagKey, _ = getClusterID(oc)
 		clusterIDTagKey = "kubernetes.io/cluster/" + clusterIDTagKey
 	})

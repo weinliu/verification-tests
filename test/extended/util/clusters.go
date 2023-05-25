@@ -127,3 +127,10 @@ func SkipHypershiftHostedCluster(oc *CLI) {
 		g.Skip("Skip for Hypershift cluster")
 	}
 }
+
+// IsSTSCluster judges whether the test cluster is using the STS mode
+func IsSTSCluster(oc *CLI) bool {
+	tempCredentials, extractErr := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", "openshift-image-registry", "secret/installer-cloud-credentials", "--keys=credentials", "--to=-").Output()
+	o.Expect(extractErr).ShouldNot(o.HaveOccurred(), "Failed to extract the temp credentials for checking whether the cluster is using STS mode")
+	return strings.Contains(tempCredentials, "web_identity_token_file")
+}
