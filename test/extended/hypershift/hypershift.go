@@ -1011,7 +1011,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		e2e.Logf("defaultWorkerSecurityGroupID in hostedcluster is %s", defaultSG)
 
 		g.By("check nodepool and awsmachinetemplate's securitygroup ID")
-		nodepoolName := doOcpReq(oc, OcpGet, true, "nodepool", "-n", "--ignore-not-found", hostedcluster.namespace, fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].metadata.name}`, hostedcluster.name))
+		nodepoolName := doOcpReq(oc, OcpGet, true, "nodepool", "-n", hostedcluster.namespace, "--ignore-not-found", fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].metadata.name}`, hostedcluster.name))
 		o.Expect(nodepoolName).ShouldNot(o.BeEmpty())
 		if arr := strings.Split(nodepoolName, " "); len(arr) > 1 {
 			nodepoolName = arr[0]
