@@ -456,6 +456,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		o.Expect(digOutput1).To(o.ContainSubstring("udp: 512"))
 
+		g.By("Check the different DNS records")
+		// To find the PTR record
+		ingressContPod := getPodName(oc, "openshift-ingress-operator", " ")
+		digOutput3, err3 := oc.AsAdmin().Run("exec").Args("-n", "openshift-ingress-operator", ingressContPod[0],
+			"--", "dig", "+short", "10.0.30.172.in-addr.arpa", "PTR").Output()
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		o.Expect(digOutput3).To(o.ContainSubstring("dns-default.openshift-dns.svc.cluster.local."))
+
+		// To find the SRV record
+		digOutput4, err4 := oc.AsAdmin().Run("exec").Args("-n", "openshift-ingress-operator", ingressContPod[0], "--", "dig",
+			"+short", "_8080-tcp._tcp.ingress-canary.openshift-ingress-canary.svc.cluster.local", "SRV").Output()
+		o.Expect(err4).NotTo(o.HaveOccurred())
+		o.Expect(digOutput4).To(o.ContainSubstring("ingress-canary.openshift-ingress-canary.svc.cluster.local."))
+
 		// bug:- 1884053
 		g.By("Check Readiness probe configured to use the '/ready' path")
 		dnsPodName2 := getRandomDNSPodName(podList)
