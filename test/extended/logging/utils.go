@@ -103,7 +103,10 @@ func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 		configFile = output
 		return true, nil
 	})
-	return configFile, err
+	if err != nil {
+		return configFile, fmt.Errorf("failed to process template with the provided parameters")
+	}
+	return configFile, nil
 }
 
 func getProxyFromEnv() string {
@@ -467,7 +470,7 @@ type resource struct {
 
 // WaitUntilResourceIsGone waits for the resource to be removed cluster
 func (r resource) WaitUntilResourceIsGone(oc *exutil.CLI) error {
-	return wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
 		if err != nil {
 			errstring := fmt.Sprintf("%v", output)
@@ -478,6 +481,10 @@ func (r resource) WaitUntilResourceIsGone(oc *exutil.CLI) error {
 		}
 		return false, nil
 	})
+	if err != nil {
+		return fmt.Errorf("can't remove %s/%s in %s project", r.kind, r.name, r.namespace)
+	}
+	return nil
 }
 
 // delete the objects in the cluster
@@ -590,8 +597,7 @@ func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string) {
 		if cl.storageClassName != "" {
 			parameters = append(parameters, "STORAGE_CLASS="+cl.storageClassName, "PVC_SIZE="+cl.storageSize)
 		}
-	}
-	if cl.logStoreType == "lokistack" {
+	} else if cl.logStoreType == "lokistack" {
 		if cl.lokistackName == "" {
 			e2e.Failf("lokistack name is not provided")
 		}
@@ -658,8 +664,7 @@ func (cl *clusterlogging) delete(oc *exutil.CLI) {
 			// remove all the pvcs in the namespace
 			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", cl.namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
 		}
-	}
-	if cl.logStoreType == "lokistack" {
+	} else if cl.logStoreType == "lokistack" {
 		resources = append(resources, resource{"deployment", "logging-view-plugin", cl.namespace})
 	}
 	for i := 0; i < len(resources); i++ {
@@ -690,13 +695,11 @@ func (cl *clusterlogging) waitForLoggingReady(oc *exutil.CLI) {
 		}
 		// wait for Kibana
 		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "kibana")
+	} else if cl.logStoreType == "lokistack" {
+		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "logging-view-plugin")
 	}
 	// wait for collector
 	WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-
-	if cl.logStoreType == "lokistack" {
-		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "logging-view-plugin")
-	}
 }
 
 type clusterlogforwarder struct {

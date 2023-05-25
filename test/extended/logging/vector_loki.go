@@ -740,8 +740,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				"js":     {clientJsExc, nodeJsExc, v8JsExc},
 				"csharp": {csharpAsyncExc, csharpNestedExc, csharpExc},
 				"python": {pythonExc},
-				// skip php due to https://issues.redhat.com/browse/LOG-3878
-				// "php":    {phpOnGaeExc, phpExc},
+				"php":    {phpOnGaeExc, phpExc},
 				"dart": {
 					dartAbstractClassErr,
 					dartArgumentErr,

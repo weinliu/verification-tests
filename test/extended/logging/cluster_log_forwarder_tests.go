@@ -384,9 +384,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				g.By("check " + k + " logs\n")
 				waitForProjectLogsAppear(cl.namespace, esPods[0], "multiline-log-"+k+"-45256", "app-00")
 				for _, log := range v {
-					if log == v8JsExc {
-						continue // skip as there is a known issue in fluentd
-					}
 					var messages []string
 					err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 						indices, err := getIndexNamesViaRoute(esRoute, token, "app")
@@ -488,9 +485,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				g.By("check " + l + " logs\n")
 				waitForProjectLogsAppear(cl.namespace, esPods[0], "multiline-log-"+l+"-49040", "app-00")
 				for _, log := range multilineLogTypes[l] {
-					if log == v8JsExc {
-						continue // skip as there is a known issue in fluentd
-					}
 					var messages []string
 					err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 						indices, err := getIndexNamesViaRoute(esRoute, token, "app")
