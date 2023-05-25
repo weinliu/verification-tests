@@ -1446,7 +1446,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("clusterrole.rbac.authorization.k8s.io/system:image-puller added: \"system:unauthenticated\""))
 
 		g.By("Try to fetch image metadata")
-		output, err = oc.AsAdmin().Run("image").Args("info", "--insecure", host+"/openshift/tools:latest").Output()
+		output, err = oc.AsAdmin().Run("image").Args("info", "--insecure", host+"/openshift/tools:latest", "--show-multiarch").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).NotTo(o.ContainSubstring("error: unauthorized: authentication required"))
 		o.Expect(output).NotTo(o.ContainSubstring("Unable to connect to the server: no basic auth credentials"))
@@ -3288,12 +3288,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check a internal image info with --insecure  and --registry-config option")
-		err = waitForAnImageStreamTag(oc, "openshift", "cli", "latest")
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "test24167:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		info, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", regRoute+"/openshift/cli:latest", "--insecure", "-a", authFile).Output()
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test24167", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		info, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", regRoute+"/"+oc.Namespace()+"/test24167:latest", "--insecure", "-a", authFile).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(info).To(o.ContainSubstring("application/vnd.docker.distribution.manifest.v2+json"))
-		o.Expect(info).To(o.ContainSubstring("OS:          linux"))
+		o.Expect(info).To(o.ContainSubstring("OS:"))
 		o.Expect(info).To(o.ContainSubstring("Image Size"))
 		o.Expect(info).To(o.ContainSubstring("Layers"))
 
@@ -3309,9 +3311,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(info).To(o.ContainSubstring("Arch:          amd64"))
 
 		g.By("Check a manifest list image with --show-multiarch option")
-		info, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--filter-by-os=linux/arm64", "-o", "json").Output()
+		info, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--show-multiarch").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(info, "amd64")).To(o.BeTrue())
 		o.Expect(strings.Contains(info, "arm64")).To(o.BeTrue())
+		o.Expect(strings.Contains(info, "ppc64le")).To(o.BeTrue())
+		o.Expect(strings.Contains(info, "s390x")).To(o.BeTrue())
+
 	})
 
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-55007-ImageStreamChange triggers using annotations should work on statefulset", func() {
