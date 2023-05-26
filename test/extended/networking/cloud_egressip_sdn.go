@@ -32,9 +32,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "nutanix")
 		if !acceptedPlatform || !strings.Contains(networkType, "sdn") {
-			g.Skip("Test cases should be run on AWS, GCP, Azure, OpenStack, vSphere, IPI BM cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS, GCP, Azure, OpenStack, vSphere, IPI BM, Nutanix cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
 		}
 
 		if checkProxy(oc) {
@@ -139,6 +139,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			e2e.Logf("Use tcpdump way to verify egressIP on vSphere")
 		case "baremetal":
 			e2e.Logf("\n BareMetal is detected, running the case on BareMetal\n")
+			flag = "tcpdump"
+			e2e.Logf("Use tcpdump way to verify egressIP on BareMetal")
+		case "nutanix":
+			e2e.Logf("\n Nutanix is detected, running the case on Nutanix\n")
 			flag = "tcpdump"
 			e2e.Logf("Use tcpdump way to verify egressIP on BareMetal")
 		default:
@@ -1682,6 +1686,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "vsphere":
 			ipOutOfCIDR = "192.168.1.100"
 		case "baremetal":
+			ipOutOfCIDR = "192.168.1.100"
+		case "nutanix":
 			ipOutOfCIDR = "192.168.1.100"
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -3258,7 +3264,7 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "nutanix")
 		if !acceptedPlatform || !strings.Contains(networkType, "sdn") {
 			g.Skip("Test cases should be run on AWS, GCP, Azure, OpenStack, vSphere, IPI BM cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
 		}
