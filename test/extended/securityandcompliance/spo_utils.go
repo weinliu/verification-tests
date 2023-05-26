@@ -3,6 +3,7 @@ package securityandcompliance
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ type workloadDescription struct {
 	name         string
 	namespace    string
 	workloadKind string
+	replicas     int
 	saName       string
 	labelKey     string
 	labelValue   string
@@ -103,7 +105,7 @@ func (saRoleRoleBinding *saRoleRoleBindingDescription) create(oc *exutil.CLI) {
 
 func (workload *workloadDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", workload.template, "-p", "NAME="+workload.name, "NAMESPACE="+workload.namespace,
-		"WORKLOADKIND="+workload.workloadKind, "SANAME="+workload.saName, "LABELKEY="+workload.labelKey, "LABELVALUE="+workload.labelValue, "LABELKEY2="+workload.labelKey2,
+		"WORKLOADKIND="+workload.workloadKind, "REPLICAS="+strconv.Itoa(workload.replicas), "SANAME="+workload.saName, "LABELKEY="+workload.labelKey, "LABELVALUE="+workload.labelValue, "LABELKEY2="+workload.labelKey2,
 		"LABELVALUE2="+workload.labelValue2, "IMAGE="+workload.image, "IMAGENAME="+workload.imageName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }

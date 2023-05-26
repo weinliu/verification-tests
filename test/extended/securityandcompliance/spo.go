@@ -37,6 +37,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		workloadDeployTemplate        string
 		podWithLabelsTemplate         string
 		podWithOneLabelTemplate       string
+		workloadRepTemplate           string
 
 		ogD                 operatorGroupDescription
 		subD                subscriptionDescription
@@ -59,6 +60,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		saRoleRolebindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/sa-previleged-role-rolebinding.yaml")
 		workloadDaeTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-daemonset.yaml")
 		workloadDeployTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-deployment.yaml")
+		workloadRepTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-replicaset.yaml")
 
 		ogD = operatorGroupDescription{
 			name:      "security-profiles-operator",
@@ -754,5 +756,131 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofiles", "--all", "-n", subD.namespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("rawselinuxprofiles", "--all", "-n", subD.namespace, "--ignore-not-found").Execute()
 		g.By("delete seccompprofiles, selinuxprofiles and rawselinuxprofiles !!!")
+	})
+
+	// author: jkuriako@redhat.com
+	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
+	g.It("ConnectedOnly-NonPreRelease-Author:jkuriako-Medium-50264-Medium-50155-check Log enricher based selinuxrecording/seccompprofiles working as expected for replicaset [Slow][Disruptive]", func() {
+		ns1 := "mytest" + getRandomString()
+		ns2 := "mytest" + getRandomString()
+		var (
+			profileRecordingRep = profileRecordingDescription{
+				name:       "spo-recording1",
+				namespace:  ns1,
+				kind:       "SelinuxProfile",
+				labelKey:   "app",
+				labelValue: "hello-replicaset",
+				template:   profileRecordingTemplate,
+			}
+			saRoleRoleBindingRep = saRoleRoleBindingDescription{
+				saName:          "spo-record-sa1",
+				namespace:       ns1,
+				roleName:        "spo-record1" + getRandomString(),
+				roleBindingName: "spo-record1" + getRandomString(),
+				template:        saRoleRolebindingTemplate,
+			}
+			replicasetHelloSelinux = workloadDescription{
+				name:         "hello-replicaset",
+				namespace:    ns1,
+				workloadKind: "ReplicaSet",
+				replicas:     3,
+				saName:       saRoleRoleBindingRep.saName,
+				labelKey:     profileRecordingRep.labelKey,
+				labelValue:   profileRecordingRep.labelValue,
+				template:     workloadRepTemplate,
+			}
+			profileRecordingRepSec = profileRecordingDescription{
+				name:       "spo-recording2",
+				namespace:  ns2,
+				kind:       "SeccompProfile",
+				labelKey:   "app",
+				labelValue: "hello-replicaset-sec",
+				template:   profileRecordingTemplate,
+			}
+			saRoleRoleBindingRepSec = saRoleRoleBindingDescription{
+				saName:          "spo-record-sa2",
+				namespace:       ns2,
+				roleName:        "spo-record2" + getRandomString(),
+				roleBindingName: "spo-record2" + getRandomString(),
+				template:        saRoleRolebindingTemplate,
+			}
+			replicasetHelloSecc = workloadDescription{
+				name:         "hello-replicaset-sec",
+				namespace:    ns2,
+				workloadKind: "ReplicaSet",
+				replicas:     3,
+				saName:       saRoleRoleBindingRepSec.saName,
+				labelKey:     profileRecordingRepSec.labelKey,
+				labelValue:   profileRecordingRepSec.labelValue,
+				template:     workloadRepTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		nodeCount := getNodeCount(oc)
+		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ns", ns1, ns1},
+			objectTableRef{"ns", ns2, ns2})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+
+		g.By("Create profilerecording !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilerecording", ns1, profileRecordingRep.name},
+			objectTableRef{"profilerecording", ns2, profileRecordingRepSec.name})
+		profileRecordingRep.create(oc)
+		profileRecordingRepSec.create(oc)
+
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingRep.name, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingRepSec.name, "-n", ns2}).check(oc)
+
+		g.By("Create sa, role, rolebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"sa", ns1, saRoleRoleBindingRep.saName},
+			objectTableRef{"sa", ns2, saRoleRoleBindingRepSec.saName},
+			objectTableRef{"role", ns1, saRoleRoleBindingRep.roleName},
+			objectTableRef{"role", ns2, saRoleRoleBindingRepSec.roleName},
+			objectTableRef{"rolebinding", ns1, saRoleRoleBindingRep.roleBindingName},
+			objectTableRef{"rolebinding", ns2, saRoleRoleBindingRepSec.roleBindingName})
+		saRoleRoleBindingRep.create(oc)
+		saRoleRoleBindingRepSec.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", saRoleRoleBindingRep.saName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", saRoleRoleBindingRepSec.saName, "-n", ns2}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"role", saRoleRoleBindingRep.roleName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"role", saRoleRoleBindingRepSec.roleName, "-n", ns2}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"rolebinding", saRoleRoleBindingRep.roleBindingName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"rolebinding", saRoleRoleBindingRepSec.roleBindingName, "-n", ns2}).check(oc)
+
+		g.By("Create workload !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"replicaset", ns1, replicasetHelloSelinux.name},
+			objectTableRef{"replicaset", ns2, replicasetHelloSecc.name})
+		replicasetHelloSelinux.create(oc)
+		replicasetHelloSecc.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "3", ok, []string{"replicaset", replicasetHelloSelinux.name, "-n", ns1, "-o=jsonpath={.status.replicas}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "3", ok, []string{"replicaset", replicasetHelloSecc.name, "-n", ns2, "-o=jsonpath={.status.replicas}"}).check(oc)
+
+		g.By("Check SelinuxProfile and SeccompProfile is generated !!!")
+		// Sleep 30 secondes so the log enricher will have enough time to catch necessary logs.
+		time.Sleep(30 * time.Second)
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SelinuxProfile", ns1, "--all"})
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SeccompProfile", ns2, "--all"})
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("replicaset", replicasetHelloSelinux.name, "-n", ns1, "--ignore-not-found").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("replicaset", replicasetHelloSecc.name, "-n", ns2, "--ignore-not-found").Execute()
+		checkPrfolieNumbers(oc, "SelinuxProfile", ns1, replicasetHelloSelinux.replicas)
+		checkPrfolieNumbers(oc, "SeccompProfile", ns2, replicasetHelloSecc.replicas)
+		checkPrfolieStatus(oc, "SelinuxProfile", ns1, "Installed")
+		checkPrfolieStatus(oc, "SeccompProfile", ns2, "Installed")
 	})
 })
