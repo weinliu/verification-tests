@@ -26,6 +26,17 @@ type multihomingNAD struct {
 	template       string
 }
 
+type multihomingSharenetNAD struct {
+	namespace      string
+	nadname        string
+	subnets        string
+	nswithnadname  string
+	excludeSubnets string
+	topology       string
+	sharenetname   string
+	template       string
+}
+
 type testMultihomingPod struct {
 	name       string
 	namespace  string
@@ -51,6 +62,18 @@ type testMultihomingStaticPod struct {
 func (nad *multihomingNAD) createMultihomingNAD(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NAMESPACE="+nad.namespace, "NADNAME="+nad.nadname, "SUBNETS="+nad.subnets, "NSWITHNADNAME="+nad.nswithnadname, "EXCLUDESUBNETS="+nad.excludeSubnets, "TOPOLOGY="+nad.topology)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to net attach definition %v", nad.nadname))
+}
+
+func (nad *multihomingSharenetNAD) createMultihomingSharenetNAD(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NAMESPACE="+nad.namespace, "NADNAME="+nad.nadname, "SUBNETS="+nad.subnets, "NSWITHNADNAME="+nad.nswithnadname, "EXCLUDESUBNETS="+nad.excludeSubnets, "TOPOLOGY="+nad.topology, "SHARENETNAME="+nad.sharenetname)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
