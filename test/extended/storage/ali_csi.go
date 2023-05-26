@@ -456,4 +456,58 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("****** Alibaba test phase finished ******")
 	})
+
+	// author: ropatil@redhat.com
+	// [Alibaba-CSI-Driver][Dynamic PV] provision volumes with zoneId parameters should work and the provisioned volumes could be read and written data
+	g.It("NonHyperShiftHOST-Author:ropatil-Medium-63875-[Alibaba-CSI-Driver][Dynamic PV] provision volumes with zoneId parameters should work and the provisioned volumes could be read and written data", func() {
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Get the RegionId and ZoneId of cluster
+		regionId := getClusterRegion(oc)
+		myWorkers := getTwoSchedulableWorkersWithDifferentAzs(oc)
+		zoneId := myWorkers[0].availableZone + "," + myWorkers[1].availableZone
+
+		// Set the resource template and definition for the scenario
+		var (
+			storageClass           = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("diskplugin.csi.alibabacloud.com"), setStorageClassVolumeBindingMode("Immediate"))
+			pvc                    = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep                    = newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(pvc.name))
+			storageClassParameters = map[string]string{
+				"regionId": regionId,
+				"zoneId":   zoneId,
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		g.By("****** Alibaba test phase start ******")
+
+		g.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		g.By("# Create a pvc with the storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("# Create deployment with the created pvc and wait ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		g.By("# Check the volume has the mentioned zoneId")
+		volName := pvc.getVolumeName(oc)
+		o.Expect(checkVolumeCsiContainAttributes(oc, volName, `"zoneId":"`+zoneId+`"`)).To(o.BeTrue())
+
+		g.By("# Check the pod volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("# Check the pod volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		g.By("****** Alibaba test phase finished ******")
+	})
 })
