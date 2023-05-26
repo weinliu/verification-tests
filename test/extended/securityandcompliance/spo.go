@@ -38,6 +38,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		podWithLabelsTemplate         string
 		podWithOneLabelTemplate       string
 		workloadRepTemplate           string
+		workloadCronjobTemplate       string
 
 		ogD                 operatorGroupDescription
 		subD                subscriptionDescription
@@ -61,6 +62,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		workloadDaeTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-daemonset.yaml")
 		workloadDeployTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-deployment.yaml")
 		workloadRepTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-replicaset.yaml")
+		workloadCronjobTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-cronjob.yaml")
 
 		ogD = operatorGroupDescription{
 			name:      "security-profiles-operator",
@@ -882,5 +884,135 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		checkPrfolieNumbers(oc, "SeccompProfile", ns2, replicasetHelloSecc.replicas)
 		checkPrfolieStatus(oc, "SelinuxProfile", ns1, "Installed")
 		checkPrfolieStatus(oc, "SeccompProfile", ns2, "Installed")
+	})
+
+	// author: bgudi@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:bgudi-Medium-50259-Medium-50244-check Log enricher based selinuxprofile/seccompprofile recording and metrics working as expected for cronjob [Slow][Disruptive]", func() {
+		ns1 := "mytest" + getRandomString()
+		ns2 := "mytest" + getRandomString()
+		var (
+			profileRecordingSeccom = profileRecordingDescription{
+				name:       "spo-recording1",
+				namespace:  ns1,
+				kind:       "SeccompProfile",
+				labelKey:   "app",
+				labelValue: "hello-openshift",
+				template:   profileRecordingTemplate,
+			}
+			saRoleRoleBindingSeccom = saRoleRoleBindingDescription{
+				saName:          "spo-record-sa1",
+				namespace:       ns1,
+				roleName:        "spo-record1" + getRandomString(),
+				roleBindingName: "spo-record1" + getRandomString(),
+				template:        saRoleRolebindingTemplate,
+			}
+			cronjobSeccomHello = workloadDescription{
+				name:         "hello-cronjob",
+				namespace:    ns1,
+				workloadKind: "CronJob",
+				saName:       saRoleRoleBindingSeccom.saName,
+				labelKey:     profileRecordingSeccom.labelKey,
+				labelValue:   profileRecordingSeccom.labelValue,
+				template:     workloadCronjobTemplate,
+			}
+			profileRecordingSelinux = profileRecordingDescription{
+				name:       "spo-recording2",
+				namespace:  ns2,
+				kind:       "SelinuxProfile",
+				labelKey:   "app",
+				labelValue: "hello-openshift",
+				template:   profileRecordingTemplate,
+			}
+			saRoleRoleBindingSelinux = saRoleRoleBindingDescription{
+				saName:          "spo-record-sa2",
+				namespace:       ns2,
+				roleName:        "spo-record2" + getRandomString(),
+				roleBindingName: "spo-record2" + getRandomString(),
+				template:        saRoleRolebindingTemplate,
+			}
+			cronjobSelinuxHello = workloadDescription{
+				name:         "hello-cronjob",
+				namespace:    ns2,
+				workloadKind: "CronJob",
+				saName:       saRoleRoleBindingSelinux.saName,
+				labelKey:     profileRecordingSelinux.labelKey,
+				labelValue:   profileRecordingSelinux.labelValue,
+				template:     workloadCronjobTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		nodeCount := getNodeCount(oc)
+		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ns", ns1, ns1},
+			objectTableRef{"ns", ns2, ns2})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+
+		g.By("Create profilerecording !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilerecording", ns1, profileRecordingSeccom.name},
+			objectTableRef{"profilerecording", ns2, profileRecordingSelinux.name})
+		profileRecordingSeccom.create(oc)
+		profileRecordingSelinux.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingSeccom.name, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingSelinux.name, "-n", ns2}).check(oc)
+
+		g.By("Create sa, role, rolebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"sa", ns1, saRoleRoleBindingSeccom.saName},
+			objectTableRef{"role", ns1, saRoleRoleBindingSeccom.roleName},
+			objectTableRef{"rolebinding", ns1, saRoleRoleBindingSeccom.roleBindingName},
+			objectTableRef{"sa", ns2, saRoleRoleBindingSelinux.saName},
+			objectTableRef{"role", ns2, saRoleRoleBindingSelinux.roleName},
+			objectTableRef{"rolebinding", ns2, saRoleRoleBindingSelinux.roleBindingName})
+		saRoleRoleBindingSeccom.create(oc)
+		saRoleRoleBindingSelinux.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", saRoleRoleBindingSeccom.saName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"role", saRoleRoleBindingSeccom.roleName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"rolebinding", saRoleRoleBindingSeccom.roleBindingName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", saRoleRoleBindingSelinux.saName, "-n", ns2}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"role", saRoleRoleBindingSelinux.roleName, "-n", ns2}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"rolebinding", saRoleRoleBindingSelinux.roleBindingName, "-n", ns2}).check(oc)
+
+		g.By("Create workload !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"cronjob", ns1, cronjobSeccomHello.name},
+			objectTableRef{"cronjob", ns2, cronjobSelinuxHello.name})
+		cronjobSeccomHello.create(oc)
+		cronjobSelinuxHello.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, cronjobSeccomHello.name, ok, []string{"cronjob", cronjobSeccomHello.name, "-n", ns1, "-o=jsonpath={.metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, cronjobSelinuxHello.name, ok, []string{"cronjob", cronjobSelinuxHello.name, "-n", ns2, "-o=jsonpath={.metadata.name}"}).check(oc)
+
+		g.By("Get jobs.batch details")
+		newCheck("expect", asAdmin, withoutNamespace, contain, cronjobSeccomHello.name, ok, []string{"jobs.batch", "-n", ns1}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, cronjobSelinuxHello.name, ok, []string{"jobs.batch", "-n", ns2}).check(oc)
+
+		g.By("Get pods details")
+		newCheck("expect", asAdmin, withoutNamespace, contain, cronjobSeccomHello.name, ok, []string{"pods", "-n", ns1}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, cronjobSelinuxHello.name, ok, []string{"pods", "-n", ns2}).check(oc)
+
+		g.By("Check seccompprofile and selinuxprofile generated !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"seccompprofile", ns1, "--all"})
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"selinuxprofile", ns2, "--all"})
+		//sleep 60s so the selinuxprofiles of the worklod could be recorded
+		time.Sleep(60 * time.Second)
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("cronjob", cronjobSeccomHello.name, "-n", ns1, "--ignore-not-found").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("cronjob", cronjobSelinuxHello.name, "-n", ns2, "--ignore-not-found").Execute()
+		checkPrfolieNumbers(oc, "seccompprofile", ns1, 2)
+		checkPrfolieStatus(oc, "seccompprofile", ns1, "Installed")
+		checkPrfolieNumbers(oc, "selinuxprofile", ns2, 2)
+		checkPrfolieStatus(oc, "selinuxprofile", ns2, "Installed")
 	})
 })

@@ -64,7 +64,7 @@ func lableNamespace(oc *exutil.CLI, parameters ...string) {
 
 func checkPrfolieNumbers(oc *exutil.CLI, profileKind string, namespace string, expectedNumber int) {
 	var intProfileNumber int
-	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 400*time.Second, func() (bool, error) {
 		profileNameString, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(profileKind, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		intProfileNumber = len(strings.Fields(profileNameString))
 		if intProfileNumber == expectedNumber {
@@ -76,7 +76,7 @@ func checkPrfolieNumbers(oc *exutil.CLI, profileKind string, namespace string, e
 }
 
 func checkPrfolieStatus(oc *exutil.CLI, profileKind string, namespace string, expected string) {
-	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 400*time.Second, func() (bool, error) {
 		profileNameString, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(profileKind, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		profileNames := strings.Fields(profileNameString)
 		for _, v := range profileNames {
