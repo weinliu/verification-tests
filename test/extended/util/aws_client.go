@@ -351,6 +351,49 @@ func (a *AwsClient) DeleteSecurityGroup(groupID string) error {
 	return err
 }
 
+func (a *AwsClient) DescribeVpcEndpoint(endpointID string) (*ec2.VpcEndpoint, error) {
+	res, err := a.svc.DescribeVpcEndpoints(&ec2.DescribeVpcEndpointsInput{
+		VpcEndpointIds: aws.StringSlice([]string{endpointID}),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res.VpcEndpoints[0], nil
+}
+
+func (a *AwsClient) GetSecurityGroupsByVpcEndpointID(endpointID string) ([]*ec2.SecurityGroupIdentifier, error) {
+	ep, err := a.DescribeVpcEndpoint(endpointID)
+	if err != nil {
+		return []*ec2.SecurityGroupIdentifier{}, err
+	}
+
+	return ep.Groups, nil
+}
+
+func (a *AwsClient) GetDefaultSecurityGroupByVpcID(vpcID string) (*ec2.SecurityGroup, error) {
+	filters := []*ec2.Filter{
+		{
+			Name: aws.String("vpc-id"),
+			Values: []*string{
+				aws.String(vpcID),
+			},
+		},
+		{
+			Name: aws.String("group-name"),
+			Values: []*string{
+				aws.String("default"),
+			},
+		},
+	}
+	input := ec2.DescribeSecurityGroupsInput{Filters: filters}
+	ep, err := a.svc.DescribeSecurityGroups(&input)
+	if err != nil {
+		return nil, err
+	}
+
+	return ep.SecurityGroups[0], nil
+}
+
 // S3Client struct for S3 storage operations
 type S3Client struct {
 	svc *s3.S3

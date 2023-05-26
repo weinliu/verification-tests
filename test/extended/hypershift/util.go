@@ -50,6 +50,11 @@ const (
 	ShortTimeout          = 50 * time.Second
 )
 
+const (
+	HyperShiftResourceTagKeyPrefix = "kubernetes.io/cluster/"
+	HyperShiftResourceTagKeyValue  = "owned"
+)
+
 type AvailabilityPolicy = string
 
 const (
@@ -64,6 +69,23 @@ const (
 	// usually means running critical workloads with just 1 replica and with
 	// toleration of full disruption of the component.
 	SingleReplica AvailabilityPolicy = "SingleReplica"
+)
+
+// AWSEndpointAccessType specifies the publishing scope of cluster endpoints.
+type AWSEndpointAccessType = string
+
+const (
+	// Public endpoint access allows public API server access and public node
+	// communication with the control plane.
+	Public AWSEndpointAccessType = "Public"
+
+	// PublicAndPrivate endpoint access allows public API server access and
+	// private node communication with the control plane.
+	PublicAndPrivate AWSEndpointAccessType = "PublicAndPrivate"
+
+	// Private endpoint access allows only private API server access and private
+	// node communication with the control plane.
+	Private AWSEndpointAccessType = "Private"
 )
 
 func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {

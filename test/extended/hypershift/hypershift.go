@@ -22,9 +22,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                                  = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
-		iaasPlatform, hypershiftTeamBaseDir string
-		hostedcluster                       *hostedCluster
+		oc                                             = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
+		iaasPlatform, hypershiftTeamBaseDir, hcInfraID string
+		hostedcluster                                  *hostedCluster
 	)
 
 	g.BeforeEach(func() {
@@ -41,6 +41,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		hypershiftTeamBaseDir = exutil.FixturePath("testdata", "hypershift")
+		// hosted cluster infra ID
+		hcInfraID = doOcpReq(oc, OcpGet, true, "hc", hostedClusterName, "-n", hostedClusterNs, `-ojsonpath={.spec.infraID}`)
 
 		if exutil.IsROSA() {
 			exutil.ROSALogin()
@@ -995,6 +997,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(doOcpReq(oc, OcpGet, true, "node", nodeName, "-o", "jsonpath={.spec.taints[0].value}", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)).Should(o.Equal("foo"))
 	})
 
+	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-60140-[AWS]: create default security group when no security group is specified in a nodepool[Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while ocp-60140 is for AWS - skipping test ...")
@@ -1053,4 +1056,58 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, npWithExistingSG, `-ojsonpath={.spec.template.spec.additionalSecurityGroups[0].id}`)).Should(o.Equal(groupID))
 		g.By("nodepool security group test passed")
 	})
+
+	// author: heli@redhat.com
+	g.It("HyperShiftMGMT-Author:heli-Critical-63867-[AWS]: awsendpointservice uses the default security group for the VPC Endpoint", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while ocp-63867 is for AWS - skipping test ...")
+		}
+		endpointAccessType := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.spec.platform.aws.endpointAccess}`)
+		if endpointAccessType != PublicAndPrivate && endpointAccessType != Private {
+			g.Skip(fmt.Sprintf("ocp-63867 is for PublicAndPrivate or Private hosted clusters on AWS, skip it for the endpointAccessType is %s", endpointAccessType))
+		}
+
+		g.By("check status of cluster again by condition type Available")
+		status := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.status.conditions[?(@.type=="Available")].status}`)
+		o.Expect(status).Should(o.Equal("True"))
+
+		g.By("get default sg of vpc")
+		vpcID := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.spec.platform.aws.cloudProviderConfig.vpc}`)
+		e2e.Logf("hc vpc is %s", vpcID)
+		exutil.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		defaultVPCSG, err := awsClient.GetDefaultSecurityGroupByVpcID(vpcID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("in PublicAndPrivate or Private clusters, default sg of vpc should not has hypershift tags kubernetes.io/cluster/{infra-id}:owned")
+		hcTagKey := HyperShiftResourceTagKeyPrefix + hcInfraID
+		for _, tag := range defaultVPCSG.Tags {
+			if tag.Key != nil && *tag.Key == hcTagKey {
+				o.Expect(*tag.Value).ShouldNot(o.Equal(HyperShiftResourceTagKeyValue))
+			}
+		}
+
+		g.By("check hosted cluster's default worker security group ID")
+		defaultWorkerSG := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.status.platform.aws.defaultWorkerSecurityGroupID}`)
+		e2e.Logf("defaultWorkerSecurityGroupID in hostedcluster is %s", defaultWorkerSG)
+		o.Expect(defaultWorkerSG).NotTo(o.Equal(defaultVPCSG))
+
+		g.By("check endpointID by vpc")
+		endpointIDs := doOcpReq(oc, OcpGet, true, "awsendpointservice", "-n", hostedcluster.namespace+"-"+hostedcluster.name, "--ignore-not-found", `-ojsonpath={.items[*].status.endpointID}`)
+		endpointIDArr := strings.Split(endpointIDs, " ")
+		o.Expect(endpointIDArr).ShouldNot(o.BeEmpty())
+
+		for _, epID := range endpointIDArr {
+			sgs, err := awsClient.GetSecurityGroupsByVpcEndpointID(epID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, sg := range sgs {
+				e2e.Logf("endpoint %s security group %s, %s, ", epID, *sg.GroupId, *sg.GroupName)
+				o.Expect(*sg.GroupId).Should(o.Equal(defaultWorkerSG))
+				o.Expect(*sg.GroupName).Should(o.Equal(hcInfraID + "-default-sg"))
+			}
+		}
+
+		g.By("ocp-63867 the default security group of endpointservice test passed")
+	})
+
 })
