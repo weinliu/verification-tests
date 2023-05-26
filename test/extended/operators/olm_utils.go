@@ -1506,3 +1506,25 @@ func assertOrCheckMCP(oc *exutil.CLI, mcp string, is int, dm int, skip bool) {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("macineconfigpool %v update failed", mcp))
 	}
 }
+
+func getAllCSV(oc *exutil.CLI) []string {
+	allCSVs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "--all-namespaces", `-o=jsonpath={range .items[*]}{@.metadata.name}{","}{@.metadata.namespace}{","}{@.status.reason}{":"}{end}`).Output()
+	if err != nil {
+		e2e.Failf("!!! Couldn't get all CSVs:%v\n", err)
+	}
+	var csvListOutput []string
+	csvList := strings.Split(allCSVs, ":")
+	for _, csv := range csvList {
+		if strings.Compare(csv, "") == 0 {
+			continue
+		}
+		name := strings.Split(csv, ",")[0]
+		ns := strings.Split(csv, ",")[1]
+		reason := strings.Split(csv, ",")[2]
+		if strings.Compare(reason, "Copied") == 0 {
+			continue
+		}
+		csvListOutput = append(csvListOutput, ns+":"+name)
+	}
+	return csvListOutput
+}

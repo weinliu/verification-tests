@@ -4285,12 +4285,50 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			o.Expect(clusterversion).To(o.Equal(version))
 		}
 		g.By("2) check status of OLM cluster operators")
+		e2e.Logf("check csv maxOpenShiftVersion")
+		upgradeableExpect := "True"
+		clusterVersionShort := strings.Split(clusterversion, "-")[0]
+		clusterVersionMajor, _ := strconv.Atoi(strings.Split(clusterVersionShort, ".")[0])
+		clusterVersionMinor, _ := strconv.Atoi(strings.Split(clusterVersionShort, ".")[1])
+		e2e.Logf("cluster verison is %s", clusterVersionShort)
+		csvList := getAllCSV(oc)
+		for _, csvIndex := range csvList {
+			nsName := strings.Split(csvIndex, ":")[0]
+			csvName := strings.Split(csvIndex, ":")[1]
+			properties := getResource(oc, asAdmin, withoutNamespace, "csv", csvName, "-n", nsName, `-o=jsonpath={.metadata.annotations.operatorframework\.io/properties}`)
+			if strings.Contains(properties, "olm.maxOpenShiftVersion") {
+				maxOpenShiftVersion := gjson.Get(properties, `properties.#(type%"*maxOpenShiftVersion*").value`).String()
+				e2e.Logf("%s: %s, maxOpenShiftVersion: %s", nsName, csvName, maxOpenShiftVersion)
+				maxOpenShiftVersionMajor, _ := strconv.Atoi(strings.Split(maxOpenShiftVersion, ".")[0])
+				maxOpenShiftVersionMinor, _ := strconv.Atoi(strings.Split(maxOpenShiftVersion, ".")[1])
+				if maxOpenShiftVersionMajor > clusterVersionMajor {
+					continue
+				}
+				if maxOpenShiftVersionMajor < clusterVersionMajor {
+					upgradeableExpect = "False"
+					break
+				}
+				if maxOpenShiftVersionMinor <= clusterVersionMinor {
+					upgradeableExpect = "False"
+					break
+				}
+			}
+		}
+		e2e.Logf("upgradeableExpect is %s", upgradeableExpect)
+		upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", "operator-lifecycle-manager", "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
+		if strings.Compare(upgradeableStatus, upgradeableExpect) != 0 {
+			getResource(oc, asAdmin, withoutNamespace, "clusteroperator", "operator-lifecycle-manager", "-o=jsonpath-as-json={.status.conditions}")
+			o.Expect(upgradeableStatus).To(o.Equal(upgradeableExpect))
+		}
+
 		for _, resource := range olmRelatedResource {
 			newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
-			upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
-			if strings.Compare(upgradeableStatus, "True") != 0 {
-				getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath-as-json={.status.conditions}")
-				o.Expect(upgradeableStatus).To(o.Equal("True"))
+			if strings.Compare(resource, "operator-lifecycle-manager") != 0 {
+				upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
+				if strings.Compare(upgradeableStatus, "True") != 0 {
+					getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath-as-json={.status.conditions}")
+					o.Expect(upgradeableStatus).To(o.Equal("True"))
+				}
 			}
 		}
 		g.By("3) Check the installed operator status")
