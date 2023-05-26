@@ -289,6 +289,27 @@ func checkAlertmangerConfig(oc *exutil.CLI, ns string, podName string, checkValu
 	exutil.AssertWaitPollNoErr(envCheck, "failed to check alertmanager config")
 }
 
+// check prometheus config in the pod
+func checkPrometheusConfig(oc *exutil.CLI, ns string, podName string, checkValue string, expectExist bool) {
+	envCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "prometheus", podName, "--", "bash", "-c", fmt.Sprintf(`cat /etc/prometheus/config_out/prometheus.env.yaml | grep '%s'`, checkValue)).Output()
+		if expectExist {
+			if err != nil || !strings.Contains(envOutput, checkValue) {
+				return false, nil
+			}
+			return true, nil
+		}
+		if !expectExist {
+			if err != nil || !strings.Contains(envOutput, checkValue) {
+				return true, nil
+			}
+			return false, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(envCheck, "failed to check prometheus config")
+}
+
 // check configuration in the pod in the given time for specific container
 func checkConfigInPod(oc *exutil.CLI, namespace string, podName string, containerName string, cmd string, checkValue string) {
 	podCheck := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
