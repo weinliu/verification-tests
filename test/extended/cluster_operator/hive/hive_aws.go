@@ -2378,7 +2378,124 @@ spec:
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, fmt.Sprintf("clusterdeployment.hive.openshift.io/"+cdName+" patched"), ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", fmt.Sprintf("{\"spec\":{\"controlPlaneConfig\":{\"apiURLOverride\": \"%s\"}}}", ValidApiUrl)}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].status}'"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterReachable", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].reason}'"}).check(oc)
-
 	})
 
+	//author: kcui@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "32007"|./bin/extended-platform-tests run --timeout 20m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-32007-[AWS]Hive can prevent cluster deletion accidentally via a set on hiveconfig[Serial]", func() {
+		g.By("Add \"deleteProtection: enabled\"  in hiveconfig.spec")
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/deleteProtection"}]`).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig/hive", "--type", `merge`, `--patch={"spec": {"deleteProtection": "enabled"}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check modifying is successful")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "enabled", ok, DefaultTimeout, []string{"hiveconfig", "hive", "-o=jsonpath={.spec.deleteProtection}"}).check(oc)
+
+		testCaseID := "32007"
+		cdName1 := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		cdName2 := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Config cd1 Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName1 + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName1,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		g.By("Config ClusterDeployment1...")
+		clusterImageSetName1 := cdName1 + "-imageset"
+		cluster1 := clusterDeployment{
+			fake:                 "true",
+			name:                 cdName1,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName1,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName1,
+			installConfigSecret:  cdName1 + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster1.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster1.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster1)
+
+		g.By("Creating cd2 install-config Secret ...")
+		installConfigSecretName := cdName2 + "-install-config"
+		installConfigSecret = installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName2,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Creating cd2 ClusterImageSet")
+		clusterImageSetName2 := cdName2 + "-imageset"
+		imageSet := clusterImageSet{
+			name:         clusterImageSetName2,
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName2})
+		imageSet.create(oc)
+
+		g.By("Creating cd2")
+		cluster2 := clusterDeployment{
+			fake:                 "true",
+			name:                 cdName2,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName2,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName2,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 3,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName2})
+		cluster2.create(oc)
+		g.By("Add annotations hive.openshift.io/protected-delete: \"false\" in cd2 CRs")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, fmt.Sprintf("clusterdeployment.hive.openshift.io/"+cdName2+" patched"), ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "--type", "merge", "-p", "{\"metadata\":{\"annotations\":{\"hive.openshift.io/protected-delete\": \"false\"}}}"}).check(oc)
+
+		g.By("Check Hive add the \"hive.openshift.io/protected-delete\" annotation to cd1 after installation")
+		e2e.Logf("Check cd1 is installed.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, FakeClusterInstallTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.metadata.annotations.hive\\.openshift\\.io/protected-delete}'"}).check(oc)
+
+		g.By("delete cd1 will failed")
+		_, stderr, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName1, "-n", oc.Namespace()).Outputs()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(stderr).To(o.ContainSubstring("metadata.annotations.hive.openshift.io/protected-delete: Invalid value: \"true\": cannot delete while annotation is present"))
+
+		g.By("edit hive.openshift.io/protected-delete: to \"false\" in cd1")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, fmt.Sprintf("clusterdeployment.hive.openshift.io/"+cdName1+" patched"), ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "--type", "merge", "-p", "{\"metadata\":{\"annotations\":{\"hive.openshift.io/protected-delete\": \"false\"}}}"}).check(oc)
+
+		g.By("delete cd1 again and success")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName1, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check cd1 has been deleted.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName1, nok, FakeClusterInstallTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
+
+		g.By("Check Hive didn't rewrite the \"hive.openshift.io/protected-delete\" annotation to cd2 after installation")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "false", ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "-o=jsonpath='{.metadata.annotations.hive\\.openshift\\.io/protected-delete}'"}).check(oc)
+
+		g.By("delete cd2 success")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName2, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check cd2 has been deleted.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName2, nok, FakeClusterInstallTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
+
+	})
 })

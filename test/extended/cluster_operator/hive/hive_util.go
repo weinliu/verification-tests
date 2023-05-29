@@ -290,17 +290,18 @@ type prometheusQueryResult struct {
 
 // Hive Configurations
 const (
-	HiveNamespace           = "hive" //Hive Namespace
-	PullSecret              = "pull-secret"
-	PrometheusURL           = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
-	thanosQuerierURL        = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query?query="
-	ClusterInstallTimeout   = 3600
-	DefaultTimeout          = 120
-	ClusterResumeTimeout    = 1200
-	ClusterUninstallTimeout = 1800
-	HibernateAfterTimer     = 300
-	ClusterSuffixLen        = 4
-	LogsLimitLen            = 1024
+	HiveNamespace             = "hive" //Hive Namespace
+	PullSecret                = "pull-secret"
+	PrometheusURL             = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
+	thanosQuerierURL          = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query?query="
+	ClusterInstallTimeout     = 3600
+	DefaultTimeout            = 120
+	FakeClusterInstallTimeout = 600
+	ClusterResumeTimeout      = 1200
+	ClusterUninstallTimeout   = 1800
+	HibernateAfterTimer       = 300
+	ClusterSuffixLen          = 4
+	LogsLimitLen              = 1024
 )
 
 // AWS Configurations
