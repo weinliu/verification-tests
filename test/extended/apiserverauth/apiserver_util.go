@@ -1,6 +1,7 @@
 package apiserverauth
 
 import (
+	"bufio"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
+	"github.com/openshift/openshift-tests-private/test/extended/util"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -256,7 +258,7 @@ func verifyCiphers(oc *exutil.CLI, expectedCipher string, operator string) error
 	return wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		switch operator {
 		case "openshift-authentication":
-			e2e.Logf("Get the cipers for openshift-authentication:")
+			e2e.Logf("Get the ciphers for openshift-authentication:")
 			getadminoutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-authentication", "v4-0-config-system-cliconfig", "-o=jsonpath='{.data.v4-0-config-system-cliconfig}'").Output()
 			if err == nil {
 				// Use jqCMD to call jq because .servingInfo part JSON comming in string format
@@ -275,7 +277,7 @@ func verifyCiphers(oc *exutil.CLI, expectedCipher string, operator string) error
 			return false, nil
 
 		case "openshiftapiservers.operator", "kubeapiservers.operator":
-			e2e.Logf("Get the cipers for %s:", operator)
+			e2e.Logf("Get the ciphers for %s:", operator)
 			getadminoutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(operator, "cluster", "-o=jsonpath={.spec.observedConfig.servingInfo['cipherSuites', 'minTLSVersion']}").Output()
 			if err == nil {
 				e2e.Logf("Comparing the ciphers: %s with %s", expectedCipher, getadminoutput)
@@ -1133,4 +1135,86 @@ func addKustomizationToMicroshift(oc *exutil.CLI, nodeName string, namespace str
 		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", fileCmd)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 	}
+}
+
+// Check ciphers of configmap of kube-apiservers, openshift-apiservers and oauth-openshift-apiservers are using.
+func verifyHypershiftCiphers(oc *exutil.CLI, expectedCipher string, ns string) error {
+	var (
+		cipherStr string
+		randomStr = exutil.GetRandomString()
+		tmpDir    = fmt.Sprintf("/tmp/-api-%s/", randomStr)
+	)
+
+	defer os.RemoveAll(tmpDir)
+	os.MkdirAll(tmpDir, 0755)
+
+	for _, item := range []string{"kube-apiserver", "openshift-apiserver", "oauth-openshift"} {
+		e2e.Logf("#### Checking the ciphers of  %s:", item)
+		if item == "kube-apiserver" {
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", ns, "kas-config", `-o=jsonpath='{.data.config\.json}'`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Use jq command line to extrack .servingInfo part JSON comming in string format
+			jqCmd := fmt.Sprintf(`echo %s | jq -cr '.servingInfo | "\(.cipherSuites) \(.minTLSVersion)"'|tr -d '\n'`, out)
+			outJQ, err := exec.Command("bash", "-c", jqCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			cipherStr = string(outJQ)
+		} else {
+			jsonOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", ns, item, `-ojson`).OutputToFile("api-" + randomStr + "." + item)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			jqCmd := fmt.Sprintf(`cat %v | jq -r '.data."config.yaml"'`, jsonOut)
+			yamlConfig, err := exec.Command("bash", "-c", jqCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			jsonConfig, errJson := util.Yaml2Json(string(yamlConfig))
+			o.Expect(errJson).NotTo(o.HaveOccurred())
+
+			jsonFile := tmpDir + item + "config.json"
+			f, err := os.Create(jsonFile)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer f.Close()
+			w := bufio.NewWriter(f)
+			_, err = fmt.Fprintf(w, "%s", jsonConfig)
+			w.Flush()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			jqCmd1 := fmt.Sprintf(`jq -cr '.servingInfo | "\(.cipherSuites) \(.minTLSVersion)"' %s |tr -d '\n'`, jsonFile)
+			jsonOut1, err := exec.Command("bash", "-c", jqCmd1).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			cipherStr = string(jsonOut1)
+		}
+		e2e.Logf("#### Checking if the ciphers has been changed as the expected: %s", expectedCipher)
+		if expectedCipher != cipherStr {
+			e2e.Logf("#### Ciphers of %s are: %s", item, cipherStr)
+			return fmt.Errorf("Ciphers not matched")
+		}
+		e2e.Logf("#### Ciphers are matched.")
+	}
+	return nil
+}
+
+// Waiting for apiservers restart
+func waitApiserverRestartOfHypershift(oc *exutil.CLI, appLabel string, ns string, waitTime int) error {
+	re, err := regexp.Compile(`(0/[0-9]|Pending|Terminating|Init)`)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	errKas := wait.Poll(20*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app="+appLabel, "--no-headers", "-n", ns).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched := re.MatchString(out); matched {
+			e2e.Logf("#### %s was restarting ...", appLabel)
+			return false, nil
+		}
+		// Recheck status of pods and confirm twice, avoid false restarts
+		for i := 1; i <= 2; i++ {
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app="+appLabel, "--no-headers", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if matchedAgain := re.MatchString(out); matchedAgain {
+				e2e.Logf("#### %s was restarting ...", appLabel)
+				return false, nil
+			}
+			time.Sleep(30 * time.Second)
+		}
+		e2e.Logf("#### %s have been restarted!", appLabel)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errKas, "Failed to complete the restart within the expected time, please check the cluster status!")
+	return errKas
 }

@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -21,6 +22,57 @@ Example:
 type YamlReplace struct {
 	Path  string // path to modify or create value
 	Value string // a string literal or YAML string (ex. 'name: frontend') to be set under the given path
+}
+
+func convert(i interface{}) interface{} {
+	switch x := i.(type) {
+	case map[interface{}]interface{}:
+		//A map with key and value using arbitrary value
+		m2 := map[string]interface{}{}
+		for k, v := range x {
+			m2[k.(string)] = convert(v)
+		}
+		return m2
+
+	case map[string]interface{}:
+		//A map with string key and an arbitrary value
+		m2 := map[string]interface{}{}
+		for k, v := range x {
+			m2[k] = convert(v)
+		}
+		return m2
+
+	case []interface{}:
+		// Arbitrary type value
+		for i, v := range x {
+			x[i] = convert(v)
+		}
+	}
+	return i
+}
+
+/*
+Yaml2Json converts yaml file to json format.
+Example:
+
+	util.Yaml2Json(string(yamlFile))
+*/
+func Yaml2Json(s string) (string, error) {
+	var (
+		body    interface{}
+		errJson error
+		b       []byte
+	)
+	if err := yaml.Unmarshal([]byte(s), &body); err != nil {
+		e2e.Failf("Failed to unmarshal yaml with error: %v", err)
+	}
+
+	body = convert(body)
+
+	if b, errJson = json.Marshal(body); errJson != nil {
+		e2e.Failf("Failed to marshal json with error: %v", errJson)
+	}
+	return string(b), errJson
 }
 
 /*
