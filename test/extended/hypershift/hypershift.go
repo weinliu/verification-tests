@@ -228,6 +228,69 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
+	g.It("HyperShiftMGMT-ROSA-Author:heli-Critical-45801-Critical-45821-Test fault resilient HA-capable etcd under network partition[Disruptive]", func() {
+		if !hostedcluster.isCPHighlyAvailable() {
+			g.Skip("this is for hosted cluster HA mode , skip test run")
+		}
+
+		g.By("find leader and get mapping between etcd pod name and node name")
+		etcdNodeMap := hostedcluster.getEtcdNodeMapping()
+		leader, followers, err := hostedcluster.getCPEtcdLeaderAndFollowers()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(len(followers) > 1).Should(o.BeTrue())
+
+		defer func() {
+			o.Eventually(func() bool {
+				return hostedcluster.isCPEtcdPodHealthy(followers[0])
+			}, ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), fmt.Sprintf("error: follower %s could not recoverd now", followers[0]))
+
+			o.Expect(hostedcluster.isCPEtcdPodHealthy(leader)).Should(o.BeTrue())
+			for i := 1; i < len(followers); i++ {
+				o.Expect(hostedcluster.isCPEtcdPodHealthy(followers[i])).Should(o.BeTrue())
+			}
+		}()
+
+		g.By("drop traffic from leader to follower")
+		defer func() {
+			debugNodeStdout, err := exutil.DebugNodeWithChroot(oc, etcdNodeMap[followers[0]], "iptables", "-t", "filter", "-D", "INPUT", "-s", etcdNodeMap[leader], "-j", "DROP")
+			o.Expect(err).ShouldNot(o.HaveOccurred())
+			e2e.Logf("recover traffic from leader %s to follower %s, debug output: %s", etcdNodeMap[leader], etcdNodeMap[followers[0]], debugNodeStdout)
+		}()
+		debugNodeStdout, err := exutil.DebugNodeWithChroot(oc, etcdNodeMap[followers[0]], "iptables", "-t", "filter", "-A", "INPUT", "-s", etcdNodeMap[leader], "-j", "DROP")
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		e2e.Logf("drop traffic debug output 1: %s", debugNodeStdout)
+
+		g.By("drop traffic from follower to leader")
+		defer func() {
+			debugNodeStdout, err := exutil.DebugNodeWithChroot(oc, etcdNodeMap[leader], "iptables", "-t", "filter", "-D", "INPUT", "-s", etcdNodeMap[followers[0]], "-j", "DROP")
+			o.Expect(err).ShouldNot(o.HaveOccurred())
+			e2e.Logf("recover traffic from follower %s to leader %s, debug output: %s", etcdNodeMap[followers[0]], etcdNodeMap[leader], debugNodeStdout)
+		}()
+		debugNodeStdout, err = exutil.DebugNodeWithChroot(oc, etcdNodeMap[leader], "iptables", "-t", "filter", "-A", "INPUT", "-s", etcdNodeMap[followers[0]], "-j", "DROP")
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		e2e.Logf("drop traffic debug output 2: %s", debugNodeStdout)
+
+		g.By("follower 0 should not be health again")
+		o.Eventually(func() bool {
+			return hostedcluster.isCPEtcdPodHealthy(followers[0])
+		}, ShortTimeout, ShortTimeout/10).Should(o.BeFalse(), fmt.Sprintf("error: follower %s should be unhealthy now", followers[0]))
+
+		g.By("leader should be running status and the rest of follower are still in the running status too")
+		o.Expect(hostedcluster.isCPEtcdPodHealthy(leader)).Should(o.BeTrue())
+		for i := 1; i < len(followers); i++ {
+			o.Expect(hostedcluster.isCPEtcdPodHealthy(followers[i])).Should(o.BeTrue())
+		}
+
+		g.By("check hosted cluster is still working")
+		o.Eventually(func() error {
+			_, err = hostedcluster.oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run(OcpGet).Args("node").Output()
+			return err
+		}, ShortTimeout, ShortTimeout/10).ShouldNot(o.HaveOccurred(), "error hosted cluster could not work any more")
+
+		g.By("ocp-45801 test passed")
+	})
+
+	// author: heli@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:heli-Critical-46711-Test HCP components to use service account tokens", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 46711 is for AWS - skipping test ...")

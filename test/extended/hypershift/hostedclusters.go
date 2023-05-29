@@ -845,3 +845,62 @@ func (h *hostedCluster) checkNodepoolHostedClusterNodeInstanceType(npName string
 	}
 	return true
 }
+
+// getEtcdLeader return etcd leader pod name and follower name list
+func (h *hostedCluster) getCPEtcdLeaderAndFollowers() (string, []string, error) {
+	var leader string
+	var followers []string
+	etcdEndpointStatusCmd := "ETCDCTL_API=3 /usr/bin/etcdctl --cacert /etc/etcd/tls/etcd-ca/ca.crt --cert /etc/etcd/tls/client/etcd-client.crt --key /etc/etcd/tls/client/etcd-client.key --endpoints=localhost:2379 endpoint status"
+	replicas := doOcpReq(h.oc, OcpGet, true, "-n", h.namespace+"-"+h.name, "sts", "etcd", `-ojsonpath={.spec.replicas}`)
+	totalNum, err := strconv.Atoi(replicas)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	for i := 0; i < totalNum; i++ {
+		podName := "etcd-" + strconv.Itoa(i)
+		res, err := exutil.RemoteShPodWithBashSpecifyContainer(h.oc, h.namespace+"-"+h.name, podName, "etcd", etcdEndpointStatusCmd)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		e2e.Logf("endpoint status %s", res)
+		arr := strings.Split(res, ",")
+		o.Expect(len(arr) > 5).Should(o.BeTrue())
+		if strings.TrimSpace(arr[4]) == "true" {
+			if leader != "" {
+				return "", []string{}, fmt.Errorf("multiple leaders found error")
+			}
+			leader = podName
+		} else {
+			followers = append(followers, podName)
+		}
+	}
+	if leader == "" {
+		return "", []string{}, fmt.Errorf("no leader found error")
+	}
+	return leader, followers, nil
+}
+
+func (h *hostedCluster) getEtcdNodeMapping() map[string]string {
+	replicas := doOcpReq(h.oc, OcpGet, true, "-n", h.namespace+"-"+h.name, "sts", "etcd", `-ojsonpath={.spec.replicas}`)
+	totalNum, err := strconv.Atoi(replicas)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	etcdNodeMap := make(map[string]string, 1)
+	for i := 0; i < totalNum; i++ {
+		etcdPod := "etcd-" + strconv.Itoa(i)
+		node := doOcpReq(h.oc, OcpGet, true, "-n", h.namespace+"-"+h.name, "pod", etcdPod, `-ojsonpath={.spec.nodeName}`)
+		etcdNodeMap[etcdPod] = node
+	}
+	return etcdNodeMap
+}
+
+func (h *hostedCluster) isCPEtcdPodHealthy(podName string) bool {
+	etcdEndpointHealthCmd := "ETCDCTL_API=3 /usr/bin/etcdctl --cacert /etc/etcd/tls/etcd-ca/ca.crt --cert /etc/etcd/tls/client/etcd-client.crt --key /etc/etcd/tls/client/etcd-client.key --endpoints=localhost:2379 endpoint health"
+	res, err := exutil.RemoteShPodWithBashSpecifyContainer(h.oc, h.namespace+"-"+h.name, podName, "etcd", etcdEndpointHealthCmd)
+	if err != nil {
+		e2e.Logf("CP ETCD %s is unhealthy with error : %s , \n res: %s", podName, err.Error(), res)
+		return false
+	}
+
+	if strings.Contains(res, "unhealthy") {
+		return false
+	}
+	return true
+}
