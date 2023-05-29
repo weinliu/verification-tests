@@ -2901,10 +2901,10 @@ nulla pariatur.`
 						Source: GetBase64EncodedFileSourceContent(filesContent),
 					},
 					Mode: PtrInt(420), // decimal 0644
-					User: ign32FileUser{
+					User: &ign32FileUser{
 						Name: "core",
 					},
-					Group: ign32FileGroup{
+					Group: &ign32FileGroup{
 						Name: "core",
 					},
 				},
@@ -2914,10 +2914,10 @@ nulla pariatur.`
 						Source: GetBase64EncodedFileSourceContent(filesContent),
 					},
 					Mode: PtrInt(416), // decimal 0640
-					User: ign32FileUser{
+					User: &ign32FileUser{
 						ID: PtrInt(coreUserID), // core user ID number
 					},
-					Group: ign32FileGroup{
+					Group: &ign32FileGroup{
 						ID: PtrInt(coreGroupID), // core group ID number
 					},
 				},
@@ -2927,10 +2927,10 @@ nulla pariatur.`
 						Source: GetBase64EncodedFileSourceContent(filesContent),
 					},
 					Mode: PtrInt(384), // decimal 0600
-					User: ign32FileUser{
+					User: &ign32FileUser{
 						ID: PtrInt(rootUserID),
 					},
-					Group: ign32FileGroup{
+					Group: &ign32FileGroup{
 						ID: PtrInt(admGroupID),
 					},
 				},
@@ -2940,10 +2940,10 @@ nulla pariatur.`
 						Source: GetBase64EncodedFileSourceContent(filesContent),
 					},
 					Mode: PtrInt(420), // decimal 0644
-					User: ign32FileUser{
+					User: &ign32FileUser{
 						ID: PtrInt(12343), // this user does not exist
 					},
-					Group: ign32FileGroup{
+					Group: &ign32FileGroup{
 						ID: PtrInt(34321), // this group does not exist
 					},
 				},
@@ -3309,7 +3309,87 @@ nulla pariatur.`
 			o.ContainSubstring(expectedOutput),
 			"MCD pivot command should show a deprecation warning. But it doesn't",
 		)
+	})
 
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63477-Deploy files using all available ignition configs. Default 3.2.0[Disruptive]", func() {
+		var (
+			wMcp                   = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mcNames                = "mc-tc-63477"
+			allVersions            = []string{"2.2.0", "3.0.0", "3.1.0", "3.2.0", "3.3.0", "3.4.0"}
+			defaultIgnitionVersion = "3.2.0"
+		)
+		defer wMcp.waitForComplete()
+
+		g.By("Create MCs with all available ignition versions")
+		for _, version := range allVersions {
+			vID := strings.ReplaceAll(version, ".", "-")
+			fileConfig := ""
+			filePath := "/etc/" + vID + ".test"
+			mcName := mcNames + "-" + vID
+
+			mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+			mc.skipWaitForMcp = true
+			defer mc.deleteNoWait()
+
+			logger.Infof("Create MC %s", mc.name)
+			// 2.2.0 ignition config defines a different config for files
+			if version == "2.2.0" {
+				logger.Infof("Generating 2.2.0 file config!")
+				file := ign22File{
+					Path: filePath,
+					Contents: ign22Contents{
+						Source: GetBase64EncodedFileSourceContent(version + " test file"),
+					},
+					Mode:       PtrInt(420), // decimal 0644
+					Filesystem: "root",
+				}
+
+				fileConfig = string(MarshalOrFail(file))
+			} else {
+				logger.Debugf("Generating 3.x file config!")
+				file := ign32File{
+					Path: filePath,
+					Contents: ign32Contents{
+						Source: GetBase64EncodedFileSourceContent(version + " test file"),
+					},
+					Mode: PtrInt(420), // decimal 0644
+				}
+
+				fileConfig = string(MarshalOrFail(file))
+			}
+
+			mc.parameters = []string{fmt.Sprintf("FILES=[%s]", fileConfig), "IGNITION_VERSION=" + version}
+			mc.create()
+		}
+		logger.Infof("OK!\n")
+
+		g.By("Wait for MCP to be updated")
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Verify default rendered ignition version")
+		renderedMC, err := wMcp.GetConfiguredMachineConfig()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config for pool %s", wMcp.GetName())
+		o.Expect(renderedMC.GetIgnitionVersion()).To(o.Equal(defaultIgnitionVersion),
+			"Rendered MC should use %s default ignition version")
+		logger.Infof("OK!\n")
+
+		g.By("Verify that all files were created")
+		node := wMcp.GetNodesOrFail()[0]
+		for _, version := range allVersions {
+			vID := strings.ReplaceAll(version, ".", "-")
+			filePath := "/etc/" + vID + ".test"
+
+			logger.Infof("Checking file %s", filePath)
+			rf := NewRemoteFile(node, filePath)
+			o.Expect(rf.Fetch()).NotTo(o.HaveOccurred(),
+				"Cannot get information about file %s in node %s", filePath, node.GetName())
+
+			o.Expect(rf.GetTextContent()).To(o.Equal(version+" test file"),
+				"File %s in node %s ha not the right content")
+
+		}
+		logger.Infof("OK!\n")
 	})
 })
 
