@@ -35,6 +35,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		selinuxProfileCustomTemplate  string
 		workloadDaeTemplate           string
 		workloadDeployTemplate        string
+		pathWebhookRecording          string
 		podWithLabelsTemplate         string
 		podWithOneLabelTemplate       string
 		workloadRepTemplate           string
@@ -54,6 +55,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		podWithProfileTemplate = filepath.Join(buildPruningBaseDir, "pod-with-seccompprofile.yaml")
 		selinuxProfileNginxTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-nginx.yaml")
 		selinuxProfileCustomTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-with-custom-policy-template.yaml")
+		pathWebhookRecording = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-recording.yaml")
 		podWithSelinuxProfileTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-with-selinux-profile.yaml")
 		podWithLabelsTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-labels.yaml")
 		podWithOneLabelTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-one-label.yaml")
@@ -618,6 +620,294 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 			"-n", ns2}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, selinuxProfileShouldExists, ok, []string{"selinuxprofiles", "-n", ns2,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51391-Log based selinuxprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
+		ns1 := "do-record-" + getRandomString()
+		ns2 := "dont-record1-" + getRandomString()
+		ns3 := "dont-record2-" + getRandomString()
+
+		var (
+			profileRecordingNs1 = profileRecordingDescription{
+				name:       "spo-recording-sel-" + getRandomString(),
+				namespace:  ns1,
+				kind:       "SelinuxProfile",
+				labelKey:   "app",
+				labelValue: "my-app",
+				template:   profileRecordingTemplate,
+			}
+			podNs1 = workloadDescription{
+				name:         "my-pod" + getRandomString(),
+				namespace:    ns1,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingNs1.labelKey,
+				labelValue:   profileRecordingNs1.labelValue,
+				imageName:    "redis",
+				image:        "quay.io/security-profiles-operator/redis:6.2.1",
+				template:     podWithOneLabelTemplate,
+			}
+			profileRecordingNs2 = profileRecordingDescription{
+				name:       "spo-recording-sel-" + getRandomString(),
+				namespace:  ns2,
+				kind:       "SelinuxProfile",
+				labelKey:   "app",
+				labelValue: "my-app",
+				template:   profileRecordingTemplate,
+			}
+			podNs2 = workloadDescription{
+				name:         "my-pod" + getRandomString(),
+				namespace:    ns2,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingNs2.labelKey,
+				labelValue:   profileRecordingNs2.labelValue,
+				imageName:    "redis",
+				image:        "quay.io/security-profiles-operator/redis:6.2.1",
+				template:     podWithOneLabelTemplate,
+			}
+			profileRecordingNs3 = profileRecordingDescription{
+				name:       "spo-recording-sel-" + getRandomString(),
+				namespace:  ns3,
+				kind:       "SelinuxProfile",
+				labelKey:   "app",
+				labelValue: "my-test",
+				template:   profileRecordingTemplate,
+			}
+			podNs3 = workloadDescription{
+				name:         "my-pod" + getRandomString(),
+				namespace:    ns3,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingNs3.labelKey,
+				labelValue:   profileRecordingNs3.labelValue,
+				imageName:    "redis",
+				image:        "quay.io/security-profiles-operator/redis:6.2.1",
+				template:     podWithOneLabelTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		nodeCount := getNodeCount(oc)
+		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+
+		g.By("Update webhookOptions.. !!!")
+		defer func() {
+			patchRecover := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/webhookOptions\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "--type", "json", "--patch", patchRecover, "-n", subD.namespace)
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("daemonsets", "spod", "-n", subD.namespace, "--ignore-not-found").Execute()
+			newCheck("expect", asAdmin, withoutNamespace, contain, "spo.x-k8s.io/enable-recording", ok, []string{"mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n",
+				subD.namespace, "-o=jsonpath={.webhooks[1].namespaceSelector.matchExpressions[0].key}"}).check(oc)
+		}()
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "--patch-file", pathWebhookRecording)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "spo.x-k8s.io/record-here", ok, []string{"mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n",
+			subD.namespace, "-o=jsonpath={.webhooks[1].namespaceSelector.matchExpressions[0].key}"}).check(oc)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ns", ns1, ns1},
+			objectTableRef{"ns", ns2, ns2},
+			objectTableRef{"ns", ns3, ns3})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//kubectl label --overwrite pods foo status=unhealthy
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/record-here=true", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns3).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns3, "-n", ns3, "spo.x-k8s.io/record-here=true", "--overwrite=true")
+		exutil.SetNamespacePrivileged(oc, ns1)
+		exutil.SetNamespacePrivileged(oc, ns2)
+		exutil.SetNamespacePrivileged(oc, ns3)
+
+		g.By("Create profilerecording !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilerecording", profileRecordingNs1.name, ns1},
+			objectTableRef{"profilerecording", profileRecordingNs2.name, ns2},
+			objectTableRef{"profilerecording", profileRecordingNs3.name, ns3})
+		profileRecordingNs1.create(oc)
+		profileRecordingNs2.create(oc)
+		profileRecordingNs3.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileRecordingNs1.name, ok, []string{"profilerecording", "-n", ns1,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileRecordingNs2.name, ok, []string{"profilerecording", "-n", ns2,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileRecordingNs3.name, ok, []string{"profilerecording", "-n", ns3,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create workload !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", ns1, podNs1.name},
+			objectTableRef{"pod", ns2, podNs2.name},
+			objectTableRef{"pod", ns3, podNs3.name})
+		podNs1.create(oc)
+		podNs2.create(oc)
+		podNs3.create(oc)
+		exutil.AssertPodToBeReady(oc, podNs1.name, ns1)
+		exutil.AssertPodToBeReady(oc, podNs2.name, ns2)
+		exutil.AssertPodToBeReady(oc, podNs3.name, ns3)
+
+		g.By("Check seccompprofile/selinuxprofile recorded !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SelinuxProfile", ns1, "--all"})
+		//sleep 30s so the selinuxprofiles of the worklod could be recorded
+		time.Sleep(30 * time.Second)
+		cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", ns1, podNs1.name},
+			objectTableRef{"pod", ns2, podNs1.name},
+			objectTableRef{"pod", ns3, podNs1.name})
+		checkPrfolieNumbers(oc, "selinuxprofile", ns1, 1)
+		checkPrfolieStatus(oc, "selinuxprofile", ns1, "Installed")
+		selinuxProfileShouldExists := profileRecordingNs1.name + "-" + podNs1.imageName
+		newCheck("expect", asAdmin, withoutNamespace, contain, selinuxProfileShouldExists, ok, []string{"selinuxprofile", "-n", ns1,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"selinuxprofile", "-n", ns2}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"selinuxprofile", "-n", ns3}).check(oc)
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51392-Log based secompprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
+		ns1 := "do-record-" + getRandomString()
+		ns2 := "dont-record1-" + getRandomString()
+		ns3 := "dont-record2-" + getRandomString()
+
+		var (
+			profileRecordingNs1 = profileRecordingDescription{
+				name:       "spo-recording-sec-" + getRandomString(),
+				namespace:  ns1,
+				kind:       "SeccompProfile",
+				labelKey:   "app",
+				labelValue: "my-app",
+				template:   profileRecordingTemplate,
+			}
+			podNs1 = workloadDescription{
+				name:         "my-pod" + getRandomString(),
+				namespace:    ns1,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingNs1.labelKey,
+				labelValue:   profileRecordingNs1.labelValue,
+				imageName:    "redis",
+				image:        "quay.io/security-profiles-operator/redis:6.2.1",
+				template:     podWithOneLabelTemplate,
+			}
+			profileRecordingNs2 = profileRecordingDescription{
+				name:       "spo-recording-sec-" + getRandomString(),
+				namespace:  ns2,
+				kind:       "SeccompProfile",
+				labelKey:   "app",
+				labelValue: "my-app",
+				template:   profileRecordingTemplate,
+			}
+			podNs2 = workloadDescription{
+				name:         "my-pod" + getRandomString(),
+				namespace:    ns2,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingNs2.labelKey,
+				labelValue:   profileRecordingNs2.labelValue,
+				imageName:    "redis",
+				image:        "quay.io/security-profiles-operator/redis:6.2.1",
+				template:     podWithOneLabelTemplate,
+			}
+			profileRecordingNs3 = profileRecordingDescription{
+				name:       "spo-recording-sec-" + getRandomString(),
+				namespace:  ns3,
+				kind:       "SeccompProfile",
+				labelKey:   "app",
+				labelValue: "my-test",
+				template:   profileRecordingTemplate,
+			}
+			podNs3 = workloadDescription{
+				name:         "my-pod" + getRandomString(),
+				namespace:    ns3,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingNs3.labelKey,
+				labelValue:   profileRecordingNs3.labelValue,
+				imageName:    "redis",
+				image:        "quay.io/security-profiles-operator/redis:6.2.1",
+				template:     podWithOneLabelTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		nodeCount := getNodeCount(oc)
+		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+
+		g.By("Update webhookOptions.. !!!")
+		defer func() {
+			patchRecover := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/webhookOptions\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "--type", "json", "--patch", patchRecover, "-n", subD.namespace)
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("daemonsets", "spod", "-n", subD.namespace, "--ignore-not-found").Execute()
+			newCheck("expect", asAdmin, withoutNamespace, contain, "spo.x-k8s.io/enable-recording", ok, []string{"mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n",
+				subD.namespace, "-o=jsonpath={.webhooks[1].namespaceSelector.matchExpressions[0].key}"}).check(oc)
+		}()
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "--patch-file", pathWebhookRecording)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "spo.x-k8s.io/record-here", ok, []string{"mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n",
+			subD.namespace, "-o=jsonpath={.webhooks[1].namespaceSelector.matchExpressions[0].key}"}).check(oc)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ns", ns1, ns1},
+			objectTableRef{"ns", ns2, ns2},
+			objectTableRef{"ns", ns3, ns3})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//kubectl label --overwrite pods foo status=unhealthy
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/record-here=true", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns3).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns3, "-n", ns3, "spo.x-k8s.io/record-here=true", "--overwrite=true")
+		exutil.SetNamespacePrivileged(oc, ns1)
+		exutil.SetNamespacePrivileged(oc, ns2)
+		exutil.SetNamespacePrivileged(oc, ns3)
+
+		g.By("Create profilerecording !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilerecording", profileRecordingNs1.name, ns1},
+			objectTableRef{"profilerecording", profileRecordingNs2.name, ns2},
+			objectTableRef{"profilerecording", profileRecordingNs3.name, ns3})
+		profileRecordingNs1.create(oc)
+		profileRecordingNs2.create(oc)
+		profileRecordingNs3.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileRecordingNs1.name, ok, []string{"profilerecording", "-n", ns1,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileRecordingNs2.name, ok, []string{"profilerecording", "-n", ns2,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileRecordingNs3.name, ok, []string{"profilerecording", "-n", ns3,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create workload !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", ns1, podNs1.name},
+			objectTableRef{"pod", ns2, podNs2.name},
+			objectTableRef{"pod", ns3, podNs3.name})
+		podNs1.create(oc)
+		podNs2.create(oc)
+		podNs3.create(oc)
+		exutil.AssertPodToBeReady(oc, podNs1.name, ns1)
+		exutil.AssertPodToBeReady(oc, podNs2.name, ns2)
+		exutil.AssertPodToBeReady(oc, podNs3.name, ns3)
+
+		g.By("Check seccompprofile/selinuxprofile recorded !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"seccompprofile", ns1, "--all"})
+		//sleep 30s so the selinuxprofiles of the worklod could be recorded
+		time.Sleep(30 * time.Second)
+		cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", ns1, podNs1.name},
+			objectTableRef{"pod", ns2, podNs1.name},
+			objectTableRef{"pod", ns3, podNs1.name})
+		checkPrfolieNumbers(oc, "seccompprofile", ns1, 1)
+		checkPrfolieStatus(oc, "seccompprofile", ns1, "Installed")
+		selinuxProfileShouldExists := profileRecordingNs1.name + "-" + podNs1.imageName
+		newCheck("expect", asAdmin, withoutNamespace, contain, selinuxProfileShouldExists, ok, []string{"seccompprofile", "-n", ns1,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"seccompprofile", "-n", ns2}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"seccompprofile", "-n", ns3}).check(oc)
 	})
 
 	// author: xiyuan@redhat.com
