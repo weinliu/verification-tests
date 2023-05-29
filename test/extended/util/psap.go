@@ -213,7 +213,7 @@ func CreateNFDInstance(oc *CLI, namespace string) {
 	}
 
 	//wait for NFD master and worker is ready
-	WaitOprResourceReady(oc, "daemonset", "nfd-master", namespace, false, false)
+	WaitOprResourceReady(oc, "deployment", "nfd-master", namespace, false, false)
 	WaitOprResourceReady(oc, "daemonset", "nfd-worker", namespace, false, true)
 }
 
