@@ -817,7 +817,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-Medium-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy[Disruptive]", func() {
+	g.It("ConnectedOnly-Author:yinzhou-Medium-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy[Disruptive]", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
