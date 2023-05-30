@@ -289,7 +289,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-41064-SDK run bundle InstallMode for single namespace [Slow]", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-41064-SDK run bundle InstallMode for single namespace [Slow] [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		var operatorGroup = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		operatorsdkCLI.showInfo = true
@@ -3017,7 +3017,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jitli-High-52364-SDK Run bundle support large FBC index", func() {
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-52364-SDK Run bundle support large FBC index [Serial]", func() {
 
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
