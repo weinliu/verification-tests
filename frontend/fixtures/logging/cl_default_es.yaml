@@ -1,0 +1,28 @@
+apiVersion: logging.openshift.io/v1
+kind: ClusterLogging
+metadata:
+  namespace: openshift-logging
+  name: instance
+spec:
+  collection:
+    type: vector
+  logStore:
+    elasticsearch:
+      nodeCount: 1
+      redundancyPolicy: ZeroRedundancy
+      resources:
+        requests:
+          memory: 2Gi
+    retentionPolicy:
+      application:
+        maxAge: 7h
+      infra:
+        maxAge: 3d
+      audit:
+        maxAge: 6h
+    type: elasticsearch
+  managementState: Managed
+  visualization:
+    kibana:
+      replicas: 1
+    type: kibana

@@ -18,12 +18,12 @@ describe('Logging related features', () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
-    //Delete logging operators if already exists 
+    //Delete logging operators if already exists
     logUtils.uninstallOperator('Red Hat OpenShift Logging', CLO.Namespace, CLO.PackageName);
     logUtils.uninstallOperator('OpenShift Elasticsearch Operator', EO.Namespace, EO.PackageName);
     logUtils.uninstallOperator('Loki Operator', LOKI.Namespace, LOKI.PackageName);
   });
-  
+
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.logout;
