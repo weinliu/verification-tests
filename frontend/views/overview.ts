@@ -40,6 +40,12 @@ export namespace OverviewSelectors {
   export const skipTour = "[data-test=tour-step-footer-secondary]";
 };
 export const statusCard = {
+  isLoaded: () => {
+    cy.get('[data-test-id="status-card"]')
+  },
+  checkAlertItem: (alert: string, checks: string) => {
+    cy.get('.co-status-card__alert-item-header').contains(`${alert}`).should(`${checks}`);
+  },
   toggleItemPopover: (item: string) => {
     cy.get(`button[data-test="${item}"]`, {timeout: 30000}).click({force: true});
   },
@@ -70,4 +76,4 @@ export const notificationDrawer = {
   expandRecommendations: () => {
     notificationDrawer.toggleNotificationItem('Recommendations', 'expand')
   },
-}
+};
