@@ -53,10 +53,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("Get token of current user")
 		token := oc.UserConfig().BearerToken
 		g.By("check federate endpoint service")
-		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/federate --data-urlencode 'match[]=cluster_version'", token, "cluster_version{endpoint", 3*platformLoadTime)
+		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/federate --data-urlencode 'match[]=prometheus_build_info'", token, "prometheus_build_info", 3*platformLoadTime)
 
 		g.By("check federate route")
-		checkRoute(oc, "openshift-monitoring", "prometheus-k8s-federate", token, "match[]=cluster_version", "cluster_version{endpoint", 3*platformLoadTime)
+		checkRoute(oc, "openshift-monitoring", "prometheus-k8s-federate", token, "match[]=prometheus_build_info", "prometheus_build_info", 3*platformLoadTime)
 	})
 
 	// author: juzhao@redhat.com
