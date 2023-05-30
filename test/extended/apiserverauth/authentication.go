@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	// author: xxia@redhat.com
 	// It is destructive case, will make co/authentical Available=False for a while, so adding [Disruptive]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("NonHyperShiftHOST-Longduration-Author:xxia-Medium-29917-Deleted authentication resources can come back immediately [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:xxia-Medium-29917-Deleted authentication resources can come back immediately [Disruptive]", func() {
 		// Temporarily skip for sno env. Will follow up to investigate robust enhancement.
 		exutil.SkipForSNOCluster(oc)
 		g.By("Delete namespace openshift-authentication")
@@ -52,6 +52,14 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		exutil.AssertWaitPollNoErr(err, "openshift-authentication is not back")
 
 		g.By("Waiting for oauth-openshift pods back")
+		// Observation: 2nd time deletion of pods brings them back to 'Running' state sooner compare to 1st time deletion,
+		// so deleting the auth pods if they are still in Terminating state
+		output, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", "openshift-authentication").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("oauth-openshift.*Terminating", output); matched {
+			err := oc.WithoutNamespace().Run("delete").Args("pods", "--all", "-n", "openshift-authentication").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Couldn't delete pods of openshift-authentication")
+		}
 		// It needs some time to wait for pods recreated and Running, so the Poll parameters are a little larger
 		err = wait.Poll(15*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", "openshift-authentication").Output()
@@ -87,8 +95,9 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		err = oc.WithoutNamespace().Run("delete").Args("authentication.operator", "cluster").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Waiting for authentication.operator back")
-		// It needs more time to wait for authentication.operator back. In test, the max time observed is up to 4 mins, so the Poll parameters are larger
-		err = wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
+		// It needs more time to wait for authentication.operator back. In test, the max time observed is up to 10 mins, so the Poll parameters are larger
+		// There is open bug https://issues.redhat.com/browse/OCPBUGS-10525 related to the deleted auth resources not being in normal state immediately
+		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("authentication.operator", "--no-headers").Output()
 			if err != nil {
 				e2e.Logf("Fail to get authentication.operator cluster, error: %s. Trying again", err)
@@ -119,9 +128,17 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "project openshift-authentication-operator  is not back")
+		exutil.AssertWaitPollNoErr(err, "project openshift-authentication-operator is not back")
 
-		g.By("Waiting for the authentication-operator pod back")
+		g.By("Waiting for the openshift-authentication-operator pod back")
+		// Observation: 2nd time deletion of pods brings them back to 'Running' state sooner compare to 1st time deletion,
+		// so deleting the openshift-authentication-operator pods if they are still in terminating state
+		output, err = oc.WithoutNamespace().Run("get").Args("pods", "-n", "openshift-authentication-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("authentication-operator.*Terminating", output); matched {
+			err := oc.WithoutNamespace().Run("delete").Args("pods", "--all", "-n", "openshift-authentication-operator").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Couldn't delete pods of openshift-authentication-operator")
+		}
 		// It needs some time to wait for pods recreated and Running, so the Poll parameters are a little larger
 		err = wait.Poll(15*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", "openshift-authentication-operator").Output()
@@ -135,7 +152,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "pod of  openshift-authentication-operator is not back")
+		exutil.AssertWaitPollNoErr(err, "pod of openshift-authentication-operator is not back")
 	})
 
 	// author: pmali@redhat.com
