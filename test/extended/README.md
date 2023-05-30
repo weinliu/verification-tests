@@ -7,7 +7,7 @@ OpenShift and the structure of extended tests.
 Prerequisites
 -------------
 
-* Compile both `oc` and `openshift-tests` in this repository (with `make WHAT=cmd/openshift-tests`)
+* Compile both `oc` and `extended-platform-tests` in this repository (with `make all`)
 * Have the environment variable `KUBECONFIG` set pointing to your cluster.
 
 
@@ -17,13 +17,13 @@ Running Tests
 To run a test by name:
 
 ```console
-$ openshift-tests run-test <FULL_TEST_NAME>
+$ extended-platform-tests run-test <FULL_TEST_NAME>
 ```
 
 To see the list of suites available, run:
 
 ```console
-$ openshift-tests help run
+$ extended-platform-tests help run
 ```
 
 See the description on the test for more info about what prerequites may exist for the test.
@@ -31,7 +31,7 @@ See the description on the test for more info about what prerequites may exist f
 To run a subset of tests using a regexp, run:
 
 ```console
-$ openshift-tests run all --dry-run | grep -E "<REGEX>" | openshift-tests run -f -
+$ extended-platform-tests run all --dry-run | grep -E "<REGEX>" | extended-platform-tests run -f -
 ```
 
 
@@ -55,16 +55,9 @@ for a full explanation of the labels used for each test spec.  In brief:
 
   OpenShift extended tests that run builds should be marked \[Slow\].
 
-- Tests should be marked \[Conformance\] when they provide test coverage for
-  functionality considered core and critical to a functional cluster (i.e. not
-  exotic features/configurations) and which is not overlapping with coverage
-  provided in other conformance tests.  Example of a valid conformance test: "Do
-  builds work." Example of an invalid conformance test: "Do builds work when the
-  forcePull flag is set."
+- \[Disruptive\]: If a test may impact workloads that it didn't create, it should be marked as \[Disruptive\]. Examples of disruptive behavior include, but are not limited to, restarting components or tainting nodes. Any \[Disruptive\] test is also assumed to qualify for the \[Serial\] label, but need not be labeled as both. These tests are not run against soak clusters to avoid restarting components.
 
-- In general, accessing the local host (e.g. using the docker socket) in
-  extended tests should be avoided.  If this is unavoidable, the test should be
-  marked \[local\].
+- \[Flaky\]: If a test is found to be flaky and we have decided that it's too hard to fix in the short term (e.g. it's going to take a full engineer-week), it receives the \[Flaky\] label until it is fixed. The \[Flaky\] label should be used very sparingly, and should be accompanied with a reference to the issue for de-flaking the test, because while a test remains labeled \[Flaky\], it is not monitored closely in CI. \[Flaky\] tests are by default not run, unless a focus or skip argument is explicitly given.
 
 Extended tests structure
 ------------------------
