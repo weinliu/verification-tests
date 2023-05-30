@@ -26,7 +26,7 @@ objects:
           node-role.kubernetes.io/master: ''
         containers:
         - name: ${DNAME}
-          image: quay.io/openshifttest/iscsi@sha256:10943052999778a2043eddb3a8c69a00c8d11d22d5f39b73b854b10f4509d9fb
+          image: quay.io/openshifttest/iscsi@sha256:d941ccc221e05d765dfa1088200746f816075e525096aa8aef197b64c9ce497b
           readinessProbe:
             exec:
               command:
