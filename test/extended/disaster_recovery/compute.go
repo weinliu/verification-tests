@@ -61,6 +61,9 @@ func GetDrMasterNodes(oc *exutil.CLI) (ComputeNodes, func()) {
 	case "ibmcloud":
 		e2e.Logf("\n IBM is detected, running the case on IBM\n")
 		return GetIbmMasterNodes(oc)
+	case "nutanix":
+		e2e.Logf("\n Nutanix is detected, running the case on nutanix\n")
+		return GetNutanixMasterNodes(oc)
 	default:
 		g.Skip("Not support cloud provider for DR cases for now. Test cases should be run on IBM or vsphere or aws or gcp or openstack or azure or baremetal, skip for other platforms!!")
 	}
