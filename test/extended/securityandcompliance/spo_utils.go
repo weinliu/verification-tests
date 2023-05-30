@@ -21,6 +21,21 @@ type profileRecordingDescription struct {
 	template   string
 }
 
+type profileBindingDescription struct {
+	name        string
+	namespace   string
+	kind        string
+	profilename string
+	image       string
+	template    string
+}
+
+type selinuxProfile struct {
+	name      string
+	namespace string
+	template  string
+}
+
 type saRoleRoleBindingDescription struct {
 	namespace       string
 	saName          string
@@ -94,6 +109,12 @@ func checkPrfolieStatus(oc *exutil.CLI, profileKind string, namespace string, ex
 func (profileRecording *profileRecordingDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", profileRecording.template, "-p", "NAME="+profileRecording.name, "NAMESPACE="+profileRecording.namespace,
 		"KIND="+profileRecording.kind, "LABELKEY="+profileRecording.labelKey, "LABELVALUE="+profileRecording.labelValue)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (profileBinding *profileBindingDescription) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", profileBinding.template, "-p", "NAME="+profileBinding.name, "NAMESPACE="+profileBinding.namespace,
+		"KIND="+profileBinding.kind, "PROFILENAME="+profileBinding.profilename, "IMAGE="+profileBinding.image)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

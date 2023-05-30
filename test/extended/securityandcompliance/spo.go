@@ -31,10 +31,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		selinuxProfileNginxTemplate   string
 		podWithSelinuxProfileTemplate string
 		profileRecordingTemplate      string
+		profileBindingTemplate        string
 		saRoleRolebindingTemplate     string
 		selinuxProfileCustomTemplate  string
 		workloadDaeTemplate           string
 		workloadDeployTemplate        string
+		pathWebhookBinding            string
 		pathWebhookRecording          string
 		podWithLabelsTemplate         string
 		podWithOneLabelTemplate       string
@@ -55,11 +57,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		podWithProfileTemplate = filepath.Join(buildPruningBaseDir, "pod-with-seccompprofile.yaml")
 		selinuxProfileNginxTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-nginx.yaml")
 		selinuxProfileCustomTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-with-custom-policy-template.yaml")
+		pathWebhookBinding = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-binding.yaml")
 		pathWebhookRecording = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-recording.yaml")
 		podWithSelinuxProfileTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-with-selinux-profile.yaml")
 		podWithLabelsTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-labels.yaml")
 		podWithOneLabelTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-one-label.yaml")
 		profileRecordingTemplate = filepath.Join(buildPruningBaseDir, "/spo/profile-recording.yaml")
+		profileBindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/profile-binding.yaml")
 		saRoleRolebindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/sa-previleged-role-rolebinding.yaml")
 		workloadDaeTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-daemonset.yaml")
 		workloadDeployTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-deployment.yaml")
@@ -908,6 +912,218 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"seccompprofile", "-n", ns2}).check(oc)
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"seccompprofile", "-n", ns3}).check(oc)
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51405-Check profilebinding could make use of webhookOptions object in webhooks for seccompprofile [Disruptive]", func() {
+		ns1 := "do-binding-" + getRandomString()
+		ns2 := "dont-binding-" + getRandomString()
+		podBusybox := filepath.Join(buildPruningBaseDir, "spo/pod-busybox.yaml")
+		podBusyboxNs1 := "pod-busybox-ns1"
+		podBusyboxNs2 := "pod-busybox-ns2"
+
+		var (
+			seccompNs1 = seccompProfile{
+				name:      "sleep-sh-pod-" + getRandomString(),
+				namespace: ns1,
+				template:  secProfileTemplate,
+			}
+			profileBindingNs1 = profileBindingDescription{
+				name:        "spo-binding-sec-" + getRandomString(),
+				namespace:   ns1,
+				kind:        "SeccompProfile",
+				profilename: seccompNs1.name,
+				image:       "quay.io/openshifttest/busybox:latest",
+				template:    profileBindingTemplate,
+			}
+			seccompNs2 = seccompProfile{
+				name:      "sleep-sh-pod-" + getRandomString(),
+				namespace: ns2,
+				template:  secProfileTemplate,
+			}
+			profileBindingNs2 = profileBindingDescription{
+				name:        "spo-binding-sec-" + getRandomString(),
+				namespace:   ns2,
+				kind:        "SeccompProfile",
+				profilename: seccompNs2.name,
+				image:       "quay.io/openshifttest/busybox:latest",
+				template:    profileBindingTemplate,
+			}
+		)
+
+		g.By("Update webhookOptions.. !!!")
+		defer func() {
+			patchRecover := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/webhookOptions\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "--type", "json", "--patch", patchRecover, "-n", subD.namespace)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "spo.x-k8s.io/enable-binding", ok, []string{"mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n",
+				subD.namespace, "-o=jsonpath={.webhooks[0].namespaceSelector.matchExpressions[0].key}"}).check(oc)
+		}()
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "--patch-file", pathWebhookBinding)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "spo.x-k8s.io/bind-here", ok, []string{"mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n",
+			subD.namespace, "-o=jsonpath={.webhooks[0].namespaceSelector.matchExpressions[0].key}"}).check(oc)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ns", ns1, ns1},
+			objectTableRef{"ns", ns2, ns2})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/bind-here=true", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, ns1)
+		exutil.SetNamespacePrivileged(oc, ns2)
+
+		g.By("Create seccompprofiles and check status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"seccompprofile", seccompNs1.name, ns1},
+			objectTableRef{"seccompprofile", seccompNs1.name, ns2})
+		seccompNs1.create(oc)
+		seccompNs2.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", seccompNs1.name, "-n", ns1, "-o=jsonpath={.status.status}"})
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", seccompNs2.name, "-n", ns2, "-o=jsonpath={.status.status}"})
+
+		g.By("Create profilebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilebinding", profileBindingNs1.name, ns1},
+			objectTableRef{"profilebinding", profileBindingNs2.name, ns2})
+		profileBindingNs1.create(oc)
+		profileBindingNs2.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileBindingNs1.name, ok, []string{"profilebinding", "-n", ns1,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileBindingNs2.name, ok, []string{"profilebinding", "-n", ns2,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Created pods with seccompprofiles and check pods status !!!")
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podBusyboxNs1, "-n", ns1, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podBusyboxNs2, "-n", ns2, "--ignore-not-found").Execute()
+		}()
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podBusybox, "-p", "NAME="+podBusyboxNs1, "NAMESPACE="+ns1)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		err2 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podBusybox, "-p", "NAME="+podBusyboxNs2, "NAMESPACE="+ns2)
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", podBusyboxNs1, "-n", ns1, "-o=jsonpath={.status.phase}"})
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", podBusyboxNs2, "-n", ns2, "-o=jsonpath={.status.phase}"})
+
+		g.By("Check whether mkdir operator allowed for pods !!!")
+		result1, _ := oc.AsAdmin().Run("exec").Args(podBusyboxNs1, "-n", ns1, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
+		if strings.Contains(result1, "Operation not permittedd") {
+			e2e.Logf("%s is expected result", result1)
+		}
+		result2, _ := oc.AsAdmin().Run("exec").Args(podBusyboxNs2, "-n", ns2, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
+		if strings.Contains(result2, "/tmpo/foo") && !strings.Contains(result2, "Operation not permittedd") {
+			e2e.Logf("%s is expected result", result2)
+		}
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51408-Check profilebinding could make use of webhookOptions object in webhooks for selinuxprofile [Disruptive]", func() {
+		ns1 := "do-binding-" + getRandomString()
+		ns2 := "dont-binding-" + getRandomString()
+		errorLoggerSelTemplate := filepath.Join(buildPruningBaseDir, "spo/selinux-profile-errorlogger.yaml")
+		errorLoggerPodTemplate := filepath.Join(buildPruningBaseDir, "spo/pod-errorlogger.yaml")
+		podErrorloggerNs1 := "pod-errorlogger-ns1"
+		podErrorloggerNs2 := "pod-errorlogger-ns2"
+
+		var (
+			selinuxNs1 = selinuxProfile{
+				name:      "error-logger-" + getRandomString(),
+				namespace: ns1,
+				template:  errorLoggerSelTemplate,
+			}
+			profileBindingNs1 = profileBindingDescription{
+				name:        "spo-binding-sec-" + getRandomString(),
+				namespace:   ns1,
+				kind:        "SelinuxProfile",
+				profilename: selinuxNs1.name,
+				image:       "quay.io/openshifttest/busybox",
+				template:    profileBindingTemplate,
+			}
+			selinuxNs2 = seccompProfile{
+				name:      "sleep-sh-pod-" + getRandomString(),
+				namespace: ns2,
+				template:  errorLoggerSelTemplate,
+			}
+			profileBindingNs2 = profileBindingDescription{
+				name:        "spo-binding-sec-" + getRandomString(),
+				namespace:   ns2,
+				kind:        "SelinuxProfile",
+				profilename: selinuxNs2.name,
+				image:       "quay.io/openshifttest/busybox",
+				template:    profileBindingTemplate,
+			}
+		)
+
+		g.By("Update webhookOptions.. !!!")
+		defer func() {
+			patchRecover := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/webhookOptions\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "--type", "json", "--patch", patchRecover, "-n", subD.namespace)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "spo.x-k8s.io/enable-binding", ok, []string{"mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n",
+				subD.namespace, "-o=jsonpath={.webhooks[0].namespaceSelector.matchExpressions[0].key}"}).check(oc)
+		}()
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "--patch-file", pathWebhookBinding)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "spo.x-k8s.io/bind-here", ok, []string{"mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n",
+			subD.namespace, "-o=jsonpath={.webhooks[0].namespaceSelector.matchExpressions[0].key}"}).check(oc)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ns", ns1, ns1},
+			objectTableRef{"ns", ns2, ns2})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/bind-here=true", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns2, "-n", ns1, "spo.x-k8s.io/enable-binding=true", "--overwrite=true")
+		exutil.SetNamespacePrivileged(oc, ns1)
+		exutil.SetNamespacePrivileged(oc, ns2)
+
+		g.By("Create selinuxprofile and check status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"selinuxprofile", selinuxNs1.name, ns1},
+			objectTableRef{"selinuxprofile", selinuxNs2.name, ns2})
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxNs1.template, "-p", "NAME="+selinuxNs1.name, "NAMESPACE="+selinuxNs1.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxNs2.template, "-p", "NAME="+selinuxNs2.name, "NAMESPACE="+selinuxNs2.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxNs1.name, "-o=jsonpath={.status.status}", "-n", ns1)
+		usageNs1 := selinuxNs1.name + "_" + selinuxNs1.namespace + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, usageNs1, ok, []string{"selinuxprofiles", selinuxNs1.name, "-n", selinuxNs1.namespace,
+			"-o=jsonpath={.status.usage}"}).check(oc)
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxNs2.name, "-o=jsonpath={.status.status}", "-n", ns2)
+		usageNs2 := selinuxNs2.name + "_" + selinuxNs2.namespace + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, usageNs2, ok, []string{"selinuxprofiles", selinuxNs2.name, "-n", selinuxNs2.namespace,
+			"-o=jsonpath={.status.usage}"}).check(oc)
+
+		g.By("Create profilebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilebinding", profileBindingNs1.name, ns1},
+			objectTableRef{"profilebinding", profileBindingNs2.name, ns2})
+		profileBindingNs1.create(oc)
+		profileBindingNs2.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileBindingNs1.name, ok, []string{"profilebinding", "-n", ns1,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileBindingNs2.name, ok, []string{"profilebinding", "-n", ns2,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Created pods with seccompprofiles and check pods status !!!")
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podErrorloggerNs1, "-n", ns1, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podErrorloggerNs2, "-n", ns2, "--ignore-not-found").Execute()
+		}()
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", errorLoggerPodTemplate, "-p", "NAME="+podErrorloggerNs1, "NAMESPACE="+ns1)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		err2 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", errorLoggerPodTemplate, "-p", "NAME="+podErrorloggerNs2, "NAMESPACE="+ns2)
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		exutil.AssertPodToBeReady(oc, podErrorloggerNs1, ns1)
+		exutil.AssertPodToBeReady(oc, podErrorloggerNs2, ns2)
+
+		g.By("Check whether the profilebinding take effect !!!")
+		result1, _ := oc.AsAdmin().Run("logs").Args("pod/"+podErrorloggerNs1, "-n", ns1, "-c", "errorlogger").Output()
+		o.Expect(result1).Should(o.BeEmpty())
+		result2, _ := oc.AsAdmin().Run("logs").Args("pod/"+podErrorloggerNs2, "-n", ns2, "-c", "errorlogger").Output()
+		o.Expect(result2).Should(o.ContainSubstring("Permission denied"))
 	})
 
 	// author: xiyuan@redhat.com
