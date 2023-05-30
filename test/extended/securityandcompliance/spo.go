@@ -42,6 +42,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		podWithOneLabelTemplate       string
 		workloadRepTemplate           string
 		workloadCronjobTemplate       string
+		workloadPodTemplate           string
 
 		ogD                 operatorGroupDescription
 		subD                subscriptionDescription
@@ -69,6 +70,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		workloadDeployTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-deployment.yaml")
 		workloadRepTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-replicaset.yaml")
 		workloadCronjobTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-cronjob.yaml")
+		workloadPodTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-one-label.yaml")
 
 		ogD = operatorGroupDescription{
 			name:      "security-profiles-operator",
@@ -1520,5 +1522,65 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		checkPrfolieStatus(oc, "seccompprofile", ns1, "Installed")
 		checkPrfolieNumbers(oc, "selinuxprofile", ns2, 2)
 		checkPrfolieStatus(oc, "selinuxprofile", ns2, "Installed")
+	})
+
+	// author: jkuriako@redhat.com
+	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
+	g.It("ConnectedOnly-NonPreRelease-Author:jkuriako-Critical-50254-check Log enricher based selinuxprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
+		ns1 := "mytest" + getRandomString()
+		var (
+			profileRecordingPod = profileRecordingDescription{
+				name:       "test-recording",
+				namespace:  ns1,
+				kind:       "SelinuxProfile",
+				labelKey:   "app",
+				labelValue: "my-app",
+				template:   profileRecordingTemplate,
+			}
+
+			podHello = workloadDescription{
+				name:         "my-pod" + getRandomString(),
+				namespace:    ns1,
+				workloadKind: "Pod",
+				labelKey:     profileRecordingPod.labelKey,
+				labelValue:   profileRecordingPod.labelValue,
+				image:        "quay.io/security-profiles-operator/redis:6.2.1",
+				imageName:    "redis",
+				template:     workloadPodTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		nodeCount := getNodeCount(oc)
+		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"ns", ns1, ns1})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create profilerecording !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"profilerecording", ns1, profileRecordingPod.name})
+		profileRecordingPod.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingPod.name, "-n", ns1}).check(oc)
+
+		g.By("Create pod and check pod status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"pod", ns1, podHello.name})
+		podHello.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, podHello.name, ok, []string{"pod", podHello.name, "-n", ns1, "-o=jsonpath={.metadata.name}"}).check(oc)
+		exutil.AssertPodToBeReady(oc, podHello.name, ns1)
+
+		g.By("Check SelinuxProfile generated !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SelinuxProfile", ns1, "--all"})
+		//sleep 60s so the selinuxprofiles of the worklod could be recorded
+		time.Sleep(60 * time.Second)
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podHello.name, "-n", ns1, "--ignore-not-found").Execute()
+		checkPrfolieStatus(oc, "SelinuxProfile", ns1, "Installed")
+		checkPrfolieNumbers(oc, "SelinuxProfile", ns1, 1)
 	})
 })
