@@ -624,7 +624,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset adding these new fields")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"bootType":"Legacy","categories":[{"key":"AppType","value":"Kubernetes"},{"key":"Environment","value":"Testing"}],"project":{"type":"name","name":"test"}}}}}}}`, "--type=merge").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"bootType":"Legacy","categories":[{"key":"AppType","value":"Kubernetes"},{"key":"Environment","value":"Testing"}],"project":{"type":"name","name":"qe-project"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 
@@ -636,7 +636,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		projectName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.project.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("bootType:%s, categories:%s, projectName:%s", bootType, categories, projectName)
-		o.Expect(strings.Contains(bootType, "Legacy") && strings.Contains(categories, "Kubernetes") && strings.Contains(categories, "Testing") && strings.Contains(projectName, "test")).To(o.BeTrue())
+		o.Expect(strings.Contains(bootType, "Legacy") && strings.Contains(categories, "Kubernetes") && strings.Contains(categories, "Testing") && strings.Contains(projectName, "qe-project")).To(o.BeTrue())
 	})
 
 	// author: zhsun@redhat.com
