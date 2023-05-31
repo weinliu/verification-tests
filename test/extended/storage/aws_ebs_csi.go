@@ -2,14 +2,14 @@ package storage
 
 import (
 	"fmt"
-	"path/filepath"
-	"strconv"
-	"strings"
-
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -212,6 +212,55 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(getInfoErr).NotTo(o.HaveOccurred())
 		o.Expect(gjson.Get(volumeInfo, `Volumes.0.Encrypted`).Bool()).Should(o.BeTrue())
 		o.Expect(gjson.Get(volumeInfo, `Volumes.0.KmsKeyId`).String()).Should(o.Equal(myKmsKeyArn))
+	})
+
+	// author: jiasun@redhat.com
+	// OCP-44793 - [AWS-EBS-CSI-Driver-Operator] could update cloud credential secret automatically when it changes
+	g.It("ROSA-OSD_CCS-Author:jiasun-High-44793-[AWS-EBS-CSI-Driver-Operator] could update cloud credential secret automatically when it changes [Disruptive]", func() {
+		ccoMode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "kube-system", "secret/aws-creds", "-ojsonpath={.metadata.annotations.cloudcredential\\.openshift\\.io/mode}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		if !strings.Contains(ccoMode, "mint") {
+			g.Skip("Skipped: the cluster not satisfy the test scenario")
+		}
+
+		g.By("# Get the origin aws-ebs-csi-driver-controller pod name")
+		defer waitCSOhealthy(oc.AsAdmin())
+		awsEbsCsiDriverController := newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"))
+		originPodList := awsEbsCsiDriverController.getPodList(oc.AsAdmin())
+		resourceVersionOri, resourceVersionOriErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("deployment", "aws-ebs-csi-driver-controller", "-n", "openshift-cluster-csi-drivers", "-o=jsonpath={.metadata.resourceVersion}").Output()
+		o.Expect(resourceVersionOriErr).ShouldNot(o.HaveOccurred())
+
+		g.By("# Delete the cloud credential secret and wait aws-ebs-csi-driver-controller ready again ")
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-cluster-csi-drivers", "secret/ebs-cloud-credentials").Execute()).NotTo(o.HaveOccurred())
+
+		o.Eventually(func() string {
+			resourceVersionNew, resourceVersionNewErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("deployment", "aws-ebs-csi-driver-controller", "-n", "openshift-cluster-csi-drivers", "-o=jsonpath={.metadata.resourceVersion}").Output()
+			o.Expect(resourceVersionNewErr).ShouldNot(o.HaveOccurred())
+			return resourceVersionNew
+		}, 120*time.Second, 5*time.Second).ShouldNot(o.Equal(resourceVersionOri))
+
+		awsEbsCsiDriverController.waitReady(oc.AsAdmin())
+		waitCSOhealthy(oc.AsAdmin())
+		newPodList := awsEbsCsiDriverController.getPodList(oc.AsAdmin())
+
+		g.By("#check pods are different with original pods")
+		o.Expect(len(sliceIntersect(originPodList, newPodList))).Should(o.Equal(0))
+
+		g.By("# Create new project for the scenario")
+		oc.SetupProject()
+
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName("gp2-csi"))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		g.By("# Create a pvc with the gp2-csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("# Create pod with the created pvc and wait for the pod ready")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
 	})
 
 	// author: pewang@redhat.com
