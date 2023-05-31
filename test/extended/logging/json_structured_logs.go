@@ -168,7 +168,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author: qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-High-42363-structured and default index[Serial]", func() {
+		g.It("CPaasrunOnly-Author:qitang-High-42363-the logs are sent to both structured and default index[Serial]", func() {
 			//create 2 projects and generate json logs in each project
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			g.By("create some json logs")
@@ -765,10 +765,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-00")
 
-			//check if the JSON logs are parsed
+			//check if the JSON logs are not parsed
 			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
 			logs := searchDocByQuery(cloNS, podList.Items[0].Name, "app-00", checkLog)
-			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.BeEmpty())
 
 			g.By("update clusterlogforwarder/instance to test OCP-41787")
 			newclfTemplate := filepath.Join(loggingBaseDir, "clusterlogforwarder", "41729.yaml")
