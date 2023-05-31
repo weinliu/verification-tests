@@ -1655,10 +1655,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("5. Check EgressIP assigned to the second egress node.\n")
-		egressIPMaps = getAssignedEIPInEIPObject(oc, EIPObjectName)
-		o.Expect(len(egressIPMaps) == 1).Should(o.BeTrue())
-		o.Expect(egressIPMaps[0]["node"] == egressNode2).Should(o.BeTrue())
-		e2e.Logf("\n egressIP is assigned to node %v after failover\n", egressIPMaps[0]["node"])
+		o.Eventually(func() bool {
+			egressIPMaps = getAssignedEIPInEIPObject(oc, EIPObjectName)
+			return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == egressNode2
+		}, "120s", "10s").Should(o.BeTrue(), "egressIP was not migrated to second egress node after unlabel first egress node!!")
 
 		g.By("6. Check source IP from the test pod of the namespace is still the egressIP after egressIP failover \n")
 		switch flag {
