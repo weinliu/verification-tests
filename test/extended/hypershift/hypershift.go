@@ -1062,7 +1062,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-60140-[AWS]: create default security group when no security group is specified in a nodepool[Serial]", func() {
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-60140-[AWS]-create default security group when no security group is specified in a nodepool[Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while ocp-60140 is for AWS - skipping test ...")
 		}
@@ -1122,7 +1122,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-63867-[AWS]: awsendpointservice uses the default security group for the VPC Endpoint", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-63867-[AWS]-awsendpointservice uses the default security group for the VPC Endpoint", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while ocp-63867 is for AWS - skipping test ...")
 		}
@@ -1289,5 +1289,71 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			testRequestMess, _ = bashClient.Run(fmt.Sprintf("oc new-project test-request-message --as=liangli --as-group=system:authenticated --as-group=system:authenticated:oauth --kubeconfig=%s || true", hostedcluster.hostedClustersKubeconfigFile)).Output()
 			return testRequestMess
 		}, DefaultTimeout, DefaultTimeout/10).Should(o.ContainSubstring("To request a project, contact your system administrator at projectname@example.com :-)"), "check projectRequestMessage error")
+	})
+
+	// author: heli@redhat.com
+	g.It("HyperShiftMGMT-NonPreRelease-Author:heli-Critical-52318-[AWS]-Enforce machineconfiguration.openshift.io/role worker in machine config[Serial]", func() {
+		g.By("create a configmap for MachineConfig")
+		fakePubKey := "AAAAB3NzaC1yc2EAAAADAQABAAABgQC0IRdwFtIIy0aURM64dDy0ogqJlV0aqDqw1Pw9VFc8bFSI7zxQ2c3Tt6GrC+Eg7y6mXQbw59laiGlyA+Qmyg0Dgd7BUVg1r8j" +
+			"RR6Xhf5XbI+tQBhoTQ6BBJKejE60LvyVUiBstGAm7jy6BkfN/5Ulvd8r3OVDYcKczVECWuOQeuPRyTHomR4twQj79+shZkN6tjptQOTTSDJJYIZOmaj9TsDN4bLIxqDYWZC0F6+" +
+			"TvBoRV7xxOBU8DHxZ9wbCZN4IyEs6U77G8bQBP2Pjbp5NrG93nvdnLcv" +
+			`CDsnSOFuiay1KNqjOclIlsrb84qN9TFL3PgLoGohz2vInlaTnopCh4m7+xDgu5bdh1B/hNjDHDTHFpHPP8z7vkWM0I4I8q853E4prGRBpyVztcObeDr/0M/Vnwawyb9Lia16J5hSBi0o3UjxE= jiezhao@cube`
+
+		configmapMachineConfTemplate := filepath.Join(hypershiftTeamBaseDir, "configmap-machineconfig.yaml")
+		configmapName := "custom-ssh-config-52318"
+		cm := configmapMachineConf{
+			Name:              configmapName,
+			Namespace:         hostedcluster.namespace,
+			SSHAuthorizedKeys: fakePubKey,
+			Template:          configmapMachineConfTemplate,
+		}
+
+		parsedCMFile := "ocp-52318-configmap-machineconfig-template.config"
+		defer cm.delete(oc, "", parsedCMFile)
+		cm.create(oc, "", parsedCMFile)
+		doOcpReq(oc, OcpGet, true, "configmap", configmapName, "-n", hostedcluster.namespace)
+
+		g.By("create a nodepool")
+		npName := "np-52318"
+		npCount := 1
+		defer func() {
+			hostedcluster.deleteNodePool(npName)
+			o.Eventually(hostedcluster.pollCheckDeletedNodePool(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
+		}()
+
+		NewAWSNodePool(npName, hostedcluster.name, hostedcluster.namespace).WithNodeCount(&npCount).CreateAWSNodePool()
+		patchOptions := fmt.Sprintf(`{"spec":{"config":[{"name":"%s"}]}}`, configmapName)
+		doOcpReq(oc, OcpPatch, true, "nodepool", npName, "-n", hostedcluster.namespace, "--type", "merge", "-p", patchOptions)
+
+		g.By("condition UpdatingConfig should be here to reflect nodepool config rolling upgrade")
+		o.Eventually(func() bool {
+			return "True" == doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", hostedcluster.namespace, `-ojsonpath={.status.conditions[?(@.type=="UpdatingConfig")].status}`)
+		}, ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), "nodepool condition UpdatingConfig not found error")
+
+		g.By("condition UpdatingConfig should be removed when upgrade completed")
+		o.Eventually(func() string {
+			return doOcpReq(oc, OcpGet, false, "nodepool", npName, "-n", hostedcluster.namespace, `-ojsonpath={.status.conditions[?(@.type=="UpdatingConfig")].status}`)
+		}, LongTimeout, LongTimeout/10).Should(o.BeEmpty(), "nodepool condition UpdatingConfig should be removed")
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npName))
+
+		g.By("check ssh key in worker nodes")
+		o.Eventually(func() bool {
+			workerNodes := hostedcluster.getNodeNameByNodepool(npName)
+			o.Expect(workerNodes).ShouldNot(o.BeEmpty())
+			for _, node := range workerNodes {
+				res, err := hostedcluster.DebugHostedClusterNodeWithChroot("52318", node, "cat", "/home/core/.ssh/authorized_keys.d/ignition")
+				if err != nil {
+					e2e.Logf("debug node error node %s: error: %s", node, err.Error())
+					return false
+				}
+				if !strings.Contains(res, fakePubKey) {
+					e2e.Logf("could not find expected key in node %s: debug ouput: %s", node, res)
+					return false
+				}
+			}
+			return true
+		}, DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "key not found error in nodes")
+
+		g.By("ocp-52318 Enforce machineconfiguration.openshift.io/role worker in machine config test passed")
 	})
 })

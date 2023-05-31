@@ -8,6 +8,7 @@ import (
 
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
+	"k8s.io/apiserver/pkg/storage/names"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -903,4 +904,37 @@ func (h *hostedCluster) isCPEtcdPodHealthy(podName string) bool {
 		return false
 	}
 	return true
+}
+
+func (h *hostedCluster) getNodeNameByNodepool(npName string) []string {
+	labelFilter := "hypershift.openshift.io/nodePool=" + npName
+	nodes := h.getHostedClusterNodeNameByLabelFilter(labelFilter)
+	return strings.Split(strings.TrimSpace(nodes), " ")
+}
+
+func (h *hostedCluster) DebugHostedClusterNodeWithChroot(caseID string, nodeName string, cmd ...string) (string, error) {
+	newNamespace := names.SimpleNameGenerator.GenerateName(fmt.Sprintf("hypershift-%s-", caseID))
+	defer func() {
+		err := h.oc.AsAdmin().AsGuestKubeconf().Run("delete").Args("namespace", newNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}()
+
+	_, err := h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpCreate).Args("namespace", newNamespace).Output()
+	if err != nil {
+		return "", err
+	}
+
+	res, err := h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpGet).Args("ns/"+newNamespace, `-o=jsonpath={.metadata.labels.pod-security\.kubernetes\.io/enforce}`).Output()
+	if err != nil {
+		return "", err
+	}
+
+	if !strings.Contains(res, "privileged") {
+		_, err = h.oc.AsGuestKubeconf().WithoutNamespace().Run("label").Args("ns/"+newNamespace, `security.openshift.io/scc.podSecurityLabelSync=false`, `pod-security.kubernetes.io/enforce=privileged`, `pod-security.kubernetes.io/audit=privileged`, `pod-security.kubernetes.io/warn=privileged`, "--overwrite").Output()
+		if err != nil {
+			return "", err
+		}
+	}
+	res, err = h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpDebug).Args(append([]string{"node/" + nodeName, "--to-namespace=" + newNamespace, "-q", "--", "chroot", "/host"}, cmd...)...).Output()
+	return res, err
 }
