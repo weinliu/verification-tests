@@ -43,6 +43,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		workloadRepTemplate           string
 		workloadCronjobTemplate       string
 		workloadPodTemplate           string
+		workloadJobTemplate           string
 
 		ogD                 operatorGroupDescription
 		subD                subscriptionDescription
@@ -71,6 +72,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		workloadRepTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-replicaset.yaml")
 		workloadCronjobTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-cronjob.yaml")
 		workloadPodTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-one-label.yaml")
+		workloadJobTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-job.yaml")
 
 		ogD = operatorGroupDescription{
 			name:      "security-profiles-operator",
@@ -1237,6 +1239,83 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		assertEventMessageRegexpMatch(oc, message, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name=spod,reason=FailedCreate", "-o=jsonpath={.items[*].message}")
 	})
 
+	// author: bgudi@redhat.com
+	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
+	g.It("ConnectedOnly-NonPreRelease-Author:bgudi-Medium-50222-check Log enricher based seccompprofile recording working as expected for job [Disruptive]", func() {
+		ns1 := "mytest" + getRandomString()
+		var (
+			profileRecordingSeccom = profileRecordingDescription{
+				name:       "spo-recording1",
+				namespace:  ns1,
+				kind:       "SeccompProfile",
+				labelKey:   "app",
+				labelValue: "hello-openshift",
+				template:   profileRecordingTemplate,
+			}
+			saRoleRoleBindingSeccom = saRoleRoleBindingDescription{
+				saName:          "spo-record-sa1",
+				namespace:       ns1,
+				roleName:        "spo-record1" + getRandomString(),
+				roleBindingName: "spo-record1" + getRandomString(),
+				template:        saRoleRolebindingTemplate,
+			}
+			jobHello = workloadDescription{
+				name:         "hello-job",
+				namespace:    ns1,
+				workloadKind: "Job",
+				saName:       saRoleRoleBindingSeccom.saName,
+				labelKey:     profileRecordingSeccom.labelKey,
+				labelValue:   profileRecordingSeccom.labelValue,
+				template:     workloadJobTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		nodeCount := getNodeCount(oc)
+		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"ns", ns1, ns1})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+
+		g.By("Create profilerecording !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"profilerecording", ns1, profileRecordingSeccom.name})
+		profileRecordingSeccom.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingSeccom.name, "-n", ns1}).check(oc)
+
+		g.By("Create sa, role, rolebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"sa", ns1, saRoleRoleBindingSeccom.saName},
+			objectTableRef{"role", ns1, saRoleRoleBindingSeccom.roleName},
+			objectTableRef{"rolebinding", ns1, saRoleRoleBindingSeccom.roleBindingName})
+		saRoleRoleBindingSeccom.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", saRoleRoleBindingSeccom.saName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"role", saRoleRoleBindingSeccom.roleName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"rolebinding", saRoleRoleBindingSeccom.roleBindingName, "-n", ns1}).check(oc)
+
+		g.By("Create workload !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"job", ns1, jobHello.name})
+		jobHello.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, jobHello.name, ok, []string{"job", jobHello.name, "-n", ns1, "-o=jsonpath={.metadata.name}"}).check(oc)
+
+		g.By("Check for pod is ready")
+		podName, _ := oc.AsAdmin().Run("get").Args("pods", "-n", ns1, "-o=jsonpath={.items..metadata.name}").Output()
+		exutil.AssertPodToBeReady(oc, podName, ns1)
+
+		g.By("Check seccompprofile and selinuxprofile generated !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"seccompprofile", ns1, "--all"})
+		//sleep 60s so the selinuxprofiles of the worklod could be recorded
+		time.Sleep(60 * time.Second)
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("job", jobHello.name, "-n", ns1, "--ignore-not-found").Execute()
+		checkPrfolieNumbers(oc, "seccompprofile", ns1, 2)
+		checkPrfolieStatus(oc, "seccompprofile", ns1, "Installed")
+	})
+
 	// author: minmli@redhat.com
 	g.It("Author:minmli-High-50397-check security profiles operator could be deleted successfully [Serial]", func() {
 		defer func() {
@@ -1395,6 +1474,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: bgudi@redhat.com
+	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
 	g.It("ConnectedOnly-NonPreRelease-Author:bgudi-Medium-50259-Medium-50244-check Log enricher based selinuxprofile/seccompprofile recording and metrics working as expected for cronjob [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
