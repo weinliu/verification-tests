@@ -3391,6 +3391,40 @@ nulla pariatur.`
 		}
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-63868-ControllerConfig sync after Infrastructure objects are updated[Disruptive]", func() {
+		var (
+			label      = "break.the.mco"
+			labelValue = "yes-tc-63868"
+			infra      = NewResource(oc.AsAdmin(), "Infrastructure", "cluster")
+			mcCO       = NewResource(oc.AsAdmin(), "ClusterOperator", "machine-config")
+		)
+
+		g.By("Label a Infrastructure resource")
+		defer func() {
+			// In case of error, the machine-config ClusterOperator will become degraded,
+			// so we need to recover the machine-config CO from degraded state.
+			// It is done by removing the machine-config-operator pod.
+			_ = infra.RemoveLabel(label)
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", MachineConfigNamespace,
+				"-l", "k8s-app=machine-config-operator", "--ignore-not-found=true").Execute()
+			o.Eventually(mcCO, "5m", "30s").ShouldNot(BeDegraded(), "Could not recover the machine-config CO from degraded status")
+
+		}()
+		o.Expect(
+			infra.AddLabel(label, labelValue),
+		).To(
+			o.Succeed(),
+			"%s/%s could not be labeled", infra.GetKind(), infra.GetName())
+		logger.Infof("OK!\n")
+
+		g.By("Check that machine-config ClusterOperator is not degraded")
+		o.Consistently(mcCO,
+			"5m", "30s").ShouldNot(BeDegraded(),
+			"machine-config ClusterOperator is degraded.\n%s", mcCO.PrettyString())
+		logger.Infof("OK!\n")
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason

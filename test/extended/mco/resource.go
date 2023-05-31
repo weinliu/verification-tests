@@ -41,6 +41,7 @@ type ResourceInterface interface {
 	Patch(patchType string, patch string) error
 	GetAnnotationOrFail(annotation string) string
 	GetConditionByType(ctype string) string
+	AddLabel(label, value string) error
 	PrettyString() string
 }
 
@@ -186,6 +187,16 @@ func (r *Resource) GetAnnotationOrFail(annotation string) string {
 // GetConditionByType returns the status.condition matching the given type
 func (r *Resource) GetConditionByType(ctype string) string {
 	return r.GetOrFail(`{.status.conditions[?(@.type=="` + ctype + `")]}`)
+}
+
+// AddLabel adds a label to the resource
+func (r *Resource) AddLabel(label, value string) error {
+	return r.oc.WithoutNamespace().Run("label").Args(r.kind, r.name, label+"="+value).Execute()
+}
+
+// RemoveLabel removes a label to the resource
+func (r *Resource) RemoveLabel(label string) error {
+	return r.oc.WithoutNamespace().Run("label").Args(r.kind, r.name, label+"-").Execute()
 }
 
 // PrettyString returns an indented json string with the definition of the resource
