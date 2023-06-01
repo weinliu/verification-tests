@@ -286,8 +286,11 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"  Message: Unable to retrieve available updates: no node for conditional update"
 		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 			cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf(cmdOut)
+			if err != nil {
+				e2e.Logf("oc adm upgrade returned error:")
+				return false, err
+			}
 			if strings.Contains(cmdOut, expString) {
 				return true, nil
 			}
@@ -306,8 +309,11 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Check no updates")
 		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 			cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf(cmdOut)
+			if err != nil {
+				e2e.Logf("oc adm upgrade returned error:")
+				return false, err
+			}
 			if strings.Contains(cmdOut, "No updates available") {
 				return true, nil
 			}
@@ -347,16 +353,20 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
+		var cmdOut string
 		g.By("Check no updates but RetrievedUpdates=True")
 		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
-			cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+			if err != nil {
+				e2e.Logf("oc adm upgrade returned error:")
+				return false, err
+			}
 			if strings.Contains(cmdOut, "No updates available") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Failed to check updates")
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failure: missing expected 'No updates available' in:\n%s", cmdOut))
 
 		status, err := getCVObyJP(oc, ".status.conditions[?(.type=='RetrievedUpdates')].status")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -366,19 +376,19 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(target).NotTo(o.BeEmpty())
 
 		g.By("Upgrade with oc adm upgrade --to")
-		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--to", target).Output()
-		o.Expect(err).To(o.HaveOccurred())
+		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--to", target).Output()
 		o.Expect(cmdOut).To(o.ContainSubstring(
 			"no recommended updates, specify --to-image to conti" +
 				"nue with the update or wait for new updates to be available"))
+		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("Upgrade with oc adm upgrade --to --allow-not-recommended")
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--allow-not-recommended", "--to", target).Output()
-		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(cmdOut).To(o.ContainSubstring(
 			"no recommended or conditional updates, specify --to-image to conti" +
 				"nue with the update or wait for new updates to be available"))
+		o.Expect(err).To(o.HaveOccurred())
 
 		targetPullspec := GenerateReleasePayload(oc)
 		o.Expect(targetPullspec).NotTo(o.BeEmpty())
@@ -386,18 +396,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Upgrade with oc adm upgrade --to-image")
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--to-image", targetPullspec).Output()
-		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(cmdOut).To(o.ContainSubstring(
 			"no recommended updates, specify --allow-explicit-upgrade to conti" +
 				"nue with the update or wait for new updates to be available"))
+		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("Upgrade with oc adm upgrade --to-image --allow-not-recommended")
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--allow-not-recommended", "--to-image", targetPullspec).Output()
-		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(cmdOut).To(o.ContainSubstring(
 			"no recommended or conditional updates, specify --allow-explicit-upgrade to conti" +
 				"nue with the update or wait for new updates to be available"))
+		o.Expect(err).To(o.HaveOccurred())
 	})
 
 	//author: jialiu@redhat.com
@@ -826,7 +836,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		err = wait.Poll(5*time.Minute, 35*time.Minute, func() (bool, error) {
 			alertDown := getAlertByName(oc, "ClusterOperatorDown")
 			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
-			o.Expect(alertDown).To(o.BeNil())
+			if alertDown != nil {
+				e2e.Logf("alert ClusterOperatorDown is not nil")
+				return false, fmt.Errorf("%v", alertDown)
+			}
 			if alertDegraded == nil || alertDegraded["state"] != "firing" {
 				e2e.Logf("Waiting for alert ClusterOperatorDegraded to be triggered and fired...")
 				return false, nil
@@ -1167,7 +1180,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		if pollErr := wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
 			curStrategy, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args("deployment", name, "-o=jsonpath={.spec.strategy}", "-n", namespace).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil {
+				e2e.Logf("oc get deployment %s returned error:", name)
+				return false, err
+			}
 			if strings.Contains(string(curStrategy), expectStrategy) {
 				return true, nil
 			}
@@ -1216,7 +1232,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			_, cmderr := exec.Command("bash", "-c", "oc get route prometheus-k8s -n openshift-monitoring").Output()
 			if cmderr != nil {
 				// oc get route returns "exit status 1" once unavailable
-				o.Expect(cmderr.Error()).To(o.ContainSubstring("exit status 1"))
+				if !strings.Contains(cmderr.Error(), "exit status 1") {
+					e2e.Logf("oc get route prometheus-k8s returned different unexpected error:")
+					return false, cmderr
+				}
 				return true, nil
 			}
 			return false, nil
@@ -1308,7 +1327,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			jsonpath = ".status.conditions[?(.type=='RetrievedUpdates')].reason"
 			err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 				reason, err := getCVObyJP(oc, jsonpath)
-				o.Expect(err).NotTo(o.HaveOccurred())
+				if err != nil {
+					e2e.Logf("get CVO RetrievedUpdates condition returned error:")
+					return false, err
+				}
 				e2e.Logf("received reason: '%s'", reason)
 				if strings.Contains(reason, "VersionNotFound") {
 					return true, nil
@@ -1341,7 +1363,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Wait for enable-auto-update")
 		err = wait.PollImmediate(2*time.Second, 10*time.Second, func() (bool, error) {
 			depArgs, _, err := getCVOcontArg(oc, "enable-auto-update")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil {
+				e2e.Logf("get CVO container args returned error:")
+				return false, err
+			}
 			if strings.Contains(depArgs, "true") {
 				//e2e.Logf(depArgs)
 				return true, nil
@@ -1354,7 +1379,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		jsonpath = ".status.conditions[?(.type=='RetrievedUpdates')].reason"
 		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 			reason, err := getCVObyJP(oc, jsonpath)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil {
+				e2e.Logf("get CVO RetreivedUpdates condition returned error:")
+				return false, err
+			}
 			if strings.Contains(reason, "VersionNotFound") {
 				e2e.Logf("success - found reason: %s", reason)
 				return true, nil
@@ -1476,7 +1504,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		err = wait.Poll(30*time.Second, 20*time.Minute, func() (bool, error) {
 			valueMaxUnavailable, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args(resourceKindName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil {
+				e2e.Logf("oc get %s -n %s returned error:", resourceKindName, resourceNamespace)
+				return false, err
+			}
 			if strings.Compare(valueMaxUnavailable, defaultValueMaxUnavailable) != 0 {
 				e2e.Logf("valueMaxUnavailable is %v. Waiting for deployment being reconciled...", valueMaxUnavailable)
 				return false, nil
@@ -1528,7 +1559,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		err = wait.Poll(30*time.Second, 8*time.Minute, func() (bool, error) {
 			valueMaxUnavailable, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args(resourceKind, resourceName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil {
+				e2e.Logf("oc get %s %s -n %s returned error:", resourceKind, resourceName, resourceNamespace)
+				return false, err
+			}
 			if strings.Compare(valueMaxUnavailable, defaultValueMaxUnavailable) == 0 {
 				e2e.Logf("valueMaxUnavailable is %v. Waiting for deployment being reconciled...", valueMaxUnavailable)
 				return false, nil

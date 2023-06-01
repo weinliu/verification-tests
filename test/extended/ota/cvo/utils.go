@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -384,34 +385,46 @@ func updateGraph(oc *exutil.CLI, graphName string) (string, string, string, erro
 // return value: string: the target version
 // return value: string: the target payload
 // return value: error: any error
-func buildGraph(client *storage.Client, oc *exutil.CLI, projectID string, graphName string) (string, string, string, string, string, error) {
-	graphFile, targetVersion, targetPayload, err := updateGraph(oc, graphName)
-	if err != nil {
-		return "", "", "", "", "", err
+func buildGraph(client *storage.Client, oc *exutil.CLI, projectID string, graphName string) (
+	url string, bucket string, object string, targetVersion string, targetPayload string, err error) {
+	var graphFile string
+	var resp *http.Response
+	var body []byte
+
+	if graphFile, targetVersion, targetPayload, err = updateGraph(oc, graphName); err != nil {
+		return
 	}
 	e2e.Logf("Graph file: %v updated", graphFile)
 
 	// Give the bucket a unique name
-	bucket := fmt.Sprintf("ocp-ota-%d", time.Now().Unix())
-	if err := CreateBucket(client, projectID, bucket); err != nil {
-		return "", "", "", "", "", err
+	bucket = fmt.Sprintf("ocp-ota-%d", time.Now().Unix())
+	if err = CreateBucket(client, projectID, bucket); err != nil {
+		return
 	}
 	e2e.Logf("Bucket: %v created", bucket)
 
 	// Give the object a unique name
-	object := fmt.Sprintf("graph-%d", time.Now().Unix())
-	if err := UploadFile(client, bucket, object, graphFile); err != nil {
-		return "", bucket, "", "", "", err
+	object = fmt.Sprintf("graph-%d", time.Now().Unix())
+	if err = UploadFile(client, bucket, object, graphFile); err != nil {
+		return
 	}
 	e2e.Logf("Object: %v uploaded", object)
 
 	// Make the object public
-	if err := MakePublic(client, bucket, object); err != nil {
-		return "", bucket, object, "", "", err
+	if err = MakePublic(client, bucket, object); err != nil {
+		return
 	}
 	e2e.Logf("Object: %v public", object)
 
-	return fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucket, object), bucket, object, targetVersion, targetPayload, nil
+	url = fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucket, object)
+	// testing endpoint accessible and logging graph contents
+	if resp, err = http.Get(url); err == nil {
+		defer resp.Body.Close()
+		if body, err = io.ReadAll(resp.Body); err == nil {
+			e2e.Logf(string(body))
+		}
+	}
+	return
 }
 
 // restoreCVSpec restores upstream and channel of clusterversion
@@ -581,24 +594,22 @@ func patchCVOcontArg(oc *exutil.CLI, index int, value string) (string, error) {
 // Returns: true - found, false - not found
 func checkUpdates(oc *exutil.CLI, conditional bool, interval time.Duration, timeout time.Duration, expStrings ...string) bool {
 	var (
-		cmdOut string
-		err    error
+		cmdOut, arg string
+		err         error
 	)
+	if conditional {
+		arg = "--include-not-recommended"
+	}
 	if pollErr := wait.Poll(interval*time.Second, timeout*time.Second, func() (bool, error) {
-		if conditional {
-			cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--include-not-recommended").Output()
-		} else {
-			cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", arg).Output()
 		for _, str := range expStrings {
-			if !strings.Contains(cmdOut, str) {
-				return false, nil
+			if !strings.Contains(cmdOut, str) || err != nil {
+				return false, err
 			}
 		}
 		return true, nil
 	}); pollErr != nil {
-		e2e.Logf(cmdOut)
+		e2e.Logf("last oc adm upgrade returned:\n%s\nstderr: %v\nexpecting:\n%s\n", cmdOut, err, strings.Join(expStrings, "\n\n"))
 		return false
 	}
 	return true
