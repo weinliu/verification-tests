@@ -2,7 +2,6 @@ package apiserverauth
 
 import (
 	"bufio"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -26,7 +25,6 @@ import (
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -1312,7 +1310,7 @@ spec:
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-High-24698-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
 		g.By("1) Check if port 6080 is available")
-		err := wait.Poll(10*time.Second, 40*time.Second, func() (bool, error) {
+		err := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6080").Output()
 			// no need to check error since some system output stderr for valid result
 			if len(checkOutput) == 0 {
@@ -1321,40 +1319,35 @@ spec:
 			e2e.Logf("Port 6080 is occupied, trying again")
 			return false, nil
 		})
-
 		exutil.AssertWaitPollNoErr(err, "Port 6080 is available")
 
-		g.By("2) Check if openshift-kube-apiserver pods are ready")
-		output, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", "openshift-kube-apiserver", "-l", "apiserver", "--no-headers").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		if matched, _ := regexp.MatchString("kube-apiserver.*Running", output); !matched {
-			e2e.Logf("Some of openshift-kube-apiserver are abnormal:\n%s", output)
-		}
-		e2e.Logf("All pods of openshift-kube-apiserver are ready")
-
-		g.By("3) Get kube-apiserver pods")
+		g.By("2) Get kube-apiserver pods")
 		err = oc.AsAdmin().Run("project").Args("openshift-kube-apiserver").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("project").Args("default").Execute() // switch to default project
-
-		podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-kube-apiserver").List(context.Background(), metav1.ListOptions{LabelSelector: "apiserver"})
+		podList, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-apiserver", "apiserver")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(podList.Size()).NotTo(o.Equal(0))
-		e2e.Logf("Fetched all pods from openshift-kube-apiserver")
+		o.Expect(podList).ShouldNot(o.BeEmpty())
 
-		g.By("4) Perform port-forward on the first pod available")
-		pod := podList.Items[0]
-		_, _, _, err = oc.AsAdmin().Run("port-forward").Args(pod.Name, "6080").Background()
+		g.By("3) Perform port-forward on the first pod available")
+		exutil.AssertPodToBeReady(oc, podList[0], "openshift-kube-apiserver")
+		_, _, _, err = oc.AsAdmin().Run("port-forward").Args(podList[0], "6080").Background()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		defer exec.Command("kill", "-9", "$(lsof -t -i:6080)").Output()
-		e2e.Logf("Port forward running in background, sleep for 30 seconds")
+		defer exec.Command("bash", "-c", "kill -HUP $(lsof -t -i:6080)").Output()
+		err1 := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6080").Output()
+			// no need to check error since some system output stderr for valid result
+			if len(checkOutput) != 0 {
+				e2e.Logf("#### Port-forward 6080:6080 is in use")
+				return true, nil
+			}
+			e2e.Logf("#### Waiting for port-forward applying ...")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err1, "#### Port-forward 6081:6443 doesn't work")
 
-		// sleep 30 seconds to make sure that port forwarding is correctly configured
-		time.Sleep(30 * time.Second)
-
-		g.By("5) check if port forward succeed")
+		g.By("4) check if port forward succeed")
 		checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:6080/readyz --noproxy \"127.0.0.1\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(checkOutput)).To(o.Equal("ok"))

@@ -2,12 +2,15 @@ package apiserverauth
 
 import (
 	"fmt"
+	"os/exec"
 	"strconv"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -25,11 +28,16 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 	g.BeforeEach(func() {
 		guestClusterName, guestClusterKube, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
-		e2e.Logf("%s, %s, %s", guestClusterName, guestClusterKube, hostedClusterNS)
+		e2e.Logf("#### %s, %s, %s", guestClusterName, guestClusterKube, hostedClusterNS)
 		oc.SetGuestKubeconf(guestClusterKube)
 
 		iaasPlatform = exutil.CheckPlatform(oc)
-
+		// Currently, the test is only supported on AWS
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
+		}
+		guestClusterNS = hostedClusterNS + "-" + guestClusterName
+		e2e.Logf("HostedClusterControlPlaneNS: %v", guestClusterNS)
 	})
 
 	// author: kewang@redhat.com
@@ -61,14 +69,6 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 				},
 			}
 		)
-
-		// Currently, the test is only supported on AWSd on AWS
-		if iaasPlatform != "aws" {
-			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
-		}
-
-		guestClusterNS = hostedClusterNS + "-" + guestClusterName
-		e2e.Logf("HostedClusterControlPlaneNS: %v", guestClusterNS)
 
 		defer func() {
 			g.By("-->> Restoring cluster's ciphers")
@@ -137,5 +137,55 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			}
 			e2e.Logf("#### Ciphers are matched: %s", cipherItem.cipherType)
 		}
+	})
+
+	// author: kewang@redhat.com
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:kewang-High-64000-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
+		g.By("1) Check if port 6081 is available")
+		err := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6081").Output()
+			// no need to check error since some system output stderr for valid result
+			if len(checkOutput) == 0 {
+				return true, nil
+			}
+			e2e.Logf("Port 6081 is occupied, trying again")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Port 6081 is available")
+
+		g.By("2) Get kube-apiserver pods")
+		err = oc.AsAdmin().Run("project").Args(guestClusterNS).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		podList, err := exutil.GetAllPodsWithLabel(oc, guestClusterNS, "app=kube-apiserver")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podList).ShouldNot(o.BeEmpty())
+		defer oc.AsAdmin().Run("project").Args("default").Execute() // switch to default project
+
+		g.By("3) Perform port-forward on the first pod available")
+		exutil.AssertPodToBeReady(oc, podList[0], guestClusterNS)
+		_, _, _, err = oc.AsAdmin().Run("port-forward").Args("-n", guestClusterNS, podList[0], "6081:6443").Background()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer exec.Command("bash", "-c", "kill -HUP $(lsof -t -i:6081)").Output()
+
+		err1 := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6081").Output()
+			// no need to check error since some system output stderr for valid result
+			if len(checkOutput) != 0 {
+				e2e.Logf("#### Port-forward 6081:6443 is in use")
+				return true, nil
+			}
+			e2e.Logf("#### Waiting for port-forward applying ...")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err1, "#### Port-forward 6081:6443 doesn't work")
+
+		// kube-apiserver of hosted clsuter doesn't use insecure port 6081
+		g.By("4) check if port forward succeed")
+		out, err := exec.Command("bash", "-c", "curl -ks https://127.0.0.1:6081/readyz --noproxy \"127.0.0.1\"").Output()
+		outStr := string(out)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(outStr).Should(o.ContainSubstring("ok"), fmt.Sprintf("Output from kube-apiserver pod readyz :: %s", outStr))
+		e2e.Logf("Port forwarding works fine, case ran passed!")
 	})
 })
