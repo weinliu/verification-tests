@@ -807,7 +807,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		err = copy(filepath.Join(dataPath, "Dockerfile"), filepath.Join(tmpPath, "Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-operator:vocpversion", "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
 
 		err = copy(filepath.Join(dataPath, "config", "default", "manager_auth_proxy_patch.yaml"), filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())

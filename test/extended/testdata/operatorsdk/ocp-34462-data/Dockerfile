@@ -1,4 +1,4 @@
-FROM registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-operator:vocpversion
+FROM brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion
 
 COPY requirements.yml ${HOME}/requirements.yml
 RUN ansible-galaxy collection install -r ${HOME}/requirements.yml --force \
