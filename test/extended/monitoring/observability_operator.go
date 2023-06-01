@@ -21,7 +21,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		if !exutil.IsROSA() {
 			createObservabilityOperator(oc, oboBaseDir)
 		}
-
 	})
 	g.It("HyperShiftMGMT-ROSA-Author:Vibhu-Critical-57236-Critical-57239-create monitoringstack and check config & metrics on hypershift", func() {
 		msD := monitoringStackDescription{
@@ -54,13 +53,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		checkRemoteWriteConfig(oc, msD)
 		g.By("Check monitoringStack has correct clusterID region and status")
 		checkMonitoringStackDetails(oc, msD, "rosa_mc")
-
 	})
 
 	g.It("Author:Vibhu-Critical-57440-observability operator uninstall [Serial]", func() {
 		defer deleteOperator(oc)
 		g.By("Delete ObservabilityOperator")
-
 	})
 	g.It("HyperShiftMGMT-ROSA-Author:Vibhu-High-55352-observability operator self monitoring", func() {
 		g.By("Check observability operator monitoring")
@@ -95,5 +92,4 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		g.By("Check metric along with value")
 		checkMetricValue(oc, "monitor_example_app")
 	})
-
 })

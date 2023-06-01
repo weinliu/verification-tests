@@ -98,7 +98,6 @@ func createOperator(oc *exutil.CLI, csTemplate string, ogTemplate string, subTem
 	out, err := checkSubscription(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("Output: %v", out)
-
 }
 func createObservabilityOperator(oc *exutil.CLI, oboBaseDir string) {
 	csTemplate := filepath.Join(oboBaseDir, "catalog-src.yaml")
@@ -118,7 +117,6 @@ func getClusterDetails(oc *exutil.CLI) (clusterID string, region string) {
 func createMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, secD monitoringStackSecretDescription) {
 	g.By("Creating Monitoring Stack")
 	createStack(oc, msD, secD, "rosa_mc", "")
-
 }
 func createStack(oc *exutil.CLI, msD monitoringStackDescription, secD monitoringStackSecretDescription, stack, oboBaseDir string) {
 	stack = strings.ToLower(stack)
@@ -184,7 +182,6 @@ func checkMonitoringStackPods(oc *exutil.CLI, stack string) {
 		return false, err
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v namespace monitoringstack pods are not in healthy state", namespace))
-
 }
 func checkOperatorPods(oc *exutil.CLI) {
 	g.By("Check " + namespace + " namespace pods liveliness")
@@ -197,7 +194,6 @@ func checkOperatorPods(oc *exutil.CLI) {
 		return false, err
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v namespace does not contain pods", namespace))
-
 }
 func checkRemoteWriteConfig(oc *exutil.CLI, msD monitoringStackDescription) {
 	var (
@@ -233,10 +229,8 @@ func checkRemoteWriteConfig(oc *exutil.CLI, msD monitoringStackDescription) {
 			return true, nil
 		}
 		return false, nil
-
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Remote write config is not correct in monitoringstack %v in %v namespace", msD.name, msD.namespace))
-
 }
 func checkMonitoringStackDetails(oc *exutil.CLI, msD monitoringStackDescription, stack string) {
 	var name string
@@ -283,10 +277,8 @@ func deleteMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, secD 
 		errStack := oc.AsAdmin().WithoutNamespace().Run("delete").Args("monitoringstack", "example-app-monitoring-stack", "-n", "openshift-observability-operator").Execute()
 		o.Expect(errStack).NotTo(o.HaveOccurred())
 	}
-
 }
 func deleteOperator(oc *exutil.CLI) {
-
 	g.By("Removing ClusterServiceVersion " + csvName)
 	errCsv := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterserviceversions", csvName, "-n", namespace).Execute()
 	g.By("Removing Subscription " + subName)
@@ -302,7 +294,6 @@ func deleteOperator(oc *exutil.CLI) {
 	o.Expect(errOg).NotTo(o.HaveOccurred())
 	o.Expect(errCs).NotTo(o.HaveOccurred())
 	o.Expect(errNs).NotTo(o.HaveOccurred())
-
 }
 func checkRuleExists(oc *exutil.CLI, token, routeName, namespace, ruleName string) bool {
 	var rules []gjson.Result
@@ -330,7 +321,6 @@ func checkRuleExists(oc *exutil.CLI, token, routeName, namespace, ruleName strin
 		}
 	}
 	return false
-
 }
 func checkConfigMapExists(oc *exutil.CLI, namespace, configmapName, checkStr string) bool {
 	searchOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", configmapName, "-n", namespace, "-o=jsonpath={.data.config\\.yaml}").Output()
@@ -365,7 +355,6 @@ func checkOperatorMonitoring(oc *exutil.CLI, oboBaseDir string) {
 			return true, nil
 		}
 		return false, nil
-
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Prometheus rules are not created in %v namespace", namespace))
 	g.By("Check if UWM exists")
@@ -384,12 +373,10 @@ func checkOperatorMonitoring(oc *exutil.CLI, oboBaseDir string) {
 			return true, nil
 		}
 		return false, nil
-
 	})
 	exutil.AssertWaitPollNoErr(errCheck, "Observability operator rules are not loaded")
 	g.By("Check Observability Operator metrics")
 	checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query={__name__=~"controller_runtime_reconcile.*",job="observability-operator",namespace="openshift-observability-operator"}'`, token, "openshift-observability-operator", platformLoadTime)
-
 }
 func checkLabel(oc *exutil.CLI) {
 	var labelName = "network.openshift.io/policy-group=monitoring"
@@ -399,7 +386,6 @@ func checkLabel(oc *exutil.CLI) {
 	o.Expect(strings.Contains(out, "monitoring")).To(o.BeTrue())
 }
 func checkPodHealth(oc *exutil.CLI) {
-
 	var (
 		actualLiveness  interface{}
 		actualReadiness interface{}
@@ -447,10 +433,8 @@ func checkPodHealth(oc *exutil.CLI) {
 			return true, nil
 		}
 		return false, nil
-
 	})
 	exutil.AssertWaitPollNoErr(errCheck, "liveness/readiness probe not implemented correctly in observability operator pod")
-
 }
 func checkHCPTargets(oc *exutil.CLI) {
 	g.By("Get SA token")
@@ -459,7 +443,6 @@ func checkHCPTargets(oc *exutil.CLI) {
 	for _, target := range targets {
 		checkMetric(oc, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=prometheus_sd_discovered_targets{config=~".*%s.*"}' `, monSvcName, namespace, target), token, target, platformLoadTime)
 	}
-
 }
 func checkExampleAppTarget(oc *exutil.CLI) {
 	g.By("Get SA token")
@@ -482,7 +465,6 @@ func checkIfMetricValueExists(oc *exutil.CLI, token, url string, timeout time.Du
 		return true, err
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metric %s doesnot contain any value", res))
-
 }
 func checkMetricValue(oc *exutil.CLI, clusterType string) {
 	g.By("Get SA token")
@@ -493,7 +475,6 @@ func checkMetricValue(oc *exutil.CLI, clusterType string) {
 	} else {
 		checkIfMetricValueExists(oc, token, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=version' `, "example-app-monitoring-stack-prometheus", namespace), platformLoadTime)
 	}
-
 }
 func createCustomMonitoringStack(oc *exutil.CLI, oboBaseDir string) {
 	g.By("Create Clustom Monitoring Stack")
@@ -522,7 +503,6 @@ func checkExampleAppStatus(oc *exutil.CLI, ns string) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Example app status is not healthy in %s namespace", ns))
-
 }
 
 func createExampleApp(oc *exutil.CLI, oboBaseDir, ns string) {
