@@ -163,7 +163,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
 
-		g.By("Patch upstream")
+		g.By("Patch upstream and channel")
 		projectID := "openshift-qe"
 		ctx := context.Background()
 		client, err := storage.NewClient(ctx)
@@ -175,7 +175,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer DeleteObject(client, bucket, object)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
+			{"add", "/spec/upstream", graphURL},
+			{"add", "/spec/channel", "stable-a"},
+		})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer restoreCVSpec(orgUpstream, orgChannel, oc)
