@@ -532,12 +532,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		defer restoreDNSOperatorDefault(oc)
 
 		g.By("patch the dns.operator/default and add a custom forward zone config")
+		podList := getAllDNSPodsNames(oc)
+		attrList := getAllCorefilesStat(oc, podList)
 		patchGlobalResourceAsAdmin(oc, resourceName, jsonPatch)
-		delAllDNSPodsNoWait(oc)
-		ensureDNSRollingUpdateDone(oc)
+		waitAllCorefilesUpdated(oc, attrList)
+		ensureClusterOperatorNormal(oc, "dns", 5, 300)
 
 		g.By("check the cache entries of the custom forward zone in CoreDNS")
-		podList := getAllDNSPodsNames(oc)
 		dnsPodName := getRandomDNSPodName(podList)
 		zoneInCoreFile := readDNSCorefile(oc, dnsPodName, "mytest.ocp:5353", "-A15")
 		o.Expect(zoneInCoreFile).Should(o.And(

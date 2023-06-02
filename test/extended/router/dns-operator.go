@@ -103,9 +103,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("patch the dns.operator/default and add custom zones config")
 		defer restoreDNSOperatorDefault(oc)
+		podList := getAllDNSPodsNames(oc)
+		attrList := getAllCorefilesStat(oc, podList)
 		patchGlobalResourceAsAdmin(oc, resourceName, jsonPatch)
-		delAllDNSPodsNoWait(oc)
-		ensureDNSRollingUpdateDone(oc)
+		attrList = waitAllCorefilesUpdated(oc, attrList)
+		ensureClusterOperatorNormal(oc, "dns", 5, 300)
 
 		g.By("check Corefile and ensure the policy is Random")
 		oneDNSPod := getDNSPodName(oc)
@@ -114,8 +116,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("updateh the custom zones policy to RoundRobin ")
 		patchGlobalResourceAsAdmin(oc, resourceName, "[{\"op\":\"replace\", \"path\":\"/spec/servers/0/forwardPlugin/policy\", \"value\":\"RoundRobin\"}]")
-		delAllDNSPodsNoWait(oc)
-		ensureDNSRollingUpdateDone(oc)
+		attrList = waitAllCorefilesUpdated(oc, attrList)
+		ensureClusterOperatorNormal(oc, "dns", 5, 300)
 
 		g.By("check Corefile and ensure the policy is round_robin")
 		oneDNSPod = getDNSPodName(oc)
@@ -124,8 +126,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("updateh the custom zones policy to Sequential")
 		patchGlobalResourceAsAdmin(oc, resourceName, "[{\"op\":\"replace\", \"path\":\"/spec/servers/0/forwardPlugin/policy\", \"value\":\"Sequential\"}]")
-		delAllDNSPodsNoWait(oc)
-		ensureDNSRollingUpdateDone(oc)
+		waitAllCorefilesUpdated(oc, attrList)
+		ensureClusterOperatorNormal(oc, "dns", 5, 300)
 
 		g.By("check Corefile and ensure the policy is sequential")
 		oneDNSPod = getDNSPodName(oc)

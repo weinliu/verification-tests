@@ -580,6 +580,10 @@ func ensureClusterOperatorNormal(oc *exutil.CLI, coName string, healthyThreshold
 			count = 0
 			if printCount%10 == 1 {
 				e2e.Logf("CO status is still abnormal (%v), wait and try again...", status)
+				if coName == "dns" {
+					e2e.Logf("do sync on all dns pods")
+					doSyncOnAllDNSPods(oc)
+				}
 			}
 		}
 		return primary, nil
@@ -614,12 +618,13 @@ func checkAllClusterOperatorsStatus(oc *exutil.CLI) []string {
 // 1st, co/dns go to Progressing status
 // 2nd, co/dns is back to normal and stable
 func ensureDNSRollingUpdateDone(oc *exutil.CLI) {
-	ensureClusterOperatorProgress(oc, "dns")
 	ensureClusterOperatorNormal(oc, "dns", 5, 300)
 }
 
 // patch the dns.operator/default with the original value
 func restoreDNSOperatorDefault(oc *exutil.CLI) {
+	podList := getAllDNSPodsNames(oc)
+	attrList := getAllCorefilesStat(oc, podList)
 	// the json value might be different in different version
 	jsonPatch := "[{\"op\":\"replace\", \"path\":\"/spec\", \"value\":{\"cache\":{\"negativeTTL\":\"0s\",\"positiveTTL\":\"0s\"},\"logLevel\":\"Normal\",\"nodePlacement\":{},\"operatorLogLevel\":\"Normal\",\"upstreamResolvers\":{\"policy\":\"Sequential\",\"transportConfig\":{},\"upstreams\":[{\"port\":53,\"type\":\"SystemResolvConf\"}]}}}]"
 	e2e.Logf("restore(patch) dns.operator/default with original settings.")
@@ -630,8 +635,8 @@ func restoreDNSOperatorDefault(oc *exutil.CLI) {
 	if strings.Contains(output, "no change") {
 		e2e.Logf("skip the Progressing check step.")
 	} else {
-		delAllDNSPodsNoWait(oc)
-		ensureClusterOperatorProgress(oc, "dns")
+		waitAllCorefilesUpdated(oc, attrList)
+
 	}
 	ensureClusterOperatorNormal(oc, "dns", 5, 300)
 }
@@ -671,6 +676,14 @@ func delAllDNSPods(oc *exutil.CLI) {
 // this function is to delete all dns pods without wait
 func delAllDNSPodsNoWait(oc *exutil.CLI) {
 	oc.AsAdmin().Run("delete").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-n", "openshift-dns", "--wait=false").Execute()
+}
+
+// this function is to do sync on all dns pods
+func doSyncOnAllDNSPods(oc *exutil.CLI) {
+	for _, podName := range getAllDNSPodsNames(oc) {
+		err := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", podName, "-c", "dns", "--", "bash", "-c", "sync").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }
 
 // this function is to check whether the given resource pod's are deleted or not
