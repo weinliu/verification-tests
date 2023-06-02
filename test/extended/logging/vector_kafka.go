@@ -519,15 +519,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Kafka sink in Vector config must use the Custom tlsSecurityProfile")
 			searchString := `[sinks.kafka_app.tls]
-			enabled = true
-			min_tls_version = "VersionTLS12"
-			ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"
-			key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
-			crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
-			ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
+enabled = true
+min_tls_version = "VersionTLS12"
+ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"
+key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
+crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
+ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
 			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(result).To(o.BeTrue())
+			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
@@ -554,15 +554,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Kafka sink in Vector config must use the Old tlsSecurityProfile")
 			searchString = `[sinks.kafka_app.tls]
-			enabled = true
-			min_tls_version = "VersionTLS10"
-			ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256,AES128-SHA,AES256-SHA,DES-CBC3-SHA"
-			key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
-			crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
-			ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
+enabled = true
+min_tls_version = "VersionTLS10"
+ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256,AES128-SHA,AES256-SHA,DES-CBC3-SHA"
+key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
+crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
+ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
 			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(result).To(o.BeTrue())
+			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
 			e2e.Logf("Wait for a minute before the collector logs are generated.")

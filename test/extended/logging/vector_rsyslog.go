@@ -303,13 +303,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Syslog sink in Vector config must use the Custom tlsSecurityProfile")
 			searchString := `[sinks.external_syslog.tls]
-			enabled = true
-			min_tls_version = "VersionTLS12"
-			ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"
-			ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
+enabled = true
+min_tls_version = "VersionTLS12"
+ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"
+ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(result).To(o.BeTrue())
+			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check logs in rsyslog server")
 			rsyslog.checkData(oc, true, "app-container.log")
@@ -324,13 +324,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Syslog sink in Vector config must use the Intermediate tlsSecurityProfile")
 			searchString = `[sinks.external_syslog.tls]
-			enabled = true
-			min_tls_version = "VersionTLS12"
-			ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"
-			ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
+enabled = true
+min_tls_version = "VersionTLS12"
+ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"
+ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(result).To(o.BeTrue())
+			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
 			e2e.Logf("Wait for a minute before the collector logs are generated.")

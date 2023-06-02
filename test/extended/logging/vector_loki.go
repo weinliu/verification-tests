@@ -1085,9 +1085,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-62975-Collector connects to the remote output using the cipher defined in the tlsSecurityPrfoile [Slow][Disruptive]", func() {
-
-			g.Skip("Skip until known issue is fixed https://issues.redhat.com/browse/LOG-4011")
-
 			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
 			waitForOperatorsRunning(oc)
 
@@ -1104,6 +1101,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			appProj := oc.Namespace()
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			appPods, _ := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 
 			g.By("Create secret with external Grafana Loki instance credentials")
 			sct := resource{"secret", "loki-client", cloNS}
@@ -1136,19 +1134,22 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_AES_128_CCM_SHA256")
 			searchString := `[sinks.loki_server.tls]
-			enabled = true
-			min_tls_version = "VersionTLS12"
-			ciphersuites = "TLS_AES_128_CCM_SHA256"`
+enabled = true
+min_tls_version = "VersionTLS13"
+ciphersuites = "TLS_AES_128_CCM_SHA256"`
 			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(result).To(o.BeTrue())
+			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
-			e2e.Logf("Wait for a minute before the collector logs are generated.")
-			time.Sleep(60 * time.Second)
-			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).Should(o.BeTrue(), "Collector shouldn't connect to the external Loki server.")
+			err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
+				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+				if err != nil {
+					return false, nil
+				}
+				return strings.Contains(collectorLogs, "error trying to connect"), nil
+			})
+			exutil.AssertWaitPollNoErr(err, "Collector shouldn't connect to the external Loki server.")
 
 			g.By("Searching for Application Logs in Loki")
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
@@ -1172,29 +1173,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_CHACHA20_POLY1305_SHA256")
 			searchString = `[sinks.loki_server.tls]
-			enabled = true
-			min_tls_version = "VersionTLS13"
-			ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
+enabled = true
+min_tls_version = "VersionTLS13"
+ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(result).To(o.BeTrue())
+			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
-			e2e.Logf("Wait for a minute before the collector logs are generated.")
-			time.Sleep(60 * time.Second)
-			collectorLogs, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Loki server.")
+			err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
+				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+				if err != nil {
+					return false, nil
+				}
+				return !strings.Contains(collectorLogs, "error trying to connect"), nil
+			})
+			exutil.AssertWaitPollNoErr(err, "Unable to connect to the external Loki server.")
 
 			g.By("Searching for Application Logs in Loki")
-			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
-			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
 				}
-				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
+				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPods.Items[0].Name {
 					return true, nil
 				}
 				return false, nil
@@ -1268,12 +1270,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Loki sink in Vector config must use the intermediate tlsSecurityProfile")
 			searchString := `[sinks.loki_server.tls]
-			enabled = true
-			min_tls_version = "VersionTLS12"
-			ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
+enabled = true
+min_tls_version = "VersionTLS12"
+ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
 			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(result).To(o.BeTrue())
+			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Searching for Application Logs in Loki")
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
@@ -1305,12 +1307,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Loki sink in Vector config must use the Modern tlsSecurityProfile")
 			searchString = `[sinks.loki_server.tls]
-			enabled = true
-			min_tls_version = "VersionTLS13"
-			ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"`
+enabled = true
+min_tls_version = "VersionTLS13"
+ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"`
 			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(result).To(o.BeTrue())
+			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
 			e2e.Logf("Wait for a minute before the collector logs are generated.")

@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
@@ -2740,24 +2739,7 @@ func checkCollectorTLSProfile(oc *exutil.CLI, ns, searchString string) (bool, er
 		return false, err
 	}
 
-	for _, s := range strings.Split(searchString, "\n") {
-		exactString := strings.TrimSpace(s)
-		found := false
-		scanner := bufio.NewScanner(strings.NewReader(string(content)))
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line == exactString {
-				found = true
-				break
-			}
-		}
-		if !found {
-			e2e.Logf("String %s not found in file", s)
-			return false, fmt.Errorf("string '%s' not found in file %s", s, filename)
-		}
-	}
-
-	return true, nil
+	return strings.Contains(string(content), searchString), nil
 }
 
 func checkOperatorsRunning(oc *exutil.CLI) (bool, error) {
