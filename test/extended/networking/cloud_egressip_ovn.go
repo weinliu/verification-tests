@@ -594,6 +594,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		checkNodeStatus(oc, egressNode, "Ready")
 		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testPodName = getPodName(oc, ns1, "name=test-pods")
+		_, err = exutil.AddLabelsToSpecificResource(oc, "pod/"+testPodName[0], ns1, "color=pink")
+		defer exutil.LabelPod(oc, ns1, testPodName[0], "color-")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("7. Check EgressIP assigned in the object.\n")
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
