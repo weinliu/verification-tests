@@ -175,6 +175,9 @@ func (mcp *MachineConfigPool) SetDefaultWaitingTime() {
 
 // getNodesWithLabels returns a list with the nodes that belong to the machine config pool and has the provided labels
 func (mcp *MachineConfigPool) getNodesWithLabels(extraLabels string) ([]Node, error) {
+	mcp.oc.NotShowInfo()
+	defer mcp.oc.SetShowInfo()
+
 	labels := JSON(mcp.GetOrFail(`{.spec.nodeSelector.matchLabels}`))
 	o.Expect(labels.Exists()).Should(o.BeTrue(), fmt.Sprintf("The pool %s has no machLabels value defined", mcp.GetName()))
 
@@ -195,6 +198,9 @@ func (mcp *MachineConfigPool) getNodesWithLabels(extraLabels string) ([]Node, er
 
 // GetNodes returns a list with the nodes that belong to the machine config pool
 func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
+	mcp.oc.NotShowInfo()
+	defer mcp.oc.SetShowInfo()
+
 	// A node can belong to several pools
 	// In the case of "worker" pool, if a node belongs to both "worker" and "master" pool
 	// then the node is considered to belong to "master" node and not to "worker" pool.

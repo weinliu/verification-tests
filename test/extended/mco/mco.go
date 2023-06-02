@@ -2211,7 +2211,7 @@ nulla pariatur.`
 		o.Expect(scaleErr).NotTo(o.HaveOccurred(), "Error scaling up MachineSet %s", newMs.GetName())
 
 		logger.Infof("Waiting %s machineset for being ready", newMsName)
-		o.Eventually(newMs.PollIsReady(), "15m", "30s").Should(o.BeTrue(), "MachineSet %s is not ready", newMs.GetName())
+		o.Eventually(newMs.GetIsReady, "15m", "30s").Should(o.BeTrue(), "MachineSet %s is not ready", newMs.GetName())
 
 		// Verify that the scaled nodes has been configured properly
 		g.By("Check config in the new node")

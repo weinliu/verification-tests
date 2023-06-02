@@ -337,7 +337,7 @@ type existMatcher struct {
 }
 
 func (matcher *existMatcher) Match(actual interface{}) (success bool, err error) {
-	resource, ok := actual.(*Resource)
+	resource, ok := actual.(ResourceInterface)
 	if !ok {
 		return false, fmt.Errorf("Exist matcher expects a Resource in case %v", g.CurrentSpecReport().FullText())
 	}

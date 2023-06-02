@@ -56,27 +56,43 @@ func (ms MachineSet) AddToScale(delta int) error {
 	return ms.ScaleTo(currentReplicas + delta)
 }
 
-// PollIsReady returns a function that can be used by Gomega "Eventually" and "Consistently" to check that the MachineSet instances ready
-func (ms MachineSet) PollIsReady() func() bool {
-	return func() bool {
-		status := JSON(ms.GetOrFail(`{.status}`))
-		replicasData := status.Get("replicas")
-		readyReplicasData := status.Get("readyReplicas")
+// GetIsReady returns true the MachineSet instances are ready
+func (ms MachineSet) GetIsReady() bool {
+	configuredReplicas, err := strconv.Atoi(ms.GetOrFail(`{.spec.replicas}`))
+	if err != nil {
+		logger.Infof("Could not parse configured replicas. Error: %s", err)
+		return false
+	}
 
-		if !replicasData.Exists() {
-			return false
-		}
-		replicas := replicasData.ToInt()
-		if replicas == 0 {
-			// We cant check the ready status when there is 0 replica configured
+	status := JSON(ms.GetOrFail(`{.status}`))
+	logger.Infof("status %s", status)
+	replicasData := status.Get("replicas")
+	readyReplicasData := status.Get("readyReplicas")
+
+	if !replicasData.Exists() {
+		logger.Infof("Replicasdata does not exist")
+		return false
+	}
+	replicas := replicasData.ToInt()
+	if replicas == 0 {
+		if replicas == configuredReplicas {
+			// We cant check the ready status when there is 0 replica configured.
+			// So if status.replicas == spec.replicas == 0 then we consider that it is ok
+			logger.Infof("Zero replicas")
 			return true
 		}
-		if !readyReplicasData.Exists() {
-			return false
-		}
-		readyReplicas := readyReplicasData.ToInt()
-		return replicas == readyReplicas
+		logger.Infof("Zero replicas. Status not updated already.")
+		return false
 	}
+	if !readyReplicasData.Exists() {
+		logger.Infof("ReadyReplicasdata does not exist")
+		return false
+	}
+	readyReplicas := readyReplicasData.ToInt()
+
+	logger.Infof("Replicas %d, readyReplicas %d", replicas, readyReplicas)
+
+	return (replicas == readyReplicas) && (replicas == configuredReplicas)
 }
 
 // GetMachines returns a slice with the machines created for this MachineSet
@@ -113,7 +129,7 @@ func (ms MachineSet) WaitUntilReady(duration string) error {
 		return err
 	}
 	pollerr := wait.Poll(20*time.Second, pDuration, func() (bool, error) {
-		return ms.PollIsReady()(), nil
+		return ms.GetIsReady(), nil
 	})
 
 	return pollerr
@@ -218,24 +234,6 @@ func (msl *MachineSetList) GetAll() ([]MachineSet, error) {
 	return allMS, nil
 }
 
-// PollAllMachineSetsReady returns a function that can be used by Gomega "Eventually" and "Consistently" to check that all MachineSet instances are ready
-func (msl MachineSetList) PollAllMachineSetsReady() func() bool {
-	return func() bool {
-		allMS, err := msl.GetAll()
-		if err != nil {
-			return false
-		}
-
-		for _, ms := range allMS {
-			if !ms.PollIsReady()() {
-				return false
-			}
-		}
-
-		return true
-	}
-}
-
 // msDuplicatedSecretChanges struct with all values that will be changed in a duplicated machinset secret
 type msDuplicatedSecretChanges struct {
 	Name                 string
@@ -243,7 +241,7 @@ type msDuplicatedSecretChanges struct {
 	IgnitionConfigAction string
 }
 
-func duplicateMachinesetSecret(oc *exutil.CLI, secretName string, changes msDuplicatedSecretChanges) (*Resource, error) {
+func duplicateMachinesetSecret(oc *exutil.CLI, secretName string, changes msDuplicatedSecretChanges) (*Secret, error) {
 
 	userData, udErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", MachineAPINamespace,
 		"--template", `{{index .data "userData" | base64decode}}`).Output()
@@ -312,5 +310,5 @@ func duplicateMachinesetSecret(oc *exutil.CLI, secretName string, changes msDupl
 		"--from-literal", fmt.Sprintf("userData=%s", userData),
 		"--from-literal", fmt.Sprintf("disableTemplating=%s", disableTemplating)).Output()
 
-	return NewNamespacedResource(oc.AsAdmin(), "Secret", MachineAPINamespace, changes.Name), err
+	return NewSecret(oc.AsAdmin(), MachineAPINamespace, changes.Name), err
 }
