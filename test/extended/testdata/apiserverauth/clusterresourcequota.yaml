@@ -1,7 +1,7 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: clusterResoureQuotaTemplate
+  name: clusterresourequotaremplate
 objects:
   - apiVersion: quota.openshift.io/v1
     kind: ClusterResourceQuota
@@ -19,6 +19,9 @@ objects:
           limits.cpu: "${{LIMITS_CPU}}"
           limits.memory: "${LIMITS_MEMORY}"
           configmaps: "${{CONFIGMAPS_LIMIT}}"
+          count/templates.template.openshift.io: "${{TEMPLATE_COUNT}}"
+          count/servicemonitors.monitoring.coreos.com: "${{SERVICE_MONITOR}}"
+          count/deployments.apps: "${{DEPLOYMENT}}"
       selector:
         labels:
           matchLabels:
@@ -26,12 +29,15 @@ objects:
 parameters:
   - name: NAME
   - name: LABEL
-  - name:	PODS_LIMIT
-  - name:	SECRETS_LIMIT
-  - name:	CPU_LIMIT
-  - name:	MEMORY_LIMIT
-  - name:	REQUESTS_CPU
-  - name:	REQUEST_MEMORY
-  - name:	LIMITS_CPU
-  - name:	LIMITS_MEMORY
-  - name:	CONFIGMAPS_LIMIT
+  - name: PODS_LIMIT
+  - name: SECRETS_LIMIT
+  - name: CPU_LIMIT
+  - name: MEMORY_LIMIT
+  - name: REQUESTS_CPU
+  - name: REQUEST_MEMORY
+  - name: LIMITS_CPU
+  - name: LIMITS_MEMORY
+  - name: CONFIGMAPS_LIMIT
+  - name: TEMPLATE_COUNT
+  - name: SERVICE_MONITOR
+  - name: DEPLOYMENT

@@ -3795,15 +3795,18 @@ EOF`, dcpolicyrepo)
 			namespace        = caseID + "-quota-test"
 			clusterQuotaName = caseID + "-crq-test"
 			crqLimits        = map[string]string{
-				"pods":           "4",
-				"secrets":        "10",
-				"cpu":            "7",
-				"memory":         "5Gi",
-				"requestsCpu":    "6",
-				"requestsMemory": "6Gi",
-				"limitsCpu":      "6",
-				"limitsMemory":   "6Gi",
-				"configmaps":     "5",
+				"pods":                                  "4",
+				"secrets":                               "10",
+				"cpu":                                   "7",
+				"memory":                                "5Gi",
+				"requests.cpu":                          "6",
+				"requests.memory":                       "6Gi",
+				"limits.cpu":                            "6",
+				"limits.memory":                         "6Gi",
+				"configmaps":                            "5",
+				"count/deployments.apps":                "1",
+				"count/templates.template.openshift.io": "3",
+				"count/servicemonitors.monitoring.coreos.com": "1",
 			}
 		)
 
@@ -3812,10 +3815,25 @@ EOF`, dcpolicyrepo)
 		o.Expect(nsError).NotTo(o.HaveOccurred())
 
 		g.By("2) Create resource ClusterResourceQuota")
-		template := getTestDataFilePath("clusterresourcequota.yaml")
-		params := []string{"-n", namespace, "-f", template, "-p", "NAME=" + clusterQuotaName, "LABEL=" + namespace, "PODS_LIMIT=" + crqLimits["pods"], "SECRETS_LIMIT=" + crqLimits["secrets"], "CPU_LIMIT=" + crqLimits["cpu"], "MEMORY_LIMIT=" + crqLimits["memory"], "REQUESTS_CPU=" + crqLimits["requestsCpu"], "REQUEST_MEMORY=" + crqLimits["requestsMemory"], "LIMITS_CPU=" + crqLimits["limitsCpu"], "LIMITS_MEMORY=" + crqLimits["limitsMemory"], "CONFIGMAPS_LIMIT=" + crqLimits["configmaps"]}
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", getTestDataFilePath("clusterresourcequota.yaml")).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		params := []string{"-n", namespace, "clusterresourequotaremplate", "-p",
+			"NAME=" + clusterQuotaName,
+			"LABEL=" + namespace,
+			"PODS_LIMIT=" + crqLimits["pods"],
+			"SECRETS_LIMIT=" + crqLimits["secrets"],
+			"CPU_LIMIT=" + crqLimits["cpu"],
+			"MEMORY_LIMIT=" + crqLimits["memory"],
+			"REQUESTS_CPU=" + crqLimits["requests.cpu"],
+			"REQUEST_MEMORY=" + crqLimits["requests.memory"],
+			"LIMITS_CPU=" + crqLimits["limits.cpu"],
+			"LIMITS_MEMORY=" + crqLimits["limits.memory"],
+			"CONFIGMAPS_LIMIT=" + crqLimits["configmaps"],
+			"TEMPLATE_COUNT=" + crqLimits["count/templates.template.openshift.io"],
+			"SERVICE_MONITOR=" + crqLimits["count/servicemonitors.monitoring.coreos.com"],
+			"DEPLOYMENT=" + crqLimits["count/deployments.apps"]}
 		quotaConfigFile := exutil.ProcessTemplate(oc, params...)
-		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", quotaConfigFile).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", quotaConfigFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("3) Create multiple secrets to test created ClusterResourceQuota, expect failure for secrets creations that exceed quota limit")
@@ -3823,15 +3841,17 @@ EOF`, dcpolicyrepo)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		usedCount, _ := strconv.Atoi(secretCount)
 		limits, _ := strconv.Atoi(crqLimits["secrets"])
+		steps := 1
 		for i := usedCount; i <= limits; i++ {
-			secretName := fmt.Sprintf("%v-secret-%d", caseID, i)
+			secretName := fmt.Sprintf("%v-secret-%d", caseID, steps)
+			g.By(fmt.Sprintf("3.%d) creating secret %s", steps, secretName))
 			output, err := oc.Run("create").Args("-n", namespace, "secret", "generic", secretName).Output()
-			g.By(fmt.Sprintf("3.%d) creating secret %s", i, secretName))
 			if i < limits {
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
 				o.Expect(output).To(o.MatchRegexp("secrets.*forbidden: exceeded quota"))
 			}
+			steps += 1
 		}
 
 		g.By("4) Create few pods before upgrade to check ClusterResourceQuota, Remaining Quota pod will create after upgrade.")
@@ -3848,12 +3868,39 @@ EOF`, dcpolicyrepo)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("5) Compare applied ClusterResourceQuota")
-		for _, resourceName := range []string{"pods", "secrets", "cpu", "memory", "configmaps"} {
-			resource, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", fmt.Sprintf(`jsonpath={.status.namespaces[*].status.used.%v}`, resourceName)).Output()
+		g.By("5) Create new app & Service Monitor to check quota exceeded")
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", getTestDataFilePath("service-monitor.yaml")).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for count := 1; count < 3; count++ {
+			appName := fmt.Sprintf("%v-app-%v", caseID, count)
+			image := "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
+			output, err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args(fmt.Sprintf("--name=%v", appName), image, "-n", namespace).Output()
+			if count <= limits {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				o.Expect(output).To(o.MatchRegexp("deployments.apps.*forbidden: exceeded quota"))
+			}
+
+			params = []string{"-n", namespace, "servicemonitortemplate", "-p",
+				fmt.Sprintf("NAME=%v-service-monitor-%v", caseID, count),
+				"DEPLOYMENT=" + crqLimits["count/deployments.apps"],
+			}
+			serviceMonitor := exutil.ProcessTemplate(oc, params...)
+			output, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", serviceMonitor).Output()
+			limits, _ = strconv.Atoi(crqLimits["count/servicemonitors.monitoring.coreos.com"])
+			if count <= limits {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				o.Expect(output).To(o.MatchRegexp("servicemonitors.*forbidden: exceeded quota"))
+			}
+		}
+
+		g.By("6) Compare applied ClusterResourceQuota")
+		for resourceName, limit := range crqLimits {
+			resource, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", fmt.Sprintf(`jsonpath={.status.namespaces[*].status.used.%v}`, strings.ReplaceAll(resourceName, ".", "\\."))).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			usedResource, _ := strconv.Atoi(strings.Trim(resource, "Gi"))
-			limits, _ := strconv.Atoi(strings.Trim(crqLimits[resourceName], "Gi"))
+			limits, _ := strconv.Atoi(strings.Trim(limit, "Gi"))
 			if 0 < usedResource && usedResource <= limits {
 				e2e.Logf("Test Passed: ClusterResourceQuota for Resource %v is in applied limit", resourceName)
 			} else {
