@@ -2524,6 +2524,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		statefulSetPodTemplate := filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
+		completedPodTemplate := filepath.Join(buildPruningBaseDir, "countdown-job-completed-pod.yaml")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1. Get list of nodes, get two worker nodes that have same subnet, use them as egress nodes\n")
@@ -2582,7 +2583,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		nsLabelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
 		o.Expect(nsLabelErr).NotTo(o.HaveOccurred())
 
-		g.By("5. Create a statefulSet Hello pod in the namespace, apply pod label to it. ")
+		g.By("5.1 Create a statefulSet Hello pod in the namespace, apply pod label to it. ")
 		createResourceFromFile(oc, ns1, statefulSetPodTemplate)
 		podErr := waitForPodWithLabelReady(oc, ns1, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
@@ -2595,7 +2596,19 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		helloPodIPv4, _ := getPodIP(oc, ns1, statefulSetPodName[0])
 		e2e.Logf("Pod's IP for the statefulSet Hello Pod is:%v", helloPodIPv4)
 
-		g.By("6. Check SNAT on the egressNode before rebooting it.\n")
+		g.By("5.2 Create a completed pod in the namespace, apply pod label to it. ")
+		createResourceFromFile(oc, ns1, completedPodTemplate)
+		completedPodName := getPodName(oc, ns1, "job-name=countdown")
+		waitPodReady(oc, ns1, completedPodName[0])
+
+		defer exutil.LabelPod(oc, ns1, completedPodName[0], "color-")
+		podLabelErr = exutil.LabelPod(oc, ns1, completedPodName[0], "color=purple")
+		exutil.AssertWaitPollNoErr(podLabelErr, "Was not able to apply pod label")
+
+		completedPodIPv4, _ := getPodIP(oc, ns1, completedPodName[0])
+		e2e.Logf("Pod's IP for the completed countdown pod is:%v", completedPodIPv4)
+
+		g.By("6. Check SNATs of stateful pod and completed pod on the egressNode before rebooting it.\n")
 		routerIDOfEgressNode1, routerErr := getRouterID(oc, nodeToBeRebooted)
 		o.Expect(routerErr).NotTo(o.HaveOccurred())
 		e2e.Logf("routerID Of node to be rebooted is:%v", routerIDOfEgressNode1)
@@ -2603,6 +2616,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		o.Expect(snatErr).NotTo(o.HaveOccurred())
 		e2e.Logf("the SNAT IP for the egressIP is:%v", snatIP)
 		o.Expect(snatIP).Should(o.Equal(helloPodIPv4))
+		o.Expect(snatIP).ShouldNot(o.Equal(completedPodIPv4))
 
 		g.By("7. Reboot egress node.\n")
 		defer checkNodeStatus(oc, egressIPMaps1[0]["node"], "Ready")
@@ -2623,6 +2637,15 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		newHelloPodIPv4, _ := getPodIP(oc, ns1, statefulSetPodName[0])
 		e2e.Logf("Pod's IP for the newly created Hello Pod is:%v", newHelloPodIPv4)
 
+		// get completed pod name again, relabel it, get its IP address
+		newCompletedPodName := getPodName(oc, ns1, "job-name=countdown")
+		waitPodReady(oc, ns1, newCompletedPodName[0])
+		defer exutil.LabelPod(oc, ns1, newCompletedPodName[0], "color-")
+		podLabelErr = exutil.LabelPod(oc, ns1, newCompletedPodName[0], "color=purple")
+		exutil.AssertWaitPollNoErr(podLabelErr, "Was not able to apply pod label")
+		newCompletedPodIPv4, _ := getPodIP(oc, ns1, newCompletedPodName[0])
+		e2e.Logf("Pod's IP for the new completed countdown pod is:%v", newCompletedPodIPv4)
+
 		g.By("9. Check egress node in egress object again, egressIP should fail to the second egressNode.\n")
 		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
 		newEgressIPHostNode := egressIPMaps1[0]["node"]
@@ -2630,15 +2653,20 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.Equal(hostLeft[0]))
 
-		g.By("10. Check SNAT on the second egressNode, it should be the IP of the newly created statefulState hello pod, not the IP of old hello pod.\n")
+		g.By("10. Check SNAT on the second egressNode\n")
 		routerIDOfEgressNode2, routerErr := getRouterID(oc, hostLeft[0])
 		o.Expect(routerErr).NotTo(o.HaveOccurred())
-
 		snatIP, snatErr = getSNATofEgressIP(oc, routerIDOfEgressNode2, freeIPs[0])
 		o.Expect(snatErr).NotTo(o.HaveOccurred())
+
 		e2e.Logf("After egressIP failover, the SNAT IP for the egressIP on second router is:%v", snatIP)
+		g.By("10.1 There should be the IP of the newly created statefulState hello pod, not the IP of old hello pod.\n")
 		o.Expect(snatIP).Should(o.Equal(newHelloPodIPv4))
 		o.Expect(snatIP).ShouldNot(o.Equal(helloPodIPv4))
+
+		g.By("10.2 There should be no SNAT for old or new completed pod's IP.\n")
+		o.Expect(snatIP).ShouldNot(o.Equal(newEgressIPHostNode)) //there should be no SNAT for completed pod's old or new IP address
+		o.Expect(snatIP).ShouldNot(o.Equal(completedPodIPv4))    //there should be no SNAT for completed pod's old or new IP address
 
 		// Make sure the rebooted node is back to Ready state
 		checkNodeStatus(oc, egressIPMaps1[0]["node"], "Ready")

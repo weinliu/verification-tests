@@ -603,7 +603,7 @@ func getPodStatus(oc *exutil.CLI, namespace string, podName string) (string, err
 
 func checkPodReady(oc *exutil.CLI, namespace string, podName string) (bool, error) {
 	podOutPut, err := getPodStatus(oc, namespace, podName)
-	status := []string{"Running", "Ready", "Complete"}
+	status := []string{"Running", "Ready", "Complete", "Succeeded"}
 	return contains(status, podOutPut), err
 }
 
