@@ -102,6 +102,12 @@ type FlowRecord struct {
 func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", flow.Template, "-p", "NAMESPACE=" + flow.Namespace}
 
+	flpSA := "flowlogs-pipeline"
+	if flow.DeploymentModel == "KAFKA" {
+		parameters = append(parameters, "DEPLOYMENT_MODEL="+flow.DeploymentModel)
+		flpSA = "flowlogs-pipeline-transformer"
+	}
+
 	if flow.ProcessorKind != "" {
 		parameters = append(parameters, "KIND="+flow.ProcessorKind)
 	}
@@ -120,16 +126,18 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		if flow.LokiAuthToken == "FORWARD" {
 			forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
 			forwardCRB := ForwardClusterRoleBinding{
-				Namespace: oc.Namespace(),
-				Template:  forwardCRBPath,
+				Namespace:          oc.Namespace(),
+				Template:           forwardCRBPath,
+				ServiceAccountName: flpSA,
 			}
 			forwardCRB.deployForwardCRB(oc)
 		} else if flow.LokiAuthToken == "HOST" {
 			hostCRBPath := filePath.Join(baseDir, "clusterRoleBinding-HOST.yaml")
 
 			hostCRB := HostClusterRoleBinding{
-				Namespace: oc.Namespace(),
-				Template:  hostCRBPath,
+				Namespace:          oc.Namespace(),
+				Template:           hostCRBPath,
+				ServiceAccountName: flpSA,
 			}
 			hostCRB.deployHostCRB(oc)
 		}
@@ -141,10 +149,6 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 
 	if flow.LokiTLSCertName != "" {
 		parameters = append(parameters, "LOKI_TLS_CERT_NAME="+flow.LokiTLSCertName)
-	}
-
-	if flow.DeploymentModel != "" {
-		parameters = append(parameters, "DEPLOYMENT_MODEL="+flow.DeploymentModel)
 	}
 
 	if flow.KafkaAddress != "" {

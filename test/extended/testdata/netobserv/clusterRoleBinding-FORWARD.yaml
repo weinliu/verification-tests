@@ -29,9 +29,6 @@ objects:
   - kind: ServiceAccount
     name: "${SERVICE_ACCOUNT_NAME}"
     namespace: "${NAMESPACE}"
-  - kind: ServiceAccount
-    name: netobserv-plugin
-    namespace: "${NAMESPACE}"
 parameters:
 - name: NAME
   value: "lokistack-netobserv-tenant-logs"

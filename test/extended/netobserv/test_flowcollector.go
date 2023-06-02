@@ -363,7 +363,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// ensure eBPF pods are ready
 		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 		// verify logs
-		err := verifyTime(oc, namespace, ls.Name, "netobserv-plugin", ls.Namespace)
+		err := verifyTime(oc, namespace, ls.Name, "flowlogs-pipeline-transformer", ls.Namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
