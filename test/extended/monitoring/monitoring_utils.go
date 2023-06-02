@@ -358,3 +358,18 @@ func checkPodDeleted(oc *exutil.CLI, ns string, label string, checkValue string)
 	})
 	exutil.AssertWaitPollNoErr(podCheck, fmt.Sprintf("found \"%s\" exist or not fully deleted", checkValue))
 }
+
+// query monitoring metrics, alerts from a specific pod
+func queryFromPod(oc *exutil.CLI, url, token, ns, pod, container, metricString string, timeout time.Duration) {
+	var metrics string
+	var err error
+	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
+	err = wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
+		metrics, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", container, pod, "--", "bash", "-c", getCmd).Output()
+		if err != nil || !strings.Contains(metrics, metricString) {
+			return false, nil
+		}
+		return true, err
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
+}

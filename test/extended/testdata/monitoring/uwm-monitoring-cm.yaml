@@ -4,7 +4,7 @@ metadata:
   name: user-workload-monitoring-config
   namespace: openshift-user-workload-monitoring
 data:
-  config.yaml: |
+  config.yaml: |-
     prometheus:
       logLevel: warn
       queryLogFile: /tmp/uwm_query.log
@@ -13,5 +13,19 @@ data:
         labelmy: test
       retentionSize: 5GiB
       retention: 15d
+      additionalAlertmanagerConfigs:
+      - scheme: http
+        prefix: /
+        timeout: 30s
+        apiVersion: v1
+        staticConfigs:
+        - alertmanager-operated.openshift-user-workload-monitoring.svc:9093
     thanosRuler:
       retention: 15d
+      additionalAlertmanagerConfigs:
+      - scheme: http
+        prefix: /
+        timeout: 30s
+        apiVersion: v1
+        staticConfigs:
+        - alertmanager-operated.openshift-user-workload-monitoring.svc:9093

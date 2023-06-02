@@ -16,6 +16,11 @@ objects:
         queryLogFile: /tmp/promethues_query.log
         retentionSize: 10GiB
         retention: 45d
+        additionalAlertmanagerConfigs:
+        - scheme: http
+          apiVersion: v1
+          staticConfigs:
+          - alertmanager-operated.openshift-user-workload-monitoring.svc:9093
       alertmanagerMain:
         logLevel: debug
       k8sPrometheusAdapter:
