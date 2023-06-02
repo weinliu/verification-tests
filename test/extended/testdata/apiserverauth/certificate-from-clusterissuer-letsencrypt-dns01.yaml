@@ -1,0 +1,11 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: certificate-from-dns01
+spec:
+  secretName: certificate-from-dns01
+  dnsNames:
+  - auth-custom1.qe1.devcluster.openshift.com
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-dns01
