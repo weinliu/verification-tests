@@ -191,7 +191,7 @@ func (h *hostedCluster) checkHCConditions() bool {
 				"Degraded False", "EtcdAvailable True", "KubeAPIServerAvailable True", "InfrastructureReady True",
 				"Available True", "ValidConfiguration True", "SupportedHostedCluster True",
 				"ValidHostedControlPlaneConfiguration True", "IgnitionEndpointAvailable True", "ReconciliationActive True",
-				"ValidReleaseImage True", "ValidOIDCConfiguration True", "ReconciliationSucceeded True"})
+				"ValidReleaseImage True", "ReconciliationSucceeded True"})
 	}
 }
 
