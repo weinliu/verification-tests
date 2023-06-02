@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -187,5 +188,66 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(outStr).Should(o.ContainSubstring("ok"), fmt.Sprintf("Output from kube-apiserver pod readyz :: %s", outStr))
 		e2e.Logf("Port forwarding works fine, case ran passed!")
+	})
+
+	// author: kewang@redhat.com
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:kewang-Medium-64076-Init container setup should have the proper securityContext", func() {
+		var (
+			apiserverItems = []struct {
+				label     string
+				apiserver string
+			}{
+				{
+					label:     "kube-apiserver",
+					apiserver: "kube-apiserver",
+				},
+				{
+					label:     "openshift-apiserver",
+					apiserver: "openshift-apiserver",
+				},
+				{
+					label:     "oauth-openshift",
+					apiserver: "oauth-server",
+				},
+			}
+			sc = `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":1000690000}`
+		)
+
+		for i, apiserverItem := range apiserverItems {
+			g.By(fmt.Sprintf("%v.1 Get one pod name of %s", i+1, apiserverItem.label))
+			e2e.Logf("namespace is: %s", guestClusterNS)
+			podList, err := exutil.GetAllPodsWithLabel(oc, guestClusterNS, "app="+apiserverItem.label)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(podList).ShouldNot(o.BeEmpty())
+			e2e.Logf("Get the %s pod name: %s", apiserverItem.label, podList[0])
+
+			containerList, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", `jsonpath={.spec.containers[*].name}`).Output()
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			o.Expect(containerList).ShouldNot(o.BeEmpty())
+			containers := strings.Split(containerList, " ")
+
+			g.By(fmt.Sprintf("%v.2 Checking the securityContext of containers of %s pod %s:", i+1, apiserverItem.apiserver, podList[0]))
+			for _, container := range containers {
+				e2e.Logf("#### Checking the container %s of pod: %s", container, podList[0])
+				jsonpath := fmt.Sprintf(`jsonpath={range .spec.containers[?(@.name=="%s")]}{.securityContext}`, container)
+				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", jsonpath).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(out).To(o.Equal(sc))
+				e2e.Logf("#### The securityContext of container %s matched the expected result.", container)
+			}
+
+			g.By(fmt.Sprintf("%v.3 Checking the securityContext of init-container %s of pod %s", i+1, apiserverItem.apiserver, podList[0]))
+			jsonpath := `jsonpath={.spec.initContainers[].securityContext}`
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", jsonpath).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(out).To(o.Equal(sc))
+			e2e.Logf("#### The securityContext of init-container matched the expected result.")
+
+			g.By(fmt.Sprintf("%v.4 Checking one container %s of %s pod %s is not allowed to access any devices on the host", i+1, containers[0], apiserverItem.apiserver, podList[0]))
+			cmd := []string{"-n", guestClusterNS, podList[0], "-c", containers[0], "--", "sysctl", "-w", "kernel.msgmax=65536"}
+			cmdOut, errCmd := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
+			o.Expect(errCmd).To(o.HaveOccurred())
+			o.Expect(cmdOut).Should(o.ContainSubstring("Read-only file system"))
+		}
 	})
 })
