@@ -1,7 +1,7 @@
 import * as yamlEditor from '../upstream/views/yaml-editor';
 import { guidedTour } from '../upstream/views/guided-tour';
 import { testName } from "../upstream/support";
-import { importYamlPage} from "../views/yaml-page"
+import { importYamlPage, yamlOptions } from "../views/yaml-page"
 
 describe("yaml editor tests", () => {
   before(() => {
@@ -11,11 +11,27 @@ describe("yaml editor tests", () => {
       Cypress.env("LOGIN_PASSWORD")
     );
     guidedTour.close();
+    cy.cliLogin();
     cy.createProject(testName);
   });
 
   after(() => {
-    cy.adminCLI(`oc delete project ${testName}`);
+    cy.exec(`oc delete project ${testName}`);
+    cy.cliLogout();
+  });
+
+  it("(OCP-63312,yanpzhan) Add ability to show/hide tooltips in the yaml editor", {tags: ['e2e','@osd-ccs','@rosa']}, () => {
+    cy.exec(`oc create -f ./fixtures/pods/example-pod.yaml -n ${testName}`);
+    cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
+    yamlEditor.isLoaded();
+    yamlOptions.setTooltips('show');
+    yamlOptions.checkTooltipsVisibility('apiVersion', 'APIVersion defines the versioned schema', 'shown');
+    cy.visit(`/k8s/ns/${testName}/pods/examplepod/yaml`);
+    yamlEditor.isLoaded();
+    yamlOptions.checkTooltipsVisibility('apiVersion', 'APIVersion defines the versioned schema', 'shown');
+    yamlOptions.setTooltips('hide');
+    yamlOptions.checkTooltipsVisibility('apiVersion', 'APIVersion defines the versioned schema', 'hidden');
+    yamlOptions.setTooltips('show');
   });
 
   it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page", {tags: ['e2e','@osd-ccs','@rosa']}, () => {
