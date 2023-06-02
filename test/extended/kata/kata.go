@@ -440,10 +440,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		msg, err := deleteKataConfig(oc, kataconfig.name)
 		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", kataconfig.name, msg, err)
 
-		g.By("Recreating kataconfig in 43523 for the remaining test cases")
-		msg, err = createKataConfig(oc, kataconfig, subscription)
-		e2e.Logf("recreated kataconfig %v: %v %v", kataconfig.name, msg, err)
-
 		g.By("SUCCESS")
 	})
 
@@ -465,9 +461,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		e2e.Logf("common kataconfig %v was deleted %v %v", kataconfig.name, msg, err)
 		g.By("SUCCESSS - build acceptance passed")
 
-		g.By("Recreating kataconfig for the remaining test cases")
-		msg, err = createKataConfig(oc, kataconfig, subscription)
-		e2e.Logf("recreated kataconfig %v: %v %v", kataconfig.name, msg, err)
 	})
 
 	// author: tbuskey@redhat.com
