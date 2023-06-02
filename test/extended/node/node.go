@@ -701,7 +701,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: asahay@redhat.com
-	g.It("Author:asahay-High-52472-update runtimeRequestTimeout parameter using KubeletConfig CR [Disruptive]", func() {
+	g.It("Author:asahay-High-52472-update runtimeRequestTimeout parameter using KubeletConfig CR [Disruptive][Slow]", func() {
 
 		oc.SetupProject()
 		runtimeTimeout.name = "kubeletconfig-52472"
