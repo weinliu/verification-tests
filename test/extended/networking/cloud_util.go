@@ -1215,3 +1215,57 @@ func getClusterNetworkInfo(oc *exutil.CLI) (string, string) {
 	e2e.Logf("network CIDR: %v;  hostPrefix: %v", networkCIDR, hostPrefix)
 	return networkCIDR, hostPrefix
 }
+
+// start one instance on Nutanix
+func startInstanceOnNutanix(nutanix *exutil.NutanixClient, hostname string) {
+	instanceID, err := nutanix.GetNutanixVMUUID(hostname)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The instance %s  UUID is :%s", hostname, instanceID)
+	stateErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		state, err := nutanix.GetNutanixVMState(instanceID)
+		if err != nil {
+			e2e.Logf("Failed to get instance state %s, Error: %v", hostname, err)
+			return false, nil
+		}
+		if state == "ON" {
+			e2e.Logf("The instance %s is already running", hostname)
+			return true, nil
+		}
+		if state == "OFF" {
+			err = nutanix.ChangeNutanixVMState(instanceID, "ON")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return true, nil
+		}
+		e2e.Logf("The instance  is in %v,not in a state from which it can be started.", state)
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("The instance is not in a state from which it can be started."))
+}
+
+// stop one instance on Nutanix
+func stopInstanceOnNutanix(nutanix *exutil.NutanixClient, hostname string) {
+	instanceID, err := nutanix.GetNutanixVMUUID(hostname)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The instance %s  UUID is :%s", hostname, instanceID)
+	stateErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		state, err := nutanix.GetNutanixVMState(instanceID)
+		if err != nil {
+			e2e.Logf("Failed to get instance state %s, Error: %v", hostname, err)
+			return false, nil
+		}
+		if state == "OFF" {
+			e2e.Logf("The instance  is already stopped.")
+			return true, nil
+		}
+		if state == "ON" {
+			err = nutanix.ChangeNutanixVMState(instanceID, "OFF")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return true, nil
+		}
+		e2e.Logf("The instance is in %v,not in a state from which it can be stopped.", state)
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("The instance is not in a state from which it can be stopped."))
+}

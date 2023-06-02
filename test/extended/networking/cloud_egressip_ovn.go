@@ -1036,7 +1036,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\n\nThe platform is %v,\n", platform)
 
 		// Due to OCPBUGS-4563, temporarily remove Azure as acceptedPlatform to skip the test on Azure
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "nutanix")
 
 		// This test case is not supposed to run on some special AWS/GCP cluster with STS, use specialPlatformCheck function to identify such a cluster
 		isSpecialSTSCluster := specialPlatformCheck(oc)
@@ -1172,6 +1172,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var ospObj exutil.Osp
 		var vspObj *exutil.Vmware
 		var vspClient *govmomi.Client
+		nutanixClient, errNutanix := exutil.InitNutanixClient(oc)
+		o.Expect(errNutanix).NotTo(o.HaveOccurred())
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected \n")
@@ -1226,6 +1228,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer startVMOnIPIBM(oc, nodeToBeShutdown)
 			stopErr := stopVMOnIPIBM(oc, nodeToBeShutdown)
 			o.Expect(stopErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
+		case "nutanix":
+			e2e.Logf("\n Nutanix is detected, stop the instance %v on nutanix now \n", nodeToBeShutdown)
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			defer startInstanceOnNutanix(nutanixClient, nodeToBeShutdown)
+			stopInstanceOnNutanix(nutanixClient, nodeToBeShutdown)
 			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -1308,6 +1316,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 			startErr := startVMOnIPIBM(oc, nodeToBeShutdown)
 			o.Expect(startErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+		case "nutanix":
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			startInstanceOnNutanix(nutanixClient, nodeToBeShutdown)
 			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
