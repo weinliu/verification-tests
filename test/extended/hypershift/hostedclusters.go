@@ -938,3 +938,15 @@ func (h *hostedCluster) DebugHostedClusterNodeWithChroot(caseID string, nodeName
 	res, err = h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpDebug).Args(append([]string{"node/" + nodeName, "--to-namespace=" + newNamespace, "-q", "--", "chroot", "/host"}, cmd...)...).Output()
 	return res, err
 }
+
+func (h *hostedCluster) updateHostedClusterAndCheck(oc *exutil.CLI, updateFunc func() error, deployment string) {
+	oldVersion := doOcpReq(oc, OcpGet, true, "deployment", deployment, "-n", h.namespace+"-"+h.name, `-ojsonpath={.metadata.annotations.deployment\.kubernetes\.io/revision}`)
+	err := updateFunc()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	o.Eventually(func() string {
+		return doOcpReq(oc, OcpGet, true, "deployment", deployment, "-n", h.namespace+"-"+h.name, `-ojsonpath={.metadata.annotations.deployment\.kubernetes\.io/revision}`)
+	}, DefaultTimeout, DefaultTimeout/10).ShouldNot(o.Equal(oldVersion), deployment+" not restart")
+	o.Eventually(func() int {
+		return strings.Compare(doOcpReq(oc, OcpGet, true, "deployment", deployment, "-n", h.namespace+"-"+h.name, `-ojsonpath={.status.replicas}`), doOcpReq(oc, OcpGet, true, "deployment", deployment, "-n", h.namespace+"-"+h.name, `-ojsonpath={.status.readyReplicas}`))
+	}, LongTimeout, LongTimeout/10).Should(o.Equal(0), deployment+" is not ready")
+}

@@ -1219,31 +1219,17 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = bashClient.Run(fmt.Sprintf(`sed -i '/^parameters:/e cat %s' %s`, dir+"/temp.yaml", dir+"/template.yaml")).Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
-		defer oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("delete").Args("-f", dir+"/template.yaml", "-n", "openshift-config").Execute()
-		err = oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("apply").Args("-f", dir+"/template.yaml", "-n", "openshift-config").Execute()
+		defer hostedcluster.oc.AsGuestKubeconf().Run("delete").Args("-f", dir+"/template.yaml", "-n", "openshift-config").Execute()
+		err = hostedcluster.oc.AsGuestKubeconf().Run("apply").Args("-f", dir+"/template.yaml", "-n", "openshift-config").Execute()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
 		g.By("Edit the project config resource to include projectRequestTemplate in the spec")
-		defer func() {
-			oldVersion := doOcpReq(oc, OcpGet, true, "deployment/openshift-apiserver", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.metadata.annotations.deployment\.kubernetes\.io/revision}`)
-			oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("patch").Args("project.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"projectRequestTemplate": null}}`).Execute()
-			o.Expect(err).ShouldNot(o.HaveOccurred())
-			o.Eventually(func() string {
-				return doOcpReq(oc, OcpGet, true, "deployment/openshift-apiserver", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.metadata.annotations.deployment\.kubernetes\.io/revision}`)
-			}, DefaultTimeout, DefaultTimeout/10).ShouldNot(o.Equal(oldVersion), "apiserver not restart")
-			o.Eventually(func() int {
-				return strings.Compare(doOcpReq(oc, OcpGet, true, "deployment/openshift-apiserver", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.status.replicas}`), doOcpReq(oc, OcpGet, true, "deployment/openshift-apiserver", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.status.readyReplicas}`))
-			}, LongTimeout, LongTimeout/10).Should(o.Equal(0), "apiserver is not ready")
-		}()
-		oldVersion := doOcpReq(oc, OcpGet, true, "deployment/openshift-apiserver", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.metadata.annotations.deployment\.kubernetes\.io/revision}`)
-		err = oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("patch").Args("project.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"projectRequestTemplate":{"name":"project-request"}}}`).Execute()
-		o.Expect(err).ShouldNot(o.HaveOccurred())
-		o.Eventually(func() string {
-			return doOcpReq(oc, OcpGet, true, "deployment/openshift-apiserver", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.metadata.annotations.deployment\.kubernetes\.io/revision}`)
-		}, DefaultTimeout, DefaultTimeout/10).ShouldNot(o.Equal(oldVersion), "apiserver not restart")
-		o.Eventually(func() int {
-			return strings.Compare(doOcpReq(oc, OcpGet, true, "deployment/openshift-apiserver", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.status.replicas}`), doOcpReq(oc, OcpGet, true, "deployment/openshift-apiserver", "-n", hostedcluster.namespace+"-"+hostedcluster.name, `-ojsonpath={.status.readyReplicas}`))
-		}, LongTimeout, LongTimeout/10).Should(o.Equal(0), "apiserver is not ready")
+		defer hostedcluster.updateHostedClusterAndCheck(oc, func() error {
+			return hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("project.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"projectRequestTemplate": null}}`).Execute()
+		}, "openshift-apiserver")
+		hostedcluster.updateHostedClusterAndCheck(oc, func() error {
+			return hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("project.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"projectRequestTemplate":{"name":"project-request"}}}`).Execute()
+		}, "openshift-apiserver")
 
 		g.By("Create a new project 'test-48510'")
 		origContxt, contxtErr := oc.SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("config").Args("current-context").Output()
@@ -1251,36 +1237,36 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer func() {
 			err = oc.SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("config").Args("use-context", origContxt).Execute()
 			o.Expect(contxtErr).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("delete").Args("project", "test-48510").Execute()
+			err = hostedcluster.oc.AsGuestKubeconf().Run("delete").Args("project", "test-48510").Execute()
 			o.Expect(contxtErr).NotTo(o.HaveOccurred())
 		}()
-		err = oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("new-project").Args("test-48510").Execute()
+		err = hostedcluster.oc.AsGuestKubeconf().Run("new-project").Args("test-48510").Execute()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
 		g.By("Check if new project config resource includes ResourceQuota and LimitRange")
-		testProjectDes, err := oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("get").Args("resourcequota", "-n", "test-48510", "-oyaml").Output()
+		testProjectDes, err := hostedcluster.oc.AsGuestKubeconf().Run("get").Args("resourcequota", "-n", "test-48510", "-oyaml").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		checkSubstring(testProjectDes, []string{`pods: "10"`, `requests.cpu: "4"`, `requests.memory: 8Gi`, `limits.cpu: "6"`, `limits.memory: 16Gi`, `requests.storage: 20G`})
 
 		g.By("Disable project self-provisioning, remove the self-provisioner cluster role from the group")
-		defer oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("patch").Args("clusterrolebinding.rbac", "self-provisioners", "-p", `{"subjects": [{"apiGroup":"rbac.authorization.k8s.io","kind":"Group","name":"system:authenticated:oauth"}]}`).Execute()
-		err = oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("patch").Args("clusterrolebinding.rbac", "self-provisioners", "-p", `{"subjects": null}`).Execute()
+		defer hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("clusterrolebinding.rbac", "self-provisioners", "-p", `{"subjects": [{"apiGroup":"rbac.authorization.k8s.io","kind":"Group","name":"system:authenticated:oauth"}]}`).Execute()
+		err = hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("clusterrolebinding.rbac", "self-provisioners", "-p", `{"subjects": null}`).Execute()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
-		selfProvisionersDes, err := oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("describe").Args("clusterrolebinding.rbac", "self-provisioners").Output()
+		selfProvisionersDes, err := hostedcluster.oc.AsGuestKubeconf().Run("describe").Args("clusterrolebinding.rbac", "self-provisioners").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(selfProvisionersDes).ShouldNot(o.ContainSubstring("system:authenticated:oauth"))
 
 		g.By("Edit the self-provisioners cluster role binding to prevent automatic updates to the role")
-		defer oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("patch").Args("clusterrolebinding.rbac", "self-provisioners", "-p", `{"metadata":{"annotations":{"rbac.authorization.kubernetes.io/autoupdate":"true"}}}`).Execute()
-		err = oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("patch").Args("clusterrolebinding.rbac", "self-provisioners", "-p", `{"metadata":{"annotations":{"rbac.authorization.kubernetes.io/autoupdate":"false"}}}`).Execute()
+		defer hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("clusterrolebinding.rbac", "self-provisioners", "-p", `{"metadata":{"annotations":{"rbac.authorization.kubernetes.io/autoupdate":"true"}}}`).Execute()
+		err = hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("clusterrolebinding.rbac", "self-provisioners", "-p", `{"metadata":{"annotations":{"rbac.authorization.kubernetes.io/autoupdate":"false"}}}`).Execute()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
-		selfProvisionersDes, err = oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("describe").Args("clusterrolebinding.rbac", "self-provisioners").Output()
+		selfProvisionersDes, err = hostedcluster.oc.AsGuestKubeconf().Run("describe").Args("clusterrolebinding.rbac", "self-provisioners").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(selfProvisionersDes).ShouldNot(o.ContainSubstring(`rbac.authorization.kubernetes.io/autoupdate: "false"`))
 
 		g.By("Edit project config resource to include the project request message")
-		defer oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("patch").Args("project.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"projectRequestMessage": null}}`).Execute()
-		err = oc.AsAdmin().SetGuestKubeconf(hostedcluster.hostedClustersKubeconfigFile).AsGuestKubeconf().Run("patch").Args("project.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"projectRequestMessage":"To request a project, contact your system administrator at projectname@example.com :-)"}}`).Execute()
+		defer hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("project.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"projectRequestMessage": null}}`).Execute()
+		err = hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("project.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"projectRequestMessage":"To request a project, contact your system administrator at projectname@example.com :-)"}}`).Execute()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
 		g.By("Create a new project as a non-admin user")
@@ -1355,5 +1341,66 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}, DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "key not found error in nodes")
 
 		g.By("ocp-52318 Enforce machineconfiguration.openshift.io/role worker in machine config test passed")
+	})
+
+	// author: liangli@redhat.com
+	g.It("HyperShiftMGMT-Author:liangli-Critical-48511-Test project configuration resources on the guest cluster[Serial]", func() {
+		caseID := "48511"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a new project 'test-48511'")
+		origContxt, contxtErr := hostedcluster.oc.AsGuestKubeconf().Run("config").Args("current-context").Output()
+		o.Expect(contxtErr).NotTo(o.HaveOccurred())
+		defer func() {
+			err = hostedcluster.oc.AsGuestKubeconf().Run("config").Args("use-context", origContxt).Execute()
+			o.Expect(contxtErr).NotTo(o.HaveOccurred())
+			err = hostedcluster.oc.AsGuestKubeconf().Run("delete").Args("project", "test-48511").Execute()
+			o.Expect(contxtErr).NotTo(o.HaveOccurred())
+		}()
+		err = hostedcluster.oc.AsGuestKubeconf().Run("new-project").Args("test-48511").Execute()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		g.By("Create a build")
+		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
+		err = hostedcluster.oc.AsGuestKubeconf().Run("new-build").Args(helloWorldSource, "--name=build-48511", "-n", "test-48511").Execute()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		g.By("Check build")
+		var buildPhase string
+		o.Eventually(func() string {
+			buildPhase, _ = hostedcluster.oc.AsGuestKubeconf().Run("get").Args("builds", "-n", "test-48511", "build-48511-1", `-ojsonpath={.status.phase}`).Output()
+			return buildPhase
+		}, DefaultTimeout, DefaultTimeout/10).Should(o.ContainSubstring("Complete"), "wait for the rebuild job complete timeout")
+
+		g.By("Add a label on a node")
+		nodeName, err := hostedcluster.oc.AsGuestKubeconf().Run("get").Args("node", `-ojsonpath={.items[0].metadata.name}`).Output()
+		defer hostedcluster.oc.AsGuestKubeconf().Run("label").Args("node", nodeName, "test-").Execute()
+		err = hostedcluster.oc.AsGuestKubeconf().Run("label").Args("node", nodeName, "test=test1", "--overwrite").Execute()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		g.By("Update nodeSelector in build.config.openshift.io/cluster")
+		defer hostedcluster.updateHostedClusterAndCheck(oc, func() error {
+			return hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("build.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"buildOverrides": null}}`).Execute()
+		}, "openshift-controller-manager")
+		hostedcluster.updateHostedClusterAndCheck(oc, func() error {
+			return hostedcluster.oc.AsGuestKubeconf().Run("patch").Args("build.config.openshift.io/cluster", "--type=merge", "-p", `{"spec":{"buildOverrides":{"nodeSelector":{"test":"test1"}}}}`).Execute()
+		}, "openshift-controller-manager")
+
+		g.By("Re-run a build")
+		err = hostedcluster.oc.AsGuestKubeconf().Run("start-build").Args("--from-build=build-48511-1", "-n", "test-48511", "build-48511-1").Execute()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		g.By("Check a new build")
+		o.Eventually(func() string {
+			buildPhase, _ = hostedcluster.oc.AsGuestKubeconf().Run("get").Args("builds", "-n", "test-48511", "build-48511-2", `-ojsonpath={.status.phase}`).Output()
+			return buildPhase
+		}, DefaultTimeout, DefaultTimeout/10).Should(o.ContainSubstring("Complete"), "wait for the rebuild job complete timeout")
+
+		g.By("Check if a new build pod runs on correct node")
+		podNodeName, _ := hostedcluster.oc.AsGuestKubeconf().Run("get").Args("pod", "-n", "test-48511", "build-48511-2-build", `-ojsonpath={.spec.nodeName}`).Output()
+		o.Expect(podNodeName).Should(o.Equal(nodeName))
 	})
 })
