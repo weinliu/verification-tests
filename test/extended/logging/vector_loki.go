@@ -2095,11 +2095,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Data has been validated in the rules configmap")
 
 			g.By("Querying rules API for application alerting/recording rules")
-			// Ruler token does not have access to infra/audit rules on the cluster. Granting permissions here to ruler SA
-			defer removeLokiStackPermissionFromSA(oc, "my-loki-tenant-logs")
-			grantLokiPermissionsToSA(oc, "my-loki-tenant-logs", ls.name+"-ruler", ls.namespace)
-
-			token := getSAToken(oc, ls.name+"-ruler", ls.namespace)
+			token := getSAToken(oc, "logcollector", ls.namespace)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(token).retry(5)
 			appRules, err := lc.queryRules("application")
