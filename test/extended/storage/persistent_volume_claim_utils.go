@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	g "github.com/onsi/ginkgo/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -210,6 +211,21 @@ func (pvc *persistentVolumeClaim) createWithoutStorageclassname(oc *exutil.CLI) 
 	err := applyResourceFromTemplateDeleteParametersAsAdmin(oc, deletePaths, "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "PVCNAME="+pvc.name, "PVCNAMESPACE="+pvc.namespace, "SCNAME="+pvc.scname,
 		"ACCESSMODE="+pvc.accessmode, "VOLUMEMODE="+pvc.volumemode, "PVCCAPACITY="+pvc.capacity)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// create multiple PersistentVolumeClaim
+func createMulPVC(oc *exutil.CLI, begin int64, length int64, pvcTemplate string, storageClassName string) []persistentVolumeClaim {
+	g.By("# Create more than node allocatable count pvcs with the preset csi storageclass")
+	provisioner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass/"+storageClassName, "-o", "jsonpath={.provisioner}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	provisionerBrief := strings.Split(provisioner, ".")[len(strings.Split(provisioner, "."))-2]
+	var pvclist []persistentVolumeClaim
+	for i := begin; i < begin+length+1; i++ {
+		pvcname := "my-pvc-" + provisionerBrief + "-" + strconv.FormatInt(i, 10)
+		pvclist = append(pvclist, newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimName(pvcname), setPersistentVolumeClaimStorageClassName(storageClassName)))
+		pvclist[i].create(oc)
+	}
+	return pvclist
 }
 
 // Delete the PersistentVolumeClaim

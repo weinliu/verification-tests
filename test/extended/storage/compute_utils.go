@@ -248,6 +248,7 @@ type node struct {
 	architecture                string
 	allocatableEphemeralStorage string
 	ephemeralStorageCapacity    string
+	instanceType                string
 }
 
 // Get cluster all node information
@@ -262,16 +263,15 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 	nodesList := strings.Split(strings.Trim(strings.Trim(gjson.Get(nodesInfoJSON, "items.#.metadata.name").String(), "["), "]"), ",")
 	for _, nodeName := range nodesList {
 		nodeName = strings.Trim(nodeName, "\"")
-		nodeRole := make([]string, 0, 3)
-		if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/master").Exists() {
-			nodeRole = append(nodeRole, "master")
+		nodeRole := make([]string, 0, 4)
+
+		labelList := strings.Split(strings.Trim(gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels").String(), "\n "), ",")
+		for i := 0; i < len(labelList); i++ {
+			if strings.Contains(labelList[i], `node-role.kubernetes.io/`) {
+				nodeRole = append(nodeRole, strings.TrimPrefix(strings.TrimSuffix(strings.TrimSpace(strings.Trim(labelList[i], "\n")), "\": \"\""), "\"node-role.kubernetes.io/"))
+			}
 		}
-		if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/worker").Exists() {
-			nodeRole = append(nodeRole, "worker")
-		}
-		if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/infra").Exists() {
-			nodeRole = append(nodeRole, "infra")
-		}
+
 		nodeAvailableZone := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+zonePath).String()
 		// Enhancement: It seems sometimes aws worker node miss kubernetes az label, maybe caused by other parallel cases
 		if nodeAvailableZone == "" && cloudProvider == "aws" {
@@ -289,9 +289,11 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		nodeAllocatableEphemeralStorage := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").status.allocatable.ephemeral-storage").String()
 		tempSlice := strings.Split(gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+"spec.providerID").String(), "/")
 		nodeInstanceID := tempSlice[len(tempSlice)-1]
+		nodeInstanceType := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node\\.kubernetes\\.io\\/instance-type").String()
 		nodes = append(nodes, node{
 			name:                        nodeName,
 			instanceID:                  nodeInstanceID,
+			instanceType:                nodeInstanceType,
 			availableZone:               nodeAvailableZone,
 			osType:                      nodeOsType,
 			osID:                        nodeOsID,

@@ -140,6 +140,57 @@ func (po *pod) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// create new pod with multiple persistentVolumeClaim
+func (po *pod) createWithMultiPVCAndNodeSelector(oc *exutil.CLI, pvclist []persistentVolumeClaim, nodeSelector map[string]string) {
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
+	}
+	jsonPathsAndActions := make([]map[string]string, 2*int64(len(pvclist))+2)
+	multiExtraParameters := make([]map[string]interface{}, 2*int64(len(pvclist))+2)
+	for i := int64(1); i < int64(len(pvclist)); i++ {
+		count := strconv.FormatInt(i, 10)
+		volumeMount := map[string]interface{}{
+			"mountPath": "/mnt/storage/" + count,
+			"name":      "data" + count,
+		}
+		volumeMountPath := "items.0.spec.containers.0.volumeMounts." + count + "."
+		jsonPathsAndActions[2*i-2] = map[string]string{volumeMountPath: "set"}
+		multiExtraParameters[2*i-2] = volumeMount
+
+		pvcname := map[string]string{
+			"claimName": pvclist[i].name,
+		}
+		volumeParam := map[string]interface{}{
+			"name":                  "data" + count,
+			"persistentVolumeClaim": pvcname,
+		}
+		volumeParamPath := "items.0.spec.volumes." + count + "."
+		jsonPathsAndActions[2*i-1] = map[string]string{volumeParamPath: "set"}
+		multiExtraParameters[2*i-1] = volumeParam
+	}
+	if len(nodeSelector) != 0 {
+		nodeType := nodeSelector["nodeType"]
+		nodeName := nodeSelector["nodeName"]
+		nodeNamePath := "items.0.spec.nodeSelector."
+		nodeNameParam := map[string]interface{}{
+			"kubernetes\\.io/hostname": nodeName,
+		}
+		jsonPathsAndActions[2*int64(len(pvclist))] = map[string]string{nodeNamePath: "set"}
+		multiExtraParameters[2*int64(len(pvclist))] = nodeNameParam
+
+		if strings.Contains(nodeType, "master") {
+			tolerationPath := "items.0.spec.tolerations.0."
+			tolerationParam := map[string]interface{}{
+				"operator": "Exists",
+				"effect":   "NoSchedule",
+			}
+			jsonPathsAndActions[2*int64(len(pvclist))+1] = map[string]string{tolerationPath: "set"}
+			multiExtraParameters[2*int64(len(pvclist))+1] = tolerationParam
+		}
+	}
+	o.Expect(applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)).Should(o.ContainSubstring("created"))
+}
+
 // Create new pod with extra parameters
 func (po *pod) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
 	if po.namespace == "" {
@@ -344,6 +395,14 @@ func (po *pod) checkFsgroup(oc *exutil.CLI, command string, expect string) {
 func (po *pod) longerTime() *pod {
 	newPod := *po
 	newPod.maxWaitReadyTime = longerMaxWaitingTime
+	return &newPod
+}
+
+// longestTime changes po.maxWaitReadyTime to longestMaxWaitingTime
+// Used for some Longduration test
+func (po *pod) longestTime() *pod {
+	newPod := *po
+	newPod.maxWaitReadyTime = longestMaxWaitingTime
 	return &newPod
 }
 

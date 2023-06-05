@@ -1,9 +1,11 @@
 package storage
 
 import (
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -129,6 +131,124 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(output).Should(o.ContainSubstring("only filesystem volumes are supported"))
 
 		g.By("****** AWS EFS test phase finished ******")
+	})
+
+	// author: jiasun@redhat.com
+	// OCP-44297- [AWS-EFS-CSI-Driver]- 1000 access point are supportable for one efs volume
+	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:jiasun-Medium-44297-[AWS-EFS-CSI-Driver]-one thousand of access point are supportable for one efs volume [Serial]", func() {
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate        = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+		)
+
+		g.By("#. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		namespace := oc.Namespace()
+
+		allNodes := getAllNodesInfo(oc)
+		schedulableNode := make([]node, 0, 10)
+		for i := 0; i < len(allNodes); i++ {
+			if (contains(allNodes[i].role, "master") || contains(allNodes[i].role, "worker")) && (!contains(allNodes[i].role, "infra")) && (!contains(allNodes[i].role, "edge")) {
+				schedulableNode = append(schedulableNode, allNodes[i])
+			}
+		}
+		if len(schedulableNode) < 6 {
+			g.Skip("No enough schedulable nodes !!!")
+		}
+
+		pvName, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("pv", "-ojsonpath={.items[?(@.spec.storageClassName==\""+scName+"\")].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if pvName != "" {
+			g.Skip("There has pv provisioned by efs-sc!!!")
+		}
+
+		maxAccessPointNum := int64(1000)
+		length := maxAccessPointNum / 20
+		var pvclist []persistentVolumeClaim
+		for i := int64(0); i < maxAccessPointNum+1; i++ {
+			pvcname := "my-pvc-" + strconv.FormatInt(i, 10)
+			pvclist = append(pvclist, newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimName(pvcname), setPersistentVolumeClaimStorageClassName(scName), setPersistentVolumeClaimNamespace(namespace)))
+		}
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", "--all", "-n", pvclist[0].namespace, "--ignore-not-found").Execute()
+
+		var wg sync.WaitGroup
+		wg.Add(20)
+		for i := int64(0); i < 20; i++ {
+			go func(i int64, length int64) {
+				defer g.GinkgoRecover()
+				for j := i * length; j < (i+1)*length; j++ {
+					pvclist[j].create(oc)
+				}
+				wg.Done()
+			}(i, length)
+		}
+		wg.Wait()
+
+		o.Eventually(func() (num int) {
+			pvcCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "-n", pvclist[0].namespace, "-ojsonpath='{.items[?(@.status.phase==\"Bound\")].metadata.name}'").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return len(strings.Fields(pvcCount))
+		}, 5*time.Minute, 15*time.Second).Should(o.Equal(int(maxAccessPointNum)))
+
+		g.By("# Check another pvc provisioned by same sc should be failed ")
+		pvcname := "my-pvc-" + strconv.FormatInt(maxAccessPointNum, 10)
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", pvcname, "-n", oc.Namespace(), "--ignore-not-found").Execute()
+		pvclist[maxAccessPointNum].create(oc)
+		waitResourceSpecifiedEventsOccurred(oc, pvclist[maxAccessPointNum].namespace, pvclist[maxAccessPointNum].name, "AccessPointLimitExceeded", "reached the maximum number of access points")
+
+		g.By("****** Create test pods schedule to workers ******")
+		nodeSelector := make(map[string]string)
+
+		g.By("# Create pods consume the 1000 pvcs, all pods should become Running normally")
+		defer func() {
+			o.Expect(oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", oc.Namespace(), "pod", "--all", "--ignore-not-found").Execute()).NotTo(o.HaveOccurred())
+		}()
+
+		for i := int64(0); i < 6; i++ {
+			nodeSelector["nodeType"] = strings.Join(schedulableNode[i].role, `,`)
+			nodeSelector["nodeName"] = schedulableNode[i].name
+			if i != 5 {
+				n := int64(0)
+				for n < 3 {
+					var wg sync.WaitGroup
+					wg.Add(10)
+					for j := int64(0); j < 10; j++ {
+						go func(j int64) {
+							defer g.GinkgoRecover()
+							podA := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvclist[i*30*5+(j+10*n)*5].name), setPodMountPath("/mnt/storage/"+strconv.FormatInt(i*30*5+(j+10*n)*5, 10)), setPodName("my-pod-"+strconv.FormatInt(i*30*5+(j+10*n)*5, 10)))
+							podA.createWithMultiPVCAndNodeSelector(oc, pvclist[i*30*5+(j+10*n)*5:i*30*5+(j+10*n)*5+5], nodeSelector)
+							podA.waitReady(oc)
+							wg.Done()
+						}(j)
+					}
+					wg.Wait()
+					n++
+				}
+				e2e.Logf(`------Create pods on %d node %s is Done--------`, i, allNodes[i].name)
+			} else {
+				m := int64(0)
+				for m < 5 {
+					var wg sync.WaitGroup
+					wg.Add(10)
+					for j := int64(0); j < 10; j++ {
+						go func(j int64) {
+							defer g.GinkgoRecover()
+							podA := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvclist[i*30*5+(j+10*m)*5].name), setPodMountPath("/mnt/storage/"+strconv.FormatInt(i*30*5+(j+10*m)*5, 10)), setPodName("my-pod-"+strconv.FormatInt(i*30*5+(j+10*m)*5, 10)))
+							podA.createWithMultiPVCAndNodeSelector(oc, pvclist[i*30*5+(j+10*m)*5:i*30*5+(j+10*m)*5+5], nodeSelector)
+							podA.waitReady(oc)
+							wg.Done()
+						}(j)
+					}
+					wg.Wait()
+					m++
+				}
+				e2e.Logf(`------Create pods on %d node %s is Done--------`, i, allNodes[i].name)
+			}
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
 	})
 
 	// author: ropatil@redhat.com

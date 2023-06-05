@@ -574,7 +574,7 @@ func getPresetStorageClassNameByProvisioner(oc *exutil.CLI, cloudProvider string
 func getPresetStorageClassListByProvisioner(oc *exutil.CLI, cloudProvider string, provisioner string) (scList []string) {
 	// TODO: Adaptation for known product issue https://issues.redhat.com/browse/OCPBUGS-1964
 	// we need to remove the condition after the issue is solved
-	if isGP2volumeSupportOnly(oc) {
+	if isGP2volumeSupportOnly(oc) && provisioner == "ebs.csi.aws.com" {
 		return append(scList, "gp2-csi")
 	}
 	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
@@ -739,7 +739,7 @@ func checkCSIDriverInstalled(oc *exutil.CLI, supportProvisioners []string) bool 
 	return true
 }
 
-// check resource event as expected
+// waitResourceSpecifiedEventsOccurred waits for specified resource event occurred
 func waitResourceSpecifiedEventsOccurred(oc *exutil.CLI, namespace string, resourceName string, events ...string) {
 	o.Eventually(func() bool {
 		Info, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", namespace, "--field-selector=involvedObject.name="+resourceName).Output()

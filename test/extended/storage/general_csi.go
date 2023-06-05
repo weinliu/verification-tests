@@ -4384,6 +4384,82 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: jiasun@redhat.com
+	// OCP-57148 [CSI Driver] Attachable volume number on each node should obey CSINode allocatable count for different instance types
+	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:jiasun-High-57148-[CSI Driver] Attachable volume number on each node should obey CSINode allocatable count for different instance types [Serial]", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "vpc.block.csi.ibm.io", "csi.vsphere.vmware.com", "pd.csi.storage.gke.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		for _, provisioner = range supportProvisioners {
+
+			g.By("#. Create new project for the scenario")
+			oc.SetupProject() //create new project
+
+			namespace := oc.Namespace()
+			storageClassName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+			defer o.Expect(oc.AsAdmin().WithoutNamespace().Run("get").Args("pv").Output()).ShouldNot(o.ContainSubstring(oc.Namespace()))
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			g.By("# get the default allocatable count of worker node and master node")
+			allNodes := getAllNodesInfo(oc)
+			workernode := getOneSchedulableWorker(allNodes)
+			masternode := getOneSchedulableMaster(allNodes)
+			workernodeInstanceType := workernode.instanceType
+			masternodeInstanceType := masternode.instanceType
+
+			workerCountStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csinode", workernode.name, "-ojsonpath={.spec.drivers[?(@.name==\""+provisioner+"\")].allocatable.count}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			masterCountStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csinode", masternode.name, "-ojsonpath={.spec.drivers[?(@.name==\""+provisioner+"\")].allocatable.count}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			workercount, parseIntErr := strconv.ParseInt(strings.Trim(workerCountStr, "'"), 10, 64)
+			o.Expect(parseIntErr).NotTo(o.HaveOccurred())
+			mastercount, parseIntErr := strconv.ParseInt(strings.Trim(masterCountStr, "'"), 10, 64)
+			o.Expect(parseIntErr).NotTo(o.HaveOccurred())
+			e2e.Logf(`The workernode/%s of type %s volumes allocatable count is: "%d"`, workernode.name, workernodeInstanceType, workercount)
+			e2e.Logf(`The masternode/%s of type %s volumes allocatable count is: "%d"`, masternode.name, masternodeInstanceType, mastercount)
+
+			e2e.Logf(`------Test on workernode START--------`)
+			extraWorkerAttachment, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumeattachments", "-ojsonpath={.items[?(@.spec.nodeName==\""+workernode.name+"\")].spec.source.persistentVolumeName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(`The workernode%s have %d volumeattachments %s `, workernode.name, len(strings.Fields(extraWorkerAttachment)), extraWorkerAttachment)
+			workercount = workercount - int64(len(strings.Fields(extraWorkerAttachment)))
+
+			extraMasterAttachment, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumeattachments", "-ojsonpath={.items[?(@.spec.nodeName==\""+masternode.name+"\")].spec.source.persistentVolumeName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(`The masternode%s have %d volumeattachments %s`, masternode.name, len(strings.Fields(extraMasterAttachment)), extraMasterAttachment)
+			mastercount = mastercount - int64(len(strings.Fields(extraMasterAttachment)))
+
+			defer o.Eventually(func() (WorkerAttachmentCount int) {
+				WorkerAttachment, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumeattachments", "-ojsonpath={.items[?(@.spec.nodeName==\""+workernode.name+"\")].spec.source.persistentVolumeName}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return len(strings.Fields(WorkerAttachment))
+			}, 600*time.Second, 15*time.Second).Should(o.Equal(len(strings.Fields(extraWorkerAttachment))))
+			checkSingleNodeMaxAttachVolumes(oc, workernode, workercount, pvcTemplate, podTemplate, storageClassName, namespace)
+
+			if workernodeInstanceType != masternodeInstanceType {
+				e2e.Logf(`------Test on masternode START--------`)
+				defer o.Eventually(func() (MasterAttachmentCount int) {
+					masterAttachment, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumeattachments", "-ojsonpath={.items[?(@.spec.nodeName==\""+masternode.name+"\")].spec.source.persistentVolumeName}").Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					return len(strings.Fields(masterAttachment))
+				}, 600*time.Second, 15*time.Second).Should(o.Equal(len(strings.Fields(extraMasterAttachment))))
+				checkSingleNodeMaxAttachVolumes(oc, masternode, mastercount, pvcTemplate, podTemplate, storageClassName, namespace)
+			}
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 	// author: pewang@redhat.com
 	// OCP-60598 - [BYOK] Pre-defined storageclass should contain the user-managed encryption key which specified when installation
 	// OCP-60599 - [BYOK] storageclass without specifying user-managed encryption key or other key should work well
@@ -4694,4 +4770,37 @@ func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep
 		dep.checkDataBlockType(oc)
 		dep.writeDataBlockType(oc)
 	}
+}
+
+// test the allocated count of pvc consumed by the pod on the Specified node
+func checkSingleNodeMaxAttachVolumes(oc *exutil.CLI, node node, count int64, pvcTemplate string, podTemplate string, storageClassName string, namespace string) {
+	defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", "--all", "-n", namespace, "--ignore-not-found").Execute()
+	pvclist := createMulPVC(oc, 0, count, pvcTemplate, storageClassName)
+
+	nodeSelector := make(map[string]string)
+	nodeSelector["nodeType"] = strings.Join(node.role, `,`)
+	nodeSelector["nodeName"] = node.name
+
+	g.By("# Create podA with pvc count more than allocatable and pod status should be pending")
+	podA := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvclist[0].name), setPodMountPath("/mnt/storage/0"))
+	podA.createWithMultiPVCAndNodeSelector(oc, pvclist, nodeSelector)
+	defer podA.deleteAsAdmin(oc)
+
+	o.Consistently(func() string {
+		podStatus, _ := getPodStatus(oc, podA.namespace, podA.name)
+		return podStatus
+	}, 30*time.Second, 5*time.Second).Should(o.Equal("Pending"))
+	waitResourceSpecifiedEventsOccurred(oc, podA.namespace, podA.name, "FailedScheduling", "node(s) exceed max volume count")
+
+	g.By("# Create podB with pvc count equal to allocatable count and pod status should be bounding")
+	podB := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvclist[0].name), setPodMountPath("/mnt/storage/0"))
+	podB.createWithMultiPVCAndNodeSelector(oc, pvclist[:count], nodeSelector)
+	defer deleteSpecifiedResource(oc.AsAdmin(), "pod", podB.name, podB.namespace)
+	podB.longerTime().waitReady(oc)
+
+	g.By("# Create another pod on the same pod and the status should be pending ")
+	podC := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvclist[count].name), setPodMountPath("/mnt/storage/"+strconv.FormatInt(count, 10)))
+	podC.createWithMultiPVCAndNodeSelector(oc, pvclist[count:], nodeSelector)
+	defer podC.deleteAsAdmin(oc)
+	waitResourceSpecifiedEventsOccurred(oc, podC.namespace, podC.name, "FailedScheduling", "node(s) exceed max volume count")
 }
