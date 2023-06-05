@@ -69,7 +69,7 @@ func getSAToken(oc *exutil.CLI) string {
 	return token
 }
 
-// Check the alert raied (pengding or firing)
+// Check the alert raised (pending or firing)
 func checkAlertRaised(oc *exutil.CLI, alertName string) {
 	token := getSAToken(oc)
 	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", prometheusK8s, "-n", prometheusNamespace, "-o=jsonpath={.spec.host}").Output()

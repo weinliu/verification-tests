@@ -4,16 +4,15 @@ import (
 	//"path/filepath"
 	"encoding/base64"
 	"fmt"
-	"path/filepath"
-	"regexp"
-	"strconv"
-	"strings"
-
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -116,6 +115,39 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		clusterCheckList := []string{"CheckDefaultDatastore", "CheckFolderPermissions", "CheckTaskPermissions", "CheckStorageClasses", "ClusterInfo"}
 		for i := range clusterCheckList {
 			o.Expect(metric).To(o.ContainSubstring(clusterCheckList[i]))
+		}
+	})
+
+	// author:jiasun@redhat.com
+	g.It("NonHyperShiftHOST-Author:jiasun-High-44656-[vSphere-Problem-Detector] should check the vsphere version and report in metric for alerter raising by CSO", func() {
+		g.By("Get support vsphere version through openshift version")
+		ocSupportVsVersion := map[string]string{
+			"4.12": "7.0.2",
+			"4.13": "7.0.2",
+			"4.14": "7.0.2",
+		}
+		clusterVersions, _, err := exutil.GetClusterVersion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("--------------------openshift version is %s", clusterVersions)
+		SupportVsVersion := ocSupportVsVersion[clusterVersions]
+		e2e.Logf("--------------------support vsphere version should be at least %s", SupportVsVersion)
+
+		g.By("Check logs of vsphere problem detector should contain ESXi version")
+		logs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("-n", "openshift-cluster-storage-operator", "-l", "name=vsphere-problem-detector-operator", "--tail=-1").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(logs, "ESXi version")).To(o.BeTrue())
+
+		g.By("Check version in metric and alert")
+		mo := newMonitor(oc.AsAdmin())
+		// TODO: Currently we don't consider the different esxi versions test environment, in CI all the esxi should have the same esxi version, we could enhance it if it's needed later.
+		esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", "data.result.0.metric.version")
+		o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
+		e2e.Logf("--------------------Esxi version is  %s", esxiVersion)
+		vCenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", "data.result.0.metric.version")
+		o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+
+		if !versionIsAbove(esxiVersion, SupportVsVersion) || !versionIsAbove(vCenterVersion, SupportVsVersion) {
+			checkAlertRaised(oc, "VSphereOlderVersionPresent")
 		}
 	})
 
