@@ -62,6 +62,87 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "28631"|./bin/extended-platform-tests run --timeout 20m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Critical-28631-[aws]Hive deprovision controller can be disabled through a hiveconfig option [Serial]", func() {
+		testCaseID := "28631"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		g.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		e2e.Logf("Wait until infra id generated")
+		newCheck("expect", "get", asAdmin, false, contain, cdName+"-", ok, 600, []string{"cd", "-n", oc.Namespace()}).check(oc)
+
+		oldhivecontrollersPod := getHivecontrollersPod(oc, HiveNamespace)
+		e2e.Logf("old hivecontrollers Pod is " + oldhivecontrollersPod)
+		e2e.Logf("Add \"deprovisionsDisabled: true\"  in hiveconfig.spec")
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig/hive", "--type", "json", "-p", "[{\"op\": \"remove\", \"path\": \"/spec/deprovisionsDisabled\"}]").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig/hive", "--type", `merge`, `--patch={"spec": {"deprovisionsDisabled": true}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check \"deprovisionsDisabled\" is set to true in hiveconfig.spec")
+		newCheck("expect", "get", asAdmin, false, compare, "true", ok, DefaultTimeout, []string{"hiveconfig", "hive", "-o=jsonpath={.spec.deprovisionsDisabled}"}).check(oc)
+		e2e.Logf("Check if hivecontrollers Pod is recreated")
+		var hivecontrollersPod string
+		checkNewcontrollersPod := func() bool {
+			hivecontrollersPod = getHivecontrollersPod(oc, HiveNamespace)
+			return strings.Compare(oldhivecontrollersPod, hivecontrollersPod) != 0
+		}
+		o.Eventually(checkNewcontrollersPod).WithTimeout(120 * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+		e2e.Logf("new hivecontrollers Pod is " + hivecontrollersPod)
+
+		e2e.Logf("Try to delete cd")
+		cmd, _, _, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("cd", cdName, "-n", oc.Namespace()).Background()
+		defer cmd.Process.Kill()
+
+		e2e.Logf(`Check logs of hive-controllers has a warning :"deprovisions are currently disabled in HiveConfig, skipping"`)
+		checkDeprovisionLog := func() bool {
+			deprovisionLogs, _, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(hivecontrollersPod, "-n", HiveNamespace).Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(deprovisionLogs, "deprovisions are currently disabled in HiveConfig, skipping") {
+				e2e.Logf(`Find target message :"deprovisions are currently disabled in HiveConfig, skipping"`)
+				return true
+			}
+			e2e.Logf(`Still waiting for message :"deprovisions are currently disabled in HiveConfig, skipping"`)
+			return false
+		}
+		o.Eventually(checkDeprovisionLog).WithTimeout(600 * time.Second).WithPolling(60 * time.Second).Should(o.BeTrue())
+
+		e2e.Logf("Add \"deprovisionsDisabled: false\"  in hiveconfig.spec")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig/hive", "--type", `merge`, `--patch={"spec": {"deprovisionsDisabled": false}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check \"deprovisionsDisabled\" is set to false in hiveconfig.spec")
+		newCheck("expect", "get", asAdmin, false, compare, "false", ok, DefaultTimeout, []string{"hiveconfig", "hive", "-o=jsonpath={.spec.deprovisionsDisabled}"}).check(oc)
+		e2e.Logf("Check if cd is in deprovision.")
+		newCheck("expect", "get", asAdmin, false, contain, cdName+"-uninstall-", ok, DefaultTimeout, []string{"pod", "-n", oc.Namespace()}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "25443"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Low-25443-[aws]Clusterdeployment contains Status.Condition of SyncSet status in case of sysncset is invalid [Serial]", func() {
 		testCaseID := "25443"

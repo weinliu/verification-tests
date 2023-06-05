@@ -1401,6 +1401,16 @@ func getHiveadmissionPod(oc *exutil.CLI, namespace string) string {
 	return podArray[0]
 }
 
+// Get hivecontrollers pod name
+func getHivecontrollersPod(oc *exutil.CLI, namespace string) string {
+	hivecontrollersOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=control-plane=controller-manager", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podArray := strings.Split(strings.TrimSpace(hivecontrollersOutput), " ")
+	o.Expect(len(podArray)).To(o.BeNumerically(">", 0))
+	e2e.Logf("Hivecontrollers pod list is %s,first pod name is %s", podArray, podArray[0])
+	return podArray[0]
+}
+
 // Get OCP Image for Hive testing, default is 4.13-nightly image for now and if not exist, fail the test
 func getTestOCPImage() string {
 	//get the latest 4.13-nightly image for Hive testing
