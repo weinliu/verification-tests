@@ -1,14 +1,14 @@
 import { listPage } from "../upstream/views/list-page";
 
 //If specific channel/catsrc needed for testing, export the values using CYPRESS_EXTRA_PARAM before running the logging tests
-//ex: export CYPRESS_EXTRA_PARAM='{"openshfift-logging": {"channel": "stable-5.7", "catalogsource": "qe-app-registry"}}'
+//ex: export CYPRESS_EXTRA_PARAM='{"openshift-logging": {"channel": "stable-5.7", "catalogsource": "qe-app-registry"}}'
 const EXTRA_PARAM = JSON.stringify(Cypress.env("EXTRA_PARAM"))
 const LOGGING_PARAM = (EXTRA_PARAM !== undefined) ? JSON.parse(EXTRA_PARAM) : null;
 
 export const catalogSource = {
   //set channel
   channel: () => {
-    let channel = (LOGGING_PARAM != null) ? LOGGING_PARAM['openshfift-logging']['channel'] : null;
+    let channel = (LOGGING_PARAM != null) ? LOGGING_PARAM['openshift-logging']['channel'] : null;
     if(channel == null){
       channel = "stable";
     }
@@ -16,7 +16,7 @@ export const catalogSource = {
   },
   //set source namespace
   nameSpace: () => {
-    let namespace = (LOGGING_PARAM != null) ? LOGGING_PARAM['openshfift-logging']['catsrc-namespace'] : null;
+    let namespace = (LOGGING_PARAM != null) ? LOGGING_PARAM['openshift-logging']['catsrc-namespace'] : null;
     if(namespace == null) {
       namespace = "openshift-marketplace";
     }
@@ -24,7 +24,7 @@ export const catalogSource = {
   },
   //set source and check if the packagemanifest exists or not
   sourceName: () => {
-    let csName = (LOGGING_PARAM != null) ? LOGGING_PARAM['openshfift-logging']['catalogsource'] : null;
+    let csName = (LOGGING_PARAM != null) ? LOGGING_PARAM['openshift-logging']['catalogsource'] : null;
     if(csName == null) {
       return catalogSource.qeCatSrc();
     } else {

@@ -1,6 +1,6 @@
 import { catalogSource, logUtils } from "../../views/logging-utils";
 
-//ex: export CYPRESS_EXTRA_PARAM='{"openshfift-logging": {"channel": "stable-5.7", "catalogsource": "qe-app-registry"}}' before running logging tests if required
+//ex: export CYPRESS_EXTRA_PARAM='{"openshift-logging": {"channel": "stable-5.7", "catalogsource": "qe-app-registry"}}' before running logging tests if required
 describe('Logging related features', () => {
   const CLO = {
     Namespace:   "openshift-logging",
