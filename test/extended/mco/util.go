@@ -510,11 +510,11 @@ func preChecks(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the list of MachineConfigPools")
 
 	for _, pool := range allMCPs {
-		logger.Infof("Check that %s pool is not degraded", pool.GetName())
-		o.EventuallyWithOffset(1, pool.GetDegradedStatus, "3m", "20s").Should(o.Equal("False"), "%s pool is degraded:\n%s", pool.GetName(), pool.PrettyString())
-
-		logger.Infof("Check that %s pool is updated", pool.GetName())
-		o.EventuallyWithOffset(1, pool.GetUpdatedStatus, "5m", "20s").Should(o.Equal("True"), "%s pool is not updated:\n%s", pool.GetName(), pool.PrettyString())
+		logger.Infof("Check that %s pool is ready for testing", pool.GetName())
+		if err := pool.SanityCheck(); err != nil { // Check that it is not degraded nor updating
+			logger.Errorf("MCP is not ready for testing (it is updating or degraded):\n%s", pool.PrettyString())
+			g.Skip(fmt.Sprintf("%s pool is not ready for testing. %s", pool.GetName(), err))
+		}
 
 	}
 

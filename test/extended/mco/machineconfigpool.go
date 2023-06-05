@@ -480,6 +480,48 @@ func (mcp *MachineConfigPool) GetConfiguredMachineConfig() (*MachineConfig, erro
 	return NewMachineConfig(mcp.oc, currentMcName, mcp.GetName()), nil
 }
 
+// SanityCheck returns an error if the MCP is Degraded or Updating.
+// We can't use WaitForUpdatedStatus or WaitForNotDegradedStatus because they always wait the interval. In a sanity check we want a fast response.
+func (mcp *MachineConfigPool) SanityCheck() error {
+	timeToWait := (time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute) / 13
+	logger.Infof("Waiting %s for MCP %s to be completed.", timeToWait.Round(time.Second), mcp.name)
+
+	const trueStatus = "True"
+	var message string
+
+	err := wait.PollImmediate(1*time.Minute, timeToWait, func() (bool, error) {
+		// If there are degraded machines, stop polling, directly fail
+		degraded, degradederr := mcp.GetDegradedStatus()
+		if degradederr != nil {
+			message = fmt.Sprintf("Error gettting Degraded status: %s", degradederr)
+			return false, nil
+		}
+
+		if degraded == trueStatus {
+			message = fmt.Sprintf("MCP '%s' is degraded", mcp.GetName())
+			return false, nil
+		}
+
+		updated, err := mcp.GetUpdatedStatus()
+		if err != nil {
+			message = fmt.Sprintf("Error gettting Updated status: %s", err)
+			return false, nil
+		}
+		if updated == trueStatus {
+			logger.Infof("MCP '%s' is ready for testing", mcp.name)
+			return true, nil
+		}
+		message = fmt.Sprintf("MCP '%s' is not updated", mcp.GetName())
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf(message)
+	}
+
+	return nil
+}
+
 // GetAll returns a []MachineConfigPool list with all existing machine config pools sorted by creation time
 func (mcpl *MachineConfigPoolList) GetAll() ([]MachineConfigPool, error) {
 	mcpl.ResourceList.SortByTimestamp()
