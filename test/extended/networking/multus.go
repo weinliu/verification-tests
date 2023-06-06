@@ -106,4 +106,54 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Check all multus-additional-cni-plugins pods are Running well")
 		o.Expect(waitForPodWithLabelReady(oc, ns1, "app=multus-additional-cni-plugins")).NotTo(o.HaveOccurred())
 	})
+
+	// author: weliang@redhat.com
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-59440-Verify whereabouts-reconciler after creating additionalNetworks. [Serial]", func() {
+		var (
+			patchSResource = "networks.operator.openshift.io/cluster"
+			patchInfo      = fmt.Sprintf(`{"spec":{ "additionalNetworks": [{"name": "whereabouts-shim", "namespace": "default","rawCNIConfig":"{\"cniVersion\":\"0.3.0\",\"type\":\"bridge\",\"name\":\"cnitest0\",\"ipam\": {\"type\":\"whereabouts\",\"subnet\":\"192.0.2.0/24\"}}","type":"Raw"}]}}`)
+			ns             = "openshift-multus"
+		)
+
+		g.By("Check there are no whereabouts-reconciler pods and ds in the openshift-multus namespace before creating additionalNetworks ")
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", "app=whereabouts-reconciler", "-ojsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
+		o.Expect(podStatus).To(o.BeEmpty())
+		_, dsErrBefore := oc.AsAdmin().Run("get").Args("daemonset.apps/whereabouts-reconciler", "-n", ns).Output()
+		o.Expect(dsErrBefore).To(o.HaveOccurred())
+
+		g.By("Add additionalNetworks through network operator")
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", `[{"op": "remove", "path": "/spec/additionalNetworks"}]`, "--type=json").Execute()
+			g.By("Check NetworkOperatorStatus to ensure the cluster is health after modification")
+			checkNetworkOperatorState(oc, 10, 60)
+		}()
+		patchResourceAsAdmin(oc, patchSResource, patchInfo)
+
+		g.By("Check whereabouts-reconciler pods and ds are created in the openshift-multus namespace after creating additionalNetworks ")
+		o.Expect(waitForPodWithLabelReady(oc, ns, "app=whereabouts-reconciler")).NotTo(o.HaveOccurred())
+		dsOutput, dsErrAfter := oc.AsAdmin().Run("get").Args("daemonset.apps/whereabouts-reconciler", "-n", ns).Output()
+		o.Expect(dsErrAfter).NotTo(o.HaveOccurred())
+		o.Expect(dsOutput).To(o.ContainSubstring("whereabouts-reconciler"))
+
+		g.By("Check there are no whereabouts-reconciler pods and ds in the openshift-multus namespace after deleting additionalNetworks ")
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", `[{"op": "remove", "path": "/spec/additionalNetworks"}]`, "--type=json").Execute()
+		o.Eventually(func() bool {
+			result := true
+			_, err := oc.AsAdmin().Run("get").Args("pod", "-n", ns, "-l", "app=whereabouts-reconciler").Output()
+			if err != nil {
+				e2e.Logf("Wait for whereabouts-reconciler pods to be deleted")
+				result = false
+			}
+			return result
+		}, "60s", "5s").Should(o.BeTrue(), fmt.Sprintf("whereabouts-reconciler pods are not deleted"))
+		o.Eventually(func() bool {
+			result := true
+			_, err := oc.AsAdmin().Run("get").Args("daemonset.apps/whereabouts-reconciler", "-n", ns).Output()
+			if err != nil {
+				e2e.Logf("Wait for daemonset.apps/whereabouts-reconciler to be deleted")
+				result = false
+			}
+			return result
+		}, "60s", "5s").Should(o.BeTrue(), fmt.Sprintf("daemonset.apps/whereabouts-reconciler is not deleted"))
+	})
 })
