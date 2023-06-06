@@ -4287,10 +4287,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		g.By("2) check status of OLM cluster operators")
 		e2e.Logf("check csv maxOpenShiftVersion")
 		upgradeableExpect := "True"
-		clusterVersionShort := strings.Split(clusterversion, "-")[0]
-		clusterVersionMajor, _ := strconv.Atoi(strings.Split(clusterVersionShort, ".")[0])
-		clusterVersionMinor, _ := strconv.Atoi(strings.Split(clusterVersionShort, ".")[1])
-		e2e.Logf("cluster verison is %s", clusterVersionShort)
+		clusterversionSemver, err := semver.Make(clusterversion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		csvList := getAllCSV(oc)
 		for _, csvIndex := range csvList {
 			nsName := strings.Split(csvIndex, ":")[0]
@@ -4299,16 +4298,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			if strings.Contains(properties, "olm.maxOpenShiftVersion") {
 				maxOpenShiftVersion := gjson.Get(properties, `properties.#(type%"*maxOpenShiftVersion*").value`).String()
 				e2e.Logf("%s: %s, maxOpenShiftVersion: %s", nsName, csvName, maxOpenShiftVersion)
-				maxOpenShiftVersionMajor, _ := strconv.Atoi(strings.Split(maxOpenShiftVersion, ".")[0])
-				maxOpenShiftVersionMinor, _ := strconv.Atoi(strings.Split(maxOpenShiftVersion, ".")[1])
-				if maxOpenShiftVersionMajor > clusterVersionMajor {
-					continue
+				if len(strings.Split(maxOpenShiftVersion, ".")) < 3 {
+					maxOpenShiftVersion = maxOpenShiftVersion + ".0"
 				}
-				if maxOpenShiftVersionMajor < clusterVersionMajor {
-					upgradeableExpect = "False"
-					break
-				}
-				if maxOpenShiftVersionMinor <= clusterVersionMinor {
+				maxOpenShiftVersionSemver, err := semver.Make(maxOpenShiftVersion)
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				if clusterversionSemver.GTE(maxOpenShiftVersionSemver) {
+					e2e.Logf("clusterversion %s is greater than maxOpenShiftVersion %s", clusterversion, maxOpenShiftVersion)
 					upgradeableExpect = "False"
 					break
 				}
@@ -4331,9 +4328,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				}
 			}
 		}
+
 		g.By("3) Check the installed operator status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
-		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", "olm-upgrade-22615").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", "olm-upgrade-22615").Output()
 		if err != nil {
 			e2e.Failf("Fail to delete project, error:%v", err)
 		}
