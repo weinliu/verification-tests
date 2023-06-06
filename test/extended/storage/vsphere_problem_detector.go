@@ -161,6 +161,67 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author:jiasun@redhat.com
+	// OCP-37731 [vSphere-Problem-Detector] should report CheckStorageClass error when invalid storagepolicy or datastore or datastoreURL
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:jiasun-Medium-37731-[vSphere-Problem-Detector] should report CheckStorageClass error when parameters values is wrong [Serial]", func() {
+		g.By("Check origin metric is '0' ")
+		mo := newMonitor(oc.AsAdmin())
+		valueOri, valueErr := mo.getSpecifiedMetricValue("vsphere_cluster_check_errors", "data.result.#(metric.check=CheckStorageClasses).value.1")
+		o.Expect(valueErr).NotTo(o.HaveOccurred())
+		o.Expect(valueOri).To(o.Equal("0"))
+
+		g.By("Create intree storageClass with an invalid storagePolicyName")
+		storageTeamBaseDir := exutil.FixturePath("testdata", "storage")
+		storageClassTemplate := filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+		inTreePolicyStorageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassName("mystorageclass-intreepolicy"), setStorageClassProvisioner("kubernetes.io/vsphere-volume"))
+		inTreeDatastoreStorageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassName("mystorageclass-intreedatastore"), setStorageClassProvisioner("kubernetes.io/vsphere-volume"))
+		inTreeDatastoreURLStorageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassName("mystorageclass-intreedatastoreurl"), setStorageClassProvisioner("kubernetes.io/vsphere-volume"))
+		csiPolicyStorageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassName("mystorageclass-csipolicy"), setStorageClassProvisioner("csi.vsphere.vmware.com"))
+		csiDatastoreStorageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassName("mystorageclass-csidatastore"), setStorageClassProvisioner("csi.vsphere.vmware.com"))
+		csiDatastoreURLStorageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassName("mystorageclass-csidatastoreurl"), setStorageClassProvisioner("csi.vsphere.vmware.com"))
+		policyExtra := map[string]string{
+			"diskformat":        "thin",
+			"storagePolicyName": "nonexist",
+		}
+		datastoreExtra := map[string]string{
+			"diskformat": "thin",
+			"datastore":  "NONDatastore",
+		}
+		datastoreURLExtra := map[string]string{
+			"datastoreurl": "non:///non/nonexist/",
+		}
+		g.By(" Hard restart the CheckStorageClasses when inTreeprovisioner with invalid storagepolicy")
+		inTreePolicyStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": policyExtra})
+		defer inTreePolicyStorageClass.deleteAsAdmin(oc)
+		mo.checkInvalidvSphereStorageClassMetric(oc, inTreePolicyStorageClass.name)
+
+		g.By(" Hard restart the CheckStorageClasses when inTreeprovisioner with invalid datastore")
+		inTreeDatastoreStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": datastoreExtra})
+		defer inTreeDatastoreStorageClass.deleteAsAdmin(oc)
+		mo.checkInvalidvSphereStorageClassMetric(oc, inTreeDatastoreStorageClass.name)
+
+		g.By(" Hard restart the CheckStorageClasses when inTreeprovisioner with invalid datastoreURL")
+		inTreeDatastoreURLStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": datastoreURLExtra})
+		defer inTreeDatastoreURLStorageClass.deleteAsAdmin(oc)
+		mo.checkInvalidvSphereStorageClassMetric(oc, inTreeDatastoreURLStorageClass.name)
+
+		g.By(" Hard restart the CheckStorageClasses when csiprovisioner with invalid storagepolicy")
+		csiPolicyStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": policyExtra})
+		defer csiPolicyStorageClass.deleteAsAdmin(oc)
+		mo.checkInvalidvSphereStorageClassMetric(oc, csiPolicyStorageClass.name)
+
+		g.By(" Hard restart the CheckStorageClasses when csiprovisioner with invalid datastore")
+		csiDatastoreStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": datastoreExtra})
+		defer csiDatastoreStorageClass.deleteAsAdmin(oc)
+		mo.checkInvalidvSphereStorageClassMetric(oc, csiDatastoreStorageClass.name)
+
+		g.By(" Hard restart the CheckStorageClasses when csiprovisioner with invalid datastoreURL")
+		csiDatastoreURLStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": datastoreURLExtra})
+		defer csiDatastoreURLStorageClass.deleteAsAdmin(oc)
+		mo.checkInvalidvSphereStorageClassMetric(oc, csiDatastoreURLStorageClass.name)
+
+	})
+
 	// author:pewang@redhat.com
 	// Since it'll restart deployment/vsphere-problem-detector-operator maybe conflict with the other vsphere-problem-detector cases,so set it as [Serial]
 	g.It("NonHyperShiftHOST-NonPreRelease-Author:pewang-High-48763-[vSphere-Problem-Detector] should report 'vsphere_rwx_volumes_total' metric correctly [Serial]", func() {

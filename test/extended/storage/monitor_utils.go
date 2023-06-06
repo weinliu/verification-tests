@@ -123,3 +123,14 @@ func checkStorageMetricsContent(oc *exutil.CLI, metricName string, content strin
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get %s in %s metric via prometheus", content, metricName))
 }
+
+// checkInvalidvSphereStorageClassMetric checks the vsphere specified invalid storageclass should report vsphere_cluster_check_errors metrics, only used for vsphere test clusters
+func (mo *monitor) checkInvalidvSphereStorageClassMetric(oc *exutil.CLI, storageClassName string) {
+	vsphereProblemDetector := newDeployment(setDeploymentName("vsphere-problem-detector-operator"), setDeploymentNamespace("openshift-cluster-storage-operator"), setDeploymentApplabel("name=vsphere-problem-detector-operator"))
+	defer vsphereProblemDetector.waitReady(oc.AsAdmin())
+	vsphereProblemDetector.hardRestart(oc.AsAdmin())
+	mo.waitSpecifiedMetricValueAsExpected("vsphere_cluster_check_errors", "data.result.#(metric.check=CheckStorageClasses).value.1", "1")
+
+	o.Expect(oc.WithoutNamespace().AsAdmin().Run("delete").Args("sc", storageClassName).Execute()).ShouldNot(o.HaveOccurred())
+	mo.waitSpecifiedMetricValueAsExpected("vsphere_cluster_check_errors", "data.result.#(metric.check=CheckStorageClasses).value.1", "0")
+}
