@@ -1712,7 +1712,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("start the service on the backend server port 10081 by socat command")
 		jsonPath := ".items[0].metadata.name"
 		srvPodName := fetchJSONPathValue(oc, project1, "pods", jsonPath)
-		resWithSetCookie2 := `nohup socat -T 1 -d -d tcp-l:10081,reuseaddr,fork,crlf system:'echo -e "\"HTTP/1.0 200 OK\nDocumentType: text/html\nHeader: Set-Cookie2 X=Y;\n\nthis is a test\""'`
+		cidr, errCidr := oc.AsAdmin().WithoutNamespace().Run("get").Args("network.config", "cluster", "-o=jsonpath={.spec.clusterNetwork[].cidr}").Output()
+		o.Expect(errCidr).NotTo(o.HaveOccurred())
+		// set ipv4 socat or ipv6 socat command on the server
+		resWithSetCookie2 := `nohup socat -T 1 -6 -d -d tcp-l:10081,reuseaddr,fork,crlf system:'echo -e "\"HTTP/1.0 200 OK\nDocumentType: text/html\nHeader: Set-Cookie2 X=Y;\n\nthis is a test\""'`
+		if strings.Contains(cidr, ".") {
+			resWithSetCookie2 = `nohup socat -T 1 -d -d tcp-l:10081,reuseaddr,fork,crlf system:'echo -e "\"HTTP/1.0 200 OK\nDocumentType: text/html\nHeader: Set-Cookie2 X=Y;\n\nthis is a test\""'`
+		}
 		cmd1, _, _, errSetCookie2 := oc.AsAdmin().Run("exec").Args("-n", project1, srvPodName, "--", "bash", "-c", resWithSetCookie2).Background()
 		defer cmd1.Process.Kill()
 		o.Expect(errSetCookie2).NotTo(o.HaveOccurred())
