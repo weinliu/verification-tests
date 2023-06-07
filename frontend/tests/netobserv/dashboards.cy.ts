@@ -7,7 +7,7 @@ import { dashboard, graphSelector } from "views/dashboards-page"
 const project = 'netobserv'
 
 
-describe('(OCP-61893 NETOBSERV) NetObserv dashboards tests', { tags: ['NETOBSERV'] }, function () {
+describe('NetObserv dashboards tests', { tags: ['NETOBSERV'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -31,7 +31,7 @@ describe('(OCP-61893 NETOBSERV) NetObserv dashboards tests', { tags: ['NETOBSERV
         Operator.createFlowcollector(project)
     })
 
-    it('should have health dashboards', function () {
+    it('OCP-61893, should have health dashboards', function () {
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-health")
         cy.byTestID('rates-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
@@ -48,6 +48,14 @@ describe('(OCP-61893 NETOBSERV) NetObserv dashboards tests', { tags: ['NETOBSERV
         })
 
         cy.get('[data-test="operator-reconciliation-rate-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+    })
+
+    it("OCP-63790, should have flow based dashboards", function () {
+        dashboard.visit()
+        dashboard.visitDashboard("grafana-dashboard-netobserv")
+        cy.byTestID("top-flow-rates-per-source-and-destination-namespaces-(1-min-rates)-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        cy.byTestID("top-byte-rates-received-per-source-and-destination-nodes-(1-min-rates)-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        cy.byTestID("top-byte-rates-received-per-source-and-destination-workloads-(1-min-rates)-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
     })
 
     after("delete flowcollector and NetObs Operator", function () {
