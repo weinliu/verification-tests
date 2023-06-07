@@ -13023,35 +13023,27 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	// author: jiazha@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:bandrade-High-45408-Eliminate use of imagestreams in catalog management", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("1) check the cronjob in the control-plane project")
-		controlProject := fmt.Sprintf("%s-%s", hostedClusterNS, guestClusterName)
-		cronjobs, err := oc.AsAdmin().Run("get").Args("cronjob", "-n", controlProject).Output()
+		g.By("1) check if uses the ImageStream resource")
+		controlProject := fmt.Sprintf("clusters-%s", guestClusterName)
+		isOutput, err := oc.AsAdmin().Run("get").Args("is", "catalogs", "-n", controlProject, "-o", "yaml").Output()
 		if err != nil {
 			e2e.Failf("Fail to get cronjob in project: %s, error:%v", controlProject, err)
 		}
-		catalogs := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
-		for _, catalog := range catalogs {
-			if !strings.Contains(cronjobs, catalog) {
-				e2e.Failf("Cannot find %s in cronjob:%v", catalog, cronjobs)
-			}
-		}
-		g.By("2) check if uses the ImageStream resource")
-		is := []string{"olm-certified-catalogs", "olm-community-catalogs", "redhat-marketplace-catalogs", "redhat-operators-catalogs"}
+		is := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		for _, imageStream := range is {
-			isContent, _ := oc.AsAdmin().Run("get").Args("is", imageStream, "-n", controlProject).Output()
-			if !strings.Contains(isContent, "not found") {
+			if !strings.Contains(isOutput, imageStream) {
 				e2e.Failf("find ImageStream:%s in project:%v", imageStream, controlProject)
 			}
 		}
-		g.By("3) check if Deployment uses the ImageStream")
+		g.By("2) check if Deployment uses the ImageStream")
 		deploys := []string{"certified-operators-catalog", "community-operators-catalog", "redhat-marketplace-catalog", "redhat-operators-catalog"}
 		for _, deploy := range deploys {
 			annotations, err := oc.AsAdmin().Run("get").Args("deployment", "-n", controlProject, deploy, "-o=jsonpath={.metadata.annotations}").Output()
 			if err != nil {
 				e2e.Failf("Fail to get deploy:%s in project: %s, error:%v", deploy, controlProject, err)
 			}
-			if strings.Contains(strings.ToLower(annotations), "imagestream") {
-				e2e.Failf("The deploy uses ImageStream: %v", annotations)
+			if !strings.Contains(strings.ToLower(annotations), "imagestream") {
+				e2e.Failf("The deploy does not use ImageStream: %v", annotations)
 			}
 		}
 	})
