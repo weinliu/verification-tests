@@ -330,7 +330,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-37096"
 		machinesetName := getWindowsMachineSetName(oc, "winsecond", iaasPlatform, zone)
 		machinesetMultiOSFileName := iaasPlatform + "_windows_machineset.yaml"
-		err := configureMachineset(oc, iaasPlatform, machinesetName, machinesetMultiOSFileName, getConfigMapData(oc, "secondary_windows_image"))
+		err := configureMachineset(oc, iaasPlatform, "winsecond", machinesetMultiOSFileName, getConfigMapData(oc, "secondary_windows_image"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
 		// here we provision 1 webservers with a runtime class ID, up to 20 minutes due to pull image on AWS
