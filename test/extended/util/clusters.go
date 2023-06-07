@@ -109,6 +109,12 @@ func SkipIfPlatformTypeNot(oc *CLI, platforms string) {
 func IsHypershiftHostedCluster(oc *CLI) bool {
 	topology, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status.controlPlaneTopology}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("topology is %s", topology)
+	if topology == "" {
+		status, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status}").Output()
+		e2e.Logf("cluster status %s", status)
+		e2e.Failf("failure: controlPlaneTopology returned empty")
+	}
 	return strings.Compare(topology, "External") == 0
 }
 
