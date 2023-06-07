@@ -21,11 +21,11 @@ objects:
           replicas: 1
           runtimeClassName: "${RUNTIMECLASSNAME}"
           containers:
-            - image: registry.redhat.io/rhscl/httpd-24-rhel7
+            - image: "${IMAGE}"
               imagePullPolicy: IfNotPresent
               name: "${NAME}"
               ports:
-                - containerPort: 8080
+                - containerPort: ${{PORT}}
               securityContext:
                 runAsNonRoot: true
                 allowPrivilegeEscalation: false
@@ -39,7 +39,11 @@ parameters:
   - name: NAME
     value: "none"
   - name: REPLICAS
-    value: "1"
+    value: "3"
   - name: RUNTIMECLASSNAME
     value: "kata"
   - name: NAMESPACE
+  - name: IMAGE
+    value: "registry.redhat.io/rhscl/httpd-24-rhel7"
+  - name: PORT
+    value: "8080"

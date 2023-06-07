@@ -1110,4 +1110,85 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 		g.By("SUCCESSS - deployment scale-down finished successfully")
 	})
+
+	g.It("Author:vvoronko-High-64043-expose-serice deployment", func() {
+
+		oc.SetupProject()
+		var (
+			podNs         = oc.Namespace()
+			deployName    = "dep-64043-" + getRandomString()
+			msg           string
+			statusCode    = 200
+			testPageBody  = "Hello OpenShift!"
+			ocpHelloImage = "quay.io/openshifttest/hello-openshift:1.2.0"
+		)
+
+		g.By("Create deployment config from template")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment,
+			"-p", "NAME="+deployName, "-p", "IMAGE="+ocpHelloImage,
+			"-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
+		if err != nil {
+			e2e.Logf("Could not create configFile %v %v", configFile, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Applying deployment file " + configFile)
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+		if err != nil {
+			e2e.Logf("Could not apply configFile %v %v", msg, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for deployment to be ready")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		msg, err = waitForDeployment(oc, podNs, deployName)
+		if err != nil {
+			e2e.Logf("Deployment didn't reached expected state: %v %v", msg, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// If the deployment is ready, pod will be.  Might not need this
+		g.By("Wait for pods to be ready")
+		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+			if !strings.Contains(msg, "No resources found") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for pods %v %v", msg, err))
+
+		g.By("Expose deployment and it's service")
+		msg, err = oc.WithoutNamespace().Run("expose").Args("deployment", deployName, "-n", podNs).Output()
+		if err != nil {
+			e2e.Logf("Expose deployment failed with: %v %v", msg, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "-n", podNs, deployName, "--ignore-not-found").Execute()
+
+		msg, err = oc.Run("expose").Args("service", deployName, "-n", podNs).Output()
+		if err != nil {
+			e2e.Logf("Expose service failed with: %v %v", msg, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", "-n", podNs, deployName, "--ignore-not-found").Execute()
+
+		host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", deployName, "-n", podNs, "-o", "jsonpath='{.spec.host}'").Output()
+		if err != nil || host == "" {
+			e2e.Logf("Failed to get host from route, actual host=%v\n error %v", host, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		host = strings.Trim(host, "'")
+		e2e.Logf("route host=%v", host)
+
+		g.By("send request via the route")
+		resp, err := getHttpResponse("http://"+host, statusCode)
+		if err != nil {
+			e2e.Logf("send request via the route failed with: %v", err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(resp, testPageBody)).To(o.BeTrue())
+
+		g.By("SUCCESSS - deployment Expose service finished successfully")
+	})
 })

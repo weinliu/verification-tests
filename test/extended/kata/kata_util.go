@@ -3,7 +3,9 @@ package kata
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -764,4 +766,22 @@ func getAllKataNodes(oc *exutil.CLI, eligibility bool, opNamespace, featureLabel
 	}
 	nodeList, msg, err := getNodeListByLabel(oc, opNamespace, actLabel)
 	return nodeList, msg, err
+}
+
+func getHttpResponse(url string, expStatusCode int) (resp string, err error) {
+	res, err := http.Get(url)
+	if err != nil {
+		e2e.Logf(err.Error())
+	} else if res.StatusCode != expStatusCode {
+		err = fmt.Errorf("Response from url=%v\n actual status code=%d doesn't match expected %d\n", url, res.StatusCode, expStatusCode)
+		e2e.Logf(err.Error())
+	} else {
+		body, err := io.ReadAll(res.Body)
+		defer res.Body.Close()
+		if err != nil {
+			e2e.Logf(err.Error())
+		}
+		resp = string(body)
+	}
+	return resp, err
 }
