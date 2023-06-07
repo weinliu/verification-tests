@@ -858,3 +858,35 @@ func removeDateFromRpmOstreeStatus(rpmOstreeStatus string) string {
 	m1 := regexp.MustCompile(`\([\-:\dTZ]*\)`)
 	return m1.ReplaceAllString(rpmOstreeStatus, "")
 }
+
+// BreakRebootInNode break the reboot process in a node, so that errors will happen when the node is rebooted
+func BreakRebootInNode(node *Node) error {
+	logger.Infof("Breaking reboot process in node %s", node.GetName())
+	_, err := node.DebugNodeWithChroot("sh", "-c", "mount -o remount,rw /usr; mv /usr/bin/systemd-run /usr/bin/systemd-run2")
+	return err
+}
+
+// FixRebootInNode fixes the problem what BreaKRebootInNode function created in a node
+func FixRebootInNode(node *Node) error {
+	logger.Infof("Fixing reboot process in node %s", node.GetName())
+	_, err := node.DebugNodeWithChroot("sh", "-c", "mount -o remount,rw /usr; mv /usr/bin/systemd-run2 /usr/bin/systemd-run")
+	return err
+}
+
+// BreakRebaseInNode break the rebase rpm-ostree subcommnad in a node, so that errors will happen when the node tries to rebase
+func BreakRebaseInNode(node *Node) error {
+	logger.Infof("Breaking rpm-ostree rebase process in node %s", node.GetName())
+	brokenRpmOstree := generateTemplateAbsolutePath("rpm-ostree-force-pivot-error.sh")
+	node.CopyFromLocal(brokenRpmOstree, "/tmp/rpm-ostree.broken")
+	// It is very important the "-Z" option when we replace the original rpm-ostree file, because it will set the default selinux options for the file.
+	// If we don't use this "-Z" option and the file has the wrong selinux type the test will fail because "rpm-ostree kargs" command cannot succeed
+	_, err := node.DebugNodeWithChroot("sh", "-c", "mount -o remount,rw /usr; mv /usr/bin/rpm-ostree /usr/bin/rpm-ostree2 && mv -Z /tmp/rpm-ostree.broken /usr/bin/rpm-ostree && chmod +x /usr/bin/rpm-ostree")
+	return err
+}
+
+// FixRebaseInNode fixes the problem what BreaKRebootInNode function created in a node
+func FixRebaseInNode(node *Node) error {
+	logger.Infof("Fixing rpm-ostree rebase process in node %s", node.GetName())
+	_, err := node.DebugNodeWithChroot("sh", "-c", "mount -o remount,rw /usr; mv /usr/bin/rpm-ostree2 /usr/bin/rpm-ostree")
+	return err
+}

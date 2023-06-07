@@ -259,6 +259,16 @@ func (mcp *MachineConfigPool) GetSortedNodes() ([]Node, error) {
 
 }
 
+// GetSortedNodesOrFail returns a list with the nodes that belong to the machine config pool in the same order used to update them
+// when a configuration is applied. If any error happens while getting the list, then the test is failed.
+func (mcp *MachineConfigPool) GetSortedNodesOrFail() []Node {
+	nodes, err := mcp.GetSortedNodes()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(),
+		"Cannot get the list of nodes that belong to '%s' MCP", mcp.GetName())
+
+	return nodes
+}
+
 // GetSortedUpdatedNodes returns the list of the UpdatedNodes sorted by the time when they started to be updated.
 // If maxUnavailable>0, then the function will fail if more that maxUpdatingNodes are being updated at the same time
 func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
@@ -546,6 +556,20 @@ func GetCompactCompatiblePool(oc *exutil.CLI) *MachineConfigPool {
 	)
 	if len(wMcp.GetNodesOrFail()) == 0 {
 		logger.Infof("Running in SNO/Compact cluster. Using master pool for testing")
+		return mMcp
+	}
+
+	return wMcp
+}
+
+// GetCoreOsCompatiblePool returns worker pool if it has CoreOs nodes. If there is no CoreOs node in the worker pool, then it returns master pool.
+func GetCoreOsCompatiblePool(oc *exutil.CLI) *MachineConfigPool {
+	var (
+		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+	)
+	if len(wMcp.GetCoreOsNodesOrFail()) == 0 {
+		logger.Infof("No CoreOs nodes in the worker pool. Using master pool for testing")
 		return mMcp
 	}
 
