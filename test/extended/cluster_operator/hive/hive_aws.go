@@ -2579,4 +2579,92 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName2, nok, FakeClusterInstallTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
 
 	})
+
+	//author: kcui@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "29907"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-High-29907-[AWS]Hive handles owner references after Velero restore[Serial]", func() {
+		testCaseID := "29907"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: cdName + "." + AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		g.By("Create Route53-aws-creds in hive namespace")
+		createRoute53AWSCreds(oc, oc.Namespace())
+
+		g.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "true",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           cdName + "." + AWSBaseDomain,
+			clusterName:          cdName,
+			manageDNS:            true,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 3,
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		e2e.Logf("Check dnszone has been created.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName+"-zone", ok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
+
+		g.By("check and record the messages of .metadata.ownerReferences1 and .metadata.resourceVersion1")
+		stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences[0]}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var ownerReferences1 map[string]any
+		err = json.Unmarshal([]byte(stdout), &ownerReferences1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		resourceVersion1, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "-o=jsonpath={.metadata.resourceVersion}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("delete ownerReferences of the dnszone")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "--type=json", "-p", `[{"op":"remove", "path": "/metadata/ownerReferences"}]`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check and record the messages of .metadata.ownerReferences2 and .metadata.resourceVersion2")
+		stdout, _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences[0]}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var ownerReferences2 map[string]any
+		err = json.Unmarshal([]byte(stdout), &ownerReferences2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		resourceVersion2, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "-o=jsonpath={.metadata.resourceVersion}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check the .metadata.ownerReferences is the same as before and the .metadata.resourceVersion is different")
+		CheckSameOrNot := func() bool {
+			if ownerReferences1["apiVersion"] == "" || ownerReferences1["blockOwnerDeletion"] != true || ownerReferences1["controller"] != true ||
+				ownerReferences1["kind"] != "ClusterDeployment" || ownerReferences1["name"] != cdName || ownerReferences1["uid"] == "" || resourceVersion1 == "" {
+				e2e.Logf("messages of ownerReferences1 or resourceVersion1 is wrong")
+				return false
+			}
+			if ownerReferences2["apiVersion"] == "" || ownerReferences2["blockOwnerDeletion"] != true || ownerReferences2["controller"] != true ||
+				ownerReferences2["kind"] != "ClusterDeployment" || ownerReferences2["name"] != cdName || ownerReferences2["uid"] == "" || resourceVersion2 == "" {
+				e2e.Logf("messages of ownerReferences2 or resourceVersion2 is wrong")
+				return false
+			}
+			if ownerReferences1["apiVersion"] != ownerReferences2["apiVersion"] || ownerReferences1["uid"] != ownerReferences2["uid"] || resourceVersion1 == resourceVersion2 {
+				e2e.Logf("ownerReferences1 or resourceVersion1 doesn't match the ownerReferences2 or resourceVersion2")
+				return false
+			}
+			return true
+		}
+		o.Eventually(CheckSameOrNot).WithTimeout(15 * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+	})
+
 })
