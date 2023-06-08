@@ -1340,8 +1340,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err = waitForPodWithLabelAppear(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=ocp50819two")
 		exutil.AssertWaitPollNoErr(err, "router pod of the second custom IC does not appear  within allowed time!")
 		customICRouterPod := getPodName(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=ocp50819two")
-		checkPodEvent := describePodResource(oc, customICRouterPod[0], "openshift-ingress")
-		o.Expect(checkPodEvent).To(o.ContainSubstring("node(s) didn't have free ports for the requested pod ports"))
+		checkPodMsg := fetchJSONPathValue(oc, "openshift-ingress", "pod/"+customICRouterPod[0], ".status..message")
+		o.Expect(checkPodMsg).To(o.ContainSubstring("node(s) didn't have free ports for the requested pod ports"))
 	})
 
 	// author: shudili@redhat.com
