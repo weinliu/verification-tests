@@ -4734,6 +4734,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterVersionShort := strings.Split(clusterVersion, "-")[0]
 		e2e.Logf("cluster verison is %s", clusterVersionShort)
+		clusterVersionMajorMinor := strings.Split(clusterVersionShort, ".")[0] + "." + strings.Split(clusterVersionShort, ".")[1]
 
 		subPods := []string{"catalog-operator", "olm-operator", "packageserver"}
 		for _, v := range subPods {
@@ -4749,7 +4750,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 			olmVersionString := strings.Split(output, "\n")[0]
 			olmVersion := strings.TrimSpace(strings.Split(olmVersionString, ":")[1])
 			e2e.Logf("olm verison is %s", olmVersion)
-			o.Expect(strings.HasPrefix(olmVersion, clusterVersionShort)).To(o.BeTrue())
+			o.Expect(strings.HasPrefix(olmVersion, clusterVersionMajorMinor)).To(o.BeTrue())
 		}
 
 		clusterOperators := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog"}
@@ -4757,7 +4758,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 			version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", co, `-o=jsonpath={.status.versions[?(@.name=="operator-lifecycle-manager")].version}`).Output()
 			e2e.Logf("verison is %s", version)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.HasPrefix(version, clusterVersionShort)).To(o.BeTrue())
+			o.Expect(strings.HasPrefix(version, clusterVersionMajorMinor)).To(o.BeTrue())
 		}
 	})
 
