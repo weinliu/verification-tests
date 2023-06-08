@@ -139,6 +139,19 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 			e2e.Failf("etcd Image update to target release failed")
 		}
 	})
+
+	// author: skundu@redhat.com
+	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Critical-64148-Verify etcd-bootstrap member is removed properly [Serial]", func() {
+		g.By("Test for case OCP-64148 Verify etcd-bootstrap member is removed properly.")
+
+		g.By("Verifying etcd cluster message and status")
+		res := verifyEtcdClusterMsgStatus(oc, "etcd-bootstrap member is already removed", "True")
+		if res {
+			e2e.Logf("etcd bootstrap member successfully removed")
+		} else {
+			e2e.Failf("failed to remove the etcd bootstrap member")
+		}
+	})
 })
 var _ = g.Describe("[sig-etcd] ETCD Microshift", func() {
 	defer g.GinkgoRecover()

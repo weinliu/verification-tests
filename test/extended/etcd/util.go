@@ -150,3 +150,17 @@ func waitForMicroshiftAfterRestart(oc *exutil.CLI, nodename string) {
 	})
 	exutil.AssertWaitPollNoErr(mStatusErr, fmt.Sprintf("Microshift failed to restart: %v", mStatusErr))
 }
+
+func verifyEtcdClusterMsgStatus(oc *exutil.CLI, msg string, status string) bool {
+	etcdStatus, errSt := oc.AsAdmin().WithoutNamespace().Run("get").Args("etcd", "cluster", "-o=jsonpath='{.status.conditions[?(@.reason==\"BootstrapAlreadyRemoved\")].status}'").Output()
+	o.Expect(errSt).NotTo(o.HaveOccurred())
+	message, errMsg := oc.AsAdmin().WithoutNamespace().Run("get").Args("etcd", "cluster", "-o=jsonpath='{.status.conditions[?(@.reason==\"BootstrapAlreadyRemoved\")].message}'").Output()
+	o.Expect(errMsg).NotTo(o.HaveOccurred())
+	found := false
+	if strings.Contains(message, msg) && strings.Contains(etcdStatus, status) {
+		e2e.Logf("message is %v and status is %v", message, etcdStatus)
+		found = true
+	}
+	return found
+
+}
