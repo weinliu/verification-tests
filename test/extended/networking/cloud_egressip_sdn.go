@@ -1111,6 +1111,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var ospObj exutil.Osp
 		var vspObj *exutil.Vmware
 		var vspClient *govmomi.Client
+		nutanixClient, errNutanix := exutil.InitNutanixClient(oc)
+		o.Expect(errNutanix).NotTo(o.HaveOccurred())
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected, stop the instance %v on AWS now \n", foundHost)
@@ -1165,6 +1167,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer startVMOnIPIBM(oc, foundHost)
 			stopErr := stopVMOnIPIBM(oc, foundHost)
 			o.Expect(stopErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		case "nutanix":
+			e2e.Logf("\n Nutanix is detected, stop the instance %v on nutanix now \n", foundHost)
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer startInstanceOnNutanix(nutanixClient, foundHost)
+			stopInstanceOnNutanix(nutanixClient, foundHost)
 			checkNodeStatus(oc, foundHost, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -1234,6 +1242,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer checkNodeStatus(oc, foundHost, "Ready")
 			startErr := startVMOnIPIBM(oc, foundHost)
 			o.Expect(startErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
+		case "nutanix":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			startInstanceOnNutanix(nutanixClient, foundHost)
 			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -1370,6 +1382,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var ospObj exutil.Osp
 		var vspObj *exutil.Vmware
 		var vspClient *govmomi.Client
+		nutanixClient, errNutanix := exutil.InitNutanixClient(oc)
+		o.Expect(errNutanix).NotTo(o.HaveOccurred())
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected, stop the instance %v on AWS now \n", foundHost)
@@ -1425,6 +1439,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer startVMOnIPIBM(oc, foundHost)
 			stopErr := stopVMOnIPIBM(oc, foundHost)
 			o.Expect(stopErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		case "nutanix":
+			e2e.Logf("\n Nutanix is detected, stop the instance %v on nutanix now \n", foundHost)
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer startInstanceOnNutanix(nutanixClient, foundHost)
+			stopInstanceOnNutanix(nutanixClient, foundHost)
 			checkNodeStatus(oc, foundHost, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -1491,6 +1511,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer checkNodeStatus(oc, foundHost, "Ready")
 			startErr := startVMOnIPIBM(oc, foundHost)
 			o.Expect(startErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
+		case "nutanix":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			startInstanceOnNutanix(nutanixClient, foundHost)
 			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -2892,6 +2916,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var ospObj exutil.Osp
 		var vspObj *exutil.Vmware
 		var vspClient *govmomi.Client
+		nutanixClient, errNutanix := exutil.InitNutanixClient(oc)
+		o.Expect(errNutanix).NotTo(o.HaveOccurred())
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected, stop the instance %v on AWS now \n", foundHost)
@@ -2946,6 +2972,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer startVMOnIPIBM(oc, foundHost)
 			stopErr := stopVMOnIPIBM(oc, foundHost)
 			o.Expect(stopErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		case "nutanix":
+			e2e.Logf("\n Nutanix is detected, stop the instance %v on nutanix now \n", foundHost)
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer startInstanceOnNutanix(nutanixClient, foundHost)
+			stopInstanceOnNutanix(nutanixClient, foundHost)
 			checkNodeStatus(oc, foundHost, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -3012,6 +3044,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer checkNodeStatus(oc, foundHost, "Ready")
 			startErr := startVMOnIPIBM(oc, foundHost)
 			o.Expect(startErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
+		case "nutanix":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			startInstanceOnNutanix(nutanixClient, foundHost)
 			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
