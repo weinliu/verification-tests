@@ -76,32 +76,31 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create machineset with instance type other than default in cluster")
 		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		architecture.SkipNonAmd64SingleArch(oc)
-		platform := exutil.CheckPlatform(oc)
-		if platform == "aws" {
-			ms := exutil.MachineSetDescription{"machineset-45430", 0}
-			defer ms.DeleteMachineSet(oc)
-			ms.CreateMachineSet(oc)
-			g.By("Update machineset with instanceType")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, "machineset-45430", "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"instanceType": "m5.4xlarge"}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Create MachineAutoscaler")
-			defer machineAutoscaler.deleteMachineAutoscaler(oc)
-			machineAutoscaler.createMachineAutoscaler(oc)
+		ms := exutil.MachineSetDescription{"machineset-45430", 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with instanceType")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, "machineset-45430", "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"instanceType": "m5.4xlarge"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Create clusterautoscaler")
-			defer clusterAutoscaler.deleteClusterAutoscaler(oc)
-			clusterAutoscaler.createClusterAutoscaler(oc)
+		g.By("Create MachineAutoscaler")
+		defer machineAutoscaler.deleteMachineAutoscaler(oc)
+		machineAutoscaler.createMachineAutoscaler(oc)
 
-			g.By("Create workload")
-			defer workLoad.deleteWorkLoad(oc)
-			workLoad.createWorkLoad(oc)
+		g.By("Create clusterautoscaler")
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+		clusterAutoscaler.createClusterAutoscaler(oc)
 
-			g.By("Check machine could be created successful")
-			// Creat a new machine taking roughly 5 minutes , set timeout as 7 minutes
-			exutil.WaitForMachinesRunning(oc, 1, "machineset-45430")
-		}
+		g.By("Create workload")
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+
+		g.By("Check machine could be created successful")
+		// Creat a new machine taking roughly 5 minutes , set timeout as 7 minutes
+		exutil.WaitForMachinesRunning(oc, 1, "machineset-45430")
 	})
 
 	//author: zhsun@redhat.com
