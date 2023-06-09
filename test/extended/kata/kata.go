@@ -1159,26 +1159,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for pods %v %v", msg, err))
 
 		g.By("Expose deployment and it's service")
-		msg, err = oc.WithoutNamespace().Run("expose").Args("deployment", deployName, "-n", podNs).Output()
-		if err != nil {
-			e2e.Logf("Expose deployment failed with: %v %v", msg, err)
-		}
+		defer deleteRouteAndService(oc, deployName, podNs)
+		host, err := createServiceAndRoute(oc, deployName, podNs)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "-n", podNs, deployName, "--ignore-not-found").Execute()
-
-		msg, err = oc.Run("expose").Args("service", deployName, "-n", podNs).Output()
-		if err != nil {
-			e2e.Logf("Expose service failed with: %v %v", msg, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", "-n", podNs, deployName, "--ignore-not-found").Execute()
-
-		host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", deployName, "-n", podNs, "-o", "jsonpath='{.spec.host}'").Output()
-		if err != nil || host == "" {
-			e2e.Logf("Failed to get host from route, actual host=%v\n error %v", host, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-		host = strings.Trim(host, "'")
 		e2e.Logf("route host=%v", host)
 
 		g.By("send request via the route")

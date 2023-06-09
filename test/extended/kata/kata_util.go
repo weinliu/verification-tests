@@ -769,19 +769,45 @@ func getAllKataNodes(oc *exutil.CLI, eligibility bool, opNamespace, featureLabel
 }
 
 func getHttpResponse(url string, expStatusCode int) (resp string, err error) {
+	resp = ""
 	res, err := http.Get(url)
-	if err != nil {
-		e2e.Logf(err.Error())
-	} else if res.StatusCode != expStatusCode {
-		err = fmt.Errorf("Response from url=%v\n actual status code=%d doesn't match expected %d\n", url, res.StatusCode, expStatusCode)
-		e2e.Logf(err.Error())
-	} else {
-		body, err := io.ReadAll(res.Body)
+	if err == nil {
 		defer res.Body.Close()
-		if err != nil {
-			e2e.Logf(err.Error())
+		if res.StatusCode != expStatusCode {
+			err = fmt.Errorf("Response from url=%v\n actual status code=%d doesn't match expected %d\n", url, res.StatusCode, expStatusCode)
+		} else {
+			body, err := io.ReadAll(res.Body)
+			if err == nil {
+				resp = string(body)
+			}
 		}
-		resp = string(body)
 	}
 	return resp, err
+}
+
+// create a service and route for the deployment, both with the same name as deployment itself
+// require defer deleteRouteAndService to cleanup
+func createServiceAndRoute(oc *exutil.CLI, deployName, podNs string) (host string, err error) {
+	msg, err := oc.WithoutNamespace().Run("expose").Args("deployment", deployName, "-n", podNs).Output()
+	if err != nil {
+		e2e.Logf("Expose deployment failed with: %v %v", msg, err)
+	} else {
+		msg, err = oc.Run("expose").Args("service", deployName, "-n", podNs).Output()
+		if err != nil {
+			e2e.Logf("Expose service failed with: %v %v", msg, err)
+		} else {
+			host, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", deployName, "-n", podNs, "-o=jsonpath={.spec.host}").Output()
+			if err != nil || host == "" {
+				e2e.Logf("Failed to get host from route, actual host=%v\n error %v", host, err)
+			}
+			host = strings.Trim(host, "'")
+		}
+	}
+	return host, err
+}
+
+// cleanup for createServiceAndRoute func
+func deleteRouteAndService(oc *exutil.CLI, deployName, podNs string) {
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "-n", podNs, deployName, "--ignore-not-found").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", "-n", podNs, deployName, "--ignore-not-found").Execute()
 }
