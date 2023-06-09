@@ -6206,7 +6206,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "OLM 1933 v8 Operator Catalog",
 				publisher:   "QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:v11",
+				address:     "quay.io/olmqe/olm-dep:v12",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -6223,7 +6223,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:               subTemplate,
 				singleNamespace:        true,
 			}
-			dependentOperator = "buildv2-operator.v0.3.0"
+			dependentOperator = "nginx-ok1-1399.v0.0.5"
 		)
 		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
