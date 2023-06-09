@@ -1072,6 +1072,47 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert2"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert2", 3*uwmLoadTime)
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert2"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", `"generatorURL":"http://prometheus-user-workload-1:9090`, 3*uwmLoadTime)
 		})
+
+		// author: tagao@redhat.com
+		g.It("Author:tagao-Medium-43311-Allow sending alerts to external Alertmanager for user workload monitoring components - disabled in-cluster alertmanager [Serial]", func() {
+			var (
+				InClusterMonitoringCM = filepath.Join(monitoringBaseDir, "disLocalAlert-setExternalAlert-prometheus.yaml")
+				testAlertmanager      = filepath.Join(monitoringBaseDir, "example-alertmanager.yaml")
+				exampleAlert          = filepath.Join(monitoringBaseDir, "example-alert-rule.yaml")
+			)
+			g.By("Restore cluster monitoring stack default configuration")
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanager", "test-alertmanager", "-n", "openshift-user-workload-monitoring", "--ignore-not-found").Execute()
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+			g.By("disable local alertmanager and set external manager for prometheus")
+			createResourceFromYaml(oc, "openshift-monitoring", InClusterMonitoringCM)
+
+			g.By("create alertmanager and set external alertmanager for prometheus/thanosRuler under openshift-user-workload-monitoring")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", testAlertmanager)
+			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
+
+			g.By("check alertmanager pod is created")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "alertmanager=test-alertmanager", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(output).To(o.ContainSubstring("alertmanager-test-alertmanager-0"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("create example PrometheusRule under user namespace")
+			oc.SetupProject()
+			ns1 := oc.Namespace()
+			createResourceFromYaml(oc, ns1, exampleAlert)
+
+			g.By("Get token of SA prometheus-k8s")
+			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+			g.By("check the user alerts TestAlert1 and in-cluster Watchdog alerts are shown in \"thanos-querier\" API")
+			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="TestAlert1"}'`, token, `TestAlert1`, 3*platformLoadTime)
+			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="Watchdog"}'`, token, `Watchdog`, 3*platformLoadTime)
+
+			g.By("check the alerts are also sent to external alertmanager, include the in-cluster and user project alerts")
+			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert1", 3*uwmLoadTime)
+			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="Watchdog"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "Watchdog", 3*uwmLoadTime)
+		})
 	})
 
 	//author: tagao@redhat.com
