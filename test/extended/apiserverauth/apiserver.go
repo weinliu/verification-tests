@@ -4994,7 +4994,7 @@ type: kubernetes.io/service-account-token`
 	})
 
 	// author: kewang@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11289-[origin_platformexp_407] [Apiserver] Check the imagestreams of quota in the project after build image", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11289-[origin_platformexp_407] [Apiserver] Check the imagestreams of quota in the project after build image [Serial]", func() {
 		var (
 			caseID                  = "ocp-11289"
 			dirname                 = "/tmp/-" + caseID
