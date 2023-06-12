@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		oc.SetupProject()
 
 		g.By("Check if operator installed or not")
-		out, err := oc.AsAdmin().Run("get").Args("sub", "-A").Output()
+		out, err := oc.AsAdmin().Run("get").Args("operators").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("No resources found", out); matched {
 			g.Skip("Skip for no operator installed")
