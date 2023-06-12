@@ -228,6 +228,10 @@ func RecoverNamespaceRestricted(oc *CLI, namespace string) error {
 	return nil
 }
 
+func (c *CLI) GetKubeconf() string {
+	return c.configPath
+}
+
 // NotShowInfo instructs the command will not be logged
 func (c *CLI) NotShowInfo() *CLI {
 	c.showInfo = false
@@ -240,9 +244,21 @@ func (c *CLI) SetShowInfo() *CLI {
 	return c
 }
 
+// SetKubeconf instructs the cluster kubeconf file is set
+func (c *CLI) SetKubeconf(kubeconf string) *CLI {
+	c.configPath = kubeconf
+	return c
+}
+
 // SetGuestKubeconf instructs the guest cluster kubeconf file is set
 func (c *CLI) SetGuestKubeconf(guestKubeconf string) *CLI {
 	c.guestConfigPath = guestKubeconf
+	return c
+}
+
+// SetAdminKubeconf instructs the admin cluster kubeconf file is set
+func (c *CLI) SetAdminKubeconf(adminKubeconf string) *CLI {
+	c.adminConfigPath = adminKubeconf
 	return c
 }
 

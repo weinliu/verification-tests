@@ -2,6 +2,7 @@ package hive
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -12,6 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -111,6 +115,23 @@ type clusterDeployment struct {
 	pullSecretRef        string
 	installAttemptsLimit int
 	template             string
+}
+
+type clusterDeploymentAdopt struct {
+	name               string
+	namespace          string
+	baseDomain         string
+	adminKubeconfigRef string
+	clusterID          string
+	infraID            string
+	clusterName        string
+	manageDNS          bool
+	platformType       string
+	credRef            string
+	region             string
+	pullSecretRef      string
+	preserveOnDelete   bool
+	template           string
 }
 
 type machinepool struct {
@@ -475,6 +496,11 @@ func (cluster *clusterDeployment) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+func (cluster *clusterDeploymentAdopt) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "ADMINKUBECONFIGREF="+cluster.adminKubeconfigRef, "CLUSTERID="+cluster.clusterID, "INFRAID="+cluster.infraID, "CLUSTERNAME="+cluster.clusterName, "MANAGEDNS="+strconv.FormatBool(cluster.manageDNS), "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "PULLSECRETREF="+cluster.pullSecretRef, "PRESERVEONDELETE="+strconv.FormatBool(cluster.preserveOnDelete))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func (machine *machinepool) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME="+machine.clusterName, "NAMESPACE="+machine.namespace, "IOPS="+strconv.Itoa(machine.iops))
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -599,7 +625,7 @@ type checkDescription struct {
 const (
 	asAdmin          = true
 	withoutNamespace = true
-	requireNS        = true
+	requireNS        = false
 	compare          = true
 	contain          = false
 	present          = true
@@ -1432,4 +1458,29 @@ func getCondition(oc *exutil.CLI, kind, resourceName, namespace, conditionType s
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return condition
+}
+
+// Get AWS credentials stored in the root Secret
+func extractAWSCredentials(oc *exutil.CLI) (AWSAccessKeyID string, AWSSecretAccessKey string) {
+	AWSAccessKeyID, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_access_key_id", "--to=-").Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	AWSSecretAccessKey, _, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_secret_access_key", "--to=-").Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return
+}
+
+// Get default external configurations for AWS SDK v2
+func getDefaultAWSConfig(oc *exutil.CLI, region string) aws.Config {
+	// Extract AWS credentials
+	AWSAccessKeyID, AWSSecretAccessKey := extractAWSCredentials(oc)
+
+	// Get default AWS config
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(AWSAccessKeyID, AWSSecretAccessKey, "")),
+		config.WithRegion(region),
+	)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	return cfg
 }

@@ -1773,12 +1773,184 @@ spec:
 
 		g.By("OCP-22382: clusterdeployment.spec does not allow edit during an update")
 		e2e.Logf("Make sure a provision Pod is created in the project's namespace")
-		newCheck("expect", "get", asAdmin, requireNS, contain, "-provision-", ok, DefaultTimeout, []string{"pod", "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "-provision-", ok, DefaultTimeout, []string{"pod", "-n", oc.Namespace()}).check(oc)
 
 		e2e.Logf("Now attempt to modify clusterdeployment.spec")
 		output, err := oc.AsAdmin().Run("patch").Args("cd", cdName, "--type=merge", "-p", "{\"spec\":{\"baseDomain\": \"qe1.devcluster.openshift.com\"}}").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Attempted to change ClusterDeployment.Spec which is immutable"))
+	})
+
+	//author: fxie@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "42721"|./bin/extended-platform-tests run --timeout 70m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-22379-Medium-42721-[AWS]Adopt clusters to Hive [Serial]", func() {
+		testCaseID := "42721"
+		resourceNameSuffix := testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+
+		e2e.Logf("Create ClusterImageSet")
+		imageSetName := "clusterimageset-" + resourceNameSuffix
+		clusterImageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		clusterImageSet.create(oc)
+
+		e2e.Logf("Copy AWS root credentials & pull-secret to the temporary namespace")
+		createAWSCreds(oc, oc.Namespace())
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create ClusterPool, wait for it to be ready")
+		poolName := "clusterpool-" + resourceNameSuffix
+		clusterPool := clusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "false",
+			baseDomain:     AWSBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "aws",
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
+			size:           2,
+			maxSize:        2,
+			runningCount:   2,
+			maxConcurrent:  2,
+			hibernateAfter: "3h",
+			template:       filepath.Join(testDataDir, "clusterpool.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		clusterPool.create(oc)
+		newCheck("expect", "get", asAdmin, requireNS, compare, "2", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-o=jsonpath={.status.ready}"}).check(oc)
+
+		e2e.Logf("Get CDs in the ClusterPool")
+		CDsInPool := strings.Split(strings.Trim(getCDlistfromPool(oc, poolName), "\n"), "\n")
+		o.Expect(len(CDsInPool)).To(o.Equal(2))
+		// We will use the 2 CDs as another Hive cluster and the cluster to adopt respectively
+		hiveCluster2, clusterToAdopt := CDsInPool[0], CDsInPool[1]
+
+		e2e.Logf("Get kubeconfig of Hive cluster 2 (%v) and the cluster to adopt (%v)", hiveCluster2, clusterToAdopt)
+		tmpDir2 := "/tmp/" + hiveCluster2 + "-" + getRandomString()
+		defer os.RemoveAll(tmpDir2)
+		err := os.MkdirAll(tmpDir2, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getClusterKubeconfig(oc, hiveCluster2, hiveCluster2, tmpDir2)
+		kubeconfig2 := tmpDir2 + "/kubeconfig"
+
+		tmpDirToAdopt := "/tmp/" + clusterToAdopt + "-" + getRandomString()
+		defer os.RemoveAll(tmpDirToAdopt)
+		err = os.MkdirAll(tmpDirToAdopt, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getClusterKubeconfig(oc, clusterToAdopt, clusterToAdopt, tmpDirToAdopt)
+		kubeconfigToAdopt := tmpDirToAdopt + "/kubeconfig"
+
+		e2e.Logf("Get infra ID and cluster ID of the cluster to adopt")
+		infraID, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}", "--kubeconfig", kubeconfigToAdopt).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterID, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.spec.clusterID}", "--kubeconfig", kubeconfigToAdopt).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Found infra ID = %v, cluster ID = %v for the cluster to adopt", infraID, clusterID)
+
+		e2e.Logf(`Set up Hive cluster 2 (%v):
+1) Deploy Hive
+2) Copy AWS root credentials to the default namespace
+3) Copy the pull-secret to the default namespace
+4) Create a Secret containing the admin kubeconfig of the cluster to adopt in the default namespace
+`, hiveCluster2)
+		// No need to set up a new project on Hive cluster 2 as it will eventually be de-provisioned.
+		// We will simply use the default namespace for this cluster.
+		// Likewise, there is no need to clean up the resources created on Hive cluster 2.
+		hiveCluster2NS := "default"
+
+		origKubeconfig := oc.GetKubeconf()
+		origAdminKubeconfig := exutil.KubeConfigPath()
+		origNS := oc.Namespace()
+		// Defer an anonymous function so that ALL (chained) setters are executed after running the test case.
+		// The deferred function is executed before all defers above, which means that the oc client object
+		// is restored (i.e. points back to Hive cluster 1) before cleaning up resources on that cluster.
+		// This is what we want.
+		defer func(origKubeconfig, origAdminKubeconfig, origNS string) {
+			oc.SetKubeconf(origKubeconfig).SetAdminKubeconf(origAdminKubeconfig).SetNamespace(origNS)
+		}(origKubeconfig, origAdminKubeconfig, origNS)
+		// From this point on, the oc client object points to Hive cluster 2.
+		oc.SetKubeconf(kubeconfig2).SetAdminKubeconf(kubeconfig2).SetNamespace(hiveCluster2NS)
+
+		// The installHiveOperator() function deploys Hive as admin. To deploy Hive on another cluster (Hive cluster 2 here), we have 3 options:
+		// 1) Create a new oc client object:
+		//    This is complicated as we cannot use the NewCLI() function, which incorporates calls to beforeEach() and afterEach()
+		//    and those two are disallowed in g.It(). Moreover, most fields of the utils.CLI type are internal and lack setters.
+		// 2) Use the existing oc client object, point it to Hive cluster 2, and make sure to restore it at the end.
+		//    This is our approach here.
+		// 3) Modify the existing code s.t. Hive is deployed as non-admin (as guest for ex.):
+		//    This is again complicated as we would need to alter the existing code infrastructure to a large extent.
+		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
+		createAWSCreds(oc, hiveCluster2NS)
+		createPullSecret(oc, hiveCluster2NS)
+		adminKubeconfigSecretName := "admin-kubeconfig-adopt"
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", adminKubeconfigSecretName, "-n", hiveCluster2NS, "--from-file", kubeconfigToAdopt).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(fmt.Sprintf("Adopt cluster %v into cluster %v", clusterToAdopt, hiveCluster2))
+		adoptCDName := clusterToAdopt + "-adopt"
+		adoptCD := clusterDeploymentAdopt{
+			name:               adoptCDName,
+			namespace:          hiveCluster2NS,
+			baseDomain:         AWSBaseDomain,
+			adminKubeconfigRef: adminKubeconfigSecretName,
+			clusterID:          clusterID,
+			infraID:            infraID,
+			clusterName:        adoptCDName,
+			manageDNS:          false,
+			platformType:       "aws",
+			credRef:            AWSCreds,
+			region:             AWSRegion,
+			pullSecretRef:      PullSecret,
+			// OCP-22379: Hive will abandon deprovision for any cluster when preserveOnDelete is true
+			preserveOnDelete: true,
+			template:         filepath.Join(testDataDir, "clusterdeployment-adopt.yaml"),
+		}
+		adoptCD.create(oc)
+
+		g.By("Make sure the adopted CD is running on Hive cluster 2")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, 600, []string{"ClusterDeployment", adoptCDName, "-n", hiveCluster2NS, "-o=jsonpath={.status.powerState}"}).check(oc)
+
+		g.By("Make sure SyncSet works on Hive cluster 2")
+		syncSetName := "syncset-" + resourceNameSuffix
+		configMapName := "configmap-" + resourceNameSuffix
+		configMapNamespace := "namespace-" + resourceNameSuffix
+		syncSetResource := syncSetResource{
+			name:        syncSetName,
+			namespace:   hiveCluster2NS,
+			namespace2:  configMapNamespace,
+			cdrefname:   adoptCDName,
+			cmname:      configMapName,
+			cmnamespace: configMapNamespace,
+			ramode:      "Sync",
+			template:    filepath.Join(testDataDir, "syncset-resource.yaml"),
+		}
+		syncSetResource.create(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName, ok, DefaultTimeout, []string{"cm", configMapName, "-n", configMapNamespace, "--kubeconfig", kubeconfigToAdopt}).check(oc)
+
+		g.By("Delete the adopted CD on Hive cluster 2")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", adoptCDName, "-n", hiveCluster2NS).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Make sure the adopted CD is gone on Hive cluster 2")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, adoptCDName, nok, DefaultTimeout, []string{"ClusterDeployment", "-n", hiveCluster2NS}).check(oc)
+		e2e.Logf("Make sure the cloud resources persist (here we look for the EC2 instances)")
+		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		ec2Client := ec2.NewFromConfig(cfg)
+		describeInstancesOutput, err := ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
+			Filters: []types.Filter{
+				{
+					Name:   aws.String("tag-key"),
+					Values: []string{"kubernetes.io/cluster/" + infraID},
+				},
+			},
+			MaxResults: aws.Int32(6),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(describeInstancesOutput.Reservations)).To(o.Equal(6))
 	})
 
 	//author: lwan@redhat.com fxie@redhat.com
