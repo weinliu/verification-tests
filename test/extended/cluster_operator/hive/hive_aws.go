@@ -143,8 +143,8 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "25443"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Low-25443-[aws]Clusterdeployment contains Status.Condition of SyncSet status in case of sysncset is invalid [Serial]", func() {
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "25443"|./bin/extended-platform-tests run --timeout 70m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Low-25443-Low-29855-[aws]Clusterdeployment contains Status.Condition of SyncSet status in case of syncset is invalid [Serial]", func() {
 		testCaseID := "25443"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -254,6 +254,97 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			return true
 		}
 		o.Eventually(waitForSyncsetFail).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+		g.By("OCP-29855:Hive treates bad syncsets as controller warnings instead of controller errors")
+		waitForClustersyncFail1 := func() bool {
+			condition := getCondition(oc, "clustersync", cdName, oc.Namespace(), "Failed")
+			if status, ok := condition["status"]; !ok || status != "True" {
+				e2e.Logf("For condition Failed, expected status is True, actual status is %v, retrying ...", status)
+				return false
+			}
+			if reason, ok := condition["reason"]; !ok || reason != "Failure" {
+				e2e.Logf("For condition Failed, expected reason is Failure, actual reason is %v, retrying ...", reason)
+				return false
+			}
+			if message, ok := condition["message"]; !ok || strings.Compare(message, fmt.Sprintf("SyncSet %s is failing", syncSetPatchName)) != 0 {
+				e2e.Logf("For condition Failed, expected message is \nSyncSet %v is failing, \nactual reason is %v\n, retrying ...", syncSetPatchName, message)
+				return false
+			}
+			e2e.Logf("For condition Failed, fields status, reason & message all expected, proceeding to the next step ...")
+			return true
+		}
+		o.Eventually(waitForClustersyncFail1).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+		hiveclustersyncPod := "hive-clustersync-0"
+		e2e.Logf(`Check logs of hive-clustersync-0 has a warning log instead of error log`)
+		checkclustersyncLog1 := func() bool {
+			clustersyncLogs, _, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(hiveclustersyncPod, "-n", HiveNamespace).Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(clustersyncLogs, "level=warning msg=\"running the patch command failed\"") {
+				e2e.Logf(`Find target message :level=warning msg="running the patch command failed"`)
+				return true
+			}
+			e2e.Logf(`Still waiting for message :level=warning msg="running the patch command failed"`)
+			return false
+		}
+		o.Eventually(checkclustersyncLog1).WithTimeout(600 * time.Second).WithPolling(60 * time.Second).Should(o.BeTrue())
+		cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetPatchName})
+
+		g.By("Extracting kubeconfig ...")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		defer os.RemoveAll(tmpDir)
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+
+		syncSetSecretName := testCaseID + "-syncset-secret"
+		syncSecretTemp := filepath.Join(testDataDir, "syncset-secret.yaml")
+		sourceName := testCaseID + "-secret"
+		syncSecret := syncSetSecret{
+			name:       syncSetSecretName,
+			namespace:  oc.Namespace(),
+			cdrefname:  cdName,
+			sname:      "secret-not-exist",
+			snamespace: oc.Namespace(),
+			tname:      sourceName,
+			tnamespace: "default",
+			template:   syncSecretTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetSecretName})
+		syncSecret.create(oc)
+		e2e.Logf("Check if Syncset-secret failed to apply.")
+		waitForClustersyncFail2 := func() bool {
+			condition := getCondition(oc, "clustersync", cdName, oc.Namespace(), "Failed")
+			if status, ok := condition["status"]; !ok || status != "True" {
+				e2e.Logf("For condition Failed, expected status is True, actual status is %v, retrying ...", status)
+				return false
+			}
+			if reason, ok := condition["reason"]; !ok || reason != "Failure" {
+				e2e.Logf("For condition Failed, expected reason is Failure, actual reason is %v, retrying ...", reason)
+				return false
+			}
+			if message, ok := condition["message"]; !ok || strings.Compare(message, fmt.Sprintf("SyncSet %s is failing", syncSetSecretName)) != 0 {
+				e2e.Logf("For condition Failed, expected message is \nSyncSet %v is failing, \nactual reason is %v\n, retrying ...", syncSetSecretName, message)
+				return false
+			}
+			e2e.Logf("For condition Failed, fields status, reason & message all expected, proceeding to the next step ...")
+			return true
+		}
+		o.Eventually(waitForClustersyncFail2).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+		e2e.Logf("Check target cluster doesn't have this secret.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, sourceName, nok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "secret"}).check(oc)
+		e2e.Logf(`Check logs of hive-clustersync-0 doesn't have error log`)
+		checkclustersyncLog2 := func() bool {
+			clustersyncLogs, _, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(hiveclustersyncPod, "-n", HiveNamespace).Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(clustersyncLogs, fmt.Sprintf("level=info msg=\"cannot read secret\" SyncSet=%s", syncSetSecretName)) {
+				e2e.Logf(`Find target message :level=info msg="cannot read secret"`)
+				return true
+			}
+			e2e.Logf(`Still waiting for message :level=info msg="cannot read secret"`)
+			return false
+		}
+		o.Eventually(checkclustersyncLog2).WithTimeout(600 * time.Second).WithPolling(60 * time.Second).Should(o.BeTrue())
 	})
 
 	//author: fxie@redhat.com
