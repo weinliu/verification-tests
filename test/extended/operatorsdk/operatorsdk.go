@@ -3153,7 +3153,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		// update the Dockerfile
 		dockerFilePath := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFilePath, "golang:1.19", "quay.io/olmqe/golang:1.19")
+		replaceContent(dockerFilePath, "golang:", "quay.io/olmqe/golang:")
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
@@ -4564,7 +4564,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		// update the Dockerfile
 		dockerFilePath := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFilePath, "golang:1.19", "quay.io/olmqe/golang:1.19")
+		replaceContent(dockerFilePath, "golang:", "quay.io/olmqe/golang:")
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
