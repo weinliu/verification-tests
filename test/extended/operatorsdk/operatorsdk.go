@@ -3708,6 +3708,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		if upstream {
+			replaceContent(rbacFilePath, "gcr.io/kubebuilder/kube-rbac-proxy:", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion+" #")
+		}
 
 		g.By("step: make bundle.")
 		// copy manifests
@@ -3904,6 +3907,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		if upstream {
+			replaceContent(rbacFilePath, "gcr.io/kubebuilder/kube-rbac-proxy:", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion+" #")
+		}
 
 		g.By("step: Install kustomize")
 		kustomizePath := "/root/kustomize"
