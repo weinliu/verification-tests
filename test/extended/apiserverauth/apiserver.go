@@ -2868,7 +2868,15 @@ spec:
 		} else {
 			serviceEndpoint = fmt.Sprintf("[%v]:%v", serviceIP.String(), randomServicePort)
 		}
-		servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceEndpoint).Output()
+		// retry 3 times, sometimes, the endpoint is not ready for accessing.
+		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceEndpoint).Output()
+			if err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Unable to access the %s", serviceEndpoint))
 		o.Expect(servicechkerror).NotTo(o.HaveOccurred())
 		o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
 		servicedelerror := oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
