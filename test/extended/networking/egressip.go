@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 
@@ -41,7 +42,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("Label EgressIP node")
 		var EgressNodeLabel = "k8s.ovn.org/egress-assignable"
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		if err != nil {
 			e2e.Logf("Unexpected error occurred: %v", err)
 		}

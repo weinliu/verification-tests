@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os/exec"
@@ -259,7 +260,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			g.By("Label EgressIP node")
 			var EgressNodeLabel = "k8s.ovn.org/egress-assignable"
-			nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+			nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 			if err != nil {
 				e2e.Logf("Unexpected error occurred: %v", err)
 			}
@@ -309,7 +310,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+ip+"\"]}")
 			defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 
-			nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+			nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			egressNode := nodeList.Items[0].Name
 			patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+ip+"\"]}")
@@ -672,7 +673,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		)
 
 		g.By("1. Get list of nodes")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
 		if !ok || egressNodes == nil || len(egressNodes) < 2 {

@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -167,7 +168,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1.1 Label EgressIP node")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 		g.By("1.2 Apply EgressLabel Key to one node.")
@@ -297,7 +298,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1.1 Label EgressIP node")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 		g.By("1.2 Apply EgressLabel Key to one node.")
@@ -399,7 +400,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("1. Get two worker nodes with same subnets")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
 		if !ok || egressNodes == nil || len(egressNodes) < 2 {
@@ -443,7 +444,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet \n")
 		var egressNode1, egressNode2 string
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
 		if !ok || egressNodes == nil || len(egressNodes) < 2 {
@@ -541,7 +542,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1.1 Label EgressIP node\n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 		g.By("1.2 Apply EgressLabel Key to one node.\n")
@@ -641,7 +642,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ns1 := oc.Namespace()
 
 		g.By("Label EgressIP node\n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
 		if !ok || egressNodes == nil || len(egressNodes) < 2 {
@@ -794,7 +795,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
 
 		g.By("1. Label EgressIP node\n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		egressNode := nodeList.Items[0].Name
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -909,7 +910,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("1. Label EgressIP node\n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		egressNode := nodeList.Items[0].Name
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1052,7 +1053,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ns1 := oc.Namespace()
 
 		g.By("2. Label EgressIP node\n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 3 {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
@@ -1386,7 +1387,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("1. Get list of nodes \n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 
@@ -1488,7 +1489,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 		ns := "56875-upgrade-ns"
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
@@ -1578,7 +1579,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		nodeNum := 2
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < nodeNum {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
@@ -1782,7 +1783,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1 Get list of nodes \n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
 		if !ok || egressNodes == nil || len(egressNodes) < 2 {
@@ -1864,7 +1865,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
 
 		g.By("1 Get list of nodes \n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 
@@ -1971,7 +1972,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1 Get list of nodes \n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 
@@ -2079,7 +2080,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		}
 
 		g.By("4 Get list of nodes, pick one as egressNode, apply EgressLabel Key to it \n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 		nodeOVNK8sMgmtIP := getOVNK8sNodeMgmtIPv4(oc, egressNode)
@@ -2157,7 +2158,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
 
 		g.By("1 Get list of nodes \n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
 		if !ok || egressNodes == nil || len(egressNodes) < 2 {
@@ -2235,7 +2236,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	g.It("Author:huirwang-High-55632-After enable egress node, egress node shouldn't generate broadcast ARP for service IPs. [Serial]", func() {
 		e2e.Logf("This case is from customer bug: https://bugzilla.redhat.com/show_bug.cgi?id=2052975")
 		g.By("1 Get list of nodes \n")
-		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
 		egessNode := nodeList.Items[0].Name
 
@@ -2264,7 +2265,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		)
 
 		g.By(" Get list of nodes \n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Apply EgressLabel Key to one node. \n")
 		egessNode := nodeList.Items[0].Name
@@ -2459,7 +2460,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		ns := oc.Namespace()
 
 		g.By("Get schedulable worker nodes")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
@@ -2545,7 +2546,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		g.By("1. Get list of nodes, get two worker nodes that have same subnet, use them as egress nodes\n")
 		var egressNode1, egressNode2 string
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
 		if !ok || egressNodes == nil || len(egressNodes) < 2 {
@@ -2865,7 +2866,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP IPv6", func() {
 		ns := oc.Namespace()
 
 		g.By("Label EgressIP node")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode1 := nodeList.Items[0].Name
 

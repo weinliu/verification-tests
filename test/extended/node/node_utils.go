@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os/exec"
@@ -878,7 +879,7 @@ func (podTwoContainers *podTwoContainersDescription) delete(oc *exutil.CLI) erro
 
 func (podUserNS *podUserNSDescription) crioWorkloadConfigExist(oc *exutil.CLI) error {
 	return wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodename := nodeList.Items[0].Name
 		workloadString, _ := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/crio/crio.conf.d/00-default")
@@ -896,7 +897,7 @@ func (podUserNS *podUserNSDescription) crioWorkloadConfigExist(oc *exutil.CLI) e
 
 func (podUserNS *podUserNSDescription) userContainersExistForNS(oc *exutil.CLI) error {
 	return wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodename := nodeList.Items[0].Name
 		xContainers, _ := exutil.DebugNodeWithChroot(oc, nodename, "bash", "-c", "cat /etc/subuid /etc/subgid")
@@ -950,7 +951,7 @@ func (podUserNS *podUserNSDescription) podRunInUserNS(oc *exutil.CLI) error {
 
 func crioConfigExist(oc *exutil.CLI, crioConfig []string, configPath string) error {
 	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodename := nodeList.Items[0].Name
 		crioString, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", configPath)

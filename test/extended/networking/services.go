@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -26,7 +27,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 		)
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
@@ -130,7 +131,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 		)
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")

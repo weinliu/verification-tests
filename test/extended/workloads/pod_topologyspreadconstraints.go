@@ -1,6 +1,7 @@
 package workloads
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -30,7 +31,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var kz = "zone"
 		var kn = "node"
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		nodeNum := 3
@@ -224,7 +225,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var ktz = "testzone"
 		var ktn = "testnode"
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		nodeNum := 3
@@ -313,7 +314,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var kz = "zone33824"
 		var kn = "node33824"
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		nodeNum := 3
@@ -446,7 +447,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var kz = "zone34017"
 		var kn = "node34017"
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		nodeNum := 3
@@ -541,7 +542,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var kz = "zone34014"
 		var kn = "node34014"
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		nodeNum := 3

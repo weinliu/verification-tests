@@ -1,6 +1,7 @@
 package disruption
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"os"
@@ -34,7 +35,7 @@ func Run(description, testname string, adapter TestData, invariants []upgrades.T
 	testSuite := &junit.TestSuite{Name: description, Package: testname}
 	test := &junit.TestCase{Name: testname, Classname: testname}
 	testSuite.TestCases = append(testSuite.TestCases, test)
-	cm := chaosmonkey.New(func() {
+	cm := chaosmonkey.New(func(ctx context.Context) {
 		start := time.Now()
 		defer finalizeTest(start, test)
 		fn()
@@ -83,7 +84,7 @@ func runChaosmonkey(
 			xml.NewEncoder(f).Encode(testSuite)
 		}
 	}()
-	cm.Do()
+	cm.Do(context.Background())
 }
 
 type chaosMonkeyAdapter struct {
@@ -94,7 +95,7 @@ type chaosMonkeyAdapter struct {
 	framework  *framework.Framework
 }
 
-func (cma *chaosMonkeyAdapter) Test(sem *chaosmonkey.Semaphore) {
+func (cma *chaosMonkeyAdapter) Test(ctx context.Context, sem *chaosmonkey.Semaphore) {
 	start := time.Now()
 	var once sync.Once
 	ready := func() {
@@ -111,11 +112,11 @@ func (cma *chaosMonkeyAdapter) Test(sem *chaosmonkey.Semaphore) {
 		return
 	}
 
-	cma.framework.BeforeEach()
-	cma.test.Setup(cma.framework)
-	defer cma.test.Teardown(cma.framework)
+	cma.framework.BeforeEach(ctx)
+	cma.test.Setup(ctx, cma.framework)
+	defer cma.test.Teardown(ctx, cma.framework)
 	ready()
-	cma.test.Test(cma.framework, sem.StopCh, cma.UpgradeType)
+	cma.test.Test(ctx, cma.framework, sem.StopCh, cma.UpgradeType)
 }
 
 func finalizeTest(start time.Time, tc *junit.TestCase) {

@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -2102,7 +2103,7 @@ func switchOVNGatewayMode(oc *exutil.CLI, mode string) {
 
 // getOVNGatewayMode will return configured OVN gateway mode, shared or local
 func getOVNGatewayMode(oc *exutil.CLI) string {
-	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if len(nodeList.Items) < 1 {
 		g.Skip("This case requires at least one schedulable node")
@@ -2246,7 +2247,7 @@ func prepareSCTPModule(oc *exutil.CLI, sctpModule string) {
 		g.Skip("There are already some nodes in NotReady or SchedulingDisabled status in cluster, skip the test!!! ")
 	}
 
-	workerNodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	workerNodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 	if err != nil || len(workerNodeList.Items) == 0 {
 		g.Skip("Can not find any woker nodes in the cluster")
 	}
@@ -2305,7 +2306,7 @@ func excludeSriovNodes(oc *exutil.CLI) []string {
 	// In rdu1 and rdu2 clusters, there are two sriov nodes with mlx nic, by default, egressrouter case cannot run on it
 	// So here exclude sriov nodes in rdu1 and rdu2 clusters, just use the other common worker nodes
 	var workers []string
-	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, node := range nodeList.Items {
 		_, ok := node.Labels["node-role.kubernetes.io/sriov"]
@@ -2489,7 +2490,7 @@ func getPodMultiNetworkIPv6(oc *exutil.CLI, namespace string, podName string) st
 // get node that hosts the egressIP
 func getHostsubnetByEIP(oc *exutil.CLI, expectedEIP string) string {
 	var nodeHostsEIP string
-	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	for i, v := range nodeList.Items {

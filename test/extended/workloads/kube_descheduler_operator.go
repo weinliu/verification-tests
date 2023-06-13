@@ -1,6 +1,7 @@
 package workloads
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -64,7 +65,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		deploydpT := filepath.Join(buildPruningBaseDir, "deploy_duplicatepodsrs.yaml")
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the descheduler namespace")
@@ -336,7 +337,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deployptsT := filepath.Join(buildPruningBaseDir, "deploy_podTopologySpread.yaml")
 		deploydT := filepath.Join(buildPruningBaseDir, "deploy_demopod.yaml")
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Create test project
@@ -785,7 +786,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deploysptT := filepath.Join(buildPruningBaseDir, "deploy_softPodTopologySpread.yaml")
 		deploysdT := filepath.Join(buildPruningBaseDir, "deploy_softdemopod.yaml")
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deschu = kubedescheduler{
@@ -1057,7 +1058,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		deschedulerpT := filepath.Join(buildPruningBaseDir, "kubedescheduler_podlifetime.yaml")
 
-		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		_, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deschu = kubedescheduler{
@@ -1424,7 +1425,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschedulerinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_includins.yaml")
 		deschedulereinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_includeexcludens.yaml")
 
-		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		_, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deschu = kubedescheduler{
@@ -1601,7 +1602,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		deschedulerinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_excludins.yaml")
 
-		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		_, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deschu = kubedescheduler{
@@ -1815,7 +1816,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deploypmT := filepath.Join(buildPruningBaseDir, "deploy_podWithPriorityClassName.yaml")
 		deploypcT := filepath.Join(buildPruningBaseDir, "priorityclassm.yaml")
 
-		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		_, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deschu = kubedescheduler{

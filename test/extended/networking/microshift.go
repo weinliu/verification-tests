@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -323,7 +324,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitForPodWithLabelReady(oc, ns, "name=hostport-pod")
 
 		g.By("Get the ready-schedulable worker nodes")
-		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
 
 		g.By("Get the IP address from the worker node")
@@ -687,7 +688,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(dnsConfigMap).Should(o.ContainSubstring("forward . /etc/resolv.conf"))
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeName := nodeList.Items[0].Name
 

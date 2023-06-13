@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -455,7 +456,7 @@ func getLoadBalancerSvcNodePort(oc *exutil.CLI, namespace string, svcName string
 }
 
 func createConfigMap(oc *exutil.CLI, testDataDir string, namespace string) (status bool) {
-	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(len(nodeList.Items) >= 4).NotTo(o.BeFalse())
 

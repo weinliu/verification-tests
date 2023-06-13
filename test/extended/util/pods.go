@@ -57,7 +57,7 @@ func RemovePodsWithPrefixes(oc *CLI, prefixes ...string) error {
 // CreateCentosExecPodOrFail creates a centos:7 pause pod used as a vessel for kubectl exec commands.
 // Pod name is uniquely generated.
 func CreateCentosExecPodOrFail(client kubernetes.Interface, ns, generateName string, tweak func(*v1.Pod)) *v1.Pod {
-	return pod.CreateExecPodOrFail(client, ns, generateName, func(pod *v1.Pod) {
+	return pod.CreateExecPodOrFail(context.TODO(), client, ns, generateName, func(pod *v1.Pod) {
 		pod.Spec.Containers[0].Image = "centos:7"
 		pod.Spec.Containers[0].Command = []string{"sh", "-c", "trap exit TERM; while true; do sleep 5; done"}
 		pod.Spec.Containers[0].Args = nil

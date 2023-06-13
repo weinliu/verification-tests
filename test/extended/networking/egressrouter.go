@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -46,7 +47,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			egressRouterService  = filepath.Join(egressBaseDir, "serive-egressrouter.yaml")
 		)
 		g.By("1.Get gateway for one worker node \n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		gateway := getIPv4Gateway(oc, nodeList.Items[0].Name)
@@ -141,7 +142,7 @@ var _ = g.Describe("[sig-networking] SDN egressrouter", func() {
 		)
 
 		g.By("1.Get gateway for one worker node \n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		node1 := nodeList.Items[0].Name
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, node1, "egress-router")

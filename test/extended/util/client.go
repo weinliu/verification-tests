@@ -397,7 +397,7 @@ func (c *CLI) CreateProject() string {
 func (c *CLI) TeardownProject() {
 	e2e.TestContext.DumpLogsOnFailure = os.Getenv("DUMP_EVENTS_ON_FAILURE") != "false"
 	if len(c.Namespace()) > 0 && g.CurrentSpecReport().Failed() && e2e.TestContext.DumpLogsOnFailure {
-		e2edebug.DumpAllNamespaceInfo(c.kubeFramework.ClientSet, c.Namespace())
+		e2edebug.DumpAllNamespaceInfo(context.TODO(), c.kubeFramework.ClientSet, c.Namespace())
 	}
 
 	if len(c.configPath) > 0 {

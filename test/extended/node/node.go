@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -781,7 +782,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	g.It("NonPreRelease-PreChkUpgrade-Author:minmli-High-45351-prepare to check crioConfig[Disruptive][Slow]", func() {
 		g.By("1) oc debug one worker and edit /etc/crio/crio.conf")
 		// we update log_level = "debug" in /etc/crio/crio.conf
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodename := nodeList.Items[0].Name
 		_, err = exutil.DebugNodeWithChroot(oc, nodename, "/bin/bash", "-c", "sed -i 's/log_level = \"info\"/log_level = \"debug\"/g' /etc/crio/crio.conf")
@@ -818,7 +819,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		defer func() {
 			g.By("Restore /etc/crio/crio.conf")
-			nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+			nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			for _, node := range nodeList.Items {
 				nodename := node.Name

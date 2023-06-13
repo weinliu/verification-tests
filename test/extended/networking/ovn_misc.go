@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
@@ -62,7 +63,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		e2e.Logf("Cluster is currently on gateway mode %s", origMode)
 		e2e.Logf("Desired mode is %s", desiredMode)
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 1 {
 			g.Skip("This case requires at least one schedulable node")

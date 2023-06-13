@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -85,7 +86,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		g.By("Obtain the namespace")
 		ns := oc.Namespace()
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
@@ -255,7 +256,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		g.By("Obtain the namespace")
 		ns := oc.Namespace()
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
@@ -411,7 +412,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		g.By("Create first namespace")
 		ns1 := oc.Namespace()
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
@@ -528,7 +529,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 			sctpClientPodname             = "sctpclient"
 		)
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
@@ -761,7 +762,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 			g.Skip("This case requires single stack cluster")
 		}
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")

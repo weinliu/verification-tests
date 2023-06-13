@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -164,7 +165,7 @@ func multihomingBeforeCheck(oc *exutil.CLI) ([]string, []string, []string, []str
 	)
 
 	g.By("Get the ready-schedulable worker nodes")
-	nodeList, nodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 	o.Expect(nodeErr).NotTo(o.HaveOccurred())
 	if len(nodeList.Items) < 2 {
 		g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")

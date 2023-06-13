@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -299,7 +300,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			g.Skip("These cases can only be run on networking team's private RDU clusters, skip for other envrionment!!!")
 		}
 		//Two worker nodes needed to create l2advertisement object
-		workerList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if !(workerList.Size() >= 2) {
@@ -478,7 +479,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			g.Skip("These cases can only be run on networking team's private RDU clusters, skip for other envrionment!!!")
 		}
 		//Two worker nodes needed to create BGP Advertisement object
-		workerList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if !(workerList.Size() >= 2) {

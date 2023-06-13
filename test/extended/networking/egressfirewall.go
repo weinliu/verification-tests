@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -43,7 +44,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			egressFWTemplate    = filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
 		)
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("1. Obtain the namespace \n")
@@ -102,7 +103,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			egressFWTemplate    = filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
 		)
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("1. Obtain the namespace \n")
@@ -182,7 +183,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			egressFWTemplate    = filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
 		)
 
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("1. Obtain the namespace \n")
@@ -555,7 +556,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	// author: huirwang@redhat.com
 	g.It("ConnectedOnly-Author:huirwang-High-60488-EgressFirewall works for a nodeSelector for matchLabels.", func() {
 		g.By("Label one node to match egressfirewall rule")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
@@ -644,7 +645,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	// author: huirwang@redhat.com
 	g.It("ConnectedOnly-Author:huirwang-High-60812-EgressFirewall works for a nodeSelector for matchExpressions.", func() {
 		g.By("Label one node to match egressfirewall rule")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
