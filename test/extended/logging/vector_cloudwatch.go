@@ -273,7 +273,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				secretName:   cw.secretName,
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
+			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
 
 			g.By("deploy collector pods")
 			cl := clusterlogging{

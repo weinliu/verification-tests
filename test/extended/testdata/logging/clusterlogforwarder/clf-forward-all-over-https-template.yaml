@@ -8,8 +8,6 @@ objects:
   metadata:
     name: ${NAME}
     namespace: ${NAMESPACE}
-    annotations:
-      logging.openshift.io/preview-tls-security-profile: enabled
   spec:
     outputs:
     - http:

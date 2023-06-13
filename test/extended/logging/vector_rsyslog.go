@@ -288,7 +288,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				secretName:   rsyslog.secretName,
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514")
+			clf.create(oc, "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514", "PREVIEW_TLS_SECURITY_PROFILE=enabled")
 
 			g.By("deploy collector pods")
 			cl := clusterlogging{

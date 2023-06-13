@@ -504,7 +504,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				secretName:   kafka.pipelineSecret,
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "URL="+kafkaEndpoint)
+			clf.create(oc, "URL="+kafkaEndpoint, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
 
 			g.By("deploy collector pods")
 			cl := clusterlogging{

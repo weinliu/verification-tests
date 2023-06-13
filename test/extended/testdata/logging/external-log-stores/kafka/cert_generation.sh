@@ -27,7 +27,7 @@ function create_root_ca() {
 openssl req -x509 -new -newkey rsa:4096 -keyout $CA_PATH/root_ca.key -nodes -days 1825 -out $CA_PATH/ca_bundle.crt -subj "/CN=aosqeroot"   -passin pass:aosqe2021 -passout pass:aosqe2021
 
 # Create trustore jks
-keytool -import -file $CA_PATH/ca_bundle.crt -keystore $CA_PATH/ca_bundle.jks  --srcstorepass aosqe2021 --deststorepass aosqe2021 -noprompt || exit 1
+/usr/lib/jvm/jre-openjdk/bin/keytool -import -file $CA_PATH/ca_bundle.crt -keystore $CA_PATH/ca_bundle.jks  --srcstorepass aosqe2021 --deststorepass aosqe2021 -noprompt || exit 1
 }
 
 # Create Client CSR
@@ -125,7 +125,7 @@ openssl ca -in $CLIENT_CA_PATH/client.csr -notext -out $CLIENT_CA_PATH/client.cr
 
 # Create Client keystone
 openssl pkcs12 -export -in $CLIENT_CA_PATH/client.crt -inkey $CLIENT_CA_PATH/client.key -out $CLIENT_CA_PATH/client.pkcs12  -passin pass:aosqe2021 -passout pass:aosqe2021
-keytool -importkeystore -srckeystore $CLIENT_CA_PATH/client.pkcs12 -srcstoretype PKCS12 -destkeystore $CLIENT_CA_PATH/client.jks -deststoretype JKS --srcstorepass aosqe2021 --deststorepass aosqe2021 -noprompt
+/usr/lib/jvm/jre-openjdk/bin/keytool -importkeystore -srckeystore $CLIENT_CA_PATH/client.pkcs12 -srcstoretype PKCS12 -destkeystore $CLIENT_CA_PATH/client.jks -deststoretype JKS --srcstorepass aosqe2021 --deststorepass aosqe2021 -noprompt
 }
 
 # Create cluster csr
@@ -243,7 +243,7 @@ openssl ca -in $CLUSTER_CA_PATH/cluster.csr -notext -out $CLUSTER_CA_PATH/cluste
 
 #Create keystone
 openssl pkcs12 -export -in $CLUSTER_CA_PATH/cluster.crt -inkey $CLUSTER_CA_PATH/cluster.key -out $CLUSTER_CA_PATH/cluster.pkcs12  -passin pass:aosqe2021 -passout pass:aosqe2021
-keytool -importkeystore -srckeystore $CLUSTER_CA_PATH/cluster.pkcs12 -srcstoretype PKCS12 -destkeystore $CLUSTER_CA_PATH/cluster.jks -deststoretype JKS  --srcstorepass aosqe2021 --deststorepass aosqe2021 -noprompt
+/usr/lib/jvm/jre-openjdk/bin/keytool -importkeystore -srckeystore $CLUSTER_CA_PATH/cluster.pkcs12 -srcstoretype PKCS12 -destkeystore $CLUSTER_CA_PATH/cluster.jks -deststoretype JKS  --srcstorepass aosqe2021 --deststorepass aosqe2021 -noprompt
 }
 
 init_cert_files

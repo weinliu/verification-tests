@@ -1564,7 +1564,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				secretName:   ees.secretName,
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
+			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
 
 			g.By("Create ClusterLogging instance with Vector as collector")
 			cl := clusterlogging{

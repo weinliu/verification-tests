@@ -1255,7 +1255,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			}
 			defer clf.delete(oc)
 			inputRefs := "[\"application\"]"
-			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
+			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
 
 			g.By("deploy collector pods")
 			cl := clusterlogging{

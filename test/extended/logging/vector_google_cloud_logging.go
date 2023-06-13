@@ -265,7 +265,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1)
+		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
 
 		g.By("Deploy collector pods")
 		cl := clusterlogging{

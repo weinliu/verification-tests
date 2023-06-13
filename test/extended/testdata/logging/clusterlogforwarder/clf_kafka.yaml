@@ -9,7 +9,7 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
     annotations:
-      logging.openshift.io/preview-tls-security-profile: enabled
+      logging.openshift.io/preview-tls-security-profile: ${PREVIEW_TLS_SECURITY_PROFILE}
   spec:
     outputs:
     - name: kafka-app
@@ -34,3 +34,5 @@ parameters:
   value: "tls://kafka.openshift-logging.svc.cluster.local:9093/clo-topic"
 - name: SECRET_NAME
   value: "kafka-vector"
+- name: PREVIEW_TLS_SECURITY_PROFILE
+  value: "disabled"

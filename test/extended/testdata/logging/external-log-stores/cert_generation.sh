@@ -256,7 +256,7 @@ function generate_extensions() {
   fi
 
   if [ ! -z "$BASE_DOMAIN" ]; then
-    extension_names="${extension_names},DNS.${extension_index}:${LOG_STORE}-${NAMESPACE}.apps.${BASE_DOMAIN}"
+    extension_names="${extension_names},DNS.${extension_index}:${LOG_STORE}-${NAMESPACE}.${BASE_DOMAIN}"
   fi
 
   echo "$extension_names"

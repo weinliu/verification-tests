@@ -1129,16 +1129,6 @@ func checkNetworkType(oc *exutil.CLI) string {
 	return strings.ToLower(output)
 }
 
-func getDomain(oc *exutil.CLI) (string, error) {
-	apiServerURL, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures.config.openshift.io/cluster", "-ojsonpath={.status.apiServerURL}").Output()
-	if err != nil {
-		return "", err
-	}
-
-	domain := strings.Split(apiServerURL, "api.")[1]
-	return strings.Split(domain, ":")[0], nil
-}
-
 func getAppDomain(oc *exutil.CLI) (string, error) {
 	subDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingresses.config/cluster", "-ojsonpath={.spec.domain}").Output()
 	if err != nil {
@@ -1155,7 +1145,7 @@ type certsConf struct {
 
 func (certs certsConf) generateCerts(oc *exutil.CLI, keysPath string) {
 	generateCertsSH := exutil.FixturePath("testdata", "logging", "external-log-stores", "cert_generation.sh")
-	domain, err := getDomain(oc)
+	domain, err := getAppDomain(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cmd := []string{generateCertsSH, keysPath, certs.namespace, certs.serverName, domain}
 	if certs.passPhrase != "" {
@@ -2234,8 +2224,11 @@ func (k kafka) deployKafka(oc *exutil.CLI) {
 		err := os.MkdirAll(keysPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		generateCertsSH := filepath.Join(kafkaFilePath, "cert_generation.sh")
-		err = exec.Command("sh", generateCertsSH, keysPath, k.namespace).Run()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		stdout, err := exec.Command("sh", generateCertsSH, keysPath, k.namespace).Output()
+		if err != nil {
+			e2e.Logf("error generating certs: %s", string(stdout))
+			e2e.Failf("error generating certs: %v", err)
+		}
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-cluster-cert", "-n", k.namespace, "--from-file=ca_bundle.jks="+keysPath+"/ca/ca_bundle.jks", "--from-file=cluster.jks="+keysPath+"/cluster/cluster.jks").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
