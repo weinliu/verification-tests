@@ -2,16 +2,19 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	//e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
@@ -905,4 +908,42 @@ var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
 	g.It("StagerunOnly-Author:weinliu-High-60991-VPA Install", func() {
 		g.By("VPA operator is installed successfully")
 	})
+})
+
+var _ = g.Describe("[sig-node] NODE Install and verify Cluster Resource Override Admission Webhook", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc = exutil.NewCLI("clusterresourceoverride-operator", exutil.KubeConfigPath())
+	)
+	g.BeforeEach(func() {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+		if strings.Contains(output, "NotFound") {
+			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
+		}
+		installOperatorClusterresourceoverride(oc)
+
+	})
+	// author: asahay@redhat.com
+
+	g.It("StagerunOnly-Author:asahay-High-27070-Cluster Resource Override Operator. [Serial]", func() {
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterResourceOverride", "cluster", "-n", "clusterresourceoverride-operator").Execute()
+		createCRClusterresourceoverride(oc)
+		var err error
+		var croCR string
+		errCheck := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			croCR, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterResourceOverride", "cluster", "-n", "clusterresourceoverride-operator").Output()
+			if err != nil {
+				e2e.Logf("error  %v, please try next round", err)
+				return false, nil
+			}
+			if !strings.Contains(croCR, "cluster") {
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("can not get cluster with output %v, the error is %v", croCR, err))
+		g.By("Operator is installed successfully")
+	})
+
 })
