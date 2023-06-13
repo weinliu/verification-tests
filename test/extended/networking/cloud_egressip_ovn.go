@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -2424,6 +2425,81 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
 			return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == nodeName1
 		}, "120s", "10s").Should(o.BeTrue(), "egressIP was not migrated to correct workers!!")
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:huirwang-Critical-64293-EgressIP should not break access from a pod with EgressIP to other host networked pods on different nodes. [Disruptive]", func() {
+		//This is from customer bug: https://bugzilla.redhat.com/show_bug.cgi?id=2070929
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+
+		g.By("Verify there are two more worker nodes in the cluster.")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		g.By("Get namespace")
+		ns := oc.Namespace()
+
+		g.By("Apply EgressLabel Key to one node. \n")
+		egessNode := nodeList.Items[0].Name
+		nonEgressNode := nodeList.Items[1].Name
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel, "true")
+
+		g.By("6. Create an egressip object\n")
+		ipStackType := checkIPStackType(oc)
+		var freeIPs []string
+		if ipStackType == "ipv6single" {
+			freeIPs = findFreeIPv6s(oc, egessNode, 1)
+			o.Expect(len(freeIPs)).Should(o.Equal(1))
+		} else {
+			freeIPs = findFreeIPs(oc, egessNode, 1)
+			o.Expect(len(freeIPs)).Should(o.Equal(1))
+		}
+
+		g.By("Create an egressip object\n")
+		egressip1 := egressIPResource1{
+			name:          "egressip-64293-1",
+			template:      egressIP1Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		g.By("Create a test pod on non-egress node\n")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod1.name)
+
+		g.By("patch label to namespace and pod")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer exutil.LabelPod(oc, ns, pod1.name, "color-")
+		err = exutil.LabelPod(oc, ns, pod1.name, "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Should be able to access the api service\n")
+		//  The backend pod of api server are hostnetwork pod and located on master nodes.  That are different nodes from egress nodes as egress nodes are worker nodes here.
+		svcIP, _ := getSvcIP(oc, "default", "kubernetes")
+		curlCmd := fmt.Sprintf("curl -s %s --connect-timeout 5", net.JoinHostPort(svcIP, "443"))
+		_, err = e2eoutput.RunHostCmd(ns, pod1.name, curlCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 	})
 })
 
