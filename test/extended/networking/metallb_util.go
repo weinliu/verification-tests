@@ -2,6 +2,7 @@ package networking
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 type subscriptionResource struct {
@@ -63,7 +65,9 @@ type ipAddressPoolResource struct {
 	namespace                 string
 	label1                    string
 	value1                    string
-	priority                  uint
+	priority                  int
+	avoidBuggyIPs             bool
+	autoAssign                bool
 	addresses                 []string
 	namespaces                []string
 	serviceLabelKey           string
@@ -88,9 +92,67 @@ type l2AdvertisementResource struct {
 	nodeSelectorValues    []string
 	template              string
 }
+type bgpPeerResource struct {
+	name        string
+	namespace   string
+	holdTime    string
+	myASN       int
+	peerASN     int
+	peerAddress string
+	template    string
+}
+
+type bgpAdvertisementResource struct {
+	name                  string
+	namespace             string
+	communities           []string
+	aggregationLength     int
+	aggregationLengthV6   int
+	ipAddressPools        []string
+	nodeSelectorsKey      string
+	nodeSelectorsOperator string
+	nodeSelectorValues    []string
+	peer                  []string
+	template              string
+}
+
+type routerConfigMapResource struct {
+	name         string
+	namespace    string
+	bgpd_enabled string
+	bfdd_enabled string
+	routerIP     string
+	node1IP      string
+	node2IP      string
+	node3IP      string
+	node4IP      string
+	template     string
+}
+
+type routerNADResource struct {
+	name          string
+	namespace     string
+	interfaceName string
+	template      string
+}
+
+type routerPodResource struct {
+	name           string
+	namespace      string
+	configMapName  string
+	NADName        string
+	routerIP       string
+	masterNodeName string
+	template       string
+}
 
 var (
-	snooze time.Duration = 720
+	snooze                 time.Duration = 720
+	bgpRouterIP                          = "192.168.111.60/24"
+	bgpRouterConfigMapName               = "router-master1-config"
+	bgpRouterPodName                     = "router-master1"
+	bgpRouterNamespace                   = "router-system"
+	bgpRouterNADName                     = "external1"
 )
 
 func operatorInstall(oc *exutil.CLI, sub subscriptionResource, ns namespaceResource, og operatorGroupResource) (status bool) {
@@ -350,12 +412,13 @@ func isPlatformSuitable(oc *exutil.CLI) bool {
 }
 
 func createIPAddressPoolCR(oc *exutil.CLI, ipAddresspool ipAddressPoolResource, addressPoolTemplate string) (status bool) {
-	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipAddresspool.template, "-p", "NAME="+ipAddresspool.name, "NAMESPACE="+ipAddresspool.namespace, "PRIORITY="+strconv.Itoa(int(ipAddresspool.priority)), "ADDRESS1="+ipAddresspool.addresses[0], "ADDRESS2="+ipAddresspool.addresses[1],
-		"NAMESPACE1="+ipAddresspool.namespaces[0], "NAMESPACE2="+ipAddresspool.namespaces[1],
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipAddresspool.template, "-p", "NAME="+ipAddresspool.name, "NAMESPACE="+ipAddresspool.namespace, "PRIORITY="+strconv.Itoa(int(ipAddresspool.priority)),
+		"AUTOASSIGN="+strconv.FormatBool(ipAddresspool.autoAssign), "AVOIDBUGGYIPS="+strconv.FormatBool(ipAddresspool.avoidBuggyIPs),
+		"ADDRESS1="+ipAddresspool.addresses[0], "ADDRESS2="+ipAddresspool.addresses[1], "NAMESPACE1="+ipAddresspool.namespaces[0], "NAMESPACE2="+ipAddresspool.namespaces[1],
 		"MLSERVICEKEY1="+ipAddresspool.serviceLabelKey, "MLSERVICEVALUE1="+ipAddresspool.serviceLabelValue, "MESERVICEKEY1="+ipAddresspool.serviceSelectorKey, "MESERVICEOPERATOR1="+ipAddresspool.serviceSelectorOperator, "MESERVICEKEY1VALUE1="+ipAddresspool.serviceSelectorValue[0],
 		"MLNAMESPACEKEY1="+ipAddresspool.serviceLabelKey, "MLNAMESPACEVALUE1="+ipAddresspool.serviceLabelValue, "MENAMESPACEKEY1="+ipAddresspool.namespaceSelectorKey, "MENAMESPACEOPERATOR1="+ipAddresspool.namespaceSelectorOperator, "MENAMESPACEKEY1VALUE1="+ipAddresspool.namespaceSelectorValue[0])
 	if err != nil {
-		e2e.Logf("Error creating ip addresspool %v", err)
+		e2e.Logf("Error creating IP Addresspool %v", err)
 		return false
 	}
 	return true
@@ -389,4 +452,168 @@ func getLoadBalancerSvcNodePort(oc *exutil.CLI, namespace string, svcName string
 	nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ports[0].nodePort}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return nodePort
+}
+
+func createConfigMap(oc *exutil.CLI, testDataDir string, namespace string) (status bool) {
+	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(len(nodeList.Items) >= 4).NotTo(o.BeFalse())
+
+	var nodeIPs []string
+	var nodeIP string
+
+	for _, node := range nodeList.Items {
+		nodeIP = getNodeIPv4(oc, namespace, node.Name)
+		nodeIPs = append(nodeIPs, nodeIP)
+	}
+
+	frrMasterSingleStackConfigMapTemplate := filepath.Join(testDataDir, "frr-master-singlestack-configmap-template.yaml")
+	frrMasterSingleStackConfigMap := routerConfigMapResource{
+		name:         bgpRouterConfigMapName,
+		namespace:    namespace,
+		bgpd_enabled: "yes",
+		bfdd_enabled: "no",
+		routerIP:     "192.168.111.60",
+		node1IP:      nodeIPs[0],
+		node2IP:      nodeIPs[1],
+		node3IP:      nodeIPs[2],
+		node4IP:      nodeIPs[3],
+		template:     frrMasterSingleStackConfigMapTemplate,
+	}
+
+	errTemplate := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrMasterSingleStackConfigMap.template, "-p", "NAME="+frrMasterSingleStackConfigMap.name, "NAMESPACE="+frrMasterSingleStackConfigMap.namespace,
+		"BGPD_ENABLED="+frrMasterSingleStackConfigMap.bgpd_enabled, "BFDD_ENABLED="+frrMasterSingleStackConfigMap.bfdd_enabled, "ROUTER_IP="+frrMasterSingleStackConfigMap.routerIP, "NODE1_IP="+frrMasterSingleStackConfigMap.node1IP,
+		"NODE2_IP="+frrMasterSingleStackConfigMap.node2IP, "NODE3_IP="+frrMasterSingleStackConfigMap.node3IP, "NODE4_IP="+frrMasterSingleStackConfigMap.node4IP)
+	if errTemplate != nil {
+		e2e.Logf("Error creating config map %v", errTemplate)
+		return false
+	}
+
+	return true
+
+}
+
+func createNAD(oc *exutil.CLI, testDataDir string, namespace string) (status bool) {
+	defInterface, intErr := getDefaultInterface(oc)
+	o.Expect(intErr).NotTo(o.HaveOccurred())
+	frrMasterSingleStackNADTemplate := filepath.Join(testDataDir, "frr-master-singlestack-nad-template.yaml")
+	frrMasterSingleStackNAD := routerNADResource{
+		name:          bgpRouterNADName,
+		namespace:     namespace,
+		interfaceName: defInterface,
+		template:      frrMasterSingleStackNADTemplate,
+	}
+	errTemplate := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrMasterSingleStackNAD.template, "-p", "NAME="+frrMasterSingleStackNAD.name, "INTERFACE="+frrMasterSingleStackNAD.interfaceName, "NAMESPACE="+frrMasterSingleStackNAD.namespace)
+	if errTemplate != nil {
+		e2e.Logf("Error creating network attachment definition %v", errTemplate)
+		return false
+	}
+
+	return true
+}
+
+func createRouterPod(oc *exutil.CLI, testDataDir string, namespace string) (status bool) {
+	frrMasterSingleStackRouterPodTemplate := filepath.Join(testDataDir, "frr-master-singlestack-router-pod-template.yaml")
+	NADName, errNAD := oc.AsAdmin().WithoutNamespace().Run("get").Args("network-attachment-definitions", "-n", namespace, "--no-headers", "-o=custom-columns=NAME:.metadata.name").Output()
+	o.Expect(errNAD).NotTo(o.HaveOccurred())
+	masterNode, errMaster := exutil.GetFirstMasterNode(oc)
+	o.Expect(errMaster).NotTo(o.HaveOccurred())
+
+	frrMasterSingleStackRouterPod := routerPodResource{
+		name:           bgpRouterPodName,
+		namespace:      namespace,
+		configMapName:  bgpRouterConfigMapName,
+		NADName:        NADName,
+		routerIP:       bgpRouterIP,
+		masterNodeName: masterNode,
+		template:       frrMasterSingleStackRouterPodTemplate,
+	}
+	errTemplate := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrMasterSingleStackRouterPod.template, "-p", "NAME="+frrMasterSingleStackRouterPod.name, "NAMESPACE="+frrMasterSingleStackRouterPod.namespace,
+		"CONFIG_MAP_NAME="+frrMasterSingleStackRouterPod.configMapName, "ROUTER_IP="+frrMasterSingleStackRouterPod.routerIP, "MASTER_NODENAME="+frrMasterSingleStackRouterPod.masterNodeName, "NAD_NAME="+frrMasterSingleStackRouterPod.NADName)
+	if errTemplate != nil {
+		e2e.Logf("Error creating router pod %v", errTemplate)
+		return false
+	}
+	err := waitForPodWithLabelReady(oc, namespace, "name=router-pod")
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	return true
+}
+
+func setUpExternalFRRRouter(oc *exutil.CLI, bgpRouterNamespace string) (status bool) {
+
+	testDataDir := exutil.FixturePath("testdata", "networking/metallb")
+	g.By(" Create namespace")
+	oc.CreateSpecifiedNamespaceAsAdmin(bgpRouterNamespace)
+	exutil.SetNamespacePrivileged(oc, bgpRouterNamespace)
+
+	g.By(" Create config map")
+	o.Expect(createConfigMap(oc, testDataDir, bgpRouterNamespace)).To(o.BeTrue())
+
+	g.By(" Create network attachment defiition")
+	o.Expect(createNAD(oc, testDataDir, bgpRouterNamespace)).To(o.BeTrue())
+
+	g.By(" Create FRR router pod on master")
+	o.Expect(createRouterPod(oc, testDataDir, bgpRouterNamespace)).To(o.BeTrue())
+
+	return true
+}
+
+func checkBGPSessions(oc *exutil.CLI, bgpRouterNamespace string) (status bool) {
+
+	cmd := []string{"-n", bgpRouterNamespace, bgpRouterPodName, "--", "vtysh", "-c", "show bgp summary"}
+	errCheck := wait.Poll(60*time.Second, 120*time.Second, func() (bool, error) {
+		e2e.Logf("Checking status of BGP session")
+		bgpSummaryOutput, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(cmd...).Output()
+		o.Expect(bgpSummaryOutput).NotTo(o.BeEmpty())
+		if err != nil {
+			return false, nil
+		}
+		if strings.Contains(bgpSummaryOutput, "Active") {
+			e2e.Logf("Failed to establish BGP session between router and speakers, Trying again")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, "Establishing BGP session between router and speakers timed out")
+	e2e.Logf("BGP session established")
+	return true
+
+}
+
+func createBGPPeerCR(oc *exutil.CLI, bgppeer bgpPeerResource) (status bool) {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bgppeer.template, "-p", "NAME="+bgppeer.name, "NAMESPACE="+bgppeer.namespace,
+		"HOLDTIME="+bgppeer.holdTime, "MY_ASN="+strconv.Itoa(int(bgppeer.myASN)), "PEER_ASN="+strconv.Itoa(int(bgppeer.peerASN)), "PEER_IPADDRESS="+bgppeer.peerAddress)
+	if err != nil {
+		e2e.Logf("Error creating BGP Peer %v", err)
+		return false
+	}
+	return true
+
+}
+
+func deleteBGPPeer(oc *exutil.CLI, rs bgpPeerResource) {
+	e2e.Logf("Delete %s %s in namespace %s", "bgppeer", rs.name, rs.namespace)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("bgppeer", rs.name, "-n", rs.namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func createBGPAdvertisementCR(oc *exutil.CLI, bgpAdvertisement bgpAdvertisementResource) (status bool) {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bgpAdvertisement.template, "-p", "NAME="+bgpAdvertisement.name, "NAMESPACE="+bgpAdvertisement.namespace,
+		"AGGREGATIONLENGTH="+strconv.Itoa(int(bgpAdvertisement.aggregationLength)), "AGGREGATIONLENGTHV6="+strconv.Itoa(int(bgpAdvertisement.aggregationLengthV6)),
+		"IPADDRESSPOOL1="+bgpAdvertisement.ipAddressPools[0], "COMMUNITIES="+bgpAdvertisement.communities[0],
+		"NODESLECTORKEY1="+bgpAdvertisement.nodeSelectorsKey, "NODESELECTOROPERATOR1="+bgpAdvertisement.nodeSelectorsOperator,
+		"WORKER1="+bgpAdvertisement.nodeSelectorValues[0], "WORKER2="+bgpAdvertisement.nodeSelectorValues[1],
+		"BGPPEER1="+bgpAdvertisement.peer[0])
+	if err != nil {
+		e2e.Logf("Error creating BGP advertisement %v", err)
+		return false
+	}
+	return true
+
+}
+func deleteBGPAdvertisement(oc *exutil.CLI, rs bgpAdvertisementResource) {
+	e2e.Logf("Delete %s %s in namespace %s", "bgpadvertisement", rs.name, rs.namespace)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("bgpadvertisement", rs.name, "-n", rs.namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

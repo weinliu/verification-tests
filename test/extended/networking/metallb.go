@@ -2,12 +2,14 @@ package networking
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN metallb", func() {
@@ -21,7 +23,13 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		serviceLabelValue         = "Test"
 		serviceNodePortAllocation = true
 		testDataDir               = exutil.FixturePath("testdata", "networking/metallb")
-		l2Addresses               = [2]string{"192.168.111.60-192.168.111.69", "192.168.111.70-192.168.111.79"}
+		l2Addresses               = [2]string{"192.168.111.61-192.168.111.69", "192.168.111.70-192.168.111.79"}
+		bgpAddresses              = [2][2]string{{"10.10.10.1-10.10.10.10", "10.10.11.1-10.10.11.10"}, {"10.10.12.1-10.10.12.10", "10.10.13.1-10.10.13.10"}}
+		expectedAddress1          = "10.10.10.1"
+		myASN                     = 64500
+		peerASN                   = 64500
+		peerIPAddress             = "192.168.111.60"
+		bgpCommunties             = [1]string{"65001:65500"}
 	)
 
 	g.BeforeEach(func() {
@@ -291,10 +299,14 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			g.Skip("These cases can only be run on networking team's private RDU clusters, skip for other envrionment!!!")
 		}
 		//Two worker nodes needed to create l2advertisement object
-		workers, err := exutil.GetClusterNodesBy(oc, "worker")
+		workerList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if !(len(workers) >= 2) {
+
+		if !(workerList.Size() >= 2) {
 			g.Skip("These cases can only be run for cluster that has atleast two worker nodes")
+		}
+		for i := 0; i < 2; i++ {
+			workers = append(workers, workerList.Items[i].Name)
 		}
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
@@ -324,13 +336,14 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		}
 		g.By("3. Create IP addresspool")
 		ipAddresspoolTemplate := filepath.Join(testDataDir, "ipaddresspool-template.yaml")
-
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-l2",
 			namespace:                 opNamespace,
 			addresses:                 l2Addresses[:],
 			namespaces:                namespaces[:],
 			priority:                  10,
+			avoidBuggyIPs:             true,
+			autoAssign:                true,
 			serviceLabelKey:           serviceSelectorKey,
 			serviceLabelValue:         serviceSelectorValue[0],
 			serviceSelectorKey:        serviceSelectorKey,
@@ -444,6 +457,144 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			o.Expect(nodePort).To(o.BeEmpty())
 
 		}
+
+	})
+
+	g.It("Author:asood-High-60097-Verify ip address is assigned from the ip address pool that has higher priority (lower value)	 [Serial]", func() {
+		var (
+			ns                   string
+			namespaces           []string
+			serviceSelectorKey   = "environ"
+			serviceSelectorValue = [1]string{"Test"}
+			namespaceLabelKey    = "region"
+			namespaceLabelValue  = [1]string{"NA"}
+			workers              []string
+			//ipaddresspools       []ipAddressPoolResource
+			ipaddrpools []string
+			bgpPeers    []string
+		)
+		g.By("0. Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU clusters, skip for other envrionment!!!")
+		}
+		//Two worker nodes needed to create BGP Advertisement object
+		workerList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if !(workerList.Size() >= 2) {
+			g.Skip("These cases can only be run for cluster that has atleast two worker nodes")
+		}
+		for i := 0; i < 2; i++ {
+			workers = append(workers, workerList.Items[i].Name)
+		}
+		g.By("1. Get the namespace")
+		ns = oc.Namespace()
+		namespaces = append(namespaces, ns)
+		namespaces = append(namespaces, "test60097")
+		g.By("Label the namespace")
+		_, errNs := oc.AsAdmin().Run("label").Args("namespace", ns, namespaceLabelKey+"="+namespaceLabelValue[0], "--overwrite").Output()
+		o.Expect(errNs).NotTo(o.HaveOccurred())
+
+		g.By("2. Set up upstream/external BGP router")
+		suffix := getRandomString()
+		bgpRouterNamespaceWithSuffix := bgpRouterNamespace + "-" + suffix
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(bgpRouterNamespaceWithSuffix)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", bgpRouterPodName, "-n", bgpRouterNamespaceWithSuffix).Execute()
+
+		o.Expect(setUpExternalFRRRouter(oc, bgpRouterNamespaceWithSuffix)).To(o.BeTrue())
+
+		g.By("3. Create MetalLB CR")
+		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
+		metallbCR := metalLBCRResource{
+			name:      "metallb",
+			namespace: opNamespace,
+			template:  metallbCRTemplate,
+		}
+		defer deleteMetalLBCR(oc, metallbCR)
+		o.Expect(createMetalLBCR(oc, metallbCR, metallbCRTemplate)).To(o.BeTrue())
+		g.By("SUCCESS - MetalLB CR Created")
+
+		g.By("4. Create BGP Peer")
+		BGPPeerTemplate := filepath.Join(testDataDir, "bgppeer-template.yaml")
+		BGPPeerCR := bgpPeerResource{
+			name:        "peer-64500",
+			namespace:   opNamespace,
+			holdTime:    "10s",
+			myASN:       myASN,
+			peerASN:     peerASN,
+			peerAddress: peerIPAddress,
+			template:    BGPPeerTemplate,
+		}
+		defer deleteBGPPeer(oc, BGPPeerCR)
+		bgpPeers = append(bgpPeers, BGPPeerCR.name)
+		o.Expect(createBGPPeerCR(oc, BGPPeerCR)).To(o.BeTrue())
+		g.By("5. Check BGP Session between speakers and Router")
+		o.Expect(checkBGPSessions(oc, bgpRouterNamespaceWithSuffix)).To(o.BeTrue())
+
+		g.By("6. Create IP addresspools with different priority")
+		priority_val := 10
+		for i := 0; i < 2; i++ {
+			ipAddresspoolTemplate := filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+			ipAddresspool := ipAddressPoolResource{
+				name:                      "ipaddresspool-l3-" + strconv.Itoa(i),
+				namespace:                 opNamespace,
+				addresses:                 bgpAddresses[i][:],
+				namespaces:                namespaces[:],
+				priority:                  priority_val,
+				avoidBuggyIPs:             true,
+				autoAssign:                true,
+				serviceLabelKey:           serviceSelectorKey,
+				serviceLabelValue:         serviceSelectorValue[0],
+				serviceSelectorKey:        serviceSelectorKey,
+				serviceSelectorOperator:   "In",
+				serviceSelectorValue:      serviceSelectorValue[:],
+				namespaceLabelKey:         namespaceLabelKey,
+				namespaceLabelValue:       namespaceLabelValue[0],
+				namespaceSelectorKey:      namespaceLabelKey,
+				namespaceSelectorOperator: "In",
+				namespaceSelectorValue:    namespaceLabelValue[:],
+				template:                  ipAddresspoolTemplate,
+			}
+			defer deleteIPAddressPool(oc, ipAddresspool)
+			o.Expect(createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)).To(o.BeTrue())
+			priority_val = priority_val + 10
+			//ipaddresspools = append(ipaddresspools, ipAddresspool)
+			ipaddrpools = append(ipaddrpools, ipAddresspool.name)
+		}
+
+		g.By("7. Create BGP Advertisement")
+		bgpAdvertisementTemplate := filepath.Join(testDataDir, "bgpadvertisement-template.yaml")
+		bgpAdvertisement := bgpAdvertisementResource{
+			name:                  "bgp-adv",
+			namespace:             opNamespace,
+			aggregationLength:     32,
+			aggregationLengthV6:   128,
+			communities:           bgpCommunties[:],
+			ipAddressPools:        ipaddrpools[:],
+			nodeSelectorsKey:      "kubernetes.io/hostname",
+			nodeSelectorsOperator: "In",
+			nodeSelectorValues:    workers[:],
+			peer:                  bgpPeers[:],
+			template:              bgpAdvertisementTemplate,
+		}
+		defer deleteBGPAdvertisement(oc, bgpAdvertisement)
+		o.Expect(createBGPAdvertisementCR(oc, bgpAdvertisement)).To(o.BeTrue())
+
+		g.By("8. Create a service to verify it is assigned address from the pool that has higher priority")
+		loadBalancerServiceTemplate := filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
+		svc := loadBalancerServiceResource{
+			name:                          "hello-world-60097",
+			namespace:                     namespaces[0],
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceTemplate,
+		}
+		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)).To(o.BeTrue())
+		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s External IP is %q", svc.name, svcIP)
+		o.Expect(strings.Contains(svcIP, expectedAddress1)).To(o.BeTrue())
 
 	})
 

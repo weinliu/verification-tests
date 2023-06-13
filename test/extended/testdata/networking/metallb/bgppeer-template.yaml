@@ -1,0 +1,22 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: bgppeer-cr-template
+objects:
+- kind: BGPPeer
+  apiVersion: metallb.io/v1beta1
+  metadata:
+    name: "${NAME}"
+    namespace: "${NAMESPACE}"
+  spec:
+    holdTime: "${HOLDTIME}"
+    myASN: ${{MY_ASN}}
+    peerASN: ${{PEER_ASN}}
+    peerAddress: "${PEER_IPADDRESS}"
+parameters:
+- name: NAME
+- name: NAMESPACE
+- name: HOLDTIME
+- name: MY_ASN
+- name: PEER_ASN
+- name: PEER_IPADDRESS

@@ -16,8 +16,8 @@ objects:
     - "${ADDRESS2}"
     autoAssign: ${{AUTOASSIGN}}
     avoidBuggyIPs: ${{AVOIDBUGGYIPS}}
-    priority: ${{PRIORITY}}
     serviceAllocation:
+      priority: ${{PRIORITY}}
       namespaces:
       - "${NAMESPACE1}"
       - "${NAMESPACE2}"
