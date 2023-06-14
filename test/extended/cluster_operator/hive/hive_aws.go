@@ -1536,10 +1536,10 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedLabels, ok, DefaultTimeout, []string{"MachineSet", machineSetName, "-n=openshift-machine-api", "--kubeconfig=" + kubeconfig, "-o=jsonpath='{.spec.template.spec.metadata.labels}'"}).check(oc)
 	})
 
-	//author: mihuang@redhat.com jshu@redhat.com
+	//author: mihuang@redhat.com jshu@redhat.com sguo@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "24088"|./bin/extended-platform-tests run --timeout 90m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-24088-[AWS]Provisioning clusters on AWS with managed dns [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-24088-Medium-33045-[AWS]Provisioning clusters on AWS with managed dns [Serial]", func() {
 		testCaseID := "24088"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -1579,6 +1579,29 @@ spec:
 
 		g.By("Check Aws ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("OCP-33045 - Prevent ClusterDeployment deletion until managed DNSZone is gone")
+		g.By("Delete route53-aws-creds in hive namespace")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "route53-aws-creds", "-n", HiveNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Try to delete cd")
+		cmd, _, _, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("cd", cdName, "-n", oc.Namespace()).Background()
+		defer cmd.Process.Kill()
+
+		g.By("Check the deprovision pod is completed")
+		DeprovisionPodName := getDeprovisionPodName(oc, cdName, oc.Namespace())
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Completed", ok, ClusterUninstallTimeout, []string{"pod", DeprovisionPodName, "-n", oc.Namespace()}).check(oc)
+		g.By("Check the cd is not removed")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace()}).check(oc)
+		g.By("Check the dnszone is not removed")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
+
+		g.By("Create route53-aws-creds in hive namespace")
+		createRoute53AWSCreds(oc, oc.Namespace())
+
+		g.By("Wait until dnszone controller next reconcile, verify dnszone and cd are removed.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
 	})
 
 	//author: mihuang@redhat.com

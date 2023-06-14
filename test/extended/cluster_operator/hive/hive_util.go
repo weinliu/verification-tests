@@ -798,6 +798,23 @@ func getProvisionPodName(oc *exutil.CLI, cdName, namespace string) string {
 	return provisionPodName
 }
 
+func getDeprovisionPodName(oc *exutil.CLI, cdName, namespace string) string {
+	var DeprovisionPodName string
+	var err error
+	waitForDeprovisionPod := func() bool {
+		DeprovisionPodName, _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=deprovision", "-l", "hive.openshift.io/cluster-deployment-name="+cdName, "-n", namespace, "-o=jsonpath={.items[0].metadata.name}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(DeprovisionPodName, cdName) && strings.Contains(DeprovisionPodName, "uninstall") {
+			return true
+		} else {
+			return false
+		}
+	}
+	o.Eventually(waitForDeprovisionPod).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+	return DeprovisionPodName
+}
+
 /*
 Looks for targetLines in the transformed provision log stream with a timeout.
 Default lineTransformation is the identity function.
