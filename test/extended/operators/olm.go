@@ -77,7 +77,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-High-59413-Default CatalogSource aren't created in restricted mode [Serial]", func() {
 		defaultCatalogSources := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
-		g.By("step 1 -> check if the SCC is restricted")
+		exutil.By("step 1 -> check if the SCC is restricted")
 		for _, cs := range defaultCatalogSources {
 			SCC, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", cs, "-o=jsonpath={.spec.grpcPodConfig.securityContextConfig}", "-n", "openshift-marketplace").Output()
 			if err != nil {
@@ -87,11 +87,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Failf("%s's SCC is not restricted!", cs)
 			}
 		}
-		g.By("step 2 -> change the default SCC to legacy")
+		exutil.By("step 2 -> change the default SCC to legacy")
 		for _, cs := range defaultCatalogSources {
 			patchResource(oc, asAdmin, withoutNamespace, "-n", "openshift-marketplace", "catalogsource", cs, "-p", "{\"spec\":{\"grpcPodConfig\": {\"securityContextConfig\": \"legacy\"}}}", "--type=merge")
 		}
-		g.By("step 3 -> check if SCC reset the restricted")
+		exutil.By("step 3 -> check if SCC reset the restricted")
 		for _, cs := range defaultCatalogSources {
 			SCC, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", cs, "-o=jsonpath={.spec.grpcPodConfig.securityContextConfig}", "-n", "openshift-marketplace").Output()
 			if err != nil {
@@ -105,7 +105,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiazha-High-59422-package-server-manager does not stomp on changes made to packgeserver CSV", func() {
-		g.By("1) change the packageser CSV's securityContext")
+		exutil.By("1) change the packageser CSV's securityContext")
 		packageserverCSVYaml, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o", "yaml").OutputToFile("ocp59422-csv.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.ModifyYamlFileContent(packageserverCSVYaml, []exutil.YamlReplace{
@@ -121,7 +121,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", packageserverCSVYaml, "-n", "openshift-operator-lifecycle-manager").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) check if the packageserver CSV's securityContext config reback")
+		exutil.By("2) check if the packageserver CSV's securityContext config reback")
 		allowPrivilegeEscalation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.install.spec.deployments[0].spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if allowPrivilegeEscalation != "false" {
@@ -137,7 +137,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-High-59416-Revert Catalog PSA decisions for 4.12 [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
-		g.By("step 1 -> check openshift-marketplace project labels")
+		exutil.By("step 1 -> check openshift-marketplace project labels")
 		labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-marketplace", "--show-labels").Output()
 		if err != nil {
 			e2e.Failf("fail to get openshift-marketplace project labels, error:%v", err)
@@ -145,7 +145,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		if !strings.Contains(labels, "pod-security.kubernetes.io/enforce=baseline") {
 			e2e.Failf("openshift-marketplace project PSA is not baseline: %s", labels)
 		}
-		g.By("step 2 -> deploy two catalog sources with old index images, both of them should work well without the restricted SCC")
+		exutil.By("step 2 -> deploy two catalog sources with old index images, both of them should work well without the restricted SCC")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -174,7 +174,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// openshifttest-53914 without openshift- prefix
 		// openshift-test-53914 without the `security.openshift.io/scc.podSecurityLabelSync=true` label
 		// openshift-test-53914 with the `security.openshift.io/scc.podSecurityLabelSync=true` label
-		g.By("Starting ../ prepare projects")
+		exutil.By("Starting ../ prepare projects")
 		projects := []string{"openshifttest-53914", "openshift-test1-53914", "openshift-test2-53914", "default", "openshift-test3-53914", "openshift-operators"}
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
@@ -183,15 +183,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		for i, project := range projects {
-			g.By(fmt.Sprintf("step-%d, subscribe to learn perator v0.0.3 in project %s", i, project))
+			exutil.By(fmt.Sprintf("step-%d, subscribe to learn perator v0.0.3 in project %s", i, project))
 			if project != "default" && project != "openshift-operators" {
-				g.By(fmt.Sprintf("step-%d, create project %s", i, project))
+				exutil.By(fmt.Sprintf("step-%d, create project %s", i, project))
 				_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("new-project", project).Output()
 				if err != nil {
 					e2e.Failf("Fail to create project %s, error:%v", project, err)
 				}
 				defer func(ns string) {
-					g.By(fmt.Sprintf(">>>delete project %s", ns))
+					exutil.By(fmt.Sprintf(">>>delete project %s", ns))
 					_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns).Output()
 					if err != nil {
 						e2e.Failf("Defer !!!Fail to delete project %s, error:%v", ns, err)
@@ -394,7 +394,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-53759-Opeatorhub status shows errors after disabling default catalogSources [Disruptive]", func() {
-		g.By("1, check if the marketplace enabled")
+		exutil.By("1, check if the marketplace enabled")
 		cap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the cluster capabilities: %s, error:%v", cap, err)
@@ -402,13 +402,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		if !strings.Contains(cap, "marketplace") {
 			g.Skip("marketplace is disabled, skip...")
 		}
-		g.By("2, check if the default catalogsource disabled")
+		exutil.By("2, check if the default catalogsource disabled")
 		disable, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub", "cluster", "-o=jsonpath={.spec.disableAllDefaultSources}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get operatorhub spec, error:%v", err)
 		}
 		if disable != "true" {
-			g.By("2-1, Disable the default catalogsource")
+			exutil.By("2-1, Disable the default catalogsource")
 			// make sure the operatorhub enabled after this test
 			defer func() {
 				_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": false}}", "--type=merge").Output()
@@ -421,7 +421,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Failf("Fail to disable operatorhub, error:%v", err)
 			}
 		}
-		g.By("3, Check the OperatorHub status")
+		exutil.By("3, Check the OperatorHub status")
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub", "cluster", "-o=jsonpath={.status.sources}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get operatorhub status, error:%v", err)
@@ -442,7 +442,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("1, Create a CatalogSource that in a random project")
+		exutil.By("1, Create a CatalogSource that in a random project")
 		oc.SetupProject()
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-interval.yaml")
 		ocpVersionByte, err := exec.Command("bash", "-c", "oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2").Output()
@@ -461,12 +461,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer cs.delete(itName, dr)
 		cs.createWithCheck(oc, itName, dr)
 
-		g.By("2, delete this CatalogSource's SA")
+		exutil.By("2, delete this CatalogSource's SA")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
 		if err != nil {
 			e2e.Failf("fail to delete the catalogsource SA:%s", cs.name)
 		}
-		g.By("3, check if SA is recreated")
+		exutil.By("3, check if SA is recreated")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
 		if err != nil {
 			e2e.Failf("fail to recreate the catalogsource SA:%s", cs.name)
@@ -480,7 +480,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("1, Create a CatalogSource that in a random project")
+		exutil.By("1, Create a CatalogSource that in a random project")
 		oc.SetupProject()
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
@@ -529,7 +529,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-49687-Make the marketplace operator optional", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("1, check if the marketplace disabled")
+		exutil.By("1, check if the marketplace disabled")
 		cap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the cluster capabilities: %s, error:%v", cap, err)
@@ -538,12 +538,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			g.Skip("marketplace is enabled, skip...")
 		} else {
 			e2e.Logf("marketplace is disabled")
-			g.By("2, check marketplace namespace")
+			exutil.By("2, check marketplace namespace")
 			_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-marketplace").Output()
 			if err == nil {
 				e2e.Failf("error! openshift-marketplace project still exist")
 			}
-			g.By("3, check operatorhub namespace")
+			exutil.By("3, check operatorhub namespace")
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub").Output()
 			if err == nil {
 				e2e.Failf("error! operatorhub resource still exist")
@@ -554,7 +554,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			itName := g.CurrentSpecReport().FullText()
 			dr.addIr(itName)
 
-			g.By("4, Create a CatalogSource that in a random project")
+			exutil.By("4, Create a CatalogSource that in a random project")
 			oc.SetupProject()
 			ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 			og := operatorGroupDescription{
@@ -581,7 +581,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			defer cs.delete(itName, dr)
 			cs.createWithCheck(oc, itName, dr)
 
-			g.By("5, Subscribe to learn perator v0.0.3 in this random project")
+			exutil.By("5, Subscribe to learn perator v0.0.3 in this random project")
 			subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			sub := subscriptionDescription{
 				subName:                "sub-49687",
@@ -604,12 +604,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiazha-Medium-49352-SNO Leader election conventions for cluster topology", func() {
-		g.By("1) get the cluster topology")
+		exutil.By("1) get the cluster topology")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the cluster infra: %s, error:%v", infra, err)
 		}
-		g.By("2) get the leaseDurationSeconds of the packageserver-controller-lock")
+		exutil.By("2) get the leaseDurationSeconds of the packageserver-controller-lock")
 		leaseDurationSeconds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "packageserver-controller-lock", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.leaseDurationSeconds}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the leaseDurationSeconds: %s, error:%v", leaseDurationSeconds, err)
@@ -626,7 +626,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiazha-High-49167-fatal error", func() {
-		g.By("1) Check OLM related resources' logs")
+		exutil.By("1) Check OLM related resources' logs")
 		deps := []string{"catalog-operator", "olm-operator", "package-server-manager", "packageserver"}
 		re1, _ := regexp.Compile("x509.*")
 		re2, _ := regexp.Compile("TLS handshake error.*")
@@ -655,7 +655,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("VMonly-Author:jiazha-High-25966-offline mirroring support", func() {
 		// This is a basic test, you can find images mirroring for disconnected cluster
 		// in: https://gitlab.cee.redhat.com/aosqe/flexy-templates/-/blob/master/functionality-testing/aos-4_10/hosts/sync_index_images_to_qe_registry.sh
-		g.By("1) mirroring an index image to the localhost registry")
+		exutil.By("1) mirroring an index image to the localhost registry")
 		defer os.RemoveAll("etcd-mirror/")
 		logs, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", "quay.io/openshifttest/etcd-index:latest", "localhost:5000", "-a", "/home/cloud-user/auth.json", "--index-filter-by-os='.*'", "--to-manifests=etcd-mirror").Output()
 		if err != nil || strings.Contains(logs, "error") {
@@ -667,7 +667,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("VMonly-ConnectedOnly-Author:jiazha-High-48980-oc adm catalog mirror image to local", func() {
 		mirroredImage := "quay.io/olmqe/sriov-fec:v4.9"
 
-		g.By("1) get the cluster auth")
+		exutil.By("1) get the cluster auth")
 		tokenDir := "/tmp/olm-48980"
 		err := os.MkdirAll(tokenDir, os.ModePerm)
 		defer os.RemoveAll(tokenDir)
@@ -678,14 +678,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		g.By("2) mirror image to local")
+		exutil.By("2) mirror image to local")
 		defer os.RemoveAll("v2/")
 		defer exec.Command("bash", "-c", "rm -rf manifests-sriov-fec-*").Output()
 		logs, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", mirroredImage, "file:///local/index", "-a", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
 		if err != nil || strings.Contains(logs, "error mirroring image") {
 			e2e.Failf("Fail to mirror image to local, error:%v, logs:%v", err, logs)
 		}
-		g.By("3) mirror local image to the docker registry")
+		exutil.By("3) mirror local image to the docker registry")
 		defer os.RemoveAll("manifests-index/")
 		logs, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", "file://local/index/olmqe/sriov-fec:v4.9", "localhost:5000/test", "-a", "/home/cloud-user/auth.json").Output()
 		if err != nil || strings.Contains(logs, "error mirroring image") {
@@ -700,7 +700,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("1) Subscribe to learn operator v0.0.3 with AllNamespaces mode")
+		exutil.By("1) Subscribe to learn operator v0.0.3 with AllNamespaces mode")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-learn-46964",
@@ -718,7 +718,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "openshift-operators", "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("2) Create testing projects and Multi OperatorGroup")
+		exutil.By("2) Create testing projects and Multi OperatorGroup")
 		ogMultiTemplate := filepath.Join(buildPruningBaseDir, "og-multins.yaml")
 		og := operatorGroupDescription{
 			name:         "og-46964",
@@ -741,14 +741,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		p1.targetNamespace = oc.Namespace()
 		p2.targetNamespace = oc.Namespace()
 		og.namespace = oc.Namespace()
-		g.By("2-1) create new projects and label them")
+		exutil.By("2-1) create new projects and label them")
 		p1.create(oc, itName, dr)
 		p1.label(oc, "label-46964")
 		p2.create(oc, itName, dr)
 		p2.label(oc, "label-46964")
 		og.create(oc, itName, dr)
 
-		g.By("3) Subscribe to Sample operator with MultiNamespaces mode")
+		exutil.By("3) Subscribe to Sample operator with MultiNamespaces mode")
 		subSample := subscriptionDescription{
 			subName:                "sub-sample-46964",
 			namespace:              oc.Namespace(),
@@ -765,10 +765,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		subSample.findInstalledCSV(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subSample.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("4) Enable this `disableCopiedCSVs` feature")
+		exutil.By("4) Enable this `disableCopiedCSVs` feature")
 		patchResource(oc, asAdmin, withoutNamespace, "olmconfig", "cluster", "-p", "{\"spec\":{\"features\":{\"disableCopiedCSVs\": true}}}", "--type=merge")
 
-		g.By("5) Check if the AllNamespaces Copied CSV are removed")
+		exutil.By("5) Check if the AllNamespaces Copied CSV are removed")
 
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			copiedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
@@ -782,10 +782,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "AllNamespace Copied CSV should be remove")
 
-		g.By("6) Disable this `disableCopiedCSVs` feature")
+		exutil.By("6) Disable this `disableCopiedCSVs` feature")
 		patchResource(oc, asAdmin, withoutNamespace, "olmconfig", "cluster", "-p", "{\"spec\":{\"features\":{\"disableCopiedCSVs\": false}}}", "--type=merge")
 
-		g.By("7) Check if the AllNamespaces Copied CSV are back")
+		exutil.By("7) Check if the AllNamespaces Copied CSV are back")
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			copiedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
 			if err != nil {
@@ -801,7 +801,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-High-43487-3rd party Operator Catalog references change during an OCP Upgrade", func() {
-		g.By("1) get the Kubernetes version")
+		exutil.By("1) get the Kubernetes version")
 		version, err := exec.Command("bash", "-c", "oc version | grep Kubernetes |awk '{print $3}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		v, _ := semver.ParseTolerant(string(version))
@@ -821,7 +821,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		oc.SetupProject()
 		for k, fullV := range imageTemplates {
-			g.By(fmt.Sprintf("create a CatalogSource with imageTemplate:%s", k))
+			exutil.By(fmt.Sprintf("create a CatalogSource with imageTemplate:%s", k))
 			buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 			csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
 			cs := catalogSourceDescription{
@@ -840,7 +840,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			// It will fail due to "ImagePullBackOff" since no this CatalogSource image in fact, so remove the status checking
 			// newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", oc.Namespace(), "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-			g.By("3) get the real CatalogSource image version")
+			exutil.By("3) get the real CatalogSource image version")
 			err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 				// oc get catalogsource cs-43487 -o=jsonpath={.spec.image}
 				image, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", cs.name, "-n", oc.Namespace(), "-o=jsonpath={.spec.image}").Output()
@@ -875,7 +875,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("1) Subscribe to the Learn operator in a random project")
+		exutil.By("1) Subscribe to the Learn operator in a random project")
 		oc.SetupProject()
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
@@ -904,7 +904,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("2) check if the extract job uses the zip flag")
+		exutil.By("2) check if the extract job uses the zip flag")
 		// ["opm","alpha","bundle","extract","-m","/bundle/","-n","openshift-marketplace","-c","9b59f03f8e8ea2f818061847881908aae51cf41836e4a3b822dcc6d3a01481c","-z"]
 		extractCommand, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("job", "-n", "openshift-marketplace", "-o=jsonpath={.items[0].spec.template.spec.containers[0].command}").Output()
 		if err != nil {
@@ -914,7 +914,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			e2e.Failf("This bundle extract job doesn't use the opm compression feature!")
 		}
 
-		g.By("3) check if the compression content is empty")
+		exutil.By("3) check if the compression content is empty")
 		bData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-marketplace", "-o=jsonpath={.items[0].binaryData}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get ConfigMap's binaryData: %v", err)
@@ -928,7 +928,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("ConnectedOnly-Author:jiazha-High-43101-OLM blocks minor OpenShift upgrades when incompatible optional operators are installed", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		// consumes this index imaage: quay.io/olmqe/etcd-index:upgrade-auto, it contains the etcdoperator v0.9.2, v0.9.4, v0.9.5
-		g.By("1) Create a CatalogSource in the openshift-marketplace project")
+		exutil.By("1) Create a CatalogSource in the openshift-marketplace project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		cs := catalogSourceDescription{
@@ -948,7 +948,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		cs.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", "openshift-marketplace", "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-		g.By("2) Install the OperatorGroup in a random project")
+		exutil.By("2) Install the OperatorGroup in a random project")
 		oc.SetupProject()
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
@@ -959,7 +959,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer og.delete(itName, dr)
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) Install the etcdoperator v0.9.2 with Manual approval")
+		exutil.By("3) Install the etcdoperator v0.9.2 with Manual approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-43101",
@@ -978,19 +978,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.update(oc, itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("4) Apprrove this etcdoperator.v0.9.2, it should be in Complete state")
+		exutil.By("4) Apprrove this etcdoperator.v0.9.2, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "etcdoperator.v0.9.2", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		// olm.properties: '[{"type": "olm.maxOpenShiftVersion", "value": " "}]'
-		g.By("5) This operator's olm.maxOpenShiftVersion is empty, so it should block the upgrade")
+		exutil.By("5) This operator's olm.maxOpenShiftVersion is empty, so it should block the upgrade")
 		CheckUpgradeStatus(oc, "False")
 
-		g.By("6) Apprrove this etcdoperator.v0.9.4, it should be in Complete state")
+		exutil.By("6) Apprrove this etcdoperator.v0.9.4, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "etcdoperator.v0.9.4", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 		// olm.properties: '[{"type": "olm.maxOpenShiftVersion", "value": "4.9"}]'
-		g.By("7) 4.9.0-xxx upgraded to 4.10.0-xxx < 4.10.0, or 4.9.1 upgraded to 4.9.x < 4.10.0, so it should NOT block 4.9 upgrade, but block 4.10+ upgrade")
+		exutil.By("7) 4.9.0-xxx upgraded to 4.10.0-xxx < 4.10.0, or 4.9.1 upgraded to 4.9.x < 4.10.0, so it should NOT block 4.9 upgrade, but block 4.10+ upgrade")
 		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the OCP version")
@@ -1004,11 +1004,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			CheckUpgradeStatus(oc, "True")
 		}
 
-		g.By("8) Apprrove this etcdoperator.v0.9.5, it should be in Complete state")
+		exutil.By("8) Apprrove this etcdoperator.v0.9.5, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "etcdoperator.v0.9.5", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.5", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 		// olm.properties: '[{"type": "olm.maxOpenShiftVersion", "value": "4.10.0"}]'
-		g.By("9) 4.9.0-xxx upgraded to 4.10.0-xxx < 4.10.0, or 4.9.1 upgraded to 4.9.x < 4.11.0, so it should NOT block 4.10 upgrade, but blocks 4.11+ upgrade")
+		exutil.By("9) 4.9.0-xxx upgraded to 4.10.0-xxx < 4.10.0, or 4.9.1 upgraded to 4.9.x < 4.11.0, so it should NOT block 4.10 upgrade, but blocks 4.11+ upgrade")
 		maxVersion2, _ := semver.ParseTolerant("4.10.0")
 		// current version > the operator's max version: 4.10.0
 		if v.Compare(maxVersion2) > 0 {
@@ -1026,7 +1026,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// this operator must be installed in the default project since the env variable: MY_POD_NAMESPACE = default
-		g.By("1) create the OperatorGroup in the default project")
+		exutil.By("1) create the OperatorGroup in the default project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -1041,7 +1041,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer og.delete(itName, dr)
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) subscribe to the learn-operator.v0.0.3 with ENV variables")
+		exutil.By("2) subscribe to the learn-operator.v0.0.3 with ENV variables")
 		subTemplate := filepath.Join(buildPruningBaseDir, "env-subscription.yaml")
 
 		sub := subscriptionDescription{
@@ -1061,7 +1061,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "default", "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3) check those env variables")
+		exutil.By("3) check those env variables")
 		envVars := map[string]string{
 			"MY_POD_NAMESPACE":        "default",
 			"OPERATOR_CONDITION_NAME": "learn-operator.v0.0.3",
@@ -1089,7 +1089,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		defaultCatalogs := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		for i, catalog := range defaultCatalogs {
-			g.By(fmt.Sprintf("%d) check CatalogSource: %s", i+1, catalog))
+			exutil.By(fmt.Sprintf("%d) check CatalogSource: %s", i+1, catalog))
 			if strings.Contains(catalogs, catalog) {
 				policy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", fmt.Sprintf("olm.catalogSource=%s", catalog), "-n", "openshift-marketplace", "-o=jsonpath={.items[0].spec.containers[0].terminationMessagePolicy}").Output()
 				if err != nil {
@@ -1106,7 +1106,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiazha-Medium-43803-Only one of multiple subscriptions to the same package is honored [Flaky]", func() {
-		g.By("1) create the OperatorGroup in a random project")
+		exutil.By("1) create the OperatorGroup in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -1121,7 +1121,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) subscribe to the learn-operator.v0.0.3 with Automatic approval")
+		exutil.By("2) subscribe to the learn-operator.v0.0.3 with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-43803",
@@ -1140,7 +1140,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3) re-subscribe to this learn operator with another subscription name")
+		exutil.By("3) re-subscribe to this learn operator with another subscription name")
 		sub2 := subscriptionDescription{
 			subName:                "sub2-43803",
 			namespace:              oc.Namespace(),
@@ -1156,7 +1156,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub2.delete(itName, dr)
 		sub2.createWithoutCheck(oc, itName, dr)
 
-		g.By("4) Check OLM logs")
+		exutil.By("4) Check OLM logs")
 		err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 			logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/catalog-operator", "-n", "openshift-operator-lifecycle-manager").Output()
 			if err != nil {
@@ -1173,7 +1173,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiazha-High-45411-packageserver isn't following the OpenShift HA conventions", func() {
-		g.By("1) get the cluster infrastructure")
+		exutil.By("1) get the cluster infrastructure")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the cluster infra")
@@ -1183,11 +1183,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		if infra == "HighlyAvailable" {
 			e2e.Logf("This is a HA cluster!")
-			g.By("2) check if there are two packageserver pods")
+			exutil.By("2) check if there are two packageserver pods")
 			if num != "2" {
 				e2e.Failf("!!!Fail, should have 2 packageserver pod, but get %s!", num)
 			}
-			g.By("3) check if the two packageserver pods running on different nodes")
+			exutil.By("3) check if the two packageserver pods running on different nodes")
 			names, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=packageserver", "-o", "name").Output()
 			if err != nil {
 				e2e.Failf("Fail to get the Packageserver pods' name")
@@ -1213,7 +1213,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiazha-High-Longduration-NonPreRelease-43135-PackageServer respects single-node configuration [Disruptive]", func() {
-		g.By("1) get the cluster infrastructure")
+		exutil.By("1) get the cluster infrastructure")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the cluster infra")
@@ -1222,7 +1222,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if infra == "SingleReplica" {
 			e2e.Logf("This is a SNO cluster")
-			g.By("2) check if only have one packageserver pod")
+			exutil.By("2) check if only have one packageserver pod")
 			if num != "1" {
 				e2e.Failf("!!!Fail, should only have 1 packageserver pod, but get %s!", num)
 			}
@@ -1233,17 +1233,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 					e2e.Failf("Defer: fail to enable CVO")
 				}
 			}()
-			g.By("3) stop CVO")
+			exutil.By("3) stop CVO")
 			_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas", "0", "deployment/cluster-version-operator", "-n", "openshift-cluster-version").Output()
 			if err != nil {
 				e2e.Failf("Fail to stop CVO")
 			}
-			g.By("4) stop the PSM")
+			exutil.By("4) stop the PSM")
 			_, err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas", "0", "deployment/package-server-manager", "-n", "openshift-operator-lifecycle-manager").Output()
 			if err != nil {
 				e2e.Failf("Fail to stop the PSM")
 			}
-			g.By("5) patch the replica to 3")
+			exutil.By("5) patch the replica to 3")
 			// oc get csv packageserver -o=jsonpath={.spec.install.spec.deployments[?(@.name==\"packageserver\")].spec.replicas}
 			// oc patch csv/packageserver -p '{"spec":{"install":{"spec":{"deployments":[{"name":"packageserver", "spec":{"replicas":3, "template":{}, "selector":{"matchLabels":{"app":"packageserver"}}}}]}}}}' --type=merge
 			// oc patch deploy/packageserver -p '{"spec":{"replicas":3}}' --type=merge
@@ -1259,12 +1259,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				return true, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "packageserver replicas is not 3")
-			g.By("6) enable CVO")
+			exutil.By("6) enable CVO")
 			_, err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas", "1", "deployment/cluster-version-operator", "-n", "openshift-cluster-version").Output()
 			if err != nil {
 				e2e.Failf("Fail to enable CVO")
 			}
-			g.By("7) check if the PSM back")
+			exutil.By("7) check if the PSM back")
 			err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 				num, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "package-server-manager", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.replicas}").Output()
 				if num != "1" {
@@ -1273,7 +1273,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				return true, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "package-server-manager replicas is not reback to 1")
-			g.By("8) check if the packageserver pods number back to 1")
+			exutil.By("8) check if the packageserver pods number back to 1")
 			// for some SNO clusters, reback may take 10 mins around
 			err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
 				num, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.availableReplicas}").Output()
@@ -1286,7 +1286,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		} else {
 			// HighlyAvailable
 			e2e.Logf("This is HA cluster, not SNO")
-			g.By("2) check if only have two packageserver pods")
+			exutil.By("2) check if only have two packageserver pods")
 			if num != "2" {
 				e2e.Failf("!!!Fail, should only have 2 packageserver pods, but get %s!", num)
 			}
@@ -1298,14 +1298,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// that means may leads to other etcd-opertor subscription fail if in Parallel
 	g.It("ConnectedOnly-VMonly-Author:jiazha-High-37826-use an PullSecret for the private Catalog Source image [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
-		g.By("1) Create a pull secert for CatalogSource")
+		exutil.By("1) Create a pull secert for CatalogSource")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dockerConfig := filepath.Join("/home", "cloud-user", ".docker", "auto", "config.json")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-marketplace", "secret", "generic", "secret-37826", fmt.Sprintf("--from-file=.dockerconfigjson=%s", dockerConfig), "--type=kubernetes.io/dockerconfigjson").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-marketplace", "secret", "secret-37826").Execute()
 
-		g.By("2) Install this private CatalogSource in the openshift-marketplace project")
+		exutil.By("2) Install this private CatalogSource in the openshift-marketplace project")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		cs := catalogSourceDescription{
 			name:        "cs-37826",
@@ -1324,7 +1324,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer cs.delete(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", "openshift-marketplace", "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-		g.By("4) Install the etcdoperator v0.9.4 from this private image")
+		exutil.By("4) Install the etcdoperator v0.9.4 from this private image")
 		oc.SetupProject()
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
@@ -1360,7 +1360,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		manifest := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, ipName, "-o=jsonpath={.status.plan[0].resource.manifest}")
 		valid := regexp.MustCompile(`name":"(\S+)","namespace"`)
 		job := valid.FindStringSubmatch(manifest)
-		g.By("5) Only check if the job pod works well")
+		exutil.By("5) Only check if the job pod works well")
 		// in this test case, we don't need to care about if the operator pods works well.
 		// more details: https://bugzilla.redhat.com/show_bug.cgi?id=1909992#c5
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"-n", "openshift-marketplace", "pods", "-l", fmt.Sprintf("job-name=%s", string(job[1])), "-o=jsonpath={.items[0].status.phase}"}).check(oc)
@@ -1475,7 +1475,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-High-37442-create a Conditions CR for each Operator it installs [Flaky]", func() {
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -1490,7 +1490,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the learn-operator v0.9.4 with Automatic approval")
+		exutil.By("2) Install the learn-operator v0.9.4 with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-37442",
@@ -1507,7 +1507,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3) Check if OperatorCondition generated well")
+		exutil.By("3) Check if OperatorCondition generated well")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "learn-operator", ok, []string{"operatorcondition", "learn-operator.v0.0.3", "-n", oc.Namespace(), "-o=jsonpath={.spec.deployments[0]}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "learn-operator.v0.0.3", ok, []string{"deployment", "learn-operator", "-n", oc.Namespace(), "-o=jsonpath={.spec.template.spec.containers[*].env[?(@.name==\"OPERATOR_CONDITION_NAME\")].value}"}).check(oc)
 		// this learn-operator.v0.0.3 role should be owned by OperatorCondition
@@ -1515,11 +1515,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// this learn-operator.v0.0.3 role should be added to learn-operator SA
 		newCheck("expect", asAdmin, withoutNamespace, compare, "learn-operator", ok, []string{"rolebinding", "learn-operator.v0.0.3", "-n", oc.Namespace(), "-o=jsonpath={.subjects[0].name}"}).check(oc)
 
-		g.By("4) delete the operator so that can check the related resource in next step")
+		exutil.By("4) delete the operator so that can check the related resource in next step")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 
-		g.By("5) Check if the related resources are removed successfully")
+		exutil.By("5) Check if the related resources are removed successfully")
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"operatorcondition", "learn-operator.v0.0.3", "-n", oc.Namespace()}).check(oc)
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"role", "learn-operator.v0.0.3", "-n", oc.Namespace()}).check(oc)
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"rolebinding", "learn-operator.v0.0.3", "-n", oc.Namespace()}).check(oc)
@@ -1530,7 +1530,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// update at June 16, 2021 due to https://bugzilla.redhat.com/show_bug.cgi?id=1927340
 	// details: https://hackmd.io/9wG20hu5TU-y1HrkhvcsZQ?view
 	g.It("ConnectedOnly-Author:jiazha-Medium-37710-supports the Upgradeable Supported Condition", func() {
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -1545,7 +1545,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the learn-operator.v0.0.1 with Manual approval")
+		exutil.By("2) Install the learn-operator.v0.0.1 with Manual approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-37710",
@@ -1564,24 +1564,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.update(oc, itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("3) Apprrove this learn-operator.v0.0.1, it should be in Complete state")
+		exutil.By("3) Apprrove this learn-operator.v0.0.1, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "learn-operator.v0.0.1", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		// The conditions array will be added to OperatorCondition’s spec and operator is now expected to only update the conditions in the spec to reflect its condition
 		// and no longer push changes to OperatorCondition’s status.
 		// $oc patch operatorcondition learn-operator.v0.0.1 -p '{"spec":{"conditions":[{"type":"Upgradeable", "observedCondition":1,"status":"False","reason":"bug","message":"not ready","lastUpdateTime":"2021-06-16T16:56:44Z","lastTransitionTime":"2021-06-16T16:56:44Z"}]}}' --type=merge
-		g.By("4) Patch the spec.conditions[0].Upgradeable to False")
+		exutil.By("4) Patch the spec.conditions[0].Upgradeable to False")
 		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"conditions\": [{\"type\": \"Upgradeable\", \"status\": \"False\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disable the upgrade\", \"observedCondition\":1, \"lastUpdateTime\":\"2021-06-16T16:56:44Z\",\"lastTransitionTime\":\"2021-06-16T16:56:44Z\"}]}}", "--type=merge")
 
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Upgradeable", ok, []string{"operatorcondition", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].type}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "False", ok, []string{"operatorcondition", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].status}"}).check(oc)
 
-		g.By("5) Apprrove this learn-operator.v0.0.2, the corresponding CSV should be in Pending state")
+		exutil.By("5) Apprrove this learn-operator.v0.0.2, the corresponding CSV should be in Pending state")
 		sub.approveSpecificIP(oc, itName, dr, "learn-operator.v0.0.2", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Pending", ok, []string{"csv", "learn-operator.v0.0.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("6) Check the CSV message, the operator is not upgradeable")
+		exutil.By("6) Check the CSV message, the operator is not upgradeable")
 		err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "csv", "learn-operator.v0.0.2", "-o=jsonpath={.status.message}").Output()
 			if !strings.Contains(msg, "operator is not upgradeable") {
@@ -1591,16 +1591,16 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "learn-operator.v0.0.2 operator is upgradeable")
 
-		g.By("7) Patch the spec.conditions[0].Upgradeable to True")
+		exutil.By("7) Patch the spec.conditions[0].Upgradeable to True")
 		// $oc patch operatorcondition learn-operator.v0.0.1 -p '{"spec":{"conditions":[{"type":"Upgradeable", "observedCondition":1,"status":"True","reason":"bug","message":"ready","lastUpdateTime":"2021-06-16T16:56:44Z","lastTransitionTime":"2021-06-16T16:56:44Z"}]}}' --type=merge
 		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"conditions\": [{\"type\": \"Upgradeable\", \"status\": \"True\", \"reason\": \"ready\", \"message\": \"enable the upgrade\", \"observedCondition\":1, \"lastUpdateTime\":\"2021-06-16T17:56:44Z\",\"lastTransitionTime\":\"2021-06-16T17:56:44Z\"}]}}", "--type=merge")
-		g.By("8) the learn-operator.v0.0.1 can be upgraded to etcdoperator.v0.9.4 successfully")
+		exutil.By("8) the learn-operator.v0.0.1 can be upgraded to etcdoperator.v0.9.4 successfully")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 	})
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-37631-Allow cluster admin to overwrite the OperatorCondition", func() {
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -1615,7 +1615,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the learn-operator.v0.0.1 with Manual approval")
+		exutil.By("2) Install the learn-operator.v0.0.1 with Manual approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-37631",
@@ -1634,18 +1634,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.update(oc, itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("3) Apprrove this learn-operator.v0.0.1, it should be in Complete state")
+		exutil.By("3) Apprrove this learn-operator.v0.0.1, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "learn-operator.v0.0.1", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("4) Patch the OperatorCondition to set the Upgradeable to False")
+		exutil.By("4) Patch the OperatorCondition to set the Upgradeable to False")
 		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"overrides\": [{\"type\": \"Upgradeable\", \"status\": \"False\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disable the upgrade\"}]}}", "--type=merge")
 
-		g.By("5) Apprrove this learn-operator.v0.0.2, the corresponding CSV should be in Pending state")
+		exutil.By("5) Apprrove this learn-operator.v0.0.2, the corresponding CSV should be in Pending state")
 		sub.approveSpecificIP(oc, itName, dr, "learn-operator.v0.0.2", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Pending", ok, []string{"csv", "learn-operator.v0.0.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("6) Check the CSV message, the operator is not upgradeable")
+		exutil.By("6) Check the CSV message, the operator is not upgradeable")
 		err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "csv", "learn-operator.v0.0.2", "-o=jsonpath={.status.message}").Output()
 			if !strings.Contains(msg, "operator is not upgradeable") {
@@ -1655,17 +1655,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "learn-operator.v0.0.2 operator is upgradeable")
 
-		g.By("7) Change the Upgradeable of the OperatorCondition to True")
+		exutil.By("7) Change the Upgradeable of the OperatorCondition to True")
 		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"overrides\": [{\"type\": \"Upgradeable\", \"status\": \"True\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disable the upgrade\"}]}}", "--type=merge")
 
-		g.By("8) the learn-operator.v0.0.1 should be upgraded to learn-operator.v0.0.2 successfully")
+		exutil.By("8) the learn-operator.v0.0.1 should be upgraded to learn-operator.v0.0.2 successfully")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 	})
 
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-Medium-33450-Operator upgrades can delete existing CSV before completion", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
-		g.By("1) Install a customization CatalogSource CR")
+		exutil.By("1) Install a customization CatalogSource CR")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		cs := catalogSourceDescription{
@@ -1684,7 +1684,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer cs.delete(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", "openshift-marketplace", "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-		g.By("2) Subscribe to the etcd operator with Manual approval")
+		exutil.By("2) Subscribe to the etcd operator with Manual approval")
 		oc.SetupProject()
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 
@@ -1711,17 +1711,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
-		g.By("3) Apprrove the etcdoperator.v0.9.2, it should be in Complete state")
+		exutil.By("3) Apprrove the etcdoperator.v0.9.2, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "etcdoperator.v0.9.2", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("4) Apprrove the etcdoperator.v0.9.4, it should be in Failed state")
+		exutil.By("4) Apprrove the etcdoperator.v0.9.4, it should be in Failed state")
 		sub.approveSpecificIP(oc, itName, dr, "etcdoperator.v0.9.4", "Failed")
 
-		g.By("5) The etcdoperator.v0.9.4 CSV should be in Pending status")
+		exutil.By("5) The etcdoperator.v0.9.4 CSV should be in Pending status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Pending", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("6) The SA should be owned by the etcdoperator.v0.9.2")
+		exutil.By("6) The SA should be owned by the etcdoperator.v0.9.2")
 		err := wait.Poll(3*time.Second, 10*time.Second, func() (bool, error) {
 			saOwner := getResource(oc, asAdmin, withoutNamespace, "sa", "etcd-operator", "-n", sub.namespace, "-o=jsonpath={.metadata.ownerReferences[0].name}")
 			if strings.Compare(saOwner, "etcdoperator.v0.9.2") != 0 {
@@ -1736,10 +1736,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-High-37260-should allow to create the default CatalogSource [Disruptive] [Flaky]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("1) Disable the default OperatorHub")
+		exutil.By("1) Disable the default OperatorHub")
 		patchResource(oc, asAdmin, withoutNamespace, "operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": true}}", "--type=merge")
 		defer patchResource(oc, asAdmin, withoutNamespace, "operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": false}}", "--type=merge")
-		g.By("1-1) Check if the default CatalogSource resource are removed")
+		exutil.By("1-1) Check if the default CatalogSource resource are removed")
 		err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "redhat-operators", "-n", "openshift-marketplace").Output()
 			if strings.Contains(res, "not found") {
@@ -1749,7 +1749,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "redhat-operators found")
 
-		g.By("2) Create a CatalogSource with a default CatalogSource name")
+		exutil.By("2) Create a CatalogSource with a default CatalogSource name")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		ocpVersionByte, err := exec.Command("bash", "-c", "oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2").Output()
@@ -1771,7 +1771,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr.addIr(itName)
 		cs.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
-		g.By("2-1) Check if this custom CatalogSource resource works well")
+		exutil.By("2-1) Check if this custom CatalogSource resource works well")
 		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest").Output()
 			if strings.Contains(res, "OLM QE") {
@@ -1781,13 +1781,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "packagemanifest does not contain OLM QE")
 
-		g.By("3) Delete the Marketplace pods and check if the custome CatalogSource still works well")
-		g.By("3-1) get the marketplace-operator pod's name")
+		exutil.By("3) Delete the Marketplace pods and check if the custome CatalogSource still works well")
+		exutil.By("3-1) get the marketplace-operator pod's name")
 		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "name=marketplace-operator", "-o=jsonpath={.items..metadata.name}", "-n", "openshift-marketplace").Output()
 		if err != nil {
 			e2e.Failf("Failed to get the marketplace pods")
 		}
-		g.By("3-2) delete/recreate the marketplace-operator pod")
+		exutil.By("3-2) delete/recreate the marketplace-operator pod")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", podName, "-n", "openshift-marketplace").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// time.Sleep(30 * time.Second)
@@ -1800,7 +1800,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "marketplace-operator pod is not running")
-		g.By("3-3) check if the custom CatalogSource still there")
+		exutil.By("3-3) check if the custom CatalogSource still there")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest").Output()
@@ -1811,11 +1811,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "packagemanifest does not contain OLM QE")
 
-		g.By("4) Enable the default OperatorHub")
+		exutil.By("4) Enable the default OperatorHub")
 		patchResource(oc, true, true, "operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": false}}", "--type=merge")
-		g.By("4-1) Check if the default CatalogSource resource are back")
+		exutil.By("4-1) Check if the default CatalogSource resource are back")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", "redhat-operators", "-n", "openshift-marketplace", "-o=jsonpath={.status..lastObservedState}"}).check(oc)
-		g.By("4-2) Check if the default CatalogSource works and the custom one are removed")
+		exutil.By("4-2) Check if the default CatalogSource works and the custom one are removed")
 		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest").Output()
 			if strings.Contains(res, "Red Hat Operators") && !strings.Contains(res, "OLM QE") {
@@ -1841,10 +1841,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By(fmt.Sprintf("1) create the OperatorGroup in project: %s", oc.Namespace()))
+		exutil.By(fmt.Sprintf("1) create the OperatorGroup in project: %s", oc.Namespace()))
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) install learn-operator.v0.0.3")
+		exutil.By("2) install learn-operator.v0.0.3")
 		sub := subscriptionDescription{
 			subName:                "sub-25922",
 			namespace:              oc.Namespace(),
@@ -1862,7 +1862,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.update(oc, itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("3) create a ConfigMap")
+		exutil.By("3) create a ConfigMap")
 		cmTemplate := filepath.Join(buildPruningBaseDir, "cm-template.yaml")
 
 		cm := configMapDescription{
@@ -1872,7 +1872,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		cm.create(oc, itName, dr)
 
-		g.By("4) Patch this ConfigMap a volume")
+		exutil.By("4) Patch this ConfigMap a volume")
 		sub.patch(oc, "{\"spec\": {\"channel\":\"alpha\",\"config\":{\"volumeMounts\":[{\"mountPath\":\"/test\",\"name\":\"config-volume\"}],\"volumes\":[{\"configMap\":{\"name\":\"special-config\"},\"name\":\"config-volume\"}]},\"name\":\"learn\",\"source\":\"cs-25922\",\"sourceNamespace\":\"openshift-marketplace\"}}")
 		err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 			podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=learn-operator", "-o=jsonpath={.items[0].metadata.name}").Output()
@@ -1887,15 +1887,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "pod of learn-operator-alm-owned special-config not mount well")
-		g.By("5) Patch a non-exist volume")
+		exutil.By("5) Patch a non-exist volume")
 		sub.patch(oc, "{\"spec\":{\"channel\":\"alpha\",\"config\":{\"volumeMounts\":[{\"mountPath\":\"/test\",\"name\":\"volume1\"}],\"volumes\":[{\"persistentVolumeClaim\":{\"claimName\":\"claim1\"},\"name\":\"volume1\"}]},\"name\":\"learn\",\"source\":\"cs-25922\",\"sourceNamespace\":\"openshift-marketplace\"}}")
 		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 			for i := 0; i < 2; i++ {
-				g.By("5-1) Check the pods status")
+				exutil.By("5-1) Check the pods status")
 				podStatus, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=learn-operator", fmt.Sprintf("-o=jsonpath={.items[%d].status.phase}", i)).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				if podStatus == "Pending" {
-					g.By("5-2) The pod status is Pending as expected")
+					exutil.By("5-2) The pod status is Pending as expected")
 					return true, nil
 				}
 			}
@@ -1907,13 +1907,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-35631-Remove OperatorSource API", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("1) Check the operatorsource resource")
+		exutil.By("1) Check the operatorsource resource")
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorsource").Output()
 		e2e.Logf("Get the expected error: %s", msg)
 		o.Expect(msg).To(o.ContainSubstring("the server doesn't have a resource type"))
 
 		// for current disconnected env, only have the default community CatalogSource CRs
-		g.By("2) Check the default Community CatalogSource CRs")
+		exutil.By("2) Check the default Community CatalogSource CRs")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", "openshift-marketplace").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Get the installed CatalogSource CRs:\n %s", msg)
@@ -1922,7 +1922,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// o.Expect(msg).To(o.ContainSubstring("community-operators"))
 		// o.Expect(msg).To(o.ContainSubstring("redhat-marketplace"))
 		// o.Expect(msg).To(o.ContainSubstring("redhat-operators"))
-		g.By("3) Check the Packagemanifest")
+		exutil.By("3) Check the Packagemanifest")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.ContainSubstring("No resources found"))
@@ -1931,17 +1931,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-31693-Check CSV information on the PackageManifest", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("1) The relatedImages should exist")
+		exutil.By("1) The relatedImages should exist")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.relatedImages}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.BeEmpty())
 
-		g.By("2) The minKubeVersion should exist")
+		exutil.By("2) The minKubeVersion should exist")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.minKubeVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.BeEmpty())
 
-		g.By("3) In this case, nativeAPI is optional, and prometheus does not have any nativeAPIs, which is ok.")
+		exutil.By("3) In this case, nativeAPI is optional, and prometheus does not have any nativeAPIs, which is ok.")
 		oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.nativeAPIs}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
@@ -1988,13 +1988,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			g.Skip("SNO cluster - skipping test ...")
 		}
 
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 		og.createwithCheck(oc, itName, dr)
-		g.By("2) Install the Prometheus with Automatic approval")
+		exutil.By("2) Install the Prometheus with Automatic approval")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3) Add app label")
+		exutil.By("3) Add app label")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, firstNode, "app_54038")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, firstNode, "app_54038", "dev")
 
@@ -2002,12 +2002,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Node labels " + msg)
 
-		g.By("4) Install the Prometheus CR")
+		exutil.By("4) Install the Prometheus CR")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", prometheusCR, "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Available", ok, []string{"Prometheus", "example", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].type}"}).check(oc)
 
-		g.By("5) Ensure that pod is not scheduled in the node with the defined label")
+		exutil.By("5) Ensure that pod is not scheduled in the node with the defined label")
 		deployedNode := getResource(oc, asAdmin, withoutNamespace, "pods", "prometheus-example-0", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}")
 		if firstNode == deployedNode {
 			e2e.Failf("Prometheus is deployed in the same node of app_54038 label. Node: %s . Node Labels: %s", deployedNode, msg)
@@ -2057,19 +2057,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			g.Skip("SNO cluster - skipping test ...")
 		}
 
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 		og.createwithCheck(oc, itName, dr)
-		g.By("2) Install the Prometheus with Automatic approval")
+		exutil.By("2) Install the Prometheus with Automatic approval")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3) Install the Prometheus CR")
+		exutil.By("3) Install the Prometheus CR")
 		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", prometheusCRTemplate, "-p", "NODE_NAME="+firstNode, "NAMESPACE="+oc.Namespace())
 
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Available", ok, []string{"Prometheus", "example", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].type}"}).check(oc)
 
-		g.By("4) Ensure that pod is scaled in the specified node")
+		exutil.By("4) Ensure that pod is scaled in the specified node")
 		deployedNode := getResource(oc, asAdmin, withoutNamespace, "pods", "prometheus-example-0", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}")
 		o.Expect(firstNode).To(o.Equal(deployedNode))
 
@@ -2077,7 +2077,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-Medium-24850-Allow users to edit the deployment of an active CSV [Flaky]", func() {
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -2092,7 +2092,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the learn operator with Automatic approval")
+		exutil.By("2) Install the learn operator with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 
 		sub := subscriptionDescription{
@@ -2110,15 +2110,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3) Get pod name")
+		exutil.By("3) Get pod name")
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=learn-operator", "-n", oc.Namespace(), "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4) Patch the deploy object by adding an environment variable")
+		exutil.By("4) Patch the deploy object by adding an environment variable")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "deploy/learn-operator", "A=B", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("5) Get restarted pod name")
+		exutil.By("5) Get restarted pod name")
 		podNameAfterPatch, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=learn-operator", "-n", oc.Namespace(), "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podName).NotTo(o.Equal(podNameAfterPatch))
@@ -2186,24 +2186,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 		)
 
-		g.By("1) Create catalog source")
+		exutil.By("1) Create catalog source")
 		defer cs.delete(itName, dr)
 		cs.create(oc, itName, dr)
 
-		g.By("2) Create the OperatorGroup")
+		exutil.By("2) Create the OperatorGroup")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) Start to subscribe to the Etcd operator")
+		exutil.By("3) Start to subscribe to the Etcd operator")
 		sub.create(oc, itName, dr)
 
-		g.By("4) Delete Etcd subscription and csv")
+		exutil.By("4) Delete Etcd subscription and csv")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 
-		g.By("5) Start to subscribe to the Etcd operator with the modifier crd")
+		exutil.By("5) Start to subscribe to the Etcd operator with the modifier crd")
 		subModified.create(oc, itName, dr)
 
-		g.By("6) Get property propertyIncludedTest in etcdclusters.etcd.database.coreos.com")
+		exutil.By("6) Get property propertyIncludedTest in etcdclusters.etcd.database.coreos.com")
 		crdYamlOutput, err := oc.AsAdmin().Run("get").Args("crd", "etcdclusters.etcd.database.coreos.com", "-o=yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(crdYamlOutput).To(o.ContainSubstring("propertyIncludedTest"))
@@ -2236,20 +2236,20 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 		)
 
-		g.By("1) Create first OperatorGroup")
+		exutil.By("1) Create first OperatorGroup")
 		og.create(oc, itName, dr)
 
-		g.By("2) Create second OperatorGroup")
+		exutil.By("2) Create second OperatorGroup")
 		og1.create(oc, itName, dr)
 
-		g.By("3) Check OperatorGroup Status")
+		exutil.By("3) Check OperatorGroup Status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "MultipleOperatorGroupsFound", ok, []string{"og", og.name, "-n", ns, "-o=jsonpath={.status.conditions..reason}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "MultipleOperatorGroupsFound", ok, []string{"og", og1.name, "-n", ns, "-o=jsonpath={.status.conditions..reason}"}).check(oc)
 
-		g.By("4) Delete second OperatorGroup")
+		exutil.By("4) Delete second OperatorGroup")
 		og1.delete(itName, dr)
 
-		g.By("5) Check OperatorGroup status")
+		exutil.By("5) Check OperatorGroup status")
 		err := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("og", og.name, "-n", ns, "-o=jsonpath={.status.conditions..reason}").Output()
 			if err != nil {
@@ -2263,7 +2263,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "The error MultipleOperatorGroupsFound still be reported in status")
-		g.By("6) OCP-42970 SUCCESS")
+		exutil.By("6) OCP-42970 SUCCESS")
 	})
 
 	// author: bandrade@redhat.com
@@ -2289,17 +2289,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 		)
 
-		g.By("1) Create first OperatorGroup")
+		exutil.By("1) Create first OperatorGroup")
 		og.create(oc, itName, dr)
 
-		g.By("2) Check OperatorGroup Status")
+		exutil.By("2) Check OperatorGroup Status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "ServiceAccountNotFound", ok, []string{"og", og.name, "-n", ns, "-o=jsonpath={.status.conditions..reason}"}).check(oc)
 
-		g.By("3) Check Service Account")
+		exutil.By("3) Check Service Account")
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4) Check OperatorGroup status")
+		exutil.By("4) Check OperatorGroup status")
 		err = wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("og", og.name, "-n", ns, "-o=jsonpath={.status.conditions..reason}").Output()
 			if err != nil {
@@ -2349,7 +2349,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		defer func() {
 			for _, v := range csObjects {
-				g.By(fmt.Sprintf("9) Remove the %s CatalogSource", v.name))
+				exutil.By(fmt.Sprintf("9) Remove the %s CatalogSource", v.name))
 				cs := catalogSourceDescription{
 					name:        v.name,
 					namespace:   "openshift-marketplace",
@@ -2365,7 +2365,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}()
 
 		for i, v := range csObjects {
-			g.By(fmt.Sprintf("%d) start to create the %s CatalogSource", i+1, v.name))
+			exutil.By(fmt.Sprintf("%d) start to create the %s CatalogSource", i+1, v.name))
 			cs := catalogSourceDescription{
 				name:        v.name,
 				namespace:   "openshift-marketplace",
@@ -2380,10 +2380,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status.connectionState.lastObservedState}"}).check(oc)
 		}
 
-		g.By("4) create the OperatorGroup")
+		exutil.By("4) create the OperatorGroup")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("5) start to subscribe to the OCS operator")
+		exutil.By("5) start to subscribe to the OCS operator")
 		sub := subscriptionDescription{
 			subName:                "ocs-sub",
 			namespace:              ns,
@@ -2397,7 +2397,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		sub.create(oc, itName, dr)
 
-		g.By("6) check the dependce operator's subscription")
+		exutil.By("6) check the dependce operator's subscription")
 		depSub := subscriptionDescription{
 			subName:                "lib-bucket-provisioner-4.3.0-bucket-test1-openshift-marketplace",
 			namespace:              ns,
@@ -2413,7 +2413,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr.getIr(itName).add(newResource(oc, "sub", depSub.subName, requireNS, depSub.namespace))
 		depSub.findInstalledCSV(oc, itName, dr)
 
-		g.By(fmt.Sprintf("7) Remove subscription:%s, %s", sub.subName, depSub.subName))
+		exutil.By(fmt.Sprintf("7) Remove subscription:%s, %s", sub.subName, depSub.subName))
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 		depSub.delete(itName, dr)
@@ -2462,7 +2462,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("1) check if this operator ready for installing")
+		exutil.By("1) check if this operator ready for installing")
 		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
 		exists, err := clusterPackageExists(oc, sub)
 		if !exists {
@@ -2470,33 +2470,33 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) Create the namespace")
+		exutil.By("2) Create the namespace")
 		project.createwithCheck(oc, itName, dr)
 
-		g.By("3) Create the OperatorGroup")
+		exutil.By("3) Create the OperatorGroup")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("4) Create the service account")
+		exutil.By("4) Create the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("5) Create a Subscription")
+		exutil.By("5) Create a Subscription")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("6) The install plan is Failed")
+		exutil.By("6) The install plan is Failed")
 		installPlan := sub.getIP(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "InstallComponentFailed+2+InstallCheckFailed", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions..reason}"}).check(oc)
 
-		g.By("7) Grant the proper permissions to the service account")
+		exutil.By("7) Grant the proper permissions to the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", saRoles, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("8) Recreate the Subscription")
+		exutil.By("8) Recreate the Subscription")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("9) Checking the state of CSV")
+		exutil.By("9) Checking the state of CSV")
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", csv, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 	})
@@ -2530,14 +2530,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 
 		defer cs.delete(itName, dr)
-		g.By("1) Create the CatalogSource")
+		exutil.By("1) Create the CatalogSource")
 		cs.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-		g.By("2) Install the OperatorGroup in a random project")
+		exutil.By("2) Install the OperatorGroup in a random project")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) Install the lib-bucket-provisioner with Automatic approval")
+		exutil.By("3) Install the lib-bucket-provisioner with Automatic approval")
 
 		sub := subscriptionDescription{
 			subName:                "lib-bucket-provisioner-43073",
@@ -2597,7 +2597,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("1) check if this operator ready for installing")
+		exutil.By("1) check if this operator ready for installing")
 		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
 		exists, err := clusterPackageExists(oc, sub)
 		if !exists {
@@ -2605,34 +2605,34 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) Create the namespace")
+		exutil.By("2) Create the namespace")
 		project.createwithCheck(oc, itName, dr)
 
-		g.By("3) Create the OperatorGroup")
+		exutil.By("3) Create the OperatorGroup")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("4) Create the service account")
+		exutil.By("4) Create the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("5) Create a Subscription")
+		exutil.By("5) Create a Subscription")
 
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("6) The install plan is Failed")
+		exutil.By("6) The install plan is Failed")
 		installPlan := sub.getIP(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Failed", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("7) Grant the proper permissions to the service account")
+		exutil.By("7) Grant the proper permissions to the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", saRoles, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("8) Recreate the Subscription")
+		exutil.By("8) Recreate the Subscription")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("9) Checking the state of CSV")
+		exutil.By("9) Checking the state of CSV")
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", csv, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 	})
@@ -2677,7 +2677,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("1) check if this operator ready for installing")
+		exutil.By("1) check if this operator ready for installing")
 		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
 		exists, err := clusterPackageExists(oc, sub)
 		if !exists {
@@ -2685,19 +2685,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) Create the namespace")
+		exutil.By("2) Create the namespace")
 		project.createwithCheck(oc, itName, dr)
 
-		g.By("3) Create the OperatorGroup without service account")
+		exutil.By("3) Create the OperatorGroup without service account")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("4) Create a Subscription")
+		exutil.By("4) Create a Subscription")
 		sub.create(oc, itName, dr)
 
-		g.By("5) Checking the state of CSV")
+		exutil.By("5) Checking the state of CSV")
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", csv, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("6) Delete the Operator Group")
+		exutil.By("6) Delete the Operator Group")
 		og.delete(itName, dr)
 
 		// create the OperatorGroup resource
@@ -2707,23 +2707,23 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			serviceAccountName: sa,
 			template:           ogSAtemplate,
 		}
-		g.By("6) Create the OperatorGroup with service account")
+		exutil.By("6) Create the OperatorGroup with service account")
 		ogSA.createwithCheck(oc, itName, dr)
 
-		g.By("7) Create the service account")
+		exutil.By("7) Create the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("9) Grant the proper permissions to the service account")
+		exutil.By("9) Grant the proper permissions to the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", saRoles, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("10) Recreate the Subscription")
+		exutil.By("10) Recreate the Subscription")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("11) Checking the state of CSV")
+		exutil.By("11) Checking the state of CSV")
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", csv, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 	})
@@ -2734,7 +2734,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
 		oc.SetupProject()
-		g.By("1) Start to create the CatalogSource CR")
+		exutil.By("1) Start to create the CatalogSource CR")
 		cs := catalogSourceDescription{
 			name:        "prometheus-dependency-cs",
 			namespace:   "openshift-marketplace",
@@ -2751,7 +2751,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		cs.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-		g.By("2) Install the OperatorGroup in a random project")
+		exutil.By("2) Install the OperatorGroup in a random project")
 
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
@@ -2761,7 +2761,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) Install the etcdoperator v0.9.4 with Automatic approval")
+		exutil.By("3) Install the etcdoperator v0.9.4 with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-30765",
@@ -2778,7 +2778,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("4) Assert that prometheus dependency is resolved")
+		exutil.By("4) Assert that prometheus dependency is resolved")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("prometheus"))
@@ -2792,7 +2792,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
 		oc.SetupProject()
-		g.By("Start to create the CatalogSource CR")
+		exutil.By("Start to create the CatalogSource CR")
 		cs := catalogSourceDescription{
 			name:        "prometheus-dependency1-cs",
 			namespace:   "openshift-marketplace",
@@ -2809,9 +2809,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		cs.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-		g.By("Start to subscribe the Etcd operator")
+		exutil.By("Start to subscribe the Etcd operator")
 
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 
 		oc.SetupProject()
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -2822,7 +2822,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the etcdoperator v0.9.4 with Automatic approval")
+		exutil.By("2) Install the etcdoperator v0.9.4 with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-27680",
@@ -2839,17 +2839,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("Assert that prometheus dependency is resolved")
+		exutil.By("Assert that prometheus dependency is resolved")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("prometheus"))
 
-		g.By("Assert that ServiceMonitor is created")
+		exutil.By("Assert that ServiceMonitor is created")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceMonitor", "my-servicemonitor", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("my-servicemonitor"))
 
-		g.By("Assert that PrometheusRule is created")
+		exutil.By("Assert that PrometheusRule is created")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("PrometheusRule", "my-prometheusrule", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("my-prometheusrule"))
@@ -2865,7 +2865,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
-		g.By("Start to subscribe the Camel-k operator")
+		exutil.By("Start to subscribe the Camel-k operator")
 		sub := subscriptionDescription{
 			subName:                "camel-k",
 			namespace:              "openshift-operators",
@@ -2883,7 +2883,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("check if camel-k is already installed")
+		exutil.By("check if camel-k is already installed")
 		csvList := getResource(oc, asAdmin, withNamespace, "csv", "-o=jsonpath={.items[*].metadata.name}")
 		e2e.Logf("CSV list %s ", csvList)
 		if !strings.Contains("camel-k", csvList) {
@@ -2905,7 +2905,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
-		g.By("Start to create the CatalogSource CR")
+		exutil.By("Start to create the CatalogSource CR")
 		cs := catalogSourceDescription{
 			name:        "ocp-47149",
 			namespace:   namespace,
@@ -2928,10 +2928,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			template:  ogTemplate,
 		}
 
-		g.By("1) Create the OperatorGroup without service account")
+		exutil.By("1) Create the OperatorGroup without service account")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Create a Subscription")
+		exutil.By("2) Create a Subscription")
 		sub := subscriptionDescription{
 			subName:                "etcd",
 			namespace:              namespace,
@@ -2945,7 +2945,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		sub.create(oc, itName, dr)
 
-		g.By("3) Checking the state of CSV")
+		exutil.By("3) Checking the state of CSV")
 		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
 			csvList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -2977,7 +2977,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
-		g.By("Start to create the CatalogSource CR")
+		exutil.By("Start to create the CatalogSource CR")
 		cs := catalogSourceDescription{
 			name:        "ocp-47181",
 			namespace:   namespace,
@@ -3000,10 +3000,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			template:  ogTemplate,
 		}
 
-		g.By("1) Create the OperatorGroup without service account")
+		exutil.By("1) Create the OperatorGroup without service account")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Create a Subscription")
+		exutil.By("2) Create a Subscription")
 		sub := subscriptionDescription{
 			subName:                "etcd",
 			namespace:              namespace,
@@ -3017,7 +3017,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		sub.create(oc, itName, dr)
 
-		g.By("3) Checking the state of CSV")
+		exutil.By("3) Checking the state of CSV")
 		newCheck("expect", asUser, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 	})
 
@@ -3031,7 +3031,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
-		g.By("Start to create the CatalogSource CR")
+		exutil.By("Start to create the CatalogSource CR")
 		cs := catalogSourceDescription{
 			name:        "ocp-47179",
 			namespace:   namespace,
@@ -3054,10 +3054,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			template:  ogTemplate,
 		}
 
-		g.By("1) Create the OperatorGroup without service account")
+		exutil.By("1) Create the OperatorGroup without service account")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Create a Subscription")
+		exutil.By("2) Create a Subscription")
 		sub := subscriptionDescription{
 			subName:                "etcd",
 			namespace:              namespace,
@@ -3071,7 +3071,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		sub.create(oc, itName, dr)
 
-		g.By("3) Checking the state of CSV")
+		exutil.By("3) Checking the state of CSV")
 		newCheck("expect", asUser, withoutNamespace, contain, "red-hat-camel-k-operator", ok, []string{"csv", "-n", sub.namespace}).check(oc)
 	})
 
@@ -3109,7 +3109,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			{"cs-noimage-cm", "configmap", "configmap name unset"},
 		}
 		for _, t := range csTypes {
-			g.By(fmt.Sprintf("test the %s type CatalogSource", t.csType))
+			exutil.By(fmt.Sprintf("test the %s type CatalogSource", t.csType))
 			cs := catalogSourceDescription{
 				name:        t.name,
 				namespace:   "openshift-marketplace",
@@ -3159,7 +3159,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("1) Start to subscribe the learn operator")
+		exutil.By("1) Start to subscribe the learn operator")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		oc.SetupProject()
 		sub := subscriptionDescription{
@@ -3179,7 +3179,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3) Assert that learn operator dependency is resolved")
+		exutil.By("3) Assert that learn operator dependency is resolved")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("learn-operator.v0.0.3"))
@@ -3243,7 +3243,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
 		oc.SetupProject()
-		g.By("1) Start to create the CatalogSource CR")
+		exutil.By("1) Start to create the CatalogSource CR")
 		cs := catalogSourceDescription{
 			name:        "prometheus-dependency-cs",
 			namespace:   "openshift-marketplace",
@@ -3260,7 +3260,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		cs.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-		g.By("2) Install the OperatorGroup in a random project")
+		exutil.By("2) Install the OperatorGroup in a random project")
 
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
@@ -3270,7 +3270,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) Install the etcdoperator v0.9.4 with Automatic approval")
+		exutil.By("3) Install the etcdoperator v0.9.4 with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-32613",
@@ -3287,7 +3287,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("4) Assert that prometheus dependency is resolved")
+		exutil.By("4) Assert that prometheus dependency is resolved")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("prometheus"))
@@ -3317,15 +3317,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		namespace := "scenario3"
 		defer RemoveNamespace(namespace, oc)
-		g.By("1) Creating a namespace")
+		exutil.By("1) Creating a namespace")
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) Creating a ConfigMap without a default channel")
+		exutil.By("2) Creating a ConfigMap without a default channel")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", cmMapWithoutDefaultChannel).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) Creating a CatalogSource")
+		exutil.By("3) Creating a CatalogSource")
 		csWithoutDefaultchannel := catalogSourceDescription{
 			name:      "scenario3",
 			namespace: "scenario3",
@@ -3334,7 +3334,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		csWithoutDefaultchannel.setSCCRestricted(oc)
 
-		g.By("4) Checking CatalogSource error statement due to the absence of a default channel")
+		exutil.By("4) Checking CatalogSource error statement due to the absence of a default channel")
 		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l olm.catalogSource=scenario3", "-n", "scenario3").Output()
 			if err != nil {
@@ -3349,11 +3349,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		exutil.AssertWaitPollNoErr(err, "pod of olm.catalogSource=scenario3 is not CrashLoopBackOff")
 
-		g.By("5) Changing the CatalogSource to include default channel for each package")
+		exutil.By("5) Changing the CatalogSource to include default channel for each package")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("apply").Args("-f", cmMapWithDefaultChannel).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("6) Checking the state of CatalogSource(Running)")
+		exutil.By("6) Checking the state of CatalogSource(Running)")
 		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l olm.catalogSource=scenario3", "-n", "scenario3").Output()
 			if err != nil {
@@ -3378,7 +3378,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("get pod name:%s", podName)
 
-			g.By(fmt.Sprintf("get olm version from the %s pod", v))
+			exutil.By(fmt.Sprintf("get olm version from the %s pod", v))
 			commands := []string{"-n", "openshift-operator-lifecycle-manager", "exec", podName, "--", "olm", "--version"}
 			olmVersion, err := oc.AsAdmin().Run(commands...).Args().Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -3391,7 +3391,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 			if sameCommit == "" {
 				sameCommit = gitCommitID
-				g.By("checking this commitID in https://github.com/openshift/operator-framework-olm repo")
+				exutil.By("checking this commitID in https://github.com/openshift/operator-framework-olm repo")
 				ctx, tc := githubClient()
 				client := github.NewClient(tc)
 				// OLM downstream repo has been changed to: https://github.com/openshift/operator-framework-olm
@@ -3412,7 +3412,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("ConnectedOnly-Author:scolange-Medium-32862-Pods found with invalid container images not present in release payload [Flaky]", func() {
 
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("Verify the version of marketplace_operator")
+		exutil.By("Verify the version of marketplace_operator")
 		pods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-marketplace", "--no-headers").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		lines := strings.Split(pods, "\n")
@@ -3430,7 +3430,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: scolange@redhat.com
 	g.It("NonHyperShiftHOST-Author:scolange-Medium-42041-Available=False despite unavailableReplicas <= maxUnavailable", func() {
-		g.By("get the cluster infrastructure")
+		exutil.By("get the cluster infrastructure")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the cluster infra")
@@ -3499,7 +3499,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
@@ -3509,7 +3509,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the learn-operator with Automatic approval")
+		exutil.By("2) Install the learn-operator with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 
 		sub := subscriptionDescription{
@@ -3622,7 +3622,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr := make(describerResrouce)
 		dr.addIr(itName)
 
-		g.By("1, check if this operator ready for installing")
+		exutil.By("1, check if this operator ready for installing")
 		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
 		exists, err = clusterPackageExists(oc, sub)
 		if !exists {
@@ -3630,10 +3630,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2, Create og")
+		exutil.By("2, Create og")
 		og.create(oc, itName, dr)
 
-		g.By("3, Subscribe to operator prometheus")
+		exutil.By("3, Subscribe to operator prometheus")
 		sub.create(oc, itName, dr)
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
@@ -3645,7 +3645,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(finalCSV).NotTo(o.BeEmpty())
 		sub.startingCSV = finalCSV
 
-		g.By("4 Unsubscribe to operator learn")
+		exutil.By("4 Unsubscribe to operator learn")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 		msgSub, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace()).Output()
@@ -3654,15 +3654,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			e2e.Failf("Cycle #1 subscribe/unsubscribe failed %v:\n%v \n%v \n", err, msgSub, msgCsv)
 		}
 
-		g.By("5, subscribe/unsubscribe to operator learn 4 more times")
+		exutil.By("5, subscribe/unsubscribe to operator learn 4 more times")
 		for i = 2; i < 6; i++ {
 			e2e.Logf("Cycle #%v starts", i)
 
-			g.By("subscribe")
+			exutil.By("subscribe")
 			sub.create(oc, itName, dr)
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", finalCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-			g.By("unsubscribe")
+			exutil.By("unsubscribe")
 			sub.delete(itName, dr)
 			msgCsv, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "-n", oc.Namespace(), sub.installedCSV).Output()
 			// o.Expect(err).NotTo(o.HaveOccurred())
@@ -3684,7 +3684,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			exutil.AssertWaitPollNoErr(waitErr, s)
 		}
 
-		g.By("6 FINISH")
+		exutil.By("6 FINISH")
 		i--
 		e2e.Logf("Finished %v subscribe & unsubscribe cycles\n\n", i)
 	})
@@ -3727,14 +3727,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr := make(describerResrouce)
 		dr.addIr(itName)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create operator1")
+		exutil.By("Create operator1")
 		sub1.create(oc, itName, dr)
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub1.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("Create operator2 which should fail")
+		exutil.By("Create operator2 which should fail")
 		sub2.createWithoutCheck(oc, itName, dr)
 		newCheck("expect", asUser, withNamespace, contain, "ConstraintsNotSatisfiable", ok, []string{"sub", sub2.subName, "-o=jsonpath={.status.conditions}"}).check(oc)
 
@@ -3748,11 +3748,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		var pkgServer = filepath.Join(buildPruningBaseDir, "packageserver.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "test40316").Execute()
 
-		g.By("create new namespace")
+		exutil.By("create new namespace")
 		var err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "test40316").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("create new OperatorGroup")
+		exutil.By("create new OperatorGroup")
 		ogFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", operatorGroup, "-p", "NAME=test-operator", "NAMESPACE=test40316").OutputToFile("config-40316.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -3826,7 +3826,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("Verify inside the jobs the value of spec.containers[].resources.requests field are setted")
+		exutil.By("Verify inside the jobs the value of spec.containers[].resources.requests field are setted")
 
 		sub := subscriptionDescription{
 			subName:                "sub-41283",
@@ -3949,10 +3949,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			template:    catsrcImageTemplate,
 		}
 
-		g.By("Create catsrc")
+		exutil.By("Create catsrc")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og := operatorGroupDescription{
 			name:      "test-operators-og",
 			namespace: namespace,
@@ -4021,17 +4021,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		e2e.Logf("Check 1 first")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.items[*].spec.name}"}).check(oc)
 
-		g.By("get pod of marketplace")
+		exutil.By("get pod of marketplace")
 		podName := getResource(oc, asAdmin, withoutNamespace, "pod", "--selector=name=marketplace-operator", "-n", "openshift-marketplace", "-o=jsonpath={...metadata.name}")
 		o.Expect(podName).NotTo(o.BeEmpty())
 
-		g.By("delete pod of marketplace")
+		exutil.By("delete pod of marketplace")
 		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "pod", podName, "-n", "openshift-marketplace")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exec.Command("bash", "-c", "sleep 10").Output()
 
-		g.By("pod of marketplace restart")
+		exutil.By("pod of marketplace restart")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", "marketplace",
 			"-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
 
@@ -4041,11 +4041,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:scolange-Medium-23395-Deleted catalog registry pods and verify if them are recreated automatically [Disruptive]", func() {
 
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("get pod of marketplace")
+		exutil.By("get pod of marketplace")
 		podName := getResource(oc, asAdmin, withoutNamespace, "pod", "--selector=olm.catalogSource=redhat-operators", "-n", "openshift-marketplace", "-o=jsonpath={...metadata.name}")
 		o.Expect(podName).NotTo(o.BeEmpty())
 
-		g.By("delete pod of marketplace")
+		exutil.By("delete pod of marketplace")
 		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "pod", podName, "-n", "openshift-marketplace")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -4062,7 +4062,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: scolange@redhat.com
 	g.It("Author:scolange-Medium-43057-Enable continuous heap profiling by default", func() {
 
-		g.By("get pod of marketplace")
+		exutil.By("get pod of marketplace")
 		configMaps := getResource(oc, asAdmin, withoutNamespace, "configmaps", "-l olm.openshift.io/pprof", "-n", "openshift-operator-lifecycle-manager")
 		o.Expect(configMaps).NotTo(o.BeEmpty())
 		e2e.Logf(configMaps)
@@ -4130,13 +4130,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub1.namespace = oc.Namespace()
 		sub1.catalogSourceNamespace = catsrc.namespace
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create catsrc")
+		exutil.By("Create catsrc")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create operator1")
+		exutil.By("Create operator1")
 		sub1.create(oc, itName, dr)
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub1.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
@@ -4144,7 +4144,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-21126-OLM Subscription status says CSV is installed when it is not", func() {
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -4159,7 +4159,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install learn-operator.v0.0.3 with Manual approval")
+		exutil.By("2) Install learn-operator.v0.0.3 with Manual approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-21126",
@@ -4175,7 +4175,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
-		g.By("3) Check the learn-operator.v0.0.3 related resources")
+		exutil.By("3) Check the learn-operator.v0.0.3 related resources")
 		// the installedCSV should be NULL
 		newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"sub", "sub-21126", "-n", oc.Namespace(), "-o=jsonpath={.status.installedCSV}"}).check(oc)
 		// the state should be UpgradePending
@@ -4191,7 +4191,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonPreRelease-PreChkUpgrade-Author:xzha-High-22615-prepare to check the OLM status", func() {
-		g.By("1) check version of the OLM related resource")
+		exutil.By("1) check version of the OLM related resource")
 		olmRelatedResource := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
 		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
 		for _, resource := range olmRelatedResource {
@@ -4199,7 +4199,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			o.Expect(version).NotTo(o.BeEmpty())
 			o.Expect(clusterversion).To(o.Equal(version))
 		}
-		g.By("2) subscribe to an operator: learn-operator, the multi-arch one")
+		exutil.By("2) subscribe to an operator: learn-operator, the multi-arch one")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -4219,7 +4219,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2-1) subscribe to the learn-operator v0.0.3 with Automatic approval")
+		exutil.By("2-1) subscribe to the learn-operator v0.0.3 with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-22615",
@@ -4256,14 +4256,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
 
 		// This step cover a upgrade bug: https://bugzilla.redhat.com/show_bug.cgi?id=2015950
-		g.By("3) Create 300 secret in openshift-operator-lifecycle-manager project")
+		exutil.By("3) Create 300 secret in openshift-operator-lifecycle-manager project")
 		for i := 1; i <= 300; i++ {
 			logs, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", fmt.Sprintf("test%d", i), "-n", "openshift-operator-lifecycle-manager").Output()
 			if err != nil && !strings.Contains(logs, "already exists") {
 				e2e.Failf("Fail to create secret: %s, error:%v", fmt.Sprintf("test%d", i), err)
 			}
 		}
-		g.By("4) check status of OLM cluster operators")
+		exutil.By("4) check status of OLM cluster operators")
 		for _, resource := range olmRelatedResource {
 			newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
 			upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
@@ -4276,7 +4276,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 	// author: jiazha@redhat.com
 	g.It("NonPreRelease-PstChkUpgrade-Author:xzha-High-22615-Post check the OLM status", func() {
-		g.By("1) check version of the OLM related resource")
+		exutil.By("1) check version of the OLM related resource")
 		olmRelatedResource := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
 		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
 		for _, resource := range olmRelatedResource {
@@ -4284,7 +4284,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			o.Expect(version).NotTo(o.BeEmpty())
 			o.Expect(clusterversion).To(o.Equal(version))
 		}
-		g.By("2) check status of OLM cluster operators")
+		exutil.By("2) check status of OLM cluster operators")
 		e2e.Logf("check csv maxOpenShiftVersion")
 		upgradeableExpect := "True"
 		clusterversionSemver, err := semver.Make(clusterversion)
@@ -4329,13 +4329,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 		}
 
-		g.By("3) Check the installed operator status")
+		exutil.By("3) Check the installed operator status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", "olm-upgrade-22615").Output()
 		if err != nil {
 			e2e.Failf("Fail to delete project, error:%v", err)
 		}
-		g.By("4) Remove those 300 secrets in openshift-operator-lifecycle-manager project")
+		exutil.By("4) Remove those 300 secrets in openshift-operator-lifecycle-manager project")
 		for i := 1; i <= 300; i++ {
 			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", fmt.Sprintf("test%d", i), "-n", "openshift-operator-lifecycle-manager").Output()
 			if err != nil {
@@ -4347,18 +4347,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: xzha@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:xzha-High-22618-prepare to check the marketplace status", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("1) check version of marketplace operator")
+		exutil.By("1) check version of marketplace operator")
 		marketplaceVersion := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", "marketplace", "-o=jsonpath={.status.versions[?(@.name==\"operator\")].version}")
 		o.Expect(marketplaceVersion).NotTo(o.BeEmpty())
 		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
 		o.Expect(clusterversion).To(o.Equal(marketplaceVersion))
 
-		g.By("2) check status of marketplace operator")
+		exutil.By("2) check status of marketplace operator")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", "marketplace", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
 		upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", "marketplace", "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
 		o.Expect(upgradeableStatus).To(o.Equal("True"))
 
-		g.By("3) check status of marketplace operator")
+		exutil.By("3) check status of marketplace operator")
 		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
 			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "-n", "openshift-marketplace")
@@ -4369,13 +4369,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "check packagemanifests failed")
-		g.By("4) upgrade prepare 22618 SUCCESS")
+		exutil.By("4) upgrade prepare 22618 SUCCESS")
 	})
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-NonPreRelease-PreChkUpgrade-Author:xzha-High-22618-prepare to check the catalogsource status of catalogsource", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("1) Create a CatalogSource in the openshift-marketplace project")
+		exutil.By("1) Create a CatalogSource in the openshift-marketplace project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		// Create a project here so that it can be keeped after this prepare case done.
@@ -4399,7 +4399,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr.addIr(itName)
 		cs.createWithCheck(oc, itName, dr)
 
-		g.By("2) check status of marketplace operator")
+		exutil.By("2) check status of marketplace operator")
 		catalogstrings := map[string]string{"certified-operators": "Certified Operators",
 			"community-operators": "Community Operators",
 			"redhat-operators":    "Red Hat Operators",
@@ -4443,24 +4443,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			getResource(oc, asAdmin, withoutNamespace, "pod", "-n", ns)
 		}
 		exutil.AssertWaitPollNoErr(err, "check packagemanifests failed")
-		g.By("3) upgrade prepare 22618 SUCCESS")
+		exutil.By("3) upgrade prepare 22618 SUCCESS")
 	})
 
 	// author: xzha@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:xzha-High-22618-Post check the marketplace status", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("1) check version of marketplace operator")
+		exutil.By("1) check version of marketplace operator")
 		marketplaceVersion := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", "marketplace", "-o=jsonpath={.status.versions[?(@.name==\"operator\")].version}")
 		o.Expect(marketplaceVersion).NotTo(o.BeEmpty())
 		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
 		o.Expect(clusterversion).To(o.Equal(marketplaceVersion))
 
-		g.By("2) check status of marketplace operator")
+		exutil.By("2) check status of marketplace operator")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", "marketplace", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
 		upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", "marketplace", "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
 		o.Expect(upgradeableStatus).To(o.Equal("True"))
 
-		g.By("3) check status of marketplace operator")
+		exutil.By("3) check status of marketplace operator")
 		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
 			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "-n", "openshift-marketplace")
@@ -4471,7 +4471,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "check packagemanifests failed")
-		g.By("4) post check upgrade 22618 SUCCESS")
+		exutil.By("4) post check upgrade 22618 SUCCESS")
 	})
 
 	// author: xzha@redhat.com
@@ -4480,11 +4480,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		ns := "olm-upgrade-22618"
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns).Output()
 
-		g.By("0) update catsrc cs-22618 ")
+		exutil.By("0) update catsrc cs-22618 ")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", "cs-22618", "-n", ns, "--type=merge", "-p", `{"spec":{"grpcPodConfig":{"securityContextConfig":"restricted"}}}`).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("1) check status of marketplace operator")
+		exutil.By("1) check status of marketplace operator")
 		catalogstrings := map[string]string{"certified-operators": "Certified Operators",
 			"community-operators": "Community Operators",
 			"redhat-operators":    "Red Hat Operators",
@@ -4528,16 +4528,16 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		exutil.AssertWaitPollNoErr(err, "check packagemanifests failed")
 
-		g.By("2) delete catsrc cs-22618")
+		exutil.By("2) delete catsrc cs-22618")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("catsrc", "cs-22618", "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) 22618 Post check SUCCESS")
+		exutil.By("3) 22618 Post check SUCCESS")
 	})
 
 	// author: xzha@redhat.com
 	g.It("Author:xzha-Medium-Longduration-NonPreRelease-43975-olm-operator-serviceaccount should not rely on external networking for health check[Disruptive][Slow]", func() {
-		g.By("1) get the cluster infrastructure")
+		exutil.By("1) get the cluster infrastructure")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the cluster infra")
@@ -4546,7 +4546,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			originProfile := getResource(oc, asAdmin, withoutNamespace, "apiserver", "cluster", "-o=jsonpath={.spec.audit.profile}")
 			o.Expect(originProfile).NotTo(o.BeEmpty())
 			if strings.Compare(originProfile, "Default") == 0 {
-				g.By("2) get revision number")
+				exutil.By("2) get revision number")
 				revisionNumber1 := 0
 				reg := regexp.MustCompile(`nodes are at revision (\d+)`)
 				if reg == nil {
@@ -4565,7 +4565,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 					e2e.Failf("Fail to get revision number")
 				}
 
-				g.By("3) Configuring the audit log policy to AllRequestBodies")
+				exutil.By("3) Configuring the audit log policy to AllRequestBodies")
 				defer func() {
 					pathJSON := fmt.Sprintf("{\"spec\":{\"audit\":{\"profile\":\"%s\"}}}", originProfile)
 					e2e.Logf("recover to be %v", pathJSON)
@@ -4576,7 +4576,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				patchResource(oc, asAdmin, withoutNamespace, "apiserver", "cluster", "-p", "{\"spec\":{\"audit\":{\"profile\":\"AllRequestBodies\"}}}", "--type=merge")
 				output = getResource(oc, asAdmin, withoutNamespace, "apiserver", "cluster", "-o=jsonpath={.spec.audit.profile}")
 				o.Expect(output).To(o.Equal("AllRequestBodies"))
-				g.By("4) Wait for api rollout")
+				exutil.By("4) Wait for api rollout")
 				err = wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
 					output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver", "-o=jsonpath={..status.conditions[?(@.type==\"NodeInstallerProgressing\")]}").Output()
 					e2e.Logf(output)
@@ -4605,11 +4605,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				})
 				exutil.AssertWaitPollNoErr(err, "api not rollout")
 				// According to the case steps, wait for 5 minutes, then check the audit log doesn't contain olm-operator-serviceaccount.
-				g.By("Wait for 5 minutes, then check the audit log")
+				exutil.By("Wait for 5 minutes, then check the audit log")
 				time.Sleep(5 * time.Minute)
 			}
 
-			g.By("check the audit log")
+			exutil.By("check the audit log")
 			nodeName, err := exutil.GetFirstMasterNode(oc)
 			e2e.Logf(nodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -4693,22 +4693,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	g.It("NonHyperShiftHOST-Author:kuiwang-Medium-22259-marketplace operator CR status on a running cluster [Exclusive]", func() {
 
 		exutil.SkipForSNOCluster(oc)
-		g.By("check marketplace status")
+		exutil.By("check marketplace status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", "marketplace",
 			"-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
 
-		g.By("get pod of marketplace")
+		exutil.By("get pod of marketplace")
 		podName := getResource(oc, asAdmin, withoutNamespace, "pod", "--selector=name=marketplace-operator", "-n", "openshift-marketplace",
 			"-o=jsonpath={...metadata.name}")
 		o.Expect(podName).NotTo(o.BeEmpty())
 
-		g.By("delete pod of marketplace")
+		exutil.By("delete pod of marketplace")
 		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "pod", podName, "-n", "openshift-marketplace")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exec.Command("bash", "-c", "sleep 10").Output()
 
-		g.By("pod of marketplace restart")
+		exutil.By("pod of marketplace restart")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", "marketplace",
 			"-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
 	})
@@ -4719,16 +4719,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 			olmClusterOperatorName = "operator-lifecycle-manager"
 		)
 
-		g.By("get the version of olm operator")
+		exutil.By("get the version of olm operator")
 		olmVersion := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", olmClusterOperatorName, "-o=jsonpath={.status.versions[?(@.name==\"operator\")].version}")
 		o.Expect(olmVersion).NotTo(o.BeEmpty())
 
-		g.By("Check if it is appropriate in ClusterOperator")
+		exutil.By("Check if it is appropriate in ClusterOperator")
 		newCheck("expect", asAdmin, withoutNamespace, compare, olmVersion, ok, []string{"clusteroperator", fmt.Sprintf("-o=jsonpath={.items[?(@.metadata.name==\"%s\")].status.versions[?(@.name==\"operator\")].version}", olmClusterOperatorName)}).check(oc)
 	})
 
 	g.It("NonHyperShiftHOST-Author:xzha-Medium-62945-OLM version rule is clear", func() {
-		g.By("get the cluster version")
+		exutil.By("get the cluster version")
 		clusterVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
 		o.Expect(clusterVersion).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4742,7 +4742,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("get pod name:%s", podName)
 
-			g.By(fmt.Sprintf("get olm version from the %s pod", v))
+			exutil.By(fmt.Sprintf("get olm version from the %s pod", v))
 			commands := []string{"-n", "openshift-operator-lifecycle-manager", "exec", podName, "--", "olm", "--version"}
 			output, err := oc.AsAdmin().WithoutNamespace().Run(commands...).Args().Output()
 			o.Expect(output).NotTo(o.BeEmpty())
@@ -4773,36 +4773,36 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 		defer exec.Command("bash", "-c", "rm -fr ./"+operatorAllPath).Output()
 		defer exec.Command("bash", "-c", "rm -fr ./"+operatorDockerioPath).Output()
 
-		g.By("mirror to quay.io/kuiwang")
+		exutil.By("mirror to quay.io/kuiwang")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("adm", "catalog", "mirror").Args("--manifests-only", "--to-manifests="+operatorAllPath, bundleIndex1, "quay.io/kuiwang").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("operators-all-manifests"))
 
-		g.By("check mapping.txt")
+		exutil.By("check mapping.txt")
 		result, err := exec.Command("bash", "-c", "cat ./"+operatorAllPath+"/mapping.txt|grep -E \"atlasmap-atlasmap-operator:0.1.0|quay.io/kuiwang/jmckind-argocd-operator:[a-z0-9][a-z0-9]|redhat-cop-cert-utils-operator:latest\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("atlasmap-atlasmap-operator:0.1.0"))
 		o.Expect(result).To(o.ContainSubstring("redhat-cop-cert-utils-operator:latest"))
 		o.Expect(result).To(o.ContainSubstring("quay.io/kuiwang/jmckind-argocd-operator"))
 
-		g.By("check icsp yaml")
+		exutil.By("check icsp yaml")
 		result, err = exec.Command("bash", "-c", "cat ./"+operatorAllPath+"/imageContentSourcePolicy.yaml | grep -E \"quay.io/kuiwang/strimzi-operator|docker.io/strimzi/operator$\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("- quay.io/kuiwang/strimzi-operator"))
 		o.Expect(result).To(o.ContainSubstring("source: docker.io/strimzi/operator"))
 
-		g.By("mirror to localhost:5000")
+		exutil.By("mirror to localhost:5000")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("adm", "catalog", "mirror").Args("--manifests-only", "--to-manifests="+operatorDockerioPath, bundleIndex2, "localhost:5000").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("operators-dockerio-manifests"))
 
-		g.By("check mapping.txt to localhost:5000")
+		exutil.By("check mapping.txt to localhost:5000")
 		result, err = exec.Command("bash", "-c", "cat ./"+operatorDockerioPath+"/mapping.txt|grep -E \"localhost:5000/atlasmap/atlasmap-operator:0.1.0|localhost:5000/strimzi/operator:[a-z0-9][a-z0-9]\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("localhost:5000/atlasmap/atlasmap-operator:0.1.0"))
 		o.Expect(result).To(o.ContainSubstring("localhost:5000/strimzi/operator"))
 
-		g.By("check icsp yaml to localhost:5000")
+		exutil.By("check icsp yaml to localhost:5000")
 		result, err = exec.Command("bash", "-c", "cat ./"+operatorDockerioPath+"/imageContentSourcePolicy.yaml | grep -E \"localhost:5000/strimzi/operator|docker.io/strimzi/operator$\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("- localhost:5000/strimzi/operator"))
@@ -4818,17 +4818,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 		)
 		defer exec.Command("bash", "-c", "rm -fr ./"+manifestPath).Output()
 
-		g.By("mirror to localhost:5000/test")
+		exutil.By("mirror to localhost:5000/test")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("adm", "catalog", "mirror").Args("--manifests-only", "--to-manifests="+manifestPath, bundleIndex1, "localhost:5000/test").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("manifests-olm-api"))
 
-		g.By("check mapping.txt to localhost:5000")
+		exutil.By("check mapping.txt to localhost:5000")
 		result, err := exec.Command("bash", "-c", "cat ./"+manifestPath+"/mapping.txt|grep -E \"quay.io/olmqe/olm-api\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("quay.io/olmqe/olm-api"))
 
-		g.By("check icsp yaml to localhost:5000")
+		exutil.By("check icsp yaml to localhost:5000")
 		result, err = exec.Command("bash", "-c", "cat ./"+manifestPath+"/imageContentSourcePolicy.yaml | grep -E \"quay.io/olmqe/olm-api\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("quay.io/olmqe/olm-api"))
@@ -4841,21 +4841,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 			packageserverName = "packageserver"
 		)
 
-		g.By("Get certsRotateAt and APIService name")
+		exutil.By("Get certsRotateAt and APIService name")
 		resources := strings.Fields(getResource(oc, asAdmin, withoutNamespace, "csv", packageserverName, "-n", "openshift-operator-lifecycle-manager", fmt.Sprintf("-o=jsonpath={.status.certsRotateAt}{\" \"}{.status.requirementStatus[?(@.kind==\"%s\")].name}", "APIService")))
 		o.Expect(resources).NotTo(o.BeEmpty())
 		apiServiceName := resources[1]
 		certsRotateAt, err := time.Parse(time.RFC3339, resources[0])
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Get caBundle")
+		exutil.By("Get caBundle")
 		caBundle := getResource(oc, asAdmin, withoutNamespace, "apiservices", apiServiceName, "-o=jsonpath={.spec.caBundle}")
 		o.Expect(caBundle).NotTo(o.BeEmpty())
 
-		g.By("Change caBundle")
+		exutil.By("Change caBundle")
 		patchResource(oc, asAdmin, withoutNamespace, "apiservices", apiServiceName, "-p", fmt.Sprintf("{\"spec\":{\"caBundle\":\"test%s\"}}", caBundle))
 
-		g.By("Check updated certsRotataAt")
+		exutil.By("Check updated certsRotataAt")
 		err = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
 			updatedCertsRotateAt, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "csv", packageserverName, "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.certsRotateAt}"))
 			if err != nil {
@@ -4935,16 +4935,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create csv with failure because of no operator group")
+		exutil.By("Create csv with failure because of no operator group")
 		sub.currentCSV = "oadp-operator.v0.5.3"
 		sub.createWithoutCheck(oc, itName, dr)
 		newCheck("present", asUser, withNamespace, notPresent, "", ok, []string{"csv", sub.currentCSV}).check(oc)
 		sub.delete(itName, dr)
 
-		g.By("Create opertor group and then csv is created with success")
+		exutil.By("Create opertor group and then csv is created with success")
 		og.create(oc, itName, dr)
 		sub.create(oc, itName, dr)
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded"+"InstallSucceeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}{.status.reason}"}).check(oc)
@@ -4995,22 +4995,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create operator")
+		exutil.By("Create operator")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("get information of catalog operator pod")
+		exutil.By("get information of catalog operator pod")
 		output := getResource(oc, asAdmin, withoutNamespace, "pods", "-l", "app=catalog-operator", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.items[0].metadata.name}{\" \"}{.items[0].status.podIP}{\":\"}{.items[0].spec.containers[0].ports[?(@.name==\"metrics\")].containerPort}")
 		o.Expect(output).NotTo(o.BeEmpty())
 		infoCatalogOperator := strings.Fields(output)
 
-		g.By("check the subscription_sync_total")
+		exutil.By("check the subscription_sync_total")
 		err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			subscriptionSyncTotal, _ := exec.Command("bash", "-c", "oc exec -c catalog-operator "+infoCatalogOperator[0]+" -n openshift-operator-lifecycle-manager -- curl -s -k -H 'Authorization: Bearer $(oc create token prometheus-k8s -n openshift-monitoring)' https://"+infoCatalogOperator[1]+"/metrics").Output()
 			if !strings.Contains(string(subscriptionSyncTotal), sub.installedCSV) {
@@ -5043,7 +5043,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		og1.namespace = oc.Namespace()
 		og2.namespace = oc.Namespace()
 
-		g.By("Create og1 and check the label of target namespace of og1 is created")
+		exutil.By("Create og1 and check the label of target namespace of og1 is created")
 		og1.create(oc, itName, dr)
 		og1Uid := getResource(oc, asAdmin, withNamespace, "og", og1.name, "-o=jsonpath={.metadata.uid}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "olm.operatorgroup.uid/"+og1Uid, ok,
@@ -5051,12 +5051,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asAdmin, withoutNamespace, contain, "olm.operatorgroup.uid/"+og1Uid, nok,
 			[]string{"ns", "openshift-operators", "-o=jsonpath={.metadata.labels}"}).check(oc)
 
-		g.By("Delete og1 and check the label of target namespace of og1 is removed")
+		exutil.By("Delete og1 and check the label of target namespace of og1 is removed")
 		og1.delete(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "olm.operatorgroup.uid/"+og1Uid, nok,
 			[]string{"ns", og1.namespace, "-o=jsonpath={.metadata.labels}"}).check(oc)
 
-		g.By("Create og2 and recreate og1 and check the label")
+		exutil.By("Create og2 and recreate og1 and check the label")
 		og2.create(oc, itName, dr)
 		og2Uid := getResource(oc, asAdmin, withNamespace, "og", og2.name, "-o=jsonpath={.metadata.uid}")
 		og1.create(oc, itName, dr)
@@ -5066,7 +5066,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(labelNs).To(o.ContainSubstring(og1Uid))
 
 		// OCP-29277
-		g.By("Check no label of global operator group ")
+		exutil.By("Check no label of global operator group ")
 		globalOgUID := getResource(oc, asAdmin, withoutNamespace, "og", "global-operators", "-n", "openshift-operators", "-o=jsonpath={.metadata.uid}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "olm.operatorgroup.uid/"+globalOgUID, nok,
 			[]string{"ns", "default", "-o=jsonpath={.metadata.labels}"}).check(oc)
@@ -5120,16 +5120,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create operator")
+		exutil.By("Create operator")
 		sub.create(oc, itName, dr)
 
-		g.By("Check the API labes should be hash")
+		exutil.By("Check the API labes should be hash")
 		apiLabels := getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.metadata.labels}")
 		o.Expect(len(apiLabels)).NotTo(o.BeZero())
 		pattern, err := regexp.Compile(`^[a-fA-F0-9]{16}$|^[a-fA-F0-9]{15}$`)
@@ -5193,17 +5193,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create operator")
+		exutil.By("Create operator")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("Check there is only one ip")
+		exutil.By("Check there is only one ip")
 		ips := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "--no-headers")
 		ipList := strings.Split(ips, "\n")
 		for _, ip := range ipList {
@@ -5260,28 +5260,28 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("prepare for manual approval")
+		exutil.By("prepare for manual approval")
 		sub.ipApproval = "Manual"
 		sub.startingCSV = "oadp-operator.v0.5.5"
 
-		g.By("Create Sub which apply manual approve install plan")
+		exutil.By("Create Sub which apply manual approve install plan")
 		sub.create(oc, itName, dr)
 
-		g.By("the install plan is RequiresApproval")
+		exutil.By("the install plan is RequiresApproval")
 		installPlan := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installplan.name}")
 		o.Expect(installPlan).NotTo(o.BeEmpty())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "RequiresApproval", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("manually approve sub")
+		exutil.By("manually approve sub")
 		sub.approve(oc, itName, dr)
 
-		g.By("the target CSV is created with upgrade")
+		exutil.By("the target CSV is created with upgrade")
 		o.Expect(strings.Compare(sub.installedCSV, sub.startingCSV) != 0).To(o.BeTrue())
 	})
 
@@ -5315,17 +5315,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 
-		g.By("Create og")
+		exutil.By("Create og")
 		defer og.delete(itName, dr)
 		og.create(oc, itName, dr)
 
-		g.By("Create operator")
+		exutil.By("Create operator")
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("Check there is only one ip")
+		exutil.By("Check there is only one ip")
 		// waiting for the InstallPlan updated
 		err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 			ips := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "--no-headers")
@@ -5348,7 +5348,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, "the generated InstallPlan != 1")
 
-		g.By("Waiting for install plan Complete")
+		exutil.By("Waiting for install plan Complete")
 		// if installplan status is Installing, csv will be re-created.
 		installPlan := sub.getIP(oc)
 		o.Expect(installPlan).NotTo(o.BeEmpty())
@@ -5405,21 +5405,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.catalogSourceName = catsrc.name
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("create sub with the above catalogsource")
+		exutil.By("create sub with the above catalogsource")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("check its condition is UnhealthyCatalogSourceFound")
+		exutil.By("check its condition is UnhealthyCatalogSourceFound")
 		newCheck("expect", asUser, withoutNamespace, contain, "UnhealthyCatalogSourceFound", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].reason}"}).check(oc)
 
-		g.By("create catalogsource")
+		exutil.By("create catalogsource")
 		catsrc.address = "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne"
 		catsrc.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-		g.By("check its condition is AllCatalogSourcesHealthy and csv is created")
+		exutil.By("check its condition is AllCatalogSourcesHealthy and csv is created")
 		newCheck("expect", asUser, withoutNamespace, contain, "AllCatalogSourcesHealthy", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].reason}"}).check(oc)
 		sub.findInstalledCSV(oc, itName, dr)
 	})
@@ -5473,19 +5473,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.catalogSourceName = catsrc.name
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
 		for i := 0; i < repeatedCount; i++ {
-			g.By("Create Catalogsource")
+			exutil.By("Create Catalogsource")
 			catsrc.create(oc, itName, dr)
 			newCheck("expect", asUser, withoutNamespace, compare, "READY", ok, []string{"catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-			g.By("Create sub with the above catalogsource")
+			exutil.By("Create sub with the above catalogsource")
 			sub.create(oc, itName, dr)
 			newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
-			g.By("Remove catalog and sub")
+			exutil.By("Remove catalog and sub")
 			sub.delete(itName, dr)
 			sub.deleteCSV(itName, dr)
 			catsrc.delete(itName, dr)
@@ -5542,26 +5542,26 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create operator")
+		exutil.By("Create operator")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("Get SA of csv")
+		exutil.By("Get SA of csv")
 		getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=json")
 		sa := newSa(strings.Fields(getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ServiceAccount\")].name}"))[0], sub.namespace)
 
-		g.By("Delete sa of csv")
+		exutil.By("Delete sa of csv")
 		sa.getDefinition(oc)
 		sa.delete(oc)
 		newCheck("expect", asUser, withNamespace, compare, "RequirementsNotMet", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.reason}"}).check(oc)
 
-		g.By("Recovery sa of csv")
+		exutil.By("Recovery sa of csv")
 		sa.reapply(oc)
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded+2+Installing", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 	})
@@ -5612,30 +5612,30 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create operator")
+		exutil.By("Create operator")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded"+"InstallSucceeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}{.status.reason}"}).check(oc)
 
-		g.By("Get SA of csv")
+		exutil.By("Get SA of csv")
 		sa := newSa(strings.Fields(getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ServiceAccount\")].name}"))[0], sub.namespace)
 		sa.checkAuth(oc, "yes", "leases")
 
-		g.By("Get Role of csv")
+		exutil.By("Get Role of csv")
 		role := newRole(getResource(oc, asUser, withNamespace, "role", "-n", sub.namespace, fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-o=jsonpath={.items[0].metadata.name}"), sub.namespace)
 		origRules := role.getRules(oc)
 		modifiedRules := role.getRulesWithDelete(oc, "coordination.k8s.io")
 
-		g.By("Remove rules")
+		exutil.By("Remove rules")
 		role.patch(oc, fmt.Sprintf("{\"rules\": %s}", modifiedRules))
 		sa.checkAuth(oc, "no", "leases")
 
-		g.By("Recovery rules")
+		exutil.By("Recovery rules")
 		role.patch(oc, fmt.Sprintf("{\"rules\": %s}", origRules))
 		sa.checkAuth(oc, "yes", "leases")
 	})
@@ -5684,22 +5684,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install perator")
+		exutil.By("install perator")
 		sub.create(oc, itName, dr)
 
-		g.By("delete catalog source")
+		exutil.By("delete catalog source")
 		catsrc.delete(itName, dr)
-		g.By("delete sa")
+		exutil.By("delete sa")
 		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "sa", "default", "-n", sub.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check abnormal status")
+		exutil.By("check abnormal status")
 		output := getResource(oc, asAdmin, withoutNamespace, "operator", sub.operatorPackage+"."+sub.namespace, "-o=json")
 		o.Expect(output).NotTo(o.BeEmpty())
 
@@ -5755,16 +5755,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install perator")
+		exutil.By("install perator")
 		sub.create(oc, itName, dr)
 
-		g.By("check csv")
+		exutil.By("check csv")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 	})
 
@@ -5812,25 +5812,25 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install perator")
+		exutil.By("install perator")
 		sub.create(oc, itName, dr)
 
-		g.By("check csv")
+		exutil.By("check csv")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("get bundle package from ip")
+		exutil.By("get bundle package from ip")
 		installPlan := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installplan.name}")
 		o.Expect(installPlan).NotTo(o.BeEmpty())
 		ipBundle := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.bundleLookups[0].path}")
 		o.Expect(ipBundle).NotTo(o.BeEmpty())
 
-		g.By("get bundle package from job")
+		exutil.By("get bundle package from job")
 		jobName := getResource(oc, asAdmin, withoutNamespace, "job", "-n", catsrc.namespace, "-o=jsonpath={.items[0].metadata.name}")
 		o.Expect(jobName).NotTo(o.BeEmpty())
 		jobBundle := getResource(oc, asAdmin, withoutNamespace, "pod", "-l", "job-name="+jobName, "-n", catsrc.namespace, "-o=jsonpath={.items[0].status.initContainerStatuses[*].image}")
@@ -5883,26 +5883,26 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install perator")
+		exutil.By("install perator")
 		sub.create(oc, itName, dr)
 
-		g.By("check csv")
+		exutil.By("check csv")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("get parameter of deployment")
+		exutil.By("get parameter of deployment")
 		getResource(oc, asAdmin, withoutNamespace, "deployment", "-n", sub.namespace, "-o=yaml")
 		// newCheck("expect", asAdmin, withoutNamespace, contain, "ARGS1", ok, []string{"deployment", opename, "-n", sub.namespace, "-o=jsonpath={.spec.template.spec.containers[0].command}"}).check(oc)
 
-		g.By("patch env for sub")
+		exutil.By("patch env for sub")
 		sub.patch(oc, "{\"spec\": {\"config\": {\"env\": [{\"name\": \"EMPTY_ENV\"},{\"name\": \"ARGS1\",\"value\": \"-v=4\"}]}}}")
 
-		g.By("check the empty env")
+		exutil.By("check the empty env")
 		// newCheck("expect", asAdmin, withoutNamespace, contain, "EMPTY_ENV", ok, []string{"deployment", opename, "-n", sub.namespace, "-o=jsonpath={.spec.template.spec.containers[0].env[*].name}"}).check(oc)
 		// newCheck("expect", asAdmin, withoutNamespace, contain, "-v=4", ok, []string{"deployment", opename, "-n", sub.namespace, "-o=jsonpath={.spec.template.spec.containers[0].env[*].value}"}).check(oc)
 	})
@@ -5960,27 +5960,27 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		defer exutil.RecoverNamespaceRestricted(oc, oc.Namespace())
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install perator")
+		exutil.By("install perator")
 		sub.create(oc, itName, dr)
 
-		g.By("check csv")
+		exutil.By("check csv")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("creat cr")
+		exutil.By("creat cr")
 		etcdCr.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{etcdCr.typename, etcdCr.name, "-n", etcdCr.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("update operator")
+		exutil.By("update operator")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"beta\"}}")
 		sub.findInstalledCSV(oc, itName, dr)
 
-		g.By("check schema does not work")
+		exutil.By("check schema does not work")
 		installPlan := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installplan.name}")
 		o.Expect(installPlan).NotTo(o.BeEmpty())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "error validating existing CRs", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].message}"}).check(oc)
@@ -6030,23 +6030,23 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install perator")
+		exutil.By("install perator")
 		sub.create(oc, itName, dr)
 
-		g.By("check csv")
+		exutil.By("check csv")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("switch channel")
+		exutil.By("switch channel")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"beta\"}}")
 		sub.findInstalledCSV(oc, itName, dr)
 
-		g.By("check csv of new channel")
+		exutil.By("check csv of new channel")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 	})
 
@@ -6094,19 +6094,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install perator")
+		exutil.By("install perator")
 		sub.create(oc, itName, dr)
 
-		g.By("check csv")
+		exutil.By("check csv")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("check sa")
+		exutil.By("check sa")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "windup-operator-haproxy", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={..serviceAccountName}"}).check(oc)
 	})
 
@@ -6163,23 +6163,23 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			sub.namespace = oc.Namespace()
 			sub.catalogSourceNamespace = catsrc.namespace
 
-			g.By("create vpa crd")
+			exutil.By("create vpa crd")
 			crdVpa.create(oc, itName, dr)
 			defer crdVpa.delete(oc)
 
-			g.By("create catalog source")
+			exutil.By("create catalog source")
 			catsrc.createWithCheck(oc, itName, dr)
 
-			g.By("Create og")
+			exutil.By("Create og")
 			og.create(oc, itName, dr)
 
-			g.By("install perator")
+			exutil.By("install perator")
 			sub.create(oc, itName, dr)
 
-			g.By("check csv")
+			exutil.By("check csv")
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-			g.By("check additional resources")
+			exutil.By("check additional resources")
 			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"VerticalPodAutoscaler", "busybox-vpa", "-n", sub.namespace}).check(oc)
 			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"PriorityClass", "super-priority", "-n", sub.namespace}).check(oc)
 			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"PodDisruptionBudget", "busybox-pdb", "-n", sub.namespace}).check(oc)
@@ -6231,16 +6231,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install perator")
+		exutil.By("install perator")
 		sub.create(oc, itName, dr)
 
-		g.By("check if dependent operator is installed")
+		exutil.By("check if dependent operator is installed")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", dependentOperator, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 	})
@@ -6341,52 +6341,52 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		subMta.namespace = oc.Namespace()
 		subMta.catalogSourceNamespace = catsrc1.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 		catsrc1.createWithCheck(oc, itName, dr)
 		catsrc2.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install Strimzi")
+		exutil.By("install Strimzi")
 		subStrimzi.create(oc, itName, dr)
 
-		g.By("check if Strimzi is installed")
+		exutil.By("check if Strimzi is installed")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subStrimzi.installedCSV, "-n", subStrimzi.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("install Portworx")
+		exutil.By("install Portworx")
 		subMta.create(oc, itName, dr)
 
-		g.By("check if Portworx is installed")
+		exutil.By("check if Portworx is installed")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subMta.installedCSV, "-n", subMta.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("get IP of Portworx")
+		exutil.By("get IP of Portworx")
 		mtaIP := subMta.getIP(oc)
 
-		g.By("Delete Portworx sub")
+		exutil.By("Delete Portworx sub")
 		subMta.delete(itName, dr)
 
-		g.By("check if Portworx sub is Deleted")
+		exutil.By("check if Portworx sub is Deleted")
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"sub", subMta.subName, "-n", subMta.namespace}).check(oc)
 
-		g.By("Delete Portworx csv")
+		exutil.By("Delete Portworx csv")
 		csvPortworx := csvDescription{
 			name:      subMta.installedCSV,
 			namespace: subMta.namespace,
 		}
 		csvPortworx.delete(itName, dr)
 
-		g.By("check if Portworx csv is Deleted")
+		exutil.By("check if Portworx csv is Deleted")
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"csv", subMta.installedCSV, "-n", subMta.namespace}).check(oc)
 
-		g.By("install Couchbase")
+		exutil.By("install Couchbase")
 		subBuildv2.create(oc, itName, dr)
 
-		g.By("get IP of Couchbase")
+		exutil.By("get IP of Couchbase")
 		couchbaseIP := subBuildv2.getIP(oc)
 
-		g.By("it takes different IP")
+		exutil.By("it takes different IP")
 		o.Expect(couchbaseIP).NotTo(o.Equal(mtaIP))
 
 	})
@@ -6455,17 +6455,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		subCockroachdb.namespace = oc.Namespace()
 		subCockroachdb.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install Etcd")
+		exutil.By("install Etcd")
 		subEtcd.create(oc, itName, dr)
 		defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subEtcd.operatorPackage+"."+subEtcd.namespace)
 
-		g.By("Check all resources via operators")
+		exutil.By("Check all resources via operators")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "ServiceAccount", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "RoleBinding", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
@@ -6477,17 +6477,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asAdmin, withoutNamespace, contain, subEtcd.namespace, ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
-		g.By("delete operator and Operator still exists because of crd")
+		exutil.By("delete operator and Operator still exists because of crd")
 		subEtcd.delete(itName, dr)
 		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subEtcd.installedCSV, "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
-		g.By("reinstall etcd and check Operator")
+		exutil.By("reinstall etcd and check Operator")
 		subEtcd.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
-		g.By("delete etcd and the Operator")
+		exutil.By("delete etcd and the Operator")
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "sub", subEtcd.subName, "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subEtcd.installedCSV, "-n", subEtcd.namespace)
@@ -6495,27 +6495,27 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subEtcd.operatorPackage+"."+subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("install etcd manually")
+		exutil.By("install etcd manually")
 		subEtcd.ipApproval = "Manual"
 		subEtcd.startingCSV = "etcdoperator.v0.9.4"
 		subEtcd.installedCSV = ""
 		subEtcd.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlan", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
-		g.By("approve etcd")
+		exutil.By("approve etcd")
 		subEtcd.approve(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, subEtcd.namespace, ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
-		g.By("unlabel resource and it is relabeled automatically")
+		exutil.By("unlabel resource and it is relabeled automatically")
 		roleName := getResource(oc, asAdmin, withoutNamespace, "operator", subEtcd.operatorPackage+"."+subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='Role')].name}")
 		o.Expect(roleName).NotTo(o.BeEmpty())
 		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "Role", roleName, "operators.coreos.com/"+subEtcd.operatorPackage+"."+subEtcd.namespace+"-", "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
-		g.By("delete etcd and the Operator again and Operator should recreated because of crd")
+		exutil.By("delete etcd and the Operator again and Operator should recreated because of crd")
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "sub", subEtcd.subName, "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subEtcd.installedCSV, "-n", subEtcd.namespace)
@@ -6542,11 +6542,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			// after the official is supported, will change it again.
 		}
 
-		g.By("install Cockroachdb")
+		exutil.By("install Cockroachdb")
 		subCockroachdb.create(oc, itName, dr)
 		defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace)
 
-		g.By("Check all resources of Cockroachdb via operators")
+		exutil.By("Check all resources of Cockroachdb via operators")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "RoleBinding", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
@@ -6557,7 +6557,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb.namespace, ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
-		g.By("create ns test-33176 and label it")
+		exutil.By("create ns test-33176 and label it")
 		_, err = doAction(oc, "create", asAdmin, withoutNamespace, "ns", "test-33176")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer doAction(oc, "delete", asAdmin, withoutNamespace, "ns", "test-33176")
@@ -6565,7 +6565,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Namespace", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
-		g.By("create apiservice and label it")
+		exutil.By("create apiservice and label it")
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", apiserviceImageTemplate, "-p", "NAME="+apiserviceName, "VERSION="+apiserviceVersion)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer doAction(oc, "delete", asAdmin, withoutNamespace, "apiservice", apiserviceName)
@@ -6624,29 +6624,29 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		subMta.namespace = oc.Namespace()
 		subMta.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install Teiid")
+		exutil.By("install Teiid")
 		subMta.create(oc, itName, dr)
 		defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subMta.operatorPackage+"."+subMta.namespace)
 
-		g.By("Check the resources via operators")
+		exutil.By("Check the resources via operators")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subMta.operatorPackage + "." + subMta.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
-		g.By("delete operator and Operator still exists because of crd")
+		exutil.By("delete operator and Operator still exists because of crd")
 		subMta.delete(itName, dr)
 		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subMta.installedCSV, "-n", subMta.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subMta.operatorPackage + "." + subMta.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
-		g.By("delete crd")
+		exutil.By("delete crd")
 		crd.delete(oc)
 
-		g.By("delete Operator resource to check if it is recreated")
+		exutil.By("delete Operator resource to check if it is recreated")
 		doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subMta.operatorPackage+"."+subMta.namespace)
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"operator", subMta.operatorPackage + "." + subMta.namespace}).check(oc)
 	})
@@ -6698,27 +6698,27 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		ogFailForward.namespace = ns
 		ogFoo.namespace = ns
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Default", ok, []string{"og", og.name, "-n", og.namespace, "-o=jsonpath={.spec.upgradeStrategy}"}).check(oc)
 		og.delete(itName, dr)
 
-		g.By("Create og all")
+		exutil.By("Create og all")
 		ogAll.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Default", ok, []string{"og", ogAll.name, "-n", ogAll.namespace, "-o=jsonpath={.spec.upgradeStrategy}"}).check(oc)
 		ogAll.delete(itName, dr)
 
-		g.By("Create og Default")
+		exutil.By("Create og Default")
 		ogDefault.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Default", ok, []string{"og", ogDefault.name, "-n", ogDefault.namespace, "-o=jsonpath={.spec.upgradeStrategy}"}).check(oc)
 		ogDefault.delete(itName, dr)
 
-		g.By("Create og failforward")
+		exutil.By("Create og failforward")
 		ogFailForward.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "TechPreviewUnsafeFailForward", ok, []string{"og", ogFailForward.name, "-n", ogFailForward.namespace, "-o=jsonpath={.spec.upgradeStrategy}"}).check(oc)
 		ogFailForward.delete(itName, dr)
 
-		g.By("Create og all")
+		exutil.By("Create og all")
 		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ogFoo.template, "-p", "NAME="+ogFoo.name, "NAMESPACE="+ogFoo.namespace, "UPGRADESTRATEGY="+ogFoo.upgradeStrategy)
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).To(o.ContainSubstring("exit status 1"))
@@ -6768,24 +6768,24 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		subOadp.namespace = oc.Namespace()
 		subOadp.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install OADP")
+		exutil.By("install OADP")
 		subOadp.create(oc, itName, dr)
 
-		g.By("Check the oadp-operator.v0.5.3 is installed successfully")
+		exutil.By("Check the oadp-operator.v0.5.3 is installed successfully")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subOadp.installedCSV, "-n", subOadp.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("patch to index image with wrong bundle csv fails")
+		exutil.By("patch to index image with wrong bundle csv fails")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", "{\"spec\":{\"image\":\"quay.io/olmqe/olm-index:OLM-2378-Oadp-csvfail\"}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "oadp-operator.v0.5.4", ok, []string{"sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}"}).check(oc)
 
-		g.By("check the csv fails")
+		exutil.By("check the csv fails")
 		// it fails after 10m which we can not control it. so, have to check it in 11m
 		err = wait.Poll(30*time.Second, 11*time.Minute, func() (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.4", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
@@ -6797,11 +6797,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.4 is not failing as expected")
 
-		g.By("change upgrade strategy to TechPreviewUnsafeFailForward")
+		exutil.By("change upgrade strategy to TechPreviewUnsafeFailForward")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("og", og.name, "-n", og.namespace, "--type=merge", "-p", "{\"spec\":{\"upgradeStrategy\":\"TechPreviewUnsafeFailForward\"}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check if oadp-operator.v0.5.6 is created	")
+		exutil.By("check if oadp-operator.v0.5.6 is created	")
 		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			csv := getResource(oc, asAdmin, withoutNamespace, "sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}")
 			if strings.Compare(csv, "oadp-operator.v0.5.6") == 0 {
@@ -6812,7 +6812,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.6 is not created")
 
-		g.By("check if upgrade is done")
+		exutil.By("check if upgrade is done")
 		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.6", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status, "Succeeded") == 0 {
@@ -6869,24 +6869,24 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		subOadp.namespace = oc.Namespace()
 		subOadp.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("install OADP")
+		exutil.By("install OADP")
 		subOadp.create(oc, itName, dr)
 
-		g.By("Check the oadp-operator.v0.5.3 is installed successfully")
+		exutil.By("Check the oadp-operator.v0.5.3 is installed successfully")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subOadp.installedCSV, "-n", subOadp.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("patch to index image with wrong bundle ip fails")
+		exutil.By("patch to index image with wrong bundle ip fails")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", "{\"spec\":{\"image\":\"quay.io/olmqe/olm-index:OLM-2378-Oadp-ipfailTwo\"}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "oadp-operator.v0.5.5", ok, []string{"sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}"}).check(oc)
 
-		g.By("check the ip fails")
+		exutil.By("check the ip fails")
 		ips := getResource(oc, asAdmin, withoutNamespace, "sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.installplan.name}")
 		o.Expect(ips).NotTo(o.BeEmpty())
 		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
@@ -6899,11 +6899,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ip %v not failing as expected", ips))
 
-		g.By("change upgrade strategy to TechPreviewUnsafeFailForward")
+		exutil.By("change upgrade strategy to TechPreviewUnsafeFailForward")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("og", og.name, "-n", og.namespace, "--type=merge", "-p", "{\"spec\":{\"upgradeStrategy\":\"TechPreviewUnsafeFailForward\"}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("patch to index image again with fixed bundle")
+		exutil.By("patch to index image again with fixed bundle")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", "{\"spec\":{\"image\":\"quay.io/olmqe/olm-index:OLM-2378-Oadp-ipfailskip\"}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
@@ -6916,7 +6916,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.6 is not created")
 
-		g.By("check if upgrade is done")
+		exutil.By("check if upgrade is done")
 		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.6", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status, "Succeeded") == 0 {
@@ -6931,7 +6931,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-24917, author: tbuskey@redhat.com
 	g.It("Author:bandrade-Medium-24917-Operators in SingleNamespace should not be granted namespace list [Disruptive]", func() {
-		g.By("1) Install the OperatorGroup in a random project")
+		exutil.By("1) Install the OperatorGroup in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -6946,7 +6946,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the learn-operator with Automatic approval")
+		exutil.By("2) Install the learn-operator with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-24917",
@@ -6965,38 +6965,38 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "AtLatestKnown", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
 
-		g.By("3) check if this operator's SA can list all namespaces")
+		exutil.By("3) check if this operator's SA can list all namespaces")
 		expectedSA := fmt.Sprintf("system:serviceaccount:%s:learn-operator", oc.Namespace())
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("policy").Args("who-can", "list", "namespaces").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(msg, expectedSA)).To(o.BeFalse())
 
-		g.By("4) get the token of this operator's SA")
+		exutil.By("4) get the token of this operator's SA")
 		token, err := getSAToken(oc, "learn-operator", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("5) get the cluster server")
+		exutil.By("5) get the cluster server")
 		server, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-server").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("6) get the current context")
+		exutil.By("6) get the current context")
 		context, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-context").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// make sure switch to the current cluster-admin role after finished
 		defer func() {
-			g.By("9) Switch to the cluster-admin role")
+			exutil.By("9) Switch to the cluster-admin role")
 			_, err := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", context).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
-		g.By("7) login the cluster with this token")
+		exutil.By("7) login the cluster with this token")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("login").Args(server, "--token", token).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		whoami, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(whoami, expectedSA)).To(o.BeTrue())
 
-		g.By("8) this SA user should NOT have the permission to list all namespaces")
+		exutil.By("8) this SA user should NOT have the permission to list all namespaces")
 		ns, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns").Output()
 		o.Expect(strings.Contains(ns, "namespaces is forbidden")).To(o.BeTrue())
 	})
@@ -7032,19 +7032,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 
-		g.By("Create ConfigMap with bad operator manifest")
+		exutil.By("Create ConfigMap with bad operator manifest")
 		cm.create(oc, itName, dr)
 
 		// Make sure bad configmap was created
-		g.By("Check configmap")
+		exutil.By("Check configmap")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(msg, catName)).To(o.BeTrue())
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.create(oc, itName, dr)
 
-		g.By("Wait for pod to fail")
+		exutil.By("Wait for pod to fail")
 		waitErr := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace()).Output()
 			e2e.Logf("\n%v", msg)
@@ -7057,7 +7057,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "the pod is not in CrashLoopBackOff")
 
-		g.By("Check catsrc state for TRANSIENT_FAILURE in lastObservedState")
+		exutil.By("Check catsrc state for TRANSIENT_FAILURE in lastObservedState")
 		waitErr = wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catName, "-n", oc.Namespace(), "-o=jsonpath={.status}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -7085,7 +7085,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		var ogSingleTemplate = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		var operatorWait = 150 * time.Second
 
-		g.By("check precondition and prepare env")
+		exutil.By("check precondition and prepare env")
 		if isPresentResource(oc, asAdmin, withoutNamespace, present, "crd", "etcdclusters.etcd.database.coreos.com") && isPresentResource(oc, asAdmin, withoutNamespace, present, "EtcdCluster", "-A") {
 			e2e.Logf("It is distruptive case and the resources exists, do not destroy it. exit")
 			return
@@ -7159,21 +7159,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("catalogsource", catsrcName, "-n", "openshift-marketplace").Execute()
 
 		oc.SetupProject()
-		g.By("create new namespace " + oc.Namespace())
+		exutil.By("create new namespace " + oc.Namespace())
 		itName := g.CurrentSpecReport().FullText()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 		etcdCr.namespace = oc.Namespace()
 
-		g.By("Create ConfigMap with operator manifest")
+		exutil.By("Create ConfigMap with operator manifest")
 		cm.create(oc, itName, dr)
 
-		g.By("Check configmap")
+		exutil.By("Check configmap")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", cm.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(msg, cmName)).To(o.BeTrue())
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.create(oc, itName, dr)
 		err = wait.Poll(60*time.Second, operatorWait, func() (bool, error) {
 			checkCatSource, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catsrcName, "-n", catsrc.namespace, "-o", "jsonpath={.status.connectionState.lastObservedState}").Output()
@@ -7191,10 +7191,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, catsrcName+" is not READY")
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("Install the etcdoperator v0.9.2 with Automatic approval")
+		exutil.By("Install the etcdoperator v0.9.2 with Automatic approval")
 		defer func() {
 			oc.AsAdmin().Run("delete").Args("crd", "etcdclusters.etcd.database.coreos.com").Output()
 			oc.AsAdmin().Run("delete").Args("crd", "etcdbackups.etcd.database.coreos.com").Output()
@@ -7203,29 +7203,29 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("creat cr")
+		exutil.By("creat cr")
 		etcdCr.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{etcdCr.typename, etcdCr.name, "-n", etcdCr.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		oc.SetupProject()
-		g.By("create new namespace " + oc.Namespace())
+		exutil.By("create new namespace " + oc.Namespace())
 		itName = g.CurrentSpecReport().FullText()
 		og1.namespace = oc.Namespace()
 		sub1.namespace = oc.Namespace()
 		etcdCr1.namespace = oc.Namespace()
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og1.createwithCheck(oc, itName, dr)
 
-		g.By("Create sub")
+		exutil.By("Create sub")
 		sub1.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.2", "-n", sub1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("creat etcd cr in namespace test-automation-24738-1")
+		exutil.By("creat etcd cr in namespace test-automation-24738-1")
 		etcdCr1.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{etcdCr1.typename, etcdCr1.name, "-n", etcdCr1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("update ConfigMap")
+		exutil.By("update ConfigMap")
 		cm.template = patchCfgMap
 		cm.create(oc, itName, dr)
 
@@ -7289,12 +7289,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			singleNamespace:        true,
 		}
 
-		g.By("Create cluster-scoped OperatorGroup")
+		exutil.By("Create cluster-scoped OperatorGroup")
 		ogAll.create(oc, itName, dr)
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace()).Output()
 		e2e.Logf("og: %v, %v", msg, og.name)
 
-		g.By("Subscribe to etcd operator and wait for the csv to fail")
+		exutil.By("Subscribe to etcd operator and wait for the csv to fail")
 		// CSV should fail && show fail.  oc describe csv xyz will have error
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
@@ -7311,17 +7311,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		e2e.Logf("--> get the csv message: %v\n", msg)
 		o.Expect(strings.Contains(msg, "InstallModeType not supported") || strings.Contains(msg, "csv in namespace with no operatorgroup")).To(o.BeTrue())
 
-		g.By("Get prometheus token")
+		exutil.By("Get prometheus token")
 		olmToken, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(olmToken).NotTo(o.BeEmpty())
 
-		g.By("get OLM pod name")
+		exutil.By("get OLM pod name")
 		olmPodname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "--selector=app=olm-operator", "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(olmPodname).NotTo(o.BeEmpty())
 
-		g.By("check metrics")
+		exutil.By("check metrics")
 
 		waitErr := wait.Poll(10*time.Second, 150*time.Second, func() (bool, error) {
 			next = false
@@ -7348,7 +7348,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "csv_abnormal metric is not created")
 
-		g.By("reset og to single namespace")
+		exutil.By("reset og to single namespace")
 		og.delete(itName, dr)
 		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace()).Output()
 		e2e.Logf("og deleted:%v", msg)
@@ -7357,7 +7357,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace(), "--no-headers").Output()
 		e2e.Logf("og created:%v", msg)
 
-		g.By("Wait for csv to recreate and ready")
+		exutil.By("Wait for csv to recreate and ready")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), csvName, "-o=jsonpath={.status.reason}").Output()
@@ -7367,7 +7367,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		e2e.Logf("--> get the csv message: %v\n", msg)
 		o.Expect(strings.Contains(msg, "completed with no errors")).To(o.BeTrue())
 
-		g.By("Make sure pods are fully running")
+		exutil.By("Make sure pods are fully running")
 		waitErr = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace()).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -7379,7 +7379,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		e2e.Logf("\nPods\n%v", msg)
 		exutil.AssertWaitPollNoErr(waitErr, "etcd-operator pod is not running as 3")
 
-		g.By("check new metrics")
+		exutil.By("check new metrics")
 
 		waitErr = wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
 			next = false
@@ -7405,7 +7405,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "csv_succeeded metric is not created")
-		g.By("SUCCESS")
+		exutil.By("SUCCESS")
 
 	})
 
@@ -7450,18 +7450,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create og")
+		exutil.By("create og")
 		og.create(oc, itName, dr)
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator")
+		exutil.By("install operator")
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("check the operator upgrade to nginx-operator.v0.0.1")
+		exutil.By("check the operator upgrade to nginx-operator.v0.0.1")
 		err := wait.Poll(15*time.Second, 480*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "csv", "nginx-operator.v1.0.1", "-o=jsonpath={.spec.replaces}").Output()
 			e2e.Logf(output)
@@ -7518,14 +7518,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = ns
 		sub.catalogSourceNamespace = ns
 
-		g.By("create og")
+		exutil.By("create og")
 		og.create(oc, itName, dr)
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator")
+		exutil.By("install operator")
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -7540,7 +7540,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("validatingwebhookconfiguration which owner ns %s is not created", ns))
 
-		g.By("update csv")
+		exutil.By("update csv")
 
 		_, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("csv", sub.installedCSV, "-n", ns,
 			"--type=json", "--patch", `[{"op":"replace","path":"/spec/webhookdefinitions/0/rules/0/operations", "value":["CREATE","DELETE"]}]`).Output()
@@ -7610,14 +7610,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = ns
 		sub.catalogSourceNamespace = ns
 
-		g.By("create og")
+		exutil.By("create og")
 		og.create(oc, itName, dr)
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator")
+		exutil.By("install operator")
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -7632,7 +7632,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("mutatingwebhookconfiguration which owner ns %s is not created", ns))
 
-		g.By("update csv")
+		exutil.By("update csv")
 		_, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("csv", sub.installedCSV, "-n", ns,
 			"--type=json", "--patch", `[{"op":"replace","path":"/spec/webhookdefinitions/0/rules/0/operations", "value":["CREATE","DELETE"]}]`).Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
@@ -7704,14 +7704,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			catsrc.namespace = ns
 			sub.catalogSourceNamespace = ns
 
-			g.By("create og")
+			exutil.By("create og")
 			og.create(oc, itName, dr)
 
-			g.By("create catalog source")
+			exutil.By("create catalog source")
 			defer catsrc.delete(itName, dr)
 			catsrc.createWithCheck(oc, itName, dr)
 
-			g.By("install operator")
+			exutil.By("install operator")
 			defer sub.delete(itName, dr)
 			sub.create(oc, itName, dr)
 
@@ -7781,18 +7781,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create og")
+		exutil.By("create og")
 		og.create(oc, itName, dr)
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator")
+		exutil.By("install operator")
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("check secrets")
+		exutil.By("check secrets")
 		errWait := wait.Poll(30*time.Second, 240*time.Second, func() (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "secrets", "mysecret").Execute()
 			if err != nil {
@@ -7803,7 +7803,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(errWait, "mysecret is not created")
 
-		g.By("check configmaps")
+		exutil.By("check configmaps")
 		errWait = wait.Poll(30*time.Second, 240*time.Second, func() (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "configmaps", "my-config-map").Execute()
 			if err != nil {
@@ -7814,11 +7814,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(errWait, "my-config-map is not found")
 
-		g.By("start to test OCP-30242")
-		g.By("delete csv")
+		exutil.By("start to test OCP-30242")
+		exutil.By("delete csv")
 		sub.deleteCSV(itName, dr)
 
-		g.By("check secrets has been deleted")
+		exutil.By("check secrets has been deleted")
 		errWait = wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "secrets", "mysecret").Execute()
 			if err != nil {
@@ -7829,7 +7829,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(errWait, "mysecret is not found")
 
-		g.By("check configmaps has been deleted")
+		exutil.By("check configmaps has been deleted")
 		errWait = wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "configmaps", "my-config-map").Execute()
 			if err != nil {
@@ -7906,20 +7906,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		itName := g.CurrentSpecReport().FullText()
 
 		//oc get proxy cluster
-		g.By("0) get the cluster proxy configuration")
+		exutil.By("0) get the cluster proxy configuration")
 		httpProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpProxy}")
 		httpsProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpsProxy}")
 		noProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.noProxy}")
 
-		g.By(fmt.Sprintf("1) create the catsrc and OperatorGroup in project: %s", oc.Namespace()))
+		exutil.By(fmt.Sprintf("1) create the catsrc and OperatorGroup in project: %s", oc.Namespace()))
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) install sub")
+		exutil.By("2) install sub")
 		sub.create(oc, itName, dr)
-		g.By("install operator SUCCESS")
+		exutil.By("install operator SUCCESS")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "nginx-operator-controller-manager", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
 		if httpProxy == "" {
@@ -7929,11 +7929,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			o.Expect(nodeHTTPSProxy).To(o.BeEmpty())
 			nodeNoProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"NO_PROXY\")].value}")
 			o.Expect(nodeNoProxy).To(o.BeEmpty())
-			g.By("CHECK proxy configure SUCCESS")
+			exutil.By("CHECK proxy configure SUCCESS")
 			sub.delete(itName, dr)
 			sub.deleteCSV(itName, dr)
 
-			g.By("3) create subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with non-empty values. ")
+			exutil.By("3) create subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with non-empty values. ")
 			subProxyTest.create(oc, itName, dr)
 			err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 				status := getResource(oc, asAdmin, withoutNamespace, "csv", subProxyTest.installedCSV, "-n", subProxyTest.namespace, "-o=jsonpath={.status.phase}")
@@ -7963,11 +7963,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			o.Expect(nodeHTTPSProxy).To(o.Equal(httpsProxy))
 			nodeNoProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"NO_PROXY\")].value}")
 			o.Expect(nodeNoProxy).To(o.Equal(noProxy))
-			g.By("CHECK proxy configure SUCCESS")
+			exutil.By("CHECK proxy configure SUCCESS")
 			sub.delete(itName, dr)
 			sub.deleteCSV(itName, dr)
 
-			g.By("3) create subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with non-empty values. ")
+			exutil.By("3) create subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with non-empty values. ")
 			subProxyTest.create(oc, itName, dr)
 			err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 				status := getResource(oc, asAdmin, withoutNamespace, "csv", subProxyTest.installedCSV, "-n", subProxyTest.namespace, "-o=jsonpath={.status.phase}")
@@ -7988,7 +7988,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			subProxyTest.delete(itName, dr)
 			subProxyTest.getCSV().delete(itName, dr)
 
-			g.By("4) Create a new subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with a fake value.")
+			exutil.By("4) Create a new subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with a fake value.")
 			subProxyFake.create(oc, itName, dr)
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 				status := getResource(oc, asAdmin, withoutNamespace, "csv", subProxyFake.installedCSV, "-n", subProxyFake.namespace, "-o=jsonpath={.status.phase}")
@@ -8009,7 +8009,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			subProxyFake.delete(itName, dr)
 			subProxyFake.getCSV().delete(itName, dr)
 
-			g.By("5) Create a new subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with an empty value.")
+			exutil.By("5) Create a new subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with an empty value.")
 			subProxyEmpty.create(oc, itName, dr)
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 				status := getResource(oc, asAdmin, withoutNamespace, "csv", subProxyEmpty.installedCSV, "-n", subProxyEmpty.namespace, "-o=jsonpath={.status.phase}")
@@ -8072,22 +8072,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 
 		itName := g.CurrentSpecReport().FullText()
-		g.By("STEP1: create the OperatorGroup ")
+		exutil.By("STEP1: create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("STEP 2: Create catalog source")
+		exutil.By("STEP 2: Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("STEP 3: install operator ")
+		exutil.By("STEP 3: install operator ")
 		subManual.createWithoutCheck(oc, itName, dr)
 		e2e.Logf("approve the install plan")
 		subManual.approveSpecificIP(oc, itName, dr, "nginx-operator.v1.6.0", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "nginx-operator.v1.6.0", "-n", subManual.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("STEP 4: approve the install plan")
+		exutil.By("STEP 4: approve the install plan")
 		subManual.approveSpecificIP(oc, itName, dr, "nginx-operator.v1.6.2", "Complete")
 
-		g.By("STEP 5: check the csv nginx-operator.v1.6.2")
+		exutil.By("STEP 5: check the csv nginx-operator.v1.6.2")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "nginx-operator.v1.6.2", "-n", subManual.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 	})
@@ -8142,7 +8142,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 
-		g.By("1, check if this operator ready for instaalling")
+		exutil.By("1, check if this operator ready for instaalling")
 		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
 		exists, err = clusterPackageExists(oc, sub)
 		if !exists {
@@ -8151,7 +8151,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(exists).To(o.BeTrue())
 
-		g.By("2, Get token & pods so that access the Prometheus")
+		exutil.By("2, Get token & pods so that access the Prometheus")
 		og.create(oc, itName, dr)
 		olmToken, err = exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -8165,7 +8165,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(catPodname).NotTo(o.BeEmpty())
 
-		g.By("3, Collect olm metrics before installing an operator")
+		exutil.By("3, Collect olm metrics before installing an operator")
 		msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", olmPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=csv_count").Outputs()
 		e2e.Logf("csv_count %v: %v", err, msg)
 		o.Expect(msg).NotTo(o.BeEmpty())
@@ -8210,15 +8210,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		e2e.Logf("\nbefore {csv_count, csv_upgrade_count, catalog_source_count, install_plan_count, subscription_count, subscription_sync_total}\n%v", metricsBefore)
 
-		g.By("4, Start to subscribe to etcdoperator")
+		exutil.By("4, Start to subscribe to etcdoperator")
 		defer sub.delete(itName, dr) // remove the subscription after test
 		sub.create(oc, itName, dr)
 
-		g.By("4.5 Check for latest version")
+		exutil.By("4.5 Check for latest version")
 		defer sub.deleteCSV(itName, dr) // remove the csv after test
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("5, learnoperator is at v0.0.3, start to collect olm metrics after")
+		exutil.By("5, learnoperator is at v0.0.3, start to collect olm metrics after")
 		msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", olmPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=csv_count").Outputs()
 		e2e.Logf("csv_count %v: %v", err, msg)
 		o.Expect(msg).NotTo(o.BeEmpty())
@@ -8260,13 +8260,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		}
 
-		g.By("6, Check results")
+		exutil.By("6, Check results")
 		e2e.Logf("{csv_count csv_upgrade_count catalog_source_count install_plan_count subscription_count subscription_sync_total}")
 		e2e.Logf("%v", metricsBefore)
 		e2e.Logf("%v", metricsAfter)
 
 		/* These are not reliable if other operators are added in parallel
-		g.By("Check Results")
+		exutil.By("Check Results")
 		// csv_count can increase since there is a new csv generated
 		o.Expect(metricsBefore.csvCount <= metricsAfter.csvCount).To(o.BeTrue())
 		e2e.Logf("PASS csv_count is greater")
@@ -8291,7 +8291,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(metricsBefore.subscriptionSyncTotal < metricsAfter.subscriptionSyncTotal).To(o.BeTrue())
 		e2e.Logf("PASS subscription_sync_total is greater")
 		*/
-		g.By("All PASS\n")
+		exutil.By("All PASS\n")
 	})
 
 	g.It("Author:xzha-High-40972-Provide more specific text when no candidates for Subscription spec", func() {
@@ -8334,7 +8334,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			sub = subOriginal
 		)
 
-		g.By("1, check if this operator exists")
+		exutil.By("1, check if this operator exists")
 		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
 		exists, err = clusterPackageExists(oc, sub)
 		if !exists {
@@ -8343,10 +8343,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(exists).To(o.BeTrue())
 
-		g.By("2, Create og")
+		exutil.By("2, Create og")
 		og.create(oc, itName, dr)
 
-		g.By("1/3 bad package name")
+		exutil.By("1/3 bad package name")
 		sub = subOriginal
 		sub.operatorPackage = "xyzzy"
 		s = fmt.Sprintf("no operators found in package %v in the catalog referenced by subscription %v", sub.operatorPackage, sub.subName)
@@ -8369,7 +8369,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.deleteCSV(itName, dr)
 		sub.delete(itName, dr)
 
-		g.By("2/3 bad catalog name")
+		exutil.By("2/3 bad catalog name")
 		e2e.Logf("catpodname %v", catPodname)
 		sub = subOriginal
 		sub.catalogSourceName = "xyzzy"
@@ -8393,7 +8393,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.deleteCSV(itName, dr)
 		sub.delete(itName, dr)
 
-		g.By("3/3 bad channel")
+		exutil.By("3/3 bad channel")
 		sub = subOriginal
 		sub.channel = "xyzzy"
 		s = fmt.Sprintf("no operators found in channel %v of package %v in the catalog referenced by subscription %v", sub.channel, sub.operatorPackage, sub.subName)
@@ -8416,7 +8416,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.deleteCSV(itName, dr)
 		sub.delete(itName, dr)
 
-		g.By("4/4 bad CSV")
+		exutil.By("4/4 bad CSV")
 		sub = subOriginal
 		sub.startingCSV = "xyzzy.v0.9.2"
 		s = fmt.Sprintf("no operators found with name %v in channel beta of package %v in the catalog referenced by subscription %v", sub.startingCSV, sub.operatorPackage, sub.subName)
@@ -8439,7 +8439,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.deleteCSV(itName, dr)
 		sub.delete(itName, dr)
 
-		g.By("FINISH\n")
+		exutil.By("FINISH\n")
 		if failures != 0 {
 			e2e.Failf("FAILED: %v times for %v", failures, failureNames)
 		}
@@ -8474,10 +8474,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 		itName := g.CurrentSpecReport().FullText()
-		g.By("1: create the OperatorGroup ")
+		exutil.By("1: create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2: create sub")
+		exutil.By("2: create sub")
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 		// to get the latest installedCSV for manual subscription so that its csv can be deleted successfully
@@ -8493,7 +8493,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, "state of csv etcdoperator.v0.9.2 is not Succeeded")
 
-		g.By("3: check OPERATOR_CONDITION_NAME")
+		exutil.By("3: check OPERATOR_CONDITION_NAME")
 		// there are 3 containers in this pod
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, "etcdoperator.v0.9.2 etcdoperator.v0.9.2 etcdoperator.v0.9.2", ok, []string{"deployment", "etcd-operator", "-n", namespaceName, "-o=jsonpath={.spec.template.spec.containers[*].env[?(@.name==\"OPERATOR_CONDITION_NAME\")].value}"}).checkWithoutAssert(oc)
 		if err != nil {
@@ -8502,7 +8502,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, "OPERATOR_CONDITION_NAME of etcd-operator is not correct")
 
-		g.By("4: approve the install plan")
+		exutil.By("4: approve the install plan")
 		sub.approveSpecificIP(oc, itName, dr, "etcdoperator.v0.9.4", "Complete")
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 		if err != nil {
@@ -8511,7 +8511,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, "state of csv etcdoperator.v0.9.4 is not Succeeded")
 
-		g.By("5: check OPERATOR_CONDITION_NAME")
+		exutil.By("5: check OPERATOR_CONDITION_NAME")
 		// there are 3 containers in this pod
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, "etcdoperator.v0.9.4 etcdoperator.v0.9.4 etcdoperator.v0.9.4", ok, []string{"deployment", "etcd-operator", "-n", namespaceName, "-o=jsonpath={.spec.template.spec.containers[*].env[?(@.name==\"OPERATOR_CONDITION_NAME\")].value}"}).checkWithoutAssert(oc)
 		if err != nil {
@@ -8557,17 +8557,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 		itName := g.CurrentSpecReport().FullText()
-		g.By("STEP 1: create the OperatorGroup and catalog source")
+		exutil.By("STEP 1: create the OperatorGroup and catalog source")
 		og.createwithCheck(oc, itName, dr)
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("STEP 2: create sub")
+		exutil.By("STEP 2: create sub")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "nginx-operator", ok, []string{"deployment", "-n", sub.namespace}).check(oc)
 
-		g.By("STEP 3: check OPERATOR_CONDITION_NAME")
+		exutil.By("STEP 3: check OPERATOR_CONDITION_NAME")
 		cpuCSV := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"manager\")].resources.requests.cpu}")
 		o.Expect(cpuCSV).NotTo(o.BeEmpty())
 		memoryCSV := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"manager\")].resources.requests.memory}")
@@ -8577,7 +8577,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		memoryDeployment := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"manager\")].resources.requests.memory}")
 		o.Expect(memoryDeployment).To(o.Equal(memoryCSV))
 
-		g.By("OCP-40532: OLM should not print debug logs")
+		exutil.By("OCP-40532: OLM should not print debug logs")
 		olmPodname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "--selector=app=olm-operator", "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(olmPodname).NotTo(o.BeEmpty())
@@ -8631,21 +8631,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 		itName := g.CurrentSpecReport().FullText()
-		g.By(fmt.Sprintf("1) create the catsrc in project: %s", oc.Namespace()))
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", oc.Namespace()))
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("2) install sub")
+		exutil.By("2) install sub")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("3) check sub status")
+		exutil.By("3) check sub status")
 		err := newCheck("expect", asAdmin, withoutNamespace, contain, "found 0 operatorgroups", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).checkWithoutAssert(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4) install og")
+		exutil.By("4) install og")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("check ip and csv")
+		exutil.By("check ip and csv")
 		installPlan := sub.getIP(oc)
 		o.Expect(installPlan).NotTo(o.BeEmpty())
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
@@ -8704,16 +8704,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 		itName := g.CurrentSpecReport().FullText()
-		g.By("1) create the catalog source and OperatorGroup")
+		exutil.By("1) create the catalog source and OperatorGroup")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) install sub")
+		exutil.By("2) install sub")
 		defer sub.delete(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("3) check ip/sub conditions")
+		exutil.By("3) check ip/sub conditions")
 		installPlan := sub.getIP(oc)
 		o.Expect(installPlan).NotTo(o.BeEmpty())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Failed", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -8727,7 +8727,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(subConditions).To(o.ContainSubstring("apiextensions.k8s.io/v1beta1"))
 		o.Expect(subConditions).To(o.ContainSubstring("Kind=CustomResourceDefinition not found on the cluster"))
 		o.Expect(subConditions).To(o.ContainSubstring("InstallComponentFailed"))
-		g.By("4) SUCCESS")
+		exutil.By("4) SUCCESS")
 	})
 
 	// author: xzha@redhat.com, test case OCP-43639
@@ -8768,12 +8768,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 		itName := g.CurrentSpecReport().FullText()
-		g.By("1) create the catalog source and OperatorGroup")
+		exutil.By("1) create the catalog source and OperatorGroup")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) install sub")
+		exutil.By("2) install sub")
 		defer sub.delete(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
 		installPlan := sub.getIP(oc)
@@ -8787,7 +8787,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			return false, nil
 		})
 		if err == nil {
-			g.By("3) check events")
+			exutil.By("3) check events")
 			err2 := wait.Poll(20*time.Second, 240*time.Second, func() (bool, error) {
 				eventOutput, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", namespaceName).Output()
 				o.Expect(err1).NotTo(o.HaveOccurred())
@@ -8802,10 +8802,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			exutil.AssertWaitPollNoErr(err2, "event CustomResourceDefinition is deprecated, piextensions.k8s.io and ditto-operator not found")
 
 		} else {
-			g.By("3) the opeartor cannot be installed, skip test case")
+			exutil.By("3) the opeartor cannot be installed, skip test case")
 		}
 
-		g.By("4) SUCCESS")
+		exutil.By("4) SUCCESS")
 	})
 
 	// author: xzha@redhat.com, test case OCP-48439
@@ -8845,16 +8845,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 		itName := g.CurrentSpecReport().FullText()
-		g.By("1) create the catalog source and OperatorGroup")
+		exutil.By("1) create the catalog source and OperatorGroup")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) install sub")
+		exutil.By("2) install sub")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "ditto-operator.v0.1.0", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 
-		g.By("3) update sub channel")
+		exutil.By("3) update sub channel")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"v0.1.1\"}}")
 		err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 			ips := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace)
@@ -8866,7 +8866,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, "no install plan for ditto-operator.v0.1.1")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "ditto-operator.v0.1.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
-		g.By("4) SUCCESS")
+		exutil.By("4) SUCCESS")
 	})
 
 	// It will cover test case: OCP-40958, author: kuiwang@redhat.com
@@ -8930,57 +8930,57 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		defer exutil.RecoverNamespaceRestricted(oc, oc.Namespace())
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator without og")
+		exutil.By("install operator without og")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("The install plan is Failed, without og")
+		exutil.By("The install plan is Failed, without og")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlanPending", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
 		installPlan := sub.getIP(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installing", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "no operator group found", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
 
-		g.By("delete operator")
+		exutil.By("delete operator")
 		sub.delete(itName, dr)
 
-		g.By("Create og1")
+		exutil.By("Create og1")
 		og1.create(oc, itName, dr)
 
-		g.By("Create og2")
+		exutil.By("Create og2")
 		og2.create(oc, itName, dr)
 
-		g.By("install operator with multiple og")
+		exutil.By("install operator with multiple og")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("The install plan is Failed, multiple og")
+		exutil.By("The install plan is Failed, multiple og")
 		installPlan = sub.getIP(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installing", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "more than one operator group", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlanPending", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
 
-		g.By("delete resource for next step")
+		exutil.By("delete resource for next step")
 		sub.delete(itName, dr)
 		og1.delete(itName, dr)
 		og2.delete(itName, dr)
 
-		g.By("create sa")
+		exutil.By("create sa")
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", saName, "-n", sub.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create ogSa")
+		exutil.By("Create ogSa")
 		ogSa.createwithCheck(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, saName, ok, []string{"og", ogSa.name, "-n", ogSa.namespace, "-o=jsonpath={.status.serviceAccountRef.name}"}).check(oc)
 
-		g.By("delete the service account")
+		exutil.By("delete the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("delete").Args("sa", saName, "-n", sub.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("install operator without sa for og")
+		exutil.By("install operator without sa for og")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("The install plan is Failed, without sa for og")
+		exutil.By("The install plan is Failed, without sa for og")
 		installPlan = sub.getIP(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installing", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "not found+2+please make sure the service account exists", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
@@ -9034,7 +9034,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 
-		g.By("1) Create the service account and OperatorGroup")
+		exutil.By("1) Create the service account and OperatorGroup")
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", sub.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		og.createwithCheck(oc, itName, dr)
@@ -9045,7 +9045,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.serviceAccountRef.name of og %s is not %s", og.name, sa))
 
-		g.By("2) Create a Subscription, check installplan")
+		exutil.By("2) Create a Subscription, check installplan")
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 		defer sub.update(oc, itName, dr)
@@ -9060,7 +9060,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.message of installplan %s does not contain 'retrying execution due to error'", installPlan))
 
-		g.By("3) After retry timeout, the install plan is Failed")
+		exutil.By("3) After retry timeout, the install plan is Failed")
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, "Failed", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 		if err != nil {
 			output := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status}")
@@ -9068,7 +9068,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.phase of installplan %s is not Failed", installPlan))
 
-		g.By("4) delete sub, then create sub again")
+		exutil.By("4) delete sub, then create sub again")
 		sub.delete(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
 		installPlan = sub.getIP(oc)
@@ -9079,11 +9079,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.message of installplan %s does not contain 'retrying execution due to error'", installPlan))
 
-		g.By("5) Grant the proper permissions to the service account")
+		exutil.By("5) Grant the proper permissions to the service account")
 		role.create(oc)
 		rolebinding.create(oc)
 
-		g.By("6) Checking the state of CSV")
+		exutil.By("6) Checking the state of CSV")
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 		if err != nil {
 			output := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status}")
@@ -9105,7 +9105,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("csv of sub %v is not installed", sub.subName))
-		g.By("7) SUCCESS")
+		exutil.By("7) SUCCESS")
 	})
 
 	// author: xzha@redhat.com
@@ -9157,11 +9157,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 
-		g.By("1) Create the service account")
+		exutil.By("1) Create the service account")
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", sub.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) Create the OperatorGroup")
+		exutil.By("2) Create the OperatorGroup")
 		og.createwithCheck(oc, itName, dr)
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, sa, ok, []string{"og", og.name, "-n", og.namespace, "-o=jsonpath={.status.serviceAccountRef.name}"}).checkWithoutAssert(oc)
 		if err != nil {
@@ -9170,22 +9170,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.serviceAccountRef.name of og %s is not %s", og.name, sa))
 
-		g.By("3) Create the Secret")
+		exutil.By("3) Create the Secret")
 		secret.create(oc)
 
-		g.By("4) Grant the proper permissions to the service account")
+		exutil.By("4) Grant the proper permissions to the service account")
 		role.create(oc)
 		rolebinding.create(oc)
 
-		g.By("5) create sub")
+		exutil.By("5) create sub")
 		sub.create(oc, itName, dr)
 
-		g.By("6) Checking the secret")
+		exutil.By("6) Checking the secret")
 		secrets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(secrets).To(o.ContainSubstring(secret.name))
 
-		g.By("7) Checking the state of CSV")
+		exutil.By("7) Checking the state of CSV")
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 	})
@@ -9231,17 +9231,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create og")
+		exutil.By("create og")
 		og.create(oc, itName, dr)
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator")
+		exutil.By("install operator")
 		defer sub.delete(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("The install plan is Failed")
+		exutil.By("The install plan is Failed")
 		installPlan := sub.getIP(oc)
 		err := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
 			result := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}")
@@ -9296,17 +9296,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 		itName := g.CurrentSpecReport().FullText()
 
-		g.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("2) install og")
+		exutil.By("2) install og")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) install sub with channel alpha-1")
+		exutil.By("3) install sub with channel alpha-1")
 		sub.create(oc, itName, dr)
 
-		g.By("4) check csv")
+		exutil.By("4) check csv")
 		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
@@ -9325,20 +9325,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, "csv etcdoperator.v0.9.2 or ditto-operator.v0.1.1 is not Succeeded nor Installing")
 
-		g.By("5) delete sub etcd-47322 and csv etcdoperator.v0.9.2")
+		exutil.By("5) delete sub etcd-47322 and csv etcdoperator.v0.9.2")
 		sub.findInstalledCSV(oc, itName, dr)
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 
-		g.By("6) install sub with channel alpha-2")
+		exutil.By("6) install sub with channel alpha-2")
 		sub.channel = "alpha-2"
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("7) check sub")
+		exutil.By("7) check sub")
 		newCheck("expect", asUser, withoutNamespace, contain, "ConstraintsNotSatisfiable", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].reason}"}).check(oc)
 		newCheck("expect", asUser, withoutNamespace, contain, "require to have the property olm.type3 with value value31", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].message}"}).check(oc)
 
-		g.By("8) delete sub and csv ditto-operator.v0.1.1")
+		exutil.By("8) delete sub and csv ditto-operator.v0.1.1")
 		selectorStr := "--selector=operators.coreos.com/ditto-operator." + namespaceName
 		subDepName := getResource(oc, asAdmin, withoutNamespace, "sub", selectorStr, "-n", sub.namespace, "-o=jsonpath={..metadata.name}")
 		o.Expect(subDepName).To(o.ContainSubstring("ditto-operator"))
@@ -9361,7 +9361,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, "delete sub and csv failed")
 
-		g.By("9) check status of csv etcdoperator.v0.9.4 and ditto-operator.v0.2.0")
+		exutil.By("9) check status of csv etcdoperator.v0.9.4 and ditto-operator.v0.2.0")
 		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.4", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") == 0 {
@@ -9435,21 +9435,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 		itName := g.CurrentSpecReport().FullText()
 
-		g.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
 		defer catsrcError.delete(itName, dr)
 		catsrcError.createWithCheck(oc, itName, dr)
 
-		g.By("2) install og")
+		exutil.By("2) install og")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) install subError with channel alpha-1")
+		exutil.By("3) install subError with channel alpha-1")
 		subError.createWithoutCheck(oc, itName, dr)
 		newCheck("expect", asUser, withoutNamespace, contain, "ErrorPreventedResolution", ok, []string{"sub", subError.subName, "-n", namespaceName, "-o=jsonpath={.status.conditions[*].reason}"}).check(oc)
 		conditionsMsg := getResource(oc, asAdmin, withoutNamespace, "sub", subError.subName, "-n", namespaceName, "-o=jsonpath={.status.conditions[*].message}")
 		o.Expect(conditionsMsg).To(o.ContainSubstring("convert olm.constraint to resolver predicate: ERROR"))
 		subError.delete(itName, dr)
 
-		g.By("4) install subError with channel alpha-2")
+		exutil.By("4) install subError with channel alpha-2")
 		subError.channel = "alpha-2"
 		subError.createWithoutCheck(oc, itName, dr)
 		newCheck("expect", asUser, withoutNamespace, contain, "ConstraintsNotSatisfiable", ok, []string{"sub", subError.subName, "-n", namespaceName, "-o=jsonpath={.status.conditions[*].reason}"}).check(oc)
@@ -9496,17 +9496,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 		itName := g.CurrentSpecReport().FullText()
 
-		g.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("2) install og")
+		exutil.By("2) install og")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) install sub with channel alpha-1")
+		exutil.By("3) install sub with channel alpha-1")
 		sub.create(oc, itName, dr)
 
-		g.By("4) check csv")
+		exutil.By("4) check csv")
 		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
@@ -9565,17 +9565,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 		itName := g.CurrentSpecReport().FullText()
 
-		g.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("2) install og")
+		exutil.By("2) install og")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("5) install sub with channel alpha-1")
+		exutil.By("5) install sub with channel alpha-1")
 		sub.create(oc, itName, dr)
 
-		g.By("6) check csv")
+		exutil.By("6) check csv")
 		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.4", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
@@ -9633,18 +9633,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 		itName := g.CurrentSpecReport().FullText()
 
-		g.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
 		defer catsrcOr.delete(itName, dr)
 		catsrcOr.createWithCheck(oc, itName, dr)
 
-		g.By("2) install og")
+		exutil.By("2) install og")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) test arbitrary compound constraints with OR")
-		g.By("3.1) install sub with channel alpha-1")
+		exutil.By("3) test arbitrary compound constraints with OR")
+		exutil.By("3.1) install sub with channel alpha-1")
 		sub.create(oc, itName, dr)
 
-		g.By("3.2) check csv")
+		exutil.By("3.2) check csv")
 		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
@@ -9663,13 +9663,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, "csv etcdoperator.v0.9.2 or ditto-operator.v0.1.0 is not Succeeded")
 
-		g.By("3.3) switch channel to be alpha-2")
+		exutil.By("3.3) switch channel to be alpha-2")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"alpha-2\"}}")
 
-		g.By("3.4) check csv")
+		exutil.By("3.4) check csv")
 		newCheck("expect", asUser, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3.4) delete all subs and csvs")
+		exutil.By("3.4) delete all subs and csvs")
 		sub.findInstalledCSV(oc, itName, dr)
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
@@ -9734,19 +9734,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 		itName := g.CurrentSpecReport().FullText()
 
-		g.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
 		defer catsrcNot.delete(itName, dr)
 		catsrcNot.createWithCheck(oc, itName, dr)
 
-		g.By("2) install og")
+		exutil.By("2) install og")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) test arbitrary compound constraints with Not")
-		g.By("3.1) install sub with channel alpha-1")
+		exutil.By("3) test arbitrary compound constraints with Not")
+		exutil.By("3.1) install sub with channel alpha-1")
 		sub.channel = "alpha-1"
 		sub.create(oc, itName, dr)
 
-		g.By("3.2) check csv")
+		exutil.By("3.2) check csv")
 		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
@@ -9765,16 +9765,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, "csv etcdoperator.v0.9.2 or ditto-operator.v0.1.0 is not Succeeded")
 
-		g.By("3.3) delete sub etcd-47323 and csv etcdoperator.v0.9.2")
+		exutil.By("3.3) delete sub etcd-47323 and csv etcdoperator.v0.9.2")
 		sub.findInstalledCSV(oc, itName, dr)
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 
-		g.By("3.4) install sub with channel alpha-2")
+		exutil.By("3.4) install sub with channel alpha-2")
 		sub.channel = "alpha-2"
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("3.5) check sub")
+		exutil.By("3.5) check sub")
 		newCheck("expect", asUser, withoutNamespace, contain, "ConstraintsNotSatisfiable", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].reason}"}).check(oc)
 		newCheck("expect", asUser, withoutNamespace, contain, "require to not have ", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].message}"}).check(oc)
 
@@ -9820,17 +9820,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("1) Create the OperatorGroup")
+		exutil.By("1) Create the OperatorGroup")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) create catalog source")
+		exutil.By("2) create catalog source")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("3) Create a Subscription")
+		exutil.By("3) Create a Subscription")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("4) check install plan message")
+		exutil.By("4) check install plan message")
 		ip := sub.getIP(oc)
 		msg := ""
 		errorText := "no operator group found"
@@ -9846,12 +9846,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("The installplan %s did not include expected message.  The message was instead %s", ip, msg))
 
-		g.By("5) Check sub message")
+		exutil.By("5) Check sub message")
 		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions}").Output()
 		o.Expect(strings.Contains(strings.ToLower(msg), errorText)).To(o.BeTrue())
 		e2e.Logf("subscription also has the expected error")
 
-		g.By("Finished")
+		exutil.By("Finished")
 
 	})
 
@@ -9907,15 +9907,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 
-		g.By("Create catalog with v1alpha1 api operator")
+		exutil.By("Create catalog with v1alpha1 api operator")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		defer og.delete(itName, dr)
 		og.create(oc, itName, dr)
 
-		g.By("Wait for the operator to show in the packagemanifest")
+		exutil.By("Wait for the operator to show in the packagemanifest")
 		selector = "--selector=catalog=" + sub.catalogSourceName
 		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sub.catalogSourceNamespace, selector).Output()
@@ -9928,7 +9928,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(waitErr, "cannot get packagemanifest by label")
 		e2e.Logf("packagemanifest by label\n%v", msg)
 
-		g.By("Subscribe")
+		exutil.By("Subscribe")
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
@@ -9936,7 +9936,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ip", "--no-headers", "-n", oc.Namespace()).Output()
 		e2e.Logf("installplan %v:\n %v\n", err, msg)
 
-		g.By("Wait for sub to create the installplan")
+		exutil.By("Wait for sub to create the installplan")
 		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.installplan}").Output()
 			if strings.Contains(msg, "install-") {
@@ -9954,13 +9954,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(waitErr, "cannot get installplan status in subscription")
 
-		g.By("Get the installplan name")
+		exutil.By("Get the installplan name")
 		ip, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.installplan.name}").Output()
 		e2e.Logf("installplan is %v %v", ip, err)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(ip).NotTo(o.BeEmpty())
 
-		g.By("Wait for expected error in the install plan status")
+		exutil.By("Wait for expected error in the install plan status")
 		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", "-n", oc.Namespace(), ip, "-o=jsonpath={.status.conditions..message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -9973,7 +9973,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		e2e.Logf("Actual installplan error: %v %v", msg, err)
 		exutil.AssertWaitPollNoErr(waitErr, "cannot get expected installplan status")
 
-		g.By("Check sub for the same message")
+		exutil.By("Check sub for the same message")
 		waitErr = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.conditions..message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -9985,7 +9985,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "subscription doesn't have the expected error")
-		g.By("Finished")
+		exutil.By("Finished")
 
 	})
 
@@ -10012,7 +10012,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			waitErr             error
 		)
 
-		g.By("Make sure we're running a 4.8.x cluster")
+		exutil.By("Make sure we're running a 4.8.x cluster")
 
 		output, err = doAction(oc, "version", asAdmin, withoutNamespace, "-o=json")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -10062,15 +10062,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 
-		g.By("Create catalog with v1alpha1 api operator")
+		exutil.By("Create catalog with v1alpha1 api operator")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		defer og.delete(itName, dr)
 		og.create(oc, itName, dr)
 
-		g.By("Wait for the operator to show in the packagemanifest/catalog source")
+		exutil.By("Wait for the operator to show in the packagemanifest/catalog source")
 		selector = "--selector=catalog=" + sub.catalogSourceName
 		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sub.catalogSourceNamespace, selector).Output()
@@ -10082,7 +10082,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(msg).To(o.ContainSubstring(sub.operatorPackage))
 		exutil.AssertWaitPollNoErr(waitErr, "cannot get packagemanifest by label")
 
-		g.By("Subscribe")
+		exutil.By("Subscribe")
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
@@ -10094,7 +10094,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(msg).NotTo(o.BeEmpty())
 		sub.startingCSV = msg
 
-		g.By("Check csv    for maxOpenShiftVersion")
+		exutil.By("Check csv    for maxOpenShiftVersion")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), sub.startingCSV, "-o", "jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.BeEmpty())
@@ -10102,7 +10102,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			e2e.Failf("The csv annotation should contain maxOpenShiftVersion\n%v\n\n", msg)
 		}
 
-		g.By("Check events for reasons AppliedWithWarnings")
+		exutil.By("Check events for reasons AppliedWithWarnings")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", oc.Namespace(), "-o=jsonpath={.items[*].reason}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.BeEmpty())
@@ -10110,7 +10110,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			e2e.Failf("The events log should contain AppliedWithWarnings\n%v\n\n", msg)
 		}
 
-		g.By("Check OLM for warnings")
+		exutil.By("Check OLM for warnings")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersions blocking cluster upgrade", ok, []string{"co", "operator-lifecycle-manager", "-o=jsonpath={.status.conditions[?(.type=='Upgradeable')].message}"}).check(oc)
 
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "operator-lifecycle-manager", "-o=jsonpath={.status.conditions[?(.type=='Upgradeable')].message}").Output()
@@ -10118,7 +10118,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(msg).NotTo(o.BeEmpty())
 		e2e.Logf("Warning %v", msg)
 
-		g.By("Finished")
+		exutil.By("Finished")
 		e2e.Logf("Found all warnings:")
 	})
 
@@ -10190,7 +10190,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.1\""))
 		}
 
-		g.By("fbc based image without deprecated bundle")
+		exutil.By("fbc based image without deprecated bundle")
 		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-fbc"
 		catsrc.createWithCheck(oc, itName, dr)
 		entries := getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
@@ -10207,7 +10207,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		catsrc.delete(itName, dr)
 
-		g.By("ffbc based image with deprecated bundle made by properties.yaml")
+		exutil.By("ffbc based image with deprecated bundle made by properties.yaml")
 		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-fbc-deprecate-nomigrate"
 		catsrc.createWithCheck(oc, itName, dr)
 		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
@@ -10233,7 +10233,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		catsrc.delete(itName, dr)
 
-		g.By("sqlite based image without deprecated bundle")
+		exutil.By("sqlite based image without deprecated bundle")
 		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-sql"
 		defer exutil.RecoverNamespaceRestricted(oc, oc.Namespace())
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())
@@ -10252,7 +10252,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		catsrc.delete(itName, dr)
 
-		g.By("sqlite based image with deprecated bundle made by deprecatetruncate")
+		exutil.By("sqlite based image with deprecated bundle made by deprecatetruncate")
 		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-sql-deprecate"
 		catsrc.createWithCheck(oc, itName, dr)
 		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
@@ -10280,11 +10280,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-62974, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-Author:kuiwang-Medium-62974-olm sets invalid scc label on its namespaces", func() {
-		g.By("https://issues.redhat.com/browse/OCPBUGS-948 automated")
+		exutil.By("https://issues.redhat.com/browse/OCPBUGS-948 automated")
 		labelKey := "openshift\\.io\\/scc"
 
 		for _, ns := range []string{"openshift-operators", "openshift-operator-lifecycle-manager"} {
-			g.By("check label openshift.io/scc is empty on " + ns)
+			exutil.By("check label openshift.io/scc is empty on " + ns)
 			sccLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", ns, "-o=jsonpath={.metadata.labels}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(sccLabel).NotTo(o.BeEmpty())
@@ -10297,14 +10297,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 	// It will cover test case: OCP-62973, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:kuiwang-Medium-62973-dedicated way collect profiles cronjob pod missing target.workload.openshift.io management annotation[Disruptive]", func() {
-		g.By("https://issues.redhat.com/browse/OCPBUGS-1088 automated")
+		exutil.By("https://issues.redhat.com/browse/OCPBUGS-1088 automated")
 		if !exutil.IsSNOCluster(oc) {
 			g.Skip("it is not sno cluster, so skip it")
 		}
-		g.By("check if the current mcp is ready, or else skip")
+		exutil.By("check if the current mcp is ready, or else skip")
 		assertOrCheckMCP(oc, "master", 10, 1, true)
 
-		g.By("check if it is aleady in workload partition")
+		exutil.By("check if it is aleady in workload partition")
 		wordLoadPartition, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.items[*].metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(wordLoadPartition, "resources.workload.openshift.io/collect-profiles") {
@@ -10317,19 +10317,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			mcWordloadPartiation = filepath.Join(buildPruningBaseDir, "mc-workload-partition.yaml")
 		)
 
-		g.By("apply MchineConfig to set workload partition")
+		exutil.By("apply MchineConfig to set workload partition")
 		defer func() {
-			g.By("wait mcp recovered")
+			exutil.By("wait mcp recovered")
 			assertOrCheckMCP(oc, "master", 240, 30, false)
 		}()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", mcWordloadPartiation).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", mcWordloadPartiation).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check mcp updated successfully")
+		exutil.By("check mcp updated successfully")
 		assertOrCheckMCP(oc, "master", 180, 30, false)
 
-		g.By("check resources.workload.openshift.io/collect-profiles")
+		exutil.By("check resources.workload.openshift.io/collect-profiles")
 		o.Eventually(func() string {
 			annotation, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.items[*].metadata.annotations}").Output()
 			return annotation
@@ -10338,9 +10338,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-62973, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-Author:kuiwang-Medium-62973-general way collect profiles cronjob pod missing target.workload.openshift.io management annotation", func() {
-		g.By("https://issues.redhat.com/browse/OCPBUGS-1088 automated")
+		exutil.By("https://issues.redhat.com/browse/OCPBUGS-1088 automated")
 
-		g.By("check target.workload.openshift.io/management")
+		exutil.By("check target.workload.openshift.io/management")
 		o.Eventually(func() string {
 			annotation, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("CronJob", "collect-profiles", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.jobTemplate.spec.template.metadata.annotations}").Output()
 			return annotation
@@ -10412,16 +10412,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 		og.namespace = oc.Namespace()
-		g.By("Create cm")
+		exutil.By("Create cm")
 		cm.create(oc, itName, dr)
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.create(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create sub")
+		exutil.By("Create sub")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "AllNamespaces InstallModeType not supported", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.message}"}).check(oc)
 	})
@@ -10488,22 +10488,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		og.namespace = oc.Namespace()
 		p1.targetNamespace = oc.Namespace()
 		p2.targetNamespace = oc.Namespace()
-		g.By("Create new project")
+		exutil.By("Create new project")
 		p1.create(oc, itName, dr)
 		p1.label(oc, "olmtestmultins")
 		p2.create(oc, itName, dr)
 		p2.label(oc, "olmtestmultins")
 
-		g.By("Create cm")
+		exutil.By("Create cm")
 		cm.create(oc, itName, dr)
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.create(oc, itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create sub")
+		exutil.By("Create sub")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "MultiNamespace InstallModeType not supported", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.message}"}).check(oc)
 	})
@@ -10535,7 +10535,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		p1.targetNamespace = oc.Namespace()
 		p2.targetNamespace = oc.Namespace()
 		og.namespace = oc.Namespace()
-		g.By("Create new projects and label them")
+		exutil.By("Create new projects and label them")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", p1.name, "--ignore-not-found").Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", p1.name).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -10545,7 +10545,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		o.Expect(err).NotTo(o.HaveOccurred())
 		p2.label(oc, "test-og-label-1651")
 
-		g.By("Create og and check the label")
+		exutil.By("Create og and check the label")
 		og.create(oc, itName, dr)
 		ogUID := getResource(oc, asAdmin, withNamespace, "og", og.name, "-o=jsonpath={.metadata.uid}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "olm.operatorgroup.uid/"+ogUID, ok,
@@ -10553,14 +10553,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		newCheck("expect", asAdmin, withoutNamespace, contain, "olm.operatorgroup.uid/"+ogUID, ok,
 			[]string{"ns", p2.name, "-o=jsonpath={.metadata.labels}"}).check(oc)
 
-		g.By("delete og and check there is no label")
+		exutil.By("delete og and check there is no label")
 		og.delete(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "olm.operatorgroup.uid/"+ogUID, nok,
 			[]string{"ns", p1.name, "-o=jsonpath={.metadata.labels}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "olm.operatorgroup.uid/"+ogUID, nok,
 			[]string{"ns", p2.name, "-o=jsonpath={.metadata.labels}"}).check(oc)
 
-		g.By("create another og to check the label")
+		exutil.By("create another og to check the label")
 		og.name = "og-1651-2"
 		og.create(oc, itName, dr)
 		ogUID = getResource(oc, asAdmin, withNamespace, "og", og.name, "-o=jsonpath={.metadata.uid}")
@@ -10625,13 +10625,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		sub.catalogSourceNamespace = catsrc.namespace
 		og.namespace = oc.Namespace()
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create configmap of csv")
+		exutil.By("Create configmap of csv")
 		cm.create(oc, itName, dr)
 
-		g.By("Get minKubeVersionRequired and kubeVersionUpdated")
+		exutil.By("Get minKubeVersionRequired and kubeVersionUpdated")
 		output := getResource(oc, asUser, withoutNamespace, "cm", cm.name, "-o=json")
 		csvDesc := strings.TrimSuffix(strings.TrimSpace(strings.SplitN(strings.SplitN(output, "\"clusterServiceVersions\": ", 2)[1], "\"customResourceDefinitions\":", 2)[0]), ",")
 		o.Expect(strings.Contains(csvDesc, "minKubeVersion:")).To(o.BeTrue())
@@ -10639,22 +10639,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		kubeVersionUpdated := generateUpdatedKubernatesVersion(oc)
 		e2e.Logf("the kubeVersionUpdated version is %s, and minKubeVersionRequired is %s", kubeVersionUpdated, minKubeVersionRequired)
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Update the minKubeVersion greater than the cluster KubeVersion")
+		exutil.By("Update the minKubeVersion greater than the cluster KubeVersion")
 		cm.patch(oc, fmt.Sprintf("{\"data\": {\"clusterServiceVersions\": %s}}", strings.ReplaceAll(csvDesc, "minKubeVersion: "+minKubeVersionRequired, "minKubeVersion: "+kubeVersionUpdated)))
 
-		g.By("Create sub with greater KubeVersion")
+		exutil.By("Create sub with greater KubeVersion")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "CSV version requirement not met", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ClusterServiceVersion\")].message}"}).check(oc)
 
-		g.By("Remove sub and csv and update the minKubeVersion to orignl")
+		exutil.By("Remove sub and csv and update the minKubeVersion to orignl")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 		cm.patch(oc, fmt.Sprintf("{\"data\": {\"clusterServiceVersions\": %s}}", csvDesc))
 
-		g.By("Create sub with orignal KubeVersion")
+		exutil.By("Create sub with orignal KubeVersion")
 		sub.create(oc, itName, dr)
 		err := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
 			csvPhase := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}")
@@ -10729,24 +10729,24 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		sub.catalogSourceNamespace = catsrc.namespace
 		og.namespace = oc.Namespace()
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create configmap of csv")
+		exutil.By("Create configmap of csv")
 		cm.create(oc, itName, dr)
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create sub")
+		exutil.By("Create sub")
 		sub.ipApproval = "Manual"
 		sub.startingCSV = "namespace-configuration-operator.v0.0.1"
 		sub.create(oc, itName, dr)
 
-		g.By("manually approve sub")
+		exutil.By("manually approve sub")
 		sub.approve(oc, itName, dr)
 
-		g.By(fmt.Sprintf("there is skipped csv version %s", skippedVersion))
+		exutil.By(fmt.Sprintf("there is skipped csv version %s", skippedVersion))
 		o.Expect(strings.Contains(sub.ipCsv, skippedVersion)).To(o.BeFalse())
 	})
 
@@ -10795,21 +10795,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		sub.catalogSourceNamespace = catsrc.namespace
 		og.namespace = oc.Namespace()
 
-		g.By("ensure no such crd")
+		exutil.By("ensure no such crd")
 		crd.delete(oc)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Create sub")
+		exutil.By("Create sub")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asUser, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "v2", nok, []string{"crd", crd.name, "-A", "-o=jsonpath={.status.storedVersions}"}).check(oc)
 
-		g.By("update channel of Sub")
+		exutil.By("update channel of Sub")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"beta\"}}")
 		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "csv", "nginx-operator-24664.v0.0.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
@@ -10873,16 +10873,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		sub.catalogSourceNamespace = catsrc.namespace
 		og.namespace = oc.Namespace()
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create cm with wrong crd")
+		exutil.By("Create cm with wrong crd")
 		cm.create(oc, itName, dr)
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.create(oc, itName, dr)
 
-		g.By("Create sub and cannot succeed")
+		exutil.By("Create sub and cannot succeed")
 		sub.createWithoutCheck(oc, itName, dr)
 		err := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
 			subStatus := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].message}")
@@ -10909,7 +10909,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		cm.delete(itName, dr)
 		catsrc.delete(itName, dr)
 
-		g.By("update cm to correct crd")
+		exutil.By("update cm to correct crd")
 		cm.name = "cm-21824-correct"
 		cm.template = cmCorrect
 		cm.create(oc, itName, dr)
@@ -10919,7 +10919,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		sub.catalogSourceName = catsrc.name
 		sub.create(oc, itName, dr)
 
-		g.By("sub succeed and csv succeed")
+		exutil.By("sub succeed and csv succeed")
 		sub.findInstalledCSV(oc, itName, dr)
 		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
 			csvStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}").Output()
@@ -10951,7 +10951,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			}
 		}
 
-		g.By("make all nodes as unschedulable")
+		exutil.By("make all nodes as unschedulable")
 		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Node Names are %v", nodeName)
@@ -10988,13 +10988,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("delete default catsrc certified-operators community-operators redhat-marketplace redhat-operators")
+		exutil.By("delete default catsrc certified-operators community-operators redhat-marketplace redhat-operators")
 		for _, catalog := range catalogs {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("catsrc", catalog, "-n", "openshift-marketplace").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("check alert has been raised")
+		exutil.By("check alert has been raised")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
@@ -11070,11 +11070,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		)
 
 		// OCP-25679, OCP-21418
-		g.By("Create operator targeted at all namespace")
+		exutil.By("Create operator targeted at all namespace")
 		sub.create(oc, itName, dr)
 
 		// OCP-25679, OCP-21418
-		g.By("Check the cluster resource rolebinding, role and service account exists")
+		exutil.By("Check the cluster resource rolebinding, role and service account exists")
 		clusterResources := strings.Fields(getResource(oc, asAdmin, withoutNamespace, "clusterrolebinding",
 			fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-o=jsonpath={.items[0].metadata.name}{\" \"}{.items[0].roleRef.name}{\" \"}{.items[0].subjects[0].name}"))
 		o.Expect(clusterResources).NotTo(o.BeEmpty())
@@ -11082,33 +11082,33 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		cl.add(newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", clusterResources[2], "-n", sub.namespace}))
 
 		// OCP-21418
-		g.By("Check the pods of the operator is running")
+		exutil.By("Check the pods of the operator is running")
 		cl.add(newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pod", fmt.Sprintf("--selector=name=%s", podLabelName), "-n", sub.namespace, "-o=jsonpath={.items[*].status.phase}"}))
 
 		// OCP-21418
-		g.By("Check no resource of new crd")
+		exutil.By("Check no resource of new crd")
 		cl.add(newCheck("present", asAdmin, withNamespace, notPresent, "", ok, []string{crName}))
 		//do check parallelly
 		cl.check(oc)
 		cl.empty()
 
 		// OCP-25679, OCP-21418
-		g.By("Delete the operator")
+		exutil.By("Delete the operator")
 		sub.delete(itName, dr)
 		sub.getCSV().delete(itName, dr)
 
 		// OCP-25679, OCP-21418
-		g.By("Check the cluster resource rolebinding, role and service account do not exist")
+		exutil.By("Check the cluster resource rolebinding, role and service account do not exist")
 		cl.add(newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"clusterrolebinding", clusterResources[0]}))
 		cl.add(newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"clusterrole", clusterResources[1]}))
 		cl.add(newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"sa", clusterResources[2], "-n", sub.namespace}))
 
 		// OCP-21418
-		g.By("Check the CRD still exists")
+		exutil.By("Check the CRD still exists")
 		cl.add(newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"crd", crdName}))
 
 		// OCP-21418
-		g.By("Check the pods of the operator is deleted")
+		exutil.By("Check the pods of the operator is deleted")
 		cl.add(newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"pod", fmt.Sprintf("--selector=name=%s", podLabelName), "-n", sub.namespace, "-o=jsonpath={.items[*].status.phase}"}))
 
 		cl.check(oc)
@@ -11175,18 +11175,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			}
 		)
 
-		g.By("create catsrc")
+		exutil.By("create catsrc")
 		catsrc.create(oc, itName, dr)
 		defer catsrc.delete(itName, dr)
 
-		g.By("create operator keda")
+		exutil.By("create operator keda")
 		defer subkeda.delete(itName, dr)
 		subkeda.create(oc, itName, dr)
 		csvkeda.name = subkeda.installedCSV
 		defer csvkeda.delete(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subkeda.installedCSV, "-n", subkeda.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("create operator Cockroachdb")
+		exutil.By("create operator Cockroachdb")
 		defer subCockroachdb.delete(itName, dr)
 		subCockroachdb.create(oc, itName, dr)
 		csvCockroachdb.name = subCockroachdb.installedCSV
@@ -11236,26 +11236,26 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		)
 
 		// OCP-21532
-		g.By("Check the global operator global-operators support all namesapces")
+		exutil.By("Check the global operator global-operators support all namesapces")
 		cl.add(newCheck("expect", asAdmin, withoutNamespace, compare, "[]", ok, []string{"og", "global-operators", "-n", "openshift-operators", "-o=jsonpath={.status.namespaces}"}))
 
-		g.By("create catsrc")
+		exutil.By("create catsrc")
 		catsrc.createWithCheck(oc, itName, dr)
 		defer catsrc.delete(itName, dr)
 
 		// OCP-21484, OCP-21532
-		g.By("Create operator targeted at all namespace")
+		exutil.By("Create operator targeted at all namespace")
 		sub.create(oc, itName, dr) // the resource is cleaned within g.AfterEach
 
-		g.By("Create new namespace")
+		exutil.By("Create new namespace")
 		project.create(oc, itName, dr) // the resource is cleaned within g.AfterEach
 
 		// OCP-21532
-		g.By("New annotations is added to copied CSV in current namespace")
+		exutil.By("New annotations is added to copied CSV in current namespace")
 		cl.add(newCheck("expect", asUser, withNamespace, contain, "alm-examples", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.metadata.annotations}"}))
 
 		// OCP-21484, OCP-21532
-		g.By("Check the csv within new namespace is copied. note: the step is slow because it wait to copy csv to new namespace")
+		exutil.By("Check the csv within new namespace is copied. note: the step is slow because it wait to copy csv to new namespace")
 		cl.add(newCheck("expect", asAdmin, withoutNamespace, compare, "Copied", ok, []string{"csv", sub.installedCSV, "-n", project.name, "-o=jsonpath={.status.reason}"}))
 
 		cl.check(oc)
@@ -11286,14 +11286,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			cl = checkList{}
 		)
 
-		g.By("Create operator targeted at all namespace")
+		exutil.By("Create operator targeted at all namespace")
 		sub.create(oc, itName, dr)
 		sub.update(oc, itName, dr)
 
-		g.By("Check clusterrolebinding has no OwnerReferences")
+		exutil.By("Check clusterrolebinding has no OwnerReferences")
 		cl.add(newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"clusterrolebinding", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..OwnerReferences}"}))
 
-		g.By("Check clusterrole has no OwnerReferences")
+		exutil.By("Check clusterrole has no OwnerReferences")
 		cl.add(newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"clusterrole", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..OwnerReferences}"}))
 		//do check parallelly
 		cl.check(oc)
@@ -11332,14 +11332,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			}
 		)
 
-		g.By("check if cockroachdb is already installed with all ns.")
+		exutil.By("check if cockroachdb is already installed with all ns.")
 		csvList := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", subCockroachdb.namespace, "-o=jsonpath={.items[*].metadata.name}")
 		if !strings.Contains(csvList, subCockroachdb.operatorPackage) {
-			g.By("create catsrc")
+			exutil.By("create catsrc")
 			catsrc.createWithCheck(oc, itName, dr)
 			defer catsrc.delete(itName, dr)
 
-			g.By("Create operator targeted at all namespace")
+			exutil.By("Create operator targeted at all namespace")
 			subCockroachdb.create(oc, itName, dr)
 			csvCockroachdb := csvDescription{
 				name:      subCockroachdb.installedCSV,
@@ -11352,7 +11352,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			defer doAction(oc, "delete", asAdmin, withoutNamespace, "crd", crdName)
 			defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace)
 
-			g.By("Check all resources via operators")
+			exutil.By("Check all resources via operators")
 			resourceKind := getResource(oc, asAdmin, withoutNamespace, "operator", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}")
 			o.Expect(resourceKind).To(o.ContainSubstring("Deployment"))
 			o.Expect(resourceKind).To(o.ContainSubstring("Role"))
@@ -11366,19 +11366,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb.namespace, ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
-			g.By("unlabel resource and it is relabeled automatically")
+			exutil.By("unlabel resource and it is relabeled automatically")
 			roleName := getResource(oc, asAdmin, withoutNamespace, "operator", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='Role')].name}")
 			o.Expect(roleName).NotTo(o.BeEmpty())
 			_, err := doAction(oc, "label", asAdmin, withoutNamespace, "-n", subCockroachdb.namespace, "Role", roleName, "operators.coreos.com/"+subCockroachdb.operatorPackage+"."+subCockroachdb.namespace+"-")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
-			g.By("delete opertor and the Operator still exists because of crd")
+			exutil.By("delete opertor and the Operator still exists because of crd")
 			subCockroachdb.delete(itName, dr)
 			csvCockroachdb.delete(itName, dr)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
-			g.By("reinstall operator and check resource via Operator")
+			exutil.By("reinstall operator and check resource via Operator")
 			subCockroachdb1 := subCockroachdb
 			subCockroachdb1.create(oc, itName, dr)
 			defer subCockroachdb1.delete(itName, dr)
@@ -11387,7 +11387,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb1.namespace, ok, []string{"operator", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
-			g.By("delete operator and delete Operator and it will be recreated because of crd")
+			exutil.By("delete operator and delete Operator and it will be recreated because of crd")
 			subCockroachdb1.delete(itName, dr)
 			_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subCockroachdb1.installedCSV, "-n", subCockroachdb1.namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -11402,7 +11402,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 		} else {
-			g.By("it already exists")
+			exutil.By("it already exists")
 		}
 	})
 
@@ -11438,14 +11438,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			}
 		)
 
-		g.By("create catlog resource")
+		exutil.By("create catlog resource")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("Check if the global operator global-operators support all namesapces")
+		exutil.By("Check if the global operator global-operators support all namesapces")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "[]", ok, []string{"og", "global-operators", "-n", "openshift-operators", "-o=jsonpath={.status.namespaces}"})
 
-		g.By("create subscription targeted at all namespace")
+		exutil.By("create subscription targeted at all namespace")
 		sub.create(oc, itName, dr)
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
@@ -11464,7 +11464,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		})
 		exutil.AssertWaitPollNoErr(err, "webhooktests.webhook.operators.coreos.io does exist")
 
-		g.By("check invalid CR")
+		exutil.By("check invalid CR")
 		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", crwebhook, "-p", "NAME=webhooktest-34181",
 			"NAMESPACE=openshift-operators", "VALID=false").OutputToFile("config-34181.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -11480,7 +11480,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		})
 		exutil.AssertWaitPollNoErr(err, "can not apply webhooktest-34181")
 
-		g.By("check valid CR")
+		exutil.By("check valid CR")
 		configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", crwebhook, "-p", "NAME=webhooktest-34181",
 			"NAMESPACE=openshift-operators", "VALID=true").OutputToFile("config-34181.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -11516,22 +11516,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 				singleNamespace:        false,
 			}
 		)
-		g.By("1, Check if the global operator global-operators support all namesapces")
+		exutil.By("1, Check if the global operator global-operators support all namesapces")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "[]", ok, []string{"og", "global-operators", "-n", "openshift-operators", "-o=jsonpath={.status.namespaces}"})
 
-		g.By("2, Create operator targeted at all namespace")
+		exutil.By("2, Create operator targeted at all namespace")
 		sub.create(oc, itName, dr)
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 
-		g.By("3, Create new namespace")
+		exutil.By("3, Create new namespace")
 		oc.SetupProject()
 
-		g.By("4, OCP-23172 Check the csv within new namespace is copied.")
+		exutil.By("4, OCP-23172 Check the csv within new namespace is copied.")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Copied", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.reason}"})
 
-		g.By("5, OCP-40531-Check the lastUpdateTime of copied CSV is equal to the original CSV.")
+		exutil.By("5, OCP-40531-Check the lastUpdateTime of copied CSV is equal to the original CSV.")
 		originCh := make(chan string)
 		defer close(originCh)
 		copyCh := make(chan string)
@@ -11547,7 +11547,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		e2e.Logf("OriginTimeStamp:%s, CopiedTimeStamp:%s", lastUpdateTimeOrigin, lastUpdateTimeNew)
 		o.Expect(lastUpdateTimeNew).To(o.Equal(lastUpdateTimeOrigin))
 
-		g.By("6, OCP-41051-Check Operator.Status.Components does not contain copied CSVs.")
+		exutil.By("6, OCP-41051-Check Operator.Status.Components does not contain copied CSVs.")
 		operatorname := sub.operatorPackage + ".openshift-operators"
 		operatorinfo := getResource(oc, asAdmin, withoutNamespace, "operator", operatorname, "-n", oc.Namespace(), "-o=jsonpath={.status.components.refs}")
 		o.Expect(operatorinfo).NotTo(o.BeEmpty())
@@ -11621,10 +11621,10 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		)
 
 		itName := g.CurrentSpecReport().FullText()
-		g.By("STEP: create the OperatorGroup ")
+		exutil.By("STEP: create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("STEP 1: prepare CatalogSource index image")
+		exutil.By("STEP 1: prepare CatalogSource index image")
 		_, err := containerCLI.Run("pull").Args(bundleImageTag1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = containerCLI.Run("pull").Args(bundleImageTag2).Output()
@@ -11653,13 +11653,13 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeFalse())
 
-		g.By("STEP 2: Create catalog source")
+		exutil.By("STEP 2: Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
-		g.By("STEP 3: install operator ")
+		exutil.By("STEP 3: install operator ")
 		sub.create(oc, itName, dr)
 		o.Expect(sub.getCSV().name).To(o.Equal("ditto-operator.v0.1.0"))
 
-		g.By("STEP 4: update CatalogSource index image")
+		exutil.By("STEP 4: update CatalogSource index image")
 		output, err = opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexTag, "-t", indexTag, "-c", containerTool).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -11682,7 +11682,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue())
 
-		g.By("STEP 5: check the operator has been updated")
+		exutil.By("STEP 5: check the operator has been updated")
 		err = wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
 			sub.findInstalledCSV(oc, itName, dr)
 			if strings.Compare(sub.installedCSV, "ditto-operator.v0.1.1") == 0 {
@@ -11692,7 +11692,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ditto-operator.v0.1.1 of sub %s fails", sub.subName))
 
-		g.By("STEP 6: delete the catsrc sub csv")
+		exutil.By("STEP 6: delete the catsrc sub csv")
 		catsrc.delete(itName, dr)
 		sub.delete(itName, dr)
 		sub.getCSV().delete(itName, dr)
@@ -11747,11 +11747,11 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		)
 
 		itName := g.CurrentSpecReport().FullText()
-		g.By("STEP: create the OperatorGroup ")
+		exutil.By("STEP: create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
 		e2e.Logf("catsrc image is %s", indexTag)
-		g.By("STEP 1: prepare CatalogSource index image")
+		exutil.By("STEP 1: prepare CatalogSource index image")
 		_, err := containerCLI.Run("pull").Args(bundleImageTag1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = containerCLI.Run("pull").Args(bundleImageTag2).Output()
@@ -11778,15 +11778,15 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeFalse())
 
-		g.By("STEP 2: Create catalog source")
+		exutil.By("STEP 2: Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
-		g.By("STEP 3: install operator ")
+		exutil.By("STEP 3: install operator ")
 		subManual.create(oc, itName, dr)
 		e2e.Logf("approve the install plan")
 		subManual.approve(oc, itName, dr)
 		subManual.expectCSV(oc, itName, dr, "ditto-operator.v0.1.0")
 
-		g.By("STEP 4: update CatalogSource index image")
+		exutil.By("STEP 4: update CatalogSource index image")
 		output, err = opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexTag, "-t", indexTag, "-c", containerTool).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -11809,7 +11809,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue())
 
-		g.By("STEP 5: approve the install plan")
+		exutil.By("STEP 5: approve the install plan")
 		err = wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
 			ipCsv := getResource(oc, asAdmin, withoutNamespace, "sub", subManual.subName, "-n", subManual.namespace, "-o=jsonpath={.status.installplan.name}{\" \"}{.status.currentCSV}")
 			if strings.Contains(ipCsv, "ditto-operator.v0.1.1") {
@@ -11819,7 +11819,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ditto-operator.v0.1.1 of sub %s fails", subManual.subName))
 		subManual.approveSpecificIP(oc, itName, dr, "ditto-operator.v0.1.1", "Complete")
-		g.By("STEP 6: check the csv")
+		exutil.By("STEP 6: check the csv")
 		subManual.expectCSV(oc, itName, dr, "ditto-operator.v0.1.1")
 		e2e.Logf("delete the catsrc sub csv")
 		catsrc.delete(itName, dr)
@@ -11830,7 +11830,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	// OCP-45359 author: jitli@redhat.com
 	g.It("NonHyperShiftHOST-Author:jitli-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags [Flaky]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("step: get version")
+		exutil.By("step: get version")
 		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the OCP version")
@@ -11846,7 +11846,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		tagPre := "v" + majorVersion + "." + strconv.Itoa(minorVersionPre-1)
 		e2e.Logf(tag + tagPre)
 
-		g.By("step: oc get catalogsource")
+		exutil.By("step: oc get catalogsource")
 		catsrcs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", "openshift-marketplace").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(catsrcs).NotTo(o.BeEmpty())
@@ -11854,7 +11854,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		defaultCatsrcs := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		for _, catalogSource := range defaultCatsrcs {
 			o.Expect(catsrcs).To(o.ContainSubstring(catalogSource))
-			g.By(fmt.Sprintf("step: check image tag of %s", catalogSource))
+			exutil.By(fmt.Sprintf("step: check image tag of %s", catalogSource))
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catalogSource, "-n", "openshift-marketplace", "-o=jsonpath={.spec.image}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, tag) || strings.Contains(output, tagPre) {
@@ -11904,28 +11904,28 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			}
 		)
 
-		g.By("1) Create new project")
+		exutil.By("1) Create new project")
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("2) Create the OperatorGroup ")
+		exutil.By("2) Create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) Install sub")
+		exutil.By("3) Install sub")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("4) check its condition is UnhealthyCatalogSourceFound")
+		exutil.By("4) check its condition is UnhealthyCatalogSourceFound")
 		newCheck("expect", asUser, withoutNamespace, contain, "UnhealthyCatalogSourceFound", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].reason}"}).check(oc)
 
-		g.By("5) Sub is created with error message")
+		exutil.By("5) Sub is created with error message")
 		message, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}").Output()
 		o.Expect(message).To(o.ContainSubstring("ditto-operator-index missing"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("6) Create catalog source")
+		exutil.By("6) Create catalog source")
 		catsrc.create(oc, itName, dr)
 		err = wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
 			catsrcStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "ditto-operator-index", "-n", sub.namespace, "-o=jsonpath={.status..lastObservedState}").Output()
@@ -11936,7 +11936,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("catalogsource %s is not created", catsrc.name))
 
-		g.By("7) To wait the csv successed")
+		exutil.By("7) To wait the csv successed")
 		sub.findInstalledCSV(oc, itName, dr)
 		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
 			checknameCsv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}").Output()
@@ -11951,7 +11951,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.phase of csv %s is not Succeeded", sub.installedCSV))
 
-		g.By("8) Error message is removed")
+		exutil.By("8) Error message is removed")
 		newmessage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}").Output()
 		o.Expect(newmessage).NotTo(o.ContainSubstring("ditto-operator-index missing"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -11965,7 +11965,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		operatorAllPath := "operators-all-manifests-" + getRandomString()
 		defer exec.Command("bash", "-c", "rm -fr ./"+operatorAllPath).Output()
 
-		g.By("mirror to localhost:5000")
+		exutil.By("mirror to localhost:5000")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("adm", "catalog", "mirror").Args("--manifests-only", "--to-manifests="+operatorAllPath, indexImage, "localhost:5000").Output()
 
 		e2e.Logf(output)
@@ -11974,7 +11974,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(output).To(o.ContainSubstring("no digest mapping available for quay.io/olmqe/etcd-index:dc-new, skip writing to ImageContentSourcePolicy"))
 		o.Expect(output).To(o.ContainSubstring("wrote mirroring manifests"))
 
-		g.By("check mapping.txt to localhost:5000")
+		exutil.By("check mapping.txt to localhost:5000")
 		result, err := exec.Command("bash", "-c", "cat ./"+operatorAllPath+"/mapping.txt|grep -E \"localhost:5000/olmqe/etcd-bundle|localhost:5000/olmqe/etcd-index\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("mapping result:%s", result)
@@ -11982,7 +11982,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(result).To(o.ContainSubstring("quay.io/olmqe/etcd-bundle:dc=localhost:5000/olmqe/etcd-bundle:dc"))
 		o.Expect(result).To(o.ContainSubstring("quay.io/olmqe/etcd-index:dc-new=localhost:5000/olmqe/etcd-index:dc-new"))
 
-		g.By("check icsp yaml to localhost:5000")
+		exutil.By("check icsp yaml to localhost:5000")
 		result, err = exec.Command("bash", "-c", "cat ./"+operatorAllPath+"/imageContentSourcePolicy.yaml | grep \"localhost:5000\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("icsp result:%s", result)
@@ -12009,15 +12009,15 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		defer DeleteDir(TestDataPath, "fixture-testdata")
 		defer DeleteDir(buildPruningBaseDir, "fixture-testdata")
 
-		g.By("1) create a ConfigMap")
+		exutil.By("1) create a ConfigMap")
 		defer cm.delete(itName, dr)
 		cm.create(oc, itName, dr)
 
-		g.By("2) opm alpha bundle extract")
+		exutil.By("2) opm alpha bundle extract")
 		_, err := opmCLI.Run("alpha").Args("bundle", "extract", "-c", cmName, "-n", oc.Namespace(), "-k", exutil.KubeConfigPath(), "-m", TestDataPath+"/0.9.2/").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) Check the data of this ConfigMap object.")
+		exutil.By("3) Check the data of this ConfigMap object.")
 		data, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", cmName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(data).To(o.ContainSubstring("operators.operatorframework.io.bundle.channel.default.v1"))
@@ -12038,13 +12038,13 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(err).NotTo(o.HaveOccurred())
 		indexImage := "registry.redhat.io/redhat/redhat-operator-index:v4.6"
 
-		g.By("1) check oc adm calalog mirror help")
+		exutil.By("1) check oc adm calalog mirror help")
 		output, err := oc.AsAdmin().Run("adm").Args("catalog", "mirror", "--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("--index-filter-by-os"))
 		o.Expect(output).NotTo(o.ContainSubstring("--filter-by-os"))
 
-		g.By("2) run oc adm calalog mirror with --index-filter-by-os=linux/amd64")
+		exutil.By("2) run oc adm calalog mirror with --index-filter-by-os=linux/amd64")
 		dockerconfigjsonpath := filepath.Join(indexTmpPath, ".dockerconfigjson")
 		defer exec.Command("rm", "-f", dockerconfigjsonpath).Output()
 		_, err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+indexTmpPath).Output()
@@ -12056,24 +12056,24 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("wrote mirroring manifests to "))
 
-		g.By("3) Check the data of mapping.txt")
+		exutil.By("3) Check the data of mapping.txt")
 		result, err := exec.Command("bash", "-c", "cat "+tmpPath1+"/mapping.txt|grep -E redhat-operator-index").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("localhost:5000/redhat/redhat-operator-index:v4.6"))
 
-		g.By("4) run oc adm calalog mirror with --index-filter-by-os=linux/s390x")
+		exutil.By("4) run oc adm calalog mirror with --index-filter-by-os=linux/s390x")
 		tmpPath2 := filepath.Join(indexTmpPath, "s390x")
 		output, err = oc.AsAdmin().Run("adm").Args("catalog", "mirror", "--index-filter-by-os=linux/s390x", indexImage,
 			"localhost:5000", "--manifests-only", "--to-manifests="+tmpPath2, "-a", dockerconfigjsonpath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("wrote mirroring manifests to "))
 
-		g.By("5) Check the data of mapping.txt")
+		exutil.By("5) Check the data of mapping.txt")
 		result, err = exec.Command("bash", "-c", "cat "+tmpPath2+"/mapping.txt|grep -E redhat-operator-index").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("localhost:5000/redhat/redhat-operator-index:v4.6"))
 
-		g.By("6) run oc adm calalog mirror with --index-filter-by-os=linux/abc")
+		exutil.By("6) run oc adm calalog mirror with --index-filter-by-os=linux/abc")
 		tmpPath3 := filepath.Join(indexTmpPath, "abc")
 		output, _ = oc.AsAdmin().Run("adm").Args("catalog", "mirror", "--index-filter-by-os=linux/abc", indexImage,
 			"localhost:5000", "--manifests-only", "--to-manifests="+tmpPath3, "-a", dockerconfigjsonpath).Output()
@@ -12105,7 +12105,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		output := ""
 		var err error
-		g.By("build bundle image 1")
+		exutil.By("build bundle image 1")
 		opmBaseDir := exutil.FixturePath("testdata", "opm", "cockroachdb", "supportproperties")
 		TestDataPath1 := filepath.Join(opmBaseDir, "5.0.3")
 		defer DeleteDir(TestDataPath1, "fixture-testdata")
@@ -12123,7 +12123,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		}
 		DeleteDir(TestDataPath1, "fixture-testdata")
 
-		g.By("build bundle image 2")
+		exutil.By("build bundle image 2")
 		opmBaseDir = exutil.FixturePath("testdata", "opm", "cockroachdb", "supportproperties")
 		TestDataPath2 := filepath.Join(opmBaseDir, "5.0.4")
 		defer DeleteDir(TestDataPath2, "fixture-testdata")
@@ -12140,7 +12140,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("build index image")
+		exutil.By("build index image")
 		if output, err := opmCLI.Run("index").Args("add", "-b", bundleImageTag1+","+bundleImageTag2, "-t", indexImageTag, "-c", containerTool).Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12150,7 +12150,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("get index.db")
+		exutil.By("get index.db")
 		TmpDataPath := filepath.Join(opmBaseDir, "tmp")
 		dbFilePath := filepath.Join(TmpDataPath, "index.db")
 		err = os.MkdirAll(TmpDataPath, 0755)
@@ -12162,7 +12162,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			e2e.Logf("get index.db Failed")
 		}
 
-		g.By("Run the opm registry server binary to load manifest and serves a grpc API to query it.")
+		exutil.By("Run the opm registry server binary to load manifest and serves a grpc API to query it.")
 		defer exec.Command("kill", "-9", "$(lsof -t -i:42979)").Output()
 		e2e.Logf("step: Run the registry-server")
 		cmd := exec.Command("opm", "registry", "serve", "-d", dbFilePath, "-t", filepath.Join(TmpDataPath, "42979.log"), "-p", "42979")
@@ -12222,10 +12222,10 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = oc.Namespace()
 
-		g.By("create the OperatorGroup ")
+		exutil.By("create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 		err = wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
 			exists, error := clusterPackageExistsInNamespace(oc, sub, catsrc.namespace)
@@ -12236,14 +12236,14 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("package of sub %s does not exist", sub.subName))
 
-		g.By("install operator")
+		exutil.By("install operator")
 		sub.createWithoutCheck(oc, itName, dr)
 		sub.expectCSV(oc, itName, dr, "cockroachdb.v5.0.4")
 		csvOutput := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.metadata.annotations}")
 		o.Expect(string(csvOutput)).To(o.ContainSubstring("version is 5.0.4"))
 		o.Expect(string(csvOutput)).To(o.ContainSubstring("type5.type5"))
 
-		g.By("SUCCESS")
+		exutil.By("SUCCESS")
 	})
 
 	g.It("VMonly-Author:xzha-ConnectedOnly-Medium-43246-Medium-53873-Convert an existing db based index to declarative config", func() {
@@ -12257,25 +12257,25 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		opmCLI := opm.NewOpmCLI()
 		quayCLI := container.NewQuayCLI()
 
-		g.By("Create index directory")
+		exutil.By("Create index directory")
 		TmpDataPath := filepath.Join("tmp", "tmp"+getRandomString())
 		err := os.MkdirAll(TmpDataPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		opmCLI.ExecCommandPath = TmpDataPath
 
-		g.By("Migrate a sqlite-based index image or database file to a file-based catalog")
+		exutil.By("Migrate a sqlite-based index image or database file to a file-based catalog")
 		output, err := opmCLI.Run("migrate").Args(imagetag, catalogFileName).Output()
 		o.Expect(output).To(o.ContainSubstring("file-based catalog"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Generate the index docker file")
+		exutil.By("Generate the index docker file")
 		_, err = opmCLI.Run("generate").Args("dockerfile", catalogFileName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dockerFileContent, err := ioutil.ReadFile(filepath.Join(TmpDataPath, catalogFileName+".Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(dockerFileContent).To(o.ContainSubstring("--cache-dir=/tmp/cache"))
 
-		g.By("Build and push the image")
+		exutil.By("Build and push the image")
 		podmanCLI := container.NewPodmanCLI()
 		podmanCLI.ExecCommandPath = TmpDataPath
 		output, err = podmanCLI.Run("build").Args(".", "-f", catalogFileName+".Dockerfile", "-t", imagetagdc).Output()
@@ -12287,7 +12287,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Storing signatures"))
 
-		g.By("create namespace and catsrc")
+		exutil.By("create namespace and catsrc")
 		itName := g.CurrentSpecReport().FullText()
 		buildIndexBaseDir := exutil.FixturePath("testdata", "olm")
 		catsrcTemplate := filepath.Join(buildIndexBaseDir, "catalogsource-image.yaml")
@@ -12306,7 +12306,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("check packagemanifest")
+		exutil.By("check packagemanifest")
 		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--all-namespaces").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12326,7 +12326,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		}
 		exutil.AssertWaitPollNoErr(err, "packagemanifest of Test Catsrc 43246 Operators doesn't exist")
 
-		g.By("43246 SUCCESS")
+		exutil.By("43246 SUCCESS")
 
 	})
 
@@ -12342,7 +12342,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			quayCLI           = container.NewQuayCLI()
 		)
 
-		g.By("Build and push the index image")
+		exutil.By("Build and push the index image")
 		podmanCLI := container.NewPodmanCLI()
 		podmanCLI.ExecCommandPath = buildIndexBaseDir
 		dockerconfigjsonpath := filepath.Join(buildIndexBaseDir, ".dockerconfigjson")
@@ -12359,7 +12359,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Storing signatures"))
 
-		g.By("create namespace and catsrc")
+		exutil.By("create namespace and catsrc")
 		itName := g.CurrentSpecReport().FullText()
 		catsrcTemplate := filepath.Join(olmDataDir, "catalogsource-image.yaml")
 		oc.SetupProject()
@@ -12377,7 +12377,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("check packagemanifest")
+		exutil.By("check packagemanifest")
 		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--selector=catalog=catsrc-62947", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12396,7 +12396,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		}
 		exutil.AssertWaitPollNoErr(err, "packagemanifest of Test Catsrc 62947 Operators doesn't exist")
 
-		g.By("62947 SUCCESS")
+		exutil.By("62947 SUCCESS")
 
 	})
 
@@ -12466,16 +12466,16 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create the OperatorGroup ")
+		exutil.By("create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("pull bundle image for index image")
+		exutil.By("pull bundle image for index image")
 		_, err := containerCLI.Run("pull").Args(bundleImageTag1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = containerCLI.Run("pull").Args(bundleImageTag2).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("build index image 1")
+		exutil.By("build index image 1")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag1, "-t", indexImageTag1, "-c", containerTool).Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12485,7 +12485,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("build index image 2")
+		exutil.By("build index image 2")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexImageTag1, "-t", indexImageTag2, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12495,14 +12495,14 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator")
+		exutil.By("install operator")
 		sub.createWithoutCheck(oc, itName, dr)
 		sub.expectCSV(oc, itName, dr, "cockroachdb.v5.0.4")
 
-		g.By("delete the catsrc sub csv") // actually this step could not be necessary because the resource of the project will be removed when the project is removed
+		exutil.By("delete the catsrc sub csv") // actually this step could not be necessary because the resource of the project will be removed when the project is removed
 		catsrc.delete(itName, dr)
 		sub.delete(itName, dr)
 		sub.getCSV().delete(itName, dr)
@@ -12578,10 +12578,10 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create the OperatorGroup ")
+		exutil.By("create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("pull bundle image for index image")
+		exutil.By("pull bundle image for index image")
 		_, err := containerCLI.Run("pull").Args(bundleImageTag1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = containerCLI.Run("pull").Args(bundleImageTag2).Output()
@@ -12589,7 +12589,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		_, err = containerCLI.Run("pull").Args(bundleImageTag3).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("build index image 1")
+		exutil.By("build index image 1")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag1, "-t", indexImageTag1, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12599,7 +12599,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("build index image 2")
+		exutil.By("build index image 2")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexImageTag1, "-t", indexImageTag2, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12609,7 +12609,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("build index image 3")
+		exutil.By("build index image 3")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag3, "-f", indexImageTag2, "-t", indexImageTag3, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12619,10 +12619,10 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator")
+		exutil.By("install operator")
 		sub.createWithoutCheck(oc, itName, dr) // actually it is operator upgrade
 		state := ""
 		err = wait.Poll(20*time.Second, 240*time.Second, func() (bool, error) {
@@ -12643,7 +12643,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			sub.expectCSV(oc, itName, dr, "oadp-operator.v0.5.5")
 		}
 
-		g.By("delete the catsrc sub csv") // actually this step could not be necessary because the resource of the project will be removed when the project is removed
+		exutil.By("delete the catsrc sub csv") // actually this step could not be necessary because the resource of the project will be removed when the project is removed
 		catsrc.delete(itName, dr)
 		sub.delete(itName, dr)
 		sub.getCSV().delete(itName, dr)
@@ -12715,16 +12715,16 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create the OperatorGroup ")
+		exutil.By("create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("pull bundle image for index image")
+		exutil.By("pull bundle image for index image")
 		_, err := containerCLI.Run("pull").Args(bundleImageTag1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = containerCLI.Run("pull").Args(bundleImageTag2).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("build index image 1")
+		exutil.By("build index image 1")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag1, "-t", indexImageTag1, "-c", containerTool).Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12734,7 +12734,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("build index image 2")
+		exutil.By("build index image 2")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexImageTag1, "-t", indexImageTag2, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12744,14 +12744,14 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator")
+		exutil.By("install operator")
 		sub.createWithoutCheck(oc, itName, dr)
 		sub.expectCSV(oc, itName, dr, "cockroachdb.v5.0.4")
 
-		g.By("delete the catsrc sub csv") // actually this step could not be necessary because the resource of the project will be removed when the project is removed
+		exutil.By("delete the catsrc sub csv") // actually this step could not be necessary because the resource of the project will be removed when the project is removed
 		catsrc.delete(itName, dr)
 		sub.delete(itName, dr)
 		sub.getCSV().delete(itName, dr)
@@ -12827,12 +12827,12 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create the OperatorGroup ")
+		exutil.By("create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
 		output := ""
 		var err error
-		g.By("build bundle image 1")
+		exutil.By("build bundle image 1")
 		TestDataPath1 := filepath.Join(opmBaseDir, "cockroachdb", "supportsemver")
 		defer DeleteDir(TestDataPath1, "fixture-testdata")
 		opmCLI.ExecCommandPath = TestDataPath1
@@ -12850,7 +12850,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		}
 		DeleteDir(TestDataPath1, "fixture-testdata")
 
-		g.By("build bundle image 2")
+		exutil.By("build bundle image 2")
 		opmBaseDir = exutil.FixturePath("testdata", "opm")
 		TestDataPath2 := filepath.Join(opmBaseDir, "cockroachdb", "supportsemver")
 		defer DeleteDir(TestDataPath2, "fixture-testdata")
@@ -12868,7 +12868,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("build index image 1")
+		exutil.By("build index image 1")
 		if output, err := opmCLI.Run("index").Args("add", "-b", bundleImageTag1, "-t", indexImageTag1, "-c", containerTool).Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12878,7 +12878,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("build index image 2")
+		exutil.By("build index image 2")
 		if output, err := opmCLI.Run("index").Args("add", "-b", bundleImageTag2, "-f", indexImageTag1, "-t", indexImageTag2, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -12888,17 +12888,17 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("Create catalog source")
+		exutil.By("Create catalog source")
 		buildIndexBaseDir = exutil.FixturePath("testdata", "olm")
 		catsrc.template = filepath.Join(buildIndexBaseDir, "catalogsource-image.yaml")
 		catsrc.createWithCheck(oc, itName, dr)
 
-		g.By("install operator")
+		exutil.By("install operator")
 		sub.template = filepath.Join(buildIndexBaseDir, "olm-subscription.yaml")
 		sub.createWithoutCheck(oc, itName, dr)
 		sub.expectCSV(oc, itName, dr, "cockroachdb.v5.0.4")
 
-		g.By("delete the catsrc sub csv") // actually this step could not be necessary because the resource of the project will be removed when the project is removed
+		exutil.By("delete the catsrc sub csv") // actually this step could not be necessary because the resource of the project will be removed when the project is removed
 		catsrc.delete(itName, dr)
 		sub.delete(itName, dr)
 		sub.getCSV().delete(itName, dr)
@@ -12913,13 +12913,13 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		)
 		defer exec.Command("bash", "-c", "rm -fr ./"+cockroachdbPath).Output()
 
-		g.By("mirror to localhost:5000")
+		exutil.By("mirror to localhost:5000")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("adm", "catalog", "mirror").Args("--manifests-only", "--to-manifests="+cockroachdbPath, indexImageTag, "localhost:5000").Output()
 		e2e.Logf("the output is %v", output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("operators-cockroachdb-manifests"))
 
-		g.By("check mapping.txt to localhost:5000")
+		exutil.By("check mapping.txt to localhost:5000")
 		result, err := exec.Command("bash", "-c", "cat ./"+cockroachdbPath+"/mapping.txt|grep -E \"quay.io/kuiwang/cockroachdb-operator\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("cockroachdb-operator:2.1.11"))
@@ -12946,7 +12946,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			x              []string
 		)
 
-		g.By("Get deployment")
+		exutil.By("Get deployment")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", olmNamespace, olmPodName, olmJpath).Output()
 		if err != nil {
 			e2e.Logf("Unable to get deployment -n %v %v %v.", olmNamespace, olmPodName, olmJpath)
@@ -12956,7 +12956,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			e2e.Failf("Could not find %v variable %v for %v: %v", olmJpath, nodeRole, olmPodName, msg)
 		}
 
-		g.By("Look at pods")
+		exutil.By("Look at pods")
 		// look for the marketplace-operator pod's full name
 		pods, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", olmNamespace, "-o", "wide").Output()
 		if err != nil {
@@ -12986,7 +12986,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			e2e.Failf("Unable to find the full pod name for %v in %v: %v.", olmPodName, olmNamespace, pods)
 		}
 
-		g.By("Query node label value")
+		exutil.By("Query node label value")
 		// Look at the setting for the node to be on the master
 		olmErrs = true
 		nodes, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", olmNamespace, olmNodeName, "-o=jsonpath={.metadata.labels}").Output()
@@ -12996,7 +12996,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(nodes).To(o.ContainSubstring("node-role.kubernetes.io/master"))
 
-		g.By("look at oc get nodes")
+		exutil.By("look at oc get nodes")
 		// Found the setting, verify that it's really on the master node
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", olmNamespace, olmNodeName, "--show-labels", "--no-headers").Output()
 		if err != nil {
@@ -13013,7 +13013,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		if olmErrs || !nodeStatus {
 			e2e.Failf("The node %v of %v pod is not a master:%v", olmNodeName, olmPodFullName, msg)
 		}
-		g.By("Finish")
+		exutil.By("Finish")
 		e2e.Logf("The pod %v is on the master node %v", olmPodFullName, olmNodeName)
 	})
 
@@ -13036,7 +13036,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	// author: jiazha@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:bandrade-High-45408-Eliminate use of imagestreams in catalog management", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		g.By("1) check if uses the ImageStream resource")
+		exutil.By("1) check if uses the ImageStream resource")
 		controlProject := fmt.Sprintf("clusters-%s", guestClusterName)
 		isOutput, err := oc.AsAdmin().Run("get").Args("is", "catalogs", "-n", controlProject, "-o", "yaml").Output()
 		if err != nil {
@@ -13048,7 +13048,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 				e2e.Failf("find ImageStream:%s in project:%v", imageStream, controlProject)
 			}
 		}
-		g.By("2) check if Deployment uses the ImageStream")
+		exutil.By("2) check if Deployment uses the ImageStream")
 		deploys := []string{"certified-operators-catalog", "community-operators-catalog", "redhat-marketplace-catalog", "redhat-operators-catalog"}
 		for _, deploy := range deploys {
 			annotations, err := oc.AsAdmin().Run("get").Args("deployment", "-n", controlProject, deploy, "-o=jsonpath={.metadata.annotations}").Output()
@@ -13064,7 +13064,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	// author: jiazha@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:jiazha-High-45348-High-45543-Enable hypershift to deploy OLM resources", func() {
 
-		g.By("1, check if any resource running in the guest cluster")
+		exutil.By("1, check if any resource running in the guest cluster")
 		projects := []string{"openshift-operator-lifecycle-manager", "openshift-marketplace"}
 		for _, project := range projects {
 			resource, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("pods", "-n", project).Output()
@@ -13085,7 +13085,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("2, create a CatalogSource that in a random project")
+		exutil.By("2, create a CatalogSource that in a random project")
 		ns := "guest-cluster-45543"
 		err := oc.AsGuestKubeconf().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -13117,7 +13117,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 		defer cs.delete(itName, dr)
 		cs.createWithCheck(oc.AsGuestKubeconf(), itName, dr)
 
-		g.By("3, subscribe to learn-operator.v0.0.3")
+		exutil.By("3, subscribe to learn-operator.v0.0.3")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-45348",
@@ -13176,7 +13176,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 			dr = make(describerResrouce)
 		)
 
-		g.By("init resource")
+		exutil.By("init resource")
 		dr.addIr(itName)
 		ns := "guest-cluster-45381"
 		err := oc.AsGuestKubeconf().Run("create").Args("ns", ns).Execute()
@@ -13187,20 +13187,20 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 		subOadp.namespace = ns
 		subOadp.catalogSourceNamespace = catsrc.namespace
 
-		g.By("create catalog source")
+		exutil.By("create catalog source")
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc.AsGuestKubeconf(), itName, dr)
 
-		g.By("Create og")
+		exutil.By("Create og")
 		defer og.delete(itName, dr)
 		og.create(oc.AsGuestKubeconf(), itName, dr)
 
-		g.By("install OADP")
+		exutil.By("install OADP")
 		defer subOadp.delete(itName, dr)
 		subOadp.create(oc.AsGuestKubeconf(), itName, dr)
 		defer subOadp.deleteCSV(itName, dr)
 
-		g.By("Check the oadp-operator.v0.5.3 is installed successfully")
+		exutil.By("Check the oadp-operator.v0.5.3 is installed successfully")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subOadp.installedCSV, "-n", subOadp.namespace, "-o=jsonpath={.status.phase}"}).check(oc.AsGuestKubeconf())
 
 	})

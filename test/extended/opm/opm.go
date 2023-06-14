@@ -28,19 +28,19 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 	// author: scolange@redhat.com
 	g.It("Author:scolange-Medium-43769-Remove opm alpha add command", func() {
 
-		g.By("step: opm alpha --help")
+		exutil.By("step: opm alpha --help")
 		output1, err := opmCLI.Run("alpha").Args("--help").Output()
 		e2e.Logf(output1)
 
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output1).NotTo(o.ContainSubstring("add"))
-		g.By("test case 43769 SUCCESS")
+		exutil.By("test case 43769 SUCCESS")
 
 	})
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-Medium-43185-DC based opm subcommands out of alpha", func() {
-		g.By("check init, serve, render and validate under opm")
+		exutil.By("check init, serve, render and validate under opm")
 		output, err := opmCLI.Run("").Args("--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(output)
@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("render "))
 		o.Expect(output).To(o.ContainSubstring("validate "))
 
-		g.By("check init, serve, render and validate not under opm alpha")
+		exutil.By("check init, serve, render and validate not under opm alpha")
 		output, err = opmCLI.Run("alpha").Args("--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(output)
@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-43171-opm render blob from bundle, db based index, dc based index, db file and directory", func() {
-		g.By("render db-based index image")
+		exutil.By("render db-based index image")
 		output, err := opmCLI.Run("render").Args("quay.io/olmqe/olm-index:OLM-2199").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("\"name\": \"cockroachdb\""))
@@ -79,7 +79,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("nRJkhFiQuzDX/kIs7oymi/znDqF/u01OSDLakLMhPHjGPLsG"))
 		o.Expect(output).To(o.ContainSubstring("2WHFDbGZFbVkvSkFyQVdDRW5sanh1aTFvZUtzV083WnhteFF"))
 
-		g.By("render dc-based index image with one file")
+		exutil.By("render dc-based index image with one file")
 		output, err = opmCLI.Run("render").Args("quay.io/olmqe/olm-index:OLM-2199-DC-example").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("\"name\": \"cockroachdb\""))
@@ -97,7 +97,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("nRJkhFiQuzDX/kIs7oymi/znDqF/u01OSDLakLMhPHjGPLsG"))
 		o.Expect(output).To(o.ContainSubstring("2WHFDbGZFbVkvSkFyQVdDRW5sanh1aTFvZUtzV083WnhteFF"))
 
-		g.By("render dc-based index image with different files")
+		exutil.By("render dc-based index image with different files")
 		output, err = opmCLI.Run("render").Args("quay.io/olmqe/olm-index:OLM-2199-DC-example-Df").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("\"name\": \"cockroachdb\""))
@@ -115,7 +115,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("nRJkhFiQuzDX/kIs7oymi/znDqF/u01OSDLakLMhPHjGPLsG"))
 		o.Expect(output).To(o.ContainSubstring("2WHFDbGZFbVkvSkFyQVdDRW5sanh1aTFvZUtzV083WnhteFF"))
 
-		g.By("render dc-based index image with different directory")
+		exutil.By("render dc-based index image with different directory")
 		output, err = opmCLI.Run("render").Args("quay.io/olmqe/olm-index:OLM-2199-DC-example-Dd").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("\"name\": \"cockroachdb\""))
@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("nRJkhFiQuzDX/kIs7oymi/znDqF/u01OSDLakLMhPHjGPLsG"))
 		o.Expect(output).To(o.ContainSubstring("2WHFDbGZFbVkvSkFyQVdDRW5sanh1aTFvZUtzV083WnhteFF"))
 
-		g.By("render bundle image")
+		exutil.By("render bundle image")
 		output, err = opmCLI.Run("render").Args("quay.io/olmqe/cockroachdb-operator:5.0.4-2199", "quay.io/olmqe/cockroachdb-operator:5.0.3-2199").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).NotTo(o.ContainSubstring("\"name\": \"cockroachdb\""))
@@ -146,7 +146,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("\"version\": \"5.0.4\""))
 		o.Expect(output).To(o.ContainSubstring("\"version\": \"5.0.3\""))
 
-		g.By("render directory")
+		exutil.By("render directory")
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
 		configDir := filepath.Join(opmBaseDir, "render", "configs")
 		output, err = opmCLI.Run("render").Args(configDir).Output()
@@ -167,7 +167,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-Medium-43180-opm init dc configuration package", func() {
-		g.By("init package")
+		exutil.By("init package")
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
 		readme := filepath.Join(opmBaseDir, "render", "init", "readme.md")
 		testpng := filepath.Join(opmBaseDir, "render", "init", "test.png")
@@ -191,17 +191,17 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		wrongIndex := path.Join(opmBaseDir, "render", "validate", "configs-wrong")
 		wrongIgnoreIndex := path.Join(opmBaseDir, "render", "validate", "configs-wrong-ignore")
 
-		g.By("validate correct index")
+		exutil.By("validate correct index")
 		output, err := opmCLI.Run("validate").Args(correctIndex).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(output)
 
-		g.By("validate wrong index")
+		exutil.By("validate wrong index")
 		output, err = opmCLI.Run("validate").Args(wrongIndex).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		e2e.Logf(output)
 
-		g.By("validate index with ignore wrong json")
+		exutil.By("validate index with ignore wrong json")
 		output, err = opmCLI.Run("validate").Args(wrongIgnoreIndex).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(output)
@@ -215,18 +215,18 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		catalogdir := path.Join(opmBase, "render", "validate", "catalog")
 		catalogerrdir := path.Join(opmBase, "render", "validate", "catalog-error")
 
-		g.By("step: opm validate -h")
+		exutil.By("step: opm validate -h")
 		output1, err := opmCLI.Run("validate").Args("--help").Output()
 		e2e.Logf(output1)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output1).To(o.ContainSubstring("opm validate "))
 
-		g.By("opm validate catalog")
+		exutil.By("opm validate catalog")
 		output, err := opmCLI.Run("validate").Args(catalogdir).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.BeEmpty())
 
-		g.By("opm validate catalog-error")
+		exutil.By("opm validate catalog-error")
 		output, err = opmCLI.Run("validate").Args(catalogerrdir).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("invalid package \\\"operator-1\\\""))
@@ -241,7 +241,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		opmBase := exutil.FixturePath("testdata", "opm")
 		catalogerrdir := path.Join(opmBase, "render", "validate", "catalog-error", "operator-1")
 
-		g.By("opm validate catalog-error/operator-1")
+		exutil.By("opm validate catalog-error/operator-1")
 		output, err := opmCLI.Run("validate").Args(catalogerrdir).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -262,19 +262,19 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 				o.Expect(output).To(o.ContainSubstring("no channel head found in graph"))
 			}
 		}
-		g.By("45401 SUCCESS")
+		exutil.By("45401 SUCCESS")
 	})
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-45402-opm render should automatically pulling in the image(s) used in the deployments", func() {
-		g.By("render bundle image")
+		exutil.By("render bundle image")
 		output, err := opmCLI.Run("render").Args("quay.io/olmqe/mta-operator:v0.0.4-45402", "quay.io/olmqe/eclipse-che:7.32.2-45402", "-oyaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("---"))
 		bundleConfigBlobs := strings.Split(output, "---")
 		for _, bundleConfigBlob := range bundleConfigBlobs {
 			if strings.Contains(bundleConfigBlob, "packageName: mta-operator") {
-				g.By("check putput of render bundle image which has no relatedimages defined in csv")
+				exutil.By("check putput of render bundle image which has no relatedimages defined in csv")
 				o.Expect(bundleConfigBlob).To(o.ContainSubstring("relatedImages"))
 				relatedImages := strings.Split(bundleConfigBlob, "relatedImages")[1]
 				o.Expect(relatedImages).To(o.ContainSubstring("quay.io/olmqe/mta-operator:v0.0.4-45402"))
@@ -282,7 +282,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 				continue
 			}
 			if strings.Contains(bundleConfigBlob, "packageName: eclipse-che") {
-				g.By("check putput of render bundle image which has relatedimages defined in csv")
+				exutil.By("check putput of render bundle image which has relatedimages defined in csv")
 				o.Expect(bundleConfigBlob).To(o.ContainSubstring("relatedImages"))
 				relatedImages := strings.Split(bundleConfigBlob, "relatedImages")[1]
 				o.Expect(relatedImages).To(o.ContainSubstring("index.docker.io/codercom/code-server"))
@@ -293,14 +293,14 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-48438-opm render should support olm.constraint which is defined in dependencies", func() {
-		g.By("render bundle image")
+		exutil.By("render bundle image")
 		output, err := opmCLI.Run("render").Args("quay.io/olmqe/etcd-bundle:v0.9.2-48438", "-oyaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check output of render bundle image contain olm.constraint which is defined in dependencies.yaml")
+		exutil.By("check output of render bundle image contain olm.constraint which is defined in dependencies.yaml")
 		o.Expect(output).To(o.ContainSubstring("olm.constraint"))
 
-		g.By("check output of render bundle image contain olm.bundle.object")
+		exutil.By("check output of render bundle image contain olm.bundle.object")
 		o.Expect(output).To(o.ContainSubstring("olm.bundle.object"))
 	})
 
@@ -455,48 +455,48 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
 		tmpPath := filepath.Join(opmBaseDir, "temp"+getRandomString())
 		defer DeleteDir(tmpPath, "fixture-testdata")
-		g.By("step: mkdir with mode 0755")
+		exutil.By("step: mkdir with mode 0755")
 		err := os.MkdirAll(tmpPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		opmCLI.ExecCommandPath = tmpPath
 
-		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-1")
+		exutil.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-1")
 		output, err := opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-1", "-b", "podman").Output()
 		if err != nil {
 			e2e.Logf(output)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-2")
+		exutil.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-2")
 		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-2", "-b", "podman").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("Bundle validation errors: Invalid CEL expression: ERROR"))
 		o.Expect(string(output)).To(o.ContainSubstring("Syntax error: missing"))
 
-		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-3")
+		exutil.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-3")
 		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-3", "-b", "podman").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("Bundle validation errors: The CEL expression is missing"))
 
-		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-4")
+		exutil.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-4")
 		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-4", "-b", "podman").Output()
 		if err != nil {
 			e2e.Logf(output)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-5")
+		exutil.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-5")
 		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-5", "-b", "podman").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("Bundle validation errors: Invalid CEL expression: ERROR"))
 		o.Expect(string(output)).To(o.ContainSubstring("undeclared reference to 'semver_compares'"))
 
-		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-6")
+		exutil.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-6")
 		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-6", "-b", "podman").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("Bundle validation errors: Invalid CEL expression: cel expressions must have type Bool"))
 
-		g.By("47335 SUCCESS")
+		exutil.By("47335 SUCCESS")
 	})
 
 	// author: bandrade@redhat.com
@@ -517,7 +517,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		opmCLI.ExecCommandPath = testDataPath
 		defer DeleteDir(testDataPath, "fixture-testdata")
 
-		g.By("step: opm alpha bundle generate")
+		exutil.By("step: opm alpha bundle generate")
 		output, err := opmCLI.Run("alpha").Args("bundle", "generate", "-d", "package/0.0.1", "-p", "25955-operator", "-c", "alpha", "-e", "alpha").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(output)
@@ -544,16 +544,16 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		err := os.Mkdir(TestDataPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: checking user account is no-root")
+		exutil.By("step: checking user account is no-root")
 		user, err := exec.Command("bash", "-c", "whoami").Output()
 		e2e.Logf("User:%s", user)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(string(user), "root") == -1 {
-			g.By("step: opm index add")
+			exutil.By("step: opm index add")
 			output1, err := opmCLI.Run("index").Args("add", "--generate", "--bundles", bundleImage, "--from-index", indexImage, "--overwrite-latest").Output()
 			e2e.Logf(output1)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			g.By("test case 43641 SUCCESS")
+			exutil.By("test case 43641 SUCCESS")
 		} else {
 			e2e.Logf("User is %s. the case should login as no-root account", user)
 		}
@@ -568,7 +568,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		defer DeleteDir(TestDataPath, "fixture-testdata")
 		imageTag := "quay.io/olmqe/25955-operator-" + getRandomString() + ":v0.0.1"
 
-		g.By("step: opm alpha bundle generate")
+		exutil.By("step: opm alpha bundle generate")
 		output, err := opmCLI.Run("alpha").Args("bundle", "generate", "-d", "package/0.0.1", "-p", "25955-operator", "-c", "alpha", "-e", "alpha").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(output)
@@ -576,7 +576,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 			e2e.Failf("Failed to execute opm alpha bundle generate : %s", output)
 		}
 
-		g.By("step: opm alpha bundle build")
+		exutil.By("step: opm alpha bundle build")
 		e2e.Logf("clean test data")
 		DeleteDir(TestDataPath, "fixture-testdata")
 		opmBaseDir = exutil.FixturePath("testdata", "opm")
@@ -613,7 +613,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		indexImage := "quay.io/olmqe/etcd-index:test-37294"
 		indexImageSemver := "quay.io/olmqe/etcd-index:test-37294-semver"
 
-		g.By("step: check etcd-index:test-37294, operatorbundle has two records, channel_entry has one record")
+		exutil.By("step: check etcd-index:test-37294, operatorbundle has two records, channel_entry has one record")
 		indexdbpath1 := filepath.Join(TestDataPath, getRandomString())
 		err := os.Mkdir(TestDataPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -629,7 +629,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue())
 
-		g.By("step: prune-stranded this index image")
+		exutil.By("step: prune-stranded this index image")
 		indexImageTmp1 := indexImage + getRandomString()
 		defer containerCLI.RemoveImage(indexImageTmp1)
 		output, err := opmCLI.Run("index").Args("prune-stranded", "-f", indexImage, "--tag", indexImageTmp1, "-c", containerTool).Output()
@@ -644,7 +644,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		defer quayCLI.DeleteTag(strings.Replace(indexImageTmp1, "quay.io/", "", 1))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: check index image operatorbundle has one record")
+		exutil.By("step: check index image operatorbundle has one record")
 		indexdbpath2 := filepath.Join(TestDataPath, getRandomString())
 		err = os.Mkdir(indexdbpath2, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -658,8 +658,8 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue())
 
-		g.By("test 2")
-		g.By("step: step: check etcd-index:test-37294-semver, operatorbundle has two records, channel_entry has two records")
+		exutil.By("test 2")
+		exutil.By("step: step: check etcd-index:test-37294-semver, operatorbundle has two records, channel_entry has two records")
 		indexdbpath3 := filepath.Join(TestDataPath, getRandomString())
 		err = os.Mkdir(indexdbpath3, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -673,7 +673,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue())
 
-		g.By("step: prune-stranded this index image")
+		exutil.By("step: prune-stranded this index image")
 		indexImageTmp2 := indexImage + getRandomString()
 		defer containerCLI.RemoveImage(indexImageTmp2)
 		output, err = opmCLI.Run("index").Args("prune-stranded", "-f", indexImageSemver, "--tag", indexImageTmp2, "-c", containerTool).Output()
@@ -688,7 +688,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		defer quayCLI.DeleteTag(strings.Replace(indexImageTmp2, "quay.io/", "", 1))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: check index image has both v0.9.2 and v0.9.2")
+		exutil.By("step: check index image has both v0.9.2 and v0.9.2")
 		indexdbpath4 := filepath.Join(TestDataPath, getRandomString())
 		err = os.Mkdir(indexdbpath4, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -728,7 +728,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 
 		opmCLI.ExecCommandPath = TestDataPath
 
-		g.By("prune redhat index image to get custom index image")
+		exutil.By("prune redhat index image to get custom index image")
 		if output, err := opmCLI.Run("index").Args("prune", "-f", indexImage, "-p", "cockroachdb", "-t", customIndexImage, "-c", containerTool).Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -738,7 +738,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("extract db file")
+		exutil.By("extract db file")
 		indexdbpath1 := filepath.Join(TestDataPath, getRandomString())
 		err = os.Mkdir(indexdbpath1, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -746,7 +746,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("get index.db SUCCESS, path is %s", path.Join(indexdbpath1, "index.db"))
 
-		g.By("check if the bunld image is in db index")
+		exutil.By("check if the bunld image is in db index")
 		rows, err := sqlit.QueryDB(path.Join(indexdbpath1, "index.db"), "select image from related_image where operatorbundle_name like 'cockroachdb%';")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer rows.Close()
@@ -774,7 +774,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		indexImage := "quay.io/olmqe/redhat-operator-index:40530"
 		defer containerCLI.RemoveImage(indexImage)
 
-		g.By("step: check the index image has other bundles except cluster-logging")
+		exutil.By("step: check the index image has other bundles except cluster-logging")
 		indexTmpPath1 := filepath.Join(TestDataPath, getRandomString())
 		err := os.MkdirAll(indexTmpPath1, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -793,7 +793,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		}
 		o.Expect(OperatorBundles).NotTo(o.BeEmpty())
 
-		g.By("step: Prune the index image to keep cluster-logging only")
+		exutil.By("step: Prune the index image to keep cluster-logging only")
 		indexImage1 := indexImage + getRandomString()
 		defer containerCLI.RemoveImage(indexImage1)
 		output, err := opmCLI.Run("index").Args("prune", "-f", indexImage, "-p", "cluster-logging", "-t", indexImage1, "-c", containerTool).Output()
@@ -808,7 +808,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		defer quayCLI.DeleteTag(strings.Replace(indexImage1, "quay.io/", "", 1))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: check database, there is no related images")
+		exutil.By("step: check database, there is no related images")
 		indexTmpPath2 := filepath.Join(TestDataPath, getRandomString())
 		err = os.MkdirAll(indexTmpPath2, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -826,7 +826,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		}
 		o.Expect(OperatorBundles).To(o.BeEmpty())
 
-		g.By("step: check the image mirroring mapping")
+		exutil.By("step: check the image mirroring mapping")
 		manifestsPath := filepath.Join(TestDataPath, getRandomString())
 		output, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", indexImage1, "localhost:5000", "--manifests-only", "--to-manifests="+manifestsPath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -838,7 +838,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 
 		result, _ = exec.Command("bash", "-c", "cat "+manifestsPath+"/mapping.txt|grep -v ose-cluster-logging|grep -v ose-logging|grep -v redhat-operator-index:40530").Output()
 		o.Expect(result).To(o.BeEmpty())
-		g.By("step: 40530 SUCCESS")
+		exutil.By("step: 40530 SUCCESS")
 
 	})
 
@@ -900,7 +900,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		defer containerCLI.RemoveImage(bundleImageTag)
 		defer quayCLI.DeleteTag(strings.Replace(bundleImageTag, "quay.io/", "", 1))
 
-		g.By("step: build bundle image ")
+		exutil.By("step: build bundle image ")
 		opmCLI.ExecCommandPath = TestDataPath
 		output, err := opmCLI.Run("alpha").Args("bundle", "build", "-d", "7.32.2", "-b", containerTool, "-t", bundleImageTag, "-p", "eclipse-che", "-c", "alpha", "-e", "alpha", "--overwrite").Output()
 		if err != nil {
@@ -915,14 +915,14 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("step: build bundle.db")
+		exutil.By("step: build bundle.db")
 		dbFilePath := TmpDataPath + "bundles.db"
 		if output, err := opmCLI.Run("registry").Args("add", "-b", bundleImageTag, "-d", dbFilePath, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("step: Check if the related images stores in this database")
+		exutil.By("step: Check if the related images stores in this database")
 		image := "quay.io/che-incubator/configbump@sha256:175ff2ba1bd74429de192c0a9facf39da5699c6da9f151bd461b3dc8624dd532"
 
 		result, err := sqlit.DBMatch(dbFilePath, "package", "name", []string{"eclipse-che"})
@@ -932,7 +932,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue())
 
-		g.By("step: Run the opm registry server binary to load manifest and serves a grpc API to query it.")
+		exutil.By("step: Run the opm registry server binary to load manifest and serves a grpc API to query it.")
 		e2e.Logf("step: Run the registry-server ")
 		cmd := exec.Command("opm", "registry", "serve", "-d", dbFilePath, "-t", filepath.Join(TmpDataPath, "26594.log"), "-p", "26594")
 		cmd.Dir = TmpDataPath
@@ -948,7 +948,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(outputCurl)).To(o.ContainSubstring(image))
 		cmd.Process.Kill()
-		g.By("step: SUCCESS")
+		exutil.By("step: SUCCESS")
 
 	})
 
@@ -956,8 +956,8 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		dbimagetag := "quay.io/olmqe/community-operator-index:v4.8"
 		dcimagetag := "quay.io/olmqe/community-operator-index:v4.8-dc"
 
-		g.By("1, testing with index.db image ")
-		g.By("1.1 list packages")
+		exutil.By("1, testing with index.db image ")
+		exutil.By("1.1 list packages")
 		output, err := opmCLI.Run("alpha").Args("list", "packages", dbimagetag).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -967,7 +967,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("3scale API Management"))
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.10"))
 
-		g.By("1.2 list channels")
+		exutil.By("1.2 list channels")
 		output, err = opmCLI.Run("alpha").Args("list", "channels", dbimagetag).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -977,7 +977,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.10"))
 		o.Expect(string(output)).To(o.ContainSubstring("3scale-community-operator.v0.7.0"))
 
-		g.By("1.3 list channels in a package")
+		exutil.By("1.3 list channels in a package")
 		output, err = opmCLI.Run("alpha").Args("list", "channels", dbimagetag, "3scale-community-operator").Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -986,7 +986,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.10"))
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.9"))
 
-		g.By("1.4 list bundles")
+		exutil.By("1.4 list bundles")
 		output, err = opmCLI.Run("alpha").Args("list", "bundles", dbimagetag).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -995,7 +995,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("3scale-community-operator.v0.6.0"))
 		o.Expect(string(output)).To(o.ContainSubstring("3scale-community-operator.v0.7.0"))
 
-		g.By("1.5 list bundles in a package")
+		exutil.By("1.5 list bundles in a package")
 		output, err = opmCLI.Run("alpha").Args("list", "bundles", dbimagetag, "wso2am-operator").Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1005,8 +1005,8 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("wso2am-operator.v1.0.1"))
 		o.Expect(string(output)).To(o.ContainSubstring("wso2am-operator.v1.1.0"))
 
-		g.By("2, testing with dc format index image")
-		g.By("2.1 list packages")
+		exutil.By("2, testing with dc format index image")
+		exutil.By("2.1 list packages")
 		output, err = opmCLI.Run("alpha").Args("list", "packages", dcimagetag).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1016,7 +1016,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("3scale API Management"))
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.10"))
 
-		g.By("2.2 list channels")
+		exutil.By("2.2 list channels")
 		output, err = opmCLI.Run("alpha").Args("list", "channels", dcimagetag).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1026,7 +1026,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.10"))
 		o.Expect(string(output)).To(o.ContainSubstring("3scale-community-operator.v0.7.0"))
 
-		g.By("2.3 list channels in a package")
+		exutil.By("2.3 list channels in a package")
 		output, err = opmCLI.Run("alpha").Args("list", "channels", dcimagetag, "3scale-community-operator").Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1035,7 +1035,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.10"))
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.9"))
 
-		g.By("2.4 list bundles")
+		exutil.By("2.4 list bundles")
 		output, err = opmCLI.Run("alpha").Args("list", "bundles", dcimagetag).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1044,7 +1044,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("3scale-community-operator.v0.6.0"))
 		o.Expect(string(output)).To(o.ContainSubstring("3scale-community-operator.v0.7.0"))
 
-		g.By("2.5 list bundles in a package")
+		exutil.By("2.5 list bundles in a package")
 		output, err = opmCLI.Run("alpha").Args("list", "bundles", dcimagetag, "wso2am-operator").Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1054,14 +1054,14 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("wso2am-operator.v1.0.1"))
 		o.Expect(string(output)).To(o.ContainSubstring("wso2am-operator.v1.1.0"))
 
-		g.By("3, testing with index.db file")
+		exutil.By("3, testing with index.db file")
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
 		TmpDataPath := filepath.Join(opmBaseDir, "tmp")
 		indexdbFilePath := filepath.Join(TmpDataPath, "index.db")
 		err = os.MkdirAll(TmpDataPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("get index.db")
+		exutil.By("get index.db")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", dbimagetag, "--path", "/database/index.db:"+TmpDataPath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("get index.db SUCCESS, path is %s", indexdbFilePath)
@@ -1069,7 +1069,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 			e2e.Logf("get index.db Failed")
 		}
 
-		g.By("3.1 list packages")
+		exutil.By("3.1 list packages")
 		output, err = opmCLI.Run("alpha").Args("list", "packages", indexdbFilePath).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1079,7 +1079,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("3scale API Management"))
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.10"))
 
-		g.By("3.2 list channels")
+		exutil.By("3.2 list channels")
 		output, err = opmCLI.Run("alpha").Args("list", "channels", indexdbFilePath).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1089,7 +1089,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.10"))
 		o.Expect(string(output)).To(o.ContainSubstring("3scale-community-operator.v0.7.0"))
 
-		g.By("3.3 list channels in a package")
+		exutil.By("3.3 list channels in a package")
 		output, err = opmCLI.Run("alpha").Args("list", "channels", indexdbFilePath, "3scale-community-operator").Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1098,7 +1098,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.10"))
 		o.Expect(string(output)).To(o.ContainSubstring("threescale-2.9"))
 
-		g.By("3.4 list bundles")
+		exutil.By("3.4 list bundles")
 		output, err = opmCLI.Run("alpha").Args("list", "bundles", indexdbFilePath).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1107,7 +1107,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("3scale-community-operator.v0.6.0"))
 		o.Expect(string(output)).To(o.ContainSubstring("3scale-community-operator.v0.7.0"))
 
-		g.By("3.5 list bundles in a package")
+		exutil.By("3.5 list bundles in a package")
 		output, err = opmCLI.Run("alpha").Args("list", "bundles", indexdbFilePath, "wso2am-operator").Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1117,7 +1117,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("wso2am-operator.v1.0.1"))
 		o.Expect(string(output)).To(o.ContainSubstring("wso2am-operator.v1.1.0"))
 
-		g.By("step: SUCCESS")
+		exutil.By("step: SUCCESS")
 	})
 
 	// author: xzha@redhat.com
@@ -1134,7 +1134,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		defer containerCLI.RemoveImage(indexImageOW)
 		defer quayCLI.DeleteTag(strings.Replace(indexImageDep, "quay.io/", "", 1))
 
-		g.By("step: run deprecatetruncate")
+		exutil.By("step: run deprecatetruncate")
 		output, err := opmCLI.Run("index").Args("deprecatetruncate", "-b", "quay.io/olmqe/ditto-operator:0.1.1", "-f", indexImage, "-t", indexImageDep, "-c", containerTool).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1146,7 +1146,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("check there is no channel alpha")
+		exutil.By("check there is no channel alpha")
 		output, err = opmCLI.Run("alpha").Args("list", "channels", indexImageDep).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1156,7 +1156,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("beta"))
 		o.Expect(string(output)).NotTo(o.ContainSubstring("ditto-operator.v0.1.0"))
 
-		g.By("re-adding the bundle")
+		exutil.By("re-adding the bundle")
 		output, err = opmCLI.Run("index").Args("add", "-b", "quay.io/olmqe/ditto-operator:0.2.0-43147", "-f", indexImageDep, "-t", indexImageOW, "--overwrite-latest", "-c", containerTool).Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1164,7 +1164,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(output)).NotTo(o.ContainSubstring("ERRO"))
 
-		g.By("step: 43147 SUCCESS")
+		exutil.By("step: 43147 SUCCESS")
 	})
 
 	// author: xzha@redhat.com
@@ -1179,7 +1179,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		defer containerCLI.RemoveImage(indexImage1)
 		defer containerCLI.RemoveImage(indexImage2)
 
-		g.By("step: run add ditto-operator.v0.1.0 replace ditto-operator.v0.1.1")
+		exutil.By("step: run add ditto-operator.v0.1.0 replace ditto-operator.v0.1.1")
 		output1, err := opmCLI.Run("index").Args("add", "-b", "quay.io/olmqe/ditto-operator:43562-0.1.0", "-f", indexImage, "-t", indexImage1, "-c", containerTool).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(string(output1)).To(o.ContainSubstring("error"))
@@ -1192,7 +1192,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output2)).To(o.ContainSubstring("permissive mode disabled"))
 		o.Expect(string(output2)).To(o.ContainSubstring("this may be due to incorrect channel head"))
 
-		g.By("test case 43562 SUCCESS")
+		exutil.By("test case 43562 SUCCESS")
 	})
 
 	// author: tbuskey@redhat.com
@@ -1211,7 +1211,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 			sqlResults []db.Channel
 		)
 
-		g.By("Setup environment")
+		exutil.By("Setup environment")
 		// see OCP-30786 for creation of these images
 		bundles[0] = "quay.io/olmqe/etcd-bundle:0.9.0-39795"
 		bundles[1] = "quay.io/olmqe/etcd-bundle:0.9.2-39795"
@@ -1226,7 +1226,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		err := os.MkdirAll(indexTmpPath1, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create index image with a,b")
+		exutil.By("Create index image with a,b")
 		index := 1
 		a := 0
 		b := 1
@@ -1246,7 +1246,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(msg).NotTo(o.BeEmpty())
 		podmanCLI.RemoveImage(t1)
 
-		g.By("Generate db with a,b & check with sqlite")
+		exutil.By("Generate db with a,b & check with sqlite")
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "--generate").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
@@ -1261,7 +1261,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(fmt.Sprintf("%v", sqlResults[1])).To(o.ContainSubstring(bundleName[0]))
 		os.Remove(path.Join(indexTmpPath1, "index.db"))
 
-		g.By("Create index image with b,a")
+		exutil.By("Create index image with b,a")
 		index++
 		a = 1
 		b = 0
@@ -1281,7 +1281,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(msg).NotTo(o.BeEmpty())
 		podmanCLI.RemoveImage(t2)
 
-		g.By("Generate db with b,a & check with sqlite")
+		exutil.By("Generate db with b,a & check with sqlite")
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "--generate").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
@@ -1296,7 +1296,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(fmt.Sprintf("%v", sqlResults[1])).To(o.ContainSubstring(bundleName[0]))
 		os.Remove(path.Join(indexTmpPath1, "index.db"))
 
-		g.By("Create index image with a,b,c")
+		exutil.By("Create index image with a,b,c")
 		index++
 		a = 0
 		b = 1
@@ -1317,7 +1317,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(msg).NotTo(o.BeEmpty())
 		podmanCLI.RemoveImage(t3)
 
-		g.By("Generate db with a,b,c & check with sqlite")
+		exutil.By("Generate db with a,b,c & check with sqlite")
 		msg, err = opmCLI.Run("index").Args("add", "-b", s, "--generate").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
@@ -1333,7 +1333,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(fmt.Sprintf("%v", sqlResults[2])).To(o.ContainSubstring(bundleName[0]))
 		os.Remove(path.Join(indexTmpPath1, "index.db"))
 
-		g.By("Create index image with b,c,a")
+		exutil.By("Create index image with b,c,a")
 		index++
 		a = 1
 		b = 2
@@ -1355,7 +1355,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		podmanCLI.RemoveImage(t4)
 		// no db check
 
-		g.By("Create index image with c,a,b")
+		exutil.By("Create index image with c,a,b")
 		index++
 		a = 2
 		b = 0
@@ -1377,7 +1377,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		podmanCLI.RemoveImage(t5)
 		// no db check
 
-		g.By("Generate db with b,a,c & check with sqlite")
+		exutil.By("Generate db with b,a,c & check with sqlite")
 		a = 1
 		b = 0
 		c = 2
@@ -1400,7 +1400,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(fmt.Sprintf("%v", sqlResults[2])).To(o.ContainSubstring(bundleName[0]))
 		os.Remove(path.Join(indexTmpPath1, "index.db"))
 
-		g.By("Finished")
+		exutil.By("Finished")
 	})
 
 	// author: scolange@redhat.com
@@ -1419,51 +1419,51 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		defer containerCLI.RemoveImage(bundleImageTag2)
 		defer containerCLI.RemoveImage(bundleImageTag3)
 
-		g.By("step: build bundle.db")
+		exutil.By("step: build bundle.db")
 		dbFilePath := TmpDataPath + "bundles.db"
 		if output, err := opmCLI.Run("registry").Args("add", "-b", bundleImageTag1, "-d", dbFilePath, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("step1: modified the bundle.db already created")
+		exutil.By("step1: modified the bundle.db already created")
 		if output, err := opmCLI.Run("registry").Args("add", "-b", bundleImageTag2, "-d", dbFilePath, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("step2: modified the bundle.db already created")
+		exutil.By("step2: modified the bundle.db already created")
 		if output, err := opmCLI.Run("registry").Args("add", "-b", bundleImageTag3, "-d", dbFilePath, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		g.By("step: SUCCESS 25935")
+		exutil.By("step: SUCCESS 25935")
 
 	})
 
 	// author: xzha@redhat.com
 	g.It("Author:xzha-Medium-45407-opm and oc should print sqlite deprecation warnings", func() {
-		g.By("opm render --help")
+		exutil.By("opm render --help")
 		output, err := opmCLI.Run("render").Args("--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("DEPRECATION NOTICE:"))
 
-		g.By("opm index --help")
+		exutil.By("opm index --help")
 		output, err = opmCLI.Run("index").Args("--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("DEPRECATION NOTICE:"))
 
-		g.By("opm registry --help")
+		exutil.By("opm registry --help")
 		output, err = opmCLI.Run("registry").Args("--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("DEPRECATION NOTICE:"))
 
-		g.By("oc adm catalog mirror --help")
+		exutil.By("oc adm catalog mirror --help")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", "--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("DEPRECATION NOTICE:"))
 
-		g.By("45407 SUCCESS")
+		exutil.By("45407 SUCCESS")
 	})
 
 	// author: xzha@redhat.com
@@ -1472,12 +1472,12 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
 		tmpPath := filepath.Join(opmBaseDir, "temp"+getRandomString())
 		defer DeleteDir(tmpPath, "fixture-testdata")
-		g.By("step: mkdir with mode 0555")
+		exutil.By("step: mkdir with mode 0555")
 		err := os.MkdirAll(tmpPath, 0555)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		opmCLI.ExecCommandPath = tmpPath
 
-		g.By("step: opm index prune")
+		exutil.By("step: opm index prune")
 		containerTool := "podman"
 		sourceImageTag := "quay.io/olmqe/multi-index:2.0"
 		imageTag := "quay.io/olmqe/multi-index:45403-" + getRandomString()
@@ -1485,7 +1485,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		output, err := opmCLI.Run("index").Args("prune", "-f", sourceImageTag, "-p", "planetscale", "-t", imageTag, "-c", containerTool).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.MatchRegexp("(?i)mkdir .* permission denied(?i)"))
-		g.By("45403 SUCCESS")
+		exutil.By("45403 SUCCESS")
 	})
 
 	// author: xzha@redhat.com
@@ -1497,12 +1497,12 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		opmCLI.ExecCommandPath = opmBaseDir
 		defer DeleteDir(opmBaseDir, "fixture-testdata")
 
-		g.By("step: create dir catalog")
+		exutil.By("step: create dir catalog")
 		catsrcPathYaml := filepath.Join(opmBaseDir, "catalog-yaml")
 		err := os.MkdirAll(catsrcPathYaml, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: create a catalog using basic veneer with yaml format")
+		exutil.By("step: create a catalog using basic veneer with yaml format")
 		output, err := opmCLI.Run("alpha").Args("render-template", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1523,12 +1523,12 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("quay.io/olmqe/nginxolm-operator-bundle:v0.0.1"))
 		o.Expect(string(output)).To(o.ContainSubstring("quay.io/olmqe/nginxolm-operator-bundle:v1.0.1"))
 
-		g.By("step: create dir catalog")
+		exutil.By("step: create dir catalog")
 		catsrcPathJSON := filepath.Join(opmBaseDir, "catalog-json")
 		err = os.MkdirAll(catsrcPathJSON, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: create a catalog using basic veneer with json format")
+		exutil.By("step: create a catalog using basic veneer with json format")
 		output, err = opmCLI.Run("alpha").Args("render-template", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1559,12 +1559,12 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		opmCLI.ExecCommandPath = opmBaseDir
 		defer DeleteDir(opmBaseDir, "fixture-testdata")
 
-		g.By("step: create dir catalog-1")
+		exutil.By("step: create dir catalog-1")
 		catsrcPath1 := filepath.Join(opmBaseDir, "catalog-1")
 		err := os.MkdirAll(catsrcPath1, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: GenerateMajorChannels: true GenerateMinorChannels: false")
+		exutil.By("step: GenerateMajorChannels: true GenerateMinorChannels: false")
 		output, err := opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-1.yaml"), "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1590,12 +1590,12 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("stable-v1     nginx-operator.v1.0.2"))
 		o.Expect(string(output)).To(o.ContainSubstring("stable-v2     nginx-operator.v2.1.0"))
 
-		g.By("step: create dir catalog-2")
+		exutil.By("step: create dir catalog-2")
 		catsrcPath2 := filepath.Join(opmBaseDir, "catalog-2")
 		err = os.MkdirAll(catsrcPath2, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: GenerateMajorChannels: true GenerateMinorChannels: true")
+		exutil.By("step: GenerateMajorChannels: true GenerateMinorChannels: true")
 		output, err = opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-2.yaml"), "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1622,12 +1622,12 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("stable-v1       nginx-operator.v1.0.1"))
 		o.Expect(string(output)).To(o.ContainSubstring("stable-v1.0     nginx-operator.v1.0.1"))
 
-		g.By("step: create dir catalog-3")
+		exutil.By("step: create dir catalog-3")
 		catsrcPath3 := filepath.Join(opmBaseDir, "catalog-3")
 		err = os.MkdirAll(catsrcPath3, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: not set GenerateMajorChannels and GenerateMinorChannels")
+		exutil.By("step: not set GenerateMajorChannels and GenerateMinorChannels")
 		output, err = opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-3.yaml")).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1657,7 +1657,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).NotTo(o.ContainSubstring("stable-v2 "))
 		o.Expect(string(output)).To(o.ContainSubstring("stable-v2.1     nginx-operator.v2.1.0"))
 
-		g.By("step: generate mermaid graph data for generated-channels")
+		exutil.By("step: generate mermaid graph data for generated-channels")
 		output, err = opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-4.yaml"), "-o", "mermaid").Output()
 		if err != nil {
 			e2e.Logf(output)
@@ -1667,20 +1667,20 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("subgraph nginx-operator-fast-v2.0[\"fast-v2.0\"]"))
 		o.Expect(string(output)).To(o.ContainSubstring("nginx-operator-fast-v2.0-nginx-operator.v2.0.1[\"nginx-operator.v2.0.1\"]"))
 
-		g.By("step: semver veneer should validate bundle versions")
+		exutil.By("step: semver veneer should validate bundle versions")
 		output, err = opmCLI.Run("alpha").Args("render-template", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-5.yaml")).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("encountered bundle versions which differ only by build metadata, which cannot be ordered"))
 		o.Expect(string(output)).To(o.ContainSubstring("cannot be compared to \"1.0.1-alpha\""))
 
-		g.By("OCP-53996")
+		exutil.By("OCP-53996")
 		filePath := filepath.Join(opmBaseDir, "catalog-semver-veneer-1.yaml")
-		g.By("step: create dir catalog")
+		exutil.By("step: create dir catalog")
 		catsrcPath53996 := filepath.Join(opmBaseDir, "catalog-53996")
 		err = os.MkdirAll(catsrcPath53996, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("step: generate index.yaml with yaml format")
+		exutil.By("step: generate index.yaml with yaml format")
 		command := "cat " + filePath + "| opm alpha render-template semver -o yaml - "
 		contentByte, err := exec.Command("bash", "-c", command).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1707,14 +1707,14 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("stable-v1     nginx-operator.v1.0.2"))
 		o.Expect(string(output)).To(o.ContainSubstring("stable-v2     nginx-operator.v2.1.0"))
 
-		g.By("step: generate json format file")
+		exutil.By("step: generate json format file")
 		command = "cat " + filePath + `| opm alpha render-template semver  - | jq 'select(.schema=="olm.channel")'| jq '{name,entries}'`
 		contentByte, err = exec.Command("bash", "-c", command).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(contentByte)).To(o.ContainSubstring("nginx-operator.v1.0.2"))
 		o.Expect(string(contentByte)).To(o.ContainSubstring("candidate-v1"))
 
-		g.By("step: generate mermaid graph data for generated-channels")
+		exutil.By("step: generate mermaid graph data for generated-channels")
 		command = "cat " + filePath + "| opm alpha render-template semver -o mermaid -"
 		contentByte, err = exec.Command("bash", "-c", command).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1728,32 +1728,32 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
 
-		g.By("step: check help message")
+		exutil.By("step: check help message")
 		output, err := opmCLI.Run("alpha").Args("render-graph", "-h").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("--minimum-edge"))
 		o.Expect(string(output)).To(o.ContainSubstring("--use-http"))
 
-		g.By("step: opm alpha render-graph index-image")
+		exutil.By("step: opm alpha render-graph index-image")
 		output, err = opmCLI.Run("alpha").Args("render-graph", "quay.io/olmqe/nginxolm-operator-index:v1").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("package \"nginx-operator\""))
 		o.Expect(string(output)).To(o.ContainSubstring("subgraph nginx-operator-alpha[\"alpha\"]"))
 
-		g.By("step: opm alpha render-graph index-image with --minimum-edge")
+		exutil.By("step: opm alpha render-graph index-image with --minimum-edge")
 		output, err = opmCLI.Run("alpha").Args("render-graph", "quay.io/olmqe/nginxolm-operator-index:v1", "--minimum-edge", "nginx-operator.v1.0.1").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("package \"nginx-operator\""))
 		o.Expect(string(output)).To(o.ContainSubstring("nginx-operator.v1.0.1"))
 		o.Expect(string(output)).NotTo(o.ContainSubstring("nginx-operator.v0.0.1"))
 
-		g.By("step: create dir catalog")
+		exutil.By("step: create dir catalog")
 		catsrcPath := filepath.Join("/tmp", "53917-catalog")
 		defer os.RemoveAll(catsrcPath)
 		errCreateDir := os.MkdirAll(catsrcPath, 0755)
 		o.Expect(errCreateDir).NotTo(o.HaveOccurred())
 
-		g.By("step: opm alpha render-graph fbc-dir")
+		exutil.By("step: opm alpha render-graph fbc-dir")
 		output, err = opmCLI.Run("render").Args("quay.io/olmqe/nginxolm-operator-index:v1", "-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1769,7 +1769,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("package \"nginx-operator\""))
 		o.Expect(string(output)).To(o.ContainSubstring("subgraph nginx-operator-alpha[\"alpha\"]"))
 
-		g.By("step: opm alpha render-graph sqlit-based catalog image")
+		exutil.By("step: opm alpha render-graph sqlit-based catalog image")
 		output, err = opmCLI.Run("alpha").Args("render-graph", "quay.io/olmqe/ditto-index:v1beta1").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("subgraph \"ditto-operator\""))
@@ -1808,14 +1808,14 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("step: build bundle.db")
+		exutil.By("step: build bundle.db")
 		dbFilePath := TmpDataPath + "bundles.db"
 		if output, err := opmCLI.Run("registry").Args("add", "-b", bundleImageTag2, "-d", dbFilePath, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("step: Run the opm registry server binary to load manifest and serves a grpc API to query it.")
+		exutil.By("step: Run the opm registry server binary to load manifest and serves a grpc API to query it.")
 		e2e.Logf("step: Run the registry-server ")
 		cmd := exec.Command("opm", "registry", "serve", "-d", dbFilePath, "-p", "25934")
 		e2e.Logf("cmd %v:", cmd)
@@ -1840,7 +1840,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(outputCurl)).To(o.ContainSubstring("bundlePath"))
 		cmd.Process.Kill()
-		g.By("step: SUCCESS 25934")
+		exutil.By("step: SUCCESS 25934")
 
 	})
 
@@ -1855,7 +1855,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		indexImage := "registry.redhat.io/redhat/certified-operator-index:v4.7"
 
-		g.By("remove package from index")
+		exutil.By("remove package from index")
 		dockerconfigjsonpath := filepath.Join(indexTmpPath, ".dockerconfigjson")
 		defer exec.Command("rm", "-f", dockerconfigjsonpath).Output()
 		_, err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+indexTmpPath).Output()
@@ -1866,20 +1866,20 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		output, err := opmCLI.Run("index").Args("rm", "--generate", "--binary-image", "registry.redhat.io/openshift4/ose-operator-registry:v4.7", "--from-index", indexImage, "--operators", "cert-manager-operator", "--pull-tool=podman").Output()
 		e2e.Logf(output)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("test case 47222 SUCCESS")
+		exutil.By("test case 47222 SUCCESS")
 	})
 
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-Medium-60573-opm exclude bundles with olm.deprecated property when rendering", func() {
 
-		g.By("opm render the sqlite index image message")
+		exutil.By("opm render the sqlite index image message")
 		msg, err := opmCLI.Run("render").Args("quay.io/olmqe/catalogtest-index:v4.12depre", "-oyaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(msg, "olm.deprecated") {
 			e2e.Failf("opm render the sqlite index image message, doesn't show the bundle with olm.dreprecated label")
 		}
 
-		g.By("opm render the fbc index image message")
+		exutil.By("opm render the fbc index image message")
 		msg, err = opmCLI.Run("render").Args("quay.io/olmqe/test-index:mix", "-oyaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(msg, "olm.deprecated") {

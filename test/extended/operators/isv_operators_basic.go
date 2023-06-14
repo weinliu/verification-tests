@@ -99,7 +99,7 @@ const InstallPlanManualMode = "Manual"
 // 	for i := range ISVOperators {
 // 		operator := ISVOperators[i]
 // 		g.It(fmt.Sprintf("ConnectedOnly-Author:bandrade-Medium-%s-[Basic] Operator %s should work properly", CaseIDISVOperators[operator], operator), func() {
-// 			g.By("1) Constructing the subscription")
+// 			exutil.By("1) Constructing the subscription")
 // 			dr := make(describerResrouce)
 // 			itName := g.CurrentSpecReport().FullText()
 // 			dr.addIr(itName)
@@ -128,12 +128,12 @@ const InstallPlanManualMode = "Manual"
 // 				template:               subTemplate,
 // 			}
 // 			defer sub.delete(itName, dr)
-// 			g.By(fmt.Sprintf("2) Subscribe to %s", operator))
+// 			exutil.By(fmt.Sprintf("2) Subscribe to %s", operator))
 // 			e2e.Logf("--> The subscription:\n %v", sub)
 // 			sub.create(oc, itName, dr)
 
 // 			defer sub.deleteCSV(itName, dr)
-// 			g.By(fmt.Sprintf("3) Check if %s works well", operator))
+// 			exutil.By(fmt.Sprintf("3) Check if %s works well", operator))
 // 			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.startingCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 // 		})
 // 	}

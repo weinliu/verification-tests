@@ -48,15 +48,15 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		expectedMsg := "storagenode-example"
 
 		defer RemoveNamespace(namespace, oc)
-		g.By("install operator")
+		exutil.By("install operator")
 		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, InstallPlanAutomaticMode)
-		g.By("check deployment of operator")
+		exutil.By("check deployment of operator")
 		CheckDeployment(currentPackage, oc)
-		g.By("create CR")
+		exutil.By("create CR")
 		CreateFromYAML(currentPackage, crFile, oc)
-		g.By("check CR")
+		exutil.By("check CR")
 		CheckCR(currentPackage, crdName, crName, jsonPath, expectedMsg, oc)
-		g.By("remvoe operator")
+		exutil.By("remvoe operator")
 		RemoveCR(currentPackage, crdName, crName, oc)
 		RemoveOperatorDependencies(currentPackage, oc, false)
 
@@ -198,10 +198,9 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		)
 
 		dr := make(describerResrouce)
-		itName = g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		g.By("Check " + packageName + " availability")
+		exutil.By("Check " + packageName + " availability")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", packageName, "--no-headers").Output()
 		if err != nil {
 			pkgAvailable = false
@@ -218,13 +217,13 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 			o.Expect(pkgAvailable)
 		}
 
-		g.By("Create og")
+		exutil.By("Create og")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("Create sub")
+		exutil.By("Create sub")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("Wait for csv")
+		exutil.By("Wait for csv")
 		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
 			if strings.Contains(msg, sub.installedCSV) {
@@ -241,15 +240,15 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("expected csv %s not Succeeded", sub.installedCSV))
 		o.Expect(csvName).NotTo(o.BeEmpty())
 
-		g.By("Create Sparkcluster")
+		exutil.By("Create Sparkcluster")
 		clusterCrd.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "ready", ok, []string{clusterCrd.typename, clusterCrd.name, "-n", oc.Namespace(), "-o=jsonpath={.status.state}"}).check(oc)
 
-		g.By("Create SparkApplication")
+		exutil.By("Create SparkApplication")
 		appCrd.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "ready", ok, []string{appCrd.typename, appCrd.name, "-n", oc.Namespace(), "-o=jsonpath={.status.state}"}).check(oc)
 
-		g.By("Wait for application pod to appear")
+		exutil.By("Wait for application pod to appear")
 		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace(), "--no-headers").Output()
 			if strings.Contains(msg, "my-spark-app") {
@@ -264,7 +263,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		exutil.AssertWaitPollNoErr(waitErr, "my-spark-app pod not not found")
 		o.Expect(appPodName).NotTo(o.BeEmpty())
 
-		g.By("Wait for SparkApplication to finish")
+		exutil.By("Wait for SparkApplication to finish")
 		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace(), appPodName, "--no-headers").Output()
 			e2e.Logf("%v", msg)
@@ -276,12 +275,12 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("expected pod %s not Completed", "SparkApplication"))
 		o.Expect(msg).NotTo(o.BeEmpty())
 
-		g.By("Check the answer in logs")
+		exutil.By("Check the answer in logs")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(appPodName, "-n", oc.Namespace()).Output()
 		o.Expect(waitErr).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring(searchMsg))
 
-		g.By("DONE")
+		exutil.By("DONE")
 		e2e.Logf("%v\n\n", re.FindString(msg))
 
 	})
@@ -314,7 +313,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		rolesFile := "resourcelocker-role.yaml"
 		sa := "resource-locker-test-sa"
 
-		g.By("install operator")
+		exutil.By("install operator")
 		currentPackage := CreateSubscription(packageName, oc, InstallPlanAutomaticMode)
 		defer RemoveOperatorDependencies(currentPackage, oc, false)
 
@@ -323,18 +322,18 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", currentPackage.Namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check deployment of operator")
+		exutil.By("check deployment of operator")
 		CheckDeployment(currentPackage, oc)
 
-		g.By("create CR")
+		exutil.By("create CR")
 		defer RemoveFromYAML(currentPackage, rolesFile, oc)
 		CreateFromYAML(currentPackage, rolesFile, oc)
 		CreateFromYAML(currentPackage, crFile, oc)
 
-		g.By("check CR")
+		exutil.By("check CR")
 		CheckCR(currentPackage, crdName, crName, jsonPath, expectedMsg, oc)
 
-		g.By("remove CR")
+		exutil.By("remove CR")
 		RemoveCR(currentPackage, crdName, crName, oc)
 
 	})
@@ -355,26 +354,26 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		expectedMsg2 := "storageosupgrade-example"
 
 		defer RemoveNamespace(namespace, oc)
-		g.By("create secret")
+		exutil.By("create secret")
 		buildPruningBaseDirsecret := exutil.FixturePath("testdata", "operators")
 		secret := filepath.Join(buildPruningBaseDirsecret, secretFile)
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", secret).Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "storageos-api-isv", "-n", "openshift-operators").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("install operator")
+		exutil.By("install operator")
 		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, InstallPlanAutomaticMode)
-		g.By("check deployment of operator")
+		exutil.By("check deployment of operator")
 		CheckDeployment(currentPackage, oc)
-		g.By("create CR1")
+		exutil.By("create CR1")
 		CreateFromYAML(currentPackage, crFile1, oc)
-		g.By("create CR2")
+		exutil.By("create CR2")
 		CreateFromYAML(currentPackage, crFile2, oc)
-		g.By("check CR1")
+		exutil.By("check CR1")
 		CheckCR(currentPackage, crdName1, crName1, jsonPath, expectedMsg1, oc)
-		g.By("check CR2")
+		exutil.By("check CR2")
 		CheckCR(currentPackage, crdName2, crName2, jsonPath, expectedMsg2, oc)
-		g.By("remvoe operator")
+		exutil.By("remvoe operator")
 		RemoveCR(currentPackage, crdName1, crName1, oc)
 		RemoveCR(currentPackage, crdName2, crName2, oc)
 		RemoveOperatorDependencies(currentPackage, oc, false)
