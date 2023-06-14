@@ -37,6 +37,7 @@ type AWSNodePool struct {
 	RootVolumeType  string `param:"root-volume-type"`
 	SecurityGroupID string `param:"securitygroup-id"`
 	SubnetID        string `param:"subnet-id"`
+	NodeUpgradeType string `param:"node-upgrade-type"`
 }
 
 func NewAWSNodePool(name, clusterName, namespace string) *AWSNodePool {
@@ -95,6 +96,11 @@ func (a *AWSNodePool) WithReleaseImage(releaseImage string) *AWSNodePool {
 
 func (a *AWSNodePool) WithSecuritygroupID(securitygroupID string) *AWSNodePool {
 	a.SecuritygroupId = securitygroupID
+	return a
+}
+
+func (a *AWSNodePool) WithNodeUpgradeType(nodeUpgradeType string) *AWSNodePool {
+	a.NodeUpgradeType = nodeUpgradeType
 	return a
 }
 

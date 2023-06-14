@@ -1467,4 +1467,76 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		doOcpReq(oc, OcpPatch, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "--type=merge", `-p=`+githubConf)
 		o.Eventually(hostedcluster.pollCheckIDPConfigReady(IdentityProviderTypeGitHub, githubIDPName, githubSecretName), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), "wait for the github idp config ready timeout")
 	})
+
+	// author: liangli@redhat.com
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:liangli-Critical-63535-Stop triggering rollout on labels/taint change[Serial]", func() {
+		caseID := "63535"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("create a nodepool")
+		np1Count := 1
+		np1Name := "63535test-01"
+		defer func() {
+			hostedcluster.deleteNodePool(np1Name)
+			o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check all nodes ready error")
+		}()
+		NewAWSNodePool(np1Name, hostedcluster.name, hostedcluster.namespace).
+			WithNodeCount(&np1Count).
+			CreateAWSNodePool()
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(np1Name), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
+
+		g.By("add nodeLabels and taints in the nodepool '63535test-01'")
+		doOcpReq(oc, OcpPatch, true, "nodepool", np1Name, "-n", hostedcluster.namespace, "--type", "merge", "-p", `{"spec":{"nodeLabels":{"env":"test"}}}`)
+		doOcpReq(oc, OcpPatch, true, "nodepool", np1Name, "-n", hostedcluster.namespace, "--type", "merge", "-p", `{"spec":{"taints":[{"key":"env","value":"test","effect":"PreferNoSchedule"}]}}`)
+		o.Consistently(func() bool {
+			value, _ := hostedcluster.oc.AsGuestKubeconf().Run("get").Args("node", "-lhypershift.openshift.io/nodePool="+np1Name, "--show-labels").Output()
+			return strings.Contains(value, "env=test")
+		}, 60*time.Second, 5*time.Second).Should(o.BeFalse())
+
+		g.By("Scale the nodepool '63535test-01' to 2")
+		doOcpReq(oc, OcpScale, true, "nodepool", np1Name, "-n", hostedcluster.namespace, "--replicas=2")
+		o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(np1Name), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("nodepool are not scale up to 2 in hostedcluster %s", hostedcluster.name))
+
+		g.By("Check if nodeLabels and taints are propagated into new node")
+		taintsValue, err := hostedcluster.oc.AsGuestKubeconf().Run("get").Args("node", "-lhypershift.openshift.io/nodePool="+np1Name, `-lenv=test`, `-ojsonpath={.items[*].spec.taints[?(@.key=="env")].value}`).Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(taintsValue).Should(o.ContainSubstring("test"))
+
+		g.By("Create a nodepool 'label-taint' with nodeLabels and taints")
+		np2Count := 1
+		np2Name := "63535test-02"
+		defer func() {
+			hostedcluster.deleteNodePool(np2Name)
+			o.Eventually(hostedcluster.pollCheckDeletedNodePool(np2Name), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
+		}()
+		NewAWSNodePool(np2Name, hostedcluster.name, hostedcluster.namespace).
+			WithNodeCount(&np2Count).
+			WithNodeUpgradeType("InPlace").
+			CreateAWSNodePool()
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(np2Name), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", np2Name))
+
+		defer func() {
+			hostedcluster.deleteNodePool(np2Name)
+			o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check all nodes ready error")
+		}()
+		g.By("add nodeLabels and taints in the nodepool '63535test-02(InPlace)'")
+		doOcpReq(oc, OcpPatch, true, "nodepool", np2Name, "-n", hostedcluster.namespace, "--type", "merge", "-p", `{"spec":{"nodeLabels":{"env":"test2"}}}`)
+		doOcpReq(oc, OcpPatch, true, "nodepool", np2Name, "-n", hostedcluster.namespace, "--type", "merge", "-p", `{"spec":{"taints":[{"key":"env","value":"test2","effect":"PreferNoSchedule"}]}}`)
+		o.Consistently(func() bool {
+			value, _ := hostedcluster.oc.AsGuestKubeconf().Run("get").Args("node", "-lhypershift.openshift.io/nodePool="+np2Name, "--show-labels").Output()
+			return strings.Contains(value, "env=test2")
+		}, 60*time.Second, 5*time.Second).Should(o.BeFalse())
+
+		g.By("Scale the nodepool '63535test-02(InPlace)' to 2")
+		doOcpReq(oc, OcpScale, true, "nodepool", np2Name, "-n", hostedcluster.namespace, "--replicas=2")
+		o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(np2Name), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("nodepool are not scale up to 2 in hostedcluster %s", hostedcluster.name))
+
+		g.By("Check if nodepool 'label-taint' comes up  and nodeLabels and taints are propagated into nodes")
+		taintsValue, err = hostedcluster.oc.AsGuestKubeconf().Run("get").Args("node", "-lhypershift.openshift.io/nodePool="+np1Name, `-lenv=test2`, `-ojsonpath={.items[*].spec.taints[?(@.key=="env")].value}`).Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(taintsValue).Should(o.ContainSubstring("test2"))
+	})
 })
