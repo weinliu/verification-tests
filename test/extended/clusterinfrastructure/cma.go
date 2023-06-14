@@ -73,11 +73,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-64165-[csr] Bootstrap kubelet client cert should include system:serviceaccounts group", func() {
 		csrs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csr", "-o=jsonpath={.items[*].metadata.name}", "--field-selector", "spec.signerName=kubernetes.io/kube-apiserver-client-kubelet").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		csrList := strings.Split(csrs, " ")
-		for _, csr := range csrList {
-			csrGroups, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csr", csr, "-o=jsonpath={.spec.groups}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(csrGroups, "\"system:serviceaccounts\",\"system:serviceaccounts:openshift-machine-config-operator\",\"system:authenticated\"")).To(o.BeTrue())
+		if csrs != "" {
+			csrList := strings.Split(csrs, " ")
+			for _, csr := range csrList {
+				csrGroups, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csr", csr, "-o=jsonpath={.spec.groups}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(strings.Contains(csrGroups, "\"system:serviceaccounts\",\"system:serviceaccounts:openshift-machine-config-operator\",\"system:authenticated\"")).To(o.BeTrue())
+			}
 		}
 	})
 })
