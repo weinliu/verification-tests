@@ -25,6 +25,7 @@ import (
 	_ "github.com/openshift/openshift-tests-private/test/extended/ota/cvo"
 	_ "github.com/openshift/openshift-tests-private/test/extended/ota/osus"
 	_ "github.com/openshift/openshift-tests-private/test/extended/perfscale"
+	_ "github.com/openshift/openshift-tests-private/test/extended/psap/cpu"
 	_ "github.com/openshift/openshift-tests-private/test/extended/psap/gpu"
 	_ "github.com/openshift/openshift-tests-private/test/extended/psap/hypernto"
 	_ "github.com/openshift/openshift-tests-private/test/extended/psap/nfd"
