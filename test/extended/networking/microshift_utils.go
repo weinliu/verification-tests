@@ -1,10 +1,12 @@
 package networking
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -78,4 +80,40 @@ func rollbackMTU(oc *exutil.CLI, nodeName string) {
 
 	g.By("reboot node")
 	rebootUshiftNode(oc, nodeName)
+}
+
+func removeIPRules(oc *exutil.CLI, nodePort, nodeIP, nodeName string) {
+	ipRuleList := fmt.Sprintf("nft -a list chain ip nat PREROUTING")
+	rulesOutput, err := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", ipRuleList)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The iprules out put is :\n%s", rulesOutput)
+	if checkIPrules(oc, nodePort, nodeIP, rulesOutput) {
+		regexText := fmt.Sprintf("tcp dport %v ip daddr %v drop # handle (\\d+)", nodePort, nodeIP)
+		re := regexp.MustCompile(regexText)
+		match := re.FindStringSubmatch(rulesOutput)
+		o.Expect(len(match) > 1).To(o.BeTrue())
+		handleNumber := match[1]
+		removeRuleCmd := fmt.Sprintf("nft -a delete rule ip nat PREROUTING handle %v", handleNumber)
+		e2e.Logf("The remove rule command: %s\n", removeRuleCmd)
+		_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", removeRuleCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		rulesOutput, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", ipRuleList)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(checkIPrules(oc, nodePort, nodeIP, rulesOutput)).Should(o.BeFalse())
+	}
+
+}
+
+func checkIPrules(oc *exutil.CLI, nodePort, nodeIP, iprules string) bool {
+	regexText := fmt.Sprintf("tcp dport %v ip daddr %v drop", nodePort, nodeIP)
+	re := regexp.MustCompile(regexText)
+	found := re.MatchString(iprules)
+	if found {
+		e2e.Logf("%s --Line found.", regexText)
+		return true
+	} else {
+		e2e.Logf("%s --Line not found.", regexText)
+		return false
+	}
+
 }

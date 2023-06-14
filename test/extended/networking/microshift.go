@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -722,5 +723,71 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		})
 		exutil.AssertWaitPollNoErr(output, fmt.Sprintf("Fail to updated dns configmap:%s", output))
 
+	})
+
+	// author: huirwang@redhat.com
+	g.It("MicroShiftOnly-Author:huirwang-High-60969-Blocking external access to the NodePort service on a specific host interface. [Disruptive]", func() {
+		var (
+			caseID           = "64253"
+			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+		)
+
+		g.By("Create a namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		pod_pmtrs := map[string]string{
+			"$podname":   "hello-pod",
+			"$namespace": e2eTestNamespace,
+			"$label":     "hello-pod",
+		}
+
+		g.By("creating hello pod in namespace")
+		createPingPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, "hello-pod")
+
+		svc_pmtrs := map[string]string{
+			"$servicename":           "test-service-etp-cluster",
+			"$namespace":             e2eTestNamespace,
+			"$label":                 "test-service",
+			"$internalTrafficPolicy": "",
+			"$externalTrafficPolicy": "",
+			"$ipFamilyPolicy":        "",
+			"$selector":              "hello-pod",
+			"$serviceType":           "NodePort",
+		}
+		createServiceforUshift(oc, svc_pmtrs)
+		svc, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "test-service-etp-cluster").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(svc).Should(o.ContainSubstring("test-service-etp-cluster"))
+
+		g.By("Get service NodePort and NodeIP value")
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "test-service-etp-cluster", "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod", "-o=jsonpath={.spec.nodeName}").Output()
+		o.Expect(podErr).NotTo(o.HaveOccurred())
+		nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeName)
+		svcURL := net.JoinHostPort(nodeIP, nodePort)
+		g.By("curl NodePort Service")
+		curlNodeCmd := fmt.Sprintf("curl %s -s --connect-timeout 5", svcURL)
+		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Insert a new rule in the nat table PREROUTING chain to drop all packets that match the destination port and IP address")
+		defer removeIPRules(oc, nodePort, nodeIP, nodeName)
+		ipDropCmd := fmt.Sprintf("nft -a insert rule ip nat PREROUTING tcp dport %v ip daddr %s drop", nodePort, nodeIP)
+		_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", ipDropCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Verify NodePort Service is blocked")
+		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("Remove the added new rule")
+		removeIPRules(oc, nodePort, nodeIP, nodeName)
+
+		g.By("Verify the NodePort service can be accessed again.")
+		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 })
