@@ -152,6 +152,27 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 			e2e.Failf("failed to remove the etcd bootstrap member")
 		}
 	})
+
+	// author: skundu@redhat.com
+	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Critical-54999-Verify ETCD is not degraded in dual-stack networking cluster.[Serial]", func() {
+		g.By("Test for case OCP-54999 Verify ETCD is not degraded in dual-stack networking cluster.")
+		ipStackType := getIPStackType(oc)
+		g.By("Skip testing on ipv4 or ipv6 single stack cluster")
+		if ipStackType == "ipv4single" || ipStackType == "ipv6single" {
+			g.Skip("The case only can be run on dualstack cluster , skip for single stack cluster!!!")
+		}
+		g.By("Verifying etcd status on dualstack cluster")
+		if ipStackType == "dualstack" {
+			g.By("Check etcd oprator status")
+			checkOperator(oc, "etcd")
+			podAllRunning := checkEtcdPodStatus(oc)
+			if podAllRunning != true {
+				e2e.Failf("etcd pods are not in running state")
+			}
+
+		}
+	})
+
 })
 var _ = g.Describe("[sig-etcd] ETCD Microshift", func() {
 	defer g.GinkgoRecover()

@@ -162,5 +162,48 @@ func verifyEtcdClusterMsgStatus(oc *exutil.CLI, msg string, status string) bool 
 		found = true
 	}
 	return found
+}
 
+func getIPStackType(oc *exutil.CLI) string {
+	svcNetwork, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.serviceNetwork}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	stack := ""
+	if strings.Count(svcNetwork, ":") >= 2 && strings.Count(svcNetwork, ".") >= 2 {
+		stack = "dualstack"
+	} else if strings.Count(svcNetwork, ":") >= 2 {
+		stack = "ipv6single"
+	} else if strings.Count(svcNetwork, ".") >= 2 {
+		stack = "ipv4single"
+	}
+	return stack
+}
+
+func checkOperator(oc *exutil.CLI, operatorName string) {
+	err := wait.Poll(60*time.Second, 1500*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().Run("get").Args("clusteroperator", operatorName).Output()
+		if err != nil {
+			e2e.Logf("get clusteroperator err, will try next time:\n")
+			return false, nil
+		}
+		if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
+			e2e.Logf("clusteroperator %s is abnormal, will try next time:\n", operatorName)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "clusteroperator abnormal")
+}
+
+// make sure all the ectd pods are running
+func checkEtcdPodStatus(oc *exutil.CLI) bool {
+	output, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=etcd", "-n", "openshift-etcd", "-o=jsonpath='{.items[*].status.phase}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	statusList := strings.Fields(output)
+	for _, podStatus := range statusList {
+		if match, _ := regexp.MatchString("Running", podStatus); !match {
+			e2e.Logf("Find etcd pod is not running")
+			return false
+		}
+	}
+	return true
 }
