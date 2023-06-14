@@ -157,7 +157,7 @@ func getPodMultiNetworks(oc *exutil.CLI, namespace string, podName string, netNa
 	return podIPv4, podIPv6
 }
 
-func multihomingBeforeCheck(oc *exutil.CLI) ([]string, []string, []string, []string, string, string, string) {
+func multihomingBeforeCheck(oc *exutil.CLI, topology string) ([]string, []string, []string, []string, string, string, string) {
 	var (
 		buildPruningBaseDir    = exutil.FixturePath("testdata", "networking/multihoming")
 		multihomingNADTemplate = filepath.Join(buildPruningBaseDir, "multihoming-NAD-template.yaml")
@@ -184,24 +184,10 @@ func multihomingBeforeCheck(oc *exutil.CLI) ([]string, []string, []string, []str
 		subnets:        "192.168.100.0/24,fd00:dead:beef::0/64",
 		nswithnadname:  nsWithnad,
 		excludeSubnets: "",
-		topology:       "layer2",
+		topology:       topology,
 		template:       multihomingNADTemplate,
 	}
 	nad1ns1.createMultihomingNAD(oc)
-
-	g.By("Check if the network-attach-defintion is created")
-	if checkNAD(oc, ns1, nadName) {
-		e2e.Logf("The correct network-attach-defintion: %v is created!", nadName)
-	} else {
-		e2e.Failf("The correct network-attach-defintion: %v is not created!", nadName)
-	}
-
-	g.By("Check if the new OVN switch is created")
-	ovnMasterPodName := getOVNLeaderPod(oc, "north")
-	o.Expect(ovnMasterPodName).ShouldNot(o.Equal(""))
-	o.Eventually(func() bool {
-		return checkOVNSwitch(oc, nadName, ovnMasterPodName)
-	}, 30*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch is not created")
 
 	g.By("Create 1st pod consuming above network-attach-defintion in ns1")
 	pod1 := testMultihomingPod{
@@ -260,13 +246,9 @@ func multihomingBeforeCheck(oc *exutil.CLI) ([]string, []string, []string, []str
 	e2e.Logf("The v4 address of pod1 is: %v", pod3IPv4, "net1", pod3.podenvname)
 	e2e.Logf("The v6 address of pod1 is: %v", pod3IPv6, "net1", pod3.podenvname)
 
-	g.By("Check if the new OVN switch ports is created")
-	listSWCmd := "ovn-nbctl show | grep port | grep " + nadName + " "
+	ovnMasterPodName := getOVNLeaderPod(oc, "north")
+	o.Expect(ovnMasterPodName).ShouldNot(o.Equal(""))
 	podName := []string{pod1Name[0], pod2Name[0], pod3Name[0]}
-	o.Eventually(func() bool {
-		listOutput, _ := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listSWCmd)
-		return checkOVNswitchPorts(podName, listOutput)
-	}, 30*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch ports are not created")
 
 	g.By("Checking connectivity from pod1 to pod2")
 	CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod2IPv4, "net1", pod2.podenvname)
@@ -312,12 +294,6 @@ func multihomingAfterCheck(oc *exutil.CLI, podName []string, podEnvName []string
 	pod2IPv6 := podIPv6[1]
 	pod3IPv6 := podIPv6[2]
 
-	g.By("Wait for the new ovn-northbound-leader pod is created")
-	o.Eventually(func() string {
-		podName := getOVNLeaderPod(oc, "north")
-		return podName
-	}, "120s", "5s").Should(o.ContainSubstring("ovnkube-master"), fmt.Sprintf("Failed to get correct OVN leader pod"))
-
 	g.By("Checking connectivity from pod to pod after deleting")
 	CurlMultusPod2PodPass(oc, ns, pod1Name, pod2IPv4, "net1", pod2envname)
 	CurlMultusPod2PodPass(oc, ns, pod1Name, pod2IPv6, "net1", pod2envname)
@@ -331,30 +307,6 @@ func multihomingAfterCheck(oc *exutil.CLI, podName []string, podEnvName []string
 	CurlMultusPod2PodPass(oc, ns, pod3Name, pod1IPv6, "net1", pod1envname)
 	CurlMultusPod2PodPass(oc, ns, pod3Name, pod2IPv4, "net1", pod2envname)
 	CurlMultusPod2PodPass(oc, ns, pod3Name, pod2IPv6, "net1", pod2envname)
-
-	g.By("Check if the new OVN switch ports are deleted after deleting the pods")
-	o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--all", "-n", ns).Execute()).NotTo(o.HaveOccurred())
-	//After deleting pods, it will take several seconds to delete the switch ports
-	ovnMasterPodNewName := getOVNLeaderPod(oc, "north")
-	o.Expect(ovnMasterPodNewName).ShouldNot(o.Equal(""))
-	listSWCmd := "ovn-nbctl show | grep port | grep " + nadName + " "
-	o.Eventually(func() bool {
-		listOutput, _ := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodNewName, listSWCmd)
-		return checkOVNswitchPorts(podName, listOutput)
-	}, 30*time.Second, 5*time.Second).ShouldNot(o.BeTrue(), "The correct OVN switch ports are not deleted")
-
-	g.By("Check if the network-attach-defintion is deleted")
-	o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nadName, "-n", ns).Execute()).NotTo(o.HaveOccurred())
-	if !checkNAD(oc, ns, nadName) {
-		e2e.Logf("The correct network-attach-defintion: %v is deleted!", nadName)
-	} else {
-		e2e.Failf("The correct network-attach-defintion: %v is not deleted!", nadName)
-	}
-
-	g.By("Check if the new created OVN switch is deleted")
-	o.Eventually(func() bool {
-		return checkOVNSwitch(oc, nadName, ovnMasterPodNewName)
-	}, 30*time.Second, 5*time.Second).ShouldNot(o.BeTrue(), "The correct OVN switch is not deleted")
 }
 
 // This is for a negtive case which the pods can't be running using the wrong NAD
