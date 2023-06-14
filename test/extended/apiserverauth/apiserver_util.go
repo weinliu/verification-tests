@@ -481,8 +481,13 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	cmdOut, err := exec.Command("bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	worker1 := strings.Replace(string(cmdOut), "\n", "", 1)
-	workerTop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", worker1, "--no-headers=true").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	// Check if there is an node.metrics on node
+	err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodemetrics", worker1).Execute()
+	var workerTop string
+	if err == nil {
+		workerTop, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", worker1, "--no-headers=true").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 	cpuUsageCmd := fmt.Sprintf(`echo "%v" | awk '{print $2}'`, workerTop)
 	cpuUsage, err := exec.Command("bash", "-c", cpuUsageCmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -502,8 +507,13 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	for i := 0; i < len(workerCPU); i++ {
-		workerCPUtop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "-log")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		// Check if there is node.metrics on node
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodemetrics", workerCPU[i]).Execute()
+		var workerCPUtop string
+		if err == nil {
+			workerCPUtop, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "-log")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		workerCPUtopcmd := fmt.Sprintf(`cat %v | awk '{print $3}'`, workerCPUtop)
 		workerCPUUsage, err := exec.Command("bash", "-c", workerCPUtopcmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -583,8 +593,13 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	totalMem := int(float64(mem) / (float64(memP) / 100))
 
 	for i := 0; i < len(workerCPU); i++ {
-		workerMEMtop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "-log")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		// Check if there is node.metrics on node
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodemetrics", workerCPU[i]).Execute()
+		var workerMEMtop string
+		if err == nil {
+			workerMEMtop, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "-log")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		workerMEMtopcmd := fmt.Sprintf(`cat %v | awk '{print $5}'`, workerMEMtop)
 		workerMEMUsage, err := exec.Command("bash", "-c", workerMEMtopcmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

@@ -723,7 +723,8 @@ spec:
 	// author: rgangwar@redhat.com
 	// It is destructive case, probably cause the system OOM, so adding [Disruptive].Workload loading costs more than 15mins, so adding [Slow]
 	// For the Jira issue https://issues.redhat.com/browse/OCPQE-9541, we need provide a good solution for the provision of adequate stress for the load of the environment
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-ConnectedOnly-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow][Disruptive]", func() {
+	// Sometimes case takes more than 15mins to avoid this failure adding -Longduration- tag
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-Longduration-NonPreRelease-ConnectedOnly-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow][Disruptive]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false"
@@ -811,9 +812,10 @@ spec:
 		}
 
 		g.By("Checking KAS logs")
-		kasPods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n openshif-kube-apiserver", "-l apiserver", "-o=jsonpath='{.items[*].metadata.name}'").Output()
+		podList, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-apiserver", "apiserver")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		for _, kasPod := range kasPods {
+		o.Expect(podList).ShouldNot(o.BeEmpty())
+		for _, kasPod := range podList {
 			kasPodName := string(kasPod)
 			_, errLog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", kasPodName).OutputToFile("OCP-40667/kas.log." + kasPodName)
 			if errLog != nil {
@@ -867,8 +869,9 @@ spec:
 		}
 	})
 
+	// Sometimes case takes more than 15mins to avoid this failure adding -Longduration- tag
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-Longduration-NonPreRelease-Author:rgangwar-Critical-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false"
@@ -944,8 +947,9 @@ spec:
 		}
 
 		g.By("Checking KAS logs")
-		kasPods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n openshif-kube-apiserver", "-l apiserver", "-o=jsonpath='{.items[*].metadata.name}'").Output()
+		kasPods, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-apiserver", "apiserver")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(kasPods).ShouldNot(o.BeEmpty())
 		for _, kasPod := range kasPods {
 			kasPodName := string(kasPod)
 			_, errLog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", kasPodName).OutputToFile("OCP-40667/kas.log." + kasPodName)
