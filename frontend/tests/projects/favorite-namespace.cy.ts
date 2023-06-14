@@ -1,9 +1,11 @@
+import { guidedTour } from '../../upstream/views/guided-tour';
 import { namespaceDropdown } from "views/namespace-dropdown";
 
 describe("namespace dropdown favorite test", () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env("LOGIN_USERNAME")}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    guidedTour.close();
   });
 
   after(() => {
