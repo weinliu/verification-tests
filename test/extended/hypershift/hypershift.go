@@ -1403,4 +1403,68 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		podNodeName, _ := hostedcluster.oc.AsGuestKubeconf().Run("get").Args("pod", "-n", "test-48511", "build-48511-2-build", `-ojsonpath={.spec.nodeName}`).Output()
 		o.Expect(podNodeName).Should(o.Equal(nodeName))
 	})
+
+	// author: heli@redhat.com
+	// Note: for oauth IDP gitlab and github, we can not use <oc login> to verify it directly. Here we just config them in
+	// the hostedcluster and check the related oauth pod/configmap resources are as expected.
+	// The whole oauth e2e is covered by oauth https://issues.redhat.com/browse/OCPQE-13439
+	// LDAP: OCP-23334, GitHub: OCP-22274, gitlab: OCP-22271, now they don't have plans to auto them because of some idp provider's limitation
+	g.It("HyperShiftMGMT-Author:heli-Critical-54476-Critical-62511-Ensure that OAuth server can communicate with GitLab (GitHub) [Serial]", func() {
+		g.By("backup current hostedcluster CR")
+		var bashClient = NewCmdClient()
+		var hcBackupFile string
+		defer os.Remove(hcBackupFile)
+		hcBackupFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hc", hostedcluster.name, "-n", hostedcluster.namespace, "-oyaml").OutputToFile("hypershift-54476-62511")
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		_, err = bashClient.Run(fmt.Sprintf("sed -i '/resourceVersion:/d' %s", hcBackupFile)).Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		g.By("get OAuth callback URL")
+		gitlabIDPName := "gitlabidp-54476"
+		gitlabSecretName := "gitlab-secret-54476"
+		fakeSecret := "fakeb577d60316d0573de82b8545c8e75c2a48156bcc"
+		gitlabConf := fmt.Sprintf(`{"spec":{"configuration":{"oauth":{"identityProviders":[{"gitlab":{"clientID":"fake4c397","clientSecret":{"name":"%s"},"url":"https://gitlab.com"},"mappingMethod":"claim","name":"%s","type":"GitLab"}]}}}}`, gitlabSecretName, gitlabIDPName)
+
+		githubIDPName := "githubidp-62511"
+		githubSecretName := "github-secret-62511"
+		githubConf := fmt.Sprintf(`{"spec":{"configuration":{"oauth":{"identityProviders":[{"github":{"clientID":"f90150abb","clientSecret":{"name":"%s"}},"mappingMethod":"claim","name":"%s","type":"GitHub"}]}}}}`, githubSecretName, githubIDPName)
+
+		cpNameSpace := hostedcluster.namespace + "-" + hostedcluster.name
+		callBackUrl := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.status.oauthCallbackURLTemplate}")
+		e2e.Logf("OAuth callback URL: %s", callBackUrl)
+		oauthRoute := doOcpReq(oc, OcpGet, true, "route", "oauth", "-n", cpNameSpace, "-ojsonpath={.spec.host}")
+		o.Expect(callBackUrl).Should(o.ContainSubstring(oauthRoute))
+
+		defer func() {
+			doOcpReq(oc, OcpApply, false, "-f", hcBackupFile)
+			o.Eventually(func() bool {
+				status := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.status.conditions[?(@.type=="Available")].status}`)
+				if strings.TrimSpace(status) != "True" {
+					return false
+				}
+				replica := doOcpReq(oc, OcpGet, true, "deploy", "oauth-openshift", "-n", cpNameSpace, "-ojsonpath={.spec.replicas}")
+				availReplica := doOcpReq(oc, OcpGet, false, "deploy", "oauth-openshift", "-n", cpNameSpace, "-ojsonpath={.status.availableReplicas}")
+				if replica != availReplica {
+					return false
+				}
+				readyReplica := doOcpReq(oc, OcpGet, false, "deploy", "oauth-openshift", "-n", cpNameSpace, "-ojsonpath={.status.readyReplicas}")
+				if readyReplica != availReplica {
+					return false
+				}
+				return true
+			}, ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), "recover back hosted cluster timeout")
+		}()
+
+		g.By("config gitlab IDP")
+		defer doOcpReq(oc, OcpDelete, false, "secret", gitlabSecretName, "--ignore-not-found", "-n", hostedcluster.namespace)
+		doOcpReq(oc, OcpCreate, true, "secret", "generic", gitlabSecretName, "-n", hostedcluster.namespace, fmt.Sprintf(`--from-literal=clientSecret="%s"`, fakeSecret))
+		doOcpReq(oc, OcpPatch, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "--type=merge", `-p=`+gitlabConf)
+		o.Eventually(hostedcluster.pollCheckIDPConfigReady(IdentityProviderTypeGitLab, gitlabIDPName, gitlabSecretName), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), "wait for the gitlab idp config ready timeout")
+
+		g.By("config github IDP")
+		defer doOcpReq(oc, OcpDelete, false, "secret", githubSecretName, "--ignore-not-found", "-n", hostedcluster.namespace)
+		doOcpReq(oc, OcpCreate, true, "secret", "generic", githubSecretName, "-n", hostedcluster.namespace, fmt.Sprintf(`--from-literal=clientSecret="%s"`, fakeSecret))
+		doOcpReq(oc, OcpPatch, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "--type=merge", `-p=`+githubConf)
+		o.Eventually(hostedcluster.pollCheckIDPConfigReady(IdentityProviderTypeGitHub, githubIDPName, githubSecretName), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), "wait for the github idp config ready timeout")
+	})
 })

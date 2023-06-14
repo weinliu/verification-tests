@@ -89,6 +89,31 @@ const (
 	Private AWSEndpointAccessType = "Private"
 )
 
+type IdentityProviderType = string
+
+const (
+	// IdentityProviderTypeBasicAuth provides identities for users authenticating with HTTP Basic Auth
+	IdentityProviderTypeBasicAuth IdentityProviderType = "BasicAuth"
+
+	// IdentityProviderTypeGitHub provides identities for users authenticating using GitHub credentials
+	IdentityProviderTypeGitHub IdentityProviderType = "GitHub"
+
+	// IdentityProviderTypeGitLab provides identities for users authenticating using GitLab credentials
+	IdentityProviderTypeGitLab IdentityProviderType = "GitLab"
+
+	// IdentityProviderTypeGoogle provides identities for users authenticating using Google credentials
+	IdentityProviderTypeGoogle IdentityProviderType = "Google"
+
+	// IdentityProviderTypeHTPasswd provides identities from an HTPasswd file
+	IdentityProviderTypeHTPasswd IdentityProviderType = "HTPasswd"
+
+	// IdentityProviderTypeKeystone provides identitities for users authenticating using keystone password credentials
+	IdentityProviderTypeKeystone IdentityProviderType = "Keystone"
+
+	// IdentityProviderTypeLDAP provides identities for users authenticating using LDAP credentials
+	IdentityProviderTypeLDAP IdentityProviderType = "LDAP"
+)
+
 func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {
 	e2e.Logf("running command : oc %s %s", string(verb), strings.Join(args, " "))
 	res, err := oc.AsAdmin().WithoutNamespace().Run(string(verb)).Args(args...).Output()

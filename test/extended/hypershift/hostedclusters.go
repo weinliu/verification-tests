@@ -950,3 +950,36 @@ func (h *hostedCluster) updateHostedClusterAndCheck(oc *exutil.CLI, updateFunc f
 		return strings.Compare(doOcpReq(oc, OcpGet, true, "deployment", deployment, "-n", h.namespace+"-"+h.name, `-ojsonpath={.status.replicas}`), doOcpReq(oc, OcpGet, true, "deployment", deployment, "-n", h.namespace+"-"+h.name, `-ojsonpath={.status.readyReplicas}`))
 	}, LongTimeout, LongTimeout/10).Should(o.Equal(0), deployment+" is not ready")
 }
+
+// idpType: HTPasswd, GitLab, GitHub ...
+func (h *hostedCluster) checkIDPConfigReady(idpType IdentityProviderType, idpName string, secretName string) bool {
+	//check idpType by idpName
+	if idpType != doOcpReq(h.oc, OcpGet, false, "hostedcluster", h.name, "-n", h.namespace, "--ignore-not-found", fmt.Sprintf(`-ojsonpath={.spec.configuration.oauth.identityProviders[?(@.name=="%s")].type}`, idpName)) {
+		return false
+	}
+
+	//check configmap oauth-openshift
+	configYaml := doOcpReq(h.oc, OcpGet, false, "configmap", "oauth-openshift", "-n", h.namespace+"-"+h.name, "--ignore-not-found", `-ojsonpath={.data.config\.yaml}`)
+	if !strings.Contains(configYaml, fmt.Sprintf("name: %s", idpName)) {
+		return false
+	}
+	if !strings.Contains(configYaml, fmt.Sprintf("kind: %sIdentityProvider", idpType)) {
+		return false
+	}
+
+	//check secret name if secretName is not empty
+	if secretName != "" {
+		volumeName := doOcpReq(h.oc, OcpGet, false, "deploy", "oauth-openshift", "-n", h.namespace+"-"+h.name, "--ignore-not-found", fmt.Sprintf(`-ojsonpath={.spec.template.spec.volumes[?(@.secret.secretName=="%s")].name}`, secretName))
+		if !strings.Contains(volumeName, "idp-secret") {
+			return false
+		}
+	}
+	return true
+}
+
+// idpType: HTPasswd, GitLab, GitHub ...
+func (h *hostedCluster) pollCheckIDPConfigReady(idpType IdentityProviderType, idpName string, secretName string) func() bool {
+	return func() bool {
+		return h.checkIDPConfigReady(idpType, idpName, secretName)
+	}
+}
