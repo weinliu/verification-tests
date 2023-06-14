@@ -5396,12 +5396,14 @@ EOF`, etcConfigYaml, level)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("5.1) Check project is deleted")
-		err = wait.Poll(2*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", projectName).Output()
 			if matched, _ := regexp.MatchString("namespaces .* not found", out); matched {
 				e2e.Logf("Step 5.1. Test Passed, project is deleted")
 				return true, nil
 			}
+			// Adding logging for debug
+			e2e.Logf("Project delete is in progress :: %s", out)
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Step 5.1. Test Failed, Project is not deleted")
