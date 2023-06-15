@@ -422,6 +422,47 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkPrometheusConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "serviceMonitor/openshift-console/console-test-monitoring/0", true)
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-62636-Graduate alert overrides and alert relabelings to GA", func() {
+		var (
+			alertingRule       = filepath.Join(monitoringBaseDir, "alertingRule.yaml")
+			alertRelabelConfig = filepath.Join(monitoringBaseDir, "alertRelabelConfig.yaml")
+		)
+		g.By("delete the created AlertingRule/AlertRelabelConfig at the end of the case")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("AlertingRule", "example", "-n", "openshift-monitoring").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("AlertRelabelConfig", "watchdog", "-n", "openshift-monitoring").Execute()
+
+		g.By("check AlertingRule/AlertRelabelConfig apiVersion is v1")
+		result, explainErr := oc.WithoutNamespace().AsAdmin().Run("explain").Args("AlertingRule", "--api-version=monitoring.openshift.io/v1").Output()
+		o.Expect(explainErr).NotTo(o.HaveOccurred())
+		o.Expect(result).To(o.ContainSubstring("AlertingRule"))
+		o.Expect(result).To(o.ContainSubstring("monitoring.openshift.io/v1"))
+
+		result, explainErr = oc.WithoutNamespace().AsAdmin().Run("explain").Args("AlertRelabelConfig", "--api-version=monitoring.openshift.io/v1").Output()
+		o.Expect(explainErr).NotTo(o.HaveOccurred())
+		o.Expect(result).To(o.ContainSubstring("AlertRelabelConfig"))
+		o.Expect(result).To(o.ContainSubstring("monitoring.openshift.io/v1"))
+
+		g.By("create AlertingRule/AlertRelabelConfig under openshift-monitoring")
+		createResourceFromYaml(oc, "openshift-monitoring", alertingRule)
+		createResourceFromYaml(oc, "openshift-monitoring", alertRelabelConfig)
+
+		g.By("check AlertingRule/AlertRelabelConfig are created")
+		output, _ := oc.WithoutNamespace().Run("get").Args("AlertingRule/example", "-ojsonpath={.metadata.name}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("example"))
+		output, _ = oc.WithoutNamespace().Run("get").Args("AlertRelabelConfig/watchdog", "-ojsonpath={.metadata.name}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("watchdog"))
+
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("check the alert defined in AlertingRule could be found in thanos-querier API")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="ExampleAlert"}'`, token, `"alertname":"ExampleAlert"`, 2*platformLoadTime)
+
+		g.By("Watchdog alert, the alert label is changed from \"severity\":\"none\" to \"severity\":\"critical\" in alertmanager API")
+		checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?&filter={alertname="Watchdog"}`, token, `"severity":"critical"`, 2*platformLoadTime)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
