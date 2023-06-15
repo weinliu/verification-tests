@@ -2,14 +2,15 @@ package storage
 
 import (
 	"fmt"
-	g "github.com/onsi/ginkgo/v2"
-	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"github.com/tidwall/gjson"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -217,7 +218,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: jiasun@redhat.com
 	// OCP-44793 - [AWS-EBS-CSI-Driver-Operator] could update cloud credential secret automatically when it changes
 	g.It("ROSA-OSD_CCS-Author:jiasun-High-44793-[AWS-EBS-CSI-Driver-Operator] could update cloud credential secret automatically when it changes [Disruptive]", func() {
-		ccoMode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "kube-system", "secret/aws-creds", "-ojsonpath={.metadata.annotations.cloudcredential\\.openshift\\.io/mode}").Output()
+		ccoMode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "kube-system", "secret/aws-creds", "--ignore-not-found", "-ojsonpath={.metadata.annotations.cloudcredential\\.openshift\\.io/mode}").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		if !strings.Contains(ccoMode, "mint") {
 			g.Skip("Skipped: the cluster not satisfy the test scenario")
