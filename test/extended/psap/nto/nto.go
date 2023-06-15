@@ -1968,7 +1968,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Assert active and recommended profile (openshift-node-postgresql) match in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(openshift-node-postgresql\) match`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(openshift-node-postgresql\) match|static tuning from profile 'openshift-node-postgresql' applied`)
 	})
 
 	g.It("NonHyperShiftHOST-Author:liqcui-Medium-49705-Tuned net plugin handle net devices with n/a value for a channel. [Disruptive]", func() {
