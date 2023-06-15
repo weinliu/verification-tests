@@ -1002,6 +1002,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Pause mcp worker")
 		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		defer mcp.pause(false)
+		defer mcp.waitForComplete() // wait before unpausing, or an update will be triggered
+
 		mcp.pause(true)
 
 		g.By("Calculate number of existing KubeletConfigs")
@@ -1074,6 +1076,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Pause mcp worker")
 		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		defer mcp.pause(false)
+		defer mcp.waitForComplete() // wait before unpausing, or an update will be triggered
+
 		mcp.pause(true)
 
 		g.By("Calculate number of existing ContainerRuntimeConfigs")
