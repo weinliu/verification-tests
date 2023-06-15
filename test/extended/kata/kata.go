@@ -304,6 +304,10 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	})
 
 	g.It("Author:abhbaner-High-43620-validate podmetrics for pod running kata", func() {
+		if kataconfig.enablePeerPods {
+			g.Skip("skipping.  metrics are not available on pods with Peer Pods enabled")
+		}
+
 		defaultPodName := "example"
 
 		oc.SetupProject()
@@ -384,7 +388,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	})
 
 	// author: tbuskey@redhat.com
-	g.It("Author:tbuskey-High-43619-oc admin top pod works for pods that use kata runtime", func() {
+	g.It("Author:tbuskey-High-43619-oc admin top pod metrics works for pods that use kata runtime", func() {
+
+		if kataconfig.enablePeerPods {
+			g.Skip("skipping.  metrics are not in oc admin top pod with Peer Pods enabled")
+		}
 
 		oc.SetupProject()
 		var (
@@ -845,6 +853,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			podsChanged    = false
 		)
 
+		if kataconfig.enablePeerPods {
+			g.Skip("skipping. upgrade (channel changing) does not apply to Peer Pods")
+		}
+
+		// maybe osc-config/env exist but that doesn't make osc-config-upgrade exist
+		testrunUpgrade.exists = false
+		testrun.exists = false
+
 		// start with testrunInitial, not testrunDefault
 		g.By("Checking for configmap " + cmName)
 		testrunUpgrade, _, err = getTestRunConfigmap(oc, testrunInitial, cmNs, cmName)
@@ -913,6 +929,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 					logErrorAndFail(oc, fmt.Sprintf("Error: patching the subscription channel %v", subUpgrade), msg, err)
 				}
 
+				e2e.Logf("STEP patched subscription channel %v %v", msg, err)
+
 				// all pods restart & subscription gets recreated
 				msg, err = subscriptionIsFinished(oc, subUpgrade)
 				if err != nil || msg == "" {
@@ -960,7 +978,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			}
 
 		} else {
-			e2e.Logf("Upgrade will not be done: %v\n%v %v", testrunUpgrade, msg, err)
+			msg = fmt.Sprintf("\nSTEP skipping Upgrade will not be done: %v\n%v %v", testrunUpgrade, msg, err)
+			g.Skip(msg)
 		}
 
 		g.By("SUCCESS")

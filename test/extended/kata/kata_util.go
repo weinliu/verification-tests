@@ -466,6 +466,7 @@ func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, er
 func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, cmName string) (testrun TestrunConfigmap, msg string, err error) {
 	// set defaults
 	testrun = testrunDefault
+	testrun.exists = false
 
 	// icspNeeded is set if either of the Images has "brew.registry.redhat.io" in it
 
@@ -616,6 +617,7 @@ func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testr
 		val string
 	)
 	testrunEnv = testrunDefault
+	testrunEnv.exists = false
 
 	switch envPrefix {
 	case "OSCS":
