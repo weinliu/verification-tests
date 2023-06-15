@@ -1,7 +1,7 @@
 apiVersion: monitoring.openshift.io/v1
 kind: AlertingRule
 metadata:
-  name: example
+  name: monitoring-example
   namespace: openshift-monitoring
 spec:
   groups:

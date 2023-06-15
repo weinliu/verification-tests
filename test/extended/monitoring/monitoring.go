@@ -429,8 +429,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			alertRelabelConfig = filepath.Join(monitoringBaseDir, "alertRelabelConfig.yaml")
 		)
 		g.By("delete the created AlertingRule/AlertRelabelConfig at the end of the case")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("AlertingRule", "example", "-n", "openshift-monitoring").Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("AlertRelabelConfig", "watchdog", "-n", "openshift-monitoring").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("AlertingRule", "monitoring-example", "-n", "openshift-monitoring").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("AlertRelabelConfig", "monitoring-watchdog", "-n", "openshift-monitoring").Execute()
 
 		g.By("check AlertingRule/AlertRelabelConfig apiVersion is v1")
 		result, explainErr := oc.WithoutNamespace().AsAdmin().Run("explain").Args("AlertingRule", "--api-version=monitoring.openshift.io/v1").Output()
@@ -448,10 +448,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		createResourceFromYaml(oc, "openshift-monitoring", alertRelabelConfig)
 
 		g.By("check AlertingRule/AlertRelabelConfig are created")
-		output, _ := oc.WithoutNamespace().Run("get").Args("AlertingRule/example", "-ojsonpath={.metadata.name}", "-n", "openshift-monitoring").Output()
-		o.Expect(output).To(o.ContainSubstring("example"))
-		output, _ = oc.WithoutNamespace().Run("get").Args("AlertRelabelConfig/watchdog", "-ojsonpath={.metadata.name}", "-n", "openshift-monitoring").Output()
-		o.Expect(output).To(o.ContainSubstring("watchdog"))
+		output, _ := oc.WithoutNamespace().Run("get").Args("AlertingRule/monitoring-example", "-ojsonpath={.metadata.name}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("monitoring-example"))
+		output, _ = oc.WithoutNamespace().Run("get").Args("AlertRelabelConfig/monitoring-watchdog", "-ojsonpath={.metadata.name}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("monitoring-watchdog"))
 
 		g.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
