@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -186,5 +187,55 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		outputLogs, errLog := oc.AsAdmin().Run("logs").Args("deployment/dns-operator", "-n", "openshift-dns-operator", "-c", "dns-operator").Output()
 		o.Expect(errLog).NotTo(o.HaveOccurred())
 		o.Expect(outputLogs).To(o.ContainSubstring("level=info"))
+	})
+
+	// Bug: OCPBUGS-6829
+	// no dns operator namespace on HyperShift guest cluster so this case is not available
+	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-High-63512-Enbaling force_tcp for protocolStrategy field to allow DNS queries to send on TCP to upstream server [Disruptive]", func() {
+		var (
+			resourceName                = "dns.operator.openshift.io/default"
+			upstreamResolverPatch       = "[{\"op\":\"add\", \"path\":\"/spec/upstreamResolvers/protocolStrategy\", \"value\":\"TCP\"}]"
+			upstreamResolverPatchRemove = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/protocolStrategy\", \"value\":\"\"}]"
+			dnsForwardPluginPatch       = "[{\"op\":\"replace\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Sequential\",\"protocolStrategy\": \"TCP\",\"upstreams\":[\"8.8.8.8\"]},\"name\":\"test\",\"zones\":[\"mytest.ocp\"]}]}]"
+		)
+
+		g.By("Check the default dns operator config for “protocol strategy” is none")
+		output, err := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "force_tcp")).NotTo(o.BeTrue())
+
+		g.By("Patch dns operator with 'TCP' as protocol strategy for upstreamresolver")
+		podList := getAllDNSPodsNames(oc)
+		attrList := getAllCorefilesStat(oc, podList)
+		defer restoreDNSOperatorDefault(oc)
+		patchGlobalResourceAsAdmin(oc, resourceName, upstreamResolverPatch)
+		waitAllCorefilesUpdated(oc, attrList)
+
+		g.By("Check the upstreamresolver for “protocol strategy” is TCP")
+		output1, err1 := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output1, "force_tcp")).To(o.BeTrue())
+
+		g.By("Check the protocol strategy value as 'TCP' in Corefile of coredns under upstreamresolver")
+		keepSearchInAllDNSPods(oc, podList, "force_tcp")
+		//remove the patch from upstreamresolver
+		patchGlobalResourceAsAdmin(oc, resourceName, upstreamResolverPatchRemove)
+		output, err = oc.AsAdmin().Run("get").Args("dns.operator.openshift.io/default", "-o=jsonpath={.spec.upstreamResolvers.protocolStrategy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.BeEmpty())
+
+		g.By("Patch dns operator with 'TCP' as protocol strategy for forwardPlugin")
+		attrList1 := getAllCorefilesStat(oc, podList)
+		patchGlobalResourceAsAdmin(oc, resourceName, dnsForwardPluginPatch)
+		waitAllCorefilesUpdated(oc, attrList1)
+
+		g.By("Check the forwardPlugin for “protocol strategy” is TCP")
+		output2, err2 := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output2, "force_tcp")).To(o.BeTrue())
+
+		g.By("Check the protocol strategy value as 'TCP' in Corefile of coredns under forwardPlugin")
+		podList1 := getAllDNSPodsNames(oc)
+		keepSearchInAllDNSPods(oc, podList1, "force_tcp")
 	})
 })
