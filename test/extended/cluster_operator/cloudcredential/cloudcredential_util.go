@@ -164,11 +164,8 @@ func checkSTSStyle(oc *exutil.CLI, mode string) bool {
 	o.Expect(output).NotTo(o.BeEmpty())
 	credentials, _ := base64.StdEncoding.DecodeString(output)
 	credConfig := strings.Split(string(credentials), "\n")
-	if len(credConfig) != 3 {
-		return false
-	}
 	if mode == "manualpodidentity" {
-		return strings.Contains(credConfig[0], "[default]") && strings.Contains(credConfig[1], "role_arn") && strings.Contains(credConfig[2], "web_identity_token_file")
+		return strings.Contains(credConfig[0], "[default]") && strings.Contains(credConfig[1], "regional") && strings.Contains(credConfig[2], "role_arn") && strings.Contains(credConfig[3], "web_identity_token_file")
 	}
 	return strings.Contains(credConfig[0], "[default]") && strings.Contains(credConfig[1], "aws_access_key_id") && strings.Contains(credConfig[2], "aws_secret_access_key")
 }
