@@ -377,7 +377,7 @@ func getHAProxyVersion(oc *exutil.CLI) string {
 
 func getHAProxyRPMVersion(oc *exutil.CLI) string {
 	routerpod := getRouterPod(oc, "default")
-	haproxyOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "rpm -qa haproxy22").Output()
+	haproxyOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "rpm -qa | grep haproxy").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return haproxyOutput
 }
