@@ -4662,7 +4662,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-Author:jitli-High-40964-migrate packagemanifest to bundle", func() {
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-40964-migrate packagemanifest to bundle", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			tmpBasePath           = "/tmp/ocp-40964-" + getRandomString()
@@ -4739,7 +4739,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-Author:jitli-Critical-59885-Run bundle on different security level namespaces [Serial]", func() {
+	g.It("VMonly-ConnectedOnly-Author:jitli-Critical-59885-Run bundle on different security level namespaces [Serial]", func() {
 
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
