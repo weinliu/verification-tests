@@ -814,4 +814,55 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
 	})
 
+	g.It("NonPreRelease-Author:qiowang-Medium-64077-Verify metrics for ipsec enabled/disabled when configure it at runtime [Disruptive] [Slow]", func() {
+		var (
+			metricName = "ovnkube_master_ipsec_enabled"
+		)
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+		ipsecState := checkIPsec(oc)
+		if ipsecState == "{}" {
+			g.Skip("Skip testing, ipsec enabled when cluster installed, cannot configure ipsec at runtime!!!")
+		}
+
+		e2e.Logf("1. Enable IPsec at runtime")
+		defer configIPSecAtRuntime(oc, "disabled")
+		enableErr := configIPSecAtRuntime(oc, "enabled")
+		o.Expect(enableErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("2. Check metrics for IPsec enabled/disabled after enabling at runtime")
+		prometheusURL := "localhost:29102/metrics"
+		containerName := "kube-rbac-proxy"
+		ovnMasterPodName := getOVNKMasterPod(oc)
+		e2e.Logf("The expected value of the %s is 1", metricName)
+		ipsecEnabled := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			metricValueAfterEnabled := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName)
+			if metricValueAfterEnabled == "1" {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s when enabled IPSec and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(ipsecEnabled, fmt.Sprintf("Fail to get metric when enabled IPSec and the error is:%s", ipsecEnabled))
+
+		e2e.Logf("3. Disable IPsec at runtime")
+		disableErr := configIPSecAtRuntime(oc, "disabled")
+		o.Expect(disableErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("4. Check metrics for IPsec enabled/disabled after disabling at runtime")
+		ovnMasterPodName = getOVNKMasterPod(oc)
+		e2e.Logf("The expected value of the %s is 0", metricName)
+		ipsecDisabled := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			metricValueAfterDisabled := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName)
+			if metricValueAfterDisabled == "0" {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s when disabled IPSec and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(ipsecDisabled, fmt.Sprintf("Fail to get metric when disabled IPSec and the error is:%s", ipsecDisabled))
+	})
+
 })

@@ -1190,6 +1190,8 @@ func getOVNMetrics(oc *exutil.CLI, url string) string {
 func checkIPsec(oc *exutil.CLI) string {
 	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The ipsec state is === %v ===", output)
+	e2e.Logf("{} means ipsec is enabled, empty means ipsec is disabled")
 	return output
 }
 
@@ -2745,4 +2747,52 @@ func createSCTPserverOnNode(oc *exutil.CLI, pod_pmtrs map[string]string) (err er
 	// create ping pod for Microshift
 	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", podFileName).Output()
 	return err
+}
+
+// configure IPSec at runtime
+func configIPSecAtRuntime(oc *exutil.CLI, targetStatus string) (err error) {
+	var targetConfig, currentStatus string
+	ipsecState := checkIPsec(oc)
+	if ipsecState == "{}" {
+		currentStatus = "enabled"
+	} else if ipsecState == "" {
+		currentStatus = "disabled"
+	}
+	if currentStatus == targetStatus {
+		e2e.Logf("The IPSec is already in %v state", targetStatus)
+		return
+	} else if targetStatus == "enabled" {
+		targetConfig = "true"
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("networks.operator.openshift.io", "cluster", "-p", "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipsecConfig\":{ }}}}}", "--type=merge").Output()
+	} else if targetStatus == "disabled" {
+		targetConfig = "false"
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("networks.operator.openshift.io", "cluster", "-p", "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipsecConfig\":null}}}}", "--type=merge").Output()
+	}
+
+	if err != nil {
+		e2e.Failf("Failed to configure IPSec at runtime")
+	} else {
+		// need to restart ovnkube-master "north" leader after configuring ipsec to make sure use correct "north" leader
+		ovnLeaderpod := getOVNLeaderPod(oc, "north")
+		removeResource(oc, true, true, "pod", ovnLeaderpod, "-n", "openshift-ovn-kubernetes")
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+		checkErr := checkIPSecInDB(oc, targetConfig)
+		exutil.AssertWaitPollNoErr(checkErr, "check IPSec configuration failed")
+		e2e.Logf("The IPSec is %v in the cluster.", targetStatus)
+	}
+	return err
+}
+
+// check IPSec configuration in northd, targetConfig should be "true" or "false"
+func checkIPSecInDB(oc *exutil.CLI, targetConfig string) error {
+	ovnLeaderpod := getOVNLeaderPod(oc, "north")
+	return wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		getIPSec, getErr := execCommandInSpecificPod(oc, "openshift-ovn-kubernetes", ovnLeaderpod, "ovn-nbctl --no-leader-only get nb_global . ipsec | grep "+targetConfig)
+		o.Expect(getErr).NotTo(o.HaveOccurred())
+		if strings.Contains(getIPSec, targetConfig) {
+			return true, nil
+		}
+		e2e.Logf("Can't get expected ipsec configuration and try again")
+		return false, nil
+	})
 }
