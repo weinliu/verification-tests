@@ -1,6 +1,8 @@
 package util
 
 import (
+	"fmt"
+	"os"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -8,6 +10,34 @@ import (
 	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
+
+// GetMirrorRegistry returns mirror registry from icsp
+func GetMirrorRegistry(oc *CLI) (registry string, err error) {
+	if registry, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy",
+		"-o", "jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}").Output(); err == nil {
+		registry, _, _ = strings.Cut(registry, "/")
+	} else {
+		err = fmt.Errorf("failed to acquire mirror registry from ICSP: %v", err)
+	}
+	return
+}
+
+// GetUserCA dump user certificate from user-ca-bundle configmap to File
+func GetUserCAToFile(oc *CLI, filename string) (err error) {
+	cert, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", "openshift-config",
+		"user-ca-bundle", "-o", "jsonpath={.data.ca-bundle\\.crt}").Output()
+	if err != nil {
+		err = fmt.Errorf("failed to acquire user ca bundle from configmap: %v", err)
+		return
+	} else {
+		err = os.WriteFile(filename, []byte(cert), 0644)
+		if err != nil {
+			err = fmt.Errorf("failed to dump cert to file: %v", err)
+			return
+		}
+		return
+	}
+}
 
 // GetClusterVersion returns the cluster version as string value (Ex: 4.8) and cluster build (Ex: 4.8.0-0.nightly-2021-09-28-165247)
 func GetClusterVersion(oc *CLI) (string, string, error) {

@@ -1,6 +1,7 @@
 package osus
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -95,4 +96,85 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		exutil.AssertWaitPollNoErr(err, "updateservice operator is not uninstalled")
 	})
 
+})
+
+var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc          = exutil.NewCLI("osusinstace", exutil.KubeConfigPath())
+		testDataDir string
+		ogTemp      string
+		subTemp     string
+		operatorPod string
+	)
+
+	g.BeforeEach(func() {
+		testDataDir = exutil.FixturePath("testdata", "ota/osus")
+		ogTemp = filepath.Join(testDataDir, "operatorgroup.yaml")
+		subTemp = filepath.Join(testDataDir, "subscription.yaml")
+		operatorPod = "name=updateservice-operator"
+
+		g.By("Install OSUS operator")
+
+		oc.SetupProject()
+
+		og := operatorGroup{
+			name:      "osus-og",
+			namespace: oc.Namespace(),
+			template:  ogTemp,
+		}
+
+		sub := subscription{
+			name:            "osus-sub",
+			namespace:       oc.Namespace(),
+			channel:         "v1",
+			approval:        "Automatic",
+			operatorName:    "cincinnati-operator",
+			sourceName:      "qe-app-registry",
+			sourceNamespace: "openshift-marketplace",
+			template:        subTemp,
+		}
+		e2e.Logf("osus project is %s", oc.Namespace())
+
+		og.create(oc)
+		sub.create(oc)
+		waitForPodReady(oc, operatorPod)
+	})
+
+	//author: yanyang@redhat.com
+	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:yanyang-High-62641-install/uninstall updateservice instance using oc-mirror [Disruptive][Serial]", func() {
+		g.By("Mirror OCP release and graph data image by oc-mirror")
+		registry, err := exutil.GetMirrorRegistry(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Registry is %s", registry)
+
+		dirname := "/tmp/case62641"
+		defer os.RemoveAll(dirname)
+		err = os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		outdir, err := ocmirror(oc, registry+"/oc-mirror", dirname)
+		e2e.Logf("oc mirror output dir is %s", outdir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		certFile := dirname + "/cert"
+		err = exutil.GetUserCAToFile(oc, certFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc)
+		err = trustCert(oc, registry, certFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Install OSUS instance")
+		defer uninstallOSUSApp(oc)
+		err = installOSUSAppOCMirror(oc, outdir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Verify OSUS instance works")
+		err = verifyOSUS(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })

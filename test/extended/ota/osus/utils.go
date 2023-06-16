@@ -1,8 +1,14 @@
 package osus
 
 import (
+	"crypto/tls"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -93,4 +99,236 @@ func (og *operatorGroup) delete(oc *exutil.CLI) {
 
 func (sub *subscription) delete(oc *exutil.CLI) {
 	removeResource(oc, "-n", sub.namespace, "subscription", sub.name)
+}
+
+// Check if pod is running
+func waitForPodReady(oc *exutil.CLI, pod string) {
+	e2e.Logf("Waiting for %s pod creating...", pod)
+	pollErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector="+pod, "-n", oc.Namespace()).Output()
+		if err != nil || strings.Contains(cmdOut, "No resources found") {
+			e2e.Logf("error: %v, keep trying!", err)
+			return false, nil
+		}
+		return true, nil
+	})
+
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("pod with name=%s is not found", pod))
+
+	e2e.Logf("Waiting for %s pod running...", pod)
+	pollErr = wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
+		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector="+pod, "-n", oc.Namespace(), "-o=jsonpath={.items[*].status.phase}").Output()
+		if err != nil {
+			e2e.Logf("pod status: %s, try again", cmdOut)
+			return false, nil
+		}
+		state := strings.Split(cmdOut, " ")
+		for _, s := range state {
+			if strings.Compare(s, "Running") != 0 {
+				e2e.Logf("pod status: %s, try again", s)
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("pod %s is not running", pod))
+}
+
+func copyFile(source string, dest string) {
+	bytesRead, err := ioutil.ReadFile(source)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = ioutil.WriteFile(dest, bytesRead, 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Set ENV for oc-mirror credential
+func locatePodmanCred(oc *exutil.CLI, dst string) (err error) {
+	e2e.Logf("Setting env for oc-mirror credential")
+	if err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dst, "--confirm").Execute(); err != nil {
+		err = fmt.Errorf("extract pull-secret failed: %v", err)
+		return
+	}
+	envDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
+	containerDir := envDir + "/containers/"
+	key := "XDG_RUNTIME_DIR"
+	currentRuntime, ex := os.LookupEnv(key)
+	if !ex {
+		if err = os.MkdirAll(containerDir, 0700); err != nil {
+			err = fmt.Errorf("make dir failed: %v", err)
+			return
+		}
+		os.Setenv(key, envDir)
+		copyFile(dst+"/"+".dockerconfigjson", containerDir+"auth.json")
+		return
+	}
+	_, err = os.Stat(currentRuntime + "containers/auth.json")
+	if os.IsNotExist(err) {
+		if err = os.MkdirAll(currentRuntime+"containers", 0700); err != nil {
+			err = fmt.Errorf("make dir failed: %v", err)
+			return
+		}
+		copyFile(dst+"/"+".dockerconfigjson", containerDir+"auth.json")
+		return
+	}
+	return
+}
+
+// Mirror OCP release and graph data image to local registry
+// Return the output direcotry which contains the manifests
+func ocmirror(oc *exutil.CLI, registry string, dirname string) (string, error) {
+	imagesetTemplate := exutil.FixturePath("testdata", "ota", "osus", "imageset-config.yaml")
+	sedCmd := fmt.Sprintf("sed -i 's|REGISTRY|%s|g' %s", registry, imagesetTemplate)
+	// e2e.Logf(sedCmd)
+	if err := exec.Command("bash", "-c", sedCmd).Run(); err != nil {
+		e2e.Logf("Update the imageset template failed: %v", err.Error())
+		return "", err
+	}
+	// file, _ := os.Open(imagesetTemplate)
+	// b, _ := ioutil.ReadAll(file)
+	// e2e.Logf(string(b))
+
+	if err := os.Chdir(dirname); err != nil {
+		e2e.Logf("Failed to cd %s: %v", dirname, err.Error())
+		return "", err
+	}
+	output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imagesetTemplate, "--ignore-history", "docker://"+registry, "--dest-skip-tls").Output()
+	if err != nil {
+		e2e.Logf("Mirror images failed: %v", err.Error())
+		return "", err
+	}
+	e2e.Logf("output of oc-mirror is %s", output)
+	substrings := strings.Split(output, " ")
+	outdir := dirname + "/" + substrings[len(substrings)-1]
+	return outdir, nil
+}
+
+// Check if image-registry is healthy
+func checkCOHealth(oc *exutil.CLI, co string) bool {
+	e2e.Logf("Checking CO %s is healthy...", co)
+	status := "TrueFalseFalse"
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", co, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+	if err != nil {
+		e2e.Logf("Get co status failed: %v", err.Error())
+		return false
+	}
+	return strings.Contains(output, status)
+}
+
+// Configure the Registry Certificate as trusted for cincinnati
+func trustCert(oc *exutil.CLI, registry string, cert string) (err error) {
+	var output string
+	certRegistry := registry
+	before, after, found := strings.Cut(registry, ":")
+	if found {
+		certRegistry = before + ".." + after
+	}
+
+	if err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-config", "configmap", "trusted-ca", "--from-file="+certRegistry+"="+cert, "--from-file=updateservice-registry="+cert).Execute(); err != nil {
+		err = fmt.Errorf("create trust-ca configmap failed: %v", err)
+		return
+	}
+	if err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": "trusted-ca"}}}`, "--type=merge").Execute(); err != nil {
+		err = fmt.Errorf("patch image.config.openshift.io/cluster failed: %v", err)
+		return
+	}
+	waitErr := wait.Poll(30*time.Second, 10*time.Minute, func() (bool, error) {
+		registryHealth := checkCOHealth(oc, "image-registry")
+		if registryHealth {
+			return true, nil
+		}
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
+		e2e.Logf("Waiting for image-registry coming ready...")
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", output))
+	return nil
+}
+
+// Install OSUS instance using manifests generated by oc-mirror
+func installOSUSAppOCMirror(oc *exutil.CLI, outdir string) (err error) {
+	e2e.Logf("Install OSUS instance")
+	if err = oc.AsAdmin().Run("apply").Args("-f", outdir).Execute(); err != nil {
+		err = fmt.Errorf("install osus instance failed: %v", err)
+		return
+	}
+	waitForPodReady(oc, "app=update-service-oc-mirror")
+	return nil
+}
+
+// Returns OSUS instance name
+func getOSUSApp(oc *exutil.CLI) (instance string, err error) {
+	e2e.Logf("Get OSUS instance")
+	instance, err = oc.AsAdmin().Run("get").Args("updateservice", "-o=jsonpath={.items[].metadata.name}").Output()
+	if err != nil {
+		err = fmt.Errorf("get OSUS instance failed: %v", err)
+	}
+	return
+}
+
+// Uninstall OSUS instance
+func uninstallOSUSApp(oc *exutil.CLI) (err error) {
+	e2e.Logf("Uninstall OSUS instance")
+	instance, err := getOSUSApp(oc)
+	if err != nil {
+		return
+	}
+	_, err = oc.AsAdmin().Run("delete").Args("updateservice", instance).Output()
+	if err != nil {
+		err = fmt.Errorf("uninstall OSUS instance failed: %v", err)
+		return
+	}
+	return nil
+}
+
+// Verify the OSUS application works
+func verifyOSUS(oc *exutil.CLI) (err error) {
+	e2e.Logf("Verify the OSUS works")
+	instance, err := getOSUSApp(oc)
+	if err != nil {
+		return
+	}
+	PEURI, err := oc.AsAdmin().Run("get").Args("-o", "jsonpath={.status.policyEngineURI}", "updateservice", instance).Output()
+	if err != nil {
+		err = fmt.Errorf("get policy engine URI failed: %v", err)
+		return
+	}
+	graphURI := PEURI + "/api/upgrades_info/v1/graph"
+
+	transCfg := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: transCfg}
+
+	response, err := client.Get(graphURI + "?channel=stable-4.13")
+
+	if err != nil {
+		err = fmt.Errorf("reach graph URI failed %v", err)
+		return
+	}
+
+	e2e.Logf("The http status code we got is: %v", response.StatusCode)
+
+	if response.StatusCode != 200 {
+		e2e.Logf("Graph URI is not active")
+		return fmt.Errorf("graph URI is not reachable")
+	}
+	return nil
+}
+
+func restoreAddCA(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config", "configmap", "trusted-ca").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	var message string
+	err = oc.AsAdmin().Run("patch").Args("image.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": "registry-config"}}}`, "--type=merge").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+		registryHealth := checkCOHealth(oc, "image-registry")
+		if registryHealth {
+			return true, nil
+		}
+		message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
+		e2e.Logf("Wait for image-registry coming ready")
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", message))
 }
