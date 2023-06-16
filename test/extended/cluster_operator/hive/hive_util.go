@@ -789,13 +789,17 @@ func printProvisionPodLogs(oc *exutil.CLI, provisionPodOutput, namespace string)
 	}
 }
 
-func getProvisionPodName(oc *exutil.CLI, cdName, namespace string) string {
-	provisionPodName, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=provision", "-l", "hive.openshift.io/cluster-deployment-name="+cdName, "-n", namespace, "-o=jsonpath={.items[0].metadata.name}").Outputs()
+func getProvisionPodNames(oc *exutil.CLI, cdName, namespace string) (provisionPodNames []string) {
+	// For "kubectl get", the default sorting order is alphabetical
+	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=provision", "-l", "hive.openshift.io/cluster-deployment-name="+cdName, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Outputs()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(provisionPodName).To(o.ContainSubstring("provision"))
-	o.Expect(provisionPodName).To(o.ContainSubstring(cdName))
+	for _, provisionPodName := range strings.Split(stdout, " ") {
+		o.Expect(provisionPodName).To(o.ContainSubstring("provision"))
+		o.Expect(provisionPodName).To(o.ContainSubstring(cdName))
+		provisionPodNames = append(provisionPodNames, provisionPodName)
+	}
 
-	return provisionPodName
+	return
 }
 
 func getDeprovisionPodName(oc *exutil.CLI, cdName, namespace string) string {

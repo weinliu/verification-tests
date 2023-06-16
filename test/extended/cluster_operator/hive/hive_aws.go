@@ -1330,7 +1330,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		g.By("test OCP-23308: Hive install log does not contain admin credentials, but contains REDACTED LINE OF OUTPUT")
-		provisionPodName := getProvisionPodName(oc, cdName, oc.Namespace())
+		provisionPodName := getProvisionPodNames(oc, cdName, oc.Namespace())[0]
 		cmd, stdout, err := oc.Run("logs").Args("-f", provisionPodName, "-c", "hive").BackgroundRC()
 		defer cmd.Process.Kill()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1667,6 +1667,122 @@ spec:
 		difference := dnsNotReadyTimedOuTimestamp.Sub(creationTimestamp)
 		e2e.Logf("default timeout is %v mins", difference.Minutes())
 		o.Expect(difference.Minutes()).Should(o.BeNumerically(">=", 10))
+	})
+
+	//author: fxie@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run | grep "23676" | ./bin/extended-platform-tests run --timeout 40m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:fxie-High-23676-[AWS]Create cluster with master terminated by manipulation[Serial]", func() {
+		testCaseID := "23676"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+
+		g.By("Creating Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		g.By("Creating ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 3,
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Getting infraID from CD...")
+		var infraID string
+		var err error
+		getInfraIDFromCD := func() bool {
+			infraID, _, err = oc.AsAdmin().Run("get").Args("cd", cdName, "-o=jsonpath={.spec.clusterMetadata.infraID}").Outputs()
+			return err == nil && strings.HasPrefix(infraID, cdName)
+		}
+		o.Eventually(getInfraIDFromCD).WithTimeout(10 * time.Minute).WithPolling(5 * time.Second).Should(o.BeTrue())
+		e2e.Logf("Found infraID = %v", infraID)
+
+		// Get AWS client
+		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		ec2Client := ec2.NewFromConfig(cfg)
+
+		g.By("Waiting until the master VMs are created...")
+		var describeInstancesOutput *ec2.DescribeInstancesOutput
+		waitUntilMasterVMCreated := func() bool {
+			describeInstancesOutput, err = ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
+				Filters: []types.Filter{
+					{
+						Name: aws.String("tag:Name"),
+						// Globbing leads to filtering AFTER returning a page of instances
+						// This results in the necessity of looping through pages of instances,
+						// i.e. some extra complexity.
+						Values: []string{infraID + "-master-0", infraID + "-master-1", infraID + "-master-2"},
+					},
+				},
+				MaxResults: aws.Int32(6),
+			})
+			return err == nil && len(describeInstancesOutput.Reservations) == 3
+		}
+		o.Eventually(waitUntilMasterVMCreated).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		// Terminate all master VMs so the Kubernetes API is never up. Provision may fail at earlier stages though.
+		g.By("Terminating the master VMs...")
+		var instancesToTerminate []string
+		for _, reservation := range describeInstancesOutput.Reservations {
+			instancesToTerminate = append(instancesToTerminate, *reservation.Instances[0].InstanceId)
+		}
+		_, err = ec2Client.TerminateInstances(context.Background(), &ec2.TerminateInstancesInput{
+			InstanceIds: instancesToTerminate,
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Terminating master VMs %v", instancesToTerminate)
+
+		// The stage at which provision fails is not guaranteed. Here we just make sure provision actually fails.
+		g.By("Waiting for the first provision Pod to fail...")
+		provisionPod1 := getProvisionPodNames(oc, cdName, oc.Namespace())[0]
+		newCheck("expect", "get", asAdmin, requireNS, compare, "Failed", ok, 1800, []string{"pod", provisionPod1, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Waiting for the second provision Pod to be created...")
+		var provisionPod2 string
+		waitForProvisionPod2 := func() bool {
+			provisionPodNames := getProvisionPodNames(oc, cdName, oc.Namespace())
+			if len(provisionPodNames) > 1 {
+				provisionPod2 = provisionPodNames[1]
+				return true
+			}
+			return false
+		}
+		o.Eventually(waitForProvisionPod2).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		g.By(fmt.Sprintf("Making sure provision Pod 2 (%s) cleans up the resources created in the previous attempt...", provisionPod2))
+		cmd, stdout, err := oc.Run("logs").Args("-f", provisionPod2, "-c", "hive").BackgroundRC()
+		defer cmd.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		f := stdout.(*os.File)
+		defer f.Close()
+		targetLines := []string{"cleaning up resources from previous provision attempt"}
+		// Extract the msg part of each line of log if exists
+		extractMsg := func(line string) string {
+			if idx := strings.Index(line, `msg="`); idx >= 0 {
+				idx2 := strings.Index(line[idx+5:], `"`)
+				return line[idx+5 : idx+5+idx2]
+			}
+			return ""
+		}
+		targetFound := assertLogs(f, targetLines, extractMsg, 10*time.Minute)
+		o.Expect(targetFound).To(o.BeTrue())
 	})
 
 	//author: fxie@redhat.com
