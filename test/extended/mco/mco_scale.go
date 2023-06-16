@@ -42,6 +42,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		preChecks(oc)
 	})
+
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-LongDuration-High-63894-Scaleup using 4.1 cloud image[Disruptive]", func() {
 		var (
 			newMsName     = "mco-tc-63894-cloned"
@@ -55,26 +56,22 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		defer func() {
 			logger.Infof("Start TC defer block")
 			newMs := NewMachineSet(oc.AsAdmin(), MachineAPINamespace, newMsName)
-			clonedSecret := NewSecret(oc.AsAdmin(), MachineAPINamespace, secretPrefix+newMsName)
-			if newMs.Exists() {
-				logger.Infof("Scaling %s machineset to zero", newMsName)
-				_ = newMs.ScaleTo(0)
-
-				logger.Infof("Waiting %s machineset for being ready", newMsName)
-				_ = newMs.WaitUntilReady("15m")
-
-				logger.Infof("Removing %s machineset", newMsName)
-				_ = newMs.Delete()
-				o.Eventually(wMcp.GetNodesOrFail, "5m", "30s").Should(o.HaveLen(initialNumWorkers),
-					"The the number of worker nodes should not have changed.\n%s", wMcp.PrettyString())
+			errors := o.InterceptGomegaFailures(func() { removeClonedMachineSet(newMs, wMcp, initialNumWorkers) }) // We don't want gomega to fail and stop the deferred cleanup process
+			if len(errors) != 0 {
+				logger.Infof("There were errors restoring the original MachineSet resources in the cluster")
+				for _, e := range errors {
+					logger.Errorf(e)
+				}
 			}
-			if clonedSecret.Exists() {
-				_ = clonedSecret.Delete()
-			}
+
+			// We don't want the test to pass if there were errors while restoring the inital state
+			o.Expect(len(errors)).To(o.BeZero(),
+				"There were %d errors while recovering the cluster's initial state", len(errors))
+
 			logger.Infof("End TC defer block")
 		}()
 
-		newMs := cloneMachineConfig(oc.AsAdmin(), newMsName, amiVersion, useIgnitionV2)
+		newMs := cloneMachineSet(oc.AsAdmin(), newMsName, amiVersion, useIgnitionV2)
 
 		g.By("Scale MachineSet up")
 		logger.Infof("Scaling up machineset %s", newMs.GetName())
@@ -91,10 +88,160 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		wMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
+		g.By("Scale down and remove the cloned Machineset")
+		removeClonedMachineSet(newMs, wMcp, initialNumWorkers)
+		logger.Infof("OK!\n")
+
+	})
+
+	g.It("Author:sregidor-NonPreRelease-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
+		var (
+			newMsName  = "copied-machineset-modified-tc-52822"
+			kcName     = "change-maxpods-kubelet-config"
+			kcTemplate = generateTemplateAbsolutePath(kcName + ".yaml")
+			crName     = "change-ctr-cr-config"
+			crTemplate = generateTemplateAbsolutePath(crName + ".yaml")
+			mcName     = "generic-config-file-test-52822"
+			mcpWorker  = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			// Set the 4.5 boot image ami for east-2 zone.
+			// the right ami should be selected from here https://github.com/openshift/installer/blob/release-4.5/data/data/rhcos.json
+			amiVersion    = "ami-0ba8d5168e13bbcce"
+			useIgnitionV2 = true // 4.5 version uses ignition V2
+			numNewNodes   = 1    // the number of nodes scaled up in the new Machineset
+		)
+
+		initialNumWorkers := len(wMcp.GetNodesOrFail())
+
+		defer func() {
+			logger.Infof("Start TC defer block")
+			newMs := NewMachineSet(oc.AsAdmin(), MachineAPINamespace, newMsName)
+			errors := o.InterceptGomegaFailures(func() { // We don't want gomega to fail and stop the deferred cleanup process
+				removeClonedMachineSet(newMs, wMcp, initialNumWorkers)
+
+				cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
+				if cr.Exists() {
+					logger.Infof("Removing ContainerRuntimeConfig %s", cr.GetName())
+					o.Expect(cr.Delete()).To(o.Succeed(), "Error removing %s", cr)
+				}
+				kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+				if kc.Exists() {
+					logger.Infof("Removing KubeletConfig %s", kc.GetName())
+					o.Expect(kc.Delete()).To(o.Succeed(), "Error removing %s", kc)
+				}
+
+				// MachineConfig struct has not been refactored to compose the "Resource" struct
+				// so there is no "Exists" method available. Use it after refactoring MachineConfig
+				mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+				logger.Infof("Removing machineconfig %s", mcName)
+				mc.delete()
+
+			})
+
+			if len(errors) != 0 {
+				logger.Infof("There were errors restoring the original MachineSet resources in the cluster")
+				for _, e := range errors {
+					logger.Errorf(e)
+				}
+			}
+
+			logger.Infof("Waiting for worker pool to be updated")
+			mcpWorker.waitForComplete()
+
+			// We don't want the test to pass if there were errors while restoring the inital state
+			o.Expect(len(errors)).To(o.BeZero(),
+				"There were %d errors while recovering the cluster's initial state", len(errors))
+
+			logger.Infof("End TC defer block")
+		}()
+
+		// Duplicate an existing MachineSet
+		newMs := cloneMachineSet(oc.AsAdmin(), newMsName, amiVersion, useIgnitionV2)
+
+		// KubeletConfig
+		g.By("Create KubeletConfig")
+		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+		kc.create()
+		kc.waitUntilSuccess("10s")
+		logger.Infof("OK!\n")
+
+		// ContainterRuntimeConfig
+		g.By("Create ContainterRuntimeConfig")
+		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
+		cr.create()
+		cr.waitUntilSuccess("10s")
+		logger.Infof("OK!\n")
+
+		// Generic machineconfig
+		g.By("Create generic config file")
+		genericConfigFilePath := "/etc/test-52822"
+		genericConfig := "config content for test case 52822"
+
+		fileConfig := getURLEncodedFileConfig(genericConfigFilePath, genericConfig, "420")
+		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
+		errCreate := template.Create("-p", "NAME="+mcName, "-p", "POOL=worker", "-p", fmt.Sprintf("FILES=[%s]", fileConfig))
+		o.Expect(errCreate).NotTo(o.HaveOccurred(), "Error creating MachineConfig %s", mcName)
+		logger.Infof("OK!\n")
+
+		// Wait for all pools to apply the configs
+		g.By("Wait for worker MCP to be updated")
+		mcpWorker.waitForComplete()
+		logger.Infof("OK!\n")
+
+		// Scale up the MachineSet
+		g.By("Scale MachineSet up")
+		logger.Infof("Scaling up machineset %s", newMs.GetName())
+		scaleErr := newMs.ScaleTo(numNewNodes)
+		o.Expect(scaleErr).NotTo(o.HaveOccurred(), "Error scaling up MachineSet %s", newMs.GetName())
+
+		logger.Infof("Waiting %s machineset for being ready", newMsName)
+		o.Eventually(newMs.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", newMs.GetName())
+		logger.Infof("OK!\n")
+
+		g.By("Check that worker pool is increased and updated")
+		o.Eventually(wMcp.GetNodesOrFail, "5m", "30s").Should(o.HaveLen(initialNumWorkers+numNewNodes),
+			"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
+
+		// Verify that the scaled nodes has been configured properly
+		g.By("Check config in the new node")
+		newNodes, nErr := newMs.GetNodes()
+		o.Expect(nErr).NotTo(o.HaveOccurred(), "Error getting the nodes created by MachineSet %s", newMs.GetName())
+		o.Expect(newNodes).To(o.HaveLen(numNewNodes), "Only %d nodes should have been created by MachineSet %s", numNewNodes, newMs.GetName())
+		newNode := newNodes[0]
+		logger.Infof("New node: %s", newNode.GetName())
+		logger.Infof("OK!\n")
+
+		g.By("Check kubelet config")
+		kcFile := NewRemoteFile(*newNode, "/etc/kubernetes/kubelet.conf")
+		kcrErr := kcFile.Fetch()
+		o.Expect(kcrErr).NotTo(o.HaveOccurred(), "Error reading kubelet config in node %s", newNode.GetName())
+		o.Expect(kcFile.GetTextContent()).Should(o.ContainSubstring("\"maxPods\": 500"),
+			"File /etc/kubernetes/kubelet.conf has not the expected content")
+		logger.Infof("OK!\n")
+
+		g.By("Check container runtime config")
+		crFile := NewRemoteFile(*newNode, "/etc/containers/storage.conf")
+		crrErr := crFile.Fetch()
+		o.Expect(crrErr).NotTo(o.HaveOccurred(), "Error reading container runtime config in node %s", newNode.GetName())
+		o.Expect(crFile.GetTextContent()).Should(o.ContainSubstring("size = \"8G\""),
+			"File /etc/containers/storage.conf has not the expected content")
+		logger.Infof("OK!\n")
+
+		g.By("Check generic machine config")
+		cFile := NewRemoteFile(*newNode, genericConfigFilePath)
+		crErr := cFile.Fetch()
+		o.Expect(crErr).NotTo(o.HaveOccurred(), "Error reading generic config file in node %s", newNode.GetName())
+		o.Expect(cFile.GetTextContent()).Should(o.Equal(genericConfig),
+			"File %s has not the expected content", genericConfigFilePath)
+		logger.Infof("OK!\n")
+
+		g.By("Scale down and remove the cloned Machineset")
+		removeClonedMachineSet(newMs, wMcp, initialNumWorkers)
+		logger.Infof("OK!\n")
+
 	})
 })
 
-func cloneMachineConfig(oc *exutil.CLI, newMsName, amiVersion string, useIgnitionV2 bool) *MachineSet {
+func cloneMachineSet(oc *exutil.CLI, newMsName, amiVersion string, useIgnitionV2 bool) *MachineSet {
 	var (
 		newSecretName = secretPrefix + newMsName
 	)
@@ -139,4 +286,32 @@ func cloneMachineConfig(oc *exutil.CLI, newMsName, amiVersion string, useIgnitio
 	logger.Infof("OK!\n")
 
 	return newMs
+}
+
+func removeClonedMachineSet(ms *MachineSet, wMcp *MachineConfigPool, expectedNumWorkers int) {
+	if ms.Exists() {
+		logger.Infof("Scaling %s machineset to zero", ms.GetName())
+		o.Expect(ms.ScaleTo(0)).To(o.Succeed(),
+			"Error scaling MachineSet %s to 0", ms.GetName())
+
+		logger.Infof("Waiting %s machineset for being ready", ms.GetName())
+		o.Eventually(ms.GetIsReady, "1s", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", ms.GetName())
+
+		logger.Infof("Removing %s machineset", ms.GetName())
+		o.Expect(ms.Delete()).To(o.Succeed(),
+			"Error deleting MachineSet %s", ms.GetName())
+
+		if expectedNumWorkers >= 0 {
+			g.By("Check that worker pool is increased and updated")
+			o.Eventually(wMcp.GetNodes, "5m", "30s").Should(o.HaveLen(expectedNumWorkers),
+				"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
+		}
+	}
+
+	clonedSecret := NewSecret(ms.oc, MachineAPINamespace, secretPrefix+ms.GetName())
+	if clonedSecret.Exists() {
+		logger.Infof("Removing %s secret", clonedSecret)
+		o.Expect(clonedSecret.Delete()).To(o.Succeed(),
+			"Error deleting  %s", ms.GetName())
+	}
 }

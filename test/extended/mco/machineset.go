@@ -58,13 +58,25 @@ func (ms MachineSet) AddToScale(delta int) error {
 
 // GetIsReady returns true the MachineSet instances are ready
 func (ms MachineSet) GetIsReady() bool {
-	configuredReplicas, err := strconv.Atoi(ms.GetOrFail(`{.spec.replicas}`))
+	configuredReplicasString, err := ms.Get(`{.spec.replicas}`)
+	if err != nil {
+		logger.Infof("Cannot get configured replicas. Err: %s", err)
+		return false
+	}
+
+	configuredReplicas, err := strconv.Atoi(configuredReplicasString)
 	if err != nil {
 		logger.Infof("Could not parse configured replicas. Error: %s", err)
 		return false
 	}
 
-	status := JSON(ms.GetOrFail(`{.status}`))
+	statusString, err := ms.Get(`{.status}`)
+	if err != nil {
+		logger.Infof("Cannot get status. Err: %s", err)
+		return false
+	}
+
+	status := JSON(statusString)
 	logger.Infof("status %s", status)
 	replicasData := status.Get("replicas")
 	readyReplicasData := status.Get("readyReplicas")
@@ -92,7 +104,10 @@ func (ms MachineSet) GetIsReady() bool {
 
 	logger.Infof("Replicas %d, readyReplicas %d", replicas, readyReplicas)
 
-	return (replicas == readyReplicas) && (replicas == configuredReplicas)
+	replicasAreReady := replicas == readyReplicas
+	replicasAreConfigured := replicas == configuredReplicas
+
+	return replicasAreReady && replicasAreConfigured
 }
 
 // GetMachines returns a slice with the machines created for this MachineSet

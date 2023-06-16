@@ -178,7 +178,11 @@ func (mcp *MachineConfigPool) getNodesWithLabels(extraLabels string) ([]Node, er
 	mcp.oc.NotShowInfo()
 	defer mcp.oc.SetShowInfo()
 
-	labels := JSON(mcp.GetOrFail(`{.spec.nodeSelector.matchLabels}`))
+	labelsString, err := mcp.Get(`{.spec.nodeSelector.matchLabels}`)
+	if err != nil {
+		return nil, err
+	}
+	labels := JSON(labelsString)
 	o.Expect(labels.Exists()).Should(o.BeTrue(), fmt.Sprintf("The pool %s has no machLabels value defined", mcp.GetName()))
 
 	nodeList := NewNodeList(mcp.oc)
