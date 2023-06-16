@@ -16,6 +16,8 @@ objects:
       lokistack:
         name: ${LOKISTACKNAME}
       type: lokistack
+    visualization:
+      type: ocp-console
 parameters:
   - name: NAME
     value: "instance"

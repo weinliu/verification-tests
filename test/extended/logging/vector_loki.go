@@ -81,7 +81,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki")
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
@@ -154,7 +154,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lc := newLokiClient(route)
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				logs, err := lc.searchByKey("", tenantKey, appProj)
 				if err != nil {
 					return false, err
@@ -216,7 +216,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki using LabelKey - Postive match")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByKey("", labelKeys, podLabel)
 				if err != nil {
 					return false, err
@@ -231,7 +231,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Searching for Application Logs in Loki using LabelKey - Negative match")
 			labelKeys = "kubernetes_labels_negative"
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByKey("", labelKeys, podLabel)
 				if err != nil {
 					return false, err
@@ -289,7 +289,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			tenantKeyID := "logging-centos-logtest"
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByKey("", tenantKey, tenantKeyID)
 				if err != nil {
 					return false, err
@@ -412,23 +412,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err when getting %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
-
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+			lc.waitForLogsAppearByProject("application", appProj)
 		})
 
 	})
@@ -517,25 +503,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
-
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("App log count check complete with Success!")
+			lc.waitForLogsAppearByProject("application", appProj)
 
 			journalLog, err := lc.searchLogsInLoki("infrastructure", `{log_type = "infrastructure", kubernetes_namespace_name !~ ".+"}`)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -607,25 +577,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
-
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("App log count check complete with Success!")
+			lc.waitForLogsAppearByProject("application", appProj)
 
 			g.By("checking if the unique cluster identifier is added to the log records")
 			clusterID, err := getClusterID(oc)
@@ -705,27 +659,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
 			g.By("check logs in loki for custom app input..")
-			appLog, err := lc.searchByNamespace("application", appProj2)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+			lc.waitForLogsAppearByProject("application", appProj2)
 
 			//no logs found for app not defined as custom input in clf
-			appLog, err = lc.searchByNamespace("application", appProj1)
+			appLog, err := lc.searchByNamespace("application", appProj1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(appLog.Data.Result) == 0).Should(o.BeTrue())
 
@@ -826,7 +766,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for k, v := range multilineLogTypes {
 				g.By("check " + k + " logs\n")
-				err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 					appLogs, err := lc.searchByNamespace("application", "multiline-log-"+k+"-61968")
 					if err != nil {
 						return false, err
@@ -839,7 +779,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				exutil.AssertWaitPollNoErr(err, "can't find "+k+" logs")
 				for _, log := range v {
 					var messages []string
-					err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+					err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
 						dataInLoki, _ := lc.queryRange("application", "{kubernetes_namespace_name=\"multiline-log-"+k+"-61968\"}", len(v)*2, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
 						lokiLog := extractLogEntities(dataInLoki)
 						var messages []string
@@ -944,7 +884,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki")
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
@@ -1007,7 +947,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki")
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
@@ -1070,7 +1010,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki")
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
@@ -1142,7 +1082,7 @@ ciphersuites = "TLS_AES_128_CCM_SHA256"`
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
-			err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 3*time.Minute, true, func(context.Context) (done bool, err error) {
 				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
 				if err != nil {
 					return false, nil
@@ -1153,7 +1093,7 @@ ciphersuites = "TLS_AES_128_CCM_SHA256"`
 
 			g.By("Searching for Application Logs in Loki")
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
@@ -1181,7 +1121,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
-			err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 3*time.Minute, true, func(context.Context) (done bool, err error) {
 				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
 				if err != nil {
 					return false, nil
@@ -1191,7 +1131,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			exutil.AssertWaitPollNoErr(err, "Unable to connect to the external Loki server.")
 
 			g.By("Searching for Application Logs in Loki")
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
@@ -1281,7 +1221,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
@@ -1324,7 +1264,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			g.By("Searching for Application Logs in Loki")
 			appPodName, err = oc.AdminKubeClient().CoreV1().Pods(appProj1).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj1)
 				if err != nil {
 					return false, err
@@ -1462,25 +1402,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
 
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("App log count check complete with Success!")
+			lc.waitForLogsAppearByProject("application", appProj)
 
 			g.By("Check that the LokiStack gateway is using the Intermediate tlsSecurityProfile")
 			server := fmt.Sprintf("%s-gateway-http:8081", ls.name)
@@ -1591,25 +1516,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
 
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("App log count check complete with Success!")
+			lc.waitForLogsAppearByProject("application", appProj)
 
 			g.By("Check that the LokiStack gateway is using the Old tlsSecurityProfile")
 			server := fmt.Sprintf("%s-gateway-http:8081", ls.name)
@@ -1720,25 +1630,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
 
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("App log count check complete with Success!")
+			lc.waitForLogsAppearByProject("application", appProj)
 
 			g.By("Check that the LokiStack gateway is using the Custom tlsSecurityProfile")
 			server := fmt.Sprintf("%s-gateway-http:8081", ls.name)
@@ -1849,25 +1744,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
-
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("App log count check complete with Success!")
+			lc.waitForLogsAppearByProject("application", appProj)
 
 			g.By("Check that the LokiStack gateway is using the Old tlsSecurityProfile")
 			server := fmt.Sprintf("%s-gateway-http:8081", ls.name)
@@ -1912,30 +1791,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ls.waitForLokiStackToBeReady(oc)
 			waitForOperatorsRunning(oc)
 
+			g.By("create a new project")
+			oc.SetupProject()
+			newAppProj := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", newAppProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
 			g.By("checking app, audit and infra logs in loki")
 			bearerToken = getSAToken(oc, "logcollector", cl.namespace)
 			route = "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc = newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
-
-			appLog, err = lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("App log count check complete with Success!")
+			lc.waitForLogsAppearByProject("application", newAppProj)
 
 			g.By("Check that the LokiStack gateway is using the intermediate tlsSecurityProfile")
 			server = fmt.Sprintf("%s-gateway-http:8081", ls.name)

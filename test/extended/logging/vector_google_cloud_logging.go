@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -84,7 +85,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				projectID: projectID,
 				logName:   logName + "-" + logType,
 			}
-			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				logs, err := gcl.getLogByType(logType)
 				if err != nil {
 					return false, err
@@ -140,7 +141,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		defer cl.delete(oc)
 		cl.create(oc)
 
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			logs, err := gcl.getLogByType("application")
 			if err != nil {
 				return false, err
@@ -202,7 +203,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		defer cl.delete(oc)
 		cl.create(oc)
 
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			logs, err := gcl.getLogByType("application")
 			if err != nil {
 				return false, err
@@ -287,7 +288,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			logs, err := gcl.getLogByType("application")
 			if err != nil {
 				return false, err
@@ -318,7 +319,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			logs, err := gcl.getLogByType("application")
 			if err != nil {
 				return false, err

@@ -464,37 +464,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
-			for _, logType := range []string{"application", "infrastructure"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err when getting %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+			for _, logType := range []string{"application", "infrastructure", "audit"} {
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
 
-			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-				res, err := lc.searchByKey("audit", "log_type", "audit")
-				if err != nil {
-					e2e.Logf("\ngot err when getting audit logs: %v\n", err)
-					return false, err
-				}
-				if len(res.Data.Result) > 0 {
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "audit logs are not found")
-
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+			lc.waitForLogsAppearByProject("application", appProj)
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53127-Critical-48628-CLO Loki Integration-Verify that by default only app and infra logs are sent to Loki (fluentd) and Expose Loki metrics to Prometheus[Serial]", func() {
@@ -548,25 +522,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found\n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
-
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("App log count check complete with Success!")
+			lc.waitForLogsAppearByProject("application", appProj)
 
 			journalLog, err := lc.searchLogsInLoki("infrastructure", `{log_type = "infrastructure", kubernetes_namespace_name !~ ".+"}`)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -586,21 +544,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 			for _, svc := range svcs.Items {
 				if !strings.Contains(svc.Name, "grpc") && !strings.Contains(svc.Name, "ring") {
-					err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-						result, err := queryPrometheus(oc, token, "/api/v1/query", "{job=\""+svc.Name+"\"}", "GET")
-						if err != nil {
-							return false, err
-						}
-						return len(result.Data.Result) > 0, nil
-					})
-					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find metrics exposed by svc %s", svc.Name))
+					checkMetric(oc, token, "{job=\""+svc.Name+"\"}", 3)
 				}
 			}
 
 			for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"openshift-operators-redhat\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
-				result, err := queryPrometheus(oc, token, "/api/v1/query", metric, "GET")
-				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(len(result.Data.Result) > 0).Should(o.BeTrue())
+				checkMetric(oc, token, metric, 3)
 			}
 		})
 
@@ -663,25 +612,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found\n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
 
-			appLog, err := lc.searchByNamespace("application", appProj)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("App log count check complete with Success!")
+			lc.waitForLogsAppearByProject("application", appProj)
 
 		})
 
@@ -751,27 +685,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.searchByKey(logType, "log_type", logType)
-					if err != nil {
-						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
-						return false, err
-					}
-					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
 			g.By("check logs in loki for custom app input..")
-			appLog, err := lc.searchByNamespace("application", appProj2)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+			lc.waitForLogsAppearByProject("application", appProj2)
 
 			//no logs found for app not defined as custom input in clf
-			appLog, err = lc.searchByNamespace("application", appProj1)
+			appLog, err := lc.searchByNamespace("application", appProj1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(appLog.Data.Result) == 0).Should(o.BeTrue())
 
@@ -855,7 +775,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki")
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
@@ -918,7 +838,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki")
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err
@@ -981,7 +901,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki")
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
 				if err != nil {
 					return false, err

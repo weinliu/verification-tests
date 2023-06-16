@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -61,7 +62,7 @@ func (s *splunkPodServer) allQueryFound(queries []string) bool {
 	//return false if any query fail
 	foundAll := true
 	for _, query := range queries {
-		if s.checkLogs(query, false) == false {
+		if !s.checkLogs(query, false) {
 			foundAll = false
 		}
 	}
@@ -121,7 +122,7 @@ func (s *splunkPodServer) extractSearchResponse(searchID string) (*splunkSearchR
 	params.Add("output_mode", "json")
 
 	var searchResult *splunkSearchResult
-	err := wait.Poll(15*time.Second, 120*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
 		resp, err1 := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs/"+searchID+"/results", params.Encode(), "GET", true, 1, nil, 200)
 		if err1 != nil {
 			e2e.Logf("failed to get response: %v, try next round", err1)

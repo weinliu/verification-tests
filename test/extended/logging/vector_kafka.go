@@ -86,7 +86,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj)
 				if err != nil {
 					return false, err
@@ -144,7 +144,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj)
 				if err != nil {
 					return false, err
@@ -202,7 +202,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj)
 				if err != nil {
 					return false, err
@@ -304,7 +304,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			//application logs
 			consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(amqNS).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=topic-logging-app-consumer"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				logs, err := getDataFromKafkaConsumerPod(oc, amqNS, consumerPods.Items[0].Name)
 				if err != nil {
 					return false, err
@@ -436,7 +436,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReadyWithLabel(oc, consumer.namespace, "job-name="+consumer.name)
 				consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(consumer.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=" + consumer.name})
 				o.Expect(err).NotTo(o.HaveOccurred())
-				err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 					logs, err := getDataFromKafkaConsumerPod(oc, consumer.namespace, consumerPods.Items[0].Name)
 					if err != nil {
 						return false, err
@@ -532,7 +532,7 @@ ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj)
 				if err != nil {
 					return false, err
@@ -574,7 +574,7 @@ ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj1)
 				if err != nil {
 					return false, err

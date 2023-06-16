@@ -38,7 +38,7 @@ func getESIndicesByName(ns string, pod string, indexName string) ([]ESIndex, err
 }
 
 func waitForIndexAppear(ns string, pod string, indexName string) {
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		indices, err := getESIndices(ns, pod)
 		count := 0
 		for _, index := range indices {
@@ -67,7 +67,7 @@ func getDocCountByQuery(ns string, pod string, indexName string, queryString str
 
 func waitForProjectLogsAppear(ns string, pod string, projectName string, indexName string) {
 	query := "{\"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"" + projectName + "\"}}}"
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		logCount, err := getDocCountByQuery(ns, pod, indexName, query)
 		if err != nil {
 			return false, err
@@ -348,7 +348,7 @@ func (es externalES) getIndices(oc *exutil.CLI) ([]ESIndex, error) {
 }
 
 func (es externalES) waitForIndexAppear(oc *exutil.CLI, indexName string) {
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		indices, err := es.getIndices(oc)
 		count := 0
 		for _, index := range indices {
@@ -377,7 +377,7 @@ func (es externalES) getDocCount(oc *exutil.CLI, indexName string, queryString s
 
 func (es externalES) waitForProjectLogsAppear(oc *exutil.CLI, projectName string, indexName string) {
 	query := "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \"" + projectName + "\"}}}"
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		logCount, err := es.getDocCount(oc, indexName, query)
 		if err != nil {
 			return false, err

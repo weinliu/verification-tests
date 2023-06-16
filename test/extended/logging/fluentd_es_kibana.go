@@ -488,7 +488,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 		waitForIndexAppear(cloNS, podList.Items[0].Name, "infra-00")
 
 		g.By("check ES metric es_index_namespaces_total")
-		err = wait.Poll(5*time.Second, 120*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
 			metricData1, err := queryPrometheus(oc, "", "/api/v1/query", "es_index_namespaces_total", "GET")
 			if err != nil {
 				return false, err
@@ -611,7 +611,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 		// make sure the upgrade starts
 		checkResource(oc, false, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
 		//rolling upgrade, the es health status will be green temporarily, so here compare the ready pods with the pod names in es/elasticsearch
-		err = wait.Poll(3*time.Second, 300*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			if err != nil {
 				return false, err
@@ -684,7 +684,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 		g.By("check metrics")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		for _, metric := range []string{"log_logged_bytes_total", "log_collected_bytes_total"} {
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				result, err := queryPrometheus(oc, token, "/api/v1/query", metric, "GET")
 				if err != nil {
 					return false, err
@@ -788,7 +788,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 		g.By("check data in Loki")
 		route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 		lc := newLokiClient(route)
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 			appLogs, err := lc.searchByNamespace("", app)
 			if err != nil {
 				return false, err

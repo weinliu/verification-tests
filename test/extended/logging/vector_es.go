@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -140,7 +139,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"component=eventrouter\"}}}"
-			err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 				logs := searchDocByQuery(cloNS, podList.Items[0].Name, "infra", checkLog)
 				if logs.Hits.Total > 0 {
 					return true, nil
@@ -196,7 +195,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 			WaitForDeploymentPodsToBeReady(oc, cloNS, "kibana")
 			var output string
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(cloNS).Get(context.Background(), "collector", metav1.GetOptions{})
 				if err != nil {
 					if apierrors.IsNotFound(err) {
@@ -230,7 +229,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				WaitForDeploymentPodsToBeReady(oc, cloNS, name)
 			}
 			WaitForDeploymentPodsToBeReady(oc, cloNS, "kibana")
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(cloNS).Get(context.Background(), "collector", metav1.GetOptions{})
 				if err != nil {
 					if apierrors.IsNotFound(err) {
@@ -319,7 +318,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(nodeLogs).Should(o.ContainSubstring(ovnProj), "The OVN logs doesn't contain logs from project %s", ovnProj)
 
 			g.By("Check for the generated OVN audit logs in Elasticsearch")
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				cmd := "es_util --query=audit*/_search?format=JSON -d '{\"query\":{\"query_string\":{\"query\":\"verdict=allow AND severity=alert AND tcp,vlan_tci AND tcp_flags=ack\",\"default_field\":\"message\"}}}'"
 				stdout, err := e2eoutput.RunHostCmdWithRetries(cloNS, esPods.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
 				if err != nil {
@@ -416,19 +415,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Check Vector and Log File metrics exporter metrics from Prometheus")
 			for _, metric := range []string{"log_logged_bytes_total", "vector_processed_bytes_total"} {
-				err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-					result, err := queryPrometheus(oc, bearerToken, "/api/v1/query", metric, "GET")
-					if err != nil {
-						return false, err
-					}
-					if len(result.Data.Result) > 0 {
-						value, _ := strconv.Atoi(result.Data.Result[0].Value[1].(string))
-						return (value > 0) && (len(result.Data.Result) > 0), nil
-					}
-					return false, nil
-
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find metric %s", metric))
+				checkMetric(oc, bearerToken, metric, 3)
 			}
 		})
 
@@ -461,7 +448,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("check container logs")
 			queryContainerLog := "_search?size=0 -d'{\"aggs\": {\"logging_aggregations\": {\"filter\": {\"exists\": {\"field\":\"kubernetes\"}},\"aggs\": {\"inner_aggregations\": {\"terms\": {\"field\" : \"hostname\"}}}}}}'"
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				aggRes, err := queryInES(cl.namespace, esPods.Items[0].Name, queryContainerLog)
 				if err != nil {
 					return false, err
@@ -481,7 +468,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("check journal logs")
 			queryJournalLog := "_search?size=0 -d'{\"aggs\": {\"logging_aggregations\": {\"filter\": {\"exists\": {\"field\":\"systemd\"}},\"aggs\": {\"inner_aggregations\": {\"terms\": {\"field\" : \"hostname\"}}}}}}'"
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				journalLog, err := queryInES(cl.namespace, esPods.Items[0].Name, queryJournalLog)
 				if err != nil {
 					return false, err
@@ -703,7 +690,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"openshift.labels.logging-labels\": \"test-labels\"}}}"
 			indexName := []string{"app", "infra", "audit"}
 			for i := 0; i < len(indexName); i++ {
-				err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
+				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 					logs := ees.searchDocByQuery(oc, indexName[i], checkLog)
 					if logs.Hits.Total > 0 || len(logs.Hits.DataHits) > 0 {
 						return true, nil
@@ -718,7 +705,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"openshift.labels.logging-labels\": \"test-labels\"}}}"
 			for i := 0; i < len(indexName); i++ {
-				err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
+				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 					logs := searchDocByQuery(cloNS, podList.Items[0].Name, indexName[i], checkLog)
 					if logs.Hits.Total > 0 {
 						return true, nil
@@ -794,7 +781,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			indexName := []string{"app", "infra", "audit"}
 			for i := 0; i < len(indexName); i++ {
 				checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"openshift.labels.logging\": \"" + indexName[i] + "-logs\"}}}"
-				err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
+				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 					logs := ees.searchDocByQuery(oc, indexName[i], checkLog)
 					if logs.Hits.Total > 0 {
 						return true, nil
@@ -809,7 +796,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			for i := 0; i < len(indexName); i++ {
 				checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"openshift.labels.logging\": \"" + indexName[i] + "-logs\"}}}"
-				err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
+				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 					logs := searchDocByQuery(cloNS, podList.Items[0].Name, indexName[i], checkLog)
 					if logs.Hits.Total > 0 {
 						return true, nil
@@ -1391,7 +1378,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check data in Loki")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", app)
 				if err != nil {
 					return false, err
@@ -1478,7 +1465,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			var logsInKafka []LogEntity
 			consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(kafka.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=kafka-consumer"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				logsInKafka, err = getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPods.Items[0].Name, appNS)
 				if err != nil {
 					return false, err
@@ -1492,7 +1479,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
 			for _, logType := range []string{"infrastructure", "audit"} {
-				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+				err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 					res, err := lc.searchByKey("", "log_type", logType)
 					if err != nil {
 						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)

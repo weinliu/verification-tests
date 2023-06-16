@@ -760,9 +760,41 @@ func (c *lokiClient) searchByKey(logType, key, value string) (*lokiQueryResponse
 	return res, err
 }
 
+func (c *lokiClient) waitForLogsAppearByKey(logType, key, value string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
+		logs, err := c.searchByKey(logType, key, value)
+		if err != nil {
+			e2e.Logf("\ngot err when searching logs: %v, retrying...\n", err)
+			return false, nil
+		}
+		if len(logs.Data.Result) > 0 {
+			e2e.Logf(`find logs by {%s="%s"}`, key, value)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf(`can't find logs by {%s="%s"} in last 5 minutes`, key, value))
+}
+
 func (c *lokiClient) searchByNamespace(logType, projectName string) (*lokiQueryResponse, error) {
 	res, err := c.searchLogsInLoki(logType, "{kubernetes_namespace_name=\""+projectName+"\"}")
 	return res, err
+}
+
+func (c *lokiClient) waitForLogsAppearByProject(logType, projectName string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
+		logs, err := c.searchByNamespace(logType, projectName)
+		if err != nil {
+			e2e.Logf("\ngot err when searching logs: %v, retrying...\n", err)
+			return false, nil
+		}
+		if len(logs.Data.Result) > 0 {
+			e2e.Logf("find logs from %s project", projectName)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't find logs from %s project in last 5 minutes", projectName))
 }
 
 // extractLogEntities extract the log entities from loki query response, designed for checking the content of log data in Loki
@@ -1025,7 +1057,7 @@ func queryAlertManagerForActiveAlerts(oc *exutil.CLI, token string, isUserWorklo
 		userWorkloadAlertManagerURL := "https://alertmanager-user-workload.openshift-user-workload-monitoring.svc:9095/api/v2/alerts"
 		cmd = "curl -k -H" + authBearer + " " + userWorkloadAlertManagerURL
 	}
-	err := wait.Poll(30*time.Second, time.Duration(timeInMinutes)*time.Minute, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, time.Duration(timeInMinutes)*time.Minute, true, func(context.Context) (done bool, err error) {
 		alerts, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", cmd)
 		if err != nil {
 			return false, err

@@ -93,7 +93,7 @@ func containSubstring(a interface{}, b string) bool {
 func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	var configFile string
 	filename := getRandomString() + ".json"
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 15*time.Second, true, func(context.Context) (done bool, err error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(filename)
 		if err != nil {
 			e2e.Logf("the err:%v, and try next round", err)
@@ -139,7 +139,7 @@ func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSo
 	} else {
 		args = append(args, so.PackageName)
 	}
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		packages, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
 		if err != nil {
 			msg := fmt.Sprintf("%v", err)
@@ -199,7 +199,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			namespaceFile, err := processTemplate(oc, "-f", namespaceTemplate, "-p", "NAMESPACE_NAME="+so.Namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer os.Remove(namespaceFile)
-			err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 				output, err := oc.AsAdmin().Run("apply").Args("-f", namespaceFile).Output()
 				if err != nil {
 					if strings.Contains(output, "AlreadyExists") {
@@ -222,7 +222,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 		ogFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.OperatorGroup, "-p", "OG_NAME="+so.Namespace, "NAMESPACE="+so.Namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.Remove(ogFile)
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 			output, err := oc.AsAdmin().Run("apply").Args("-f", ogFile, "-n", so.Namespace).Output()
 			if err != nil {
 				if strings.Contains(output, "AlreadyExists") {
@@ -245,7 +245,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			subscriptionFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+so.CatalogSource.Channel, "SOURCE="+so.CatalogSource.SourceName, "SOURCE_NAMESPACE="+so.CatalogSource.SourceNamespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer os.Remove(subscriptionFile)
-			err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 				output, err := oc.AsAdmin().Run("apply").Args("-f", subscriptionFile, "-n", so.Namespace).Output()
 				if err != nil {
 					if strings.Contains(output, "AlreadyExists") {
@@ -283,11 +283,11 @@ func (so *SubscriptionObjects) getInstalledCSV(oc *exutil.CLI) string {
 // WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
 func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
 	var selectors map[string]string
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				e2e.Logf("Waiting for availability of deployment/%s\n", name)
+				e2e.Logf("Waiting for deployment/%s to appear\n", name)
 				return false, nil
 			}
 			return false, err
@@ -315,7 +315,7 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 
 func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 	var selectors map[string]string
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		ss, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -347,7 +347,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 
 // WaitForDaemonsetPodsToBeReady waits for all the pods controlled by the ds to be ready
 func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -368,7 +368,7 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 
 func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 	var count int
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
 			return false, err
@@ -406,7 +406,7 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 
 // GetDeploymentsNameByLabel retruns a list of deployment name which have specific labels
 func GetDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -469,7 +469,7 @@ type resource struct {
 
 // WaitUntilResourceIsGone waits for the resource to be removed cluster
 func (r resource) WaitUntilResourceIsGone(oc *exutil.CLI) error {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
 		if err != nil {
 			errstring := fmt.Sprintf("%v", output)
@@ -501,7 +501,7 @@ func (r resource) clear(oc *exutil.CLI) error {
 }
 
 func (r resource) WaitForResourceToAppear(oc *exutil.CLI) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
 		if err != nil {
 			msg := fmt.Sprintf("%v", output)
@@ -679,7 +679,7 @@ func (cl *clusterlogging) delete(oc *exutil.CLI) {
 func (cl *clusterlogging) waitForLoggingReady(oc *exutil.CLI) {
 	if cl.logStoreType == "elasticsearch" {
 		var esDeployNames []string
-		err := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 2*time.Minute, true, func(context.Context) (done bool, err error) {
 			esDeployNames = GetDeploymentsNameByLabel(oc, cl.namespace, "cluster-name=elasticsearch")
 			if len(esDeployNames) != cl.esNodeCount {
 				e2e.Logf("expect %d ES deployments, but only find %d, try next time...", cl.esNodeCount, len(esDeployNames))
@@ -784,8 +784,8 @@ func deleteNamespace(oc *exutil.CLI, ns string) {
 		}
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-		_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), ns, metav1.GetOptions{})
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		_, err = oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), ns, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return true, nil
@@ -799,7 +799,7 @@ func deleteNamespace(oc *exutil.CLI, ns string) {
 
 // WaitForIMCronJobToAppear checks if the cronjob exists or not
 func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		_, err = oc.AdminKubeClient().BatchV1().CronJobs(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -815,7 +815,7 @@ func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
 
 func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
 	// wait for jobs to appear
-	err := wait.Poll(5*time.Second, timeout, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, true, func(context.Context) (done bool, err error) {
 		jobList, err := oc.AdminKubeClient().BatchV1().Jobs(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "component=indexManagement"})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -834,7 +834,7 @@ func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
 	jobList, err := oc.AdminKubeClient().BatchV1().Jobs(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "component=indexManagement"})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, job := range jobList.Items {
-		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 			job, err := oc.AdminKubeClient().BatchV1().Jobs(ns).Get(context.Background(), job.Name, metav1.GetOptions{})
 			//succeeded, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "job", job.Name, "-o=jsonpath={.status.succeeded}").Output()
 			if err != nil {
@@ -873,7 +873,7 @@ func assertResourceStatus(oc *exutil.CLI, kind, name, namespace, jsonpath, exptd
 	if namespace != "" {
 		parameters = append(parameters, "-n", namespace)
 	}
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		clStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
 		if err != nil {
 			return false, err
@@ -893,26 +893,9 @@ func getRouteAddress(oc *exutil.CLI, ns, routeName string) string {
 }
 
 func getSAToken(oc *exutil.CLI, name, ns string) string {
-	secrets, err := oc.AdminKubeClient().CoreV1().Secrets(ns).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		return ""
-	}
-	var secret string
-	for _, s := range secrets.Items {
-		if strings.Contains(s.Name, name+"-token") {
-			secret = s.Name
-			break
-		}
-	}
-	dirname := "/tmp/" + oc.Namespace() + "-sa"
-	defer os.RemoveAll(dirname)
-	err = os.MkdirAll(dirname, 0777)
+	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", name, "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+secret, "-n", ns, "--confirm", "--to="+dirname).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	bearerToken, err := os.ReadFile(dirname + "/token")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return string(bearerToken)
+	return token
 }
 
 // queryPrometheus returns the promtheus metrics which match the query string
@@ -959,6 +942,21 @@ func getMetric(oc *exutil.CLI, token, query string) ([]metric, error) {
 	return res.Data.Result, nil
 }
 
+func checkMetric(oc *exutil.CLI, token, query string, timeInMinutes int) {
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, time.Duration(timeInMinutes)*time.Minute, true, func(context.Context) (done bool, err error) {
+		metrics, err := getMetric(oc, token, query)
+		if err != nil {
+			return false, err
+		}
+		if len(metrics) == 0 {
+			e2e.Logf("no metrics found by query: %s, try next time", query)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't find metrics by %s in %d minutes", query, timeInMinutes))
+}
+
 func getAlert(oc *exutil.CLI, token, alertSelector string) ([]alert, error) {
 	var al []alert
 	alerts, err := queryPrometheus(oc, token, "/api/v1/alerts", "", "GET")
@@ -974,7 +972,7 @@ func getAlert(oc *exutil.CLI, token, alertSelector string) ([]alert, error) {
 }
 
 func checkAlert(oc *exutil.CLI, token, alertName, status string, timeInMinutes int) {
-	err := wait.Poll(30*time.Second, time.Duration(timeInMinutes)*time.Minute, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, time.Duration(timeInMinutes)*time.Minute, true, func(context.Context) (done bool, err error) {
 		alerts, err := getAlert(oc, token, alertName)
 		if err != nil {
 			return false, err
@@ -993,7 +991,7 @@ func checkAlert(oc *exutil.CLI, token, alertName, status string, timeInMinutes i
 
 // WaitUntilPodsAreGone waits for pods selected with labelselector to be removed
 func WaitUntilPodsAreGone(oc *exutil.CLI, namespace string, labelSelector string) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector="+labelSelector, "-n", namespace).Output()
 		if err != nil {
 			return false, err
@@ -1009,7 +1007,7 @@ func WaitUntilPodsAreGone(oc *exutil.CLI, namespace string, labelSelector string
 
 // Check logs from resource
 func (r resource) checkLogsFromRs(oc *exutil.CLI, expected string, containerName string) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(r.kind+`/`+r.name, "-n", r.namespace, "-c", containerName).Output()
 		if err != nil {
 			e2e.Logf("Can't get logs from resource, error: %s. Trying again", err)
@@ -1159,7 +1157,7 @@ func (certs certsConf) generateCerts(oc *exutil.CLI, keysPath string) {
 // compare: true means compare the expectedContent with the resource content, false means check if the resource contains the expectedContent;
 // args are the arguments used to execute command `oc.AsAdmin.WithoutNamespace().Run("get").Args(args...).Output()`;
 func checkResource(oc *exutil.CLI, expect bool, compare bool, expectedContent string, args []string) {
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
 		if err != nil {
 			if strings.Contains(output, "NotFound") {
@@ -1283,7 +1281,7 @@ func (r rsyslog) getPodName(oc *exutil.CLI) string {
 
 func (r rsyslog) checkData(oc *exutil.CLI, expect bool, filename string) {
 	cmd := "ls -l /var/log/clf/" + filename
-	err := wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 		stdout, err := e2eoutput.RunHostCmdWithRetries(r.namespace, r.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
 			if strings.Contains(err.Error(), "No such file or directory") {
@@ -1437,7 +1435,7 @@ func (f fluentdServer) getPodName(oc *exutil.CLI) string {
 // expect true means you expect the file to exist, false means the file is not expected to exist
 func (f fluentdServer) checkData(oc *exutil.CLI, expect bool, filename string) {
 	cmd := "ls -l /fluentd/log/" + filename
-	err := wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 		stdout, err := e2eoutput.RunHostCmdWithRetries(f.namespace, f.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
 			if strings.Contains(err.Error(), "No such file or directory") {
@@ -1497,7 +1495,7 @@ func (l logstash) checkData(oc *exutil.CLI, expect bool, filename string) {
 	}
 
 	cmd := "ls -l /usr/share/logstash/data/" + filename
-	err = wait.Poll(15*time.Second, 60*time.Second, func() (done bool, err error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 		stdout, err := e2eoutput.RunHostCmdWithRetries(l.namespace, pods.Items[0].Name, cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
 			return false, err
@@ -2012,7 +2010,7 @@ func (cw cloudwatchSpec) logsFound() bool {
 
 	for _, logType := range cw.logTypes {
 		if logType == "infrastructure" {
-			err1 := wait.Poll(15*time.Second, 180*time.Second, func() (done bool, err error) {
+			err1 := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				return cw.infrastructureLogsFound(false), nil
 			})
 			if err1 != nil {
@@ -2023,7 +2021,7 @@ func (cw cloudwatchSpec) logsFound() bool {
 			}
 		}
 		if logType == "audit" {
-			err2 := wait.Poll(15*time.Second, 180*time.Second, func() (done bool, err error) {
+			err2 := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				return cw.auditLogsFound(true), nil
 			})
 			if err2 != nil {
@@ -2034,7 +2032,7 @@ func (cw cloudwatchSpec) logsFound() bool {
 			}
 		}
 		if logType == "application" {
-			err3 := wait.Poll(15*time.Second, 180*time.Second, func() (done bool, err error) {
+			err3 := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				return cw.applicationLogsFound(), nil
 			})
 			if err3 != nil {
@@ -2084,8 +2082,7 @@ func (cw cloudwatchSpec) getLogRecordsFromCloudwatchByNamespace(limit int32, log
 
 	streamNames := cw.getCloudwatchLogStreamNames(logGroupName, "", namespaceName)
 	e2e.Logf("the log streams are: %v", streamNames)
-	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-		var err error
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 		output, err = cw.filterLogEventsFromCloudwatch(limit, logGroupName, "", streamNames...)
 		if err != nil {
 			e2e.Logf("get error when filter events in cloudwatch, try next time")
@@ -2760,7 +2757,7 @@ func checkOperatorsRunning(oc *exutil.CLI) (bool, error) {
 func waitForOperatorsRunning(oc *exutil.CLI) {
 	e2e.Logf("Wait a minute to allow the cluster to reconcile the config changes.")
 	time.Sleep(1 * time.Minute)
-	err := wait.Poll(3*time.Minute, 21*time.Minute, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Minute, 21*time.Minute, true, func(context.Context) (done bool, err error) {
 		return checkOperatorsRunning(oc)
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to wait for operators to be running: %v", err))

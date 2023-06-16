@@ -124,19 +124,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(bearerToken).retry(5)
 		for _, logType := range []string{"application", "infrastructure"} {
-			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-				res, err := lc.searchByKey(logType, "log_type", logType)
-				if err != nil {
-					e2e.Logf("\ngot err when checking %s logs: %v, retrying...\n", logType, err)
-					return false, nil
-				}
-				if len(res.Data.Result) > 0 {
-					e2e.Logf("found %s logs in LokiStack", logType)
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+			lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			labels, err := lc.listLabels(logType, "")
 			o.Expect(err).NotTo(o.HaveOccurred(), "got error when checking %s log labels", logType)
 			e2e.Logf("\nthe %s log labels are: %v\n", logType, labels)
@@ -166,33 +154,19 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		defer clf.delete(oc)
 		clf.create(oc)
 
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-			res, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\"}")
-			if err != nil {
-				e2e.Logf("\ngot err when checking audit logs: %v, retrying...\n", err)
-				return false, nil
-			}
-			return len(res.Data.Result) > 0, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "audit logs are not found")
+		lc.waitForLogsAppearByKey("audit", "log_type", "audit")
 		labels, err := lc.listLabels("audit", "")
 		o.Expect(err).NotTo(o.HaveOccurred(), "got error when checking audit log labels")
 		e2e.Logf("\nthe audit log labels are: %v\n", labels)
 
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		g.By("check metrics exposed by collector")
-		err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-			result, err := getMetric(oc, token, "{job=\"collector\"}")
-			if err != nil {
-				return false, err
-			}
-			return len(result) > 0, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Can't find metrics exposed by svc/collector")
+		for _, job := range []string{"collector", "logfilesmetricexporter"} {
+			checkMetric(oc, token, "{job=\""+job+"\"}", 3)
+		}
+
 		for _, metric := range []string{"log_logged_bytes_total", "vector_component_received_events_total"} {
-			result, err := getMetric(oc, token, metric)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(result) > 0).Should(o.BeTrue())
+			checkMetric(oc, token, metric, 3)
 		}
 
 		g.By("check metrics exposed by loki")
@@ -200,20 +174,11 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, svc := range svcs.Items {
 			if !strings.Contains(svc.Name, "grpc") && !strings.Contains(svc.Name, "ring") {
-				err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-					result, err := getMetric(oc, token, "{job=\""+svc.Name+"\"}")
-					if err != nil {
-						return false, err
-					}
-					return len(result) > 0, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find metrics exposed by svc/%s", svc.Name))
+				checkMetric(oc, token, "{job=\""+svc.Name+"\"}", 3)
 			}
 		}
 		for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"openshift-operators-redhat\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
-			result, err := getMetric(oc, token, metric)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(result) > 0).Should(o.BeTrue())
+			checkMetric(oc, token, metric, 3)
 		}
 
 	})
@@ -368,7 +333,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		cl.create(oc)
 
 		for _, logType := range []string{"infrastructure", "audit", "application"} {
-			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				logs, err := gcl.getLogByType(logType)
 				if err != nil {
 					return false, err

@@ -97,7 +97,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		defer cl.delete(oc)
 		cl.create(oc)
 		clo, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
-		err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cloNS, clo.Items[0].Name, "--since=2m").Output()
 			if err != nil {
 				return false, err
@@ -241,7 +241,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 		g.By("check indices settings, should have \"index.blocks.read_only_allow_delete\": \"true\"")
 		indicesSettings := "es_util --query=app*/_settings/index.blocks.read_only_allow_delete?pretty"
-		err = wait.Poll(5*time.Second, 120*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
 			output, err := e2eoutput.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, indicesSettings, 3*time.Second, 30*time.Second)
 			if err != nil {
 				return false, err
@@ -264,7 +264,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		o.Expect(big.NewFloat(diskUsage2).Cmp(big.NewFloat(95)) <= 0).Should(o.BeTrue())
 
 		g.By("check indices settings again, should not have \"index.blocks.read_only_allow_delete\": \"true\"")
-		err = wait.Poll(5*time.Second, 120*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
 			output, err := e2eoutput.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, indicesSettings, 3*time.Second, 30*time.Second)
 			if err != nil {
 				return false, err
@@ -325,7 +325,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		}
 
 		g.By("check ES status, should have one pod removed")
-		err = wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-data=true"})
 			if err != nil {
 				return false, err
@@ -490,7 +490,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		// for proj1, logs collected 3 minutes ago should be removed, here check doc count collected 4 minutes ago as it takes some time for the jobs to complete
 		// sometimes the count isn't 0 because the job is completed, but the data haven't been removed, so here need to wait for several seconds
 		query1 := "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \"" + proj1 + "\"}},{\"range\": {\"@timestamp\": {\"lte\": \"now-4m/m\"}}}]}}}"
-		err = wait.Poll(3*time.Second, 45*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 45*time.Second, true, func(context.Context) (done bool, err error) {
 			count1, err := getDocCountByQuery(cloNS, masterPods.Items[0].Name, "app", query1)
 			if err != nil {
 				return false, err
@@ -1053,7 +1053,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
-			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				res, err := lc.searchByNamespace("application", appProj)
 				if err != nil {
 					e2e.Logf("\ngot err when getting application logs: %v\n", err)
@@ -1176,7 +1176,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		bearerToken := getSAToken(oc, "logcollector", cl.namespace)
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(bearerToken).retry(5)
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			res, err := lc.searchByNamespace("application", appProj)
 			if err != nil {
 				e2e.Logf("\ngot err when getting application logs: %v\n", err)
