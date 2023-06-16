@@ -2386,7 +2386,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("image-policy-aosqe"))
 
 		g.By("Could pull image from secure registry using node credentials")
-		mirrorReg, mrerr := exec.Command("bash", "-c", "oc get imagecontentsourcepolicy image-policy-0 -o jsonpath={.spec.repositoryDigestMirrors[0].mirrors[0]} | awk -F'/' '{print $1}'").Output()
+		mirrorReg, mrerr := exec.Command("bash", "-c", "oc get imagecontentsourcepolicy image-policy-aosqe -o jsonpath={.spec.repositoryDigestMirrors[0].mirrors[0]} | awk -F'/' '{print $1}'").Output()
 		o.Expect(mrerr).NotTo(o.HaveOccurred())
 		mReg := strings.TrimSuffix(string(mirrorReg), "\n")
 		err = oc.AsAdmin().Run("import-image").Args("httpd-dis:latest", "--from="+mReg+"/rhel8/httpd-24:latest", "--confirm", "-n", oc.Namespace()).Execute()
@@ -3739,7 +3739,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 	})
 
-	g.It("NonPreRelease-Longduration-Author:wewang-Critical-61598-Uploading large layers should success when push large size image [Serial]", func() {
+	g.It("NonPreRelease-Longduration-ConnectedOnly-Author:wewang-Critical-61598-Uploading large layers should success when push large size image [Serial]", func() {
 		g.By("Check image registry storage type")
 		out, err := oc.AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.storage.s3}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
