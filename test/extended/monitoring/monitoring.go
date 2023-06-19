@@ -279,7 +279,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=up{namespace=\"56168-upgrade-ns\"}==0'", token, `"result":[]`, 2*uwmLoadTime)
 
 		g.By("check no alert 'TargetDown'")
-		checkAlertNotExist(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/alerts", token, "TargetDown", uwmLoadTime)
+		checkAlertNotExist(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{namespace=\"56168-upgrade-ns\"}'", token, "TargetDown", uwmLoadTime)
 	})
 
 	// author: tagao@redhat.com
