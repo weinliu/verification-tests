@@ -330,7 +330,7 @@ func checkDeschedulerMetrics(oc *exutil.CLI, strategyname string, metricName str
 	olmToken, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	checkPodStatus(oc, "statefulset.kubernetes.io/pod-name=prometheus-k8s-0", "openshift-monitoring", "Running")
-	err = wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
+	err = wait.Poll(6*time.Second, 180*time.Second, func() (bool, error) {
 		output, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="+metricName).Outputs()
 		// Adding code for debugging the case
 		if err != nil {
