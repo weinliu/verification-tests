@@ -1,10 +1,11 @@
 package clusterinfrastructure
 
 import (
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -693,7 +694,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Validate the webhooks warns with invalid values of shieldedVM config")
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"shieldedInstanceConfig": {"secureBoot": "nabled","integrityMonitoring": "Enabled","virtualizedTrustedPlatformModule": "Enabled"}}}}}}}`, "--type=merge").Output()
-		o.Expect(strings.Contains(out, "Error from server (providerSpec.shieldedInstanceConfig")).To(o.BeTrue())
+		o.Expect(strings.Contains(out, "secureBoot must be either Enabled or Disabled")).To(o.BeTrue())
 	})
 
 	//author miyadav@redhat.com
