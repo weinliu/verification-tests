@@ -232,7 +232,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 				jsonpath := fmt.Sprintf(`jsonpath={range .spec.containers[?(@.name=="%s")]}{.securityContext}`, container)
 				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", jsonpath).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(out).To(o.ContainSubstring("sc"))
+				o.Expect(out).To(o.ContainSubstring(sc))
 				e2e.Logf("#### The securityContext of container %s matched the expected result.", container)
 			}
 
