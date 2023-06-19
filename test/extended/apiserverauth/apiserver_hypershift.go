@@ -210,7 +210,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 					apiserver: "oauth-server",
 				},
 			}
-			sc = `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":}`
+			sc = `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":`
 		)
 
 		for i, apiserverItem := range apiserverItems {
@@ -240,7 +240,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			jsonpath := `jsonpath={.spec.initContainers[].securityContext}`
 			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", jsonpath).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(out).To(o.Equal(sc))
+			o.Expect(out).To(o.ContainSubstring(sc))
 			e2e.Logf("#### The securityContext of init-container matched the expected result.")
 
 			g.By(fmt.Sprintf("%v.4 Checking one container %s of %s pod %s is not allowed to access any devices on the host", i+1, containers[0], apiserverItem.apiserver, podList[0]))
