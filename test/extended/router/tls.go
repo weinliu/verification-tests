@@ -258,7 +258,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).Should(o.ContainSubstring(`service-secure1-%s.ocp51980.%s`, oc.Namespace(), baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
-		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", "ingress-dca-tls")
+		searchOutput := pollReadPodData(oc, "openshift-ingress", custContPod, "cat haproxy.config", "ingress-dca-tls")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + oc.Namespace() + ":" + routeNames[0]))
 
 		g.By("check the reachability of the host in custom controller")
