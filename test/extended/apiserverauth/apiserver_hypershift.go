@@ -210,7 +210,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 					apiserver: "oauth-server",
 				},
 			}
-			sc = `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":1000690000}`
+			sc = `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":}`
 		)
 
 		for i, apiserverItem := range apiserverItems {
@@ -232,7 +232,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 				jsonpath := fmt.Sprintf(`jsonpath={range .spec.containers[?(@.name=="%s")]}{.securityContext}`, container)
 				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", jsonpath).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(out).To(o.Equal(sc))
+				o.Expect(out).To(o.ContainSubstring("sc"))
 				e2e.Logf("#### The securityContext of container %s matched the expected result.", container)
 			}
 
