@@ -2,6 +2,8 @@ package networking
 
 import (
 	"context"
+	"net"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +13,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -190,5 +193,44 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Eventually(func() string {
 			return getCNOStatusCondition(oc)
 		}, 30*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying IP network value for clusterNetwork CIDR is unsupported]`))
+	})
+
+	//author: zzhao@redhat.com
+	//bug: https://issues.redhat.com/browse/OCPBUGS-2827
+	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-OSD_CCS-Author:zzhao-Medium-64297- check nodeport service with large mtu.[Serial]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			hostPortServiceFile = filepath.Join(buildPruningBaseDir, "ocpbug-2827/hostport.yaml")
+			mtuTestFile         = filepath.Join(buildPruningBaseDir, "ocpbug-2827/mtutest.yaml")
+			ns1                 = "openshift-kube-apiserver"
+		)
+		platform := exutil.CheckPlatform(oc)
+		acceptedPlatform := strings.Contains(platform, "aws")
+		if !acceptedPlatform {
+			g.Skip("Test cases should be run on AWS cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		}
+
+		g.By("create nodeport service in namespace")
+		defer removeResource(oc, true, true, "-f", hostPortServiceFile, "-n", ns1)
+		createResourceFromFile(oc, ns1, hostPortServiceFile)
+
+		g.By("create mtutest pod")
+		defer removeResource(oc, true, true, "-f", mtuTestFile, "-n", ns1)
+		createResourceFromFile(oc, ns1, mtuTestFile)
+		err := waitForPodWithLabelReady(oc, ns1, "app=mtu-tester")
+		exutil.AssertWaitPollNoErr(err, "this pod with label app=mtu-tester not ready")
+		mtuTestPod := getPodName(oc, ns1, "app=mtu-tester")
+
+		g.By("get one nodeip")
+		PodNodeName, nodeErr := exutil.GetPodNodeName(oc, ns1, mtuTestPod[0])
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		nodeIp := getNodeIPv4(oc, ns1, PodNodeName)
+
+		output, err := e2eoutput.RunHostCmd(ns1, mtuTestPod[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(nodeIp, "31251")+"?mtu=8849 2>/dev/null | cut -b-10")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "Terminated")).To(o.BeFalse())
+		output, err = e2eoutput.RunHostCmd(ns1, mtuTestPod[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(nodeIp, "31251")+"?mtu=8850 2>/dev/null | cut -b-10")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "Terminated")).To(o.BeFalse())
 	})
 })
