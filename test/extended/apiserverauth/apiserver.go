@@ -2261,8 +2261,9 @@ spec:
 		namespace := oc.Namespace()
 
 		g.By("2) Get cluster worker node list")
-		workernodes, workernodegeterr := exutil.GetClusterNodesBy(oc, "worker")
-		o.Expect(workernodegeterr).NotTo(o.HaveOccurred())
+		nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", `node-role.kubernetes.io/worker,!node-role.kubernetes.io/edge`, "-o", "jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		workernodes := strings.Split(nodes, " ")
 
 		g.By("3) Create new hello pod on first worker node")
 		podTemplate := getTestDataFilePath("create-pod.yaml")
