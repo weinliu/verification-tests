@@ -491,26 +491,17 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr := waitEgressFirewallApplied(oc, egressFW1.name, ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		g.By("2. Delete the EgressFirewall, check logs of ovnkube-master pod for error, there should be no segementation error.")
+		g.By("2. Delete the EgressFirewall, check logs of ovnkube-master pod for error, there should be no segementation error, no DNS value not found in dnsMap error message.")
 		removeResource(oc, true, true, "egressfirewall", egressFW1.name, "-n", egressFW1.namespace)
 
 		ovnKMasterPod := getOVNKMasterPod(oc)
 		o.Expect(ovnKMasterPod).ShouldNot(o.BeEmpty())
 		e2e.Logf("\n ovnKMasterPod: %v\n", ovnKMasterPod)
 
-		o.Consistently(func() int {
+		o.Consistently(func() bool {
 			podlogs, _ := oc.AsAdmin().Run("logs").Args(ovnKMasterPod, "-n", "openshift-ovn-kubernetes", "-c", "ovnkube-master").Output()
-			return strings.Count(podlogs, `SIGSEGV: segmentation violation`)
-		}, 60*time.Second, 10*time.Second).Should(o.Equal(0))
-
-		g.By("3. No synax error message should be found in ovnkube-node -c ovn-controller log after egressFirewall is deleted.")
-		readyErr := waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
-		exutil.AssertWaitPollNoErr(readyErr, "ovnkube-node pods are not ready")
-		podlog, logErr := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ovn-kubernetes", "-l", "app=ovnkube-node", "-c", "ovn-controller", "--tail=-1").Output()
-		o.Expect(logErr).NotTo(o.HaveOccurred())
-		if strings.Contains(podlog, "Syntax error") {
-			e2e.Failf("There is syntax error in ovnkube node-log, test failed")
-		}
+			return strings.Count(podlogs, `SIGSEGV: segmentation violation`) == 0 && strings.Count(podlogs, `DNS value not found in dnsMap for domain`) == 0
+		}, 60*time.Second, 10*time.Second).Should(o.BeTrue(), "Segementation error or no DNS value in dnsMap error message found in ovnkube-master pod log!!")
 	})
 
 	// author: huirwang@redhat.com
