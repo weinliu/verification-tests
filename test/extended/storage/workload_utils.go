@@ -491,21 +491,21 @@ func waitPodReady(oc *exutil.CLI, namespace string, podName string) {
 // Flake info : "error: unable to upgrade connection: container not found"  It maybe the container suddenly crashed.
 func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, command string) (output string, errInfo error) {
 	command1 := []string{"-n", namespace, podName, "--", "/bin/sh", "-c", command}
-	err := wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+	wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 		output, errInfo = oc.WithoutNamespace().Run("exec").Args(command1...).Output()
 		if errInfo != nil {
+			if strings.Contains(errInfo.Error(), "unable to upgrade connection: container not found") {
+				e2e.Logf(podName+"# "+command+" *failed with unable to upgrade connection, try again* :\"%v\".", errInfo)
+				return false, nil
+			}
 			e2e.Logf(podName+"# "+command+" *failed with* :\"%v\".", errInfo)
-			return false, nil
+			return false, errInfo
 		}
 		e2e.Logf(podName+"# "+command+" *Output is* :\"%s\".", output)
 		return true, nil
 	})
 
-	if err != nil {
-		e2e.Logf("oc describe pod %s:\n%s", podName, describePod(oc, namespace, podName))
-		return output, errInfo
-	}
-	return output, nil
+	return
 }
 
 // Wait for pods selected with selector name to be removed
@@ -851,18 +851,32 @@ func (dep *deployment) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("deployment", dep.name, "-n", dep.namespace, "--ignore-not-found").Execute()
 }
 
-// Get deployment pod list
+// Get deployment 'Running' pods list
 func (dep *deployment) getPodList(oc *exutil.CLI) (podList []string) {
 	selectorLabel := dep.applabel
 	if !strings.Contains(dep.applabel, "=") {
 		selectorLabel = "app=" + dep.applabel
 	}
-	output, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", dep.namespace, "-l", selectorLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if output != "" {
-		podList = strings.Split(output, " ")
+	o.Eventually(func() bool {
+		podListStr, _ := oc.WithoutNamespace().Run("get").Args("pod", "-n", dep.namespace, "-l", selectorLabel, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+		podList = strings.Fields(podListStr)
+		return strings.EqualFold(fmt.Sprint(len(podList)), dep.replicasno)
+	}, 120*time.Second, 5*time.Second).Should(o.BeTrue(), fmt.Sprintf("Failed to get deployment %s's ready podlist", dep.name))
+	e2e.Logf("Deployment/%s's ready podlist is: %v", dep.name, podList)
+	return
+}
+
+// Get deployment pods list without filter pods 'Running' status
+func (dep *deployment) getPodListWithoutFilterStatus(oc *exutil.CLI) (podList []string) {
+	selectorLabel := dep.applabel
+	if !strings.Contains(dep.applabel, "=") {
+		selectorLabel = "app=" + dep.applabel
 	}
-	return podList
+	podListStr, getPodListErr := oc.WithoutNamespace().Run("get").Args("pod", "-n", dep.namespace, "-l", selectorLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(getPodListErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get deployment %s's podlist", dep.name))
+	podList = strings.Fields(podListStr)
+	e2e.Logf("Deployment/%s's podlist is: %v", dep.name, podList)
+	return
 }
 
 // Get ReplicasNum of the Deployment

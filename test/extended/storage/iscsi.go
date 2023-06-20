@@ -265,7 +265,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		patchResourceAsAdmin(oc, oc.Namespace(), "secret/"+sec.name, patchSecretInvalidPwd, "merge")
 		expectedMsg := "Login failed to authenticate with target"
 		dep.scaleReplicas(oc, "1")
-		checkMsgExistsInPodDescription(oc, dep.getPodList(oc)[0], expectedMsg)
+		checkMsgExistsInPodDescription(oc, dep.getPodListWithoutFilterStatus(oc)[0], expectedMsg)
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 
@@ -284,7 +284,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("#. Make username & password empty in chap-secret file and reschedule deployment to check pod creation fails")
 		patchResourceAsAdmin(oc, oc.Namespace(), "secret/"+sec.name, "[{\"op\": \"remove\", \"path\": \"/data\"}]", "json")
 		dep.scaleReplicas(oc, "1")
-		checkMsgExistsInPodDescription(oc, dep.getPodList(oc)[0], expectedMsg)
+		checkMsgExistsInPodDescription(oc, dep.getPodListWithoutFilterStatus(oc)[0], expectedMsg)
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 
