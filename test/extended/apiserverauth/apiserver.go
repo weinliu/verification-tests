@@ -5788,4 +5788,80 @@ manifests:
 		podsList := getPodsListByLabel(oc.AsAdmin(), oc.Namespace(), "deploymentconfig=frontend")
 		exutil.AssertPodToBeReady(oc, podsList[0], oc.Namespace())
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-11905-APIServer Use well-formed pull secret with incorrect credentials will fail to build and deploy [Serial]", func() {
+		g.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
+		g.By("1) Create a new project required for this test execution")
+		oc.SetupProject()
+
+		g.By("2) Build hello-world from external source")
+		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
+		buildName := fmt.Sprintf("ocp11905-test-%s", strings.ToLower(exutil.RandStr(5)))
+		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3) Wait for hello-world build to success")
+		buildClient := oc.BuildClient().BuildV1().Builds(oc.Namespace())
+		err = exutil.WaitForABuild(buildClient, buildName+"-1", nil, nil, nil)
+		if err != nil {
+			exutil.DumpBuildLogs(buildName, oc)
+		}
+		exutil.AssertWaitPollNoErr(err, "build is not complete")
+
+		g.By("4) Get dockerImageRepository value from imagestreams test")
+		dockerImageRepository1, err := oc.Run("get").Args("imagestreams", buildName, "-o=jsonpath={.status.dockerImageRepository}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		dockerServer := strings.Split(strings.TrimSpace(dockerImageRepository1), "/")
+		o.Expect(dockerServer).NotTo(o.BeEmpty())
+
+		g.By("5) Create another project with the second user")
+		oc.SetupProject()
+
+		g.By("6) Give user admin permission")
+		username := oc.Username()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", username).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("7) Create secret for private image under project with wrong password")
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "user1-dockercfg", "--docker-email=any@any.com", "--docker-server="+dockerServer[0], "--docker-username="+username, "--docker-password=password", "-n", oc.Namespace()).NotShowInfo().Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("8) Create new deploymentconfig from the dockerImageRepository fetched in step 4")
+		deploymentConfigYaml, err := oc.Run("create").Args("deploymentconfig", "frontend", "--image="+dockerImageRepository1, "--dry-run=client", "-o=yaml").OutputToFile("ocp12036-dc.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("9) Modify the deploymentconfig and create a new deployment.")
+		exutil.ModifyYamlFileContent(deploymentConfigYaml, []exutil.YamlReplace{
+			{
+				Path:  "spec.template.spec.containers.0.imagePullPolicy",
+				Value: "Always",
+			},
+			{
+				Path:  "spec.template.spec.imagePullSecrets",
+				Value: "- name: user1-dockercfg",
+			},
+		})
+		err = oc.Run("create").Args("-f", deploymentConfigYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("10) Check if pod is running with the expected status.")
+		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			podOutput, err := oc.Run("get").Args("pod").Output()
+			if err == nil {
+				matched, _ := regexp.MatchString("frontend-1-.*(ImagePullBackOff|ErrImagePull)", podOutput)
+				if matched {
+					e2e.Logf("Pod is running with expected status\n%s", podOutput)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod did not showed up with the expected status")
+	})
 })
