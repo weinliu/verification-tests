@@ -1,34 +1,34 @@
 import { listPage } from "../upstream/views/list-page";
 
 //If specific channel/catsrc needed for testing, export the values using CYPRESS_EXTRA_PARAM before running the logging tests
-//ex: export CYPRESS_EXTRA_PARAM='{"openshift-logging": {"channel": "stable-5.7", "catalogsource": "qe-app-registry"}}'
-const EXTRA_PARAM = JSON.stringify(Cypress.env("EXTRA_PARAM"))
-const LOGGING_PARAM = (EXTRA_PARAM !== undefined) ? JSON.parse(EXTRA_PARAM) : null;
+//ex: export CYPRESS_EXTRA_PARAM='{"openshift-logging": {"cluster-logging": {"channel": "stable", "source": "qe-app-registry"}, "elasticsearch-operator": {"channel": "stable", "source": "qe-app-registry"}, "loki-operator": {"channel": "stable", "source": "qe-app-registry"}}}'
+const extraParam = JSON.stringify(Cypress.env("EXTRA_PARAM"))
+const loggingParam = (extraParam != undefined) ? JSON.parse(extraParam) : null;
 
 export const catalogSource = {
   //set channel
-  channel: () => {
-    let channel = (LOGGING_PARAM != null) ? LOGGING_PARAM['openshift-logging']['channel'] : null;
+  channel: (packageName) => {
+    let channel = (loggingParam != null) ? loggingParam['openshift-logging'][`${packageName}`]['channel'] : null;
     if(channel == null){
       channel = "stable";
     }
     return channel;
   },
   //set source namespace
-  nameSpace: () => {
-    let namespace = (LOGGING_PARAM != null) ? LOGGING_PARAM['openshift-logging']['catsrc-namespace'] : null;
+  nameSpace: (packageName) => {
+    let namespace = (loggingParam != null) ? loggingParam['openshift-logging'][`${packageName}`]['catsrc-namespace'] : null;
     if(namespace == null) {
       namespace = "openshift-marketplace";
     }
     return namespace;
   },
   //set source and check if the packagemanifest exists or not
-  sourceName: () => {
-    let csName = (LOGGING_PARAM != null) ? LOGGING_PARAM['openshift-logging']['catalogsource'] : null;
+  sourceName: (packageName) => {
+    let csName = (loggingParam != null) ? loggingParam['openshift-logging'][`${packageName}`]['source'] : null;
     if(csName == null) {
       return catalogSource.qeCatSrc();
     } else {
-      return cy.exec(`oc get catsrc ${csName} -n ${catalogSource.nameSpace()} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
+      return cy.exec(`oc get catsrc ${csName} -n ${catalogSource.nameSpace(packageName)} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
       .then(result => {
         if(!result.stderr.includes('NotFound')) {
           return csName;

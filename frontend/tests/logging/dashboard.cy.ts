@@ -2,42 +2,49 @@ import { catalogSource, logUtils } from "../../views/logging-utils";
 import { dashboard, graphSelector } from "views/dashboards-page"
 describe('Logging related features', () => {
   const CLO = {
-    Namespace:   "openshift-logging",
-    PackageName: "cluster-logging"
-  }
+    namespace:   "openshift-logging",
+    packageName: "cluster-logging",
+  };
   const EO = {
-    Namespace:   "openshift-operators-redhat",
-    PackageName: "elasticsearch-operator"
-  }
+    namespace:   "openshift-operators-redhat",
+    packageName: "elasticsearch-operator",
+  };
   const LO = {
-    Namespace:   "openshift-operators-redhat",
-    PackageName: "loki-operator"
-  }
+    namespace:   "openshift-operators-redhat",
+    packageName: "loki-operator",
+  };
 
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     // Install logging operators if needed
-    catalogSource.sourceName().then((csName) => {
-      logUtils.installOperator(CLO.Namespace, CLO.PackageName, csName, catalogSource.channel(), true);
-      logUtils.installOperator(EO.Namespace, EO.PackageName, csName, catalogSource.channel());
-      logUtils.installOperator(LO.Namespace, LO.PackageName, csName, catalogSource.channel());
+    catalogSource.sourceName(CLO.packageName).then((csName) => {
+      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), true);
     });
+    cy.contains('View Operator').should('be.visible');
+    catalogSource.sourceName(EO.packageName).then((csName) => {
+      logUtils.installOperator(EO.namespace, EO.packageName, csName, catalogSource.channel(EO.packageName));
+    });
+    cy.contains('View Operator').should('be.visible');
+    catalogSource.sourceName(LO.packageName).then((csName) => {
+      logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName));
+    });
+    cy.contains('View Operator').should('be.visible');
   });
 
   after(() => {
-    logUtils.removeClusterLogging(CLO.Namespace)
+    logUtils.removeClusterLogging(CLO.namespace)
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.logout;
   });
 
   it('(OCP-53071,qitang) Vector - OpenShift Logging Collection Vector metrics dashboard', {tags: ['e2e','admin']}, () => {
     // Create Logging instance
-    logUtils.createClusterLoggingViaYamlView(CLO.Namespace, "cl_default_es.yaml")
+    logUtils.createClusterLoggingViaYamlView(CLO.namespace, "cl_default_es.yaml")
 
-    logUtils.waitforPodReady(CLO.Namespace, 'component=elasticsearch');
-    logUtils.waitforPodReady(CLO.Namespace, 'component=kibana');
-    logUtils.waitforPodReady(CLO.Namespace, 'component=collector');
+    logUtils.waitforPodReady(CLO.namespace, 'component=elasticsearch');
+    logUtils.waitforPodReady(CLO.namespace, 'component=kibana');
+    logUtils.waitforPodReady(CLO.namespace, 'component=collector');
 
     dashboard.visitDashboard('grafana-dashboard-cluster-logging');
 
