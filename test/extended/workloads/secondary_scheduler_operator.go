@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			name:        "openshift-secondary-scheduler-operator",
 			namespace:   kubeNamespace,
 			channelName: "stable",
-			opsrcName:   "redhat-operators",
+			opsrcName:   "qe-app-registry",
 			sourceName:  "openshift-marketplace",
 			startingCSV: "secondaryscheduleroperator.v1.1.1",
 			template:    ssoSubscriptionT,
