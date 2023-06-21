@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -525,10 +526,10 @@ spec:
 		o.Eventually(checkConditionEquality).WithTimeout(20 * time.Minute).WithPolling(time.Minute).Should(o.BeTrue())
 	})
 
-	//author: jshu@redhat.com
+	//author: jshu@redhat.com sguo@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "33832"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33832-[aws]Hive supports ClusterPool [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33832-Low-42251-[aws]Hive supports ClusterPool [Serial]", func() {
 		testCaseID := "33832"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -569,14 +570,65 @@ spec:
 			size:           1,
 			maxSize:        1,
 			runningCount:   0,
-			maxConcurrent:  1,
+			maxConcurrent:  2,
 			hibernateAfter: "360m",
 			template:       poolTemp,
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
-		g.By("Check if ClusterPool created successfully and become ready")
+		g.By("Check if ClusterPool created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterPool", "-n", oc.Namespace()}).check(oc)
+
+		g.By("OCP-42251 - Initialize hive CR conditions")
+		g.By("OCP-42251 Step 1: Check all conditions type of ClusterPool")
+		allClusterPoolConditionTypes := []string{"MissingDependencies", "CapacityAvailable", "AllClustersCurrent", "InventoryValid", "DeletionPossible"}
+		sort.Strings(allClusterPoolConditionTypes)
+		checkClusterPoolConditionType := func() bool {
+			checkedClusterPoolConditionTypesOutput, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].type}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkedClusterPoolConditionTypes := strings.Split(checkedClusterPoolConditionTypesOutput, " ")
+			sort.Strings(checkedClusterPoolConditionTypes)
+			e2e.Logf("Compare allClusterPoolConditionTypes: %v and checkedClusterPoolConditionTypes: %v", allClusterPoolConditionTypes, checkedClusterPoolConditionTypes)
+			return reflect.DeepEqual(allClusterPoolConditionTypes, checkedClusterPoolConditionTypes)
+		}
+		o.Eventually(checkClusterPoolConditionType).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+		e2e.Logf("Check if ClusterDeployment is created")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterDeployment", "-A"}).check(oc)
+		g.By("OCP-42251 Step 2: Check all conditions type of ClusterDeployment")
+		cdName, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", "-A", "-o=jsonpath={.items[0].metadata.name}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cdNameSpace := cdName
+		allClusterDeploymentConditionTypes := []string{"InstallerImageResolutionFailed", "ControlPlaneCertificateNotFound", "IngressCertificateNotFound", "Unreachable", "ActiveAPIURLOverride",
+			"DNSNotReady", "InstallImagesNotResolved", "ProvisionFailed", "SyncSetFailed", "RelocationFailed", "Hibernating", "Ready", "InstallLaunchError", "DeprovisionLaunchError", "ProvisionStopped",
+			"Provisioned", "RequirementsMet", "AuthenticationFailure", "AWSPrivateLinkReady", "AWSPrivateLinkFailed", "ClusterInstallFailed", "ClusterInstallCompleted", "ClusterInstallStopped", "ClusterInstallRequirementsMet"}
+		sort.Strings(allClusterDeploymentConditionTypes)
+		checkClusterDeploymentConditionType := func() bool {
+			checkedClusterDeploymentConditionTypesOutput, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.status.conditions[*].type}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkedClusterDeploymentConditionTypes := strings.Split(checkedClusterDeploymentConditionTypesOutput, " ")
+			sort.Strings(checkedClusterDeploymentConditionTypes)
+			e2e.Logf("Compare allClusterDeploymentConditionTypes: %v and checkedClusterDeploymentConditionTypes: %v", allClusterDeploymentConditionTypes, checkedClusterDeploymentConditionTypes)
+			return reflect.DeepEqual(allClusterDeploymentConditionTypes, checkedClusterDeploymentConditionTypes)
+		}
+		o.Eventually(checkClusterDeploymentConditionType).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+		g.By("OCP-42251 Step 3: Check all conditions type of MachinePool")
+		machinepoolName := cdName + "-worker"
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, machinepoolName, ok, DefaultTimeout, []string{"Machinepool", "-n", cdNameSpace}).check(oc)
+		allMachinepoolConditionTypes := []string{"NotEnoughReplicas", "NoMachinePoolNameLeasesAvailable", "InvalidSubnets", "UnsupportedConfiguration"}
+		sort.Strings(allMachinepoolConditionTypes)
+		checkMachinePoolConditionType := func() bool {
+			checkedMachinepoolConditionTypesOutput, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Machinepool", machinepoolName, "-n", cdNameSpace, "-o=jsonpath={.status.conditions[*].type}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkedMachinepoolConditionTypes := strings.Split(checkedMachinepoolConditionTypesOutput, " ")
+			sort.Strings(checkedMachinepoolConditionTypes)
+			e2e.Logf("Compare allMachinepoolConditionTypes: %v and checkedMachinepoolConditionTypes: %v", allMachinepoolConditionTypes, checkedMachinepoolConditionTypes)
+			return reflect.DeepEqual(allMachinepoolConditionTypes, checkedMachinepoolConditionTypes)
+		}
+		o.Eventually(checkMachinePoolConditionType).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+		g.By("Check if ClusterPool become ready")
 		//runningCount is 0 so pool status should be standby: 1, ready: 0
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
@@ -591,8 +643,23 @@ spec:
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName})
 		claim.create(oc)
-		g.By("Check if ClusterClaim created successfully and become running")
+		g.By("Check if ClusterClaim created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
+
+		g.By("OCP-42251 Step 4: Check all conditions type of ClusterClaim")
+		allClusterClaimConditionTypes := []string{"Pending", "ClusterRunning"}
+		sort.Strings(allClusterClaimConditionTypes)
+		checkClusterClaimConditionType := func() bool {
+			checkedClusterClaimConditionTypesOutput, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterClaim", claimName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].type}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkedClusterClaimConditionTypes := strings.Split(checkedClusterClaimConditionTypesOutput, " ")
+			sort.Strings(checkedClusterClaimConditionTypes)
+			e2e.Logf("Compare allClusterClaimConditionTypes: %v and checkedClusterClaimConditionTypes: %v", allClusterClaimConditionTypes, checkedClusterClaimConditionTypes)
+			return reflect.DeepEqual(allClusterClaimConditionTypes, checkedClusterClaimConditionTypes)
+		}
+		o.Eventually(checkClusterClaimConditionType).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+		g.By("Check if ClusterClaim become running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
 	})
 
