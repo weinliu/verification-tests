@@ -144,6 +144,106 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "41286"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Medium-41286-[aws]ClusterPool supports provisioning fake cluster [Serial]", func() {
+		testCaseID := "41286"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		g.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
+		g.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
+		pool := clusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "true",
+			baseDomain:     AWSBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "aws",
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
+			size:           1,
+			maxSize:        1,
+			runningCount:   0,
+			maxConcurrent:  1,
+			hibernateAfter: "360m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+		g.By("Check if ClusterPool created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterPool", "-n", oc.Namespace()}).check(oc)
+		g.By("Check hive will propagate the annotation to all created ClusterDeployment")
+		cdName, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", "-A", "-o=jsonpath={.items[0].metadata.name}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cdNameSpace := cdName
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, `"hive.openshift.io/fake-cluster":"true"`, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.metadata.annotations}"}).check(oc)
+		//runningCount is 0 so pool status should be standby: 1, ready: 0
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, FakeClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+
+		g.By("Create ClusterClaim...")
+		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
+		claimName := poolName + "-claim"
+		claim := clusterClaim{
+			name:            claimName,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName,
+			template:        claimTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName})
+		claim.create(oc)
+		g.By("Check if ClusterClaim created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
+		g.By("Check claiming a fake cluster works well")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
+		waitForClusterClaimRunning := func() bool {
+			condition := getCondition(oc, "ClusterClaim", claimName, oc.Namespace(), "ClusterRunning")
+			if status, ok := condition["status"]; !ok || status != "True" {
+				e2e.Logf("For condition ClusterRunning, expected status is True, actual status is %v, retrying ...", status)
+				return false
+			}
+			if reason, ok := condition["reason"]; !ok || reason != "Running" {
+				e2e.Logf("For condition ClusterRunning, expected reason is Running, actual reason is %v, retrying ...", reason)
+				return false
+			}
+			if message, ok := condition["message"]; !ok || message != "Cluster is running" {
+				e2e.Logf("For condition ClusterRunning, expected message is \nCluster is running, \nactual reason is %v\n, retrying ...", message)
+				return false
+			}
+			e2e.Logf("For condition ClusterRunning, fields status, reason & message all expected, proceeding to the next step ...")
+			return true
+		}
+		o.Eventually(waitForClusterClaimRunning).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+		g.By("Check clusterMetadata field of fake cluster, all fields have values")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.spec.clusterMetadata.adminKubeconfigSecretRef.name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.spec.clusterMetadata.adminPasswordSecretRef.name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.spec.clusterMetadata.clusterID}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.spec.clusterMetadata.infraID}"}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "25443"|./bin/extended-platform-tests run --timeout 70m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Low-25443-Low-29855-[aws]Clusterdeployment contains Status.Condition of SyncSet status in case of syncset is invalid [Serial]", func() {
 		testCaseID := "25443"
