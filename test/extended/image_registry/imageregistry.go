@@ -54,7 +54,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(output, "TrueFalseFalse") && !strings.Contains(output, "TrueTrueFalse") {
-				message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}{.status.conditions[?(@.type==\"Progressing\")].message}").Output()
+				message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}{.status.conditions[?(@.type==\"Progressing\")].message}{.status.conditions[?(@.type==\"Degraded\")].message}").Output()
 				e2e.Logf("Wait for image-registry coming ready")
 				return false, nil
 			}
