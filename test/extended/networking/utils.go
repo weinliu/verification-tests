@@ -2796,3 +2796,15 @@ func checkIPSecInDB(oc *exutil.CLI, targetConfig string) error {
 		return false, nil
 	})
 }
+
+// IsIPv4 check if the string is an IPv4 address.
+func IsIPv4(str string) bool {
+	ip := net.ParseIP(str)
+	return ip != nil && strings.Contains(str, ".")
+}
+
+// IsIPv6 check if the string is an IPv6 address.
+func IsIPv6(str string) bool {
+	ip := net.ParseIP(str)
+	return ip != nil && strings.Contains(str, ":")
+}

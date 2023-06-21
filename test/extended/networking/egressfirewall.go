@@ -968,9 +968,9 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall5-template.yaml")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
-		url1 := "www.salesforce.com" // used as Deny rule for first namespace
-		url2 := "www.ericsson.com"   // used as Deny rule for second namespace
-		url3 := "www.google.com"     // is not used as Deny rule in either namespace
+		url1 := "www.yahoo.com"    // used as Deny rule for first namespace
+		url2 := "www.ericsson.com" // used as Deny rule for second namespace
+		url3 := "www.google.com"   // is not used as Deny rule in either namespace
 
 		g.By("1. nslookup obtain dns server ip for url1 and url2\n")
 		ips1, err := net.LookupIP(url1)
@@ -988,43 +988,85 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		ipStackType := checkIPStackType(oc)
 		e2e.Logf("\n ipStackType: %v\n", ipStackType)
 
+		// get all IPv4 and IPv6 addresses of 3 hosts above
+		var ipv4Addr1, ipv6Addr1, ipv4Addr2, ipv6Addr2, ipv4Addr3, ipv6Addr3 []string
+		for j := 0; j <= len(ips1)-1; j++ {
+			if IsIPv4(ips1[j].String()) {
+				ipv4Addr1 = append(ipv4Addr1, ips1[j].String())
+			}
+			if IsIPv6(ips1[j].String()) {
+				ipv6Addr1 = append(ipv6Addr1, ips1[j].String())
+			}
+		}
+
+		for j := 0; j <= len(ips2)-1; j++ {
+			if IsIPv4(ips2[j].String()) {
+				ipv4Addr2 = append(ipv4Addr2, ips2[j].String())
+			}
+			if IsIPv6(ips2[j].String()) {
+				ipv6Addr2 = append(ipv6Addr2, ips2[j].String())
+			}
+		}
+
+		for j := 0; j <= len(ips3)-1; j++ {
+			if IsIPv4(ips3[j].String()) {
+				ipv4Addr3 = append(ipv4Addr3, ips3[j].String())
+			}
+			if IsIPv6(ips3[j].String()) {
+				ipv6Addr3 = append(ipv6Addr3, ips3[j].String())
+			}
+		}
+
+		e2e.Logf("ipv4Address1: %v, ipv6Address1: %v\n\n", ipv4Addr1, ipv6Addr1)
+		e2e.Logf("ipv4Address2: %v, ipv6Address2: %v\n\n", ipv4Addr2, ipv6Addr2)
+		e2e.Logf("ipv4Address3: %v, ipv6Address3: %v\n\n", ipv4Addr3, ipv6Addr3)
+
+		//Store IPv4 addresses of the 3 hosts above in ip1, ip2, ip3
+		//Store IPv6 addresses of the 3 hosts above in ip4, ip5, ip6
 		var cidrValue1, cidrValue2, cidrValue3, cidrValue4, ip1, ip2, ip3, ip4, ip5, ip6 string
 		if ipStackType == "ipv6single" {
-			ip1 = ips1[len(ips1)-1].String()
-			ip2 = ips2[len(ips2)-1].String()
-			ip3 = ips3[len(ips3)-1].String()
+			if len(ipv6Addr1) < 2 || len(ipv6Addr2) < 2 || len(ipv6Addr3) < 2 {
+				g.Skip("Not enough IPv6 address for the hosts that are used in this test with v6 single cluster, need two IPv6 addresses from each host, skip the test.")
+			}
+			ip1 = ipv6Addr1[0]
+			ip2 = ipv6Addr2[0]
+			ip3 = ipv6Addr3[0]
 			cidrValue1 = ip1 + "/128"
 			cidrValue2 = ip2 + "/128"
 
-			ip4 = ips1[len(ips1)-2].String()
-			ip5 = ips2[len(ips2)-2].String()
-			ip6 = ips3[len(ips3)-2].String()
+			ip4 = ipv6Addr1[1]
+			ip5 = ipv6Addr2[1]
+			ip6 = ipv6Addr3[1]
 			cidrValue3 = ip4 + "/128"
 			cidrValue4 = ip5 + "/128"
 		} else if ipStackType == "ipv4single" {
-			ip1 = ips1[0].String()
-			ip2 = ips2[0].String()
-			ip3 = ips3[0].String()
+			if len(ipv4Addr1) < 2 || len(ipv4Addr2) < 2 || len(ipv4Addr3) < 2 {
+				g.Skip("Not enough IPv4 address for the hosts that are used in this test with V4 single cluster, need two IPv4 addresses from each host, skip the test.")
+			}
+			ip1 = ipv4Addr1[0]
+			ip2 = ipv4Addr2[0]
+			ip3 = ipv4Addr3[0]
 			cidrValue1 = ip1 + "/32"
 			cidrValue2 = ip2 + "/32"
 
-			ip4 = ips1[1].String()
-			ip5 = ips2[1].String()
-			ip6 = ips3[1].String()
+			ip4 = ipv4Addr1[1]
+			ip5 = ipv4Addr2[1]
+			ip6 = ipv4Addr3[1]
 			cidrValue3 = ip4 + "/32"
 			cidrValue4 = ip5 + "/32"
 		} else if ipStackType == "dualstack" {
-			// ip1, ip2, ip3 store IPv4 addresses of their hosts above
-			ip1 = ips1[0].String()
-			ip2 = ips2[0].String()
-			ip3 = ips3[0].String()
+			if len(ipv4Addr1) < 1 || len(ipv4Addr2) < 1 || len(ipv4Addr3) < 1 || len(ipv6Addr1) < 1 || len(ipv6Addr2) < 1 || len(ipv6Addr3) < 1 {
+				g.Skip("Not enough IPv4 or IPv6 address for the hosts that are used in this test with dualstack cluster, need at least one IPv4 and one IPv6 address from each host, skip the test.")
+			}
+			ip1 = ipv4Addr1[0]
+			ip2 = ipv4Addr2[0]
+			ip3 = ipv4Addr3[0]
 			cidrValue1 = ip1 + "/32"
 			cidrValue2 = ip2 + "/32"
 
-			// ip4, ip5, ip6 store IPv4 addresses of their hosts above
-			ip4 = ips1[len(ips1)-1].String()
-			ip5 = ips2[len(ips2)-1].String()
-			ip6 = ips3[len(ips3)-1].String()
+			ip4 = ipv6Addr1[0]
+			ip5 = ipv6Addr2[0]
+			ip6 = ipv6Addr3[0]
 			cidrValue3 = ip4 + "/128"
 			cidrValue4 = ip5 + "/128"
 		}
