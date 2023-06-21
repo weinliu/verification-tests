@@ -866,12 +866,12 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		createKedaOperator(oc)
 	})
 	// author: weinliu@redhat.com
-	g.It("ConnectedOnly-Author:weinliu-High-52383-Keda Install", func() {
+	g.It("StagerunOnly-Author:weinliu-High-52383-Keda Install", func() {
 		g.By("CMA (Keda) operator has been installed successfully")
 	})
 
 	// author: weinliu@redhat.com
-	g.It("ConnectedOnly-Author:weinliu-High-62570-Verify must-gather tool works with CMA", func() {
+	g.It("StagerunOnly-Author:weinliu-High-62570-Verify must-gather tool works with CMA", func() {
 		var (
 			mustgatherName = "mustgather" + getRandomString()
 			mustgatherDir  = "/tmp/" + mustgatherName
