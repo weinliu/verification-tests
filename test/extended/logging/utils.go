@@ -319,7 +319,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 		ss, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				e2e.Logf("Waiting for availability of %s statefulset\n", name)
+				e2e.Logf("Waiting for statefulset/%s to appear\n", name)
 				return false, nil
 			}
 			return false, err
@@ -351,7 +351,7 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 		daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				e2e.Logf("Waiting for availability of daemonset/%s\n", name)
+				e2e.Logf("Waiting for daemonset/%s to appeear\n", name)
 				return false, nil
 			}
 			return false, err
@@ -404,13 +404,13 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod with label %s is not ready", label))
 }
 
-// GetDeploymentsNameByLabel retruns a list of deployment name which have specific labels
-func GetDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string {
+// getDeploymentsNameByLabel retruns a list of deployment name which have specific labels
+func getDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string {
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				e2e.Logf("Waiting for availability of deployment\n")
+				e2e.Logf("Can't get deployment(s) match label(s) %s, retrying...\n", label)
 				return false, nil
 			}
 			return false, err
@@ -420,7 +420,6 @@ func GetDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment with label %s is not available", label))
 	if err == nil {
 		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -430,6 +429,7 @@ func GetDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string
 		}
 		return expectedDeployments
 	}
+	e2e.Logf("No deployment matches label(s) %s in %s project", label, ns)
 	return nil
 }
 
@@ -440,7 +440,7 @@ func getPodNames(oc *exutil.CLI, ns, label string) ([]string, error) {
 		return names, err
 	}
 	if len(pods.Items) == 0 {
-		return names, fmt.Errorf("no pods matching label %s in namespace %s", label, ns)
+		return names, fmt.Errorf("no pod(s) match label %s in namespace %s", label, ns)
 	}
 	for _, pod := range pods.Items {
 		names = append(names, pod.Name)
@@ -451,7 +451,7 @@ func getPodNames(oc *exutil.CLI, ns, label string) ([]string, error) {
 // WaitForECKPodsToBeReady checks if the EFK pods could become ready or not
 func WaitForECKPodsToBeReady(oc *exutil.CLI, ns string) {
 	//wait for ES
-	esDeployNames := GetDeploymentsNameByLabel(oc, ns, "cluster-name=elasticsearch")
+	esDeployNames := getDeploymentsNameByLabel(oc, ns, "cluster-name=elasticsearch")
 	for _, name := range esDeployNames {
 		WaitForDeploymentPodsToBeReady(oc, ns, name)
 	}
@@ -680,7 +680,7 @@ func (cl *clusterlogging) waitForLoggingReady(oc *exutil.CLI) {
 	if cl.logStoreType == "elasticsearch" {
 		var esDeployNames []string
 		err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 2*time.Minute, true, func(context.Context) (done bool, err error) {
-			esDeployNames = GetDeploymentsNameByLabel(oc, cl.namespace, "cluster-name=elasticsearch")
+			esDeployNames = getDeploymentsNameByLabel(oc, cl.namespace, "cluster-name=elasticsearch")
 			if len(esDeployNames) != cl.esNodeCount {
 				e2e.Logf("expect %d ES deployments, but only find %d, try next time...", cl.esNodeCount, len(esDeployNames))
 				return false, nil
@@ -699,6 +699,9 @@ func (cl *clusterlogging) waitForLoggingReady(oc *exutil.CLI) {
 	}
 	// wait for collector
 	WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+	if cl.name == "instance" {
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "logfilesmetricexporter")
+	}
 }
 
 type clusterlogforwarder struct {

@@ -117,7 +117,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl.update(oc, "", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge")
 
 			g.By("Scale down the Elasticsearch deployment to 0.")
-			deployList := GetDeploymentsNameByLabel(oc, cloNS, "component=elasticsearch")
+			deployList := getDeploymentsNameByLabel(oc, cloNS, "component=elasticsearch")
 			for _, name := range deployList {
 				err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", name, "--replicas=0", "-n", cloNS).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())

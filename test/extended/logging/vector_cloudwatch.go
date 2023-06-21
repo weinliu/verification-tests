@@ -99,8 +99,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-51978-Vector Forward logs to Cloudwatch using namespaceUUID and groupPrefix[Serial]", func() {
-			g.Skip("Known issue: https://issues.redhat.com/browse/LOG-2701")
-
 			cw.setGroupPrefix("logging-51978-" + getInfrastructureName(oc))
 			cw.setGroupType("namespaceUUID")
 			cw.setLogTypes("application", "infrastructure", "audit")
@@ -240,7 +238,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-61600-Collector External Cloudwatch output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
-			cw.setGroupPrefix("logging-47052-" + getInfrastructureName(oc))
+			cw.setGroupPrefix("logging-61600-" + getInfrastructureName(oc))
 			cw.setGroupType("logType")
 			cw.setLogTypes("infrastructure", "audit", "application")
 

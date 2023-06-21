@@ -732,11 +732,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			logStoreType:     "elasticsearch",
 			storageClassName: sc,
 			esNodeCount:      3,
-			waitForReady:     true,
-			templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
+			//waitForReady:     true,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
 		}
 		defer cl.delete(oc)
 		cl.create(oc, "REDUNDANCY_POLICY=SingleRedundancy")
+
+		// since logging 5.8 is not released, in catsrc/redhat-operators, stable channel is pointed to logging 5.7
+		// in logging 5.7, there is only one ds, using ls.waitForLokiStackToBeReady(oc) will always fail.
+		var esDeployNames []string
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 2*time.Minute, true, func(context.Context) (bool, error) {
+			esDeployNames = getDeploymentsNameByLabel(oc, cl.namespace, "cluster-name=elasticsearch")
+			if len(esDeployNames) != cl.esNodeCount {
+				e2e.Logf("expect %d ES deployments, but only find %d, try next time...", cl.esNodeCount, len(esDeployNames))
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "some ES deployments are not created")
+
+		for _, name := range esDeployNames {
+			WaitForDeploymentPodsToBeReady(oc, cl.namespace, name)
+		}
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "kibana")
 
 		//get current csv version
 		preCloCSV := preCLO.getInstalledCSV(oc)
@@ -840,17 +859,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			logStoreType:     "elasticsearch",
 			storageClassName: sc,
 			esNodeCount:      3,
-			waitForReady:     true,
 			templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
 		}
 		defer cl.delete(oc)
 		cl.create(oc, "REDUNDANCY_POLICY=SingleRedundancy")
+		var esDeployNames []string
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 2*time.Minute, true, func(context.Context) (bool, error) {
+			esDeployNames = getDeploymentsNameByLabel(oc, cl.namespace, "cluster-name=elasticsearch")
+			if len(esDeployNames) != cl.esNodeCount {
+				e2e.Logf("expect %d ES deployments, but only find %d, try next time...", cl.esNodeCount, len(esDeployNames))
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "some ES deployments are not created")
+		for _, name := range esDeployNames {
+			WaitForDeploymentPodsToBeReady(oc, cl.namespace, name)
+		}
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "kibana")
 		esPods, err := getPodNames(oc, cl.namespace, "component=elasticsearch")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Before upgrade, ES pods are: %v", esPods)
 
 		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable", "qe-app-registry", "openshift-marketplace"}
+		var source = CatalogSourceObjects{"stable-5.8", "qe-app-registry", "openshift-marketplace"}
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&EO to %s", source.Channel))
@@ -1003,11 +1036,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			collectorType: "vector",
 			logStoreType:  "lokistack",
 			lokistackName: ls.name,
-			waitForReady:  true,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			//waitForReady:  true,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
 		}
 		defer cl.delete(oc)
 		cl.create(oc)
+		// since logging 5.8 is not released, in catsrc/redhat-operators, stable channel is pointed to logging 5.7
+		// in logging 5.7, there is only one ds, using ls.waitForLokiStackToBeReady(oc) will always fail.
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "logging-view-plugin")
 
 		//get current csv version
 		preCloCSV := preCLO.getInstalledCSV(oc)
@@ -1132,14 +1169,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			collectorType: "vector",
 			logStoreType:  "lokistack",
 			lokistackName: ls.name,
-			waitForReady:  true,
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
 		}
 		defer cl.delete(oc)
 		cl.create(oc)
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "logging-view-plugin")
 
 		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable", "qe-app-registry", "openshift-marketplace"}
+		var source = CatalogSourceObjects{"stable-5.8", "qe-app-registry", "openshift-marketplace"}
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&LO to %s", source.Channel))

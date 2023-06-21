@@ -189,7 +189,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.delete(oc)
 			cl.create(oc, "NODE_LABEL={\"vector\": \"deploy\"}")
 			g.By("Check Collector daemonset has no running pods")
-			esDeployNames := GetDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
+			esDeployNames := getDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
 			for _, name := range esDeployNames {
 				WaitForDeploymentPodsToBeReady(oc, cloNS, name)
 			}
@@ -224,7 +224,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check Collector daemonset has no running pods")
-			esDeployNames = GetDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
+			esDeployNames = getDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
 			for _, name := range esDeployNames {
 				WaitForDeploymentPodsToBeReady(oc, cloNS, name)
 			}
@@ -580,7 +580,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl.create(oc, "COLLECTOR_LIMITS_MEMORY=750Gi", "COLLECTOR_LIMITS_CPU=150m", "COLLECTOR_REQUESTS_CPU=150m", "COLLECTOR_REQUESTS_MEMORY=750Gi")
 
 			g.By("Check Collector daemonset has no running pods")
-			esDeployNames := GetDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
+			esDeployNames := getDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
 			for _, name := range esDeployNames {
 				WaitForDeploymentPodsToBeReady(oc, cloNS, name)
 			}
@@ -1566,7 +1566,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Elasticsearch sink in Vector config must use the Custom tlsSecurityProfile")
 			searchString := `[sinks.es_created_by_user.tls]
-enabled = true
 min_tls_version = "VersionTLS10"
 ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256"
 ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
@@ -1587,7 +1586,6 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 
 			g.By("The Elasticsearch sink in Vector config must use the Old tlsSecurityProfile")
 			searchString = `[sinks.es_created_by_user.tls]
-enabled = true
 min_tls_version = "VersionTLS10"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256,AES128-SHA,AES256-SHA,DES-CBC3-SHA"
 ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`

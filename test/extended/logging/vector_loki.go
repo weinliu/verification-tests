@@ -1041,7 +1041,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			appProj := oc.Namespace()
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			appPods, _ := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 
 			g.By("Create secret with external Grafana Loki instance credentials")
 			sct := resource{"secret", "loki-client", cloNS}
@@ -1074,7 +1073,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_AES_128_CCM_SHA256")
 			searchString := `[sinks.loki_server.tls]
-enabled = true
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_CCM_SHA256"`
 			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
@@ -1098,13 +1096,9 @@ ciphersuites = "TLS_AES_128_CCM_SHA256"`
 				if err != nil {
 					return false, err
 				}
-				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond == 0 {
-					return true, nil
-				}
-				return false, nil
+				return appLogs.Status == "success" && len(appLogs.Data.Result) == 0, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "Failed searching for application logs in Loki")
-			e2e.Logf("Application Logs Query is a success")
 
 			g.By("Set the Custom tlsSecurityProfile for Loki output")
 			patch := `{"spec":{"outputs":[{"name":"loki-server","secret":{"name":"loki-client"},"tls":{"securityProfile":{"custom":{"ciphers":["TLS_CHACHA20_POLY1305_SHA256"],"minTLSVersion":"VersionTLS13"},"type":"Custom"}},"type":"loki","url":"https://logs-prod3.grafana.net"}],"tlsSecurityProfile":null}}`
@@ -1113,7 +1107,6 @@ ciphersuites = "TLS_AES_128_CCM_SHA256"`
 
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_CHACHA20_POLY1305_SHA256")
 			searchString = `[sinks.loki_server.tls]
-enabled = true
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
@@ -1131,18 +1124,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			exutil.AssertWaitPollNoErr(err, "Unable to connect to the external Loki server.")
 
 			g.By("Searching for Application Logs in Loki")
-			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
-				appLogs, err := lc.searchByNamespace("", appProj)
-				if err != nil {
-					return false, err
-				}
-				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPods.Items[0].Name {
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "failed searching for application logs in Loki")
-			e2e.Logf("Application Logs Query is a success")
+			lc.waitForLogsAppearByProject("", appProj)
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-61476-Collector-External Loki output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
@@ -1210,7 +1192,6 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 
 			g.By("The Loki sink in Vector config must use the intermediate tlsSecurityProfile")
 			searchString := `[sinks.loki_server.tls]
-enabled = true
 min_tls_version = "VersionTLS12"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
 			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
@@ -1247,7 +1228,6 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 
 			g.By("The Loki sink in Vector config must use the Modern tlsSecurityProfile")
 			searchString = `[sinks.loki_server.tls]
-enabled = true
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"`
 			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
