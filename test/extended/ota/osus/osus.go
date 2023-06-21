@@ -19,7 +19,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 	var oc = exutil.NewCLI("osus", exutil.KubeConfigPath())
 
 	//author: jiajliu@redhat.com
-	g.It("Author:jiajliu-High-35869-install/uninstall osus operator from OperatorHub through CLI [Flaky]", func() {
+	g.It("Author:jiajliu-High-35869-install/uninstall osus operator from OperatorHub through CLI", func() {
 
 		testDataDir := exutil.FixturePath("testdata", "ota/osus")
 		ogTemp := filepath.Join(testDataDir, "operatorgroup.yaml")
@@ -55,7 +55,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=name=updateservice-operator", "-n", oc.Namespace()).Output()
 			if err != nil || strings.Contains(output, "No resources found") {
-				e2e.Logf("error: %v, keep trying!", err)
+				e2e.Logf("error: %v; output: %w", err, output)
 				return false, nil
 			}
 			return true, nil
@@ -89,6 +89,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		err = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("all", "-n", oc.Namespace()).Output()
 			if err != nil || !strings.Contains(output, "No resources found") {
+				e2e.Logf("error: %v; output: %w", err, output)
 				return false, nil
 			}
 			return true, nil
