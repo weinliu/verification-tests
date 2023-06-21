@@ -233,4 +233,24 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "Terminated")).To(o.BeFalse())
 	})
+
+	// author: anusaxen@redhat.com
+	g.It("Author:anusaxen-High-64151-check node healthz port is enabled for ovnk in CNO for GCP", func() {
+		e2e.Logf("It is for OCPBUGS-7158")
+		platform := checkPlatform(oc)
+		if !strings.Contains(platform, "gcp") {
+			g.Skip("Skip for un-expected platform,not GCP!")
+		}
+		g.By("Expect healtz-bind-address to be present in ovnkube-config config map")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-ovn-kubernetes", "ovnkube-config", "-ojson").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "0.0.0.0:10256")).To(o.BeTrue())
+
+		g.By("Make sure healtz-bind-address is reachable via nodes")
+		worker_node, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = exutil.DebugNode(oc, worker_node, "bash", "-c", "curl -v http://0.0.0.0:10256/healthz")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("HTTP/1.1 200 OK"))
+	})
 })
