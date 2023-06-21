@@ -1178,8 +1178,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var ospObj exutil.Osp
 		var vspObj *exutil.Vmware
 		var vspClient *govmomi.Client
-		nutanixClient, errNutanix := exutil.InitNutanixClient(oc)
-		o.Expect(errNutanix).NotTo(o.HaveOccurred())
+		var nutanixClient *exutil.NutanixClient
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected \n")
@@ -1237,6 +1236,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
 		case "nutanix":
 			e2e.Logf("\n Nutanix is detected, stop the instance %v on nutanix now \n", nodeToBeShutdown)
+			nutanixClient, err = exutil.InitNutanixClient(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 			defer startInstanceOnNutanix(nutanixClient, nodeToBeShutdown)
 			stopInstanceOnNutanix(nutanixClient, nodeToBeShutdown)
