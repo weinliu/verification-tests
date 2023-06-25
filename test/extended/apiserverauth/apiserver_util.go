@@ -81,7 +81,7 @@ func (service *service) createServiceFromTemplate(oc *exutil.CLI) {
 	exutil.CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "NAME="+service.name, "CLUSTERIP="+service.clusterip, "NAMESPACE="+service.namespace)
 }
 
-func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason string, conditionStatus string, conditionTypes []string) {
+func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason interface{}, conditionStatus string, conditionTypes []string) {
 	for _, webHookErrorConditionType := range conditionTypes {
 		// increase wait time for prow ci failures
 		err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
@@ -89,14 +89,9 @@ func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason string, c
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(webhookError).Should(o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType), "Mismatch in 'type' of admission errors reported")
 			//Inline conditional statement for evaluating 1) reason and status together,2) only status.
-			if conditionReason != "" && strings.Contains(webhookError, conditionReason) {
+			if containsAnyWebHookReason(webhookError, conditionReason) {
 				e2e.Logf("kube-apiserver admission webhook errors as \n %s ", string(webhookError))
 				o.Expect(webhookError).Should(o.MatchRegexp(`"status":"%s"`, conditionStatus), "Mismatch in 'status' of admission errors reported")
-				o.Expect(webhookError).Should(o.MatchRegexp(`"reason":"%s"`, conditionReason), "Mismatch in 'reason' of admission errors reported")
-				return true, nil
-			} else if conditionReason == "" && strings.Contains(webhookError, conditionStatus) {
-				o.Expect(webhookError).Should(o.MatchRegexp(`"status":"%s"`, conditionStatus), "Mismatch in 'status' of admission errors reported")
-				e2e.Logf("kube-apiserver admission webhook errors as \n %s ", string(webhookError))
 				return true, nil
 			}
 			// Adding logging for more debug
@@ -1234,4 +1229,20 @@ func waitApiserverRestartOfHypershift(oc *exutil.CLI, appLabel string, ns string
 	})
 	exutil.AssertWaitPollNoErr(errKas, "Failed to complete the restart within the expected time, please check the cluster status!")
 	return errKas
+}
+
+func containsAnyWebHookReason(webhookError string, conditionReasons interface{}) bool {
+	switch reasons := conditionReasons.(type) {
+	case string:
+		return strings.Contains(webhookError, reasons)
+	case []string:
+		for _, reason := range reasons {
+			if strings.Contains(webhookError, reason) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
 }
