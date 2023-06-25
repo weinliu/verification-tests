@@ -716,7 +716,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer dep2.deleteAsAdmin(oc)
 
 		g.By("#. Check Pod scheduling failed for new deployment")
-		podName := dep2.getPodList(oc)[0]
+		podName := dep2.getPodListWithoutFilterStatus(oc)[0]
 		o.Eventually(func() string {
 			podInfo := describePod(oc, dep2.namespace, podName)
 			return podInfo
