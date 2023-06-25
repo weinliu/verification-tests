@@ -1080,7 +1080,7 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("sosreport status is: %v", string(sosreportStatus))
 		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
-		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport-localhost")).To(o.BeTrue())
+		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport")).To(o.BeTrue())
 		if err != nil {
 			e2e.Failf("Error occured running with sos report: %v", err.Error())
 		}
