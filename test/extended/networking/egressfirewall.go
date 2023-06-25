@@ -1370,4 +1370,71 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 		}, 30*time.Second, 10*time.Second).ShouldNot(o.BeTrue())
 	})
 
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-PreChkUpgrade-Author:huirwang-High-64761-Check egressnetworkpolicy is functional post upgrade", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			statefulSetHelloPod = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
+			egressNPTemplate    = filepath.Join(buildPruningBaseDir, "egressnetworkpolicy-template.yaml")
+			ns                  = "64761-upgrade-ns"
+		)
+
+		g.By("create new namespace")
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create an egressnetworkpolicy object with rule deny.")
+		egressNP := egressNetworkpolicy{
+			name:      "egressnetworkpolicy-64761",
+			namespace: ns,
+			ruletype:  "Deny",
+			rulename:  "cidrSelector",
+			rulevalue: "0.0.0.0/0",
+			template:  egressNPTemplate,
+		}
+		egressNP.createEgressNetworkPolicyObj(oc)
+		errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressnetworkpolicy.network.openshift.io/"+egressNP.name, "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"www.redhat.com\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
+		o.Expect(errPatch).NotTo(o.HaveOccurred())
+
+		g.By("Create a pod in the namespace")
+		createResourceFromFile(oc, ns, statefulSetHelloPod)
+		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
+		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
+		helloPodname := getPodName(oc, ns, "app=hello")[0]
+
+		g.By("Check the allowed website can be accessed!")
+		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check the other website can be blocked!")
+		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
+		o.Expect(err).To(o.HaveOccurred())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-PstChkUpgrade-Author:huirwang-High-64761-Check egressnetworkpolicy is functional post upgrade", func() {
+		ns := "64761-upgrade-ns"
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
+		if nsErr != nil {
+			g.Skip("Skip the PstChkUpgrade test as 64761-upgrade-ns namespace does not exist, PreChkUpgrade test did not run")
+		}
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
+
+		g.By("Verify if egressnetworkpolicy existed")
+		output, efErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressnetworkpolicy", "-n", ns).Output()
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("egressnetworkpolicy-64761"))
+
+		g.By("Get the pod in the namespace")
+		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
+		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
+		helloPodname := getPodName(oc, ns, "app=hello")[0]
+
+		g.By("Check the allowed website can be accessed!")
+		_, err := e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check the other website can be blocked!")
+		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
+		o.Expect(err).To(o.HaveOccurred())
+	})
 })
