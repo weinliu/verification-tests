@@ -1086,6 +1086,17 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		}
 
 	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Critical-63002-oc new-app propagate containerPort information to the deployment if import-mode is PreserveOriginal", func() {
+		g.By("create new namespace")
+		oc.SetupProject()
+		g.By("create new-app with import-mode as PreserveOrigin")
+		err := oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", oc.Namespace(), "--name=example-preserveoriginal", "--import-mode=PreserveOriginal").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		out, err := oc.WithoutNamespace().Run("get").Args("svc", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "example-preserveoriginal")).To(o.BeTrue())
+	})
 
 })
 
