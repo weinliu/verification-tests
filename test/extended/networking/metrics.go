@@ -456,7 +456,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		} else {
 			iptablesCmdList = []string{"iptables"}
 		}
-		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		nodes, getNodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o", "jsonpath='{.items[*].metadata.name}'").Output()
+		nodeName := strings.Split(strings.Trim(nodes, "'"), " ")[0]
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		podName, getPodNameErr := exutil.GetPodName(oc, namespace, "app=ovnkube-node", nodeName)
 		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
@@ -529,7 +530,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		)
-		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		nodes, getNodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o", "jsonpath='{.items[*].metadata.name}'").Output()
+		nodeName := strings.Split(strings.Trim(nodes, "'"), " ")[0]
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		podName, getPodNameErr := exutil.GetPodName(oc, namespace, "app=ovnkube-node", nodeName)
 		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
@@ -776,7 +778,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
 		)
-		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		nodes, getNodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o", "jsonpath='{.items[*].metadata.name}'").Output()
+		nodeName := strings.Split(strings.Trim(nodes, "'"), " ")[0]
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		podName, getPodNameErr := exutil.GetPodName(oc, namespace, "app=ovnkube-node", nodeName)
 		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
