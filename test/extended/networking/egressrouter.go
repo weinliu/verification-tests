@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-networking] SDN egressrouter", func() {
 		// This is from customer bug https://issues.redhat.com/browse/OCPBUGS-3744
 		// Note, egress router functional case should only run on real baremetal clusters. As this case only check pod running, so we can use AWS to test it as well.
 		platform := exutil.CheckPlatform(oc)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "none") || strings.Contains(platform, "baremetal")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "baremetal")
 		if !acceptedPlatform {
 			g.Skip("Test cases should be run on AWS/BM cluster, skip for other platforms!")
 		}
