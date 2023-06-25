@@ -42,6 +42,18 @@ type credentialsRequest struct {
 	template  string
 }
 
+type OcpClientVerb = string
+
+func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {
+	e2e.Logf("running command : oc %s %s", string(verb), strings.Join(args, " "))
+	res, err := oc.AsAdmin().WithoutNamespace().Run(string(verb)).Args(args...).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if notEmpty {
+		o.Expect(res).ShouldNot(o.BeEmpty())
+	}
+	return res
+}
+
 func getCloudCredentialMode(oc *exutil.CLI) (string, error) {
 	var (
 		mode           string

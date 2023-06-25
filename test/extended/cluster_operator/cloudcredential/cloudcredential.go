@@ -26,6 +26,26 @@ var _ = g.Describe("[sig-cco] Cluster_Operator CCO should", func() {
 		modeInMetric string
 	)
 
+	g.It("NonHyperShiftHOST-PstChkUpgrade-Author:mihuang-High-23352-Cloud credential operator resets progressing transition timestamp when it upgrades", func() {
+		g.By("Check if ns-23352 namespace exists")
+		ns := "ns-23352"
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
+		if err != nil {
+			g.Skip("Skip the PstChkUpgrade test as ns-23352 namespace does not exist, PreChkUpgrade test did not run")
+		}
+		defer doOcpReq(oc, "delete", true, "ns", ns, "--ignore-not-found=true")
+
+		g.By("Get the progressingTransitionTimestamp before upgrade")
+		progressingTransitionTimestampCM := doOcpReq(oc, "get", true, "cm", "cm-23352", "-n", "ns-23352", `-o=jsonpath={.data.progressingTransitionTimestamp}`)
+		e2e.Logf("progressingTransitionTimestampCM: %s", progressingTransitionTimestampCM)
+
+		g.By("Check the progressing transition timestamp should be reset after upgrade")
+		progressingTransitionTimestampAfterUpgrade, err := time.Parse(time.RFC3339, doOcpReq(oc, "get", true, "clusteroperator", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Progressing")].lastTransitionTime}`))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("progressingTransitionTimestampAfterUpgrade: %s", progressingTransitionTimestampAfterUpgrade)
+		o.Expect(fmt.Sprintf("%s", progressingTransitionTimestampAfterUpgrade)).NotTo(o.Equal(progressingTransitionTimestampCM))
+	})
+
 	// author: lwan@redhat.com
 	// It is destructive case, will remove root credentials, so adding [Disruptive]. The case duration is greater than 5 minutes
 	// so adding [Slow]
