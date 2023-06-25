@@ -5074,13 +5074,14 @@ spec:
 		}()
 
 		// Function to get audit event logs for user login.
-		checkAuditEventCount := func(logGroup string, user string, pass string) int {
-			var count int
+		checkAuditEventCount := func(logGroup string, user string, pass string) (string, int) {
+			var eventLogs string
+			var eventCount int
 			now := time.Now().UTC().Unix()
 			errUser := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", user, "-p", pass).NotShowInfo().Execute()
 			o.Expect(errUser).NotTo(o.HaveOccurred())
 
-			script := fmt.Sprintf(`rm /tmp/OCP-43336-*.json; for logpath in kube-apiserver oauth-apiserver openshift-apiserver; do sleep 5; grep -h "%v" /var/log/${logpath}/audit*.log | jq -c 'select (.requestReceivedTimestamp | .[0:19] + "Z" | fromdateiso8601 > %v)' >> /tmp/OCP-43336-$logpath.json; done; cat /tmp/OCP-43336-*.json`, logGroup, now)
+			script := fmt.Sprintf(`rm -if /tmp/OCP-43336-*.json; for logpath in kube-apiserver oauth-apiserver openshift-apiserver; do sleep 5; grep -h "%v" /var/log/${logpath}/audit*.log | jq -c 'select (.requestReceivedTimestamp | .[0:19] + "Z" | fromdateiso8601 > %v)' >> /tmp/OCP-43336-$logpath.json; done; cat /tmp/OCP-43336-*.json`, logGroup, now)
 			contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
 			o.Expect(contextErr).NotTo(o.HaveOccurred())
 
@@ -5089,10 +5090,10 @@ spec:
 			o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 			o.Expect(masterNodes).NotTo(o.BeEmpty())
 			for _, masterNode := range masterNodes {
-				_, eventCount := checkAuditLogs(oc, script, masterNode, "openshift-kube-apiserver")
-				count += eventCount
+				eventLogs, eventCount = checkAuditLogs(oc, script, masterNode, "openshift-kube-apiserver")
+				eventCount += eventCount
 			}
-			return count
+			return eventLogs, eventCount
 		}
 
 		// Get user detail used by the test and cleanup after execution.
@@ -5104,7 +5105,10 @@ spec:
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
 		g.By("2. Check audit events should be zero after login operation")
-		auditEventCount := checkAuditEventCount("system:authenticated:oauth", users[0].Username, users[0].Password)
+		auditEventLog, auditEventCount := checkAuditEventCount("system:authenticated:oauth", users[0].Username, users[0].Password)
+		if auditEventCount > 0 {
+			e2e.Logf("Event Logs :: %v", auditEventLog)
+		}
 		o.Expect(auditEventCount).To(o.BeNumerically("==", 0))
 
 		g.By("3. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as Default")
@@ -5112,7 +5116,7 @@ spec:
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
 		g.By("4. Check audit events should be greater than zero after login operation")
-		auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[1].Username, users[1].Password)
+		_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[1].Username, users[1].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 
 		g.By("5. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as None")
@@ -5120,7 +5124,7 @@ spec:
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
 		g.By("6. Check audit events should be greater than zero after login operation")
-		auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[2].Username, users[2].Password)
+		_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[2].Username, users[2].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 
 		g.By("7. Configure audit config for customRules system:authenticated:oauth profile as Default & system:serviceaccounts:openshift-console-operator as WriteRequestBodies and audit profile as None")
@@ -5128,10 +5132,10 @@ spec:
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
 		g.By("8. Check audit events should be greater than zero after login operation")
-		auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[3].Username, users[3].Password)
+		_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[3].Username, users[3].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 
-		auditEventCount = checkAuditEventCount("system:serviceaccounts:openshift-console-operator", users[3].Username, users[3].Password)
+		_, auditEventCount = checkAuditEventCount("system:serviceaccounts:openshift-console-operator", users[3].Username, users[3].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 	})
 
