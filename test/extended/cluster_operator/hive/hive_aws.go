@@ -63,6 +63,85 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "43029"|./bin/extended-platform-tests run --timeout 20m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-High-43029-[AWS]Hive should abandon deprovision when preserveOnDelete is true when clusters with managed DNS [Serial]", func() {
+		testCaseID := "43029"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: cdName + "." + AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		g.By("Create Route53-aws-creds in hive namespace")
+		createRoute53AWSCreds(oc, oc.Namespace())
+
+		g.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "true",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           cdName + "." + AWSBaseDomain,
+			clusterName:          cdName,
+			manageDNS:            true,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 3,
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Check Aws ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, FakeClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("Edit secret aws-creds and change the data to an invalid value")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "aws-creds", "--type", `merge`, `--patch={"data": {"aws_access_key_id": "MTIzNDU2"}}`, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Delete the cd, and then hive will hit DeprovisionLaunchError=AuthenticationFailed, and stuck in deprovision process")
+		cmd, _, _, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName, "-n", oc.Namespace()).Background()
+		defer cmd.Process.Kill()
+		waitForDeprovisionLaunchError := func() bool {
+			condition := getCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "DeprovisionLaunchError")
+			if status, ok := condition["status"]; !ok || status != "True" {
+				e2e.Logf("For condition DeprovisionLaunchError, expected status is True, actual status is %v, retrying ...", status)
+				return false
+			}
+			if reason, ok := condition["reason"]; !ok || reason != "AuthenticationFailed" {
+				e2e.Logf("For condition DeprovisionLaunchError, expected reason is AuthenticationFailed, actual reason is %v, retrying ...", reason)
+				return false
+			}
+			if message, ok := condition["message"]; !ok || strings.Compare(message, "Credential check failed") != 0 {
+				e2e.Logf("For condition DeprovisionLaunchError, expected message is \nCredential check failed, \nactual reason is %v\n, retrying ...", message)
+				return false
+			}
+			e2e.Logf("For condition DeprovisionLaunchError, fields status, reason & message all expected, proceeding to the next step ...")
+			return true
+		}
+		o.Eventually(waitForDeprovisionLaunchError).WithTimeout(ClusterUninstallTimeout * time.Second).WithPolling(30 * time.Second).Should(o.BeTrue())
+
+		g.By("Set cd.spec.preserveOnDelete = true on cd")
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "--type", "json", "-p", "[{\"op\": \"remove\", \"path\": \"/spec/preserveOnDelete\"}]").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "--type", `merge`, `--patch={"spec": {"preserveOnDelete": true}}`, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check in this situation, hive would be able to remove dnszone and CD CR directly")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "28631"|./bin/extended-platform-tests run --timeout 20m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Critical-28631-[aws]Hive deprovision controller can be disabled through a hiveconfig option [Serial]", func() {
 		testCaseID := "28631"
