@@ -166,4 +166,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(WorkloadAnnotation).To(o.ContainSubstring("\"target.workload.openshift.io/management\":\"{\\\"effect\\\": \\\"PreferredDuringScheduling\\\"}"))
 		}
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-Critical-64657-Alibaba clusters are TechPreview and should not be upgradeable", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "AlibabaCloud")
+		SkipIfCloudControllerManagerNotDeployed(oc)
+		g.By("Check cluster is TechPreview and should not be upgradeable")
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o=jsonpath={.status.conditions[*]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(msg).To(o.ContainSubstring("Alibaba platform is currently tech preview, upgrades are not allowed"))
+
+	})
 })
