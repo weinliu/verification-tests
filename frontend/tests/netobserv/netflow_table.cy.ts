@@ -3,7 +3,7 @@ import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, genSelectors, colSelectors, querySumSelectors, histogramSelectors } from "../../views/netflow-page"
 
 // if project name is changed here, it also needs to be changed 
-// under fixture/flowcollector.ts and topology_view.spec.ts
+// under all netobserv test specs
 const project = 'netobserv'
 
 describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table view tests', { tags: ['NETOBSERV'] }, function () {
@@ -47,7 +47,6 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                     cy.get('[data-test="1h"]').should('exist').click()
                 })
             })
-
 
             cy.byTestID(genSelectors.refreshDrop).then(btn => {
                 expect(btn).to.exist

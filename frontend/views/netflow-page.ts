@@ -107,6 +107,16 @@ export namespace topologySelectors {
     export const badgeToggle = '#badge-switch'
 }
 
+export namespace overviewSelectors {
+    export const mPanels = '#view-options-dropdown > ul > section:nth-child(1) > ul > li > a'
+    export const panelsModal = '.modal-content'
+    export const typeDrop = 'type-dropdown'
+    export const scopeDrop = 'scope-dropdown'
+    export const truncateDrop = 'truncate-dropdown'
+    export const defaultPanels = ['Top 5 average rates', 'Top 5 latest rates', 'Top 5 flow rates stacked with total', 'Top 5 flow rates']
+    export const allPanels = ['Top 5 average rates', 'Top 5 latest rates', 'Top 5 flow rates stacked', 'Total rate', 'Top 5 flow rates stacked with total', 'Top 5 flow rates']
+}
+
 export namespace histogramSelectors {
     export const timeRangeContainer = "#chart-histogram > div.pf-l-flex.pf-m-row.histogram-range-container"
     export const zoomin = timeRangeContainer + " > div:nth-child(5) > div > div:nth-child(2) > button"
@@ -117,4 +127,79 @@ export namespace histogramSelectors {
     const backwardShift = timeRangeContainer + "> div:nth-child(2)"
     export const singleLeftShift = backwardShift + "> button:nth-child(2)"
     export const doubleLeftShift = backwardShift + "> button:nth-child(1)"
+}
+
+Cypress.Commands.add('showAdvancedOptions', () => {
+    cy.get('#show-view-options-button')
+      .then(function ($button) {
+        if ($button.text() === 'Hide advanced options') {
+          return;
+        } else {
+          cy.get('#show-view-options-button').click();
+        }
+      })
+});
+
+Cypress.Commands.add('checkPanelsNum', (panels = 4) => {
+    cy.get('#overview-flex').find('.overview-card').its('length').should('eq', panels);
+});
+
+Cypress.Commands.add('checkPanel', (panelName) => {
+    for (let i = 0; i < panelName.length; i++) {
+        cy.get('#overview-flex').contains(panelName[i]);
+        cy.get('[data-test-metrics]').its('length').should('gt', 0);
+    }
+});
+
+Cypress.Commands.add('openPanelsModal', () => {
+    cy.showAdvancedOptions();
+    cy.get('#view-options-button').click();
+    cy.get(overviewSelectors.mPanels).click().then(panel => {
+        cy.get(overviewSelectors.panelsModal).should('exist')
+    })
+});
+
+Cypress.Commands.add('checkPopupItems', (id, names) => {
+    for (let i = 0; i < names.length; i++) {
+        cy.get(id).contains(names[i])
+          .closest('.pf-c-data-list__item-row').find('.pf-c-data-list__check');
+      }
+});
+
+Cypress.Commands.add('selectPopupItems', (id, names) => {
+    for (let i = 0; i < names.length; i++) {
+      cy.get(id).contains(names[i])
+        .closest('.pf-c-data-list__item-row').find('.pf-c-data-list__check').click();
+    }
+});
+
+Cypress.Commands.add('checkQuerySummary', (metric) => {
+    let warningExists = false
+    let num = 0
+    cy.get(querySumSelectors.queryStatsPanel).should('exist').then(qrySum => {
+        if (Cypress.$(querySumSelectors.queryStatsPanel + ' svg.query-summary-warning').length > 0) {
+            warningExists = true
+        }
+    })
+    if (warningExists) {
+        num = Number(metric.text().split('+ ')[0])
+    }
+    else {
+        num = Number(metric.text().split(' ')[0])
+    }
+    expect(num).to.be.greaterThan(0)
+});
+
+declare global {
+    namespace Cypress {
+        interface Chainable {
+        showAdvancedOptions(): Chainable<Element>
+        checkPanelsNum(panels?: number): Chainable<Element>
+        checkPanel(panelName : string[]): Chainable<Element>
+        openPanelsModal(): Chainable<Element>
+        selectPopupItems(id: string, names: string[]): Chainable<Element>
+        checkPopupItems(id: string, names: string[]): Chainable<Element>
+        checkQuerySummary(metric: JQuery<HTMLElement>): Chainable<Element>
+      }
+    }
 }

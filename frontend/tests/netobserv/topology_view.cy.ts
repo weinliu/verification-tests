@@ -2,7 +2,7 @@ import { netflowPage, genSelectors, topologySelectors, topologyPage } from "../.
 import { Operator } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 // if project name is changed here, it also needs to be changed 
-// under fixture/flowcollector.ts and netflow_table.spec.ts
+// under all netobserv test specs
 const project = 'netobserv'
 const metricFunction = [
     "Latest rate",
