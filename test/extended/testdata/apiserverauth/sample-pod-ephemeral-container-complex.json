@@ -5,6 +5,7 @@
       "name": "hello-openshift"
     },
     "spec": {
+      "serviceAccountName": "default",
       "ephemeralContainers": [
         {
           "name": "ephemeral-pod-debugger",

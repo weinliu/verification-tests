@@ -969,8 +969,8 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		podJson := filepath.Join(baseDir, "sample-pod-ephemeral-container-complex.json")
 
 		//It should fail, currently there is a bug (https://issues.redhat.com/browse/OCPBUGS-7181) associated with it
-		// err = oc.Run("replace").Args("--raw", "/api/v1/namespaces/"+testNamespace+"/pods/hello-openshift/ephemeralcontainers", "-f", podJson).Execute()
-		// o.Expect(err).To(o.HaveOccurred(), "Addition of privileged ephemeral containers without required privileges must fail")
+		err = oc.Run("replace").Args("--raw", "/api/v1/namespaces/"+testNamespace+"/pods/hello-openshift/ephemeralcontainers", "-f", podJson).Execute()
+		o.Expect(err).To(o.HaveOccurred(), "Addition of privileged ephemeral containers without required privileges must fail")
 
 		g.By("6. Adding scc to the user")
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default", "-n", testNamespace).Execute()
