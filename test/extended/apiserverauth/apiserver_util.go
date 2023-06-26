@@ -84,7 +84,7 @@ func (service *service) createServiceFromTemplate(oc *exutil.CLI) {
 func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason interface{}, conditionStatus string, conditionTypes []string) {
 	for _, webHookErrorConditionType := range conditionTypes {
 		// increase wait time for prow ci failures
-		err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		err := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
 			webhookError, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(webhookError).Should(o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType), "Mismatch in 'type' of admission errors reported")
@@ -95,7 +95,7 @@ func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason interface
 				return true, nil
 			}
 			// Adding logging for more debug
-			e2e.Logf("Retrying for expected kube-apiserver admission webhook error :: %s :: %s", conditionStatus, webhookError)
+			e2e.Logf("Retrying for expected kube-apiserver admission webhook error :: %s :: %s :: %s", conditionStatus, webhookError, webHookErrorConditionType)
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Test Fail: Expected Kube-apiserver admissionwebhook errors not present.")

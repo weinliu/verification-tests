@@ -1899,29 +1899,8 @@ spec:
 		CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
 
 		g.By("2) Check for information message after upgrade on kube-apiserver cluster when bad admission webhooks are present.")
-		for _, webHookErrorConditionType := range webHookErrorConditionTypes {
-			webhookError, err := oc.Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("kube-apiserver reports the admission webhook errors as \n %s ", string(webhookError))
-
-			webhookServiceFailureReasons := []string{"WebhookServiceNotFound", "WebhookServiceNotReady", "WebhookServiceConnectionError", "AdmissionWebhookMatchesVirtualResource"}
-			matched := false
-			var matchedReason string
-			for _, reason := range webhookServiceFailureReasons {
-				if strings.Contains(webhookError, reason) {
-					matched = true
-					matchedReason = reason
-					break
-				}
-			}
-			o.Expect(matched).To(o.BeTrue(), "Mismatch in admission errors reported")
-
-			o.Expect(webhookError).Should(o.And(
-				o.MatchRegexp(`"reason":"%s"`, matchedReason),
-				o.MatchRegexp(`"status":"%s"`, status),
-				o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType)),
-				"Mismatch in admission errors reported")
-		}
+		webhookServiceFailureReasons := []string{"WebhookServiceNotFound", "WebhookServiceNotReady", "WebhookServiceConnectionError", "AdmissionWebhookMatchesVirtualResource"}
+		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, status, webHookErrorConditionTypes)
 
 		g.By("3) Check for kube-apiserver operator status after upgrade when cluster has bad webhooks present.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
