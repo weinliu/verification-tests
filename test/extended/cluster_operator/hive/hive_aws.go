@@ -63,6 +63,76 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "32135"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Medium-32135-[aws]kubeconfig and password secrets need to be owned by ClusterDeployment after installed [Serial]", func() {
+		testCaseID := "32135"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		g.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Check ownerReference for secrets kubeconfig and password, before installed, it is only owned by ClusterProvision.")
+		ClusterprovisionName := getClusterprovisionName(oc, cdName, oc.Namespace())
+		kubeconfigName := ClusterprovisionName + "-admin-kubeconfig"
+		passwordName := ClusterprovisionName + "-admin-password"
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", ok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", nok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", ok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", nok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+
+		g.By("Check ClusterDeployment is installed.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("Check ownership again, it will be owned by both ClusterProvision and ClusterDeployment.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", ok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", ok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", ok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", ok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+
+		g.By("Delete ClusterProvision.")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterProvision", ClusterprovisionName, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check kubeconfig and password secrets are still exist and owned by clusterdeployment.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", nok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", ok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", nok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", ok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
+
+		g.By("Delete clusterdeployment, kubeconfig and password secrets will be deleted.")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, kubeconfigName, nok, DefaultTimeout, []string{"secret", "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, passwordName, nok, DefaultTimeout, []string{"secret", "-n", oc.Namespace()}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "43029"|./bin/extended-platform-tests run --timeout 20m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-High-43029-[AWS]Hive should abandon deprovision when preserveOnDelete is true when clusters with managed DNS [Serial]", func() {
 		testCaseID := "43029"

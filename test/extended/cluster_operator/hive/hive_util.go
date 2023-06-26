@@ -789,6 +789,23 @@ func printProvisionPodLogs(oc *exutil.CLI, provisionPodOutput, namespace string)
 	}
 }
 
+func getClusterprovisionName(oc *exutil.CLI, cdName, namespace string) string {
+	var ClusterprovisionName string
+	var err error
+	waitForClusterprovision := func() bool {
+		ClusterprovisionName, _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", namespace, "-o=jsonpath={.status.provisionRef.name}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(ClusterprovisionName, cdName) {
+			return true
+		} else {
+			return false
+		}
+	}
+	o.Eventually(waitForClusterprovision).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+	return ClusterprovisionName
+}
+
 func getProvisionPodNames(oc *exutil.CLI, cdName, namespace string) (provisionPodNames []string) {
 	// For "kubectl get", the default sorting order is alphabetical
 	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=provision", "-l", "hive.openshift.io/cluster-deployment-name="+cdName, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Outputs()
