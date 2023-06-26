@@ -676,8 +676,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-mnt-namespaces"))
 
-		//Verify nto operator logs
-		assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "user-max-mnt-namespaces")
+		g.By("Assert static tuning from profile 'user-max-mnt-namespaces' applied in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `static tuning from profile 'user-max-mnt-namespaces' applied|active and recommended profile \(user-max-mnt-namespaces\) match`)
 
 		g.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
@@ -695,12 +695,16 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if isSNO || is3CPNoWorker {
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-control-plane")
 			assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "openshift-control-plane")
+			g.By("Assert static tuning from profile 'openshift-control-plane' applied in tuned pod log")
+			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `static tuning from profile 'openshift-control-plane' applied|active and recommended profile \(openshift-control-plane\) match`)
+
 			profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(profileCheck).To(o.Equal("openshift-control-plane"))
 		} else {
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node")
-			assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "openshift-node")
+			g.By("Assert static tuning from profile 'openshift-node' applied in tuned pod log")
+			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `static tuning from profile 'openshift-node' applied|active and recommended profile \(openshift-node\) match`)
 			profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(profileCheck).To(o.Equal("openshift-node"))
@@ -921,7 +925,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(isMatch).To(o.Equal(true))
 	})
 
-	g.It("Author:liqcui-Medium-44650-NTO profiles provided with TuneD [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-NonHyperShiftHOST-Author:liqcui-Medium-44650-NTO profiles provided with TuneD [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
