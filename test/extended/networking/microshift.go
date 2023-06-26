@@ -728,7 +728,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	// author: huirwang@redhat.com
 	g.It("MicroShiftOnly-Author:huirwang-High-60969-Blocking external access to the NodePort service on a specific host interface. [Disruptive]", func() {
 		var (
-			caseID           = "64253"
+			caseID           = "60969"
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
 		)
 
@@ -785,6 +785,80 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("Remove the added new rule")
 		removeIPRules(oc, nodePort, nodeIP, nodeName)
+
+		g.By("Verify the NodePort service can be accessed again.")
+		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// author: asood@redhat.com
+	g.It("MicroShiftOnly-Author:asood-High-64753-Check disabling IPv4 forwarding makes the nodeport service inaccessible. [Disruptive]", func() {
+		var (
+			caseID           = "64753"
+			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+			serviceName      = "test-service-" + caseID
+		)
+
+		g.By("Create a namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		pod_pmtrs := map[string]string{
+			"$podname":   "hello-pod",
+			"$namespace": e2eTestNamespace,
+			"$label":     "hello-pod",
+		}
+
+		g.By("creating hello pod in namespace")
+		createPingPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, "hello-pod")
+
+		svc_pmtrs := map[string]string{
+			"$servicename":           serviceName,
+			"$namespace":             e2eTestNamespace,
+			"$label":                 "test-service",
+			"$internalTrafficPolicy": "",
+			"$externalTrafficPolicy": "",
+			"$ipFamilyPolicy":        "",
+			"$selector":              "hello-pod",
+			"$serviceType":           "NodePort",
+		}
+		createServiceforUshift(oc, svc_pmtrs)
+		svc, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, serviceName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(svc).Should(o.ContainSubstring(serviceName))
+
+		g.By("Get service NodePort and NodeIP value")
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, serviceName, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod", "-o=jsonpath={.spec.nodeName}").Output()
+		o.Expect(podErr).NotTo(o.HaveOccurred())
+		nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeName)
+		svcURL := net.JoinHostPort(nodeIP, nodePort)
+		e2e.Logf("Service URL %s", svcURL)
+
+		g.By("Curl NodePort Service")
+		curlNodeCmd := fmt.Sprintf("curl %s -s --connect-timeout 5", svcURL)
+		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Disable IPv4 forwarding")
+		enableIPv4ForwardingCmd := fmt.Sprintf("sysctl -w net.ipv4.ip_forward=1")
+		disableIPv4ForwardingCmd := fmt.Sprintf("sysctl -w net.ipv4.ip_forward=0")
+		defer func() {
+			_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", enableIPv4ForwardingCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", disableIPv4ForwardingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Verify NodePort Service is no longer accessible")
+		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("Enable IPv4 forwarding")
+		_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", enableIPv4ForwardingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Verify the NodePort service can be accessed again.")
 		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
