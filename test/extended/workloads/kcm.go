@@ -524,4 +524,65 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			e2e.Failf("KS operator not rebased with latest Kubernetes\n")
 		}
 	})
+
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-63962-Verify MaxUnavailableStatefulSet feature is available via TechPreviewNoUpgrade", func() {
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip for featuregate set as TechPreviewNoUpgrade")
+		}
+		// Get kubecontrollermanager pod name & check if the feature gate is enabled
+		kcmPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-kube-controller-manager", "-l", "app=kube-controller-manager", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		kcmPodOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", kcmPodName, "-n", "openshift-kube-controller-manager", "-o=jsonpath={.spec.containers[0].args}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(kcmPodOut, "--feature-gates=MaxUnavailableStatefulSet=true")).To(o.BeTrue())
+	})
+
+	// author: knarra@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-Critical-63694-Verify MaxUnavailableStatefulSet feature works fine", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		statefulset63694 := filepath.Join(buildPruningBaseDir, "statefulset_63694.yaml")
+
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip for featuregate not set as TechPreviewNoUpgrade")
+		}
+		// Create statefulset
+
+		g.By("create new namespace")
+		oc.SetupProject()
+		ns63694 := oc.Namespace()
+
+		ssCreationErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", statefulset63694, "-n", ns63694).Execute()
+		o.Expect(ssCreationErr).NotTo(o.HaveOccurred())
+
+		// Check all pod related to statefulset are running
+		if ok := waitForAvailableRsRunning(oc, "statefulset", "web", ns63694, "5"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			e2e.Failf("All pods related to statefulset web are not running")
+		}
+
+		// Trigger a rolling upgrade by changing the image
+		patch := `[{"op":"replace", "path":"/spec/template/spec/containers/0/image", "value":"quay.io/openshifttest/nginx-alpine@sha256:f78c5a93df8690a5a937a6803ef4554f5b6b1ef7af4f19a441383b8976304b4c"}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("statefulset", "web", "-n", ns63694, "--type=json", "-p", patch).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		// Verify that pods have been rolled out in order
+		if ok := waitForAvailableRsRunning(oc, "statefulset", "web", ns63694, "5"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			e2e.Failf("All pods related to statefulset web are not running")
+		}
+
+		g.By("Get events sorted by lastTimestamp")
+		eventsOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", ns63694, "--sort-by="+".lastTimestamp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		eventDetails := []string{"delete Pod web-4 in StatefulSet web successful", "delete Pod web-3 in StatefulSet web successful", "create Pod web-4 in StatefulSet web successful", "create Pod web-3 in StatefulSet web successful", "delete Pod web-1 in StatefulSet web successful", "delete Pod web-2 in StatefulSet web successful", "create Pod web-2 in StatefulSet web successful", "delete Pod web-0 in StatefulSet web successful", "create Pod web-0 in StatefulSet web successful"}
+		for _, event := range eventDetails {
+			o.Expect(strings.Contains(eventsOutput, event)).To(o.BeTrue())
+		}
+	})
+
 })
