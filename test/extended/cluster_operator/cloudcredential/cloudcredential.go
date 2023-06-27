@@ -123,6 +123,15 @@ spec:
 			}
 		}
 	})
+
+	g.It("NonHyperShiftHOST-Author:mihuang-Medium-33209-[cco-passthrough]IPI on azure with cco passthrough mode", func() {
+		g.By("Check if it's an azure cluster")
+		exutil.SkipIfPlatformTypeNot(oc, "azure")
+
+		g.By("Check root credential has passthrough annotations")
+		o.Expect(doOcpReq(oc, "get", true, "secret", "-n", "kube-system", "azure-credentials", "-o=jsonpath={.metadata.annotations.cloudcredential\\.openshift\\.io/mode}")).Should(o.Equal("passthrough"))
+	})
+
 	//For bug https://bugzilla.redhat.com/show_bug.cgi?id=1940142
 	//For bug https://bugzilla.redhat.com/show_bug.cgi?id=1952891
 	g.It("NonHyperShiftHOST-Author:lwan-High-45415-[Bug 1940142] Reset CACert to correct path [Disruptive]", func() {
