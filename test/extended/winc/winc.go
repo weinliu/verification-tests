@@ -81,10 +81,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check Windows worker nodes run the same kubelet version as other Linux worker nodes")
 		linuxKubeletVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=linux", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 		windowsKubeletVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=windows", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if windowsKubeletVersion[0:7] != linuxKubeletVersion[0:7] {
-			e2e.Failf("Failed to check Windows %s and Linux %s kubelet version should be the same", windowsKubeletVersion, linuxKubeletVersion)
+
+		if !matchKubeletVersion(oc, linuxKubeletVersion, windowsKubeletVersion) {
+			e2e.Failf("failed to check Windows %s and Linux %s kubelet version should be the same", windowsKubeletVersion, linuxKubeletVersion)
 		}
 
 		g.By("Check worker label is applied to Windows nodes")

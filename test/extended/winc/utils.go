@@ -1002,3 +1002,21 @@ func waitForAdminNodeLogEvent(oc *exutil.CLI, host string, logPath string, messa
 	})
 	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("Failed to find \"%v\" in node %v log %v after 25 minutes", message, host, logPath))
 }
+
+func matchKubeletVersion(oc *exutil.CLI, version1, version2 string) bool {
+	// Remove the "v" prefix and split the versions by the dot separator after getting only the part before the + sign
+	version1Parts := strings.Split(strings.Split(strings.TrimPrefix(version1, "v"), "+")[0], ".")
+	version2Parts := strings.Split(strings.Split(strings.TrimPrefix(version2, "v"), "+")[0], ".")
+	// Ensure both versions have at least 3 parts (X.Y.Z)
+	if len(version1Parts) < 3 || len(version2Parts) < 3 {
+		return false
+	}
+
+	wmcoLogVersion := getWMCOVersionFromLogs(oc)
+	if strings.HasSuffix(strings.Split(wmcoLogVersion, "-")[0], ".0.0") {
+		// Kubelet versions should match (X.Y.Z) only on new WMCO releases
+		return version1Parts[0] == version2Parts[0] && version1Parts[1] == version2Parts[1] && version1Parts[2] == version2Parts[2]
+	}
+	// otherwise, check only X.Y match
+	return version1Parts[0] == version2Parts[0] && version1Parts[1] == version2Parts[1]
+}
