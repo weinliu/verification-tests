@@ -9,7 +9,7 @@ objects:
     name: "${NAME}"
     namespace: "${NAMESPACE}"
   spec:
-    terminationGracePeriodSeconds: 90
+    terminationGracePeriodSeconds: 60
     securityContext:
       runAsNonRoot: true
       seccompProfile:
