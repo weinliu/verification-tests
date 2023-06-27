@@ -6,6 +6,7 @@ import (
 	"net"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -863,5 +864,78 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Verify the NodePort service can be accessed again.")
 		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("MicroShiftOnly-Author:huirwang-Medium-61162-Hostname changes should not block ovn. [Disruptive]", func() {
+		var (
+			caseID           = "61162"
+			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+		)
+
+		exutil.By("Create a namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		exutil.By("Get the ready-schedulable worker nodes")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeList.Items) > 0).To(o.BeTrue())
+		nodeName := nodeList.Items[0].Name
+
+		exutil.By("Change node hostname")
+		newHostname := fmt.Sprintf("%v.61162", nodeName)
+		e2e.Logf("Changing the host name to %v", newHostname)
+		setHostnameCmd := fmt.Sprintf("hostnamectl set-hostname %v", newHostname)
+		defer func() {
+			_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "hostnamectl set-hostname \"\" ;hostnamectl set-hostname --transient "+nodeName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, nodeName)
+		}()
+		_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", setHostnameCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, nodeName)
+
+		exutil.By("Verify the ovn pods running well.")
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+		exutil.AssertWaitPollNoErr(err, "wait for ovnkube-master pods ready timeout")
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		exutil.AssertWaitPollNoErr(err, "wait for ovnkube-node pods ready timeout")
+
+		exutil.By("Verify the hostname is new hostname ")
+		hostnameOutput, err := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "cat /etc/hostname")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		pattern := `dhcp.*\.61162`
+		re := regexp.MustCompile(pattern)
+		cuhostname := re.FindString(hostnameOutput)
+		e2e.Logf("Current hostname is %v,expected hostname is %v", cuhostname, newHostname)
+		o.Expect(cuhostname == newHostname).To(o.BeTrue())
+
+		exutil.By("Verify test pods working well.")
+		pod_pmtrs := map[string]string{
+			"$podname":   "hello-pod1",
+			"$namespace": e2eTestNamespace,
+			"$label":     "hello-pod",
+		}
+
+		exutil.By("create 1st hello pod in namespace")
+		createPingPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, "hello-pod1")
+
+		pod_pmtrs = map[string]string{
+			"$podname":   "hello-pod2",
+			"$namespace": e2eTestNamespace,
+			"$label":     "hello-pod",
+		}
+		exutil.By("create 2nd hello pod in same namespace")
+		createPingPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, "hello-pod2")
+
+		exutil.By("curl hello-pod2 to hello-pod1")
+		helloPod1IP := getPodIPv4(oc, e2eTestNamespace, "hello-pod1")
+		output, err := e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod2", "curl --connect-timeout 5 -s "+net.JoinHostPort(helloPod1IP, "8080"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
 	})
 })

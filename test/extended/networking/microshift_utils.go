@@ -117,3 +117,10 @@ func checkIPrules(oc *exutil.CLI, nodePort, nodeIP, iprules string) bool {
 	}
 
 }
+
+func restartMicroshiftService(oc *exutil.CLI, nodeName string) {
+	// As restart the microshift service, the debug node pod will quit with error
+	exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "systemctl restart microshift")
+	exec.Command("bash", "-c", "sleep 60").Output()
+	checkNodeStatus(oc, nodeName, "Ready")
+}
