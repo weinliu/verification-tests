@@ -3399,7 +3399,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("# Check for deployment should stuck at Pending state")
 			var podsList []string
 			o.Eventually(func() []string {
-				podsList = dep.getPodListWithoutFilterStatus(oc)
+				podsList = depRestore.getPodListWithoutFilterStatus(oc)
 				return podsList
 			}, 60*time.Second, 5*time.Second).ShouldNot(o.BeEmpty())
 			o.Consistently(func() string {
