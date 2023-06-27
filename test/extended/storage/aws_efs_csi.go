@@ -1,12 +1,13 @@
 package storage
 
 import (
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -411,8 +412,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Update the new dep with additional volume and wait till it gets ready")
 		newdepA.setVolumeAdd(oc, "/data-dir2", "local1", newpvcB.name)
-		podsList, err := getPodsListByLabel(oc, oc.Namespace(), "app="+newdepA.applabel)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		podsList := newdepA.getPodList(oc)
 		updatedPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podsList[0], "-n", oc.Namespace(), "-o=jsonpath={.spec.containers[0].volumeMounts[*].mountPath}").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(updatedPod).Should(o.ContainSubstring("/data-dir2"))

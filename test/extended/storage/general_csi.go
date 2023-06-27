@@ -3014,8 +3014,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer dep.deleteAsAdmin(oc)
 
 			g.By("# Check for dep remain in Pending state")
-			podsList, err := getPodsListByLabel(oc, oc.Namespace(), "app="+dep.applabel)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			var podsList []string
+			o.Eventually(func() []string {
+				podsList = dep.getPodListWithoutFilterStatus(oc)
+				return podsList
+			}, 60*time.Second, 5*time.Second).ShouldNot(o.BeEmpty())
 			o.Consistently(func() string {
 				podStatus, _ := getPodStatus(oc, dep.namespace, podsList[0])
 				return podStatus
@@ -3394,8 +3397,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer depRestore.deleteAsAdmin(oc)
 
 			g.By("# Check for deployment should stuck at Pending state")
-			podsList, err := getPodsListByLabel(oc, oc.Namespace(), "app="+depRestore.applabel)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			var podsList []string
+			o.Eventually(func() []string {
+				podsList = dep.getPodListWithoutFilterStatus(oc)
+				return podsList
+			}, 60*time.Second, 5*time.Second).ShouldNot(o.BeEmpty())
 			o.Consistently(func() string {
 				podStatus, _ := getPodStatus(oc, depRestore.namespace, podsList[0])
 				return podStatus
