@@ -23,6 +23,7 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 		iaasPlatform         string
 		isSNO                bool
 		namespace            string
+		projectCount         int
 	)
 
 	g.BeforeEach(func() {
@@ -51,7 +52,11 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 		//ocPerfAppImageName = "quay.io/openshifttest/hello-openshift:multiarch"
 		e2e.Logf("ocp perfscale test case ocp-22140 will use below image to test:\n[Image Name]:%s", ocPerfAppImageName)
 
-		const projectCount = 60
+		if iaasPlatform == "azure" {
+			projectCount = 45
+		} else {
+			projectCount = 60
+		}
 
 		start := time.Now()
 		g.By("Try to create projects and deployments")
