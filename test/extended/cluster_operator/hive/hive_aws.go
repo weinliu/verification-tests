@@ -3385,4 +3385,38 @@ spec:
 
 	})
 
+	//author: kcui@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "30089"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-Medium-30089-[AWS]Hive components will be teared down when HiveConfig is deleted[Disruptive]", func() {
+		g.By("Check the hive-controllers and hiveadmission are running")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"deployment", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"deployment", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
+
+		g.By("Delete hiveconfig")
+		newCheck("expect", "delete", asAdmin, withoutNamespace, contain, "hiveconfig.hive.openshift.io \"hive\" deleted", ok, DefaultTimeout, []string{"hiveconfig", "hive"}).check(oc)
+
+		g.By("Check hive-controllers and hiveadmission were teared down or deleted")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", nok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", nok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", nok, DefaultTimeout, []string{"deployment", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", nok, DefaultTimeout, []string{"deployment", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", nok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", nok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
+
+		g.By("Create the hive resources again")
+		hc.createIfNotExist(oc)
+
+		g.By("Check the resources again")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"deployment", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"deployment", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
+	})
+
 })
