@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 				}
 			}
 
-			// We don't want the test to pass if there were errors while restoring the inital state
+			// We don't want the test to pass if there were errors while restoring the initial state
 			o.Expect(len(errors)).To(o.BeZero(),
 				"There were %d errors while recovering the cluster's initial state", len(errors))
 
@@ -147,7 +147,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			logger.Infof("Waiting for worker pool to be updated")
 			mcpWorker.waitForComplete()
 
-			// We don't want the test to pass if there were errors while restoring the inital state
+			// We don't want the test to pass if there were errors while restoring the initial state
 			o.Expect(len(errors)).To(o.BeZero(),
 				"There were %d errors while recovering the cluster's initial state", len(errors))
 

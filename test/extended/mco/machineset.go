@@ -1,6 +1,7 @@
 package mco
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -143,7 +144,9 @@ func (ms MachineSet) WaitUntilReady(duration string) error {
 		logger.Errorf("Error parsing duration %s. Errot: %s", duration, err)
 		return err
 	}
-	pollerr := wait.Poll(20*time.Second, pDuration, func() (bool, error) {
+
+	immediate := false
+	pollerr := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, pDuration, immediate, func(ctx context.Context) (bool, error) {
 		return ms.GetIsReady(), nil
 	})
 

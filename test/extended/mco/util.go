@@ -3,6 +3,7 @@ package mco
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -381,7 +382,8 @@ func AddToAllMachineSets(oc *exutil.CLI, delta int) error {
 
 	var waitErr error
 	for _, ms := range allMs {
-		waitErr = wait.PollImmediate(30*time.Second, 15*time.Minute, func() (bool, error) { return ms.GetIsReady(), nil })
+		immediate := true
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 15*time.Minute, immediate, func(ctx context.Context) (bool, error) { return ms.GetIsReady(), nil })
 		if waitErr != nil {
 			logger.Errorf("MachineSet %s is not ready. Restoring original replicas.", ms.GetName())
 			for _, ms := range modifiedMSs {
@@ -729,8 +731,9 @@ func RemoveAllMCOPods(oc *exutil.CLI) error {
 	}
 
 	logger.Infof("Waiting for MCO pods to be runnging and ready in namespace %s", MachineConfigNamespace)
-	waitErr := wait.Poll(10*time.Second, 15*time.Minute,
-		func() (bool, error) {
+	immediate := false
+	waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 15*time.Minute, immediate,
+		func(ctx context.Context) (bool, error) {
 			status, err := NewNamespacedResourceList(oc.AsAdmin(), "pod", MachineConfigNamespace).
 				Get(`{.items[*].status.conditions[?(@.type=="Ready")].status}`)
 

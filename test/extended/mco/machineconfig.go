@@ -1,6 +1,7 @@
 package mco
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -45,7 +46,8 @@ func (mc *MachineConfig) create() {
 	params = append(params, mc.parameters...)
 	mc.Create(params...)
 
-	pollerr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
+	immediate := false
+	pollerr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 1*time.Minute, immediate, func(ctx context.Context) (bool, error) {
 		stdout, err := mc.Get(`{.metadata.name}`)
 		if err != nil {
 			logger.Errorf("the err:%v, and try next round", err)

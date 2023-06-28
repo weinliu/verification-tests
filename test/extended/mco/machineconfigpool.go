@@ -1,6 +1,7 @@
 package mco
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -160,6 +161,12 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 	},
 		"5m", "5s").Should(o.BeNumerically(">=", 0), fmt.Sprintf("machineCount field has no value in MCP %s", mcp.name))
 
+	// If the pool has no node configured, we wait at least 1 minute.
+	// There are tests that create pools with 0 nodes and wait for the pool to be updated. They cant wait 0 minutes.
+	if totalNodes == 0 {
+		return 1
+	}
+
 	return totalNodes * mcp.MinutesWaitingPerNode
 }
 
@@ -284,7 +291,8 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 
 	pendingNodes := poolNodes
 	updatedNodes := []Node{}
-	err := wait.Poll(20*time.Second, timeToWait, func() (bool, error) {
+	immediate := false
+	err := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, timeToWait, immediate, func(ctx context.Context) (bool, error) {
 		// If there are degraded machines, stop polling, directly fail
 		degradedstdout, degradederr := mcp.getDegradedMachineCount()
 		if degradederr != nil {
@@ -339,7 +347,8 @@ func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
 	logger.Infof("Waiting %s for MCP %s status to be not degraded.", timeToWait, mcp.name)
 
-	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
+	immediate := false
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
 		stdout, err := mcp.GetDegradedStatus()
 		if err != nil {
 			logger.Errorf("the err:%v, and try next round", err)
@@ -364,7 +373,8 @@ func (mcp MachineConfigPool) WaitForUpdatedStatus() error {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
 	logger.Infof("Waiting %s for MCP %s status to be updated.", timeToWait, mcp.name)
 
-	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
+	immediate := false
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
 		stdout, err := mcp.GetUpdatedStatus()
 		if err != nil {
 			logger.Errorf("the err:%v, and try next round", err)
@@ -388,7 +398,8 @@ func (mcp *MachineConfigPool) waitForComplete() {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
 	logger.Infof("Waiting %s for MCP %s to be completed.", timeToWait, mcp.name)
 
-	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
+	immediate := false
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
 		// If there are degraded machines, stop polling, directly fail
 		degradedstdout, degradederr := mcp.getDegradedMachineCount()
 		if degradederr != nil {
@@ -503,7 +514,8 @@ func (mcp *MachineConfigPool) SanityCheck() error {
 	const trueStatus = "True"
 	var message string
 
-	err := wait.PollImmediate(1*time.Minute, timeToWait, func() (bool, error) {
+	immediate := true
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
 		// If there are degraded machines, stop polling, directly fail
 		degraded, degradederr := mcp.GetDegradedStatus()
 		if degradederr != nil {

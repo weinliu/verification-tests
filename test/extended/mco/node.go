@@ -1,6 +1,7 @@
 package mco
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -139,7 +140,9 @@ func (n *Node) DeleteLabel(label string) (string, error) {
 // WaitForLabelRemoved waits until the given label is not present in the node.
 func (n *Node) WaitForLabelRemoved(label string) error {
 	logger.Infof("Waiting for label %s to be removed from node %s", label, n.GetName())
-	waitErr := wait.Poll(1*time.Minute, 10*time.Minute, func() (bool, error) {
+
+	immediate := true
+	waitErr := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, 10*time.Minute, immediate, func(ctx context.Context) (bool, error) {
 		labels, err := n.Get(`{.metadata.labels}`)
 		if err != nil {
 			logger.Infof("Error waiting for labels to be removed:%v, and try next round", err)
@@ -547,7 +550,9 @@ func (n *Node) IsRpmOsTreeIdle() (bool, error) {
 // WaitUntilRpmOsTreeIsIdle waits until rpm-ostree reports an idle state. Returns an error if times out
 func (n *Node) WaitUntilRpmOsTreeIsIdle() error {
 	logger.Infof("Waiting for rpm-ostree state to be idle in node %s", n.GetName())
-	waitErr := wait.Poll(10*time.Second, 10*time.Minute, func() (bool, error) {
+
+	immediate := false
+	waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 10*time.Minute, immediate, func(ctx context.Context) (bool, error) {
 		isIddle, err := n.IsRpmOsTreeIdle()
 		if err == nil {
 			if isIddle {
