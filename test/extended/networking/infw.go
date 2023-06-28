@@ -27,6 +27,11 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 
 	g.BeforeEach(func() {
 
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("This is required to run on OVNKubernetes Network Backened")
+		}
+
 		//leveraging few templates and utils from metallb code
 		namespaceTemplate := filepath.Join(testDataDirMetallb, "namespace-template.yaml")
 		operatorGroupTemplate := filepath.Join(testDataDirMetallb, "operatorgroup-template.yaml")
