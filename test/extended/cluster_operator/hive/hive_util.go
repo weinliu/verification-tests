@@ -3,6 +3,7 @@ package hive
 import (
 	"bufio"
 	"context"
+	"crypto"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -16,6 +17,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	legoroute53 "github.com/go-acme/lego/v4/providers/dns/route53"
+	"github.com/go-acme/lego/v4/registration"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -309,10 +312,17 @@ type prometheusQueryResult struct {
 	Status string `json:"status"`
 }
 
+type legoUser struct {
+	Email        string
+	Registration *registration.Resource
+	key          crypto.PrivateKey
+}
+
 // Hive Configurations
 const (
 	HiveNamespace             = "hive" //Hive Namespace
 	PullSecret                = "pull-secret"
+	hiveAdditionalCASecret    = "hive-additional-ca"
 	PrometheusURL             = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
 	thanosQuerierURL          = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query?query="
 	ClusterInstallTimeout     = 3600
@@ -377,6 +387,18 @@ func getRandomString() string {
 		buffer[index] = chars[seed.Intn(len(chars))]
 	}
 	return string(buffer)
+}
+
+func (u *legoUser) GetEmail() string {
+	return u.Email
+}
+
+func (u *legoUser) GetRegistration() *registration.Resource {
+	return u.Registration
+}
+
+func (u *legoUser) GetPrivateKey() crypto.PrivateKey {
+	return u.key
 }
 
 func (cmc *clusterMonitoringConfig) create(oc *exutil.CLI) {
@@ -1521,4 +1543,23 @@ func getDefaultAWSConfig(oc *exutil.CLI, region string) aws.Config {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return cfg
+}
+
+// Customize the function to obtain a Lego DNS provider to avoid setting environment variables
+// as the default implementation read from them
+func newLegoDNSProvider(
+	maxRetries, TTL int,
+	propagationTimeout, pollingInterval time.Duration,
+	accessKeyID, secretAccessKey, region string,
+) (*legoroute53.DNSProvider, error) {
+	legoRoute53Config := &legoroute53.Config{
+		Region:             region,
+		MaxRetries:         maxRetries,
+		TTL:                TTL,
+		PropagationTimeout: propagationTimeout,
+		PollingInterval:    pollingInterval,
+		AccessKeyID:        accessKeyID,
+		SecretAccessKey:    secretAccessKey,
+	}
+	return legoroute53.NewDNSProviderConfig(legoRoute53Config)
 }

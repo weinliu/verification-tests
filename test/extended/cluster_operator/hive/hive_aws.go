@@ -2,6 +2,10 @@ package hive
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -19,6 +23,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/go-acme/lego/v4/certificate"
+	"github.com/go-acme/lego/v4/lego"
+	"github.com/go-acme/lego/v4/registration"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -595,6 +602,221 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			return false
 		}
 		o.Eventually(checkclustersyncLog2).WithTimeout(600 * time.Second).WithPolling(60 * time.Second).Should(o.BeTrue())
+	})
+
+	//author: fxie@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "23986"|./bin/extended-platform-tests run --timeout 75m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Critical-23986-Medium-64550-[aws]Kubeconfig secrets can work with additional CAs[Serial]", func() {
+		testCaseID := "23986"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		apiEndpoint := "api." + cdName + "." + AWSBaseDomain
+		appsEndpoint := "apps." + cdName + "." + AWSBaseDomain
+		appsEndpointGlobbing := "*." + appsEndpoint
+		appsEndpointConsole := "console-openshift-console." + appsEndpoint
+
+		/*
+			To generate a Let's Encrypt certificate, we have the following options:
+			1) Use the cert-manager operator:
+			   Pro: Openshift native
+			   Con: we are no longer testing Hive itself as we rely on another operator as well
+			2) Use certbot (or hiveutil which relies on it):
+			   Pro: straightforwardness
+			   Con: we have to install certbot
+			3) Use a Golang library which automates this process:
+			   Pro:	straightforwardness (somewhat)
+			   Con: cannot think of any
+			Here we are using option 3).
+		*/
+		g.By("Getting a Let's Encrypt certificate for " + apiEndpoint + " & " + appsEndpointGlobbing)
+		// Get Lego user and config
+		privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		user := legoUser{key: privateKey}
+		config := lego.NewConfig(&user)
+
+		// Get Lego client
+		client, err := lego.NewClient(config)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Registration for new user
+		_, err = client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Set Lego DNS provider which is used to solve the ACME DNS challenge
+		// (and cleanup the related DNS records after that)
+		maxRetries := 5
+		TTL := 10
+		propagationTimeout, pollingInterval := 15*time.Minute, 4*time.Second
+		awsAccessKeyId, awsSecretAccessKey := extractAWSCredentials(oc)
+		dnsProvider, err := newLegoDNSProvider(maxRetries, TTL, propagationTimeout, pollingInterval, awsAccessKeyId, awsSecretAccessKey, AWSRegion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = client.Challenge.SetDNS01Provider(dnsProvider)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Request for certificates
+		// Note:
+		// Lego checks DNS record propagation from recursive DNS servers specified in /etc/resolv.conf (if possible).
+		// So before running this test case locally, turn off the VPNs as they often update /etc/resolv.conf.
+		request := certificate.ObtainRequest{
+			Domains: []string{apiEndpoint, appsEndpointGlobbing},
+			// We want the certificates to be split
+			Bundle: false,
+		}
+		certificates, err := client.Certificate.Obtain(request)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Writing certificates & private key to files...")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		defer os.RemoveAll(tmpDir)
+		err = os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		fullChainFilePath := tmpDir + "/fullchain.pem"
+		err = os.WriteFile(fullChainFilePath, append(certificates.Certificate, certificates.IssuerCertificate...), 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		chainFilePath := tmpDir + "/chain.pem"
+		err = os.WriteFile(chainFilePath, certificates.IssuerCertificate, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		privateKeyFilePath := tmpDir + "/privkey.pem"
+		err = os.WriteFile(privateKeyFilePath, certificates.PrivateKey, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Creating serving-cert Secret which will be referenced in CD's manifest...")
+		servingCertificateSecretName := "serving-cert"
+		defer oc.AsAdmin().Run("delete").Args("secret", servingCertificateSecretName).Execute()
+		err = oc.AsAdmin().Run("create").Args("secret", "tls", servingCertificateSecretName, "--cert="+fullChainFilePath, "--key="+privateKeyFilePath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Creating ca-cert Secret which will be referenced in HiveConfig/hive...")
+		caCertificateSecretName := "ca-cert"
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", caCertificateSecretName, "-n=hive").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", caCertificateSecretName, "--from-file=ca.crt="+chainFilePath, "-n=hive").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Referencing ca-cert Secret in HiveConfig/hive...")
+		patch := `
+spec:
+  additionalCertificateAuthoritiesSecretRef:
+  - name: ` + caCertificateSecretName
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/additionalCertificateAuthoritiesSecretRef"}]`).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Creating ClusterDeployment...")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		cd := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 1,
+		}
+		defer cleanCD(oc, cd.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cd.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cd)
+
+		g.By("Patching CD s.t. it references the serving certificate Secret...")
+		patch = fmt.Sprintf(`
+spec:
+  certificateBundles:
+  - name: serving-cert
+    certificateSecretRef:
+      name: %s
+  controlPlaneConfig:
+    servingCertificates:
+      default: serving-cert
+  ingress:
+  - name: default
+    domain: %s
+    servingCertificate: serving-cert`, servingCertificateSecretName, appsEndpoint)
+		err = oc.AsAdmin().Run("patch").Args("clusterdeployment", cdName, "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Waiting for the CD to be installed...")
+		newCheck("expect", "get", asAdmin, requireNS, compare, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("Making sure the target cluster is using the right certificate...")
+		endpointCertIsGood := func(endpoint string) bool {
+			e2e.Logf("Checking certificates for endpoint %v ...", endpoint)
+			conn, err := tls.Dial("tcp", endpoint, &tls.Config{InsecureSkipVerify: true})
+			if err != nil {
+				e2e.Logf("Error dialing endpoint %v: %v, keep polling ...", endpoint, err.Error())
+				return false
+			}
+			// Must call conn.Close() here to make sure the connection is successfully established,
+			// so the conn object is populated and can be closed without incurring a nil pointer dereference error.
+			defer conn.Close()
+
+			// Look for the target certificate (the one with apiEndpoint/appsEndpoint as subject)
+			// in all certificates of the endpoint
+			for _, cert := range conn.ConnectionState().PeerCertificates {
+				if strings.Contains(cert.Subject.String(), apiEndpoint) || strings.Contains(cert.Subject.String(), appsEndpoint) {
+					// For simplicity, here we only check the issuer is correct on the target certificate
+					return strings.Contains(cert.Issuer.String(), `Let's Encrypt`)
+				}
+			}
+
+			e2e.Logf("Target certificate not found on endpoint %v, keep polling ...", endpoint)
+			return false
+		}
+
+		// It seems that DNS propagation can be really slow for "*.apps.CLUSTER.qe.devcluster.openshift.com" (literally)
+		// So here we check the console endpoint "console.apps.CLUSTER.qe.devcluster.openshift.com" instead
+		checkCertificates := func() bool {
+			return endpointCertIsGood(apiEndpoint+":6443") && endpointCertIsGood(appsEndpointConsole+":443")
+		}
+
+		// We need to poll s.t. remote-ingress or control-plane-certificate-related SyncSets are applied
+		// and APIServer/Ingress-Operator finish reconcile on the target cluster.
+		o.Eventually(checkCertificates).WithTimeout(20 * time.Minute).WithPolling(1 * time.Minute).Should(o.BeTrue())
+
+		// The kubeconfig obtained (for ex. Secret/fxie-hive-1-0-wlqg2-admin-kubeconfig.data["kubeconfig"]) has the
+		// CA certs integrated, so we should be able to communicate to the target cluster without the following error:
+		// "x509: certificate signed by unknown authority".
+		g.By("Communicating to the target cluster using the kubeconfig with Let's Encrypt's CA...")
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfigPath := tmpDir + "/kubeconfig"
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--kubeconfig", kubeconfigPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("OCP-64550: Hive should be able to delete Secret/hive-additional-ca")
+		// Make sure the hive-additional-CA Secret still exists at this moment
+		stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Secret", hiveAdditionalCASecret, "-n", HiveNamespace).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stdout).To(o.ContainSubstring(hiveAdditionalCASecret))
+
+		// Patch HiveConfig
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/additionalCertificateAuthoritiesSecretRef"}]`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Make sure the hive-additional-CA Secret is eventually deleted
+		hiveOperatorReconcileTimeout := 300
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, hiveAdditionalCASecret, nok, hiveOperatorReconcileTimeout, []string{"Secret", "-n", HiveNamespace}).check(oc)
+
+		// Make sure Hive Operator stays healthy for a while
+		hiveIsStillHealthy := func() bool {
+			stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hiveconfig/hive", `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`).Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return stdout == "True"
+		}
+		o.Consistently(hiveIsStillHealthy).WithTimeout(DefaultTimeout * time.Second).WithPolling(10 * time.Second).Should(o.BeTrue())
 	})
 
 	//author: fxie@redhat.com
