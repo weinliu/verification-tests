@@ -265,13 +265,13 @@ func (ht *HypershiftTest) CreateClusterOnAws() {
 	_, createClusterErr := ht.cli.CreateCluster(createClusterOpts)
 	o.Expect(createClusterErr).NotTo(o.HaveOccurred(), "create hosted cluster on aws failed")
 
+	ht.clusterNS = exutil.GetHyperShiftHostedClusterNameSpace(ht.oc)
+	logger.Infof("the hosted cluster namespace is: %s", ht.clusterNS)
+
 	// wait for hosted control plane is available
 	exutil.AssertAllPodsToBeReadyWithPollerParams(ht.oc, fmt.Sprintf("%s-%s", ht.clusterNS, name), 30*time.Second, 10*time.Minute)
 
 	logger.Infof("hosted cluster %s is created successfully on AWS", name)
-
-	ht.clusterNS = exutil.GetHyperShiftHostedClusterNameSpace(ht.oc)
-
 }
 
 // DestroyClusterOnAws destroy hosted cluster on aws
