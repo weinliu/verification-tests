@@ -1453,6 +1453,35 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output2).NotTo(o.ContainSubstring("--collector.netclass.netlink"))
 	})
 
+	//author: tagao@redhat.com
+	g.It("Author:tagao-High-63659-check On/Off switch of ksmd Collector in Node Exporter [Serial]", func() {
+		var (
+			enableKsmd = filepath.Join(monitoringBaseDir, "enableKsmd.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("check ksmd Collector is disabled by default")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--no-collector.ksmd"))
+
+		g.By("check ksmd metrics in prometheus k8s pod, should not have related metrics")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="ksmd"}'`, token, `"result":[]`, uwmLoadTime)
+
+		g.By("enable ksmd in CMO")
+		createResourceFromYaml(oc, "openshift-monitoring", enableKsmd)
+
+		g.By("check ksmd metrics in prometheus k8s pod again")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="ksmd"}'`, token, `"collector":"ksmd"`, 3*uwmLoadTime)
+
+		g.By("check ksmd in daemonset")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--collector.ksmd"))
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
