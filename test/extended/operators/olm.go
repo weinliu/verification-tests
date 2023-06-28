@@ -5700,14 +5700,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check abnormal status")
-		output := getResource(oc, asAdmin, withoutNamespace, "operator", sub.operatorPackage+"."+sub.namespace, "-o=json")
+		output := getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", sub.operatorPackage+"."+sub.namespace, "-o=json")
 		o.Expect(output).NotTo(o.BeEmpty())
 
-		output = getResource(oc, asAdmin, withoutNamespace, "operator", sub.operatorPackage+"."+sub.namespace,
+		output = getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", sub.operatorPackage+"."+sub.namespace,
 			fmt.Sprintf("-o=jsonpath={.status.components.refs[?(@.name==\"%s\")].conditions[*].type}", sub.subName))
 		o.Expect(output).To(o.ContainSubstring("CatalogSourcesUnhealthy"))
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "RequirementsNotMet+2+InstallWaiting", ok, []string{"operator", sub.operatorPackage + "." + sub.namespace,
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RequirementsNotMet+2+InstallWaiting", ok, []string{"operator.operators.coreos.com", sub.operatorPackage + "." + sub.namespace,
 			fmt.Sprintf("-o=jsonpath={.status.components.refs[?(@.name==\"%s\")].conditions[*].reason}", sub.installedCSV)}).check(oc)
 	})
 
@@ -6463,36 +6463,36 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("install Etcd")
 		subEtcd.create(oc, itName, dr)
-		defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subEtcd.operatorPackage+"."+subEtcd.namespace)
+		defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator.operators.coreos.com", subEtcd.operatorPackage+"."+subEtcd.namespace)
 
 		exutil.By("Check all resources via operators")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "ServiceAccount", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "RoleBinding", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Subscription", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlan", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Deployment", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, subEtcd.namespace, ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "ServiceAccount", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RoleBinding", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Subscription", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlan", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Deployment", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, subEtcd.namespace, ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
 		exutil.By("delete operator and Operator still exists because of crd")
 		subEtcd.delete(itName, dr)
 		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subEtcd.installedCSV, "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 		exutil.By("reinstall etcd and check Operator")
 		subEtcd.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
 		exutil.By("delete etcd and the Operator")
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "sub", subEtcd.subName, "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subEtcd.installedCSV, "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subEtcd.operatorPackage+"."+subEtcd.namespace)
+		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "operator.operators.coreos.com", subEtcd.operatorPackage+"."+subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("install etcd manually")
@@ -6500,27 +6500,27 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		subEtcd.startingCSV = "etcdoperator.v0.9.4"
 		subEtcd.installedCSV = ""
 		subEtcd.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlan", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlan", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 		exutil.By("approve etcd")
 		subEtcd.approve(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, subEtcd.namespace, ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, subEtcd.namespace, ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
 		exutil.By("unlabel resource and it is relabeled automatically")
-		roleName := getResource(oc, asAdmin, withoutNamespace, "operator", subEtcd.operatorPackage+"."+subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='Role')].name}")
+		roleName := getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", subEtcd.operatorPackage+"."+subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='Role')].name}")
 		o.Expect(roleName).NotTo(o.BeEmpty())
 		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "Role", roleName, "operators.coreos.com/"+subEtcd.operatorPackage+"."+subEtcd.namespace+"-", "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 		exutil.By("delete etcd and the Operator again and Operator should recreated because of crd")
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "sub", subEtcd.subName, "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subEtcd.installedCSV, "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subEtcd.operatorPackage+"."+subEtcd.namespace)
+		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "operator.operators.coreos.com", subEtcd.operatorPackage+"."+subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// here there is issue and take WA
 		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "crd", "etcdbackups.etcd.database.coreos.com", "operators.coreos.com/"+subEtcd.operatorPackage+"."+subEtcd.namespace+"-")
@@ -6530,7 +6530,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		//done for WA
 		var componentKind string
 		err = wait.Poll(15*time.Second, 240*time.Second, func() (bool, error) {
-			componentKind = getResource(oc, asAdmin, withoutNamespace, "operator", subEtcd.operatorPackage+"."+subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}")
+			componentKind = getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", subEtcd.operatorPackage+"."+subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}")
 			if strings.Contains(componentKind, "CustomResourceDefinition") {
 				return true, nil
 			}
@@ -6544,18 +6544,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("install Cockroachdb")
 		subCockroachdb.create(oc, itName, dr)
-		defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace)
+		defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator.operators.coreos.com", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace)
 
 		exutil.By("Check all resources of Cockroachdb via operators")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "RoleBinding", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Subscription", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlan", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Deployment", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb.namespace, ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RoleBinding", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Subscription", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlan", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Deployment", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb.namespace, ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
 		exutil.By("create ns test-33176 and label it")
 		_, err = doAction(oc, "create", asAdmin, withoutNamespace, "ns", "test-33176")
@@ -6563,7 +6563,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		defer doAction(oc, "delete", asAdmin, withoutNamespace, "ns", "test-33176")
 		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "ns", "test-33176", "operators.coreos.com/"+subCockroachdb.operatorPackage+"."+subCockroachdb.namespace+"=")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Namespace", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Namespace", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 		exutil.By("create apiservice and label it")
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", apiserviceImageTemplate, "-p", "NAME="+apiserviceName, "VERSION="+apiserviceVersion)
@@ -6571,7 +6571,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		defer doAction(oc, "delete", asAdmin, withoutNamespace, "apiservice", apiserviceName)
 		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "apiservice", apiserviceName, "operators.coreos.com/"+subCockroachdb.operatorPackage+"."+subCockroachdb.namespace+"=")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "APIService", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "APIService", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 	})
 
@@ -6632,23 +6632,23 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("install Teiid")
 		subMta.create(oc, itName, dr)
-		defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subMta.operatorPackage+"."+subMta.namespace)
+		defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator.operators.coreos.com", subMta.operatorPackage+"."+subMta.namespace)
 
 		exutil.By("Check the resources via operators")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subMta.operatorPackage + "." + subMta.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator.operators.coreos.com", subMta.operatorPackage + "." + subMta.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 		exutil.By("delete operator and Operator still exists because of crd")
 		subMta.delete(itName, dr)
 		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subMta.installedCSV, "-n", subMta.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subMta.operatorPackage + "." + subMta.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator.operators.coreos.com", subMta.operatorPackage + "." + subMta.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 		exutil.By("delete crd")
 		crd.delete(oc)
 
 		exutil.By("delete Operator resource to check if it is recreated")
-		doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subMta.operatorPackage+"."+subMta.namespace)
-		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"operator", subMta.operatorPackage + "." + subMta.namespace}).check(oc)
+		doAction(oc, "delete", asAdmin, withoutNamespace, "operator.operators.coreos.com", subMta.operatorPackage+"."+subMta.namespace)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"operator.operators.coreos.com", subMta.operatorPackage + "." + subMta.namespace}).check(oc)
 	})
 
 	// It will cover test case: OCP-50135, author: kuiwang@redhat.com
@@ -11347,13 +11347,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			}
 			defer subCockroachdb.delete(itName, dr)
 			defer csvCockroachdb.delete(itName, dr)
-			crdName := getResource(oc, asAdmin, withoutNamespace, "operator", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='CustomResourceDefinition')].name}")
+			crdName := getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='CustomResourceDefinition')].name}")
 			o.Expect(crdName).NotTo(o.BeEmpty())
 			defer doAction(oc, "delete", asAdmin, withoutNamespace, "crd", crdName)
-			defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace)
+			defer doAction(oc, "delete", asAdmin, withoutNamespace, "operator.operators.coreos.com", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace)
 
 			exutil.By("Check all resources via operators")
-			resourceKind := getResource(oc, asAdmin, withoutNamespace, "operator", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}")
+			resourceKind := getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}")
 			o.Expect(resourceKind).To(o.ContainSubstring("Deployment"))
 			o.Expect(resourceKind).To(o.ContainSubstring("Role"))
 			o.Expect(resourceKind).To(o.ContainSubstring("RoleBinding"))
@@ -11363,35 +11363,35 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			o.Expect(resourceKind).To(o.ContainSubstring("Subscription"))
 			o.Expect(resourceKind).To(o.ContainSubstring("InstallPlan"))
 			o.Expect(resourceKind).To(o.ContainSubstring("ClusterServiceVersion"))
-			newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb.namespace, ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb.namespace, ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
 			exutil.By("unlabel resource and it is relabeled automatically")
-			roleName := getResource(oc, asAdmin, withoutNamespace, "operator", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='Role')].name}")
+			roleName := getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", subCockroachdb.operatorPackage+"."+subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='Role')].name}")
 			o.Expect(roleName).NotTo(o.BeEmpty())
 			_, err := doAction(oc, "label", asAdmin, withoutNamespace, "-n", subCockroachdb.namespace, "Role", roleName, "operators.coreos.com/"+subCockroachdb.operatorPackage+"."+subCockroachdb.namespace+"-")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 			exutil.By("delete opertor and the Operator still exists because of crd")
 			subCockroachdb.delete(itName, dr)
 			csvCockroachdb.delete(itName, dr)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 			exutil.By("reinstall operator and check resource via Operator")
 			subCockroachdb1 := subCockroachdb
 			subCockroachdb1.create(oc, itName, dr)
 			defer subCockroachdb1.delete(itName, dr)
 			defer doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subCockroachdb1.installedCSV, "-n", subCockroachdb1.namespace)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb1.namespace, ok, []string{"operator", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator.operators.coreos.com", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb1.namespace, ok, []string{"operator.operators.coreos.com", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator.operators.coreos.com", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
 			exutil.By("delete operator and delete Operator and it will be recreated because of crd")
 			subCockroachdb1.delete(itName, dr)
 			_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subCockroachdb1.installedCSV, "-n", subCockroachdb1.namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "operator", subCockroachdb1.operatorPackage+"."+subCockroachdb1.namespace)
+			_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "operator.operators.coreos.com", subCockroachdb1.operatorPackage+"."+subCockroachdb1.namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// here there is issue and take WA
 			_, err = doAction(oc, "label", asAdmin, withoutNamespace, "crd", crdName, "operators.coreos.com/"+subCockroachdb1.operatorPackage+"."+subCockroachdb1.namespace+"-")
@@ -11399,7 +11399,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			_, err = doAction(oc, "label", asAdmin, withoutNamespace, "crd", crdName, "operators.coreos.com/"+subCockroachdb1.operatorPackage+"."+subCockroachdb1.namespace+"=")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			//done for WA
-			newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "CustomResourceDefinition", ok, []string{"operator.operators.coreos.com", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
 		} else {
 			exutil.By("it already exists")
@@ -11549,7 +11549,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 		exutil.By("6, OCP-41051-Check Operator.Status.Components does not contain copied CSVs.")
 		operatorname := sub.operatorPackage + ".openshift-operators"
-		operatorinfo := getResource(oc, asAdmin, withoutNamespace, "operator", operatorname, "-n", oc.Namespace(), "-o=jsonpath={.status.components.refs}")
+		operatorinfo := getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", operatorname, "-n", oc.Namespace(), "-o=jsonpath={.status.components.refs}")
 		o.Expect(operatorinfo).NotTo(o.BeEmpty())
 		o.Expect(operatorinfo).NotTo(o.ContainSubstring("Copied"))
 	})
