@@ -5,6 +5,7 @@ import (
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -13,7 +14,8 @@ import (
 // waitForClusterHealthy check if new machineconfig is applied successfully
 func waitForClusterHealthy(oc *exutil.CLI) {
 	e2e.Logf("Waiting for the cluster healthy ...")
-	pollErr := wait.Poll(1*time.Minute, 30*time.Minute, func() (bool, error) {
+	timeToWait := time.Duration(getNodeCount(oc)*5) * time.Minute
+	pollErr := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
 		master, errMaster := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "master", "-o", "jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'").Output()
 		worker, errWorker := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "worker", "-o", "jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'").Output()
 		if errMaster != nil || errWorker != nil {
@@ -27,9 +29,18 @@ func waitForClusterHealthy(oc *exutil.CLI) {
 		return false, nil
 	})
 	if pollErr != nil {
-		e2e.Failf("Expected cluster is not healthy after waiting up to 25 minutes ...")
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Failf("Expected cluster is not healthy after waiting up to %s minutes ...", timeToWait)
 	}
 	e2e.Logf("Cluster is healthy ...")
+}
+
+func getNodeCount(oc *exutil.CLI) int {
+	nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeCount := int(strings.Count(nodes, "Ready")) + int(strings.Count(nodes, "NotReady"))
+	return nodeCount
 }
 
 // SkipIfCloudControllerManagerNotDeployed check if ccm is deployed
