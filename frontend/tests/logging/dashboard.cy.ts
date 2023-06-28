@@ -21,15 +21,12 @@ describe('Logging related features', () => {
     catalogSource.sourceName(CLO.packageName).then((csName) => {
       logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), true);
     });
-    cy.contains('View Operator').should('be.visible');
     catalogSource.sourceName(EO.packageName).then((csName) => {
       logUtils.installOperator(EO.namespace, EO.packageName, csName, catalogSource.channel(EO.packageName));
     });
-    cy.contains('View Operator').should('be.visible');
     catalogSource.sourceName(LO.packageName).then((csName) => {
       logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName));
     });
-    cy.contains('View Operator').should('be.visible');
   });
 
   after(() => {

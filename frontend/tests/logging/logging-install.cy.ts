@@ -33,7 +33,6 @@ describe('Logging related features', () => {
     catalogSource.sourceName(CLO.packageName).then((csName) => {
       logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), true);
     });
-    cy.contains('View Operator').should('be.visible');
   });
 
   it('(OCP-24292,gkarager) Deploy elasticsearch-operator via Web Console', {tags: ['e2e','admin']}, () => {
@@ -41,7 +40,6 @@ describe('Logging related features', () => {
     catalogSource.sourceName(EO.packageName).then((csName) => {
       logUtils.installOperator(EO.namespace, EO.packageName, csName, catalogSource.channel(EO.packageName));
     });
-    cy.contains('View Operator').should('be.visible');
   });
 
   it('(gkarager) Deploy loki-operator via Web Console', {tags: ['e2e','admin']}, () => {
@@ -49,6 +47,5 @@ describe('Logging related features', () => {
     catalogSource.sourceName(LO.packageName).then((csName) => {
       logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName));
     });
-    cy.contains('View Operator').should('be.visible');
   });
 });

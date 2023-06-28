@@ -71,6 +71,7 @@ export const logUtils = {
           cy.get('input[name="logging-view-plugin"][data-test="Enable-radio-input"]').click();
         }
         cy.get('[data-test="install-operator"]').click();
+        cy.contains('View Operator').should('be.visible');
       }
     })
   },
