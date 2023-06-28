@@ -226,7 +226,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Get the origin aws-ebs-csi-driver-controller pod name")
 		defer waitCSOhealthy(oc.AsAdmin())
-		awsEbsCsiDriverController := newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"))
+		awsEbsCsiDriverController := newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"), setDeploymentReplicasNo("2"))
 		originPodList := awsEbsCsiDriverController.getPodList(oc.AsAdmin())
 		resourceVersionOri, resourceVersionOriErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("deployment", "aws-ebs-csi-driver-controller", "-n", "openshift-cluster-csi-drivers", "-o=jsonpath={.metadata.resourceVersion}").Output()
 		o.Expect(resourceVersionOriErr).ShouldNot(o.HaveOccurred())
