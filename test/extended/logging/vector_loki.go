@@ -366,7 +366,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ls := lokiStack{
 				name:          "loki-49486",
 				namespace:     lokiNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-49486",
 				storageClass:  sc,
@@ -463,12 +463,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-53128",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-secret-53128",
 				storageClass:  sc,
@@ -529,12 +529,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-53146",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-secret-53146",
 				storageClass:  sc,
@@ -608,12 +608,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-57063",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-secret-57063",
 				storageClass:  sc,
@@ -705,12 +705,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				},
 			}
 
-			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-61968",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-secret-61968",
 				storageClass:  sc,
@@ -1334,12 +1334,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
 			waitForOperatorsRunning(oc)
 
-			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-54523",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-secret-54523",
 				storageClass:  sc,
@@ -1448,12 +1448,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
 			waitForOperatorsRunning(oc)
 
-			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-54525",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-secret-54525",
 				storageClass:  sc,
@@ -1562,12 +1562,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
 			waitForOperatorsRunning(oc)
 
-			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-54526",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-secret-54526",
 				storageClass:  sc,
@@ -1676,12 +1676,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
 			waitForOperatorsRunning(oc)
 
-			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-54527",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-secret-54527",
 				storageClass:  sc,
@@ -1878,7 +1878,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ls := lokiStack{
 				name:          "loki-52779",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-52779",
 				storageClass:  sc,
@@ -1982,7 +1982,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ls := lokiStack{
 				name:          "loki-55415",
 				namespace:     cloNS,
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-55415",
 				storageClass:  sc,
@@ -2072,7 +2072,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ls := lokiStack{
 				name:          "loki-61435",
 				namespace:     "openshift-logging",
-				tSize:         "1x.extra-small",
+				tSize:         "1x.demo",
 				storageType:   s,
 				storageSecret: "storage-61435",
 				storageClass:  sc,

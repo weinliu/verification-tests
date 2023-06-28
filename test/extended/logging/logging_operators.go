@@ -1014,7 +1014,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		ls := lokiStack{
 			name:          "loki-53407",
 			namespace:     "openshift-logging",
-			tSize:         "1x.extra-small",
+			tSize:         "1x.demo",
 			storageType:   getStorageType(oc),
 			storageSecret: "storage-secret-53407",
 			storageClass:  sc,
@@ -1147,7 +1147,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		ls := lokiStack{
 			name:          "loki-53404",
 			namespace:     "openshift-logging",
-			tSize:         "1x.extra-small",
+			tSize:         "1x.demo",
 			storageType:   getStorageType(oc),
 			storageSecret: "storage-secret-53404",
 			storageClass:  sc,

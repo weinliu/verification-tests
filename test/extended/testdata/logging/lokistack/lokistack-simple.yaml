@@ -32,7 +32,7 @@ parameters:
 - name: NAMESPACE
   value: "openshift-logging"
 - name: SIZE
-  value: "1x.extra-small"
+  value: "1x.demo"
 - name: SECRET_NAME
   value: "s3-secret"
 - name: STORAGE_TYPE

@@ -87,7 +87,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		ls := lokiStack{
 			name:          "loki-53817",
 			namespace:     cloNS,
-			tSize:         "1x.extra-small",
+			tSize:         "1x.demo",
 			storageType:   s,
 			storageSecret: "storage-secret-53817",
 			storageClass:  sc,
