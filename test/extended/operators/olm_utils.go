@@ -199,7 +199,7 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 // if it is AtLatestKnown, get installed csv from sub and save it to dr.
 // if it is not AtLatestKnown, raise error.
 func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName string, dr describerResrouce) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		state := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
 		if strings.Compare(state, "AtLatestKnown") == 0 {
 			return true, nil
@@ -226,7 +226,7 @@ func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName stri
 // if not same, raise error.
 // if same, nothong happen.
 func (sub *subscriptionDescription) expectCSV(oc *exutil.CLI, itName string, dr describerResrouce, cv string) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		sub.findInstalledCSV(oc, itName, dr)
 		if strings.Compare(sub.installedCSV, cv) == 0 {
 			return true, nil
@@ -239,7 +239,7 @@ func (sub *subscriptionDescription) expectCSV(oc *exutil.CLI, itName string, dr 
 // the method is to approve the install plan when you create sub with sub.ipApproval != Automatic
 // normally firstly call sub.create(), then call this method sub.approve. it is used to operator upgrade case.
 func (sub *subscriptionDescription) approve(oc *exutil.CLI, itName string, dr describerResrouce) {
-	err := wait.Poll(6*time.Second, 360*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 6*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 		for strings.Compare(sub.installedCSV, "") == 0 {
 			state := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
 			if strings.Compare(state, "AtLatestKnown") == 0 {
@@ -255,7 +255,7 @@ func (sub *subscriptionDescription) approve(oc *exutil.CLI, itName string, dr de
 			o.Expect(installPlan).NotTo(o.BeEmpty())
 			e2e.Logf("try to approve installPlan %s", installPlan)
 			patchResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "--type", "merge", "-p", "{\"spec\": {\"approved\": true}}")
-			err := wait.Poll(10*time.Second, 70*time.Second, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 70*time.Second, false, func(ctx context.Context) (bool, error) {
 				err := newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 				if err != nil {
 					e2e.Logf("the get error is %v, and try next", err)
@@ -278,7 +278,7 @@ func (sub *subscriptionDescription) approve(oc *exutil.CLI, itName string, dr de
 func (sub *subscriptionDescription) approveSpecificIP(oc *exutil.CLI, itName string, dr describerResrouce, csvName string, phase string) {
 	// fix https://github.com/openshift/openshift-tests-private/issues/735
 	var state string
-	wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
+	wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 		state = getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
 		if strings.Compare(state, "UpgradePending") == 0 {
 			return true, nil
@@ -293,7 +293,7 @@ func (sub *subscriptionDescription) approveSpecificIP(oc *exutil.CLI, itName str
 			o.Expect(installPlan).NotTo(o.BeEmpty())
 			e2e.Logf("---> Get the pending InstallPlan %s", installPlan)
 			patchResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "--type", "merge", "-p", "{\"spec\": {\"approved\": true}}")
-			err := wait.Poll(10*time.Second, 70*time.Second, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 70*time.Second, false, func(ctx context.Context) (bool, error) {
 				err := newCheck("expect", asAdmin, withoutNamespace, compare, phase, ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 				if err != nil {
 					return false, nil
@@ -319,7 +319,7 @@ func (sub *subscriptionDescription) getCSV() csvDescription {
 // get the reference InstallPlan
 func (sub *subscriptionDescription) getIP(oc *exutil.CLI) string {
 	var installPlan string
-	waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	waitErr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		var err error
 		installPlan, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installPlanRef.name}").Output()
 		if strings.Compare(installPlan, "") == 0 || err != nil {
@@ -508,7 +508,7 @@ func (catsrc *catalogSourceDescription) getSCC(oc *exutil.CLI) string {
 
 func (catsrc *catalogSourceDescription) createWithCheck(oc *exutil.CLI, itName string, dr describerResrouce) {
 	catsrc.create(oc, itName, dr)
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}").Output()
 		if strings.Compare(status, "READY") != 0 {
 			e2e.Logf("catsrc %s lastObservedState is %s, not READY", catsrc.name, status)
@@ -766,7 +766,7 @@ func (sa *serviceAccountDescription) reapply(oc *exutil.CLI) {
 
 // the method is to check if what sa can do is expected with expected parameter.
 func (sa *serviceAccountDescription) checkAuth(oc *exutil.CLI, expected string, cr string) {
-	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, _ := doAction(oc, "auth", asAdmin, withNamespace, "--as", fmt.Sprintf("system:serviceaccount:%s:%s", sa.namespace, sa.name), "can-i", "create", cr)
 		e2e.Logf("the result of checkAuth:%v", output)
 		if strings.Contains(output, expected) {
@@ -1122,7 +1122,7 @@ func getKubernetesVersion(oc *exutil.CLI) string {
 // the method is to create one resource with template
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 15*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "olm-config.json")
 		if err != nil {
 			e2e.Logf("the err:%v, and try next round", err)
@@ -1143,7 +1143,7 @@ func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 // present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
 func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, present bool, parameters ...string) bool {
 	parameters = append(parameters, "--ignore-not-found")
-	err := wait.Poll(3*time.Second, 70*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 70*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("the get error is %v, and try next", err)
@@ -1176,7 +1176,7 @@ func patchResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, paramete
 // withoutNamespace means if take WithoutNamespace() to execute it.
 func execResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
-	err := wait.Poll(3*time.Second, 6*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 6*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := doAction(oc, "exec", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("the exec error is %v, and try next", err)
@@ -1196,7 +1196,7 @@ func execResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameter
 func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	var err error
-	err = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 		result, err = doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("output is %v, error is %v, and try next", result, err)
@@ -1212,7 +1212,7 @@ func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters
 func getResourceNoEmpty(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	var err error
-	err = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 		result, err = doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil || strings.TrimSpace(result) == "" {
 			e2e.Logf("output is %v, error is %v, and try next", result, err)
@@ -1263,7 +1263,7 @@ func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCom
 		e2e.Failf("! Fail to parse the timeout value:%s, err:%v", content, err)
 	}
 
-	return wait.Poll(3*time.Second, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("the get error is %v, and try next", err)
@@ -1302,7 +1302,7 @@ func removeResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, paramet
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	err = wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil && (strings.Contains(output, "NotFound") || strings.Contains(output, "No resources found")) {
 			e2e.Logf("the resource is delete successfully")
@@ -1420,7 +1420,7 @@ func DeleteDir(filePathStr string, filePre string) bool {
 // CheckUpgradeStatus check upgrade status
 func CheckUpgradeStatus(oc *exutil.CLI, expectedStatus string) {
 	e2e.Logf("Check the Upgradeable status of the OLM, expected: %s", expectedStatus)
-	err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 		upgradeable, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "operator-lifecycle-manager", "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the Upgradeable status of the OLM: %v", err)
@@ -1490,7 +1490,7 @@ func isSNOCluster(oc *exutil.CLI) bool {
 
 func assertOrCheckMCP(oc *exutil.CLI, mcp string, is int, dm int, skip bool) {
 	var machineCount string
-	err := wait.Poll(time.Duration(is)*time.Second, time.Duration(dm)*time.Minute, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), time.Duration(is)*time.Second, time.Duration(dm)*time.Minute, false, func(ctx context.Context) (bool, error) {
 		machineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcp, "-o=jsonpath={.status.machineCount}{\" \"}{.status.readyMachineCount}{\" \"}{.status.unavailableMachineCount}{\" \"}{.status.degradedMachineCount}").Output()
 		indexCount := strings.Fields(machineCount)
 		if strings.Compare(indexCount[0], indexCount[1]) == 0 && strings.Compare(indexCount[2], "0") == 0 && strings.Compare(indexCount[3], "0") == 0 {

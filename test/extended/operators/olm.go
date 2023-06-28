@@ -1,6 +1,7 @@
 package operators
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -270,7 +271,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				if err != nil {
 					e2e.Failf("Fail to unlabel project %s with security.openshift.io/scc.podSecurityLabelSync-, error:%v", project, err)
 				}
-				err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+				err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 					labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.labels}").Output()
 					if err != nil || !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
 						e2e.Logf("The label not updated, re-try: %s", err)
@@ -301,7 +302,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 			if project != "openshifttest-53914" && project != "default" {
 				//  The `security.openshift.io/scc.podSecurityLabelSync=true` won't be removed.
-				err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+				err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 					labels, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.labels}").Output()
 					if err != nil || !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
 						e2e.Logf("security.openshift.io/scc.podSecurityLabelSync=true should NOT be removed from project %s after CSV removed, labels:%s", project, labels)
@@ -331,7 +332,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			// if err != nil {
 			// 	e2e.Failf("Fail to enable TechPreviewNoUpgrade, error:%v", err)
 			// }
-			// err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+			// err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			// 	_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("platformoperator").Output()
 			// 	if err != nil {
 			// 		e2e.Logf("The platformoperator resource not ready, re-try: %s", err)
@@ -356,7 +357,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Failf("! fail to delete PO cluster logging: %s", err)
 			}
 		}()
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("platformoperator", "cluster-logging", "-o=jsonpath={.status.conditions[0].message}").Output()
 			if err != nil {
 				e2e.Failf("! fail to get PO cluster logging message: %s", err)
@@ -379,7 +380,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Failf("! fail to delete PO quay-operator: %s", err)
 			}
 		}()
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("platformoperator", "quay-operator", "-o=jsonpath={.status.conditions[0].status}").Output()
 			if err != nil {
 				e2e.Failf("! fail to PO quay operator: %s", err)
@@ -508,7 +509,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer cs.delete(itName, dr)
 		cs.create(oc, itName, dr)
 		var msg string
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status.message}").Output()
 			if !strings.Contains(msg, "error parsing") {
 				return false, nil
@@ -770,7 +771,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		exutil.By("5) Check if the AllNamespaces Copied CSV are removed")
 
-		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			copiedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
 			if err != nil {
 				e2e.Failf("Error: %v, fail to get CSVs in project: %s", err, oc.Namespace())
@@ -786,7 +787,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		patchResource(oc, asAdmin, withoutNamespace, "olmconfig", "cluster", "-p", "{\"spec\":{\"features\":{\"disableCopiedCSVs\": false}}}", "--type=merge")
 
 		exutil.By("7) Check if the AllNamespaces Copied CSV are back")
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			copiedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
 			if err != nil {
 				e2e.Failf("Error: %v, fail to get CSVs in project: %s", err, oc.Namespace())
@@ -841,7 +842,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			// newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", oc.Namespace(), "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
 			exutil.By("3) get the real CatalogSource image version")
-			err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 				// oc get catalogsource cs-43487 -o=jsonpath={.spec.image}
 				image, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", cs.name, "-n", oc.Namespace(), "-o=jsonpath={.spec.image}").Output()
 				if err != nil {
@@ -1157,7 +1158,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub2.createWithoutCheck(oc, itName, dr)
 
 		exutil.By("4) Check OLM logs")
-		err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/catalog-operator", "-n", "openshift-operator-lifecycle-manager").Output()
 			if err != nil {
 				e2e.Failf("Fail to get the OLM logs")
@@ -1250,7 +1251,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			// should update CSV
 			patchResource(oc, asAdmin, withoutNamespace, "-n", "openshift-operator-lifecycle-manager", "csv", "packageserver", "-p", "{\"spec\":{\"install\":{\"spec\":{\"deployments\":[{\"name\":\"packageserver\", \"spec\":{\"replicas\":3, \"template\":{}, \"selector\":{\"matchLabels\":{\"app\":\"packageserver\"}}}}]}}}}", "--type=merge")
 			patchResource(oc, asAdmin, withoutNamespace, "-n", "openshift-operator-lifecycle-manager", "deployment", "packageserver", "-p", "{\"spec\":{\"replicas\":3}}", "--type=merge")
-			err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 				num, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.availableReplicas}").Output()
 				e2e.Logf("packageserver replicas is %s", num)
 				if num != "3" {
@@ -1265,7 +1266,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Failf("Fail to enable CVO")
 			}
 			exutil.By("7) check if the PSM back")
-			err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 				num, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "package-server-manager", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.replicas}").Output()
 				if num != "1" {
 					return false, nil
@@ -1275,7 +1276,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			exutil.AssertWaitPollNoErr(err, "package-server-manager replicas is not reback to 1")
 			exutil.By("8) check if the packageserver pods number back to 1")
 			// for some SNO clusters, reback may take 10 mins around
-			err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
 				num, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.availableReplicas}").Output()
 				if num != "1" {
 					return false, nil
@@ -1582,7 +1583,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Pending", ok, []string{"csv", "learn-operator.v0.0.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("6) Check the CSV message, the operator is not upgradeable")
-		err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "csv", "learn-operator.v0.0.2", "-o=jsonpath={.status.message}").Output()
 			if !strings.Contains(msg, "operator is not upgradeable") {
 				return false, nil
@@ -1646,7 +1647,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Pending", ok, []string{"csv", "learn-operator.v0.0.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("6) Check the CSV message, the operator is not upgradeable")
-		err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "csv", "learn-operator.v0.0.2", "-o=jsonpath={.status.message}").Output()
 			if !strings.Contains(msg, "operator is not upgradeable") {
 				return false, nil
@@ -1722,7 +1723,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Pending", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("6) The SA should be owned by the etcdoperator.v0.9.2")
-		err := wait.Poll(3*time.Second, 10*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
 			saOwner := getResource(oc, asAdmin, withoutNamespace, "sa", "etcd-operator", "-n", sub.namespace, "-o=jsonpath={.metadata.ownerReferences[0].name}")
 			if strings.Compare(saOwner, "etcdoperator.v0.9.2") != 0 {
 				return false, nil
@@ -1740,7 +1741,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		patchResource(oc, asAdmin, withoutNamespace, "operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": true}}", "--type=merge")
 		defer patchResource(oc, asAdmin, withoutNamespace, "operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": false}}", "--type=merge")
 		exutil.By("1-1) Check if the default CatalogSource resource are removed")
-		err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "redhat-operators", "-n", "openshift-marketplace").Output()
 			if strings.Contains(res, "not found") {
 				return true, nil
@@ -1772,7 +1773,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		cs.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 		exutil.By("2-1) Check if this custom CatalogSource resource works well")
-		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest").Output()
 			if strings.Contains(res, "OLM QE") {
 				return true, nil
@@ -1792,7 +1793,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// time.Sleep(30 * time.Second)
 		// waiting for the new marketplace pod ready
-		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "name=marketplace-operator", "-o=jsonpath={.items..status.phase}", "-n", "openshift-marketplace").Output()
 			if strings.Contains(res, "Running") {
 				return true, nil
@@ -1802,7 +1803,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.AssertWaitPollNoErr(err, "marketplace-operator pod is not running")
 		exutil.By("3-3) check if the custom CatalogSource still there")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
-		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest").Output()
 			if strings.Contains(res, "OLM QE") {
 				return true, nil
@@ -1816,7 +1817,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.By("4-1) Check if the default CatalogSource resource are back")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", "redhat-operators", "-n", "openshift-marketplace", "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 		exutil.By("4-2) Check if the default CatalogSource works and the custom one are removed")
-		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest").Output()
 			if strings.Contains(res, "Red Hat Operators") && !strings.Contains(res, "OLM QE") {
 				return true, nil
@@ -1874,7 +1875,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		exutil.By("4) Patch this ConfigMap a volume")
 		sub.patch(oc, "{\"spec\": {\"channel\":\"alpha\",\"config\":{\"volumeMounts\":[{\"mountPath\":\"/test\",\"name\":\"config-volume\"}],\"volumes\":[{\"configMap\":{\"name\":\"special-config\"},\"name\":\"config-volume\"}]},\"name\":\"learn\",\"source\":\"cs-25922\",\"sourceNamespace\":\"openshift-marketplace\"}}")
-		err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=learn-operator", "-o=jsonpath={.items[0].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("4-1) Get learn operator pod name:%s", podName)
@@ -1889,7 +1890,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.AssertWaitPollNoErr(err, "pod of learn-operator-alm-owned special-config not mount well")
 		exutil.By("5) Patch a non-exist volume")
 		sub.patch(oc, "{\"spec\":{\"channel\":\"alpha\",\"config\":{\"volumeMounts\":[{\"mountPath\":\"/test\",\"name\":\"volume1\"}],\"volumes\":[{\"persistentVolumeClaim\":{\"claimName\":\"claim1\"},\"name\":\"volume1\"}]},\"name\":\"learn\",\"source\":\"cs-25922\",\"sourceNamespace\":\"openshift-marketplace\"}}")
-		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			for i := 0; i < 2; i++ {
 				exutil.By("5-1) Check the pods status")
 				podStatus, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=learn-operator", fmt.Sprintf("-o=jsonpath={.items[%d].status.phase}", i)).Output()
@@ -2250,7 +2251,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		og1.delete(itName, dr)
 
 		exutil.By("5) Check OperatorGroup status")
-		err := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("og", og.name, "-n", ns, "-o=jsonpath={.status.conditions..reason}").Output()
 			if err != nil {
 				e2e.Logf("Fail to get og: %s, error: %s and try again", og.name, err)
@@ -2300,7 +2301,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("4) Check OperatorGroup status")
-		err = wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("og", og.name, "-n", ns, "-o=jsonpath={.status.conditions..reason}").Output()
 			if err != nil {
 				e2e.Logf("Fail to get og: %s, error: %s and try again", og.name, err)
@@ -2946,7 +2947,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 
 		exutil.By("3) Checking the state of CSV")
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			csvList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(csvList, "\n")
@@ -3123,7 +3124,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			dr.addIr(itName)
 			cs.create(oc, itName, dr)
 
-			err := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", cs.name, "-o=jsonpath={.status.message}").Output()
 				if err != nil {
 					e2e.Logf("Fail to get CatalogSource: %s, error: %s and try again", cs.name, err)
@@ -3335,7 +3336,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		csWithoutDefaultchannel.setSCCRestricted(oc)
 
 		exutil.By("4) Checking CatalogSource error statement due to the absence of a default channel")
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l olm.catalogSource=scenario3", "-n", "scenario3").Output()
 			if err != nil {
 				return false, nil
@@ -3354,7 +3355,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("6) Checking the state of CatalogSource(Running)")
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l olm.catalogSource=scenario3", "-n", "scenario3").Output()
 			if err != nil {
 				return false, nil
@@ -3539,7 +3540,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(catPodname).NotTo(o.BeEmpty())
 
-		waitErr := wait.Poll(3*time.Second, snooze*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(catPodname, "-n", "openshift-operator-lifecycle-manager", tail, since).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "component not found") {
@@ -3668,7 +3669,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			// o.Expect(err).NotTo(o.HaveOccurred())
 			// sub.deleteCSV(itName, dr) // this doesn't seem to work for multiple cycles
 			// Need to ensure its deleted before proceeding
-			waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 				msgSub, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace()).Output()
 				e2e.Logf("STEP %v sub msg: %v", i, msgSub)
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -3843,7 +3844,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
 
-		err := wait.Poll(60*time.Second, operatorWait, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 60*time.Second, operatorWait, false, func(ctx context.Context) (bool, error) {
 			checknameCsv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("jobs", "-n", "openshift-marketplace", "-o", "jsonpath={.items[*].spec.template.spec.containers[*].resources.requests.cpu}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf(checknameCsv)
@@ -4049,7 +4050,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "pod", podName, "-n", "openshift-marketplace")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=olm.catalogSource=redhat-operators", "-o=jsonpath={.items..status.phase}", "-n", "openshift-marketplace").Output()
 			if strings.Contains(res, "Running") {
 				return true, nil
@@ -4236,7 +4237,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// keep the resource so that checking it after upgrading
 		// defer sub.delete(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
-		err = wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			state := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
 			if strings.Compare(state, "AtLatestKnown") == 0 {
 				return true, nil
@@ -4359,7 +4360,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(upgradeableStatus).To(o.Equal("True"))
 
 		exutil.By("3) check status of marketplace operator")
-		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
 			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "-n", "openshift-marketplace")
 			if catsrcS == "" || packages == "" {
@@ -4405,7 +4406,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			"redhat-operators":    "Red Hat Operators",
 			"redhat-marketplace":  "Red Hat Marketplace"}
 
-		err = wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			catsrcS, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if catsrcS == "" {
@@ -4461,7 +4462,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(upgradeableStatus).To(o.Equal("True"))
 
 		exutil.By("3) check status of marketplace operator")
-		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
 			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "-n", "openshift-marketplace")
 			if catsrcS == "" || packages == "" {
@@ -4491,7 +4492,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			"redhat-marketplace":  "Red Hat Marketplace",
 			"cs-22618":            "22618 Operators"}
 
-		err = wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			catsrcS, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-A").Output()
 			if catsrcS == "" {
 				e2e.Logf("get catsrc failed")
@@ -4577,7 +4578,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				output = getResource(oc, asAdmin, withoutNamespace, "apiserver", "cluster", "-o=jsonpath={.spec.audit.profile}")
 				o.Expect(output).To(o.Equal("AllRequestBodies"))
 				exutil.By("4) Wait for api rollout")
-				err = wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
+				err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
 					output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver", "-o=jsonpath={..status.conditions[?(@.type==\"NodeInstallerProgressing\")]}").Output()
 					e2e.Logf(output)
 					if err != nil {
@@ -4856,7 +4857,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 		patchResource(oc, asAdmin, withoutNamespace, "apiservices", apiServiceName, "-p", fmt.Sprintf("{\"spec\":{\"caBundle\":\"test%s\"}}", caBundle))
 
 		exutil.By("Check updated certsRotataAt")
-		err = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			updatedCertsRotateAt, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "csv", packageserverName, "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.certsRotateAt}"))
 			if err != nil {
 				e2e.Logf("the get error is %v, and try next", err)
@@ -5011,7 +5012,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		infoCatalogOperator := strings.Fields(output)
 
 		exutil.By("check the subscription_sync_total")
-		err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			subscriptionSyncTotal, _ := exec.Command("bash", "-c", "oc exec -c catalog-operator "+infoCatalogOperator[0]+" -n openshift-operator-lifecycle-manager -- curl -s -k -H 'Authorization: Bearer $(oc create token prometheus-k8s -n openshift-monitoring)' https://"+infoCatalogOperator[1]+"/metrics").Output()
 			if !strings.Contains(string(subscriptionSyncTotal), sub.installedCSV) {
 				e2e.Logf("the metric is not counted and try next round")
@@ -5327,7 +5328,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("Check there is only one ip")
 		// waiting for the InstallPlan updated
-		err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			ips := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "--no-headers")
 			ipList := strings.Split(ips, "\n")
 			count := 0
@@ -6529,7 +6530,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 		//done for WA
 		var componentKind string
-		err = wait.Poll(15*time.Second, 240*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 240*time.Second, false, func(ctx context.Context) (bool, error) {
 			componentKind = getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", subEtcd.operatorPackage+"."+subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}")
 			if strings.Contains(componentKind, "CustomResourceDefinition") {
 				return true, nil
@@ -6787,7 +6788,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("check the csv fails")
 		// it fails after 10m which we can not control it. so, have to check it in 11m
-		err = wait.Poll(30*time.Second, 11*time.Minute, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 11*time.Minute, false, func(ctx context.Context) (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.4", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status, "Failed") == 0 {
 				e2e.Logf("csv oadp-operator.v0.5.4 fails expected")
@@ -6802,7 +6803,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check if oadp-operator.v0.5.6 is created	")
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			csv := getResource(oc, asAdmin, withoutNamespace, "sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}")
 			if strings.Compare(csv, "oadp-operator.v0.5.6") == 0 {
 				e2e.Logf("csv %v is created", csv)
@@ -6813,7 +6814,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.6 is not created")
 
 		exutil.By("check if upgrade is done")
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.6", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status, "Succeeded") == 0 {
 				e2e.Logf("csv oadp-operator.v0.5.6 is successful")
@@ -6889,7 +6890,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("check the ip fails")
 		ips := getResource(oc, asAdmin, withoutNamespace, "sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.installplan.name}")
 		o.Expect(ips).NotTo(o.BeEmpty())
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "installplan", ips, "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status, "Failed") == 0 {
 				e2e.Logf("ip %v fails expected", ips)
@@ -6906,7 +6907,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("patch to index image again with fixed bundle")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", "{\"spec\":{\"image\":\"quay.io/olmqe/olm-index:OLM-2378-Oadp-ipfailskip\"}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			csv := getResource(oc, asAdmin, withoutNamespace, "sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}")
 			if strings.Compare(csv, "oadp-operator.v0.5.6") == 0 {
 				e2e.Logf("csv %v is created", csv)
@@ -6917,7 +6918,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.6 is not created")
 
 		exutil.By("check if upgrade is done")
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.6", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status, "Succeeded") == 0 {
 				e2e.Logf("csv oadp-operator.v0.5.6 is successful")
@@ -7045,7 +7046,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.create(oc, itName, dr)
 
 		exutil.By("Wait for pod to fail")
-		waitErr := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace()).Output()
 			e2e.Logf("\n%v", msg)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -7058,7 +7059,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(waitErr, "the pod is not in CrashLoopBackOff")
 
 		exutil.By("Check catsrc state for TRANSIENT_FAILURE in lastObservedState")
-		waitErr = wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catName, "-n", oc.Namespace(), "-o=jsonpath={.status}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "TRANSIENT_FAILURE") && strings.Contains(msg, "lastObservedState") {
@@ -7175,7 +7176,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("Create catalog source")
 		catsrc.create(oc, itName, dr)
-		err = wait.Poll(60*time.Second, operatorWait, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 60*time.Second, operatorWait, false, func(ctx context.Context) (bool, error) {
 			checkCatSource, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catsrcName, "-n", catsrc.namespace, "-o", "jsonpath={.status.connectionState.lastObservedState}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if checkCatSource == "READY" {
@@ -7234,7 +7235,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(patchIP).To(o.ContainSubstring("patched"))
 
-		err = wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			ips := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub1.namespace)
 			if strings.Contains(ips, "etcdoperator.v0.9.4") {
 				e2e.Logf("Install plan for etcdoperator.v0.9.4 is created")
@@ -7323,7 +7324,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("check metrics")
 
-		waitErr := wait.Poll(10*time.Second, 150*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			next = false
 			metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(olmPodname, "-n", "openshift-operator-lifecycle-manager", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://localhost:8443/metrics").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -7368,7 +7369,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(strings.Contains(msg, "completed with no errors")).To(o.BeTrue())
 
 		exutil.By("Make sure pods are fully running")
-		waitErr = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace()).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "etcd-operator") && strings.Contains(msg, "Running") && strings.Contains(msg, "3/3") {
@@ -7381,7 +7382,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("check new metrics")
 
-		waitErr = wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			next = false
 			metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(olmPodname, "-n", "openshift-operator-lifecycle-manager", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://localhost:8443/metrics").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -7462,7 +7463,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 
 		exutil.By("check the operator upgrade to nginx-operator.v0.0.1")
-		err := wait.Poll(15*time.Second, 480*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 480*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "csv", "nginx-operator.v1.0.1", "-o=jsonpath={.spec.replaces}").Output()
 			e2e.Logf(output)
 			if err != nil {
@@ -7530,7 +7531,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		err := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns).Execute()
 			if err != nil {
 				e2e.Logf("The validatingwebhookconfiguration is not created:%v", err)
@@ -7548,7 +7549,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		validatingwebhookName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns, "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", validatingwebhookName, "-o=jsonpath={..operations}").Output()
 			e2e.Logf(output)
 			if err != nil {
@@ -7622,7 +7623,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		err := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mutatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns).Execute()
 			if err != nil {
 				e2e.Logf("The mutatingwebhookconfiguration is not created:%v", err)
@@ -7639,7 +7640,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		validatingwebhookName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mutatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns, "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mutatingwebhookconfiguration", validatingwebhookName, "-o=jsonpath={..operations}").Output()
 			e2e.Logf(output)
 			if err != nil {
@@ -7715,7 +7716,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			defer sub.delete(itName, dr)
 			sub.create(oc, itName, dr)
 
-			err := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 				err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns).Execute()
 				if err != nil {
 					e2e.Logf("The validatingwebhookconfiguration is not created:%v", err)
@@ -7793,7 +7794,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 
 		exutil.By("check secrets")
-		errWait := wait.Poll(30*time.Second, 240*time.Second, func() (bool, error) {
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 240*time.Second, false, func(ctx context.Context) (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "secrets", "mysecret").Execute()
 			if err != nil {
 				e2e.Logf("Failed to create secrets, error:%v", err)
@@ -7804,7 +7805,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(errWait, "mysecret is not created")
 
 		exutil.By("check configmaps")
-		errWait = wait.Poll(30*time.Second, 240*time.Second, func() (bool, error) {
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 240*time.Second, false, func(ctx context.Context) (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "configmaps", "my-config-map").Execute()
 			if err != nil {
 				e2e.Logf("Failed to create secrets, error:%v", err)
@@ -7819,7 +7820,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.deleteCSV(itName, dr)
 
 		exutil.By("check secrets has been deleted")
-		errWait = wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "secrets", "mysecret").Execute()
 			if err != nil {
 				e2e.Logf("The secrets has been deleted")
@@ -7830,7 +7831,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(errWait, "mysecret is not found")
 
 		exutil.By("check configmaps has been deleted")
-		errWait = wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "configmaps", "my-config-map").Execute()
 			if err != nil {
 				e2e.Logf("The configmaps has been deleted")
@@ -7935,7 +7936,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 			exutil.By("3) create subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with non-empty values. ")
 			subProxyTest.create(oc, itName, dr)
-			err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 				status := getResource(oc, asAdmin, withoutNamespace, "csv", subProxyTest.installedCSV, "-n", subProxyTest.namespace, "-o=jsonpath={.status.phase}")
 				if (strings.Compare(status, "Succeeded") == 0) || (strings.Compare(status, "Installing") == 0) {
 					e2e.Logf("csv status is Succeeded or Installing")
@@ -7969,7 +7970,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 			exutil.By("3) create subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with non-empty values. ")
 			subProxyTest.create(oc, itName, dr)
-			err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 				status := getResource(oc, asAdmin, withoutNamespace, "csv", subProxyTest.installedCSV, "-n", subProxyTest.namespace, "-o=jsonpath={.status.phase}")
 				if (strings.Compare(status, "Succeeded") == 0) || (strings.Compare(status, "Installing") == 0) {
 					e2e.Logf("csv status is Succeeded or Installing")
@@ -7990,7 +7991,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 			exutil.By("4) Create a new subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with a fake value.")
 			subProxyFake.create(oc, itName, dr)
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 				status := getResource(oc, asAdmin, withoutNamespace, "csv", subProxyFake.installedCSV, "-n", subProxyFake.namespace, "-o=jsonpath={.status.phase}")
 				if (strings.Compare(status, "Succeeded") == 0) || (strings.Compare(status, "Installing") == 0) {
 					e2e.Logf("csv status is Succeeded or Installing")
@@ -8011,7 +8012,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 			exutil.By("5) Create a new subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with an empty value.")
 			subProxyEmpty.create(oc, itName, dr)
-			err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 				status := getResource(oc, asAdmin, withoutNamespace, "csv", subProxyEmpty.installedCSV, "-n", subProxyEmpty.namespace, "-o=jsonpath={.status.phase}")
 				if (strings.Compare(status, "Succeeded") == 0) || (strings.Compare(status, "Installing") == 0) {
 					e2e.Logf("csv status is Succeeded or Installing")
@@ -8353,7 +8354,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		step = "1/3"
 
 		sub.createWithoutCheck(oc, itName, dr)
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, s) {
@@ -8377,7 +8378,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		step = "2/3"
 
 		sub.createWithoutCheck(oc, itName, dr)
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, s) {
@@ -8400,7 +8401,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		step = "3/3"
 
 		sub.createWithoutCheck(oc, itName, dr)
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, s) {
@@ -8423,7 +8424,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		step = "4/4"
 
 		sub.createWithoutCheck(oc, itName, dr)
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, s) {
@@ -8655,7 +8656,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, "status.phase of installplan is not Complete")
 		sub.findInstalledCSV(oc, itName, dr)
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status, "Succeeded") == 0 {
 				e2e.Logf("get installedCSV failed")
@@ -8778,7 +8779,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.createWithoutCheck(oc, itName, dr)
 		installPlan := sub.getIP(oc)
 		o.Expect(installPlan).NotTo(o.BeEmpty())
-		err := wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			ipPhase := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Contains(ipPhase, "Complete") {
 				e2e.Logf("sub is installed")
@@ -8788,7 +8789,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		if err == nil {
 			exutil.By("3) check events")
-			err2 := wait.Poll(20*time.Second, 240*time.Second, func() (bool, error) {
+			err2 := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 240*time.Second, false, func(ctx context.Context) (bool, error) {
 				eventOutput, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", namespaceName).Output()
 				o.Expect(err1).NotTo(o.HaveOccurred())
 				lines := strings.Split(eventOutput, "\n")
@@ -8856,7 +8857,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("3) update sub channel")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"v0.1.1\"}}")
-		err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			ips := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace)
 			if strings.Contains(ips, "ditto-operator.v0.1.1") {
 				e2e.Logf("Install plan for ditto-operator.v0.1.1 is created")
@@ -9096,7 +9097,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			e2e.Logf(output)
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.phase of csv %s is not Succeeded", csv))
-		err = wait.Poll(1*time.Second, 10*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 1*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
 			installedCSV := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}")
 			if strings.Compare(installedCSV, "") == 0 {
 				e2e.Logf("get installedCSV failed")
@@ -9243,7 +9244,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("The install plan is Failed")
 		installPlan := sub.getIP(oc)
-		err := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 900*time.Second, false, func(ctx context.Context) (bool, error) {
 			result := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(result, "Failed") == 0 {
 				e2e.Logf("ip is failed")
@@ -9307,7 +9308,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 
 		exutil.By("4) check csv")
-		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
 				e2e.Logf("csv etcdoperator.v0.9.2 status is not Succeeded, go next round")
@@ -9346,7 +9347,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "ditto-operator.v0.1.1", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			output := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", sub.namespace)
 			if strings.Contains(output, "ditto-operator.v0.1.1") {
 				e2e.Logf("csv ditto-operator.v0.1.1 still exist, go next round")
@@ -9362,7 +9363,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(err, "delete sub and csv failed")
 
 		exutil.By("9) check status of csv etcdoperator.v0.9.4 and ditto-operator.v0.2.0")
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.4", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") == 0 {
 				e2e.Logf("csv etcdoperator.v0.9.4 status is Succeeded")
@@ -9378,7 +9379,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, "csv etcdoperator.v0.9.4 is not Succeeded")
 
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status2 := getResource(oc, asAdmin, withoutNamespace, "csv", "ditto-operator.v0.2.0", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if (strings.Compare(status2, "Succeeded") == 0) || (strings.Compare(status2, "Installing") == 0) {
 				e2e.Logf("csv ditto-operator.v0.2.0 status is Succeeded")
@@ -9507,7 +9508,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 
 		exutil.By("4) check csv")
-		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
 				e2e.Logf("csv etcdoperator.v0.9.2 status is not Succeeded, go next round")
@@ -9576,7 +9577,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 
 		exutil.By("6) check csv")
-		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.4", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
 				e2e.Logf("csv etcdoperator.v0.9.4 status is not Succeeded, go next round")
@@ -9645,7 +9646,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 
 		exutil.By("3.2) check csv")
-		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
 				e2e.Logf("csv etcdoperator.v0.9.2 status is not Succeeded, go next round")
@@ -9680,7 +9681,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "ditto-operator.v0.1.0", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			output := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", sub.namespace)
 			if strings.Contains(output, "ditto-operator.v0.1.0") {
 				e2e.Logf("csv ditto-operator.v0.1.0 still exist, go next round")
@@ -9747,7 +9748,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 
 		exutil.By("3.2) check csv")
-		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status1 := getResource(oc, asAdmin, withoutNamespace, "csv", "etcdoperator.v0.9.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status1, "Succeeded") != 0 {
 				e2e.Logf("csv etcdoperator.v0.9.2 status is not Succeeded, go next round")
@@ -9834,7 +9835,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		ip := sub.getIP(oc)
 		msg := ""
 		errorText := "no operator group found"
-		waitErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", ip, "-n", oc.Namespace(), "-o=jsonpath={..status.conditions}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(strings.ToLower(msg), errorText) {
@@ -9917,7 +9918,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("Wait for the operator to show in the packagemanifest")
 		selector = "--selector=catalog=" + sub.catalogSourceName
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sub.catalogSourceNamespace, selector).Output()
 			if strings.Contains(msg, catsrc.displayName) {
 				return true, nil
@@ -9937,7 +9938,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		e2e.Logf("installplan %v:\n %v\n", err, msg)
 
 		exutil.By("Wait for sub to create the installplan")
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.installplan}").Output()
 			if strings.Contains(msg, "install-") {
 				return true, nil
@@ -9961,7 +9962,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(ip).NotTo(o.BeEmpty())
 
 		exutil.By("Wait for expected error in the install plan status")
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", "-n", oc.Namespace(), ip, "-o=jsonpath={.status.conditions..message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, errorText) {
@@ -9974,7 +9975,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(waitErr, "cannot get expected installplan status")
 
 		exutil.By("Check sub for the same message")
-		waitErr = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.conditions..message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, errorText) {
@@ -10072,7 +10073,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("Wait for the operator to show in the packagemanifest/catalog source")
 		selector = "--selector=catalog=" + sub.catalogSourceName
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sub.catalogSourceNamespace, selector).Output()
 			if strings.Contains(msg, catsrc.displayName) {
 				return true, nil
@@ -10656,7 +10657,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 		exutil.By("Create sub with orignal KubeVersion")
 		sub.create(oc, itName, dr)
-		err := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			csvPhase := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Contains(csvPhase, "Succeeded") {
 				e2e.Logf("sub is installed")
@@ -10811,7 +10812,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 		exutil.By("update channel of Sub")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"beta\"}}")
-		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			status := getResource(oc, asAdmin, withoutNamespace, "csv", "nginx-operator-24664.v0.0.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status, "Succeeded") == 0 {
 				e2e.Logf("csv nginx-operator-24664.v0.0.2 is Succeeded")
@@ -10884,7 +10885,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 		exutil.By("Create sub and cannot succeed")
 		sub.createWithoutCheck(oc, itName, dr)
-		err := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			subStatus := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].message}")
 			e2e.Logf(subStatus)
 			if strings.Contains(subStatus, "invalid") {
@@ -10895,7 +10896,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.conditions of sub %s doesn't have expect meesage", sub.subName))
 
 		sub.findInstalledCSV(oc, itName, dr)
-		err = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			csvPhase := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.requirementStatus}")
 			e2e.Logf(csvPhase)
 			if strings.Contains(csvPhase, "NotPresent") {
@@ -10921,7 +10922,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 		exutil.By("sub succeed and csv succeed")
 		sub.findInstalledCSV(oc, itName, dr)
-		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			csvStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if csvStatus == "Succeeded" {
@@ -10961,7 +10962,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			for _, nodeIndex := range node {
 				oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", nodeIndex)).Execute()
 			}
-			err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 				catalogstrings := []string{"Certified Operators", "Community Operators", "Red Hat Operators", "Red Hat Marketplace"}
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -10999,7 +11000,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		o.Expect(err).NotTo(o.HaveOccurred())
 		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(60*time.Second, 600*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 60*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
 			for _, alertString := range catalogs {
 				alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"OperatorHubSourceError\" and .labels.name == \"%s\")'", token, url, alertString)
 				output, err := exec.Command("bash", "-c", alertCMD).Output()
@@ -11451,7 +11452,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		defer sub.deleteCSV(itName, dr)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "webhooktests.webhook.operators.coreos.io", "-n", "openshift-operators").Execute()
 
-		err := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("-o", "name").Output()
 			if err != nil {
 				e2e.Logf("There is no WebhookTest, err:%v", err)
@@ -11468,7 +11469,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", crwebhook, "-p", "NAME=webhooktest-34181",
 			"NAMESPACE=openshift-operators", "VALID=false").OutputToFile("config-34181.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			erra := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 			if erra == nil {
 				e2e.Logf("expect fail and try next")
@@ -11485,7 +11486,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			"NAMESPACE=openshift-operators", "VALID=true").OutputToFile("config-34181.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("WebhookTest", "webhooktest-34181", "-n", "openshift-operators").Execute()
-		err = wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			erra := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 			if erra != nil {
 				e2e.Logf("try next, err:%v", err)
@@ -11683,7 +11684,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(result).To(o.BeTrue())
 
 		exutil.By("STEP 5: check the operator has been updated")
-		err = wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			sub.findInstalledCSV(oc, itName, dr)
 			if strings.Compare(sub.installedCSV, "ditto-operator.v0.1.1") == 0 {
 				return true, nil
@@ -11810,7 +11811,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		o.Expect(result).To(o.BeTrue())
 
 		exutil.By("STEP 5: approve the install plan")
-		err = wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			ipCsv := getResource(oc, asAdmin, withoutNamespace, "sub", subManual.subName, "-n", subManual.namespace, "-o=jsonpath={.status.installplan.name}{\" \"}{.status.currentCSV}")
 			if strings.Contains(ipCsv, "ditto-operator.v0.1.1") {
 				return true, nil
@@ -11927,7 +11928,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		exutil.By("6) Create catalog source")
 		catsrc.create(oc, itName, dr)
-		err = wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			catsrcStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "ditto-operator-index", "-n", sub.namespace, "-o=jsonpath={.status..lastObservedState}").Output()
 			if strings.Compare(catsrcStatus, "READY") == 0 {
 				return true, nil
@@ -11938,7 +11939,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		exutil.By("7) To wait the csv successed")
 		sub.findInstalledCSV(oc, itName, dr)
-		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			checknameCsv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf(checknameCsv)
@@ -12227,7 +12228,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		exutil.By("Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
-		err = wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			exists, error := clusterPackageExistsInNamespace(oc, sub, catsrc.namespace)
 			if !exists || error != nil {
 				return false, nil
@@ -12307,7 +12308,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		catsrc.createWithCheck(oc, itName, dr)
 
 		exutil.By("check packagemanifest")
-		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--all-namespaces").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, "Test Catsrc 43246 Operators") {
@@ -12378,7 +12379,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		catsrc.createWithCheck(oc, itName, dr)
 
 		exutil.By("check packagemanifest")
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--selector=catalog=catsrc-62947", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, "Test Catsrc 62947 Operators") {
@@ -12625,7 +12626,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		exutil.By("install operator")
 		sub.createWithoutCheck(oc, itName, dr) // actually it is operator upgrade
 		state := ""
-		err = wait.Poll(20*time.Second, 240*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 240*time.Second, false, func(ctx context.Context) (bool, error) {
 			state = getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
 			if strings.Compare(state, "AtLatestKnown") == 0 {
 				return true, nil

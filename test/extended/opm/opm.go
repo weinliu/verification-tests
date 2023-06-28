@@ -1,6 +1,7 @@
 package opm
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -1825,7 +1826,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("step: check api.Registry/ListPackages")
-		err = wait.Poll(20*time.Second, 240*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 240*time.Second, false, func(ctx context.Context) (bool, error) {
 			outputCurl, err := exec.Command("grpcurl", "-plaintext", "localhost:25934", "api.Registry/ListPackages").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(string(outputCurl), "etcd") {

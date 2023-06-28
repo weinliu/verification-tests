@@ -1,6 +1,7 @@
 package operators
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -224,7 +225,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		sub.createWithoutCheck(oc, itName, dr)
 
 		exutil.By("Wait for csv")
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
 			if strings.Contains(msg, sub.installedCSV) {
 				e2e.Logf("found csv %v", msg)
@@ -249,7 +250,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		newCheck("expect", asAdmin, withoutNamespace, compare, "ready", ok, []string{appCrd.typename, appCrd.name, "-n", oc.Namespace(), "-o=jsonpath={.status.state}"}).check(oc)
 
 		exutil.By("Wait for application pod to appear")
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace(), "--no-headers").Output()
 			if strings.Contains(msg, "my-spark-app") {
 				if strings.Contains(msg, "driver") {
@@ -264,7 +265,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		o.Expect(appPodName).NotTo(o.BeEmpty())
 
 		exutil.By("Wait for SparkApplication to finish")
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace(), appPodName, "--no-headers").Output()
 			e2e.Logf("%v", msg)
 			if strings.Contains(msg, "Completed") {
@@ -460,7 +461,7 @@ func RemoveCR(p Packagemanifest, CRName string, instanceName string, oc *exutil.
 // if it is not expected, it will delete CR and the resource of the installed operator, for example sub, csv and possible ns
 func CheckCR(p Packagemanifest, CRName string, instanceName string, jsonPath string, expectedMessage string, oc *exutil.CLI) {
 
-	poolErr := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+	poolErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
 		msg, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args(CRName, instanceName, "-n", p.Namespace, jsonPath).Output()
 		e2e.Logf(msg)
 		if strings.Contains(msg, expectedMessage) {

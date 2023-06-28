@@ -1,6 +1,7 @@
 package operators
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -314,7 +315,7 @@ func writeSubscription(p Packagemanifest, installPlanApprovalMode string) (templ
 // if ok, nothing happen
 // if nok, it will delete sub, csv. and it also delete ns if it is singlenamespace or ownnamespace.
 func CheckDeployment(p Packagemanifest, oc *exutil.CLI) {
-	poolErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+	poolErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 		msg, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("csv", p.CsvVersion, "-o=jsonpath={.status.phase}", "-n", p.Namespace).Output()
 		if strings.Contains(msg, "Succeeded") {
 			return true, nil
