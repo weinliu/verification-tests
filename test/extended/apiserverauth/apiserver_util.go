@@ -23,6 +23,7 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"github.com/tidwall/gjson"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -87,15 +88,16 @@ func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason interface
 		err := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
 			webhookError, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(webhookError).Should(o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType), "Mismatch in 'type' of admission errors reported")
 			//Inline conditional statement for evaluating 1) reason and status together,2) only status.
-			if containsAnyWebHookReason(webhookError, conditionReason) {
-				e2e.Logf("kube-apiserver admission webhook errors as \n %s ", string(webhookError))
+			webhookConditionStatus := gjson.Get(webhookError, `status`).String()
+			if containsAnyWebHookReason(webhookError, conditionReason) && webhookConditionStatus == conditionStatus {
+				e2e.Logf("kube-apiserver admission webhook errors as \n %s ::: %s ::: %s ::: %s", conditionStatus, webhookError, webHookErrorConditionType, conditionReason)
+				o.Expect(webhookError).Should(o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType), "Mismatch in 'type' of admission errors reported")
 				o.Expect(webhookError).Should(o.MatchRegexp(`"status":"%s"`, conditionStatus), "Mismatch in 'status' of admission errors reported")
 				return true, nil
 			}
 			// Adding logging for more debug
-			e2e.Logf("Retrying for expected kube-apiserver admission webhook error :: %s :: %s :: %s", conditionStatus, webhookError, webHookErrorConditionType)
+			e2e.Logf("Retrying for expected kube-apiserver admission webhook error ::: %s ::: %s ::: %s ::: %s", conditionStatus, webhookError, webHookErrorConditionType, conditionReason)
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Test Fail: Expected Kube-apiserver admissionwebhook errors not present.")
