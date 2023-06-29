@@ -67,3 +67,8 @@ func Debugf(format string, v ...interface{}) {
 func Errorf(format string, v ...interface{}) {
 	logger.log.Error().Msgf(format, v...)
 }
+
+// Warnf log warning level message
+func Warnf(format string, v ...interface{}) {
+	logger.log.Warn().Msgf(format, v...)
+}

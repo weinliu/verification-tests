@@ -1,0 +1,281 @@
+package rosacli
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	"gopkg.in/yaml.v3"
+)
+
+type parser struct {
+	jsonData  *jsonData
+	tableData *tableData
+	textData  *textData
+}
+
+func NewParser() *parser {
+	jsonD := new(jsonData)
+	tableD := new(tableData)
+	textD := new(textData)
+
+	p := &parser{
+		jsonData:  jsonD,
+		tableData: tableD,
+		textData:  textD,
+	}
+	return p
+}
+
+type jsonData struct {
+	input  bytes.Buffer
+	output interface{}
+}
+
+type tableData struct {
+	input  bytes.Buffer
+	output []map[string]interface{}
+}
+
+type textData struct {
+	input  bytes.Buffer
+	output string
+	tip    string
+}
+
+func (td *textData) Input(input bytes.Buffer) *textData {
+	td.input = input
+	return td
+}
+
+// Read the cmd input and return the []byte array
+func readLines(in bytes.Buffer) [][]byte {
+	lines := [][]byte{}
+	var line []byte
+	var err error
+	for err == nil {
+		line, err = in.ReadBytes('\n')
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// It extracts the useful result struct as a map and the message as a string
+func (td *textData) Parse() *textData {
+	var tips bytes.Buffer
+	var results bytes.Buffer
+
+	input := td.input
+	lines := readLines(input)
+	reg1 := regexp.MustCompile(`.*[IEW].*:\x20\S.*\s+\S+`)
+	reg2 := regexp.MustCompile("^```\\s*")
+	for _, line := range lines {
+		strline := string(line)
+		if reg2.FindString(strline) != "" {
+			continue
+		}
+		result := reg1.FindString(strline)
+		if result == "" {
+			results.WriteString(strline)
+		} else {
+			tips.WriteString(strline)
+		}
+	}
+
+	td.output = results.String()
+	td.tip = tips.String()
+	return td
+}
+
+func (td *textData) yamlToMap() (map[string]interface{}, error) {
+	res := make(map[string]interface{})
+	err := yaml.Unmarshal([]byte(td.output), &res)
+	return res, err
+}
+
+func (tab *tableData) Input(input bytes.Buffer) *tableData {
+	tab.input = input
+	return tab
+}
+
+// Parse the cmd table ouptut title
+func tableTitle(titleLine []byte) map[int]string {
+	offsetMap := map[int]string{}
+	var elem []byte
+	startOffset := 0
+	startCount := true
+
+	for offset, char := range titleLine {
+		if offset == len(titleLine)-1 {
+			if len(elem) != 0 {
+				key := string(elem)
+				offsetMap[startOffset] = key
+				elem = []byte{}
+				startCount = true
+			}
+		}
+		if char != ' ' {
+			elem = append(elem, char)
+			if startCount {
+				startOffset = offset
+				startCount = false
+			}
+		} else {
+			if offset == 0 {
+				continue
+			} else if titleLine[offset-1] == ' ' {
+				if len(elem) != 0 {
+					key := string(elem)
+					offsetMap[startOffset] = key
+					elem = []byte{}
+					startCount = true
+				}
+			} else {
+				elem = append(elem, char)
+			}
+		}
+	}
+	for key, val := range offsetMap {
+		offsetMap[key] = strings.TrimRight(val, " ")
+	}
+	return offsetMap
+}
+
+// Parse the cmd table ouptut line
+func tableLine(line []byte, offsetMap map[int]string) map[string]interface{} {
+	resultMap := map[string]interface{}{}
+	var elemValue string
+	for offset, key := range offsetMap {
+		if offset >= len(line) {
+			resultMap[key] = ""
+			continue
+		}
+		for subOff, char := range line[offset:] {
+			if subOff == len(line[offset:])-1 {
+				elemValue = strings.TrimRight(string(line[offset:]), "\n")
+				elemValue = strings.TrimLeft(elemValue, " ")
+				resultMap[key] = elemValue
+			}
+			if char == ' ' && line[subOff+1+offset] == ' ' {
+				elemValue = strings.TrimRight(string(line[offset:subOff+offset]), " ")
+				elemValue = strings.TrimLeft(elemValue, " ")
+				resultMap[key] = elemValue
+				break
+			}
+		}
+	}
+	return resultMap
+}
+
+// Parse the table output of the rosa cmd
+func (tab *tableData) Parse() *tableData {
+	input := tab.input
+	lines := readLines(input)
+	titleLine := lines[0]
+	offsetMap := tableTitle(titleLine)
+
+	result := []map[string]interface{}{}
+	for _, line := range lines[1 : len(lines)-1] {
+		result = append(result, tableLine(line, offsetMap))
+	}
+
+	tab.output = result
+	return tab
+}
+
+func (jd *jsonData) Input(input bytes.Buffer) *jsonData {
+	jd.input = input
+	return jd
+}
+
+func (jd *jsonData) Parse() *jsonData {
+	var object map[string]interface{}
+	err := json.Unmarshal(jd.input.Bytes(), &object)
+	if err != nil {
+		logger.Errorf(" error in Parse is %v", err)
+	}
+
+	jd.output = object
+	return jd
+}
+
+func (jd *jsonData) ParseList(jsonStr string) *jsonData {
+	var object []map[string]interface{}
+	err := json.Unmarshal(jd.input.Bytes(), &object)
+	if err != nil {
+		logger.Errorf(" error in Parse is %v", err)
+	}
+
+	jd.output = object
+	return jd
+}
+
+func (jd *jsonData) digObject(keys ...interface{}) interface{} {
+	value := dig(jd.output, keys)
+	return value
+}
+func (jd *jsonData) digString(keys ...interface{}) string {
+	switch result := dig(jd.output, keys).(type) {
+	case nil:
+		return ""
+	case string:
+		return result
+	case fmt.Stringer:
+		return result.String()
+	default:
+		return fmt.Sprintf("%s", result)
+	}
+}
+func (jd *jsonData) digBool(keys ...interface{}) bool {
+	switch result := dig(jd.output, keys).(type) {
+	case nil:
+		return false
+	case bool:
+		return result
+	case string:
+		b, err := strconv.ParseBool(result)
+		if err != nil {
+			return false
+		}
+		return b
+	default:
+		return false
+	}
+}
+
+func (jd *jsonData) digFloat(keys ...interface{}) float64 {
+	value := dig(jd.output, keys)
+	result := value.(float64)
+	return result
+}
+
+func dig(object interface{}, keys []interface{}) interface{} {
+	if object == nil || len(keys) == 0 {
+		return nil
+	}
+	switch key := keys[0].(type) {
+	case string:
+		switch data := object.(type) {
+		case map[string]interface{}:
+			value := data[key]
+			if len(keys) == 1 {
+				return value
+			}
+			return dig(value, keys[1:])
+		}
+	case int:
+		switch data := object.(type) {
+		case []interface{}:
+			value := data[key]
+			if len(keys) == 1 {
+				return value
+			}
+			return dig(value, keys[1:])
+		}
+	}
+	return nil
+}
