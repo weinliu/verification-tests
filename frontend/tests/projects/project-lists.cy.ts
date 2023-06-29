@@ -14,37 +14,38 @@ describe('project list tests', () => {
     login_passwd_two = b.split(':')[1];
     cy.login(Cypress.env('LOGIN_IDP'), login_user_one, login_passwd_one);
     guidedTour.close();
-    cy.createProject('userone-project');
+    cy.createProject('testuserone-project');
     cy.logout;
 
     cy.login(Cypress.env('LOGIN_IDP'), login_user_two, login_passwd_two);
     guidedTour.close();
-    cy.createProject('usertwo-project');
-    cy.adminCLI(`oc adm policy add-role-to-user admin ${login_user_two} -n userone-project`);
+    cy.createProject('testusertwo-project');
+    cy.adminCLI(`oc adm policy add-role-to-user admin ${login_user_two} -n testuserone-project`);
   });
 
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user_two}`);
-    cy.adminCLI('oc delete project userone-project');
-    cy.adminCLI('oc delete project usertwo-project');
+    cy.adminCLI('oc delete project testuserone-project');
+    cy.adminCLI('oc delete project testusertwo-project');
   });
 
   it('(OCP-43131,yapei) normal and admin user able to filter projects with Requester', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.log('normal user able to filter with Requester');
     cy.visit('/k8s/cluster/projects');
     listPage.rows.shouldBeLoaded();
-    projectsPage.checkProjectExists("userone-project");
-    projectsPage.checkProjectExists("usertwo-project");
+    listPage.filter.byName('testuser');
+    projectsPage.checkProjectExists("testuserone-project");
+    projectsPage.checkProjectExists("testusertwo-project");
     // filter by Me
     projectsPage.filterMyProjects();
-    projectsPage.checkProjectExists("usertwo-project");
-    projectsPage.checkProjectNotExists("userone-project");
+    projectsPage.checkProjectExists("testusertwo-project");
+    projectsPage.checkProjectNotExists("testuserone-project");
     listPage.filter.clearAllFilters();
 
     // filter by User
     projectsPage.filterUserProjects();
-    projectsPage.checkProjectExists("userone-project");
-    projectsPage.checkProjectNotExists("usertwo-project");
+    projectsPage.checkProjectExists("testuserone-project");
+    projectsPage.checkProjectNotExists("testusertwo-project");
     listPage.filter.clearAllFilters();
 
 
@@ -54,18 +55,21 @@ describe('project list tests', () => {
     // filter by System
     projectsPage.filterSystemProjects();
     projectsPage.checkProjectExists("openshift");
-    projectsPage.checkProjectNotExists("usertwo-project");
+    listPage.filter.byName('testuser');
+    projectsPage.checkProjectNotExists("testusertwo-project");
     listPage.filter.clearAllFilters();
 
     // filter by User
+    listPage.filter.byName('testuser');
     projectsPage.filterUserProjects();
-    projectsPage.checkProjectExists("userone-project");
-    projectsPage.checkProjectNotExists("usertwo-project");
+    projectsPage.checkProjectExists("testuserone-project");
+    projectsPage.checkProjectNotExists("testusertwo-project");
     listPage.filter.clearAllFilters();
 
     // filter by Me
+    listPage.filter.byName('testuser');
     projectsPage.filterMyProjects();
-    projectsPage.checkProjectExists("usertwo-project");
-    projectsPage.checkProjectNotExists("userone-project");
+    projectsPage.checkProjectExists("testusertwo-project");
+    projectsPage.checkProjectNotExists("testuserone-project");
   });
 })
