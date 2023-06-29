@@ -1,6 +1,6 @@
 import { Operator } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
-import { netflowPage, genSelectors, querySumSelectors, overviewSelectors} from "../../views/netflow-page"
+import { netflowPage, genSelectors, querySumSelectors, overviewSelectors } from "../../views/netflow-page"
 
 // if project name is changed here, it also needs to be changed 
 // under all netobserv test specs
@@ -36,13 +36,13 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
         beforeEach('overview page test', function () {
             netflowPage.visit()
             cy.get('.overviewTabButton').should('exist')
-            
+
             cy.checkPanel(overviewSelectors.defaultPanels)
             cy.checkPanelsNum(4);
         })
 
         it("should validate overview page features", function () {
-            
+
             cy.byTestID(genSelectors.timeDrop).then(btn => {
                 expect(btn).to.exist
                 cy.wrap(btn).click().then(drop => {
@@ -87,7 +87,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
                         cy.byTestID('25').should('exist').click()
                     })
                 })
-            })    
+            })
         })
 
         it("should validate query summary panel", function () {
@@ -110,9 +110,9 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
         it("should validate panels", function () {
             //open panels modal
             cy.openPanelsModal();
-            
+
             //check if all panels are listed 
-            var panels:string[] = ['Top X average rates (donut)', 'Top X latest rates (donut)', 'Top X flow rates stacked (bars)', 'Total rate (line)', 'Top X flow rates stacked with total (bars)', 'Top X flow rates (lines)']
+            var panels: string[] = ['Top X average rates (donut)', 'Top X latest rates (donut)', 'Top X flow rates stacked (bars)', 'Total rate (line)', 'Top X flow rates stacked with total (bars)', 'Top X flow rates (lines)']
             cy.checkPopupItems(overviewSelectors.panelsModal, panels);
 
             //select all panels
@@ -143,7 +143,11 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
         })
     })
 
-    after("delete flowcollector and NetObs Operator", function () {
+    afterEach("test", function () {
+        cy.get('#reset-filters-button').should('exist').click()
+    })
+
+    after("after all tests are done", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.logout()
     })

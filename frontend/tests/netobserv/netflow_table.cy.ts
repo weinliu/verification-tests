@@ -225,7 +225,6 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
 
             cy.byTestID('clear-all-filters-button').click()
             cy.get('div.custom-chip').should('not.exist')
-            cy.get('#reset-filters-button').should('exist').click()
         })
 
         it("should validate localstorage for plugin", { tags: ['e2e', 'admin'] }, function () {
@@ -347,6 +346,10 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                 cy.byTestID("refresh-dropdown-dropdown").should('exist').should('not.be.disabled')
             })
         })
+    })
+
+    afterEach("test", function () {
+        cy.get('#reset-filters-button').should('exist').click()
     })
 
     after("delete flowcollector and NetObs Operator", function () {

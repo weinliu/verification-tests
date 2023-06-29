@@ -304,6 +304,10 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         })
     })
 
+    afterEach("test", function () {
+        cy.get('#reset-filters-button').should('exist').click()
+    })
+
     after("after all tests are done", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.logout()
