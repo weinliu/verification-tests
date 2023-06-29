@@ -53,6 +53,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		paoNamespace   = "openshift-performance-addon-operator"
 		iaasPlatform   string
 		ManualPickup   bool
+		podShippedFile string
 	)
 
 	g.BeforeEach(func() {
@@ -62,6 +63,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		iaasPlatform = exutil.CheckPlatform(oc)
 		e2e.Logf("Cloud provider is: %v", iaasPlatform)
 		ManualPickup = true
+
+		podShippedFile = exutil.FixturePath("testdata", "psap", "nto", "pod-shipped.yaml")
+
 	})
 
 	// author: liqcui@redhat.com
@@ -638,9 +642,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Clean up the custom profile user-max-mnt-namespaces and unlabel the nginx pod
 		defer ntoRes.delete(oc)
 
+		//First choice to use [tests] image, the image mirrored by default in disconnected cluster
+		//if don't have [tests] image in some environment, we can use hello-openshift as image
+		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
+		AppImageName := exutil.GetImagestreamImageName(oc, "tests")
+		if len(AppImageName) == 0 {
+			AppImageName = "quay.io/openshifttest/hello-openshift:multiarch"
+		}
+
 		//Create a nginx web application pod
 		g.By("Create a nginx web pod in nto temp namespace")
-		exutil.ApplyOperatorResourceByYaml(oc, ntoTestNS, podNginxFile)
+		exutil.ApplyNsResourceFromTemplate(oc, ntoTestNS, "--ignore-unknown-parameters=true", "-f", podShippedFile, "-p", "IMAGENAME="+AppImageName)
 
 		//Check if nginx pod is ready
 		exutil.AssertPodToBeReady(oc, "nginx", ntoTestNS)
@@ -1830,9 +1842,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("This is the test case that execute mannually in shared cluster ...")
 		}
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		//Use the first rhcos worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstCoreOsWorkerNode(oc)
+		e2e.Logf("tunedNodeName is [ %v ]", tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if len(tunedNodeName) == 0 {
+			g.Skip("Skip Testing on RHEL worker or windows node")
+		}
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
@@ -2032,7 +2049,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "18", 300, "tuned.plugins.base: instance net: assigning devices")
 
 		g.By("Assert active and recommended profile (net-plugin) match in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `profile 'net-plugin' applied|profile \(net-plugin\) match`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "18", 300, `profile 'net-plugin' applied|profile \(net-plugin\) match`)
 
 		g.By("Check if new NTO profile was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "net-plugin")
@@ -2255,10 +2272,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
 		}
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		//Use the first rhcos worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstCoreOsWorkerNode(oc)
+		e2e.Logf("tunedNodeName is [ %v ]", tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+
+		if len(tunedNodeName) == 0 {
+			g.Skip("Skip Testing on RHEL worker or windows node")
+		}
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)

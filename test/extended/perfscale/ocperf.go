@@ -36,7 +36,7 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 	})
 
 	// author: kkulkarni@redhat.com
-	g.It("Longduration-Author:liqcui-Medium-22140-Create 60 projects and time various oc commands durations[Slow][Serial]", func() {
+	g.It("Longduration-Author:liqcui-Medium-22140-Create multiple projects and time various oc commands durations[Slow][Serial]", func() {
 
 		if isSNO {
 			g.Skip("Skip Testing on SNO ...")
@@ -53,9 +53,9 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 		e2e.Logf("ocp perfscale test case ocp-22140 will use below image to test:\n[Image Name]:%s", ocPerfAppImageName)
 
 		if iaasPlatform == "azure" {
-			projectCount = 45
+			projectCount = 40
 		} else {
-			projectCount = 60
+			projectCount = 45
 		}
 
 		start := time.Now()

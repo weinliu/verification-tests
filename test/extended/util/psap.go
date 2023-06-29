@@ -920,3 +920,35 @@ func SpecifyMachinesetWithDifferentInstanceType(oc *CLI) string {
 	}
 	return expectedInstanceType
 }
+
+// GetImagestreamImageName Return an imagestream's image repository name
+func GetImagestreamImageName(oc *CLI, imagestreamName string) string {
+	var imageName string
+
+	//Ignore NotFound error, it will return a empty string, then use another image if the image doesn't exit
+	imageRepos, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is", imagestreamName, "-n", "openshift", "-ojsonpath={.status.dockerImageRepository}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if !strings.Contains(imageRepos, "NotFound") {
+		imageTags, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is", imagestreamName, "-n", "openshift", "-ojsonpath={.status.tags[*].tag}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		imageTagList := strings.Split(imageTags, " ")
+		//Because some image stream tag is broken, we need to find which image is available in disconnected cluster.
+		for i := 0; i < len(imageTagList); i++ {
+			jsonathStr := fmt.Sprintf(`-ojsonpath='{.status.tags[%v].conditions[?(@.status=="False")]}{.status.tags[%v].tag}'`, i, i)
+			stdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is", imagestreamName, "-n", "openshift", jsonathStr).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(stdOut).NotTo(o.BeEmpty())
+			e2e.Logf("stdOut is: %v", stdOut)
+			if !strings.Contains(stdOut, "NotFound") {
+				imageTag := strings.ReplaceAll(stdOut, "'", "")
+				imageName = imageRepos + ":" + imageTag
+				break
+			}
+
+		}
+
+	}
+	return imageName
+}
