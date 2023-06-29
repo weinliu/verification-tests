@@ -2,12 +2,13 @@ package clusterinfrastructure
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -421,5 +422,41 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		machineControllerLog, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+machineControllerPodName, "-c", "machine-controller", "-n", "openshift-machine-api").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(machineControllerLog, "unknown instance type") || strings.Contains(machineControllerLog, "Failed to set autoscaling from zero annotations, instance type unknown")).To(o.BeTrue())
+	})
+
+	//author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-22038-[CAO] Cluster-autoscaler should support scale machinset from/to 0 [Serial][Slow][Disruptive]", func() {
+		machineAutoscaler = machineAutoscalerDescription{
+			name:           "machineautoscaler-22038",
+			namespace:      "openshift-machine-api",
+			maxReplicas:    1,
+			minReplicas:    0,
+			template:       machineAutoscalerTemplate,
+			machineSetName: "machineset-22038",
+		}
+
+		g.By("Create machineset")
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "openstack", "gcp", "vsphere")
+		architecture.SkipNonAmd64SingleArch(oc)
+
+		ms := exutil.MachineSetDescription{"machineset-22038", 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Create MachineAutoscaler")
+		defer machineAutoscaler.deleteMachineAutoscaler(oc)
+		machineAutoscaler.createMachineAutoscaler(oc)
+
+		g.By("Create clusterautoscaler")
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+		clusterAutoscaler.createClusterAutoscaler(oc)
+
+		g.By("Create workload")
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+
+		g.By("Check machine could be created successful")
+		exutil.WaitForMachinesRunning(oc, 1, "machineset-22038")
 	})
 })
