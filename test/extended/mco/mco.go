@@ -2790,9 +2790,15 @@ nulla pariatur.`
 					},
 				},
 			}
-			workerNode = NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
 			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			workerNode = wMcp.GetNodesOrFail()[0] // we don't want to get "windows" nodes
 		)
+
+		// Maybe in the future we can add some logic to create the "core" user and the "core" group with the right IDs
+		// Now we will skip the test case to avoid breaking executions with RHEL nodes.
+		if len(NewNodeList(oc).GetAllRhelWokerNodesOrFail()) != 0 {
+			g.Skip("There are yum based RHEL nodes in the cluster. This test cannot be executed because no 'core' user/group exist in RHEL nodes")
+		}
 
 		g.By("Create new machine config to create files with different users and groups")
 		fileConfig := MarshalOrFail(allFiles)
