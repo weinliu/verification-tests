@@ -459,7 +459,15 @@ func (n *Node) IgnoreEventsBeforeNow() error {
 	if lerr != nil {
 		return lerr
 	}
+
 	logger.Infof("Latest event in node %s was: %s", n.GetName(), latestEvent)
+
+	if latestEvent == nil {
+		logger.Infof("Since no event was found for node %s, we will not ignore any event", n.GetName())
+		n.eventCheckpoint = time.Time{}
+		return nil
+	}
+
 	logger.Infof("Ignoring all previous events!")
 	n.eventCheckpoint, err = latestEvent.GetLastTimestamp()
 	return err
