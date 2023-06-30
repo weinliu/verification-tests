@@ -75,7 +75,7 @@ func verifyImageIDInDebugNode(oc *exutil.CLI, nodeNameList []string, imageID str
 			found = true
 		} else {
 			found = false
-			e2e.Failf("expected mage %v not found on node %v", imageID, node)
+			e2e.Failf("expected image %v not found on node %v", imageID, node)
 		}
 	}
 	return found
@@ -86,7 +86,7 @@ func verifySSLHealth(oc *exutil.CLI, ipOfNode string, node string) bool {
 	NodeIpAndPort := ipOfNode + ":9979"
 	resultOutput, _ := exutil.DebugNodeWithChroot(oc, node, "openssl", "s_client", "-cipher", "ECDHE-RSA-DES-CBC3-SHA", "-connect", NodeIpAndPort)
 	if strings.Contains(resultOutput, "Verification: OK") {
-		e2e.Logf("SSL health on port 9979 is healhy")
+		e2e.Logf("SSL health on port 9979 is healthy")
 		healthCheck = true
 	} else {
 		e2e.Logf("SSL op %v ", resultOutput)
