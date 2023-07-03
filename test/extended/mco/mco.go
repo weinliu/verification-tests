@@ -2479,9 +2479,13 @@ nulla pariatur.`
 		o.Expect(alertJSON).To(o.HaveLen(1),
 			"One and only one %s alert should be reported because of the eviction problems", expectedAlertName)
 
-		expectedAnnotation := fmt.Sprintf("Drain failed on %s , updates may be blocked. For more details check MachineConfigController pod logs: oc logs -f -n openshift-machine-config-operator machine-config-controller-xxxxx -c machine-config-controller", workerNode.GetName())
-		o.Expect(alertJSON[0].Get("annotations").Get("message").ToString()).Should(o.ContainSubstring(expectedAnnotation),
+		expectedDescription := fmt.Sprintf("Drain failed on %s , updates may be blocked. For more details check MachineConfigController pod logs: oc logs -f -n openshift-machine-config-operator machine-config-controller-xxxxx -c machine-config-controller", workerNode.GetName())
+		o.Expect(alertJSON[0].Get("annotations").Get("description").ToString()).Should(o.ContainSubstring(expectedDescription),
 			"The error description should make a reference to the pod info")
+
+		expectedSummary := "Alerts the user to a failed node drain. Always triggers when the failure happens one or more times."
+		o.Expect(alertJSON[0].Get("annotations").Get("summary").ToString()).Should(o.Equal(expectedSummary),
+			"The alert has a wrong 'summary' annotation value")
 
 		// Since OCPBUGS-904 we need to check that the namespace is reported properly
 		o.Expect(alertJSON[0].Get("labels").Get("namespace").ToString()).Should(o.Equal(MachineConfigNamespace),

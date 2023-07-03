@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/onsi/gomega/types"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -36,6 +38,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 			fileContent            = "test"
 			fileMode               = 420 // decimal 0644
 			expectedAlertName      = "MCDRebootError"
+			expectedAlertSeverity  = "critical"
 			alertFiredAfter        = 5 * time.Minute
 			alertStillPresentAfter = 10 * time.Minute
 		)
@@ -67,16 +70,25 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		mc.create()
 		logger.Infof("OK!\n")
 
+		// Check that the expected alert is fired with the right values
 		expectedDegradedMessage := fmt.Sprintf(`Node %s is reporting: "reboot command failed, something is seriously wrong"`,
 			node.GetName())
-		expectedAlertAnnotationMessage := fmt.Sprintf("Reboot failed on %s , update may be blocked. For more details:  oc logs -f -n openshift-machine-config-operator machine-config-daemon",
+
+		expectedAlertLabels := expectedAlertValues{"severity": o.Equal(expectedAlertSeverity)}
+
+		expectedAlertAnnotationDescription := fmt.Sprintf("Reboot failed on %s , update may be blocked. For more details:  oc logs -f -n openshift-machine-config-operator machine-config-daemon",
 			node.GetName())
 
+		expectedAlertAnnotations := expectedAlertValues{
+			"message": o.ContainSubstring(expectedAlertAnnotationDescription),
+		}
+
 		params := checkFiredAlertParams{
-			expectedDegradedMessage:        regexp.QuoteMeta(expectedDegradedMessage),
-			expectedAlertName:              expectedAlertName,
-			expectedAlertAnnotationMessage: expectedAlertAnnotationMessage,
-			pendingDuration:                alertFiredAfter,
+			expectedAlertName:        expectedAlertName,
+			expectedDegradedMessage:  regexp.QuoteMeta(expectedDegradedMessage),
+			expectedAlertLabels:      expectedAlertLabels,
+			expectedAlertAnnotations: expectedAlertAnnotations,
+			pendingDuration:          alertFiredAfter,
 			// Because of OCPBUGS-5497, we need to check that the alert is already present after 15 minutes.
 			// We have waited 5 minutes to test the "firing" state, so we only have to wait 10 minutes more to test the 15 minutes needed since OCPBUGS-5497
 			stillPresentDuration: alertStillPresentAfter,
@@ -93,10 +105,11 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63866-MCDPivotError alert[Disruptive]", func() {
 		var (
-			mcName             = "mco-tc-63866-pivot-alert"
-			expectedAlertName  = "MCDPivotError"
-			alertFiredAfter    = 2 * time.Minute
-			dockerFileCommands = `RUN echo 'Hello world' >  /etc/hello-world-file`
+			mcName                = "mco-tc-63866-pivot-alert"
+			expectedAlertName     = "MCDPivotError"
+			alertFiredAfter       = 2 * time.Minute
+			dockerFileCommands    = `RUN echo 'Hello world' >  /etc/hello-world-file`
+			expectedAlertSeverity = "warning"
 		)
 		// We use master MCP because like that we make sure that we are using a CoreOs node
 		g.By("Break the reboot process in a node")
@@ -128,17 +141,26 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		mc.create()
 		logger.Infof("OK\n")
 
+		// Check that the expected alert is fired with the right values
 		expectedDegradedMessage := fmt.Sprintf(`Node %s is reporting: "failed to update OS to %s`,
 			node.GetName(), digestedImage)
-		expectedAlertAnnotationMessage := fmt.Sprintf("Error detected in pivot logs on %s , upgrade may be blocked. For more details:  oc logs -f -n openshift-machine-config-operator machine-config-daemon-",
+
+		expectedAlertLabels := expectedAlertValues{"severity": o.Equal(expectedAlertSeverity)}
+
+		expectedAlertAnnotationDescription := fmt.Sprintf("Error detected in pivot logs on %s , upgrade may be blocked. For more details:  oc logs -f -n openshift-machine-config-operator machine-config-daemon-",
 			node.GetName())
 
+		expectedAlertAnnotations := expectedAlertValues{
+			"message": o.ContainSubstring(expectedAlertAnnotationDescription),
+		}
+
 		params := checkFiredAlertParams{
-			expectedDegradedMessage:        regexp.QuoteMeta(expectedDegradedMessage),
-			expectedAlertName:              expectedAlertName,
-			expectedAlertAnnotationMessage: expectedAlertAnnotationMessage,
-			pendingDuration:                alertFiredAfter,
-			stillPresentDuration:           0, // We skip this validation to make the test faster
+			expectedAlertName:        expectedAlertName,
+			expectedDegradedMessage:  regexp.QuoteMeta(expectedDegradedMessage),
+			expectedAlertLabels:      expectedAlertLabels,
+			expectedAlertAnnotations: expectedAlertAnnotations,
+			pendingDuration:          alertFiredAfter,
+			stillPresentDuration:     0, // We skip this validation to make the test faster
 		}
 		checkFiredAlert(oc, coMcp, params)
 
@@ -151,13 +173,16 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 	})
 })
 
+type expectedAlertValues map[string]types.GomegaMatcher
+
 type checkFiredAlertParams struct {
+	expectedAlertLabels      expectedAlertValues
+	expectedAlertAnnotations expectedAlertValues
 	// regexp that should match the MCP degraded message
-	expectedDegradedMessage        string
-	expectedAlertName              string
-	expectedAlertAnnotationMessage string
-	pendingDuration                time.Duration
-	stillPresentDuration           time.Duration
+	expectedDegradedMessage string
+	expectedAlertName       string
+	pendingDuration         time.Duration
+	stillPresentDuration    time.Duration
 }
 
 func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAlertParams) {
@@ -176,25 +201,47 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 	o.Eventually(getAlertsByName, "5m", "20s").WithArguments(oc, params.expectedAlertName).
 		Should(o.HaveLen(1),
 			"Expected 1 %s alert and only 1 to be triggered!", params.expectedAlertName)
-	logger.Infof("OK!\n")
-
-	g.By("Verify that the alert has the right message")
 
 	alertJSON, err := getAlertsByName(oc, params.expectedAlertName)
 	o.Expect(err).NotTo(o.HaveOccurred(),
 		"Error trying to get the %s alert", params.expectedAlertName)
 
 	logger.Infof("Found %s alerts: %s", params.expectedAlertName, alertJSON)
-
 	alertMap := alertJSON[0].ToMap()
 	annotationsMap := alertJSON[0].Get("annotations").ToMap()
+	logger.Infof("OK!\n")
+
+	if params.expectedAlertAnnotations != nil {
+		g.By("Verify alert's annotations")
+
+		// Check all expected annotations
+		for annotation, expectedMatcher := range params.expectedAlertAnnotations {
+			logger.Infof("Verifying annotation: %s", annotation)
+			o.Expect(annotationsMap).To(o.HaveKeyWithValue(annotation, expectedMatcher),
+				"The alert is reporting a wrong '%s' annotation value", annotation)
+		}
+		logger.Infof("OK!\n")
+	} else {
+		logger.Infof("No annotations checks needed!")
+	}
+
+	g.By("Verify alert's labels")
 	labelsMap := alertJSON[0].Get("labels").ToMap()
 
-	o.Expect(annotationsMap).To(o.HaveKeyWithValue("message", o.ContainSubstring(params.expectedAlertAnnotationMessage)),
-		"The alert is reporting a wrong error message")
-	// Since OCPBUGS-904 we need to check that the namespace is reported properly
+	// Since OCPBUGS-904 we need to check that the namespace is reported properly in all the alerts
 	o.Expect(labelsMap).To(o.HaveKeyWithValue("namespace", MachineConfigNamespace),
 		"Expected the alert to report the MCO namespace")
+
+	if params.expectedAlertLabels != nil {
+		// Check all expected labels
+		for label, expectedMatcher := range params.expectedAlertLabels {
+			logger.Infof("Verifying label: %s", label)
+			o.Expect(labelsMap).To(o.HaveKeyWithValue(label, expectedMatcher),
+				"The alert is reporting a wrong '%s' label value", label)
+		}
+	} else {
+		logger.Infof("No extra labels checks needed!")
+	}
 
 	logger.Infof("OK!\n")
 
