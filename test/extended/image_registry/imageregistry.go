@@ -3941,4 +3941,47 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "privatekey name set error")
 	})
+
+	g.It("Author:xiuwang-Medium-11569-Check the registry-editor permission [Serial]", func() {
+		g.By("Add registry-eidtor role to a project")
+		registry_role := [3]string{"registry-admin", "registry-editor", "registry-viewer"}
+		defer func() {
+			for i := 0; i < 3; i++ {
+				err := oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", registry_role[i], "-z", "test-"+registry_role[i], "-n", oc.Namespace()).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		for i := 0; i < 3; i++ {
+			err := oc.AsAdmin().Run("create").Args("sa", "test-"+registry_role[i], "-n", oc.Namespace()).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", registry_role[i], "-z", "test-"+registry_role[i], "-n", oc.Namespace()).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		g.By("Check the registry-editor policy")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("policy").Args("who-can", "create", "imagestreamimages", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "test-"+registry_role[0]) || !strings.Contains(output, "test-"+registry_role[1]) || strings.Contains(output, "test-"+registry_role[2]) {
+			e2e.Failf("Dreate imagestreamimages permission is not correct.")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("who-can", "deletecollection", "imagestreammappings", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "test-"+registry_role[0]) || !strings.Contains(output, "test-"+registry_role[1]) || strings.Contains(output, "test-"+registry_role[2]) {
+			e2e.Failf("Deletecollection imagestreammappings permission is not correct.")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("who-can", "list", "imagestreams/secrets", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "test-"+registry_role[0]) || !strings.Contains(output, "test-"+registry_role[1]) || strings.Contains(output, "test-"+registry_role[2]) {
+			e2e.Failf("List imagestreams/secrets permission is not correct.")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("who-can", "patch", "imagestreamtags", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "test-"+registry_role[0]) || !strings.Contains(output, "test-"+registry_role[1]) || strings.Contains(output, "test-"+registry_role[2]) {
+			e2e.Failf("Patch istag permission is not correct.")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("who-can", "get", "imagestreams/layers", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "test-"+registry_role[0]) || !strings.Contains(output, "test-"+registry_role[1]) || !strings.Contains(output, "test-"+registry_role[2]) {
+			e2e.Failf("Get is/layers permission is not correct.")
+		}
+	})
 })
