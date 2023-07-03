@@ -187,4 +187,22 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 			"ContainerRuntimeConfig generated MC and worker pool rendered MC should have the same Controller Version annotation")
 
 	})
+
+	g.It("NonHyperShiftHOST-Author:sregidor-PstChkUpgrade-NonPreRelease-Critical-64781-MCO should be compliant with CIS benchmark rule", func() {
+		exutil.By("Verify that machine-config-opeartor pod is not using the default SA")
+
+		o.Expect(
+			oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", MachineConfigNamespace, "-l", "k8s-app=machine-config-operator",
+				"-o", `jsonpath={.items[0].spec.serviceAccountName}`).Output(),
+		).NotTo(o.Equal("default"),
+			"machine-config-operator pod is using the 'default' serviceAccountName and it should not")
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify that there is no clusterrolebinding for the default ServiceAccount")
+
+		defaultSAClusterRoleBinding := NewResource(oc.AsAdmin(), "clusterrolebinding", "default-account-openshift-machine-config-operator")
+		o.Expect(defaultSAClusterRoleBinding).NotTo(Exist(),
+			"The old clusterrolebinding for the 'default' service account exists and it should not exist")
+		logger.Infof("OK!\n")
+	})
 })
