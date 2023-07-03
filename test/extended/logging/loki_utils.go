@@ -521,6 +521,33 @@ func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) {
 	}
 }
 
+// update existing lokistack CR
+// if template is specified, then run command `oc process -f template -p patches | oc apply -f -`
+// if template is not specified, then run command `oc patch lokistack/${l.name} -p patches`
+// if use patch, should add `--type=` in the end of patches
+func (l lokiStack) update(oc *exutil.CLI, template string, patches ...string) {
+	var err error
+	if template != "" {
+		parameters := []string{"-f", template, "-p", "NAME=" + l.name, "NAMESPACE=" + l.namespace}
+		if len(patches) > 0 {
+			parameters = append(parameters, patches...)
+		}
+		file, processErr := processTemplate(oc, parameters...)
+		defer os.Remove(file)
+		if processErr != nil {
+			e2e.Failf("error processing file: %v", processErr)
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", l.namespace).Execute()
+	} else {
+		parameters := []string{"lokistack/" + l.name, "-n", l.namespace, "-p"}
+		parameters = append(parameters, patches...)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(parameters...).Execute()
+	}
+	if err != nil {
+		e2e.Failf("error updating lokistack: %v", err)
+	}
+}
+
 func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
 	resource{"lokistack", l.name, l.namespace}.clear(oc)
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc", "-n", l.namespace, "-l", "app.kubernetes.io/instance="+l.name).Execute()

@@ -573,7 +573,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl.create(oc)
 
 			g.By("checking app, infra and audit logs in loki")
-			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			bearerToken := getSAToken(oc, "default", oc.Namespace())
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {

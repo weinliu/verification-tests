@@ -355,8 +355,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			e2e.Logf("Deleting Loki Distributor deployment")
+			distributorPods, err := getPodNames(oc, ls.namespace, "app.kubernetes.io/component=distributor")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment/"+ls.name+"-distributor", "-n", ls.namespace).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range distributorPods {
+				er := resource{"pod", pod, ls.namespace}.WaitUntilResourceIsGone(oc)
+				o.Expect(er).NotTo(o.HaveOccurred())
+			}
 
 			e2e.Logf("Check to see reconciliation of Loki Distributor by Controller....")
 			ls.waitForLokiStackToBeReady(oc)

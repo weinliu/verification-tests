@@ -964,6 +964,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 
 	// author qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Serial][Slow]", func() {
+		g.Skip("skip the case as logging 5.8 is not released")
 		var targetchannel = "stable"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
@@ -1147,7 +1148,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		ls := lokiStack{
 			name:          "loki-53404",
 			namespace:     "openshift-logging",
-			tSize:         "1x.demo",
+			tSize:         "1x.extra-small",
 			storageType:   getStorageType(oc),
 			storageSecret: "storage-secret-53404",
 			storageClass:  sc,
@@ -1199,6 +1200,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		WaitForDeploymentPodsToBeReady(oc, preLO.Namespace, preLO.OperatorName)
 
 		g.By("waiting for the Loki and Vector pods to be ready after upgrade")
+		ls.update(oc, "", "{\"spec\": {\"size\": \"1x.demo\"}}", "--type=merge")
 		ls.waitForLokiStackToBeReady(oc)
 		cl.waitForLoggingReady(oc)
 		// In upgrade testing, sometimes a pod may not be ready but the deployment/statefulset might be ready
