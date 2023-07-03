@@ -391,6 +391,10 @@ func applyResourceFromTemplateWithExtraParametersAsAdmin(oc *exutil.CLI, extraPa
 		tempByte, readErr := ioutil.ReadFile(parameterizedTemplateByReplaceToFile(oc, parameters...))
 		o.Expect(readErr).NotTo(o.HaveOccurred())
 		tempJSONOutput = string(tempByte)
+		// Make methods compatible with microshift test cluster
+		if _, ok := extraParameters["jsonPath"]; ok && strings.HasPrefix(fmt.Sprintf("%s", extraParameters["jsonPath"]), "items.0.") {
+			extraParameters["jsonPath"] = strings.TrimPrefix(fmt.Sprintf("%s", extraParameters["jsonPath"]), "items.0.")
+		}
 	}
 	configFile, _ = jsonAddExtraParametersToFile(tempJSONOutput, extraParameters)
 	e2e.Logf("the file of resource is %s", configFile)
