@@ -40,3 +40,35 @@ export const consoleTheme = {
     cy.contains('button', 'System default').click()
   }
 }
+
+export const userPreferences = {
+  navToGeneralUserPreferences: () => {
+    cy.get('button[aria-label="User menu"]').click({force: true});
+    cy.get('a').contains('User Preferences').click();
+    cy.get('.co-user-preference-page-content__tab-content', {timeout: 20000}).should('be.visible');
+  },
+  checkExactMatchDisabledByDefault: () => {
+    cy.get('input[id="console.enableExactSearch"]').should('have.attr', 'data-checked-state', 'false');
+  },
+  toggleExactMatch: (action: string) => {
+    cy.get('input[id="console.enableExactSearch"]').as('enableExactMatchInput').then(($elem) => {
+      const checkedstate = $elem.attr('data-checked-state');
+      switch(checkedstate){
+        case 'true':
+          if(action === 'enable'){
+            cy.log('exact match already enabled, nothing to do!');
+          } else if( action === 'disable'){
+            cy.log('exact match already enabled, disabling');
+            cy.get('@enableExactMatchInput').click();
+          }
+        case 'false':
+          if(action === 'enable') {
+            cy.log('exact match currently disabled, enabling');
+            cy.get('@enableExactMatchInput').click();
+          } else if (action === 'disable') {
+            cy.log('exact match currently disabled, nothing to do!');
+          }
+      }
+    })
+  }
+}
