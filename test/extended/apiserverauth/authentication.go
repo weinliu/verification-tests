@@ -1020,8 +1020,24 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(authUrl).To(o.ContainSubstring("https://"))
 
 		g.By("2. Check if the basic challenge will be shown when no X-CSRF-TOKEN http header")
+		proxy := ""
+		var proxyURL *url.URL
+		if os.Getenv("http_proxy") != "" {
+			proxy = os.Getenv("http_proxy")
+		} else if os.Getenv("https_proxy") != "" {
+			proxy = os.Getenv("https_proxy")
+		}
+
+		if proxy != "" {
+			proxyURL, err = url.Parse(proxy)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			proxyURL = nil
+		}
+
 		httpClient := &http.Client{
 			Transport: &http.Transport{
+				Proxy: http.ProxyURL(proxyURL),
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: true,
 				},
