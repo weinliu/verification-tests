@@ -200,6 +200,20 @@ func (ht *HypershiftTest) CreateBucket() {
 
 	g.By("configure aws-cred file with default profile")
 
+	const (
+		bucketPolicyTemplate = `{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::%s/*"
+    }
+  ]
+}`
+	)
+
 	// create a temp file to store aws credential in shared temp dir
 	credfile := generateTempFilePath(ht.dir, "aws-cred-*.conf")
 	// call CloudCredential#OutputToFile to write cred info to temp file
@@ -216,6 +230,8 @@ func (ht *HypershiftTest) CreateBucket() {
 	s3 := exutil.NewS3ClientFromCredFile(awscred.file, "default", awscred.region)
 	// create bucket if it does not exists
 	o.Expect(s3.CreateBucket(bucket)).NotTo(o.HaveOccurred(), "create aws s3 bucket %s failed", bucket)
+	policy := fmt.Sprintf(bucketPolicyTemplate, bucket)
+	o.Expect(s3.PutBucketPolicy(bucket, policy)).To(o.Succeed(), "an error happened while adding a policy to the bucket")
 }
 
 // DeleteBucket delete s3 bucket

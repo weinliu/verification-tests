@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -470,6 +471,34 @@ func (sc *S3Client) CreateBucket(name string) error {
 
 	return nil
 
+}
+
+// PutBucketPolicy configures a given bucket with a policy
+// param: name bucket name
+// param: policy policy that will be added the bucket
+func (sc *S3Client) PutBucketPolicy(name, policy string) error {
+	e2e.Logf("Setting policy in bucket %s. Policy: %s", name, policy)
+
+	input := &s3.PutBucketPolicyInput{
+		Bucket: aws.String(name),
+		Policy: aws.String(policy),
+	}
+
+	result, err := sc.svc.PutBucketPolicy(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			e2e.Logf("AWS Error %s setting policy in bucket %s: %s", aerr.Code(), name, aerr.Error())
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			e2e.Logf("Error setting policy in bucket %s: %s", name, err.Error())
+		}
+		return err
+	}
+
+	e2e.Logf("Policy result: %s", result)
+
+	return nil
 }
 
 // DeleteBucket delete S3 bucket
