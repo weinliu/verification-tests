@@ -1201,7 +1201,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Make sure the image can't be pulled without auth")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("firstis:latest", "--from="+myimage, "--reference-policy=local", "--insecure", "--confirm", "-n", oc.Namespace()).Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("firstis:latest", "--from="+myimage, "--reference-policy=local", "--import-mode=PreserveOriginal", "--insecure", "--confirm", "-n", oc.Namespace()).Output()
 		o.Expect(output).To(o.ContainSubstring("Unauthorized"))
 
 		g.By("Update pull secret")
@@ -1386,7 +1386,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Create imagestream using source image only match to mirrors namespace in icsp")
 		oc.SetupProject()
-		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("skopeo:latest", "--from=quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "--reference-policy=local", "--confirm", "-n", oc.Namespace()).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("skopeo:latest", "--from=quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "--reference-policy=local", "--confirm", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1418,7 +1418,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create a imagestream with a docker private image")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("docker.io/irqe/busybox:latest", "test48710:latest", "--reference-policy=local", "-n", oc.Namespace()).Output()
+		// TODO double check docker.io/irqe/busybox:latest is a manifest list built for all the arches
+		output, err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("docker.io/irqe/busybox:latest", "test48710:latest", "--reference-policy=local", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Tag test48710:latest set"))
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test48710", "latest")
@@ -2389,7 +2390,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		mirrorReg, mrerr := exec.Command("bash", "-c", "oc get imagecontentsourcepolicy image-policy-aosqe -o jsonpath={.spec.repositoryDigestMirrors[0].mirrors[0]} | awk -F'/' '{print $1}'").Output()
 		o.Expect(mrerr).NotTo(o.HaveOccurred())
 		mReg := strings.TrimSuffix(string(mirrorReg), "\n")
-		err = oc.AsAdmin().Run("import-image").Args("httpd-dis:latest", "--from="+mReg+"/rhel8/httpd-24:latest", "--confirm", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().Run("import-image").Args("httpd-dis:latest", "--from="+mReg+"/rhel8/httpd-24:latest", "--import-mode=PreserveOriginal", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "httpd-dis", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2699,6 +2700,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: yyou@redhat.com
 	g.It("NonPreRelease-ConnectedOnly-Author:yyou-Medium-22230-Can set the Requests values in imageregistry config [Disruptive]", func() {
+		// TODO: remove this skip when the builds v1 API will support producing manifest list images
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		g.By("Check if openshift-sample operator installed")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
 		if err != nil && strings.Contains(output, `openshift-samples" not found`) {
@@ -2791,7 +2794,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		getRegistry = strings.ReplaceAll(getRegistry, `["`, ``)
 		getRegistry = strings.ReplaceAll(getRegistry, `"]`, ``)
 		mirrorImage := "--from=" + getRegistry + "/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"
-		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage", mirrorImage, "--confirm", "-n", oc.Namespace()).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage", mirrorImage, "--confirm", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3078,20 +3081,20 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator does not become available in 480 seconds")
 
 		g.By("Import the not allowed image")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("notinallowed:latest", "--from=registry.access.redhat.com/ubi8/ubi", "--confirm=true", "-n", oc.Namespace()).Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("notinallowed:latest", "--from=registry.access.redhat.com/ubi8/ubi", "--import-mode=PreserveOriginal", "--confirm=true", "-n", oc.Namespace()).Output()
 		if err == nil {
 			e2e.Failf("allowedRegistriesForImport does not work")
 		}
 		o.Expect(output).To(o.ContainSubstring("Forbidden: registry \"registry.access.redhat.com\" not allowed by whitelist"))
 
 		g.By("Import the allowed image")
-		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "allowedquay:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "allowedquay:latest", "--import-mode=PreserveOriginal", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "allowedquay", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Import the allowed image with secure")
-		output, err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("secure:latest", "--from=registry.redhat.io/ubi8/ubi", "--confirm=true", "-n", oc.Namespace()).Output()
+		output, err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("secure:latest", "--from=registry.redhat.io/ubi8/ubi", "--import-mode=PreserveOriginal", "--confirm=true", "-n", oc.Namespace()).Output()
 		if err == nil {
 			e2e.Failf("allowedRegistriesForImport does not work")
 		}
@@ -3331,7 +3334,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			}
 		)
 		g.By("Import an imagestream")
-		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("test:v1", "--from=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--confirm", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("test:v1", "--from=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--import-mode=PreserveOriginal", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test", "v1")
 		o.Expect(err).NotTo(o.HaveOccurred())

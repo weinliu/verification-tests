@@ -107,6 +107,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//Author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:xiuwang-Medium-44107-Image pruner should skip images that has already been deleted [Serial]", func() {
+		// TODO: remove this skip when the builds v1 API will support producing manifest list images
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		g.By("Setup imagepruner")
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":3,"keepYoungerThanDuration":null,"schedule":""}}`, "--type=merge").Execute()
 		err := oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":0,"keepYoungerThanDuration":"0s","schedule": "* * * * *"}}`, "--type=merge").Execute()
@@ -440,7 +442,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		defer recoverRegistryDefaultReplicas(oc)
 		configureRegistryStorageToEmptyDir(oc)
 		g.By("Create a imagestream using oci image")
-		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324", "oci:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324", "oci:latest", "--reference-policy=local", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForAnImageStreamTag(oc, oc.Namespace(), "oci", "latest")
 

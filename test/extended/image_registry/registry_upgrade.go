@@ -66,11 +66,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Can't import image from blocked registry")
-		blockedOut, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-firstis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "-n", ns).Output()
+		blockedOut, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-firstis:latest", "--from="+blockedImage, "--reference-policy=local", "--import-mode=PreserveOriginal", "--insecure", "--confirm", "-n", ns).Output()
 		o.Expect(blockedOut).To(o.ContainSubstring(blockedRoute + " blocked"))
 
 		g.By("Could import image from the insecured registry without --insecure")
-		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-secondis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
+		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-secondis:latest", "--from="+insecuredImage, "--import-mode=PreserveOriginal", "--confirm", "-n", ns).Output()
 		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
 		o.Expect(insecuredOut).NotTo(o.ContainSubstring("x509"))
 	})
@@ -95,11 +95,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Can't import image from blocked registry")
-		blockedOut, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-secondis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "-n", ns).Output()
+		blockedOut, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-secondis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "--import-mode=PreserveOriginal", "-n", ns).Output()
 		o.Expect(blockedOut).To(o.ContainSubstring(blockedRoute + " blocked"))
 
 		g.By("Could import image from the insecured registry without --insecure")
-		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-thirdis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
+		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-thirdis:latest", "--from="+insecuredImage, "--confirm", "--import-mode=PreserveOriginal", "-n", ns).Output()
 		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
 		o.Expect(insecuredOut).NotTo(o.ContainSubstring("x509"))
 	})
