@@ -585,4 +585,29 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-26247-Alert when pod has a PodDisruptionBudget with minAvailable 1 disruptionsAllowed 0", func() {
+		ns26247 := oc.Namespace()
+
+		g.By("create deploy")
+		deployCreationErr := oc.WithoutNamespace().Run("create").Args("deployment", "deploy26247", "-n", ns26247, "--image", "image-registry.openshift-image-registry.svc:5000/openshift/cli", "--", "sleep", "3600").Execute()
+		o.Expect(deployCreationErr).NotTo(o.HaveOccurred())
+
+		g.By("create pdb")
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("poddisruptionbudget", "pdb26247", "--selector=app=deploy26247", "--min-available=1", "-n", ns26247).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check PodDisruptionBudgetAtLimit alert")
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PodDisruptionBudgetAtLimit"}'`, token, "pdb26247", 600)
+
+		g.By("scale the deploy to replicas 0")
+		err = oc.Run("scale").Args("deploy", "deploy26247", "--replicas=0").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("check PodDisruptionBudgetLimit alert")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PodDisruptionBudgetLimit"}'`, token, "pdb26247", 600)
+	})
+
 })

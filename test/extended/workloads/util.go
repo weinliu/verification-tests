@@ -1304,3 +1304,18 @@ func isTechPreviewNoUpgrade(oc *exutil.CLI) bool {
 
 	return featureGate.Spec.FeatureSet == configv1.TechPreviewNoUpgrade
 }
+
+// check data by running curl on a pod
+func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.Duration) {
+	var metrics string
+	var err error
+	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
+	err = wait.Poll(10*time.Second, timeout*time.Second, func() (bool, error) {
+		metrics, err = exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", getCmd)
+		if err != nil || !strings.Contains(metrics, metricString) {
+			return false, nil
+		}
+		return true, err
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
+}
