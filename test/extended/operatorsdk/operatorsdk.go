@@ -217,7 +217,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-35443-SDK run bundle InstallMode for own namespace [Slow]", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-35443-SDK run bundle InstallMode for own namespace [Slow] [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		var operatorGroup = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		operatorsdkCLI.showInfo = true
@@ -360,7 +360,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-41065-SDK run bundle InstallMode for all namespace [Slow]", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-41065-SDK run bundle InstallMode for all namespace [Slow] [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		var operatorGroup = filepath.Join(buildPruningBaseDir, "og-allns.yaml")
 		operatorsdkCLI.showInfo = true
