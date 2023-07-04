@@ -207,3 +207,12 @@ func checkEtcdPodStatus(oc *exutil.CLI) bool {
 	}
 	return true
 }
+
+// get the proxies
+func getGlobalProxy(oc *exutil.CLI) (string, string) {
+	httpProxy, httperr := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
+	o.Expect(httperr).NotTo(o.HaveOccurred())
+	httpsProxy, httsperr := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpsProxy}").Output()
+	o.Expect(httsperr).NotTo(o.HaveOccurred())
+	return httpProxy, httpsProxy
+}
