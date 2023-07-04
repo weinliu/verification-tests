@@ -439,6 +439,10 @@ func waitForPersistentVolumeStatusAsExpected(oc *exutil.CLI, pvName string, expe
 			return false, nil
 		})
 	}
+	if err != nil {
+		pvInfo, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pv", pvName).Output()
+		e2e.Logf("Failed to wait for PV %s's status as expected, its detail info is:\n%s", pvName, pvInfo)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The persist volume '%s' didn't become to expected status'%s' ", pvName, expectedStatus))
 }
 
@@ -448,7 +452,9 @@ func createNewPersistVolumeWithRetainVolume(oc *exutil.CLI, originPvExportJSON s
 		err            error
 		outputJSONFile string
 	)
-	jsonPathList := []string{`spec.claimRef`, `spec.storageClassName`, `status`, `metadata`}
+	// For csi pvs better keep the annotation pv.kubernetes.io/provisioned-by: csi.xxxx.com, otherwise even if the pv's
+	// "persistentVolumeReclaimPolicy": "Delete" the pv couldn't be cleaned up caused by "error getting deleter volume plugin for volume : no deletable volume plugin matched"
+	jsonPathList := []string{`spec.claimRef`, `spec.storageClassName`, `status`}
 	// vSphere: Do not specify the key storage.kubernetes.io/csiProvisionerIdentity in csi.volumeAttributes in PV specification. This key indicates dynamically provisioned PVs.
 	// Note: https://docs.vmware.com/en/VMware-vSphere-Container-Storage-Plug-in/2.0/vmware-vsphere-csp-getting-started/GUID-D736C518-E641-4AA9-8BBD-973891AEB554.html
 	if cloudProvider == "vsphere" {
@@ -465,7 +471,7 @@ func createNewPersistVolumeWithRetainVolume(oc *exutil.CLI, originPvExportJSON s
 	retainPolicyParameter := map[string]interface{}{
 		"jsonPath":                      `spec.`,
 		"storageClassName":              storageClassName,
-		"persistentVolumeReclaimPolicy": "Delete", // Seems invalid when the volumeID ever maked retain
+		"persistentVolumeReclaimPolicy": "Delete",
 	}
 	for _, extraParameter := range []map[string]interface{}{pvNameParameter, retainPolicyParameter} {
 		outputJSONFile, err = jsonAddExtraParametersToFile(originPvExportJSON, extraParameter)

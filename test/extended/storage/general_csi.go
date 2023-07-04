@@ -1225,103 +1225,103 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
 		for _, provisioner = range supportProvisioners {
-			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
-			// Set the resource definition for the scenario
-			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassReclaimPolicy("Retain"))
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimTemplate(pvcTemplate))
-			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-			newpvc := newPersistentVolumeClaim(setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimTemplate(pvcTemplate))
-			newpod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(newpvc.name))
+			func() {
+				exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+				// Set the resource definition for the scenario
+				storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassReclaimPolicy("Retain"))
+				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimTemplate(pvcTemplate))
+				pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+				manualSc := "manual-sc-44907"
+				newpvc := newPersistentVolumeClaim(setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(manualSc))
+				newpod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(newpvc.name))
 
-			g.By("# Create csi storageclass with 'reclaimPolicy: retain'")
-			if provisioner == "efs.csi.aws.com" {
-				// Get the efs present scName and fsid
-				fsid := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner))
-				efsExtra := map[string]string{
-					"provisioningMode": "efs-ap",
-					"fileSystemId":     fsid,
-					"directoryPerms":   "700",
+				exutil.By("# Create csi storageclass with 'reclaimPolicy: retain'")
+				if provisioner == "efs.csi.aws.com" {
+					// Get the efs present scName and fsid
+					fsid := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner))
+					efsExtra := map[string]string{
+						"provisioningMode": "efs-ap",
+						"fileSystemId":     fsid,
+						"directoryPerms":   "700",
+					}
+					extraParameters := map[string]interface{}{
+						"parameters": efsExtra,
+					}
+					storageClass.createWithExtraParameters(oc, extraParameters)
+				} else {
+					storageClass.create(oc)
 				}
-				extraParameters := map[string]interface{}{
-					"parameters": efsExtra,
-				}
-				storageClass.createWithExtraParameters(oc, extraParameters)
-			} else {
-				storageClass.create(oc)
-			}
-			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+				defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
-			g.By("# Create a pvc with the csi storageclass")
-			pvc.create(oc)
-			defer pvc.deleteAsAdmin(oc)
+				exutil.By("# Create a pvc with the csi storageclass")
+				pvc.create(oc)
+				defer pvc.deleteAsAdmin(oc)
 
-			g.By("# Create pod with the created pvc and wait for the pod ready")
-			pod.create(oc)
-			defer pod.deleteAsAdmin(oc)
-			pod.waitReady(oc)
+				exutil.By("# Create pod with the created pvc and wait for the pod ready")
+				pod.create(oc)
+				defer pod.deleteAsAdmin(oc)
+				pod.waitReady(oc)
 
-			g.By("# Get the volumename, volumeID and pod located node name")
-			volumeName := pvc.getVolumeName(oc)
-			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", volumeName).Execute()
-			volumeID := pvc.getVolumeID(oc)
-			defer deleteBackendVolumeByVolumeID(oc, volumeID)
-			originNodeName := getNodeNameByPod(oc, pod.namespace, pod.name)
+				exutil.By("# Get the volumename, volumeID and pod located node name")
+				volumeName := pvc.getVolumeName(oc)
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", volumeName).Execute()
+				volumeID := pvc.getVolumeID(oc)
+				defer deleteBackendVolumeByVolumeID(oc, volumeID)
+				originNodeName := getNodeNameByPod(oc, pod.namespace, pod.name)
 
-			g.By("# Check the pod volume can be read and write")
-			pod.checkMountedVolumeCouldRW(oc)
+				exutil.By("# Check the pod volume can be read and write")
+				pod.checkMountedVolumeCouldRW(oc)
 
-			g.By("# Check the pod volume have the exec right")
-			pod.checkMountedVolumeHaveExecRight(oc)
+				exutil.By("# Check the pod volume have the exec right")
+				pod.checkMountedVolumeHaveExecRight(oc)
 
-			g.By("# Delete the pod and pvc")
-			pod.delete(oc)
-			pvc.delete(oc)
+				exutil.By("# Delete the pod and pvc")
+				pod.delete(oc)
+				pvc.delete(oc)
 
-			g.By("# Check the PV status become to 'Released' ")
-			waitForPersistentVolumeStatusAsExpected(oc, volumeName, "Released")
+				exutil.By("# Check the PV status become to 'Released' ")
+				waitForPersistentVolumeStatusAsExpected(oc, volumeName, "Released")
 
-			g.By("# Delete the PV and check the volume already not mounted on node")
-			originpv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", volumeName, "-o", "json").Output()
-			debugLogf(originpv)
-			o.Expect(err).ShouldNot(o.HaveOccurred())
-			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", volumeName).Output()
-			o.Expect(err).ShouldNot(o.HaveOccurred())
-			waitForPersistentVolumeStatusAsExpected(oc, volumeName, "deleted")
-			checkVolumeNotMountOnNode(oc, volumeName, originNodeName)
+				exutil.By("# Delete the PV and check the volume already not mounted on node")
+				originpv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", volumeName, "-o", "json").Output()
+				debugLogf(originpv)
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", volumeName).Output()
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				waitForPersistentVolumeStatusAsExpected(oc, volumeName, "deleted")
+				checkVolumeNotMountOnNode(oc, volumeName, originNodeName)
 
-			g.By("# Check the volume still exists in backend by volumeID")
-			getCredentialFromCluster(oc)
-			waitVolumeAvailableOnBackend(oc, volumeID)
+				exutil.By("# Check the volume still exists in backend by volumeID")
+				getCredentialFromCluster(oc)
+				waitVolumeAvailableOnBackend(oc, volumeID)
 
-			g.By("# Use the retained volume create new pv,pvc,pod and wait for the pod running")
-			newPvName := "newpv-" + getRandomString()
-			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", newPvName).Execute()
-			createNewPersistVolumeWithRetainVolume(oc, originpv, storageClass.name, newPvName)
-			newpvc.capacity = pvc.capacity
-			newpvc.createWithSpecifiedPV(oc, newPvName)
-			defer newpvc.deleteAsAdmin(oc)
-			newpod.create(oc)
-			defer newpod.deleteAsAdmin(oc)
-			newpod.waitReady(oc)
+				exutil.By("# Use the retained volume create new pv,pvc,pod and wait for the pod running")
+				newPvName := "newpv-" + getRandomString()
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", newPvName).Execute()
+				createNewPersistVolumeWithRetainVolume(oc, originpv, manualSc, newPvName)
+				newpvc.capacity = pvc.capacity
+				newpvc.createWithSpecifiedPV(oc, newPvName)
+				defer newpvc.deleteAsAdmin(oc)
+				newpod.create(oc)
+				defer newpod.deleteAsAdmin(oc)
+				newpod.waitReady(oc)
 
-			g.By("# Check the retained pv's data still exist and have exec right")
-			output, err := newpod.execCommand(oc, "cat "+newpod.mountPath+"/testfile")
-			o.Expect(err).ShouldNot(o.HaveOccurred())
-			o.Expect(output).Should(o.ContainSubstring("storage test"))
-			output, err = newpod.execCommand(oc, newpod.mountPath+"/hello")
-			o.Expect(err).ShouldNot(o.HaveOccurred())
-			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift Storage"))
+				exutil.By("# Check the retained pv's data still exist and have exec right")
+				output, err := newpod.execCommand(oc, "cat "+newpod.mountPath+"/testfile")
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				o.Expect(output).Should(o.ContainSubstring("storage test"))
+				output, err = newpod.execCommand(oc, newpod.mountPath+"/hello")
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				o.Expect(output).Should(o.ContainSubstring("Hello OpenShift Storage"))
 
-			g.By("# Delete the pv and check the retained pv delete in backend")
-			newpod.delete(oc)
-			newpvc.delete(oc)
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", newPvName).Execute()
-			o.Expect(err).ShouldNot(o.HaveOccurred())
-			waitForPersistentVolumeStatusAsExpected(oc, newPvName, "deleted")
-			deleteBackendVolumeByVolumeID(oc, volumeID)
-			waitVolumeDeletedOnBackend(oc, volumeID)
+				exutil.By("# Delete the pv and check the retained pv delete in backend")
+				deleteSpecifiedResource(oc, "pod", newpod.name, newpod.namespace)
+				deleteSpecifiedResource(oc, "pvc", newpvc.name, newpvc.namespace)
+				waitForPersistentVolumeStatusAsExpected(oc, newPvName, "deleted")
+				waitVolumeDeletedOnBackend(oc, volumeID)
 
-			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+				exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			}()
 		}
 	})
 
