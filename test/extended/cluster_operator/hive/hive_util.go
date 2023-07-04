@@ -339,6 +339,7 @@ const (
 const (
 	AWSBaseDomain  = "qe.devcluster.openshift.com" //AWS BaseDomain
 	AWSRegion      = "us-east-2"
+	AWSRegion2     = "us-east-1"
 	AWSCreds       = "aws-creds"
 	HiveManagedDNS = "hivemanageddns" //for all manage DNS Domain
 )
@@ -348,6 +349,7 @@ const (
 	AzureClusterInstallTimeout = 4500
 	AzureBaseDomain            = "qe.azure.devcluster.openshift.com" //Azure BaseDomain
 	AzureRegion                = "centralus"
+	AzureRegion2               = "eastus"
 	AzureCreds                 = "azure-credentials"
 	AzureRESGroup              = "os4-common"
 	AzurePublic                = "AzurePublicCloud"
@@ -358,6 +360,7 @@ const (
 	GCPBaseDomain  = "qe.gcp.devcluster.openshift.com" //GCP BaseDomain
 	GCPBaseDomain2 = "qe1.gcp.devcluster.openshift.com"
 	GCPRegion      = "us-central1"
+	GCPRegion2     = "us-east1"
 	GCPCreds       = "gcp-credentials"
 )
 
