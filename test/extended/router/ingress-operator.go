@@ -2,15 +2,18 @@ package router
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -1072,5 +1075,89 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-config-managed", "secret", "router-certs", "-o=go-template='{{len .data}}'").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(strings.Trim(output, "'")).To(o.Equal("1"))
+	})
+
+	//author: asood@redhat.com
+	//bug: https://issues.redhat.com/browse/OCPBUGS-6013
+	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-OSD_CCS-Author:asood-Medium-63832-Cluster ingress health checks and routes fail on swapping application router between public and private", func() {
+		var (
+			namespace         = "openshift-ingress"
+			operatorNamespace = "openshift-ingress-operator"
+			caseID            = "63832"
+			curlURL           = ""
+			strategyScope     []string
+		)
+		platform := exutil.CheckPlatform(oc)
+		acceptedPlatform := strings.Contains(platform, "aws")
+		if !acceptedPlatform {
+			g.Skip("Test cases should be run on AWS cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		}
+		g.By("0. Create a custom ingress controller")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customIngressControllerTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp" + caseID,
+				namespace: operatorNamespace,
+				domain:    caseID + ".test.com",
+				template:  customIngressControllerTemp,
+			}
+		)
+
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("1. Annotate ingress controller")
+		addAnnotationPatch := `{"metadata":{"annotations":{"ingress.operator.openshift.io/auto-delete-load-balancer":""}}}`
+		errAnnotate := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ingctrl.namespace, "ingresscontrollers/"+ingctrl.name, "--type=merge", "-p", addAnnotationPatch).Execute()
+		o.Expect(errAnnotate).NotTo(o.HaveOccurred())
+
+		strategyScope = append(strategyScope, `{"spec":{"endpointPublishingStrategy":{"loadBalancer":{"scope":"Internal"},"type":"LoadBalancerService"}}}`)
+		strategyScope = append(strategyScope, `{"spec":{"endpointPublishingStrategy":{"loadBalancer":{"scope":"External"},"type":"LoadBalancerService"}}}`)
+
+		g.By("2. Get the health check node port")
+		prevHealthCheckNodePort, err := oc.AsAdmin().Run("get").Args("svc", "router-"+ingctrl.name, "-n", namespace, "-o=jsonpath={.spec.healthCheckNodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for i := 0; i < len(strategyScope); i++ {
+			g.By("3. Change the endpoint publishing strategy")
+			changeScope := strategyScope[i]
+			changeScopeErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ingctrl.namespace, "ingresscontrollers/"+ingctrl.name, "--type=merge", "-p", changeScope).Execute()
+			o.Expect(changeScopeErr).NotTo(o.HaveOccurred())
+
+			g.By("3.1 Check the state of custom ingress operator")
+			err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+			g.By("3.2 Check the pods are in running state")
+			podList, podListErr := exutil.GetAllPodsWithLabel(oc, namespace, "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name)
+			o.Expect(podListErr).NotTo(o.HaveOccurred())
+			o.Expect(len(podList)).ShouldNot(o.Equal(0))
+			podName := podList[0]
+
+			g.By("3.3 Get node name of one of the pod")
+			nodeName, nodeNameErr := exutil.GetPodNodeName(oc, namespace, podName)
+			o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+
+			g.By("3.4. Get new health check node port")
+			err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
+				healthCheckNodePort, healthCheckNPErr := oc.AsAdmin().Run("get").Args("svc", "router-"+ingctrl.name, "-n", namespace, "-o=jsonpath={.spec.healthCheckNodePort}").Output()
+				o.Expect(healthCheckNPErr).NotTo(o.HaveOccurred())
+				if healthCheckNodePort == prevHealthCheckNodePort {
+					return false, nil
+				}
+				curlURL = net.JoinHostPort(nodeName, healthCheckNodePort)
+				prevHealthCheckNodePort = healthCheckNodePort
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get health check node port %s", err))
+
+			g.By("3.5. Check endpoint is 1")
+			cmd := fmt.Sprintf("curl %s -s --connect-timeout 5", curlURL)
+			output, err := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(output, "\"localEndpoints\": 1")).To(o.BeTrue())
+		}
 	})
 })
