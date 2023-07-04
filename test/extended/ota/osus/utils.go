@@ -46,6 +46,14 @@ type resource struct {
 	namespace        string
 }
 
+type updateService struct {
+	name      string
+	namespace string
+	graphdata string
+	releases  string
+	template  string
+}
+
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	var cfgFileJson string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -99,6 +107,11 @@ func (og *operatorGroup) delete(oc *exutil.CLI) {
 
 func (sub *subscription) delete(oc *exutil.CLI) {
 	removeResource(oc, "-n", sub.namespace, "subscription", sub.name)
+}
+
+func (us *updateService) create(oc *exutil.CLI) (err error) {
+	err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", us.template, "-p", "NAME="+us.name, "NAMESPACE="+us.namespace, "GRAPHDATA="+us.graphdata, "RELEASES="+us.releases)
+	return
 }
 
 // Check if pod is running
@@ -331,4 +344,51 @@ func restoreAddCA(oc *exutil.CLI) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", message))
+}
+
+// Build graph-data image by using podman
+func buildPushGraphImage(oc *exutil.CLI, tag string, dirname string) (err error) {
+	e2e.Logf("Build graph-data image")
+	dockerFile := exutil.FixturePath("testdata", "ota", "osus", "Dockerfile")
+	cmd := fmt.Sprintf("podman build -f %s -t %s", dockerFile, tag)
+	var out []byte
+	if out, err = exec.Command("bash", "-c", cmd).CombinedOutput(); err != nil {
+		err = fmt.Errorf("%s failed: %v\n%s", cmd, err, string(out))
+		return
+	}
+
+	cmd = fmt.Sprintf("podman push --trace --authfile %s --tls-verify=false %s", dirname+"/.dockerconfigjson", tag)
+	if out, err = exec.Command("bash", "-c", cmd).CombinedOutput(); err != nil {
+		err = fmt.Errorf("%s failed: %v\n%s", cmd, err, string(out))
+		return
+	}
+	return
+}
+
+// Mirror OCP images using oc adm release mirror
+func mirror(oc *exutil.CLI, registry string, payload string, dirname string) (err error) {
+	e2e.Logf("Mirror OCP images by oc adm release mirror")
+	_, tag, found := strings.Cut(payload, ":")
+	if !found {
+		err = fmt.Errorf("the payload is invalid")
+		return
+	}
+	cmd := fmt.Sprintf("oc adm release mirror -a %s --insecure=true --from %s --to=%s --to-release-image=%s", dirname+"/.dockerconfigjson", payload, registry+"/ocp-image", registry+"/ocp-release:"+tag)
+	var out []byte
+	if out, err = exec.Command("bash", "-c", cmd).CombinedOutput(); err != nil {
+		err = fmt.Errorf("%s failed: %v\n%s", cmd, err, string(out))
+		return
+	}
+	return
+}
+
+// Install OSUS instance using oc
+func installOSUSAppOC(oc *exutil.CLI, us updateService) (err error) {
+	e2e.Logf("Install OSUS instance")
+	if err = us.create(oc); err != nil {
+		err = fmt.Errorf("install osus instance failed: %v", err)
+		return
+	}
+	waitForPodReady(oc, "app="+us.name)
+	return nil
 }

@@ -11,6 +11,15 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+// Extract pull secrect from cluster
+func GetPullSec(oc *CLI, dirname string) (err error) {
+	if err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute(); err != nil {
+		err = fmt.Errorf("extract pull-secret failed: %v", err)
+		return
+	}
+	return
+}
+
 // GetMirrorRegistry returns mirror registry from icsp
 func GetMirrorRegistry(oc *CLI) (registry string, err error) {
 	if registry, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy",

@@ -111,6 +111,11 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 	)
 
 	g.BeforeEach(func() {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+		if strings.Contains(output, "NotFound") {
+			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
+		}
+
 		testDataDir = exutil.FixturePath("testdata", "ota/osus")
 		ogTemp = filepath.Join(testDataDir, "operatorgroup.yaml")
 		subTemp = filepath.Join(testDataDir, "subscription.yaml")
@@ -177,5 +182,55 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		g.By("Verify OSUS instance works")
 		err = verifyOSUS(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	//author: yanyang@redhat.com
+	g.It("NonHyperShiftHOST-DisconnectedOnly-VMonly-Author:yanyang-High-35944-install/uninstall updateservice instance and build graph image as non root [Disruptive][Serial]", func() {
+		g.By("Check if it's a AWS/GCP/Azure cluster")
+		exutil.SkipIfPlatformTypeNot(oc, "gcp, aws, azure")
+
+		dirname := "/tmp/case35944"
+		registry, err := exutil.GetMirrorRegistry(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Registry is %s", registry)
+
+		defer os.RemoveAll(dirname)
+		err = exutil.GetPullSec(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Build and push graph data image by podman as non root user")
+		graphdataTag := registry + "/ota-35944/graph-data:latest"
+		err = buildPushGraphImage(oc, graphdataTag, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Mirror OCP images using oc adm release mirror")
+		err = mirror(oc, registry, "quay.io/openshift-release-dev/ocp-release:4.13.0-x86_64", dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		certFile := dirname + "/cert"
+		err = exutil.GetUserCAToFile(oc, certFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc)
+		err = trustCert(oc, registry, certFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Install OSUS instance")
+		usTemp := exutil.FixturePath("testdata", "ota", "osus", "updateservice.yaml")
+		us := updateService{
+			name:      "update-service-35944",
+			namespace: oc.Namespace(),
+			template:  usTemp,
+			graphdata: graphdataTag,
+			releases:  registry + "/ocp-release",
+		}
+		defer uninstallOSUSApp(oc)
+		err = installOSUSAppOC(oc, us)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Verify OSUS instance works")
+		err = verifyOSUS(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 	})
 })
