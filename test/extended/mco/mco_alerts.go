@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 			alertStillPresentAfter = 10 * time.Minute
 		)
 
-		g.By("Break the reboot process in a node")
+		exutil.By("Break the reboot process in a node")
 		node := mcp.GetSortedNodesOrFail()[0]
 		defer func() {
 			_ = FixRebootInNode(&node)
@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 			"Error breaking the reboot process in node %s", node.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Create a MC to force a reboot")
+		exutil.By("Create a MC to force a reboot")
 		file := ign32File{
 			Path: filePath,
 			Contents: ign32Contents{
@@ -95,7 +95,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		}
 		checkFiredAlert(oc, mcp, params)
 
-		g.By("Fix the reboot process in the node")
+		exutil.By("Fix the reboot process in the node")
 		o.Expect(FixRebootInNode(&node)).To(o.Succeed(),
 			"Error fixing the reboot process in node %s", node.GetName())
 		logger.Infof("OK!\n")
@@ -112,7 +112,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 			expectedAlertSeverity = "warning"
 		)
 		// We use master MCP because like that we make sure that we are using a CoreOs node
-		g.By("Break the reboot process in a node")
+		exutil.By("Break the reboot process in a node")
 		// We sort the coreOs list to make sure that we break the first updated not to make the test faster
 		node := coMcp.GetSortedNodesOrFail()[0]
 		defer func() {
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		logger.Infof("OK!\n")
 
 		// Build a new osImage that we will use to force a rebase in the broken node
-		g.By("Build new OSImage")
+		exutil.By("Build new OSImage")
 		osImageBuilder := OsImageBuilderInNode{node: node, dockerFileCommands: dockerFileCommands}
 		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -132,7 +132,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		logger.Infof("OK\n")
 
 		// Create MC to force the rebase operation
-		g.By("Create a MC to deploy the new osImage")
+		exutil.By("Create a MC to deploy the new osImage")
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, coMcp.GetName())
 		mc.parameters = []string{"OS_IMAGE=" + digestedImage}
 
@@ -164,7 +164,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		}
 		checkFiredAlert(oc, coMcp, params)
 
-		g.By("Fix the rpm-ostree rebase process in the node")
+		exutil.By("Fix the rpm-ostree rebase process in the node")
 		o.Expect(FixRebaseInNode(&node)).To(o.Succeed(),
 			"Error fixing the rpm-ostree rebase process in node %s", node.GetName())
 		logger.Infof("OK!\n")
@@ -186,18 +186,18 @@ type checkFiredAlertParams struct {
 }
 
 func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAlertParams) {
-	g.By("Wait for MCP to be degraded")
+	exutil.By("Wait for MCP to be degraded")
 	o.Eventually(mcp,
 		"15m", "30s").Should(BeDegraded(),
 		"The %s MCP should be degraded when the reboot process is broken. But it didn't.", mcp.GetName())
 	logger.Infof("OK!\n")
 
-	g.By("Verify that the pool reports the right error message")
+	exutil.By("Verify that the pool reports the right error message")
 	o.Expect(mcp).To(HaveNodeDegradedMessage(o.MatchRegexp(params.expectedDegradedMessage)),
 		"The %s MCP is not reporting the right error message", mcp.GetName())
 	logger.Infof("OK!\n")
 
-	g.By("Verify that the alert is triggered")
+	exutil.By("Verify that the alert is triggered")
 	o.Eventually(getAlertsByName, "5m", "20s").WithArguments(oc, params.expectedAlertName).
 		Should(o.HaveLen(1),
 			"Expected 1 %s alert and only 1 to be triggered!", params.expectedAlertName)
@@ -212,7 +212,7 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 	logger.Infof("OK!\n")
 
 	if params.expectedAlertAnnotations != nil {
-		g.By("Verify alert's annotations")
+		exutil.By("Verify alert's annotations")
 
 		// Check all expected annotations
 		for annotation, expectedMatcher := range params.expectedAlertAnnotations {
@@ -225,7 +225,7 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 		logger.Infof("No annotations checks needed!")
 	}
 
-	g.By("Verify alert's labels")
+	exutil.By("Verify alert's labels")
 	labelsMap := alertJSON[0].Get("labels").ToMap()
 
 	// Since OCPBUGS-904 we need to check that the namespace is reported properly in all the alerts
@@ -246,13 +246,13 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 	logger.Infof("OK!\n")
 
 	if params.pendingDuration != 0 {
-		g.By("Verify that the alert is pending")
+		exutil.By("Verify that the alert is pending")
 		o.Expect(alertMap).To(o.HaveKeyWithValue("state", "pending"),
 			"Expected the alert to report the MCO namespace")
 		logger.Infof("OK!\n")
 	}
 
-	g.By("Verify that the alert is in firing state")
+	exutil.By("Verify that the alert is in firing state")
 	if params.pendingDuration != 0 {
 		logger.Infof("Wait %s minutes until the alert is fired", params.pendingDuration)
 		time.Sleep(params.pendingDuration)
@@ -272,7 +272,7 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 	logger.Infof("OK!\n")
 
 	if params.stillPresentDuration.Minutes() != 0 {
-		g.By(fmt.Sprintf("Verfiy that the alert is not removed after %s", params.stillPresentDuration))
+		exutil.By(fmt.Sprintf("Verfiy that the alert is not removed after %s", params.stillPresentDuration))
 		o.Consistently(getAlertsByName, params.stillPresentDuration, params.stillPresentDuration/3).WithArguments(oc, params.expectedAlertName).
 			Should(o.HaveLen(1),
 				"Expected % alert to be present, but the alert was removed for no reason!", params.expectedAlertName)
@@ -282,13 +282,13 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 }
 
 func checkFixedAlert(oc *exutil.CLI, mcp *MachineConfigPool, expectedAlertName string) {
-	g.By("Verfiy that the pool stops being degraded")
+	exutil.By("Verfiy that the pool stops being degraded")
 	o.Eventually(mcp,
 		"10m", "30s").ShouldNot(BeDegraded(),
 		"After fixing the reboot process the %s MCP should stop being degraded", mcp.GetName())
 	logger.Infof("OK!\n")
 
-	g.By("Verfiy that the alert is not triggered anymore")
+	exutil.By("Verfiy that the alert is not triggered anymore")
 	o.Eventually(getAlertsByName, "5m", "20s").WithArguments(oc, expectedAlertName).
 		Should(o.HaveLen(0),
 			"Expected % alert to be removed after the problem is fixed!", expectedAlertName)

@@ -9,7 +9,6 @@ import (
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
-	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
@@ -31,7 +30,7 @@ type OsImageBuilder struct {
 func (b *OsImageBuilder) prepareEnvironment() error {
 	if b.dockerConfig == "" {
 		logger.Infof("No docker config file was provided to the osImage builder. Generating a new docker config file")
-		g.By("Extract pull-secret")
+		exutil.By("Extract pull-secret")
 		pullSecret := GetPullSecret(b.oc.AsAdmin())
 		tokenDir, err := pullSecret.Extract()
 		if err != nil {
@@ -161,7 +160,7 @@ func (b *OsImageBuilder) CleanUp() error {
 }
 
 func (b *OsImageBuilder) buildImage() error {
-	g.By("Build image locally")
+	exutil.By("Build image locally")
 	baseImage, err := getImageFromReleaseInfo(b.oc.AsAdmin(), LayeringBaseImageReleaseInfo, b.dockerConfig)
 	if err != nil {
 		return fmt.Errorf("Error getting the base image to build new osImages. Error: %s", err)
@@ -203,7 +202,7 @@ func (b *OsImageBuilder) pushImage() error {
 	if b.osImage == "" {
 		return fmt.Errorf("There is no image to be pushed. Wast the osImage built?")
 	}
-	g.By("Push osImage")
+	exutil.By("Push osImage")
 	logger.Infof("Pushing image %s", b.osImage)
 	podmanCLI := container.NewPodmanCLI()
 	output, err := podmanCLI.Run("push").Args(b.osImage, "--tls-verify=false", "--authfile", b.dockerConfig).Output()

@@ -53,7 +53,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
     ostree container commit
 `
 		// Capture current rpm-ostree status
-		g.By("Capture the current ostree deployment")
+		exutil.By("Capture the current ostree deployment")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -68,7 +68,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		logger.Infof("OK\n")
 
 		// Create MC and wait for MCP
-		g.By("Create a MC to deploy the new osImage")
+		exutil.By("Create a MC to deploy the new osImage")
 		layeringMcName := "layering-mc"
 		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, MachineConfigPoolWorker)
 		layeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
@@ -81,7 +81,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		logger.Infof("The new osImage was deployed successfully\n")
 
 		// Check rpm-ostree status
-		g.By("Check that the rpm-ostree status is reporting the right booted image")
+		exutil.By("Check that the rpm-ostree status is reporting the right booted image")
 
 		status, err := workerNode.GetRpmOstreeStatus(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -100,7 +100,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		logger.Infof("OK!\n")
 
 		// Check image content
-		g.By("Load remote resources to verify that the osImage content has been deployed properly")
+		exutil.By("Load remote resources to verify that the osImage content has been deployed properly")
 
 		tc54085Dir := NewRemoteFile(workerNode, "/etc/tc_54085")
 		tc54085File := NewRemoteFile(workerNode, "/etc/tc54085.txt")
@@ -114,20 +114,20 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 			"Error getting information about file %s in node %s", binHelloWorld.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Check that the directory in /etc exists and has the right permissions")
+		exutil.By("Check that the directory in /etc exists and has the right permissions")
 		o.Expect(tc54085Dir.IsDirectory()).To(o.BeTrue(),
 			"Error, %s in node %s is not a directory", tc54085Dir.GetFullPath(), workerNode.GetName())
 		o.Expect(tc54085Dir.GetNpermissions()).To(o.Equal("3770"),
 			"Error, permissions of %s in node %s are not the expected ones", tc54085Dir.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Check that the file in /etc exists and has the right permissions")
+		exutil.By("Check that the file in /etc exists and has the right permissions")
 		o.Expect(tc54085File.GetNpermissions()).To(o.Equal("5400"),
 			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetFullPath(), workerNode.GetName())
 		o.Expect(tc54085File.GetTextContent()).To(o.Equal("Test case 54085 test file\n"),
 			"Error, content of %s in node %s are not the expected one", tc54085File.GetFullPath(), workerNode.GetName())
 
-		g.By("Check that the file in /usr/bin exists, has the right permissions and can be executed")
+		exutil.By("Check that the file in /usr/bin exists, has the right permissions and can be executed")
 		o.Expect(binHelloWorld.GetNpermissions()).To(o.Equal("5770"),
 			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetFullPath(), workerNode.GetName())
 
@@ -138,7 +138,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 			"Error, 'Hellow world' executable file's output was not the expected one")
 		logger.Infof("OK!\n")
 
-		g.By("Check that the tailscale rpm has been deployed")
+		exutil.By("Check that the tailscale rpm has been deployed")
 		tailscaledRpm, rpmErr := workerNode.DebugNodeWithChroot("rpm", "-q", "tailscale")
 		o.Expect(rpmErr).NotTo(o.HaveOccurred(),
 			"Error, getting the installed rpms in node %s.  'tailscale' rpm is not installed.", workerNode.GetName())
@@ -146,7 +146,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 			"Error, 'tailscale' rpm is not installed in node %s", workerNode.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Check that the tailscaled.service unit is loaded, active and enabled")
+		exutil.By("Check that the tailscaled.service unit is loaded, active and enabled")
 		tailscaledStatus, unitErr := workerNode.GetUnitStatus("tailscaled.service")
 		o.Expect(unitErr).NotTo(o.HaveOccurred(),
 			"Error getting the status of the 'tailscaled.service' unit in node %s", workerNode.GetName())
@@ -160,13 +160,13 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		logger.Infof("OK!\n")
 
 		// Delete the MC and wait for MCP
-		g.By("Delete the MC so that the original osImage is restored")
+		exutil.By("Delete the MC so that the original osImage is restored")
 		layeringMC.delete()
 		mcp.waitForComplete()
 		logger.Infof("MC was successfully deleted\n")
 
 		// Check the rpm-ostree status after the MC deletion
-		g.By("Check that the original ostree deployment was restored")
+		exutil.By("Check that the original ostree deployment was restored")
 		deployment, derr := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(derr).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
@@ -181,28 +181,28 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		logger.Infof("OK!\n")
 
 		// Check the image content after the MC deletion
-		g.By("Check that the directory in /etc does not exist anymore")
+		exutil.By("Check that the directory in /etc does not exist anymore")
 		o.Expect(tc54085Dir.Fetch()).Should(o.HaveOccurred(),
 			"Error, file %s should not exist in node %s, but it exists", tc54085Dir.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Check that the file in /etc does not exist anymore")
+		exutil.By("Check that the file in /etc does not exist anymore")
 		o.Expect(tc54085File.Fetch()).Should(o.HaveOccurred(),
 			"Error, file %s should not exist in node %s, but it exists", tc54085File.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Check that the file in /usr/bin does not exist anymore")
+		exutil.By("Check that the file in /usr/bin does not exist anymore")
 		o.Expect(binHelloWorld.Fetch()).Should(o.HaveOccurred(),
 			"Error, file %s should not exist in node %s, but it exists", binHelloWorld.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Check that the tailscale rpm is not installed anymore")
+		exutil.By("Check that the tailscale rpm is not installed anymore")
 		tailscaledRpm, rpmErr = workerNode.DebugNodeWithChroot("rpm", "-q", "tailscale")
 		o.Expect(rpmErr).To(o.HaveOccurred(),
 			"Error,  'tailscale' rpm should not be installed in node %s, but it is installed.\n Output %s", workerNode.GetName(), tailscaledRpm)
 		logger.Infof("OK!\n")
 
-		g.By("Check that the tailscaled.service is not present anymore")
+		exutil.By("Check that the tailscaled.service is not present anymore")
 		tailscaledStatus, unitErr = workerNode.GetUnitStatus("tailscaled.service")
 		o.Expect(unitErr).To(o.HaveOccurred(),
 			"Error,  'tailscaled.service'  unit should not be available in node %s, but it is.\n Output %s", workerNode.GetName(), tailscaledStatus)
@@ -247,7 +247,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && chmod 1755 /usr/bin/tc_54159_rpm_and_osimage
 `
 		// Install rpm in first worker node
-		g.By("Installing rpm package in first working node")
+		exutil.By("Installing rpm package in first working node")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 
 		logger.Infof("Copy yum repo to node")
@@ -300,7 +300,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("OK\n")
 
 		// Capture current rpm-ostree status
-		g.By("Capture the current ostree deployment")
+		exutil.By("Capture the current ostree deployment")
 		o.Expect(workerNode.WaitUntilRpmOsTreeIsIdle()).
 			NotTo(o.HaveOccurred(), "rpm-ostree status didn't become idle after installing wget")
 		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
@@ -323,7 +323,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("OK\n")
 
 		// Create MC and wait for MCP
-		g.By("Create a MC to deploy the new osImage")
+		exutil.By("Create a MC to deploy the new osImage")
 		layeringMcName := "layering-mc-54159"
 		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, MachineConfigPoolWorker)
 		layeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
@@ -336,7 +336,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("The new osImage was deployed successfully\n")
 
 		// Check rpm-ostree status
-		g.By("Check that the rpm-ostree status is reporting the right booted image and installed rpm")
+		exutil.By("Check that the rpm-ostree status is reporting the right booted image and installed rpm")
 
 		bootedDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -352,7 +352,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("OK!\n")
 
 		// Check rpm is installed
-		g.By("Check that the rpm is installed even if we use the new osImage")
+		exutil.By("Check that the rpm is installed even if we use the new osImage")
 		rpmOut, err := workerNode.DebugNodeWithChroot("rpm", "-q", "wget")
 		o.Expect(err).
 			NotTo(o.HaveOccurred(),
@@ -366,7 +366,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("OK\n")
 
 		// Check osImage content
-		g.By("Check that the new osImage content was deployed properly")
+		exutil.By("Check that the new osImage content was deployed properly")
 		rf := NewRemoteFile(workerNode, "/usr/bin/tc_54159_rpm_and_osimage")
 		o.Expect(rf.Fetch()).
 			ShouldNot(o.HaveOccurred(),
@@ -378,13 +378,13 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("OK\n")
 
 		// Delete the MC and wait for MCP
-		g.By("Delete the MC so that original osImage is restored")
+		exutil.By("Delete the MC so that original osImage is restored")
 		layeringMC.delete()
 		mcp.waitForComplete()
 		logger.Infof("MC was successfully deleted\n")
 
 		// Check the rpm-ostree status after the MC deletion
-		g.By("Check that the original ostree deployment was restored")
+		exutil.By("Check that the original ostree deployment was restored")
 		logger.Infof("Waiting for rpm-ostree status to be idle")
 		o.Expect(workerNode.WaitUntilRpmOsTreeIsIdle()).
 			NotTo(o.HaveOccurred(), "rpm-ostree status didn't become idle after restoring the original osImage")
@@ -411,7 +411,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			coreExtensions          = "rhel-coreos-extensions"
 		)
 
-		g.By("Extract pull-secret")
+		exutil.By("Extract pull-secret")
 		pullSecret := GetPullSecret(oc.AsAdmin())
 		// TODO: when the code to create a tmp directory in the beforeEach section is merged, use ExtractToDir method instead
 		secretExtractDir, err := pullSecret.Extract()
@@ -420,13 +420,13 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("Pull secret has been extracted to: %s\n", secretExtractDir)
 		dockerConfigFile := filepath.Join(secretExtractDir, ".dockerconfigjson")
 
-		g.By("Get base image for layering")
+		exutil.By("Get base image for layering")
 		baseImage, err := getImageFromReleaseInfo(oc.AsAdmin(), LayeringBaseImageReleaseInfo, dockerConfigFile)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the base image to build new osImages")
 		logger.Infof("Base image: %s\n", baseImage)
 
-		g.By("Inspect base image information")
+		exutil.By("Inspect base image information")
 		skopeoCLI := NewSkopeoCLI().SetAuthFile(dockerConfigFile)
 		inspectInfo, err := skopeoCLI.Run("inspect").Args("--tls-verify=false", "--config", "docker://"+baseImage).Output()
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -440,7 +440,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			baseImage, inspectInfo)
 		logger.Infof("OK!\n")
 
-		g.By("Verify that old machine config os content is not present in the release info")
+		exutil.By("Verify that old machine config os content is not present in the release info")
 		mcOsIMage, mcErr := getImageFromReleaseInfo(oc.AsAdmin(), oldMachineConfigOsImage, dockerConfigFile)
 		o.Expect(mcErr).NotTo(o.HaveOccurred(),
 			"Error getting the old machine config os content image")
@@ -448,7 +448,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			"%s image should not be present in the release image, but we can find it with value %s", oldMachineConfigOsImage, mcOsIMage)
 		logger.Infof("OK!\n")
 
-		g.By("Verify that new core extensions image is present in the release info")
+		exutil.By("Verify that new core extensions image is present in the release info")
 		coreExtensionsValue, exErr := getImageFromReleaseInfo(oc.AsAdmin(), coreExtensions, dockerConfigFile)
 		o.Expect(exErr).NotTo(o.HaveOccurred(),
 			"Error getting the new core extensions image")
@@ -487,7 +487,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Create MC to apply the config to worker nodes
-		g.By("Create a MC to deploy the new osImage in 'worker' pool")
+		exutil.By("Create a MC to deploy the new osImage in 'worker' pool")
 		wLayeringMcName := "tc-54909-layering-extensions-worker"
 		wLayeringMC := NewMachineConfig(oc.AsAdmin(), wLayeringMcName, MachineConfigPoolWorker)
 		wLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
@@ -497,7 +497,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		wLayeringMC.create()
 
 		// Create MC to apply the config to master nodes
-		g.By("Create a MC to deploy the new osImage in 'master' pool")
+		exutil.By("Create a MC to deploy the new osImage in 'master' pool")
 		mLayeringMcName := "tc-54909-layering-extensions-master"
 		mLayeringMC := NewMachineConfig(oc.AsAdmin(), mLayeringMcName, MachineConfigPoolMaster)
 		mLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
@@ -514,7 +514,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("The new osImage was deployed successfully in 'master' pool\n")
 
 		// Check rpm-ostree status in worker node
-		g.By("Check that the rpm-ostree status is reporting the right booted image in worker nodes")
+		exutil.By("Check that the rpm-ostree status is reporting the right booted image in worker nodes")
 
 		wStatus, err := workerNode.GetRpmOstreeStatus(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -533,7 +533,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Check rpm-ostree status in master node
-		g.By("Check that the rpm-ostree status is reporting the right booted image in master nodes")
+		exutil.By("Check that the rpm-ostree status is reporting the right booted image in master nodes")
 
 		mStatus, err := masterNode.GetRpmOstreeStatus(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -552,21 +552,21 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Check rpm is installed in worker node
-		g.By("Check that the rpm is installed in worker node")
+		exutil.By("Check that the rpm is installed in worker node")
 		o.Expect(workerNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
 		logger.Infof("OK\n")
 
 		// Check rpm is installed in master node
-		g.By("Check that the rpm is installed in worker node")
+		exutil.By("Check that the rpm is installed in worker node")
 		o.Expect(masterNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, workerNode.GetName())
 		logger.Infof("OK\n")
 
 		// Create MC to apply usbguard extension to worker nodes
-		g.By("Create a MC to deploy the new osImage in 'worker' pool")
+		exutil.By("Create a MC to deploy the new osImage in 'worker' pool")
 		wUsbguardMcName := "tc-54909-extension-usbguard-worker"
 		wUsbguardMC := NewMachineConfig(oc.AsAdmin(), wUsbguardMcName, MachineConfigPoolWorker).SetMCOTemplate("change-worker-extension-usbguard.yaml")
 		wUsbguardMC.skipWaitForMcp = true
@@ -575,7 +575,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		wUsbguardMC.create()
 
 		// Create MC to apply usbguard extension to master nodes
-		g.By("Create a MC to deploy the new osImage in 'master' pool")
+		exutil.By("Create a MC to deploy the new osImage in 'master' pool")
 		mUsbguardMcName := "tc-54909-extension-usbguard-master"
 		mUsbguardMC := NewMachineConfig(oc.AsAdmin(), mUsbguardMcName, MachineConfigPoolMaster).SetMCOTemplate("change-worker-extension-usbguard.yaml")
 		mUsbguardMC.skipWaitForMcp = true
@@ -591,7 +591,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("The new config was applied successfully in 'master' pool\n")
 
 		// Check that rpms are installed in worker node after the extension
-		g.By("Check that both rpms are installed in worker node after the extension")
+		exutil.By("Check that both rpms are installed in worker node after the extension")
 		o.Expect(workerNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
@@ -602,7 +602,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Check that rpms are installed in master node after the extension
-		g.By("Check that both rpms are installed in master node after the extension")
+		exutil.By("Check that both rpms are installed in master node after the extension")
 		o.Expect(masterNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, masterNode.GetName())
@@ -613,7 +613,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Check rpm-ostree status in worker node after extension
-		g.By("Check that the rpm-ostree status is reporting the right booted image in worker nodes after the extension is installed")
+		exutil.By("Check that the rpm-ostree status is reporting the right booted image in worker nodes after the extension is installed")
 
 		wStatus, err = workerNode.GetRpmOstreeStatus(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -634,7 +634,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Check rpm-ostree status in master node after the extension
-		g.By("Check that the rpm-ostree status is reporting the right booted image in master nodes after the extension is installed")
+		exutil.By("Check that the rpm-ostree status is reporting the right booted image in master nodes after the extension is installed")
 
 		mStatus, err = masterNode.GetRpmOstreeStatus(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -654,7 +654,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 			"container reference in the master node's status is not the exepeced one after the extension is installed")
 		logger.Infof("OK!\n")
 
-		g.By("Remove custom layering MCs")
+		exutil.By("Remove custom layering MCs")
 		wLayeringMC.deleteNoWait()
 		mLayeringMC.deleteNoWait()
 		logger.Infof("OK!\n")
@@ -667,7 +667,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("The new config was applied successfully in 'master' pool\n")
 
 		// Check that extension rpm is installed in the worker node, but custom layering rpm is not
-		g.By("Check that extension rpm is installed in worker node but custom layering rpm is not")
+		exutil.By("Check that extension rpm is installed in worker node but custom layering rpm is not")
 		o.Expect(workerNode.RpmIsInstalled(rpmName)).
 			To(o.BeFalse(),
 				"Error. %s rpm is  installed in worker node %s but it should not be installed.", rpmName, workerNode.GetName())
@@ -678,7 +678,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Check that extension rpm is installed in the master node, but custom layering rpm is not
-		g.By("Check that both rpms are installed in master node")
+		exutil.By("Check that both rpms are installed in master node")
 
 		o.Expect(masterNode.RpmIsInstalled(rpmName)).
 			To(o.BeFalse(),
@@ -690,7 +690,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Check rpm-ostree status in worker node after deleting custom osImage
-		g.By("Check that the rpm-ostree status is reporting the right booted image in worker nodes after deleting custom osImage")
+		exutil.By("Check that the rpm-ostree status is reporting the right booted image in worker nodes after deleting custom osImage")
 
 		wStatus, err = workerNode.GetRpmOstreeStatus(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -704,7 +704,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Check rpm-ostree status in master node after deleting custom  osImage
-		g.By("Check that the rpm-ostree status is reporting the right booted image in master nodes after deleting custom osImage")
+		exutil.By("Check that the rpm-ostree status is reporting the right booted image in master nodes after deleting custom osImage")
 
 		mStatus, err = masterNode.GetRpmOstreeStatus(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -744,7 +744,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		defer wMcp.waitForComplete()
 
 		// Create a MC to use realtime kernel in the worker pool
-		g.By("Create machine config to enable RT kernel in worker pool")
+		exutil.By("Create machine config to enable RT kernel in worker pool")
 		wRtMcName := "50-realtime-kernel-worker"
 		wRtMc := NewMachineConfig(oc.AsAdmin(), wRtMcName, MachineConfigPoolWorker).SetMCOTemplate(rtMcTemplate)
 		wRtMc.skipWaitForMcp = true
@@ -756,7 +756,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Create a MC to use realtime kernel in the master pool
-		g.By("Create machine config to enable RT kernel in master pool")
+		exutil.By("Create machine config to enable RT kernel in master pool")
 		mRtMcName := "50-realtime-kernel-master"
 		mRtMc := NewMachineConfig(oc.AsAdmin(), mRtMcName, MachineConfigPoolMaster).SetMCOTemplate(rtMcTemplate)
 		mRtMc.skipWaitForMcp = true
@@ -766,25 +766,25 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Wait for the pools to be updated
-		g.By("Wait for pools to be updated after applying the new realtime kernel")
+		exutil.By("Wait for pools to be updated after applying the new realtime kernel")
 		wMcp.waitForComplete()
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
 		// Check that realtime kernel is active in worker nodes
-		g.By("Check realtime kernel in worker nodes")
+		exutil.By("Check realtime kernel in worker nodes")
 		o.Expect(workerNode.IsRealTimeKernel()).Should(o.BeTrue(),
 			"Kernel is not realtime kernel in worker node %s", workerNode.GetName())
 		logger.Infof("OK!\n")
 
 		// Check that realtime kernel is active in master nodes
-		g.By("Check realtime kernel in master nodes")
+		exutil.By("Check realtime kernel in master nodes")
 		o.Expect(masterNode.IsRealTimeKernel()).Should(o.BeTrue(),
 			"Kernel is not realtime kernel in master node %s", masterNode.GetName())
 		logger.Infof("OK!\n")
 
 		// Build the new osImage
-		g.By("Build a custom osImage")
+		exutil.By("Build a custom osImage")
 		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
 		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -792,7 +792,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Create MC to apply the config to worker nodes
-		g.By("Create a MC to deploy the new osImage in 'worker' pool")
+		exutil.By("Create a MC to deploy the new osImage in 'worker' pool")
 		wLayeringMcName := "tc-54915-layering-kerneltype-worker"
 		wLayeringMC := NewMachineConfig(oc.AsAdmin(), wLayeringMcName, MachineConfigPoolWorker)
 		wLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
@@ -803,7 +803,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Create MC to apply the config to master nodes
-		g.By("Create a MC to deploy the new osImage in 'master' pool")
+		exutil.By("Create a MC to deploy the new osImage in 'master' pool")
 		mLayeringMcName := "tc-54915-layering-kerneltype-master"
 		mLayeringMC := NewMachineConfig(oc.AsAdmin(), mLayeringMcName, MachineConfigPoolMaster)
 		mLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
@@ -814,13 +814,13 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Wait for the pools to be updated
-		g.By("Wait for pools to be updated after applying the new osImage")
+		exutil.By("Wait for pools to be updated after applying the new osImage")
 		wMcp.waitForComplete()
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
 		// Check rpm is installed in worker node
-		g.By("Check that the rpm is installed in worker node")
+		exutil.By("Check that the rpm is installed in worker node")
 		o.Expect(workerNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
@@ -843,7 +843,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Check rpm is installed in master node
-		g.By("Check that the rpm is installed in master node")
+		exutil.By("Check that the rpm is installed in master node")
 		o.Expect(masterNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, workerNode.GetName())
@@ -866,43 +866,43 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Check that realtime kernel is active in worker nodes
-		g.By("Check realtime kernel in worker nodes")
+		exutil.By("Check realtime kernel in worker nodes")
 		o.Expect(workerNode.IsRealTimeKernel()).Should(o.BeTrue(),
 			"Kernel is not realtime kernel in worker node %s", workerNode.GetName())
 		logger.Infof("OK!\n")
 
 		// Check that realtime kernel is active in master nodes
-		g.By("Check realtime kernel in master nodes")
+		exutil.By("Check realtime kernel in master nodes")
 		o.Expect(masterNode.IsRealTimeKernel()).Should(o.BeTrue(),
 			"Kernel is not realtime kernel in master node %s", masterNode.GetName())
 		logger.Infof("OK!\n")
 
 		// Delete realtime configs
-		g.By("Delete the realtime kernel MCs")
+		exutil.By("Delete the realtime kernel MCs")
 		wRtMc.deleteNoWait()
 		mRtMc.deleteNoWait()
 		logger.Infof("OK!\n")
 
 		// Wait for the pools to be updated
-		g.By("Wait for pools to be updated after deleting the realtime kernel configs")
+		exutil.By("Wait for pools to be updated after deleting the realtime kernel configs")
 		wMcp.waitForComplete()
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
 		// Check that realtime kernel is not active in worker nodes anymore
-		g.By("Check realtime kernel in worker nodes")
+		exutil.By("Check realtime kernel in worker nodes")
 		o.Expect(workerNode.IsRealTimeKernel()).Should(o.BeFalse(),
 			"Realtime kernel should not be active anymore in worker node %s", workerNode.GetName())
 		logger.Infof("OK!\n")
 
 		// Check that realtime kernel is not active in master nodes anymore
-		g.By("Check realtime kernel in master nodes")
+		exutil.By("Check realtime kernel in master nodes")
 		o.Expect(masterNode.IsRealTimeKernel()).Should(o.BeFalse(),
 			"Realtime kernel should not be active anymore in master node %s", masterNode.GetName())
 		logger.Infof("OK!\n")
 
 		// Check rpm is installed in worker node
-		g.By("Check that the rpm is installed in worker node")
+		exutil.By("Check that the rpm is installed in worker node")
 		o.Expect(workerNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
@@ -918,7 +918,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Check rpm is installed in master node
-		g.By("Check that the rpm is installed in master node")
+		exutil.By("Check that the rpm is installed in master node")
 		o.Expect(masterNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, workerNode.GetName())
@@ -946,13 +946,13 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		)
 
-		g.By("Check that the metric is exposed to telemetry")
+		exutil.By("Check that the metric is exposed to telemetry")
 		expectedExposedMetric := fmt.Sprintf(`{__name__=\"%s:sum\"}`, osImageURLOverrideQuery)
 		telemetryConfig := NewNamespacedResource(oc.AsAdmin(), "Configmap", "openshift-monitoring", "telemetry-config")
 		o.Expect(telemetryConfig.Get(`{.data}`)).To(o.ContainSubstring(expectedExposedMetric),
 			"Metric %s, is not exposed to telemetry", osImageURLOverrideQuery)
 
-		g.By("Validating initial os_image_url_override values")
+		exutil.By("Validating initial os_image_url_override values")
 		mon, err := exutil.NewPrometheusMonitor(oc.AsAdmin())
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error creating new thanos monitor")
@@ -976,7 +976,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Build the new osImage
-		g.By("Build a custom osImage")
+		exutil.By("Build a custom osImage")
 		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
 		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -984,7 +984,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK\n")
 
 		// Create MC to apply the config to worker nodes
-		g.By("Create a MC to deploy the new osImage in 'worker' pool")
+		exutil.By("Create a MC to deploy the new osImage in 'worker' pool")
 		wLayeringMcName := "tc-55002-layering-telemetry-worker"
 		wLayeringMC := NewMachineConfig(oc.AsAdmin(), wLayeringMcName, MachineConfigPoolWorker)
 		wLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
@@ -997,7 +997,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Create MC to apply the config to master nodes
-		g.By("Create a MC to deploy the new osImage in 'master' pool")
+		exutil.By("Create a MC to deploy the new osImage in 'master' pool")
 		mLayeringMcName := "tc-55002-layering-telemetry-master"
 		mLayeringMC := NewMachineConfig(oc.AsAdmin(), mLayeringMcName, MachineConfigPoolMaster)
 		mLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
@@ -1008,12 +1008,12 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Wait for the pools to be updated
-		g.By("Wait for pools to be updated after applying the new osImage")
+		exutil.By("Wait for pools to be updated after applying the new osImage")
 		wMcp.waitForComplete()
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
-		g.By("Validating os_image_url_override values with overridden master and worker pools")
+		exutil.By("Validating os_image_url_override values with overridden master and worker pools")
 		osImageOverride, err = mon.SimpleQuery(osImageURLOverrideQuery)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error querying metric: %s", osImageURLOverrideQuery)
@@ -1032,12 +1032,12 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 			osImageURLOverrideQuery, osImageOverride)
 		logger.Infof("OK!\n")
 
-		g.By("Delete the MC that overrides worker pool's osImage and wait for the pool to be updated")
+		exutil.By("Delete the MC that overrides worker pool's osImage and wait for the pool to be updated")
 		wLayeringMC.deleteNoWait()
 		wMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
-		g.By("Validating os_image_url_override values with overridden master pool only")
+		exutil.By("Validating os_image_url_override values with overridden master pool only")
 		osImageOverride, err = mon.SimpleQuery(osImageURLOverrideQuery)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error querying metric: %s", osImageURLOverrideQuery)
@@ -1056,12 +1056,12 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 			osImageURLOverrideQuery, osImageOverride)
 		logger.Infof("OK!\n")
 
-		g.By("Delete the MC that overrides master pool's osImage and wait for the pool to be updated")
+		exutil.By("Delete the MC that overrides master pool's osImage and wait for the pool to be updated")
 		mLayeringMC.deleteNoWait()
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
-		g.By("Validating os_image_url_override when no pool is overridden")
+		exutil.By("Validating os_image_url_override when no pool is overridden")
 		osImageOverride, err = mon.SimpleQuery(osImageURLOverrideQuery)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error querying metric: %s", osImageURLOverrideQuery)

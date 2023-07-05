@@ -506,7 +506,7 @@ func isFIPSEnabledInClusterConfig(oc *exutil.CLI) bool {
 
 // preChecks executes some basic checks to make sure the the cluster is healthy enough to run MCO test cases
 func preChecks(oc *exutil.CLI) {
-	g.By("MCO Preconditions Checks")
+	exutil.By("MCO Preconditions Checks")
 
 	allMCPs, err := NewMachineConfigPoolList(oc.AsAdmin()).GetAll()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the list of MachineConfigPools")

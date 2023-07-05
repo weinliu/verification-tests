@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 		newMs := cloneMachineSet(oc.AsAdmin(), newMsName, amiVersion, useIgnitionV2)
 
-		g.By("Scale MachineSet up")
+		exutil.By("Scale MachineSet up")
 		logger.Infof("Scaling up machineset %s", newMs.GetName())
 		scaleErr := newMs.ScaleTo(numNewNodes)
 		o.Expect(scaleErr).NotTo(o.HaveOccurred(), "Error scaling up MachineSet %s", newMs.GetName())
@@ -82,13 +82,13 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		o.Eventually(newMs.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", newMs.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Check that worker pool is increased and updated")
+		exutil.By("Check that worker pool is increased and updated")
 		o.Eventually(wMcp.GetNodesOrFail, "5m", "30s").Should(o.HaveLen(initialNumWorkers+numNewNodes),
 			"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
 		wMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
-		g.By("Scale down and remove the cloned Machineset")
+		exutil.By("Scale down and remove the cloned Machineset")
 		removeClonedMachineSet(newMs, wMcp, initialNumWorkers)
 		logger.Infof("OK!\n")
 
@@ -158,21 +158,21 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		newMs := cloneMachineSet(oc.AsAdmin(), newMsName, amiVersion, useIgnitionV2)
 
 		// KubeletConfig
-		g.By("Create KubeletConfig")
+		exutil.By("Create KubeletConfig")
 		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
 		kc.create()
 		kc.waitUntilSuccess("10s")
 		logger.Infof("OK!\n")
 
 		// ContainterRuntimeConfig
-		g.By("Create ContainterRuntimeConfig")
+		exutil.By("Create ContainterRuntimeConfig")
 		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
 		cr.create()
 		cr.waitUntilSuccess("10s")
 		logger.Infof("OK!\n")
 
 		// Generic machineconfig
-		g.By("Create generic config file")
+		exutil.By("Create generic config file")
 		genericConfigFilePath := "/etc/test-52822"
 		genericConfig := "config content for test case 52822"
 
@@ -183,12 +183,12 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		logger.Infof("OK!\n")
 
 		// Wait for all pools to apply the configs
-		g.By("Wait for worker MCP to be updated")
+		exutil.By("Wait for worker MCP to be updated")
 		mcpWorker.waitForComplete()
 		logger.Infof("OK!\n")
 
 		// Scale up the MachineSet
-		g.By("Scale MachineSet up")
+		exutil.By("Scale MachineSet up")
 		logger.Infof("Scaling up machineset %s", newMs.GetName())
 		scaleErr := newMs.ScaleTo(numNewNodes)
 		o.Expect(scaleErr).NotTo(o.HaveOccurred(), "Error scaling up MachineSet %s", newMs.GetName())
@@ -197,12 +197,12 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		o.Eventually(newMs.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", newMs.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Check that worker pool is increased and updated")
+		exutil.By("Check that worker pool is increased and updated")
 		o.Eventually(wMcp.GetNodesOrFail, "5m", "30s").Should(o.HaveLen(initialNumWorkers+numNewNodes),
 			"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
 
 		// Verify that the scaled nodes has been configured properly
-		g.By("Check config in the new node")
+		exutil.By("Check config in the new node")
 		newNodes, nErr := newMs.GetNodes()
 		o.Expect(nErr).NotTo(o.HaveOccurred(), "Error getting the nodes created by MachineSet %s", newMs.GetName())
 		o.Expect(newNodes).To(o.HaveLen(numNewNodes), "Only %d nodes should have been created by MachineSet %s", numNewNodes, newMs.GetName())
@@ -210,7 +210,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		logger.Infof("New node: %s", newNode.GetName())
 		logger.Infof("OK!\n")
 
-		g.By("Check kubelet config")
+		exutil.By("Check kubelet config")
 		kcFile := NewRemoteFile(*newNode, "/etc/kubernetes/kubelet.conf")
 		kcrErr := kcFile.Fetch()
 		o.Expect(kcrErr).NotTo(o.HaveOccurred(), "Error reading kubelet config in node %s", newNode.GetName())
@@ -218,7 +218,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			"File /etc/kubernetes/kubelet.conf has not the expected content")
 		logger.Infof("OK!\n")
 
-		g.By("Check container runtime config")
+		exutil.By("Check container runtime config")
 		crFile := NewRemoteFile(*newNode, "/etc/containers/storage.conf")
 		crrErr := crFile.Fetch()
 		o.Expect(crrErr).NotTo(o.HaveOccurred(), "Error reading container runtime config in node %s", newNode.GetName())
@@ -226,7 +226,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			"File /etc/containers/storage.conf has not the expected content")
 		logger.Infof("OK!\n")
 
-		g.By("Check generic machine config")
+		exutil.By("Check generic machine config")
 		cFile := NewRemoteFile(*newNode, genericConfigFilePath)
 		crErr := cFile.Fetch()
 		o.Expect(crErr).NotTo(o.HaveOccurred(), "Error reading generic config file in node %s", newNode.GetName())
@@ -234,7 +234,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			"File %s has not the expected content", genericConfigFilePath)
 		logger.Infof("OK!\n")
 
-		g.By("Scale down and remove the cloned Machineset")
+		exutil.By("Scale down and remove the cloned Machineset")
 		removeClonedMachineSet(newMs, wMcp, initialNumWorkers)
 		logger.Infof("OK!\n")
 
@@ -247,7 +247,7 @@ func cloneMachineSet(oc *exutil.CLI, newMsName, amiVersion string, useIgnitionV2
 	)
 
 	// Duplicate an existing MachineSet
-	g.By("Duplicate a MachineSet resource")
+	exutil.By("Duplicate a MachineSet resource")
 	allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
 	ms := allMs[0]
@@ -260,7 +260,7 @@ func cloneMachineSet(oc *exutil.CLI, newMsName, amiVersion string, useIgnitionV2
 	logger.Infof("OK!\n")
 
 	// Create a new secret using "append" and "2.2.0" Ignition version
-	g.By("Create a new secret with 2.2.0 ignition version and 'append' configuration")
+	exutil.By("Create a new secret with 2.2.0 ignition version and 'append' configuration")
 	logger.Infof("Duplicating secret %s with new name %s", currentSecret, newSecretName)
 	var changes msDuplicatedSecretChanges
 	if useIgnitionV2 {
@@ -274,13 +274,13 @@ func cloneMachineSet(oc *exutil.CLI, newMsName, amiVersion string, useIgnitionV2
 	logger.Infof("OK!\n")
 
 	// Set the new boot image ami.
-	g.By(fmt.Sprintf("Configure the duplicated MachineSet to use the %s boot image", amiVersion))
+	exutil.By(fmt.Sprintf("Configure the duplicated MachineSet to use the %s boot image", amiVersion))
 	err = newMs.Patch("json", fmt.Sprintf(`[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/ami/id", "value": "%s" }]`, amiVersion))
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error patching MachineSet %s to use the new %s boot image", newMs.GetName(), amiVersion)
 	logger.Infof("OK!\n")
 
 	// Use new secret
-	g.By("Configure the duplicated MachineSet to use the new secret")
+	exutil.By("Configure the duplicated MachineSet to use the new secret")
 	err = newMs.Patch("json", `[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/userDataSecret/name", "value": "`+newSecretName+`" }]`)
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error patching MachineSet %s to use the new secret %s", newMs.GetName(), newSecretName)
 	logger.Infof("OK!\n")
@@ -302,7 +302,7 @@ func removeClonedMachineSet(ms *MachineSet, wMcp *MachineConfigPool, expectedNum
 			"Error deleting MachineSet %s", ms.GetName())
 
 		if expectedNumWorkers >= 0 {
-			g.By("Check that worker pool is increased and updated")
+			exutil.By("Check that worker pool is increased and updated")
 			o.Eventually(wMcp.GetNodes, "5m", "30s").Should(o.HaveLen(expectedNumWorkers),
 				"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
 		}

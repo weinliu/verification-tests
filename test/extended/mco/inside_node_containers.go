@@ -7,7 +7,6 @@ import (
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
-	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
@@ -32,7 +31,7 @@ type OsImageBuilderInNode struct {
 func (b *OsImageBuilderInNode) prepareEnvironment() error {
 	if b.dockerConfig == "" {
 		logger.Infof("No docker config file was provided to the osImage builder. Generating a new docker config file")
-		g.By("Extract pull-secret")
+		exutil.By("Extract pull-secret")
 		pullSecret := GetPullSecret(b.node.oc.AsAdmin())
 		tokenDir, err := pullSecret.Extract()
 		if err != nil {
@@ -62,7 +61,7 @@ func (b *OsImageBuilderInNode) prepareEnvironment() error {
 		b.remoteDockerfile = filepath.Join(b.remoteTmpDir, "Dockerfile")
 	}
 
-	g.By("Prepare remote docker config file")
+	exutil.By("Prepare remote docker config file")
 	logger.Infof("Copy cluster config.json file")
 	_, cpErr := b.node.DebugNodeWithChroot("cp", "/var/lib/kubelet/config.json", b.remoteDockerConfig)
 	if cpErr != nil {
@@ -151,7 +150,7 @@ func (b *OsImageBuilderInNode) CleanUp() error {
 }
 
 func (b *OsImageBuilderInNode) buildImage() error {
-	g.By("Get base osImage locally")
+	exutil.By("Get base osImage locally")
 	baseImage, err := getImageFromReleaseInfo(b.node.oc.AsAdmin(), LayeringBaseImageReleaseInfo, b.dockerConfig)
 	if err != nil {
 		return fmt.Errorf("Error getting the base image to build new osImages. Error: %s", err)
@@ -159,7 +158,7 @@ func (b *OsImageBuilderInNode) buildImage() error {
 
 	logger.Infof("Base image: %s\n", baseImage)
 
-	g.By("Prepare remote dockerFile directory")
+	exutil.By("Prepare remote dockerFile directory")
 	dockerFile := "FROM " + baseImage + "\n" + b.dockerFileCommands + "\n" + ExpirationDokerfileLabel
 	logger.Infof(" Using Dockerfile:\n%s", dockerFile)
 
@@ -174,7 +173,7 @@ func (b *OsImageBuilderInNode) buildImage() error {
 	}
 	logger.Infof("OK!\n")
 
-	g.By("Build osImage")
+	exutil.By("Build osImage")
 	podmanCLI := container.NewPodmanCLI()
 	buildPath := filepath.Dir(b.remoteDockerfile)
 	podmanCLI.ExecCommandPath = buildPath
@@ -199,7 +198,7 @@ func (b *OsImageBuilderInNode) buildImage() error {
 }
 
 func (b *OsImageBuilderInNode) pushImage() error {
-	g.By("Push osImage")
+	exutil.By("Push osImage")
 	output, err := b.node.DebugNodeWithChroot("podman", "push", b.osImage, "--authfile", b.remoteDockerConfig)
 	if err != nil {
 		msg := fmt.Sprintf("Podman failed pushing image %s:\n%s\n%s", b.osImage, output, err)
@@ -221,7 +220,7 @@ func (b *OsImageBuilderInNode) pushImage() error {
 }
 
 func (b *OsImageBuilderInNode) removeImage() error {
-	g.By("Remove osImage")
+	exutil.By("Remove osImage")
 	rmOutput, err := b.node.DebugNodeWithChroot("podman", "rmi", "-i", b.osImage)
 	if err != nil {
 		msg := fmt.Sprintf("Podman failed removing image %s:\n%s\n%s", b.osImage, rmOutput, err)
@@ -235,7 +234,7 @@ func (b *OsImageBuilderInNode) removeImage() error {
 }
 
 func (b *OsImageBuilderInNode) digestImage() (string, error) {
-	g.By("Digest osImage")
+	exutil.By("Digest osImage")
 	inspectInfo, _, err := b.node.DebugNodeWithChrootStd("skopeo", "inspect", "docker://"+b.osImage, "--authfile", b.remoteDockerConfig)
 	if err != nil {
 		msg := fmt.Sprintf("Skopeo failed inspecting image %s:\n%s\n%s", b.osImage, inspectInfo, err)

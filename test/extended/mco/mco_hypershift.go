@@ -174,7 +174,7 @@ type HypershiftTest struct {
 // InstallOnAws install hypershift on aws
 func (ht *HypershiftTest) InstallOnAws() {
 
-	g.By("install hypershift operator")
+	exutil.By("install hypershift operator")
 
 	awscred := ht.cred.(*AwsCredential)
 	_, installErr := ht.cli.Install(
@@ -198,7 +198,7 @@ func (ht *HypershiftTest) Uninstall() {
 // CreateBucket create s3 bucket
 func (ht *HypershiftTest) CreateBucket() {
 
-	g.By("configure aws-cred file with default profile")
+	exutil.By("configure aws-cred file with default profile")
 
 	const (
 		bucketPolicyTemplate = `{
@@ -218,7 +218,7 @@ func (ht *HypershiftTest) CreateBucket() {
 	credfile := generateTempFilePath(ht.dir, "aws-cred-*.conf")
 	// call CloudCredential#OutputToFile to write cred info to temp file
 	o.Expect(ht.cred.OutputToFile(credfile)).NotTo(o.HaveOccurred(), "write aws cred to file failed")
-	g.By("create s3 bucket for installer")
+	exutil.By("create s3 bucket for installer")
 	// get aws cred
 	awscred := ht.cred.(*AwsCredential)
 	// get infra name as part of bucket name
@@ -237,7 +237,7 @@ func (ht *HypershiftTest) CreateBucket() {
 // DeleteBucket delete s3 bucket
 func (ht *HypershiftTest) DeleteBucket() {
 
-	g.By("delete s3 bucket to recycle cloud resource")
+	exutil.By("delete s3 bucket to recycle cloud resource")
 
 	// get aws cred
 	awscred := ht.cred.(*AwsCredential)
@@ -251,7 +251,7 @@ func (ht *HypershiftTest) DeleteBucket() {
 // CreateClusterOnAws create hosted cluster on aws
 func (ht *HypershiftTest) CreateClusterOnAws() {
 
-	g.By("extract pull-secret from namespace openshift-config")
+	exutil.By("extract pull-secret from namespace openshift-config")
 
 	// extract pull secret and save it to temp dir
 	secret := NewSecret(ht.oc.AsAdmin(), "openshift-config", "pull-secret")
@@ -262,12 +262,12 @@ func (ht *HypershiftTest) CreateClusterOnAws() {
 	secretFile := filepath.Join(ht.dir, ".dockerconfigjson")
 	logger.Infof("pull-secret info is saved to %s", secretFile)
 
-	g.By("get base domain from resource dns/cluster")
+	exutil.By("get base domain from resource dns/cluster")
 
 	baseDomain := getBaseDomain(ht.oc)
 	logger.Infof("based domain is: %s", baseDomain)
 
-	g.By("create hosted cluster on AWS")
+	exutil.By("create hosted cluster on AWS")
 	name := fmt.Sprintf("mco-cluster-%s", exutil.GetRandomString())
 	ht.Put(TestCtxKeyCluster, name)
 	awscred := ht.cred.(*AwsCredential)
@@ -295,7 +295,7 @@ func (ht *HypershiftTest) DestroyClusterOnAws() {
 
 	clusterName := ht.StrValue(TestCtxKeyCluster)
 
-	g.By(fmt.Sprintf("destroy hosted cluster %s", clusterName))
+	exutil.By(fmt.Sprintf("destroy hosted cluster %s", clusterName))
 
 	awscred := ht.cred.(*AwsCredential)
 	destroyClusterOpts := NewAwsDestroyClusterOptions().
@@ -313,7 +313,7 @@ func (ht *HypershiftTest) DestroyClusterOnAws() {
 // param: replica nodes # in node pool
 func (ht *HypershiftTest) CreateNodePoolOnAws(replica string) {
 
-	g.By("create rendered node pool")
+	exutil.By("create rendered node pool")
 
 	clusterName := ht.StrValue(TestCtxKeyCluster)
 	name := fmt.Sprintf("%s-np-%s", clusterName, exutil.GetRandomString())
@@ -356,7 +356,7 @@ func (ht *HypershiftTest) CreateNodePoolOnAws(replica string) {
 // DestroyNodePoolOnAws delete node pool related awsmachine first, then delete node pool
 func (ht *HypershiftTest) DestroyNodePoolOnAws() {
 
-	g.By("destroy nodepool related resources")
+	exutil.By("destroy nodepool related resources")
 
 	logger.Infof("delete node pool related machines")
 
@@ -391,7 +391,7 @@ func (ht *HypershiftTest) DestroyNodePoolOnAws() {
 // CreateMcConfigMap create config map contains machine config
 func (ht *HypershiftTest) CreateMcConfigMap() {
 
-	g.By("create machine config in config map")
+	exutil.By("create machine config in config map")
 
 	template := generateTemplateAbsolutePath(TmplHypershiftMcConfigMap)
 	cmName := fmt.Sprintf("mc-cm-%s", exutil.GetRandomString())
@@ -424,7 +424,7 @@ func (ht *HypershiftTest) CreateMcConfigMap() {
 // DeleteMcConfigMap when node pool is destroyed, delete config map
 func (ht *HypershiftTest) DeleteMcConfigMap() {
 
-	g.By("delete config map")
+	exutil.By("delete config map")
 
 	cmName := ht.StrValue(TestCtxKeyConfigMap)
 	NewNamespacedResource(ht.oc.AsAdmin(), "cm", ht.clusterNS, cmName).DeleteOrFail()
@@ -436,7 +436,7 @@ func (ht *HypershiftTest) DeleteMcConfigMap() {
 // this operation will trigger in-place update
 func (ht *HypershiftTest) PatchNodePoolToTriggerUpdate() {
 
-	g.By("patch node pool to add config setting")
+	exutil.By("patch node pool to add config setting")
 
 	npName := ht.StrValue(HypershiftCrNodePool)
 	cmName := ht.StrValue(TestCtxKeyConfigMap)
@@ -445,7 +445,7 @@ func (ht *HypershiftTest) PatchNodePoolToTriggerUpdate() {
 	o.Expect(np.GetOrFail(`{.spec.config}`)).Should(o.ContainSubstring(cmName), "node pool does not have cm config")
 	logger.Debugf(np.PrettyString())
 
-	g.By("wait node pool update to complete")
+	exutil.By("wait node pool update to complete")
 
 	np.WaitUntilConfigIsUpdating()
 	np.WaitUntilConfigUpdateIsCompleted()
@@ -456,7 +456,7 @@ func (ht *HypershiftTest) PatchNodePoolToTriggerUpdate() {
 // this operation will update os image on hosted cluster nodes
 func (ht *HypershiftTest) PatchNodePoolToUpdateReleaseImage() {
 
-	g.By("patch node pool to update release image")
+	exutil.By("patch node pool to update release image")
 	npName := ht.StrValue(HypershiftCrNodePool)
 	np := NewHypershiftNodePool(ht.oc.AsAdmin(), ht.clusterNS, npName)
 	versionSlice := strings.Split(np.GetVersion(), ".")
@@ -465,7 +465,7 @@ func (ht *HypershiftTest) PatchNodePoolToUpdateReleaseImage() {
 	o.Expect(np.GetOrFail(`{.spec.release.image}`)).Should(o.ContainSubstring(imageURL), "node pool does not have update release image config")
 	logger.Debugf(np.PrettyString())
 
-	g.By("wait node pool update to complete")
+	exutil.By("wait node pool update to complete")
 
 	np.WaitUntilVersionIsUpdating()
 	np.WaitUntilVersionUpdateIsCompleted()
@@ -476,7 +476,7 @@ func (ht *HypershiftTest) PatchNodePoolToUpdateReleaseImage() {
 // PatchNodePoolToUpdateMaxUnavailable update node pool to enable maxUnavailable support
 func (ht *HypershiftTest) PatchNodePoolToUpdateMaxUnavailable(maxUnavailable string) {
 
-	g.By("patch node pool to update property spec.management.inPlace.maxUnavailable and spec.config")
+	exutil.By("patch node pool to update property spec.management.inPlace.maxUnavailable and spec.config")
 
 	npName := ht.StrValue(HypershiftCrNodePool)
 	cmName := ht.StrValue(TestCtxKeyConfigMap)
@@ -490,7 +490,7 @@ func (ht *HypershiftTest) PatchNodePoolToUpdateMaxUnavailable(maxUnavailable str
 
 	logger.Debugf(np.PrettyString())
 
-	g.By("check node pool update is started")
+	exutil.By("check node pool update is started")
 	np.WaitUntilConfigIsUpdating()
 
 }
@@ -502,7 +502,7 @@ func (ht *HypershiftTest) CheckNodesAreUpdatingInParallel(nodeNum int) {
 	np := NewHypershiftNodePool(ht.oc.AsAdmin(), ht.clusterNS, npName)
 	defer np.WaitUntilConfigUpdateIsCompleted()
 
-	g.By(fmt.Sprintf("checking whether nodes are updating in parallel, expected node num is %v", nodeNum))
+	exutil.By(fmt.Sprintf("checking whether nodes are updating in parallel, expected node num is %v", nodeNum))
 
 	kubeconf := ht.StrValue(TestCtxKeyKubeConfig)
 	ht.oc.SetGuestKubeconf(kubeconf)
@@ -523,7 +523,7 @@ func (ht *HypershiftTest) CheckNodesAreUpdatingInParallel(nodeNum int) {
 // CreateKubeConfigForCluster create kubeconfig for hosted cluster
 func (ht *HypershiftTest) CreateKubeConfigForCluster() {
 
-	g.By("create kubeconfig for hosted cluster")
+	exutil.By("create kubeconfig for hosted cluster")
 
 	clusterName := ht.StrValue(TestCtxKeyCluster)
 	file := filepath.Join(ht.dir, fmt.Sprintf("%s-kubeconfig", clusterName))
@@ -538,7 +538,7 @@ func (ht *HypershiftTest) CreateKubeConfigForCluster() {
 // CheckMcAnnotationsOnNode check machine config is updated successfully
 func (ht *HypershiftTest) CheckMcAnnotationsOnNode() {
 
-	g.By("check machine config annotation to verify update is done")
+	exutil.By("check machine config annotation to verify update is done")
 	clusterName := ht.StrValue(TestCtxKeyCluster)
 	kubeconf := ht.StrValue(TestCtxKeyKubeConfig)
 	npName := ht.StrValue(HypershiftCrNodePool)
@@ -594,7 +594,7 @@ func (ht *HypershiftTest) CheckMcAnnotationsOnNode() {
 // VerifyFileContent verify whether config file on node is expected
 func (ht *HypershiftTest) VerifyFileContent() {
 
-	g.By("check whether the test file content is matched ")
+	exutil.By("check whether the test file content is matched ")
 	filePath := ht.StrValue(TestCtxKeyFilePath)
 	kubeconf := ht.StrValue(TestCtxKeyKubeConfig)
 	npName := ht.StrValue(HypershiftCrNodePool)

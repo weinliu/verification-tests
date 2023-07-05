@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 		skipTestIfOsIsNotRhelOs(oc)
 
-		g.By("iterate all rhel nodes to check the machine config related annotations")
+		exutil.By("iterate all rhel nodes to check the machine config related annotations")
 
 		allRhelNodes := NewNodeList(oc).GetAllRhelWokerNodesOrFail()
 		for _, node := range allRhelNodes {
@@ -54,7 +54,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	g.It("NonHyperShiftHOST-Author:rioliu-PstChkUpgrade-NonPreRelease-High-55748-Upgrade failed with Transaction in progress", func() {
 
-		g.By("check machine config daemon log to verify no error `Transaction in progress` found")
+		exutil.By("check machine config daemon log to verify no error `Transaction in progress` found")
 
 		allNodes, getNodesErr := NewNodeList(oc).GetAllLinux()
 		o.Expect(getNodesErr).NotTo(o.HaveOccurred(), "Get all linux nodes error")
@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 		allCoreOsNodes := NewNodeList(oc).GetAllCoreOsNodesOrFail()
 		for _, node := range allCoreOsNodes {
-			g.By(fmt.Sprintf("check authorized key dir and file on %s", node.GetName()))
+			exutil.By(fmt.Sprintf("check authorized key dir and file on %s", node.GetName()))
 			o.Eventually(func(gm o.Gomega) {
 				output, err := node.DebugNodeWithChroot("stat", oldAuthorizedKeyPath)
 				gm.Expect(err).Should(o.HaveOccurred(), "old authorized key file still exists")
@@ -106,15 +106,15 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 			g.Skip("Worker pool has 0 nodes configured.")
 		}
 
-		g.By("create kubelet config to add 500 max pods")
+		exutil.By("create kubelet config to add 500 max pods")
 		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
 		kc.create()
 
-		g.By("create ContainerRuntimeConfig")
+		exutil.By("create ContainerRuntimeConfig")
 		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
 		cr.create("-p", "CRCONFIG="+crConfig)
 
-		g.By("wait for worker pool to be ready")
+		exutil.By("wait for worker pool to be ready")
 		wMcp.waitForComplete()
 
 	})
@@ -153,7 +153,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		logger.Infof("Jira issure: https://issues.redhat.com/browse/OCPBUGS-6018")
 		logger.Infof("PR: https://github.com/openshift/machine-config-operator/pull/3501")
 
-		g.By("check that the MC in the worker pool has the right kubelet configuration")
+		exutil.By("check that the MC in the worker pool has the right kubelet configuration")
 		worker := wMcp.GetNodesOrFail()[0]
 		config := NewRemoteFile(worker, "/etc/kubernetes/kubelet.conf")
 		o.Expect(config.Fetch()).To(o.Succeed(),
@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		o.Expect(config.GetTextContent()).To(o.ContainSubstring(`"maxPods": 500`),
 			"The kubelet configuration is not the expected one.")
 
-		g.By("check controller versions")
+		exutil.By("check controller versions")
 		rmc, err := wMcp.GetConfiguredMachineConfig()
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Cannot get the MC configured for worker pool")
