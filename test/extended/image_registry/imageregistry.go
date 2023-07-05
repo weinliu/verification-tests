@@ -1771,7 +1771,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			}
 		case "gcs":
 			storageclient = "storage.googleapis.com"
-		case "ibmocs":
+		case "ibmcos":
 			storageclient = "storage.appdomain.cloud"
 		case "oss":
 			storageclient = "aliyuncs.com"
