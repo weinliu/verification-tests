@@ -52,7 +52,7 @@ func createUWMConfig(oc *exutil.CLI, uwmMonitoringConfig string) {
 	}
 }
 
-// check if a configmap is created in specific namespace [usage: checkConfigMap(oc, namesapce, configmapName)]
+// check if a configmap is created in specific namespace [usage: checkConfigMap(oc, namespace, configmapName)]
 func checkConfigMap(oc *exutil.CLI, ns, configmapName string) bool {
 	searchOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", configmapName, "-n", ns, "-o=jsonpath={.data.config\\.yaml}").Output()
 	if err != nil {

@@ -905,7 +905,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				g.Skip("This case should execute on cluster which have default storage class!")
 			}
 
-			g.By("get master node mames with label")
+			g.By("get master node names with label")
 			NodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master", "-ojsonpath={.items[*].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			nodeNameList := strings.Fields(NodeNames)
@@ -988,7 +988,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				g.Skip("This case should execute on cluster which have default storage class!")
 			}
 
-			g.By("get master node mames with label")
+			g.By("get master node names with label")
 			NodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master", "-ojsonpath={.items[*].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			nodeNameList := strings.Fields(NodeNames)
@@ -1347,7 +1347,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("enabled UWM and configure alertmanager secret setting in cluster-monitoring-config configmap")
 		createResourceFromYaml(oc, "openshift-monitoring", alertmanagerSecretCM)
 
-		g.By("check if the sercrets are mounted to alertmanager pod")
+		g.By("check if the secrets are mounted to alertmanager pod")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		checkConfigInPod(oc, "openshift-monitoring", "alertmanager-main-0", "alertmanager", "ls /etc/alertmanager/secrets/", "test-secret")
 		checkConfigInPod(oc, "openshift-monitoring", "alertmanager-main-0", "alertmanager", "ls /etc/alertmanager/secrets/", "slack-api-token")

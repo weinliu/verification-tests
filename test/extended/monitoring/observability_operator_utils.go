@@ -464,7 +464,7 @@ func checkIfMetricValueExists(oc *exutil.CLI, token, url string, timeout time.Du
 		}
 		return true, err
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metric %s doesnot contain any value", res))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metric %s does not contain any value", res))
 }
 func checkMetricValue(oc *exutil.CLI, clusterType string) {
 	g.By("Get SA token")
