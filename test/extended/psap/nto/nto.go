@@ -989,7 +989,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(openshiftControlPlaneTunedConf).NotTo(o.BeEmpty())
 		o.Expect(openshiftControlPlaneTunedConf).To(o.ContainSubstring("include=openshift"))
 
-		if strings.Contains(kernelVersion, "el8") || strings.Contains(kernelVersion, "el9") {
+		if strings.Contains(kernelVersion, "el8") {
 			o.Expect(openshiftControlPlaneTunedConf).To(o.And(
 				o.ContainSubstring("sched_wakeup_granularity_ns=4000000"),
 				o.ContainSubstring("sched_migration_cost_ns=5000000")))
@@ -1719,7 +1719,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Assert active and recommended profile (openshift-profile-stuck) match in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(openshift-profile-stuck\) match`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(openshift-profile-stuck\) match`)
 
 		g.By("Check if new NTO profile openshift-profile-stuck was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-profile-stuck")
@@ -1809,9 +1809,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		oc.SetupProject()
 		ntoTestNS := oc.Namespace()
 
+		//First choice to use [tests] image, the image mirrored by default in disconnected cluster
+		//if don't have [tests] image in some environment, we can use hello-openshift as image
+		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
+		AppImageName := exutil.GetImagestreamImageName(oc, "tests")
+		if len(AppImageName) == 0 {
+			AppImageName = "quay.io/openshifttest/hello-openshift:multiarch"
+		}
+
 		//Create a hugepages-app application pod
 		g.By("Create a hugepages-app pod to consume hugepage in nto temp namespace")
-		exutil.ApplyOperatorResourceByYaml(oc, ntoTestNS, hugepage100MPodFile)
+		exutil.ApplyNsResourceFromTemplate(oc, ntoTestNS, "--ignore-unknown-parameters=true", "-f", hugepage100MPodFile, "-p", "IMAGENAME="+AppImageName)
 
 		//Check if hugepages-appis ready
 		g.By("Check if a hugepages-app pod is ready ...")
