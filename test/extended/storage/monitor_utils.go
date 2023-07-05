@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -133,4 +134,28 @@ func (mo *monitor) checkInvalidvSphereStorageClassMetric(oc *exutil.CLI, storage
 
 	o.Expect(oc.WithoutNamespace().AsAdmin().Run("delete").Args("sc", storageClassName).Execute()).ShouldNot(o.HaveOccurred())
 	mo.waitSpecifiedMetricValueAsExpected("vsphere_cluster_check_errors", "data.result.#(metric.check=CheckStorageClasses).value.1", "0")
+}
+
+// function to return the volume counts for the specified provisioner values
+func (mo *monitor) getProvisionedVolumesMetric(oc *exutil.CLI, provisioner string) map[string]int64 {
+	metricOri := make(map[string]int64, 2)
+	metricOri["Filesystem"] = 0
+	metricOri["Block"] = 0
+
+	result, vm0err := mo.getSpecifiedMetricValue("cluster:kube_persistentvolume_plugin_type_counts:sum", "data.result")
+	o.Expect(vm0err).NotTo(o.HaveOccurred())
+	for i := 0; i < strings.Count(result, "plugin_name"); i++ {
+		j := strconv.Itoa(i)
+		valueOri0 := gjson.GetMany(result, j+".metric.plugin_name", j+".metric.volume_mode", j+".value.1")
+		if strings.Contains(valueOri0[0].String(), provisioner) {
+			if valueOri0[1].String() == "Filesystem" {
+				metricOri["Filesystem"] = valueOri0[2].Int()
+			}
+			if valueOri0[1].String() == "Block" {
+				metricOri["Block"] = valueOri0[2].Int()
+			}
+		}
+	}
+	e2e.Logf(`Currently volumes counts metric for provisioner %v is:  "%v"`, provisioner, metricOri)
+	return metricOri
 }
