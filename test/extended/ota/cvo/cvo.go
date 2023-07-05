@@ -38,33 +38,31 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(CVOStatus).NotTo(o.BeNil())
 
 		g.By("Check ready is true")
-		o.Expect(CVOStatus["ready"]).To(o.BeTrue())
+		o.Expect(CVOStatus["ready"]).To(o.BeTrue(), "CVO is not ready: %v", CVOStatus)
 
 		g.By("Check started is true")
-		o.Expect(CVOStatus["started"]).To(o.BeTrue())
+		o.Expect(CVOStatus["started"]).To(o.BeTrue(), "CVO is not started: %v", CVOStatus)
 
 		g.By("Check state is running")
-		o.Expect(CVOStatus["state"]).NotTo(o.BeNil())
-		o.Expect(CVOStatus["state"].(map[string]interface{})["running"]).NotTo(o.BeNil())
+		o.Expect(CVOStatus["state"]).NotTo(o.BeNil(), "CVO have no state: %v", CVOStatus)
+		o.Expect(CVOStatus["state"].(map[string]interface{})["running"]).NotTo(o.BeNil(), "CVO state have no running: %v", CVOStatus)
 
 		g.By("Check exitCode of lastState is 0 if lastState is not empty")
-		o.Expect(CVOStatus["lastState"]).NotTo(o.BeNil())
+		o.Expect(CVOStatus["lastState"]).NotTo(o.BeNil(), "CVO have no lastState: %v", CVOStatus)
 		if reflect.ValueOf(CVOStatus["lastState"]).Len() == 0 {
 			e2e.Logf("lastState is empty which is expected")
 		} else {
 			lastState := CVOStatus["lastState"]
-			o.Expect(lastState.(map[string]interface{})["terminated"]).NotTo(o.BeNil())
+			o.Expect(lastState.(map[string]interface{})["terminated"]).NotTo(o.BeNil(), "no terminated for non-empty CVO lastState: %v", CVOStatus)
 			exitCode := lastState.(map[string]interface{})["terminated"].(map[string]interface{})["exitCode"]
-			o.Expect(exitCode.(float64)).To(o.BeZero())
+			o.Expect(exitCode.(float64)).To(o.BeZero(), "CVO terminated with non-zero code: %v", CVOStatus)
 			reason := lastState.(map[string]interface{})["terminated"].(map[string]interface{})["reason"]
-			o.Expect(reason.(string)).To(o.Equal("Completed"))
+			o.Expect(reason.(string)).To(o.Equal("Completed"), "CVO terminated with unexpected reason: %v", CVOStatus)
 		}
 	})
 
 	//author: yanyang@redhat.com
 	g.It("NonHyperShiftHOST-Author:yanyang-Medium-49508-disable capabilities by modifying the cv.spec.capabilities.baselineCapabilitySet [Serial]", func() {
-		// currently unsupported in Hypershift hosted
-		exutil.SkipHypershiftHostedCluster(oc)
 		orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -72,7 +70,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			g.Skip("The test requires baselineCapabilitySet=vCurrent, rather than " + orgBaseCap)
 		}
 
-		defer changeCap(oc, true, orgBaseCap)
+		defer func() {
+			out, err := changeCap(oc, true, orgBaseCap)
+			o.Expect(err).NotTo(o.HaveOccurred(), out)
+		}()
 
 		g.By("Check cap status and condition prior to change")
 		enabledCap, err := getCVObyJP(oc, ".status.capabilities.enabledCapabilities[*]")
@@ -121,34 +122,41 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("NonHyperShiftHOST-Author:yanyang-Low-49670-change spec.capabilities to invalid value", func() {
-		// currently unsupported in Hypershift hosted
-		exutil.SkipHypershiftHostedCluster(oc)
 		orgCap, err := getCVObyJP(oc, ".spec.capabilities")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if orgCap == "" {
-			defer ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/capabilities", nil}})
+			defer func() {
+				out, err := ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/capabilities", nil}})
+				o.Expect(err).NotTo(o.HaveOccurred(), out)
+			}()
 		} else {
 			orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			orgAddCapstr, err := getCVObyJP(oc, ".spec.capabilities.additionalEnabledCapabilities[*]")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf(orgBaseCap, orgAddCapstr)
+			e2e.Logf("original baseline: %s, original additional: %s", orgBaseCap, orgAddCapstr)
 
 			orgAddCap := strings.Split(orgAddCapstr, " ")
 
-			defer changeCap(oc, true, orgBaseCap)
-			defer changeCap(oc, false, orgAddCap)
+			defer func() {
+				out, err := changeCap(oc, true, orgBaseCap)
+				o.Expect(err).NotTo(o.HaveOccurred(), out)
+			}()
+			defer func() {
+				out, err := changeCap(oc, false, orgAddCap)
+				o.Expect(err).NotTo(o.HaveOccurred(), out)
+			}()
 		}
 
 		g.By("Set invalid baselineCapabilitySet")
 		cmdOut, err := changeCap(oc, true, "Invalid")
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"v4.12\", \"v4.13\", \"vCurrent\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"v4.12\", \"v4.13\", \"v4.14\", \"vCurrent\""))
 
 		g.By("Set invalid additionalEnabledCapabilities")
 		cmdOut, err = changeCap(oc, false, []string{"Invalid"})
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\", \"CSISnapshot\", \"NodeTuning\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\", \"CSISnapshot\", \"NodeTuning\", \"MachineAPI\""))
 	})
 
 	//author: yanyang@redhat.com
@@ -161,18 +169,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		orgChannel, err := getCVObyJP(oc, ".spec.channel")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
+		e2e.Logf("Original upstream: %s, original channel: %s", orgUpstream, orgChannel)
 
 		g.By("Patch upstream and channel")
 		projectID := "openshift-qe"
 		ctx := context.Background()
 		client, err := storage.NewClient(ctx)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer client.Close()
+		defer func() { o.Expect(client.Close()).NotTo(o.HaveOccurred()) }()
 
 		graphURL, bucket, object, _, _, err := buildGraph(client, oc, projectID, "cincy-conditional-edge.json")
-		defer DeleteBucket(client, bucket)
-		defer DeleteObject(client, bucket, object)
+		defer func() { o.Expect(DeleteBucket(client, bucket)).NotTo(o.HaveOccurred()) }()
+		defer func() { o.Expect(DeleteObject(client, bucket, object)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
@@ -192,7 +200,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"4.99.999999 registry.ci.openshift.org/ocp/release@sha256:" +
 			"9999999999999999999999999999999999999999999999999999999999999999"
 		found := checkUpdates(oc, false, 5, 15, expUpdate1, expUpdate2)
-		o.Expect(found).To(o.BeTrue())
+		o.Expect(found).To(o.BeTrue(), "recommended update and notes about additional updates")
 
 		g.By("Check risk type=Always updates and 2 risks update present")
 		expUpdate1 = "Version: 4.88.888888\n  " +
@@ -208,7 +216,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"Recommended: Unknown\n  " +
 			"Reason: EvaluationFailed"
 		found = checkUpdates(oc, true, 5, 15, "Supported but not recommended updates", expUpdate1, expUpdate2)
-		o.Expect(found).To(o.BeTrue())
+		o.Expect(found).To(o.BeTrue(), "risk type=Always updates and 2 risks update")
 
 		g.By("Check Recommended: Unknown update is changed to Recommended: False with MultipleReasons")
 		expUpdate2 = "Version: 4.77.777777\n  " +
@@ -219,7 +227,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"Message: On clusters on default invoker user, this imaginary bug can happen. " +
 			"https://bug.example.com/a"
 		found = checkUpdates(oc, true, 60, 15*60, "Supported but not recommended updates", expUpdate2)
-		o.Expect(found).To(o.BeTrue())
+		o.Expect(found).To(o.BeTrue(), "Unknown update is changed to Recommended=False")
 
 		g.By("Check The reason for the multiple risks is changed to SomeInvokerThing")
 		expUpdate2 = "Version: 4.77.777777\n  " +
@@ -230,7 +238,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"Message: On clusters on default invoker user, this imaginary bug can happen. " +
 			"https://bug.example.com/a"
 		found = checkUpdates(oc, true, 60, 15*60, "Supported but not recommended updates", expUpdate2)
-		o.Expect(found).To(o.BeTrue())
+		o.Expect(found).To(o.BeTrue(), "reason for the multiple risks is changed to SomeInvokerThing")
 
 		g.By("Check multiple reason conditional update present")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "buggy").Output()
@@ -246,7 +254,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"On clusters with the channel set to 'buggy', this imaginary bug can happen. " +
 			"https://bug.example.com/b"
 		found = checkUpdates(oc, true, 300, 65*60, expUpdate2)
-		o.Expect(found).To(o.BeTrue())
+		o.Expect(found).To(o.BeTrue(), "multiple reason conditional update present")
 	})
 
 	//author: yanyang@redhat.com
@@ -258,18 +266,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		orgChannel, err := getCVObyJP(oc, ".spec.channel")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
+		e2e.Logf("Original upstream: %s, original channel: %s", orgUpstream, orgChannel)
 
 		g.By("Patch upstream")
 		projectID := "openshift-qe"
 		ctx := context.Background()
 		client, err := storage.NewClient(ctx)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer client.Close()
+		defer func() { o.Expect(client.Close()).NotTo(o.HaveOccurred()) }()
 
-		graphURL, bucket, object, _, _, err := buildGraph(client, oc, projectID, "cincy-conditional-edge-invalid-null-node.json")
-		defer DeleteBucket(client, bucket)
-		defer DeleteObject(client, bucket, object)
+		graphURL, bucket1, object1, _, _, err := buildGraph(client, oc, projectID, "cincy-conditional-edge-invalid-null-node.json")
+		defer func() { o.Expect(DeleteBucket(client, bucket1)).NotTo(o.HaveOccurred()) }()
+		defer func() { o.Expect(DeleteObject(client, bucket1, object1)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
@@ -284,42 +292,32 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		expString := "warning: Cannot display available updates:\n" +
 			"  Reason: ResponseInvalid\n" +
 			"  Message: Unable to retrieve available updates: no node for conditional update"
-		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+		exutil.AssertWaitPollNoErr(wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 			cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
-			e2e.Logf(cmdOut)
+			e2e.Logf("oc adm upgrade returned:\n%s", cmdOut)
 			if err != nil {
-				e2e.Logf("oc adm upgrade returned error:")
-				return false, err
+				return false, fmt.Errorf("oc adm upgrade returned error: %v", err)
 			}
-			if strings.Contains(cmdOut, expString) {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Test on empty target node failed")
+			return strings.Contains(cmdOut, expString), nil
+		}), "Test on empty target node failed")
 
-		graphURL, bucket, object, _, _, err = buildGraph(client, oc, projectID, "cincy-conditional-edge-invalid-multi-risks.json")
-		defer DeleteBucket(client, bucket)
-		defer DeleteObject(client, bucket, object)
+		graphURL, bucket2, object2, _, _, err := buildGraph(client, oc, projectID, "cincy-conditional-edge-invalid-multi-risks.json")
+		defer func() { o.Expect(DeleteBucket(client, bucket2)).NotTo(o.HaveOccurred()) }()
+		defer func() { o.Expect(DeleteObject(client, bucket2, object2)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check no updates")
-		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+		exutil.AssertWaitPollNoErr(wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 			cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
-			e2e.Logf(cmdOut)
+			e2e.Logf("oc adm upgrade returned:\n%s", cmdOut)
 			if err != nil {
-				e2e.Logf("oc adm upgrade returned error:")
-				return false, err
+				return false, fmt.Errorf("oc adm upgrade returned error: %v", err)
 			}
-			if strings.Contains(cmdOut, "No updates available") {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Test on multiple invalid risks failed")
+			return strings.Contains(cmdOut, "No updates available"), nil
+		}), "Test on multiple invalid risks failed")
 	})
 
 	//author: yanyang@redhat.com
@@ -331,18 +329,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		orgChannel, err := getCVObyJP(oc, ".spec.channel")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Original upstream:%s, original channel: %s", orgUpstream, orgChannel)
+		e2e.Logf("Original upstream: %s, original channel: %s", orgUpstream, orgChannel)
 
 		g.By("Patch upstream")
 		projectID := "openshift-qe"
 		ctx := context.Background()
 		client, err := storage.NewClient(ctx)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer client.Close()
+		defer func() { o.Expect(client.Close()).NotTo(o.HaveOccurred()) }()
 
 		graphURL, bucket, object, _, _, err := buildGraph(client, oc, projectID, "cincy-conditional-edge-invalid-multi-risks.json")
-		defer DeleteBucket(client, bucket)
-		defer DeleteObject(client, bucket, object)
+		defer func() { o.Expect(DeleteBucket(client, bucket)).NotTo(o.HaveOccurred()) }()
+		defer func() { o.Expect(DeleteObject(client, bucket, object)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
@@ -355,18 +353,14 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		var cmdOut string
 		g.By("Check no updates but RetrievedUpdates=True")
-		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+		exutil.AssertWaitPollNoErr(wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 			cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+			e2e.Logf("oc adm upgrade returned:\n%s", cmdOut)
 			if err != nil {
-				e2e.Logf("oc adm upgrade returned error:")
-				return false, err
+				return false, fmt.Errorf("oc adm upgrade returned error: %v", err)
 			}
-			if strings.Contains(cmdOut, "No updates available") {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failure: missing expected 'No updates available' in:\n%s", cmdOut))
+			return strings.Contains(cmdOut, "No updates available"), nil
+		}), "failure: missing expected 'No updates available'")
 
 		status, err := getCVObyJP(oc, ".status.conditions[?(.type=='RetrievedUpdates')].status")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -432,7 +426,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		output, err := PodExec(oc, "/usr/bin/cluster-version-operator start --help", projectName, cvoPodsList[0])
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf(
 			"/usr/bin/cluster-version-operator start --help executs error on %v", cvoPodsList[0]))
-		e2e.Logf(output)
+		e2e.Logf("CVO help returned: %s", output)
 		keywords = []string{"You must set both --serving-cert-file and --serving-key-file unless you set --listen empty"}
 		for _, v := range keywords {
 			o.Expect(output).Should(o.ContainSubstring(v))
@@ -444,7 +438,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 				"-n", projectName, "-o=json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var result map[string]interface{}
-		json.Unmarshal([]byte(output), &result)
+		err = json.Unmarshal([]byte(output), &result)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		endpoints := result["spec"].(map[string]interface{})["endpoints"]
 		e2e.Logf("Get cvo's spec.endpoints: %v", endpoints)
 		o.Expect(endpoints).Should(o.HaveLen(1))
@@ -474,7 +469,6 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		cmd := fmt.Sprintf("curl http://%s/metrics", endpointURI)
 		output, err = PodExec(oc, cmd, projectName, cvoPodsList[0])
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cmd %s executs error on %v", cmd, cvoPodsList[0]))
-		e2e.Logf(output)
 		keywords = []string{"Client sent an HTTP request to an HTTPS server"}
 		for _, v := range keywords {
 			o.Expect(output).Should(o.ContainSubstring(v))
@@ -484,7 +478,6 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		cmd = fmt.Sprintf("curl -k -I https://%s/metrics", endpointURI)
 		output, err = PodExec(oc, cmd, projectName, cvoPodsList[0])
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cmd %s executs error on %v", cmd, cvoPodsList[0]))
-		e2e.Logf(output)
 		keywords = []string{"HTTP/1.1 200 OK"}
 		for _, v := range keywords {
 			o.Expect(output).Should(o.ContainSubstring(v))
@@ -496,7 +489,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		orgChannel, err := getCVObyJP(oc, ".spec.channel")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", orgChannel).Execute()
+		defer func() {
+			o.Expect(oc.AsAdmin().WithoutNamespace().Run("adm").
+				Args("upgrade", "channel", orgChannel).Execute()).NotTo(o.HaveOccurred())
+		}()
 
 		g.By("Enable alert by clearing channel")
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel").Execute()
@@ -509,12 +505,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Alert CannotRetrieveUpdates does not appear within 60m")
 		appeared, _, err := waitForAlert(oc, "CannotRetrieveUpdates", 600, 3600, "")
-		o.Expect(appeared).NotTo(o.BeTrue())
+		o.Expect(appeared).NotTo(o.BeTrue(), "no CannotRetrieveUpdates within 60m")
 		o.Expect(err.Error()).To(o.ContainSubstring("timed out waiting for the condition"))
 
 		g.By("Alert CannotRetrieveUpdates does not appear after 60m")
 		appeared, _, err = waitForAlert(oc, "CannotRetrieveUpdates", 300, 600, "")
-		o.Expect(appeared).NotTo(o.BeTrue())
+		o.Expect(appeared).NotTo(o.BeTrue(), "no CannotRetrieveUpdates after 60m")
 		o.Expect(err.Error()).To(o.ContainSubstring("timed out waiting for the condition"))
 	})
 
@@ -528,17 +524,17 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		orgChannel, err := getCVObyJP(oc, ".spec.channel")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
+		e2e.Logf("Original upstream: %s, original channel: %s", orgUpstream, orgChannel)
 
 		projectID := "openshift-qe"
 		ctx := context.Background()
 		client, err := storage.NewClient(ctx)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer client.Close()
+		defer func() { o.Expect(client.Close()).NotTo(o.HaveOccurred()) }()
 
 		graphURL, bucket, object, _, _, err := buildGraph(client, oc, projectID, "cincy.json")
-		defer DeleteBucket(client, bucket)
-		defer DeleteObject(client, bucket, object)
+		defer func() { o.Expect(DeleteBucket(client, bucket)).NotTo(o.HaveOccurred()) }()
+		defer func() { o.Expect(DeleteObject(client, bucket, object)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer restoreCVSpec(orgUpstream, orgChannel, oc)
@@ -578,7 +574,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			{"add", "/spec/channel", "channel-a"},
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", "sleep 5").Output()
+		time.Sleep(5 * time.Second)
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cmdOut).To(o.ContainSubstring("Channel: channel-a (available channels: channel-a, channel-b)"))
@@ -618,7 +614,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Set to an unknown channel when the available channels are not present without --allow-explicit-channel")
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "channel-d").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", "sleep 5").Output()
+		time.Sleep(5 * time.Second)
 		o.Expect(cmdOut).To(o.ContainSubstring(
 			fmt.Sprintf("warning: No channels known to be compatible with the current version \"%s\"; unable to vali"+
 				"date \"channel-d\". Setting the update channel to \"channel-d\" anyway.", version)))
@@ -629,7 +625,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Set to an unknown channel which is not in the available channels without --allow-explicit-channel")
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "channel-f").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		exec.Command("bash", "-c", "sleep 5").Output()
+		time.Sleep(5 * time.Second)
 		o.Expect(cmdOut).To(o.ContainSubstring(
 			"error: the requested channel \"channel-f\" is not one of the avail" +
 				"able channels (channel-a, channel-b), you must pass --allow-explicit-channel to continue"))
@@ -638,7 +634,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "channel", "channel-f", "--allow-explicit-channel").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", "sleep 5").Output()
+		time.Sleep(5 * time.Second)
 		o.Expect(cmdOut).To(o.ContainSubstring(
 			"warning: The requested channel \"channel-f\" is not one of the avail" +
 				"able channels (channel-a, channel-b). You have used --allow-explicit-cha" +
@@ -659,7 +655,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Set to a known channel when the available channels are not present")
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "channel-a").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", "sleep 5").Output()
+		time.Sleep(5 * time.Second)
 		o.Expect(cmdOut).To(o.ContainSubstring(
 			fmt.Sprintf("warning: No channels known to be compatible with the current version \"%s\"; un"+
 				"able to validate \"channel-a\". Setting the update channel to \"channel-a\" anyway.", version)))
@@ -670,7 +666,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Set to a known channel without --allow-explicit-channel")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "channel-b").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", "sleep 5").Output()
+		time.Sleep(5 * time.Second)
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cmdOut).To(o.ContainSubstring("Channel: channel-b (available channels: channel-a, channel-b)"))
@@ -680,17 +676,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	g.It("Author:yanyang-High-42543-the removed resources are not created in a fresh installed cluster", func() {
 		g.By("Check the annotation delete:true for imagestream/hello-openshift is set in manifest")
 		tempDataDir, err := extractManifest(oc)
-		defer os.RemoveAll(tempDataDir)
+		defer func() { o.Expect(os.RemoveAll(tempDataDir)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestDir := filepath.Join(tempDataDir, "manifest")
-		out, err := exec.Command("bash", "-c", fmt.Sprintf("grep -rl \"name: hello-openshift\" %s", manifestDir)).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd := fmt.Sprintf("grep -rl \"name: hello-openshift\" %s", manifestDir)
+		out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Command: \"%s\" returned error: %s", cmd, string(out))
 		o.Expect(string(out)).NotTo(o.BeEmpty())
 		file := strings.TrimSpace(string(out))
-		cmd := fmt.Sprintf("grep -A5 'name: hello-openshift' %s | grep 'release.openshift.io/delete: \"true\"'", file)
-		result, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(result)).NotTo(o.BeEmpty())
+		cmd = fmt.Sprintf("grep -A5 'name: hello-openshift' %s | grep 'release.openshift.io/delete: \"true\"'", file)
+		out, err = exec.Command("bash", "-c", cmd).CombinedOutput()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Command: \"%s\" returned error: %s", cmd, string(out))
+		o.Expect(string(out)).NotTo(o.BeEmpty())
 
 		g.By("Check imagestream hello-openshift not present in a fresh installed cluster")
 		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").
@@ -710,7 +707,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		orgChannel, err := getCVObyJP(oc, ".spec.channel")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
+		e2e.Logf("Original upstream: %s, original channel: %s", orgUpstream, orgChannel)
 
 		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
@@ -751,11 +748,11 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		ctx := context.Background()
 		client, err := storage.NewClient(ctx)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer client.Close()
+		defer func() { o.Expect(client.Close()).NotTo(o.HaveOccurred()) }()
 
 		graphURL, bucket, object, targetVersion, targetPayload, err := buildGraph(client, oc, projectID, "cincy.json")
-		defer DeleteBucket(client, bucket)
-		defer DeleteObject(client, bucket, object)
+		defer func() { o.Expect(DeleteBucket(client, bucket)).NotTo(o.HaveOccurred()) }()
+		defer func() { o.Expect(DeleteObject(client, bucket, object)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
@@ -763,7 +760,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			{"add", "/spec/channel", "channel-a"},
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", "sleep 5").Output()
+		time.Sleep(5 * time.Second)
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		expStr := []string{
@@ -813,32 +810,43 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Get goodOauthFile from the initial oauth yaml file to oauth-41728.yaml")
 		goodOauthFile, err := oc.AsAdmin().WithoutNamespace().Run("get").
 			Args("oauth", "cluster", "-o", "yaml").OutputToFile("oauth-41728.yaml")
-		defer os.RemoveAll(goodOauthFile)
+		defer func() { o.Expect(os.RemoveAll(goodOauthFile)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Prune goodOauthFile")
-		oauthfile, err := exec.Command("bash", "-c",
-			fmt.Sprintf("sed -i \"/resourceVersion/d\" %s && cat %s", goodOauthFile, goodOauthFile)).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(oauthfile).NotTo(o.ContainSubstring("resourceVersion"))
+		cmd := fmt.Sprintf("sed -i \"/resourceVersion/d\" %s && cat %s", goodOauthFile, goodOauthFile)
+		oauthfile, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Command: \"%s\" returned error: %s", cmd, string(oauthfile))
+		o.Expect(string(oauthfile)).NotTo(o.ContainSubstring("resourceVersion"))
 
 		g.By("Enable ClusterOperatorDegraded alert")
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", badOauthFile).Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", goodOauthFile).Execute()
+		defer func() {
+			// after applying good auth, co is back to normal, while cvo condition failing is still present for up to ~2-4 minutes
+			o.Expect(waitForCVOStatus(oc, 30, 4*60, "ClusterOperatorDegraded",
+				".status.conditions[?(.type=='Failing')].reason", false)).NotTo(o.HaveOccurred())
+		}()
+		defer func() {
+			o.Expect(oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", goodOauthFile).Execute()).NotTo(o.HaveOccurred())
+		}()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check ClusterOperatorDegraded condition...")
-		err = waitForCondition(60, 480, "True",
-			"oc get co authentication -ojson|jq -r '.status.conditions[]|select(.type==\"Degraded\").status'")
-		exutil.AssertWaitPollNoErr(err, "authentication operator is not degraded in 8m")
+		if err = waitForCondition(oc, 60, 480, "True",
+			"get", "co", "authentication", "-o", "jsonpath={.status.conditions[?(@.type=='Degraded')].status}"); err != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "authentication", "-o", "yaml").Execute()
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("oauth", "cluster", "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, "authentication operator is not degraded in 8m")
+		}
 
 		g.By("Check ClusterOperatorDown alert is not firing and ClusterOperatorDegraded alert is fired correctly.")
+		var alertDown, alertDegraded map[string]interface{}
 		err = wait.Poll(5*time.Minute, 35*time.Minute, func() (bool, error) {
-			alertDown := getAlertByName(oc, "ClusterOperatorDown")
-			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
+			alertDown = getAlertByName(oc, "ClusterOperatorDown", "authentication")
+			alertDegraded = getAlertByName(oc, "ClusterOperatorDegraded", "authentication")
 			if alertDown != nil {
-				e2e.Logf("alert ClusterOperatorDown is not nil")
-				return false, fmt.Errorf("%v", alertDown)
+				return false, fmt.Errorf("alert ClusterOperatorDown is not nil: %v", alertDown)
 			}
 			if alertDegraded == nil || alertDegraded["state"] != "firing" {
 				e2e.Logf("Waiting for alert ClusterOperatorDegraded to be triggered and fired...")
@@ -852,22 +860,17 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 				To(o.ContainSubstring("The authentication operator is degraded"))
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "ClusterOperatorDegraded alert is not fired in 30m")
-
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ClusterOperatorDegraded alert is not fired in 30m: %v", alertDegraded))
 		g.By("Disable ClusterOperatorDegraded alert")
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", goodOauthFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check alert is disabled")
-		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
-			if alertDegraded != nil {
-				e2e.Logf("Waiting for alert being disabled...")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "alert is not disabled.")
+		exutil.AssertWaitPollNoErr(wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			alertDegraded = getAlertByName(oc, "ClusterOperatorDegraded", "authentication")
+			e2e.Logf("Waiting for alert being disabled...")
+			return alertDegraded == nil, nil
+		}), fmt.Sprintf("alert is not disabled: %v", alertDegraded))
 	})
 
 	//author: jiajliu@redhat.com
@@ -878,7 +881,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Enable alerts")
 		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", badOauthFile).Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("co", "test").Execute()
+		// if normal already deleted before. discarding error.
+		defer func() { _ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("co", "test").Execute() }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check operator's condition...")
@@ -887,54 +891,39 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(output).To(o.Equal(""))
 
 		g.By("Waiting for alerts triggered...")
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			alertDown := getAlertByName(oc, "ClusterOperatorDown")
-			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
-			if alertDown == nil || alertDegraded == nil {
-				e2e.Logf("Waiting for alerts to be triggered...")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "No alert triggerred!")
+		var alertDown, alertDegraded map[string]interface{}
+		exutil.AssertWaitPollNoErr(wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			alertDown = getAlertByName(oc, "ClusterOperatorDown", "test")
+			alertDegraded = getAlertByName(oc, "ClusterOperatorDegraded", "test")
+			e2e.Logf("Waiting for alerts to be triggered...")
+			return alertDown != nil && alertDegraded != nil, nil
+		}), fmt.Sprintf("failed expecting both alerts triggered: Down=%v Degraded=%v", alertDown, alertDegraded))
 
 		g.By("Check alert ClusterOperatorDown fired.")
-		err = wait.Poll(5*time.Minute, 10*time.Minute, func() (bool, error) {
-			alertDown := getAlertByName(oc, "ClusterOperatorDown")
-			if alertDown["state"] != "firing" {
-				e2e.Logf("Waiting for alert ClusterOperatorDown to be triggered and fired...")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "ClusterOperatorDown alert is not fired in 10m")
+		exutil.AssertWaitPollNoErr(wait.Poll(5*time.Minute, 10*time.Minute, func() (bool, error) {
+			alertDown = getAlertByName(oc, "ClusterOperatorDown", "test")
+			e2e.Logf("Waiting for alert ClusterOperatorDown to be triggered and fired...")
+			return alertDown["state"] == "firing", nil
+		}), fmt.Sprintf("ClusterOperatorDown alert is not fired in 10m: %v", alertDown))
 
 		g.By("Check alert ClusterOperatorDegraded fired.")
-		err = wait.Poll(5*time.Minute, 20*time.Minute, func() (bool, error) {
-			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
-			if alertDegraded["state"] != "firing" {
-				e2e.Logf("Waiting for alert ClusterOperatorDegraded to be triggered and fired...")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "ClusterOperatorDegraded alert is not fired in 30m")
+		exutil.AssertWaitPollNoErr(wait.Poll(5*time.Minute, 20*time.Minute, func() (bool, error) {
+			alertDegraded = getAlertByName(oc, "ClusterOperatorDegraded", "test")
+			e2e.Logf("Waiting for alert ClusterOperatorDegraded to be triggered and fired...")
+			return alertDegraded["state"] == "firing", nil
+		}), fmt.Sprintf("ClusterOperatorDegraded alert is not fired in 30m: %v", alertDegraded))
 
 		g.By("Disable alerts")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("co", "test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check alerts are disabled...")
-		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			alertDown := getAlertByName(oc, "ClusterOperatorDown")
-			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
-			if alertDown != nil || alertDegraded != nil {
-				e2e.Logf("Waiting for alerts being disabled...")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "alerts are not disabled.")
+		exutil.AssertWaitPollNoErr(wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			alertDown := getAlertByName(oc, "ClusterOperatorDown", "test")
+			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded", "test")
+			e2e.Logf("Waiting for alerts being disabled...")
+			return alertDown == nil && alertDegraded == nil, nil
+		}), fmt.Sprintf("alerts are not disabled: Down=%v Degraded=%v", alertDown, alertDegraded))
 	})
 
 	//author: jiajliu@redhat.com
@@ -946,16 +935,24 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Enable ClusterOperatorDown alert")
 		_, err = ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", "osus-ca"}})
+		defer func() {
+			out, err := ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
+			o.Expect(err).NotTo(o.HaveOccurred(), out)
+		}()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
 
 		g.By("Check ClusterOperatorDown condition...")
-		err = waitForCondition(60, 480, "False", "oc get co machine-config -ojson|jq -r '.status.conditions[]|select(.type==\"Available\").status'")
-		exutil.AssertWaitPollNoErr(err, "machine-config operator is not down in 8m")
+		if err = waitForCondition(oc, 60, 480, "False",
+			"get", "co", "machine-config", "-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}"); err != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "machine-config", "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, "machine-config operator is not down in 8m")
+		}
 
 		g.By("Check ClusterOperatorDown alert is fired correctly")
+		var alertDown map[string]interface{}
 		err = wait.Poll(100*time.Second, 600*time.Second, func() (bool, error) {
-			alertDown := getAlertByName(oc, "ClusterOperatorDown")
+			alertDown = getAlertByName(oc, "ClusterOperatorDown", "machine-config")
 			if alertDown == nil || alertDown["state"] != "firing" {
 				e2e.Logf("Waiting for alert ClusterOperatorDown to be triggered and fired...")
 				return false, nil
@@ -968,22 +965,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 				To(o.ContainSubstring("The machine-config operator may be down or disabled"))
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "ClusterOperatorDown alert is not fired in 10m")
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ClusterOperatorDown alert is not fired in 10m: %v", alertDown))
 
 		g.By("Disable ClusterOperatorDown alert")
 		_, err = ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check alert is disabled")
-		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			alertDown := getAlertByName(oc, "ClusterOperatorDown")
-			if alertDown != nil {
-				e2e.Logf("Waiting for alert being disabled...")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "alert is not disabled.")
+		exutil.AssertWaitPollNoErr(wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			alertDown = getAlertByName(oc, "ClusterOperatorDown", "machine-config")
+			e2e.Logf("Waiting for alert being disabled...")
+			return alertDown == nil, nil
+		}), fmt.Sprintf("alert is not disabled: %v", alertDown))
 	})
 
 	//author: jiajliu@redhat.com
@@ -1016,18 +1009,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		exutil.SkipBaselineCaps(oc, "None, v4.11")
 		g.By("Check the replicas for openshift-insights/insights-operator is unset in manifest")
 		tempDataDir, err := extractManifest(oc)
-		defer os.RemoveAll(tempDataDir)
+		defer func() { o.Expect(os.RemoveAll(tempDataDir)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestDir := filepath.Join(tempDataDir, "manifest")
 		namespace, name := "openshift-insights", "insights-operator"
 		cmd := fmt.Sprintf(
 			"grep -rlZ 'kind: Deployment' %s | xargs -0 grep -l 'name: %s\\|namespace: %s' | xargs grep replicas",
 			manifestDir, name, namespace)
-		e2e.Logf(cmd)
-		out, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf("executing: bash -c %s", cmd)
+		out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 		// We expect no replicas could be found, so the cmd should return with non-zero
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(out).To(o.BeEmpty())
+		o.Expect(err).To(o.HaveOccurred(), "Command: \"%s\" returned success instead of error: %s", cmd, string(out))
+		o.Expect(string(out)).To(o.BeEmpty())
 
 		g.By("Check only one insights-operator pod in a fresh installed cluster")
 		num, err := oc.AsAdmin().WithoutNamespace().Run("get").
@@ -1036,10 +1029,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(num).To(o.Equal("1"))
 
-		defer oc.AsAdmin().WithoutNamespace().Run("scale").
-			Args("--replicas", "1",
-				fmt.Sprintf("deployment/%s", name),
-				"-n", namespace).Output()
+		defer func() {
+			out, err := oc.AsAdmin().WithoutNamespace().Run("scale").
+				Args("--replicas", "1",
+					fmt.Sprintf("deployment/%s", name),
+					"-n", namespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), out)
+		}()
 
 		g.By("Scale down insights-operator replica to 0")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("scale").
@@ -1049,17 +1045,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the insights-operator replica recovers to one")
-		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
+		exutil.AssertWaitPollNoErr(wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
 			num, err = oc.AsAdmin().WithoutNamespace().Run("get").
 				Args("deployment", name,
 					"-o=jsonpath={.spec.replicas}",
 					"-n", namespace).Output()
-			if num != "1" {
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "insights-operator replicas is not 1")
+			return num == "1", err
+		}), "insights-operator replicas is not 1")
 
 		g.By("Scale up insights-operator replica to 2")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("scale").
@@ -1069,17 +1061,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the insights-operator replica recovers to one")
-		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
+		exutil.AssertWaitPollNoErr(wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
 			num, err = oc.AsAdmin().WithoutNamespace().Run("get").
 				Args("deployment", name,
 					"-o=jsonpath={.spec.replicas}",
 					"-n", namespace).Output()
-			if num != "1" {
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "insights-operator replicas is not 1")
+			return num == "1", err
+		}), "insights-operator replicas is not 1")
 	})
 
 	//author: jiajliu@redhat.com
@@ -1091,19 +1079,19 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		featuregate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Featuregate:%s", featuregate)
+		e2e.Logf("Featuregate: %s", featuregate)
 		if featuregate != "{}" && strings.Contains(featuregate, "TechPreviewNoUpgrade") {
 			g.Skip("This case is only suitable for non-techpreview cluster!")
 		}
 
 		g.By("Check annotation release.openshift.io/feature-set=TechPreviewNoUpgrade in manifests are correct.")
 		tempDataDir, err := extractManifest(oc)
-		defer os.RemoveAll(tempDataDir)
+		defer func() { o.Expect(os.RemoveAll(tempDataDir)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestDir := filepath.Join(tempDataDir, "manifest")
-		featuresetTechPreviewManifest, err := exec.Command("bash", "-c", fmt.Sprintf(
-			"grep -rl 'release.openshift.io/feature-set: .*TechPreviewNoUpgrade.*' %s|grep 'clusteroperator.yaml'", manifestDir)).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd := fmt.Sprintf("grep -rl 'release.openshift.io/feature-set: .*TechPreviewNoUpgrade.*' %s|grep 'clusteroperator.yaml'", manifestDir)
+		featuresetTechPreviewManifest, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Command: \"%s\" returned error: %s", cmd, string(featuresetTechPreviewManifest))
 		tpOperatorFilePaths := strings.Split(strings.TrimSpace(string(featuresetTechPreviewManifest)), "\n")
 		o.Expect(len(tpOperatorFilePaths)).To(o.Equal(len(tpOperator)))
 		e2e.Logf("Expected number of cluster operator manifest files with correct annotation found!")
@@ -1141,16 +1129,16 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		exutil.SkipBaselineCaps(oc, "None, v4.11")
 		g.By("Get the strategy for openshift-insights/insights-operator in manifest")
 		tempDataDir, err := extractManifest(oc)
-		defer os.RemoveAll(tempDataDir)
+		defer func() { o.Expect(os.RemoveAll(tempDataDir)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestDir := filepath.Join(tempDataDir, "manifest")
 		namespace, name := "openshift-insights", "insights-operator"
 		cmd := fmt.Sprintf(
 			"grep -rlZ 'kind: Deployment' %s | xargs -0 grep -l 'name: %s' | xargs grep strategy -A1 | sed -n 2p | cut -f2 -d ':'",
 			manifestDir, name)
-		e2e.Logf(cmd)
-		out, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("executing: bash -c %s", cmd)
+		out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Command: \"%s\" returned error: %s", cmd, string(out))
 		o.Expect(out).NotTo(o.BeEmpty())
 		expectStrategy := strings.TrimSpace(string(out))
 		e2e.Logf(expectStrategy)
@@ -1181,14 +1169,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			curStrategy, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args("deployment", name, "-o=jsonpath={.spec.strategy}", "-n", namespace).Output()
 			if err != nil {
-				e2e.Logf("oc get deployment %s returned error:", name)
-				return false, err
+				return false, fmt.Errorf("oc get deployment %s returned error: %v", name, err)
 			}
-			if strings.Contains(string(curStrategy), expectStrategy) {
-				return true, nil
-			}
-			return false, nil
+			return strings.Contains(curStrategy, expectStrategy), nil
 		}); pollErr != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", name, "-o", "yaml").Execute()
 			//If the strategy is not reverted, manually change it back
 			if expectStrategy == "Recreate" {
 				patch = []JSONp{
@@ -1208,7 +1194,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	g.It("Longduration-NonPreRelease-Author:evakhoni-Medium-48247-Prometheus is able to scrape metrics from the CVO after rotation of the signer ca in openshift-service-ca [Disruptive]", func() {
 
 		g.By("Check for alerts Before signer ca rotation.")
-		alertCVODown := getAlertByName(oc, "ClusterVersionOperatorDown")
+		alertCVODown := getAlert(oc, ".labels.alertname == \"ClusterVersionOperatorDown\"")
 		alertTargetDown := getAlert(oc, ".labels.alertname == \"TargetDown\" and .labels.service == \"cluster-version-operator\"")
 		o.Expect(alertCVODown).To(o.BeNil())
 		o.Expect(alertTargetDown).To(o.BeNil())
@@ -1217,24 +1203,26 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		result, err := oc.AsAdmin().WithoutNamespace().Run("delete").
 			Args("secret/signing-key", "-n", "openshift-service-ca").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(result)
+		e2e.Logf("delete returned: %s", result)
 		o.Expect(result).To(o.ContainSubstring("deleted"))
 
 		g.By("Check new signing-key is recreated")
-		// supposed to fail until available so suppressing stderr and return code
-		err = waitForCondition(3, 30, "signing-key",
-			"oc -n openshift-service-ca get secret/signing-key -ojsonpath='{.metadata.name}' 2>/dev/null; :")
-		exutil.AssertWaitPollNoErr(err, "signing-key not recreated within 30s")
+		exutil.AssertWaitPollNoErr(wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+			// supposed to fail until available so polling and suppressing the error
+			out, _ := exec.Command(
+				"bash", "-c", "oc -n openshift-service-ca get secret/signing-key -o jsonpath='{.metadata.name}'").Output()
+			e2e.Logf("signing-key name: %s", string(out))
+			return strings.Contains(string(out), "signing-key"), nil
+		}), "signing-key not recreated within 30s")
 
 		g.By("Wait for Prometheus route to be available")
 		// firstly wait until route is unavailable
 		err = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
-			_, cmderr := exec.Command("bash", "-c", "oc get route prometheus-k8s -n openshift-monitoring").Output()
+			out, cmderr := exec.Command("bash", "-c", "oc get route prometheus-k8s -n openshift-monitoring").CombinedOutput()
 			if cmderr != nil {
 				// oc get route returns "exit status 1" once unavailable
 				if !strings.Contains(cmderr.Error(), "exit status 1") {
-					e2e.Logf("oc get route prometheus-k8s returned different unexpected error:")
-					return false, cmderr
+					return false, fmt.Errorf("oc get route prometheus-k8s returned different unexpected error: %v\n%s", cmderr, string(out))
 				}
 				return true, nil
 			}
@@ -1245,17 +1233,19 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			o.Expect(err.Error()).To(o.ContainSubstring("timed out waiting for the condition"))
 		}
 		// wait until available again
-		// supposed to fail until available so suppressing stderr and return code
-		err = waitForCondition(10, 600, "True",
-			"oc get route prometheus-k8s -n openshift-monitoring -o"+
-				"jsonpath='{.status.ingress[].conditions[].status}' 2>/dev/null; :")
-		exutil.AssertWaitPollNoErr(err, "Prometheus route is unavailable for 10m")
+		exutil.AssertWaitPollNoErr(wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+			// supposed to fail until available so polling and suppressing the error
+			out, _ := exec.Command(
+				"bash", "-c", "oc get route prometheus-k8s -n openshift-monitoring -o jsonpath='{.status.ingress[].conditions[].status}'").Output()
+			e2e.Logf("prometheus route status: '%s'", string(out))
+			return strings.Contains(string(out), "True"), nil
+		}), "Prometheus route is unavailable for 10m")
 
-		g.By("Check CVO accessable by Prometheus - After signer ca rotation.")
+		g.By("Check CVO accessible by Prometheus - After signer ca rotation.")
 		seenAlertCVOd, seenAlertTD := false, false
 		// alerts may appear within first 5 minutes, and fire after 10 more mins
 		err = wait.Poll(1*time.Minute, 15*time.Minute, func() (bool, error) {
-			alertCVODown = getAlertByName(oc, "ClusterVersionOperatorDown")
+			alertCVODown = getAlert(oc, ".labels.alertname == \"ClusterVersionOperatorDown\"")
 			alertTargetDown = getAlert(oc, ".labels.alertname == \"TargetDown\" and .labels.service == \"cluster-version-operator\"")
 			if alertCVODown != nil {
 				e2e.Logf("alert ClusterVersionOperatorDown found - checking state..")
@@ -1301,7 +1291,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			origChannel, err := getCVObyJP(oc, ".spec.channel")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("Original upstream:%s, original channel:%s", origUpstream, origChannel)
+			e2e.Logf("Original upstream: %s, original channel: %s", origUpstream, origChannel)
 			defer restoreCVSpec(origUpstream, origChannel, oc)
 
 			g.By("Patch upstream")
@@ -1309,12 +1299,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			ctx := context.Background()
 			client, err := storage.NewClient(ctx)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			defer client.Close()
+			defer func() { o.Expect(client.Close()).NotTo(o.HaveOccurred()) }()
 
 			graphURL, bucket, object, targetVersion, targetPayload, err = buildGraph(
 				client, oc, projectID, "cincy-source-not-in-graph.json")
-			defer DeleteBucket(client, bucket)
-			defer DeleteObject(client, bucket, object)
+			defer func() { o.Expect(DeleteBucket(client, bucket)).NotTo(o.HaveOccurred()) }()
+			defer func() { o.Expect(DeleteObject(client, bucket, object)).NotTo(o.HaveOccurred()) }()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
@@ -1325,19 +1315,14 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 			g.By("Check RetrievedUpdates reason VersionNotFound after patching upstream")
 			jsonpath = ".status.conditions[?(.type=='RetrievedUpdates')].reason"
-			err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+			exutil.AssertWaitPollNoErr(wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 				reason, err := getCVObyJP(oc, jsonpath)
 				if err != nil {
-					e2e.Logf("get CVO RetrievedUpdates condition returned error:")
-					return false, err
+					return false, fmt.Errorf("get CVO RetrievedUpdates condition returned error: %v", err)
 				}
 				e2e.Logf("received reason: '%s'", reason)
-				if strings.Contains(reason, "VersionNotFound") {
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "Failed to check RetrievedUpdates!=True")
+				return strings.Contains(reason, "VersionNotFound"), nil
+			}), "Failed to check RetrievedUpdates!=True")
 		}
 
 		g.By("Give appropriate error on oc adm upgrade --to")
@@ -1355,41 +1340,54 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Find enable-auto-update index in deployment")
 		origAutoState, autoUpdIndex, err := getCVOcontArg(oc, "enable-auto-update")
+		defer func() {
+			out, err := patchCVOcontArg(oc, autoUpdIndex, fmt.Sprintf("--enable-auto-update=%s", origAutoState))
+			o.Expect(err).NotTo(o.HaveOccurred(), out)
+		}()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer patchCVOcontArg(oc, autoUpdIndex, fmt.Sprintf("--enable-auto-update=%s", origAutoState))
 		_, err = patchCVOcontArg(oc, autoUpdIndex, "--enable-auto-update=true")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// recovery: once enable-auto-update is reconciled (~30sec), deployment becomes unavailable for up to CVO minimum reconcile period (~2-4min)
+		defer func() {
+			if err = waitForCondition(oc, 30, 240, "True",
+				"get", "-n", "openshift-cluster-version", "deployments/cluster-version-operator", "-o", "jsonpath={.status.conditions[?(.type=='Available')].status}"); err != nil {
+				//dump contents to log
+				_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-cluster-version", "deployments/cluster-version-operator", "-o", "yaml").Execute()
+				exutil.AssertWaitPollNoErr(err, "deployments/cluster-version-operator not available after 4m")
+			}
+		}()
+
+		defer func() {
+			exutil.AssertWaitPollNoErr(wait.PollImmediate(10*time.Second, 30*time.Second, func() (bool, error) {
+				depArgs, _, err := getCVOcontArg(oc, "enable-auto-update")
+				if err != nil {
+					return false, fmt.Errorf("get CVO container args returned error: %v", err)
+				}
+				e2e.Logf("argument: %s", depArgs)
+				return strings.Contains(depArgs, "false"), nil
+			}), "Failed waiting for enable-auto-update=false")
+		}()
+
 		g.By("Wait for enable-auto-update")
-		err = wait.PollImmediate(2*time.Second, 10*time.Second, func() (bool, error) {
+		exutil.AssertWaitPollNoErr(wait.PollImmediate(2*time.Second, 10*time.Second, func() (bool, error) {
 			depArgs, _, err := getCVOcontArg(oc, "enable-auto-update")
 			if err != nil {
-				e2e.Logf("get CVO container args returned error:")
-				return false, err
+				return false, fmt.Errorf("get CVO container args returned error: %v", err)
 			}
-			if strings.Contains(depArgs, "true") {
-				//e2e.Logf(depArgs)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Failed waiting for enable-auto-update=true")
+			e2e.Logf("argument: %s", depArgs)
+			return strings.Contains(depArgs, "true"), nil
+		}), "Failed waiting for enable-auto-update=true")
 
 		g.By("Check cvo can not get available update after setting enable-auto-update")
-		jsonpath = ".status.conditions[?(.type=='RetrievedUpdates')].reason"
-		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
-			reason, err := getCVObyJP(oc, jsonpath)
+		exutil.AssertWaitPollNoErr(wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+			reason, err := getCVObyJP(oc, ".status.conditions[?(.type=='RetrievedUpdates')].reason")
 			if err != nil {
-				e2e.Logf("get CVO RetreivedUpdates condition returned error:")
-				return false, err
+				return false, fmt.Errorf("get CVO RetreivedUpdates condition returned error: %v", err)
 			}
-			if strings.Contains(reason, "VersionNotFound") {
-				e2e.Logf("success - found reason: %s", reason)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Failed to check cvo can not get available update")
+			e2e.Logf("reason: %s", reason)
+			return strings.Contains(reason, "VersionNotFound"), nil
+		}), "Failed to check cvo can not get available update")
 
 		g.By("Check availableUpdates is null")
 		availableUpdates, err := getCVObyJP(oc, ".status.availableUpdates")
@@ -1414,13 +1412,16 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--allow-explicit-upgrade", "--force", "--to-image", fakeReleasePayload).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer recoverReleaseAccepted(oc)
+		defer func() { o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred()) }()
 
 		g.By("check ReleaseAccepted=False")
 		// usually happens quicker, but 8 minutes is safe deadline
-		err = waitForCondition(30, 480, "False",
-			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
-		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
+		if err = waitForCondition(oc, 30, 480, "False",
+			"get", "clusterversion", "version", "-o", "jsonpath={.status.conditions[?(@.type=='ReleaseAccepted')].status}"); err != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
+		}
 
 		g.By("check ReleaseAccepted False have correct message")
 		message, err := getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
@@ -1431,18 +1432,23 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("check version pod in ImagePullBackOff")
 		// swinging betseen Init:0/4 Init:ErrImagePull and Init:ImagePullBackOff so need a few retries
-		err = waitForCondition(5, 30, "ImagePullBackOff",
-			"oc get -n openshift-cluster-version pods -ojsonpath='{.items[*].status.initContainerStatuses[0].state.waiting.reason}'")
-		exutil.AssertWaitPollNoErr(err, "ImagePullBackOff not detected in 30s")
+		if err = waitForCondition(oc, 5, 30, "ImagePullBackOff",
+			"get", "-n", "openshift-cluster-version", "pods", "-o", "jsonpath={.items[*].status.initContainerStatuses[0].state.waiting.reason}"); err != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-cluster-version", "pods", "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, "ImagePullBackOff not detected in 30s")
+		}
 
 		g.By("Clear above unstarted upgrade")
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check ReleaseAccepted=True")
-		err = waitForCondition(30, 480, "True",
-			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
-		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
+		if err = waitForCondition(oc, 30, 480, "True",
+			"get", "clusterversion", "version", "-o", "jsonpath={.status.conditions[?(@.type=='ReleaseAccepted')].status}"); err != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
+		}
 
 		g.By("check ReleaseAccepted False have correct message")
 		message, err = getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
@@ -1450,9 +1456,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(message).To(o.ContainSubstring(regexp.MustCompile(` architecture=".*"`).ReplaceAllString(originalMessage, ""))) // until OCPBUGS-4032 is fixed
 
 		g.By("no version pod in ImagePullBackOff")
-		err = waitForCondition(5, 30, "",
-			"oc get -n openshift-cluster-version pods -ojsonpath='{.items[*].status.initContainerStatuses[0].state.waiting.reason}'")
-		exutil.AssertWaitPollNoErr(err, "ImagePullBackOff not cleared in 30s")
+		if err = waitForCondition(oc, 5, 30, "",
+			"get", "-n", "openshift-cluster-version", "pods", "-o", "jsonpath={.items[*].status.initContainerStatuses[0].state.waiting.reason}"); err != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-cluster-version", "pods", "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, "ImagePullBackOff not cleared in 30s")
+		}
 	})
 
 	//author: jiajliu@redhat.com
@@ -1485,36 +1494,40 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--allow-explicit-upgrade", "--to-image", oldReleasePayload).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer recoverReleaseAccepted(oc)
+		defer func() { o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred()) }()
 
-		err = waitForCondition(30, 480, "False",
-			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
-		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
+		if err = waitForCondition(oc, 30, 480, "False",
+			"get", "clusterversion", "version", "-o", "jsonpath={.status.conditions[?(@.type=='ReleaseAccepted')].status}"); err != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
+		}
 
 		g.By("Change strategy.rollingUpdate.maxUnavailable to be 50%.")
 		_, err = ocJSONPatch(oc, resourceNamespace, resourceKindName, []JSONp{
 			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "50%"},
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer ocJSONPatch(oc, resourceNamespace, resourceKindName, []JSONp{
-			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "25%"},
-		})
+		defer func() {
+			out, err := ocJSONPatch(oc, resourceNamespace, resourceKindName, []JSONp{
+				{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "25%"},
+			})
+			o.Expect(err).NotTo(o.HaveOccurred(), out)
+		}()
 
 		g.By("Check the deployment was reconciled back.")
-		err = wait.Poll(30*time.Second, 20*time.Minute, func() (bool, error) {
+		exutil.AssertWaitPollNoErr(wait.Poll(30*time.Second, 20*time.Minute, func() (bool, error) {
 			valueMaxUnavailable, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args(resourceKindName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
 			if err != nil {
-				e2e.Logf("oc get %s -n %s returned error:", resourceKindName, resourceNamespace)
-				return false, err
+				return false, fmt.Errorf("oc get %s -n %s returned error: %v", resourceKindName, resourceNamespace, err)
 			}
 			if strings.Compare(valueMaxUnavailable, defaultValueMaxUnavailable) != 0 {
 				e2e.Logf("valueMaxUnavailable is %v. Waiting for deployment being reconciled...", valueMaxUnavailable)
 				return false, nil
 			}
 			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "the deployment was not reconciled back in 20min.")
+		}), "the deployment was not reconciled back in 20min.")
 	})
 
 	//author: jiajliu@redhat.com
@@ -1528,11 +1541,14 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		err := oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--allow-explicit-upgrade", "--to-image", fakeReleasePayload).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer recoverReleaseAccepted(oc)
+		defer func() { o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred()) }()
 
-		err = waitForCondition(30, 480, "False",
-			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
-		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
+		if err = waitForCondition(oc, 30, 480, "False",
+			"get", "clusterversion", "version", "-o", "jsonpath={.status.conditions[?(@.type=='ReleaseAccepted')].status}"); err != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
+		}
 
 		g.By("Disable deployment/network-operator's management through setting cv.overrides.")
 		err = setCVOverrides(oc, resourceKind, resourceName, resourceNamespace)
@@ -1551,17 +1567,19 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "50%"},
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer ocJSONPatch(oc, resourceNamespace, fmt.Sprintf("%s/%s", resourceKind, resourceName), []JSONp{
-			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", 1},
-		})
+		defer func() {
+			out, err := ocJSONPatch(oc, resourceNamespace, fmt.Sprintf("%s/%s", resourceKind, resourceName), []JSONp{
+				{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", 1},
+			})
+			o.Expect(err).NotTo(o.HaveOccurred(), out)
+		}()
 
 		g.By("Check the deployment will not be reconciled back.")
 		err = wait.Poll(30*time.Second, 8*time.Minute, func() (bool, error) {
 			valueMaxUnavailable, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args(resourceKind, resourceName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
 			if err != nil {
-				e2e.Logf("oc get %s %s -n %s returned error:", resourceKind, resourceName, resourceNamespace)
-				return false, err
+				return false, fmt.Errorf("oc get %s %s -n %s returned error: %v", resourceKind, resourceName, resourceNamespace, err)
 			}
 			if strings.Compare(valueMaxUnavailable, defaultValueMaxUnavailable) == 0 {
 				e2e.Logf("valueMaxUnavailable is %v. Waiting for deployment being reconciled...", valueMaxUnavailable)

@@ -23,7 +23,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-// JSONp defins a json struct
+// JSONp defines a json struct
 type JSONp struct {
 	Oper string      `json:"op"`
 	Path string      `json:"path"`
@@ -136,11 +136,11 @@ func waitForAlert(oc *exutil.CLI, alertString string, interval time.Duration, ti
 	return true, annoMap, nil
 }
 
-// Check if operator's condition is expected until timeout or return ture or an error happened.
-func waitForCondition(interval time.Duration, timeout time.Duration, expectedCondition string, parameters string) error {
-	e2e.Logf("Checking condition for: %s", parameters)
+// Check if operator's condition is expected until timeout or return true or an error happened.
+func waitForCondition(oc *exutil.CLI, interval time.Duration, timeout time.Duration, expectedCondition string, args ...string) error {
+	e2e.Logf("Checking condition for: oc %v", args)
 	err := wait.Poll(interval*time.Second, timeout*time.Second, func() (bool, error) {
-		output, err := exec.Command("bash", "-c", parameters).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run(args[0]).Args(args[1:]...).Output()
 		if err != nil {
 			e2e.Logf("Checking condition error:%v", err)
 			return false, err
@@ -176,10 +176,10 @@ func getAlert(oc *exutil.CLI, alertSelector string) map[string]interface{} {
 		return nil
 	}
 	command := fmt.Sprintf("curl -skH \"Authorization: Bearer %s\" https://%s/api/v1/alerts"+
-		" | jq -r '.data.alerts[]|select(%s)'", token, url, alertSelector)
+		" | jq -r '[.data.alerts[]|select(%s)][0]'", token, url, alertSelector)
 	output, err := exec.Command("bash", "-c", command).Output()
 	if err != nil {
-		e2e.Logf("Getting alert error:%v", err)
+		e2e.Logf("Getting alert error:%v for %s", err, strings.ReplaceAll(command, token[5:], "*****"))
 		return nil
 	}
 	if len(output) == 0 {
@@ -188,7 +188,7 @@ func getAlert(oc *exutil.CLI, alertSelector string) map[string]interface{} {
 	}
 	err = json.Unmarshal(output, &alertInfo)
 	if err != nil {
-		e2e.Logf("Unmarshal alert error:%v", err)
+		e2e.Logf("Unmarshal alert error:%v in %s for %s", err, output, strings.ReplaceAll(command, token[5:], "*****"))
 		return nil
 	}
 	e2e.Logf("Alert found: %v", alertInfo)
@@ -196,8 +196,8 @@ func getAlert(oc *exutil.CLI, alertSelector string) map[string]interface{} {
 }
 
 // Get detail alert info by alertname
-func getAlertByName(oc *exutil.CLI, alertName string) map[string]interface{} {
-	return getAlert(oc, fmt.Sprintf(".labels.alertname == \"%s\"", alertName))
+func getAlertByName(oc *exutil.CLI, alertName string, name string) map[string]interface{} {
+	return getAlert(oc, fmt.Sprintf(".labels.alertname == \"%s\" and .labels.name == \"%s\"", alertName, name))
 }
 
 // CreateBucket creates a new bucket in the gcs
@@ -431,10 +431,9 @@ func buildGraph(client *storage.Client, oc *exutil.CLI, projectID string, graphN
 // if no need to restore, pass "nochange" to the argument(s)
 func restoreCVSpec(upstream string, channel string, oc *exutil.CLI) {
 	e2e.Logf("Restoring upgrade graph to '%s' channel to '%s'", upstream, channel)
-
 	if channel != "nochange" {
-		oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "--allow-explicit-channel", channel).Execute()
-		exec.Command("bash", "-c", "sleep 5").Output()
+		_ = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "--allow-explicit-channel", channel).Execute()
+		time.Sleep(5 * time.Second)
 		currChannel, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[].spec.channel}").Output()
 		if currChannel != channel {
 			e2e.Logf("Error on channel recovery, expected %s, but got %s", channel, currChannel)
@@ -443,9 +442,9 @@ func restoreCVSpec(upstream string, channel string, oc *exutil.CLI) {
 
 	if upstream != "nochange" {
 		if upstream == "" {
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion/version", "--type=json", "-p", "[{\"op\":\"remove\", \"path\":\"/spec/upstream\"}]").Execute()
+			_ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion/version", "--type=json", "-p", "[{\"op\":\"remove\", \"path\":\"/spec/upstream\"}]").Execute()
 		} else {
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion/version", "--type=merge", "--patch", fmt.Sprintf("{\"spec\":{\"upstream\":\"%s\"}}", upstream)).Execute()
+			_ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion/version", "--type=merge", "--patch", fmt.Sprintf("{\"spec\":{\"upstream\":\"%s\"}}", upstream)).Execute()
 		}
 		currUpstream, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[].spec.upstream}").Output()
 		if currUpstream != upstream {
@@ -642,35 +641,6 @@ func changeCap(oc *exutil.CLI, base bool, cap interface{}) (string, error) {
 	return ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", spec, cap}})
 }
 
-// func getCapsManifest(oc *exutil.CLI) ([]string, error) {
-// 	tempDataDir, err := extractManifest(oc)
-// 	defer os.RemoveAll(tempDataDir)
-// 	if err != nil {
-// 		return []string{}, err
-// 	}
-// 	manifestDir := filepath.Join(tempDataDir, "manifest")
-// 	cmd := fmt.Sprintf("grep 'capability.openshift.io/name' -hr %s | cut -d ':' -f2  | tr -d '\"' | sort | uniq", manifestDir)
-// 	out, err := exec.Command("bash", "-c", cmd).Output()
-// 	if err != nil {
-// 		return []string{}, err
-// 	}
-// 	capStr := strings.ReplaceAll(string(out), " ", "")
-// 	knownCaps := regexp.MustCompile("[\n+]").Split(capStr, -1)
-// 	inResult := make(map[string]bool)
-// 	var result []string
-// 	for _, str := range knownCaps {
-// 		if str == "" {
-// 			continue
-// 		}
-// 		if _, ok := inResult[str]; !ok {
-// 			inResult[str] = true
-// 			result = append(result, str)
-// 		}
-// 	}
-// 	sort.Strings(result)
-// 	return result, nil
-// }
-
 // waits for string 'message' to appear in CVO 'jsonpath'.
 // or waits for message to disappear if waitingToAppear=false.
 // returns error if any.
@@ -686,7 +656,9 @@ func waitForCVOStatus(oc *exutil.CLI, interval time.Duration, timeout time.Durat
 	})
 	if err != nil {
 		if strings.Compare(err.Error(), "timed out waiting for the condition") == 0 {
-			err = fmt.Errorf("reached time limit of %s waiting for CVO %sto contain '%s', dumping output:\n%s", timeout*time.Second, prefix, message, out)
+			out, _ = getCVObyJP(oc, ".status.conditions")
+			err = fmt.Errorf("reached time limit of %s waiting for CVO %s %sto contain '%s', dumping conditions:\n%s",
+				timeout*time.Second, strings.NewReplacer(".status.conditions[?(.type=='", "", "')].", " ").Replace(jsonpath), prefix, message, out)
 			return
 		}
 		err = fmt.Errorf("while waiting for CVO %sto contain '%s', an error was received: %s %s", prefix, message, out, err.Error())
@@ -827,10 +799,10 @@ func recoverReleaseAccepted(oc *exutil.CLI) (err error) {
 		e2e.Logf(err.Error())
 		return err
 	}
-	if err = waitForCondition(30, 480, "True",
-		"oc get clusterversion version -o jsonpath=\"{.status.conditions[?(@.type=='ReleaseAccepted')].status}\""); err != nil {
+	if err = waitForCondition(oc, 30, 480, "True",
+		"get", "clusterversion", "version", "-o", "jsonpath={.status.conditions[?(@.type=='ReleaseAccepted')].status}"); err != nil {
 		if strings.Compare(err.Error(), "timed out waiting for the condition") == 0 {
-			err = fmt.Errorf("ReleaseAccepted condition is not false in 8m")
+			err = fmt.Errorf("ReleaseAccepted condition is not back to True within 8m")
 		} else {
 			err = fmt.Errorf("waiting for ReleaseAccepted returned error: %s", err.Error())
 		}
