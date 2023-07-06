@@ -3218,24 +3218,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 	})
 
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-High-40317-Check CatalogSources index images [Flaky]", func() {
-		exutil.SkipBaselineCaps(oc, "None")
-		clusterVersion, _, err := exutil.GetClusterVersion(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		cs := [...]string{"certified-operators", "community-operators", "redhat-operators"}
-
-		for _, v := range cs {
-			msgCertified, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", v, "-o=jsonpath={.spec.image}", "-n", "openshift-marketplace").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			splittedCertifiedVersion := strings.Split(msgCertified, ":")[1]
-			certifiedVersion := splittedCertifiedVersion[1:]
-			o.Expect(clusterVersion).To(o.ContainSubstring(certifiedVersion))
-
-		}
-	})
-
-	// author: bandrade@redhat.com
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-32613-Operators won't install if the CSV dependency is already installed", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
@@ -11830,22 +11812,11 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// OCP-45359 author: jitli@redhat.com
 	g.It("NonHyperShiftHOST-Author:jitli-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags [Flaky]", func() {
+
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.By("step: get version")
-		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
-		if err != nil {
-			e2e.Failf("Fail to get the OCP version")
-		}
-		v, _ := semver.ParseTolerant(currentVersion)
-		majorVersion := strconv.FormatUint(v.Major, 10)
-		minorVersion := strconv.FormatUint(v.Minor, 10)
-		tag := "v" + majorVersion + "." + minorVersion
-		minorVersionPre, err := strconv.Atoi(minorVersion)
-		if err != nil {
-			e2e.Failf("Fail to get the OCP version")
-		}
-		tagPre := "v" + majorVersion + "." + strconv.Itoa(minorVersionPre-1)
-		e2e.Logf(tag + tagPre)
+		clusterVersion, _, err := exutil.GetClusterVersion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("step: oc get catalogsource")
 		catsrcs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", "openshift-marketplace").Output()
@@ -11856,12 +11827,14 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		for _, catalogSource := range defaultCatsrcs {
 			o.Expect(catsrcs).To(o.ContainSubstring(catalogSource))
 			exutil.By(fmt.Sprintf("step: check image tag of %s", catalogSource))
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catalogSource, "-n", "openshift-marketplace", "-o=jsonpath={.spec.image}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(output, tag) || strings.Contains(output, tagPre) {
-				e2e.Logf("%s", output)
+			indexImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catalogSource, "-n", "openshift-marketplace", "-o=jsonpath={.spec.image}").Output()
+			if err != nil {
+				e2e.Failf("fail to get %s's indeximage, error:%v", catalogSource, err)
+			}
+			if strings.Contains(indexImage, clusterVersion) {
+				e2e.Logf("%s", indexImage)
 			} else {
-				e2e.Failf("%s not contains %s or %s", output, tag, tagPre)
+				e2e.Failf("The cluster version is: %s, the indexImage version is: %s", clusterVersion, indexImage)
 			}
 		}
 	})

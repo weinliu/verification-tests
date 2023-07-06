@@ -4773,25 +4773,4 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("ConnectedOnly-Author:jitli-Critical-64912-Operators index image tag matched ocp release version", func() {
-
-		g.By("check the operators index image tag")
-		catalogsources := []string{
-			"certified-operators",
-			"community-operators",
-			"redhat-operators",
-			"redhat-marketplace",
-		}
-		for _, catalogsource := range catalogsources {
-			indexImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catalogsource, "-n", "openshift-marketplace", "-o=jsonpath={.spec.image}").Output()
-			if err != nil {
-				g.Skip(fmt.Sprintf("fail to get %s's indeximage, error:%v", catalogsource, err))
-			}
-			if !strings.Contains(indexImage, ocpversion) {
-				e2e.Failf("The %s image: %v", catalogsource, indexImage)
-			}
-		}
-	})
-
 })
