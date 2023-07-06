@@ -2494,7 +2494,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42695-Verify the manual remediation for rule ocp4-moderate-compliancesuite-exists works as expected [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42695-Verify the manual remediation for rule ocp4-moderate-scansettingbinding-exists works as expected [Serial]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "moderate-test" + getRandomString(),
 			namespace:       "",
@@ -2522,11 +2522,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.status.phase}"}).check(oc)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
-		g.By("Verify 'ocp4-moderate-compliancesuite-exists' rule status through compliancecheck result.. !!!\n")
+		g.By("Verify 'ocp4-moderate-scansettingbinding-exists' rule status through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			"ocp4-moderate-compliancesuite-exists", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+			"ocp4-moderate-scansettingbinding-exists", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
-		g.By("The ocp-42695 The ComplianceSuite object exist and operator is successfully installed... !!!!\n ")
+		g.By("The ocp-42695 The ScanSettingBinding object exist and operator is successfully installed... !!!!\n ")
 	})
 
 	// author: pdhamdhe@redhat.com
