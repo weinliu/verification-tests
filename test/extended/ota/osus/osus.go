@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	arch "github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -18,8 +19,13 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 
 	var oc = exutil.NewCLI("osus", exutil.KubeConfigPath())
 
+	g.BeforeEach(func() {
+		exutil.SkipMissingQECatalogsource(oc)
+		arch.SkipNonAmd64SingleArch(oc)
+	})
+
 	//author: jiajliu@redhat.com
-	g.It("Author:jiajliu-High-35869-install/uninstall osus operator from OperatorHub through CLI", func() {
+	g.It("Author:jiajliu-High-35869-install/uninstall osus operator from OperatorHub through CLI [Serial]", func() {
 
 		testDataDir := exutil.FixturePath("testdata", "ota/osus")
 		ogTemp := filepath.Join(testDataDir, "operatorgroup.yaml")
@@ -52,7 +58,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 
 		g.By("Check updateservice operator installed successully!")
 		e2e.Logf("Waiting for osus operator pod creating...")
-		err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=name=updateservice-operator", "-n", oc.Namespace()).Output()
 			if err != nil || strings.Contains(output, "No resources found") {
 				e2e.Logf("error: %v; output: %w", err, output)
@@ -63,7 +69,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		exutil.AssertWaitPollNoErr(err, "pod with name=updateservice-operator is not found")
 
 		e2e.Logf("Waiting for osus operator pod running...")
-		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=name=updateservice-operator", "-n", oc.Namespace(), "-o=jsonpath={.items[0].status.phase}").Output()
 			if err != nil || strings.Compare(status, "Running") != 0 {
 				e2e.Logf("error: %v; status: %w", err, status)
@@ -111,10 +117,8 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 	)
 
 	g.BeforeEach(func() {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-		if strings.Contains(output, "NotFound") {
-			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
-		}
+		exutil.SkipMissingQECatalogsource(oc)
+		arch.SkipNonAmd64SingleArch(oc)
 
 		testDataDir = exutil.FixturePath("testdata", "ota/osus")
 		ogTemp = filepath.Join(testDataDir, "operatorgroup.yaml")

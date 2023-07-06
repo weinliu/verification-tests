@@ -163,3 +163,11 @@ func IsSTSCluster(oc *CLI) bool {
 	o.Expect(extractErr).ShouldNot(o.HaveOccurred(), "Failed to extract the temp credentials for checking whether the cluster is using STS mode")
 	return strings.Contains(tempCredentials, "web_identity_token_file")
 }
+
+// Skip the test if there is not catalogsource/qe-app-registry in the cluster
+func SkipMissingQECatalogsource(oc *CLI) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+	if strings.Contains(output, "NotFound") || err != nil {
+		g.Skip("Skip the test since no catalogsource/qe-app-registry in the cluster")
+	}
+}
