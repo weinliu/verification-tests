@@ -30,7 +30,7 @@ class SummaryClient:
                 "Cluster_Operator":"",
                 "Azure":"",
                 "Network_Edge":"@ne-qe-team ",
-                "ETCD":"",
+                "ETCD":"@etcd-qe-team ",
                 "Installer":"",
                 "Portfolio_Integration":"",
                 "Service_Development_A":"",

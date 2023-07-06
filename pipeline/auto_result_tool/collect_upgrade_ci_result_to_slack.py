@@ -31,7 +31,7 @@ class SummaryClient:
                 "Cluster_Operator":"@hive-qe-team",
                 "Azure":"",
                 "Network_Edge":"@ne-qe-team",
-                "ETCD":"@geliu",
+                "ETCD":"@etcd-qe-team",
                 "Installer":"@installer-qe-team",
                 "Portfolio_Integration":"",
                 "Service_Development_A":"@yasun",
