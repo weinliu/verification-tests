@@ -78,9 +78,11 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 
 		expectedAlertAnnotationDescription := fmt.Sprintf("Reboot failed on %s , update may be blocked. For more details:  oc logs -f -n openshift-machine-config-operator machine-config-daemon",
 			node.GetName())
+		expectedAlertAnnotationSummary := "Alerts the user that a node failed to reboot one or more times over a span of 5 minutes."
 
 		expectedAlertAnnotations := expectedAlertValues{
-			"message": o.ContainSubstring(expectedAlertAnnotationDescription),
+			"description": o.ContainSubstring(expectedAlertAnnotationDescription),
+			"summary":     o.Equal(expectedAlertAnnotationSummary),
 		}
 
 		params := checkFiredAlertParams{
@@ -149,9 +151,11 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 
 		expectedAlertAnnotationDescription := fmt.Sprintf("Error detected in pivot logs on %s , upgrade may be blocked. For more details:  oc logs -f -n openshift-machine-config-operator machine-config-daemon-",
 			node.GetName())
+		expectedAlertAnnotationSummary := "Alerts the user when an error is detected upon pivot. This triggers if the pivot errors are above zero for 2 minutes."
 
 		expectedAlertAnnotations := expectedAlertValues{
-			"message": o.ContainSubstring(expectedAlertAnnotationDescription),
+			"description": o.ContainSubstring(expectedAlertAnnotationDescription),
+			"summary":     o.Equal(expectedAlertAnnotationSummary),
 		}
 
 		params := checkFiredAlertParams{
@@ -275,7 +279,7 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 		exutil.By(fmt.Sprintf("Verfiy that the alert is not removed after %s", params.stillPresentDuration))
 		o.Consistently(getAlertsByName, params.stillPresentDuration, params.stillPresentDuration/3).WithArguments(oc, params.expectedAlertName).
 			Should(o.HaveLen(1),
-				"Expected % alert to be present, but the alert was removed for no reason!", params.expectedAlertName)
+				"Expected %s alert to be present, but the alert was removed for no reason!", params.expectedAlertName)
 		logger.Infof("OK!\n")
 	}
 
@@ -291,6 +295,6 @@ func checkFixedAlert(oc *exutil.CLI, mcp *MachineConfigPool, expectedAlertName s
 	exutil.By("Verfiy that the alert is not triggered anymore")
 	o.Eventually(getAlertsByName, "5m", "20s").WithArguments(oc, expectedAlertName).
 		Should(o.HaveLen(0),
-			"Expected % alert to be removed after the problem is fixed!", expectedAlertName)
+			"Expected %s alert to be removed after the problem is fixed!", expectedAlertName)
 	logger.Infof("OK!\n")
 }
