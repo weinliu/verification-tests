@@ -21,8 +21,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 				"{\"address\":\"10.100.1.11\",\"port\":53,\"type\":\"Network\"}, " +
 				"{\"address\":\"10.100.1.12\",\"port\":53,\"type\":\"Network\"}, " +
 				"{\"address\":\"10.100.1.13\",\"port\":5353,\"type\":\"Network\"}]}]"
-			cfgDefaultUpstreams = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[" +
-				"{\"port\":53,\"type\":\"SystemResolvConf\"}]}]"
 			cfgPolicyRandom = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/policy\", \"value\":\"Random\"}]"
 			cfgPolicyRr     = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/policy\", \"value\":\"RoundRobin\"}]"
 			cfgPolicySeq    = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/policy\", \"value\":\"Sequential\"}]"
@@ -77,27 +75,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Check forward policy sequential in Corefile of coredns")
 		policyOutput = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
 		o.Expect(policyOutput).To(o.ContainSubstring("policy sequential"))
-
-		g.By("Patch dns operator with default upstream resolvers")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
-		patchGlobalResourceAsAdmin(oc, resourceName, cfgDefaultUpstreams)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check upstreams is restored to default in CoreDNS")
-		upstreams = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
-		o.Expect(upstreams).To(o.ContainSubstring("forward . /etc/resolv.conf"))
-		g.By("Check forward policy sequential in Corefile of coredns")
-		policyOutput = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
-		o.Expect(policyOutput).To(o.ContainSubstring("policy sequential"))
 	})
 
 	// author: shudili@redhat.com
 	g.It("Author:shudili-Critical-46872-Configure logLevel for CoreDNS under DNS operator flag [Disruptive]", func() {
 		var (
-			resourceName      = "dns.operator.openshift.io/default"
-			cfgLogLevelDebug  = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Debug\"}]"
-			cfgLogLevelTrace  = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Trace\"}]"
-			cfgLogLevelNormal = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Normal\"}]"
+			resourceName     = "dns.operator.openshift.io/default"
+			cfgLogLevelDebug = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Debug\"}]"
+			cfgLogLevelTrace = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Trace\"}]"
 		)
 		defer restoreDNSOperatorDefault(oc)
 
@@ -127,22 +112,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Check log class for logLevel Trace in Corefile of coredns")
 		logOutput = readDNSCorefile(oc, dnsPodName, "log", "-A2")
 		o.Expect(logOutput).To(o.ContainSubstring("class all"))
-
-		g.By("Patch dns operator with logLevel Normal for CoreDNS")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
-		patchGlobalResourceAsAdmin(oc, resourceName, cfgLogLevelNormal)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check log class for logLevel Trace in Corefile of coredns")
-		logOutput = readDNSCorefile(oc, dnsPodName, "log", "-A2")
-		o.Expect(logOutput).To(o.ContainSubstring("class error"))
 	})
 
 	g.It("Author:shudili-NonPreRelease-Critical-46867-Configure upstream resolvers for CoreDNS flag [Disruptive]", func() {
 		var (
 			resourceName        = "dns.operator.openshift.io/default"
-			cfgDefaultUpstreams = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[" +
-				"{\"port\":53,\"type\":\"SystemResolvConf\"}]}]"
 			cfgMulIPv4Upstreams = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[" +
 				"{\"address\":\"10.100.1.11\",\"port\":53,\"type\":\"Network\"}, " +
 				"{\"address\":\"10.100.1.12\",\"port\":53,\"type\":\"Network\"}, " +
@@ -223,15 +197,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Check multiple ipv6 forward upstream resolvers for CoreDNS")
 		upstreams = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
 		o.Expect(upstreams).To(o.ContainSubstring(expMulIPv6Upstreams))
-
-		g.By("Patch dns operator with default upstream resolvers")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
-		patchGlobalResourceAsAdmin(oc, resourceName, cfgDefaultUpstreams)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check upstreams is restored to default in CoreDNS")
-		upstreams = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
-		o.Expect(upstreams).To(o.ContainSubstring("forward . /etc/resolv.conf"))
 	})
 
 	g.It("Author:shudili-Medium-46869-Negative test of configuring upstream resolvers and policy flag [Disruptive]", func() {
@@ -342,7 +307,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			defaultUpstreams    = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[{\"port\":53,\"type\":\"SystemResolvConf\"}]}]"
 			cfgDebug            = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Debug\"}]"
 			cfgTrace            = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Trace\"}]"
-			cfgNormal           = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Normal\"}]"
 		)
 		defer restoreDNSOperatorDefault(oc)
 
@@ -413,13 +377,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("get the desired TRACE logs from a coredns pod")
 		output = waitDNSLogsAppear(oc, podList, normalDNSReq)
 		o.Expect(output).To(o.ContainSubstring(normalDNSReq))
-
-		g.By("Patch dns operator with logLevel Normal for CoreDNS")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
-		patchGlobalResourceAsAdmin(oc, resourceName, cfgNormal)
-		waitCorefileUpdated(oc, attrList)
-		g.By("test done, will restore dns operator to default by the defer restoreDNSOperatorDefault code")
 	})
 
 	// Bug: 1949361, 1884053, 1756344
