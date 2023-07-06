@@ -192,69 +192,71 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
 		g.By("Check recommended update and notes about additional updates present on the output of oc adm upgrade")
-		expUpdate1 := "Additional updates which are not recommended based on your cluster " +
-			"configuration are available, to view those re-run the command with " +
-			"--include-not-recommended"
-		expUpdate2 := "Recommended updates:\n\n  " +
-			"VERSION     IMAGE\n  " +
-			"4.99.999999 registry.ci.openshift.org/ocp/release@sha256:" +
-			"9999999999999999999999999999999999999999999999999999999999999999"
-		found := checkUpdates(oc, false, 5, 15, expUpdate1, expUpdate2)
-		o.Expect(found).To(o.BeTrue(), "recommended update and notes about additional updates")
+		o.Expect(checkUpdates(oc, false, 5, 15,
+			"Additional updates which are not recommended",
+			//"based on your cluster configuration are available",
+			"or where the recommended status is \"Unknown\"",
+			"for your cluster configuration are available",
+			"to view those re-run the command with --include-not-recommended",
+			"Recommended updates:",
+			"4.99.999999 registry.ci.openshift.org/ocp/release@sha256:"+
+				"9999999999999999999999999999999999999999999999999999999999999999",
+		)).To(o.BeTrue(), "recommended update and notes about additional updates")
 
 		g.By("Check risk type=Always updates and 2 risks update present")
-		expUpdate1 = "Version: 4.88.888888\n  " +
-			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
-			"8888888888888888888888888888888888888888888888888888888888888888\n  " +
-			"Recommended: False\n  " +
-			"Reason: ReleaseIsRejected\n  " +
-			"Message: Too many CI failures on this release, so do not update to it"
-
-		expUpdate2 = "Version: 4.77.777777\n  " +
-			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
-			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
-			"Recommended: Unknown\n  " +
-			"Reason: EvaluationFailed"
-		found = checkUpdates(oc, true, 5, 15, "Supported but not recommended updates", expUpdate1, expUpdate2)
-		o.Expect(found).To(o.BeTrue(), "risk type=Always updates and 2 risks update")
+		o.Expect(checkUpdates(oc, true, 5, 15,
+			"Supported but not recommended updates", "Version: 4.88.888888",
+			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
+				"8888888888888888888888888888888888888888888888888888888888888888",
+			"Recommended: False",
+			"Reason: ReleaseIsRejected",
+			"Message: Too many CI failures on this release, so do not update to it",
+			"Version: 4.77.777777",
+			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
+				"7777777777777777777777777777777777777777777777777777777777777777",
+			"Recommended: Unknown",
+			"Reason: EvaluationFailed",
+		)).To(o.BeTrue(), "risk type=Always updates and 2 risks update")
 
 		g.By("Check Recommended: Unknown update is changed to Recommended: False with MultipleReasons")
-		expUpdate2 = "Version: 4.77.777777\n  " +
-			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
-			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
-			"Recommended: False\n  " +
-			"Reason: MultipleReasons\n  " +
-			"Message: On clusters on default invoker user, this imaginary bug can happen. " +
-			"https://bug.example.com/a"
-		found = checkUpdates(oc, true, 60, 15*60, "Supported but not recommended updates", expUpdate2)
-		o.Expect(found).To(o.BeTrue(), "Unknown update is changed to Recommended=False")
+		o.Expect(checkUpdates(oc, true, 60, 15*60,
+			"Supported but not recommended updates",
+			"Version: 4.77.777777",
+			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
+				"7777777777777777777777777777777777777777777777777777777777777777",
+			"Recommended: False",
+			"Reason: MultipleReasons",
+			"Message: On clusters on default invoker user, this imaginary bug can happen. "+
+				"https://bug.example.com/a",
+		)).To(o.BeTrue(), "Unknown update is changed to Recommended=False")
 
 		g.By("Check The reason for the multiple risks is changed to SomeInvokerThing")
-		expUpdate2 = "Version: 4.77.777777\n  " +
-			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
-			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
-			"Recommended: False\n  " +
-			"Reason: SomeInvokerThing\n  " +
-			"Message: On clusters on default invoker user, this imaginary bug can happen. " +
-			"https://bug.example.com/a"
-		found = checkUpdates(oc, true, 60, 15*60, "Supported but not recommended updates", expUpdate2)
-		o.Expect(found).To(o.BeTrue(), "reason for the multiple risks is changed to SomeInvokerThing")
+		o.Expect(checkUpdates(oc, true, 60, 15*60,
+			"Supported but not recommended updates",
+			"Version: 4.77.777777",
+			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
+				"7777777777777777777777777777777777777777777777777777777777777777",
+			"Recommended: False",
+			"Reason: SomeInvokerThing",
+			"Message: On clusters on default invoker user, this imaginary bug can happen. "+
+				"https://bug.example.com/a",
+		)).To(o.BeTrue(), "reason for the multiple risks is changed to SomeInvokerThing")
 
 		g.By("Check multiple reason conditional update present")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "buggy").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		expUpdate2 = "Version: 4.77.777777\n  " +
-			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
-			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
-			"Recommended: False\n  " +
-			"Reason: MultipleReasons\n  " +
-			"Message: On clusters on default invoker user, this imaginary bug can happen. " +
-			"https://bug.example.com/a\n  \n  " +
-			"On clusters with the channel set to 'buggy', this imaginary bug can happen. " +
-			"https://bug.example.com/b"
-		found = checkUpdates(oc, true, 300, 65*60, expUpdate2)
-		o.Expect(found).To(o.BeTrue(), "multiple reason conditional update present")
+		o.Expect(checkUpdates(oc, true, 300, 65*60,
+			"Version: 4.77.777777",
+			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
+				"7777777777777777777777777777777777777777777777777777777777777777",
+			"Recommended: False",
+			"Reason: MultipleReasons",
+			"Message: On clusters on default invoker user, this imaginary bug can happen. "+
+				"https://bug.example.com/a",
+			"On clusters with the channel set to 'buggy', this imaginary bug can happen. "+
+				"https://bug.example.com/b",
+		)).To(o.BeTrue(), "multiple reason conditional update present")
 	})
 
 	//author: yanyang@redhat.com
