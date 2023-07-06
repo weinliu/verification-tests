@@ -570,4 +570,41 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
+
+	// author: heli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:heli-Critical-64405-[HyperShiftINSTALL] Create a cluster in the AWS Region ap-southeast-3 [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 64405 is for AWS - skipping test ...")
+		}
+
+		region, err := getClusterRegion(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		if region != "ap-southeast-3" {
+			g.Skip("region is " + region + " while 64405 is for ap-southeast-3 - skipping test ...")
+		}
+
+		caseID := "64405"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err = os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName("hypershift-" + caseID).
+			withNodePoolReplicas(2)
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
+
+		g.By("create HostedClusters node ready")
+		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
+		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+	})
+
 })

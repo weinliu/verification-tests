@@ -93,13 +93,23 @@ func (h *hostedCluster) getClustersDeletionTimestamp() (string, error) {
 func (h *hostedCluster) hostedClustersReady() (bool, error) {
 	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", h.namespace, "--ignore-not-found", h.name, `-ojsonpath='{.status.conditions[?(@.type=="Available")].status}'`).Output()
 	if er != nil {
-		e2e.Logf("error occurred: %v, try next round", er)
+		e2e.Logf("error occurred to get Available: %v, try next round", er)
 		return false, er
 	}
-	if strings.Contains(value, "True") {
-		return true, nil
+	if !strings.Contains(value, "True") {
+		return false, fmt.Errorf("Available != True")
 	}
-	return false, nil
+
+	value, er = h.oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", h.namespace, "--ignore-not-found", h.name, `-ojsonpath={.status.version.history[?(@.state!="")].state}`).Output()
+	if er != nil {
+		e2e.Logf("error occurred to get PROGRESS: %v, try next round", er)
+		return false, er
+	}
+	if !strings.Contains(value, "Completed") {
+		return false, fmt.Errorf("PROGRESS != Completed")
+	}
+
+	return true, nil
 }
 
 func (h *hostedCluster) pollHostedClustersReady() func() bool {

@@ -1,20 +1,17 @@
 package hypershift
 
 import (
-	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"github.com/tidwall/gjson"
 	"io/ioutil"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"os"
 	"regexp"
 	"strings"
+
+	o "github.com/onsi/gomega"
+	"github.com/tidwall/gjson"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
+
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
 type installHelper struct {
@@ -22,7 +19,7 @@ type installHelper struct {
 	bucketName   string
 	region       string
 	dir          string
-	awsClient    *s3.Client
+	s3Client     *exutil.S3Client
 	iaasPlatform string
 }
 
@@ -227,43 +224,37 @@ func (receiver *installHelper) newAWSS3Client() {
 	region, err := getClusterRegion(receiver.oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("current region %s", region)
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secureKey, "")),
-		config.WithRegion(region))
-	o.Expect(err).NotTo(o.HaveOccurred())
 	content := "[default]\naws_access_key_id=" + accessKeyID + "\naws_secret_access_key=" + secureKey
 	filePath := receiver.dir + "/credentials"
 	err = ioutil.WriteFile(filePath, []byte(content), 0644)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("extract AWS Credentials")
-	receiver.awsClient = s3.NewFromConfig(cfg)
+
+	receiver.s3Client = exutil.NewS3ClientFromCredFile(filePath, "default", region)
 	receiver.region = region
 }
 
 func (receiver *installHelper) createAWSS3Bucket() {
-	exist := false
-	buckets, err := receiver.awsClient.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
-	o.Expect(err).NotTo(o.HaveOccurred())
-	for _, bu := range buckets.Buckets {
-		if *bu.Name == receiver.bucketName {
-			exist = true
-			break
-		}
-	}
-	if exist {
-		return
-	}
-	if strings.Compare("us-east-1", receiver.region) == 0 {
-		_, err = receiver.awsClient.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &receiver.bucketName})
-	} else {
-		_, err = receiver.awsClient.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &receiver.bucketName, CreateBucketConfiguration: &types.CreateBucketConfiguration{LocationConstraint: types.BucketLocationConstraint(receiver.region)}})
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(receiver.s3Client.HeadBucket(receiver.bucketName)).Should(o.HaveOccurred())
+	o.Expect(receiver.s3Client.CreateBucket(receiver.bucketName)).ShouldNot(o.HaveOccurred())
+
+	bucketPolicyTemplate := `{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::%s/*"
+    }
+  ]
+}`
+	policy := fmt.Sprintf(bucketPolicyTemplate, receiver.bucketName)
+	o.Expect(receiver.s3Client.PutBucketPolicy(receiver.bucketName, policy)).To(o.Succeed(), "an error happened while adding a policy to the bucket")
 }
 
 func (receiver *installHelper) deleteAWSS3Bucket() {
-	_, err := receiver.awsClient.DeleteBucket(context.TODO(), &s3.DeleteBucketInput{Bucket: &receiver.bucketName})
-	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(receiver.s3Client.DeleteBucket(receiver.bucketName)).ShouldNot(o.HaveOccurred())
 }
 
 func (receiver *installHelper) extractAzureCredentials() {
