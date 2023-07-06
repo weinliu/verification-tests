@@ -23,12 +23,15 @@ import (
 )
 
 var (
-	wmcoNamespace    = "openshift-windows-machine-config-operator"
-	wmcoDeployment   = "windows-machine-config-operator"
-	mcoNamespace     = "openshift-machine-api"
-	defaultNamespace = "winc-test"
-	windowsWorkloads = "win-webserver"
-	linuxWorkloads   = "linux-webserver"
+	wmcoNamespace      = "openshift-windows-machine-config-operator"
+	wmcoDeployment     = "windows-machine-config-operator"
+	mcoNamespace       = "openshift-machine-api"
+	defaultNamespace   = "winc-test"
+	windowsWorkloads   = "win-webserver"
+	linuxWorkloads     = "linux-webserver"
+	nutanix_proxy_host = "10.0.77.69"
+	vsphere_bastion    = "bastion.vmc.ci.openshift.org"
+	nutanixProxyUser   = "root"
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
@@ -146,7 +149,7 @@ func getNumNodesWithAnnotation(oc *exutil.CLI, annotationValue string) int {
 
 func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, zone string) string {
 	machinesetName := name
-	if iaasPlatform == "vsphere" && name == "windows" {
+	if iaasPlatform == "vsphere" || iaasPlatform == "nutanix" && name == "windows" {
 		machinesetName = "winworker"
 	}
 	if iaasPlatform == "aws" || iaasPlatform == "gcp" {
@@ -183,7 +186,10 @@ func getWindowsInternalIPs(oc *exutil.CLI) []string {
 func getSSHBastionHost(oc *exutil.CLI, iaasPlatform string) string {
 
 	if iaasPlatform == "vsphere" {
-		return "bastion.vmc.ci.openshift.org"
+		return vsphere_bastion
+	}
+	if iaasPlatform == "nutanix" {
+		return nutanix_proxy_host
 	}
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -203,6 +209,8 @@ func getAdministratorNameByPlatform(iaasPlatform string) (admin string) {
 func getBastionSSHUser(iaasPlatform string) (user string) {
 	if iaasPlatform == "vsphere" {
 		return "openshift-qe"
+	} else if iaasPlatform == "nutanix" {
+		return nutanixProxyUser
 	}
 	return "core"
 }
@@ -455,6 +463,24 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, machineSetName string, fi
 			map[string]string{"<zone_suffix>": strings.Split(zone, "-")[2]},
 			map[string]string{"<region>": region},
 			map[string]string{"<gcp_windows_image>": strings.Trim(imageID, `'`)},
+			map[string]string{"<name>": machineSetName},
+		)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.Remove(manifestFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else if iaasPlatform == "nutanix" {
+
+		cluster_uuid, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-o=jsonpath={.items[-1].spec.providerSpec.value.cluster.uuid}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		subnet_uuid, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-o=jsonpath={.items[-1].spec.providerSpec.value.subnets[0].uuid}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		manifestFile, err := exutil.GenerateManifestFile(
+			oc, "winc", fileName,
+			map[string]string{"<infrastructureID>": infrastructureID},
+			map[string]string{"<cluster_uuid>": cluster_uuid},
+			map[string]string{"<subnet_uuid>": subnet_uuid},
+			map[string]string{"<nutanix_windows_image>": strings.Trim(imageID, `'`)},
 			map[string]string{"<name>": machineSetName},
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())

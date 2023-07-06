@@ -258,8 +258,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author: sgao@redhat.com refactored:v1
 	g.It("Smokerun-Author:sgao-Critical-32273-Configure kube proxy and external networking check", func() {
-		if iaasPlatform == "vsphere" {
-			g.Skip("vSphere does not support Load balancer, skipping")
+		if iaasPlatform == "vsphere" || iaasPlatform == "nutanix" {
+			g.Skip(fmt.Sprintf("Platform %s does not support Load balancer, skipping", iaasPlatform))
 		}
 		namespace := "winc-32273"
 		defer deleteProject(oc, namespace)
@@ -811,7 +811,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check after reconciled Windows node should be Ready")
 		waitVersionAnnotationReady(oc, windowsHostName, 60*time.Second, 1200*time.Second)
 		g.By("Check LB service works well")
-		if iaasPlatform != "vsphere" {
+		if iaasPlatform != "vsphere" && iaasPlatform != "nutanix" {
 			externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
@@ -828,7 +828,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				e2e.Failf("Load balancer is not ready after waiting up to 5 minutes ...")
 			}
 		} else {
-			e2e.Logf("Skipped step Check LB service works, not supported on vSphere")
+			e2e.Logf(fmt.Sprintf("Platform %s does not support Load balancer, skipping", iaasPlatform))
 		}
 	})
 
@@ -871,8 +871,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 	// author: rrasouli@redhat.com
 	g.It("Smokerun-Author:rrasouli-High-38186-[wmco] Windows LB service [Slow]", func() {
-		if iaasPlatform == "vsphere" {
-			g.Skip("vSphere does not support Load balancer, skipping")
+		if iaasPlatform == "vsphere" || iaasPlatform == "nutanix" {
+			g.Skip(fmt.Sprintf("Platform %s does not support Load balancer, skipping", iaasPlatform))
 		}
 		namespace := "winc-38186"
 		// defer cancel to avoid leaving a zombie goroutine
@@ -1260,7 +1260,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// go routine parameters
 		var ctx context.Context
 		var cancel context.CancelFunc
-		if iaasPlatform != "vsphere" {
+		if iaasPlatform != "vsphere" && iaasPlatform != "nutanix" {
 			externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, defaultNamespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			ctx, cancel = context.WithCancel(context.Background())
@@ -1299,7 +1299,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			waitForMachinesetReady(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 28, 3)
 		}
 
-		if iaasPlatform != "vsphere" {
+		if iaasPlatform != "vsphere" && iaasPlatform != "nutanix" {
 			// Context was cancelled due to an error
 			if ctx.Err() != nil {
 				e2e.Failf("Connectivity check failed")
