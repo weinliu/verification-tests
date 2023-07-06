@@ -46,7 +46,7 @@ func createServiceforUshift(oc *exutil.CLI, svc_pmtrs map[string]string) (err er
 	return err
 }
 
-// get generic pod yaml file, replace varibles as per requirements in ushift and create service post that
+// get generic pod yaml file, replace varibles as per requirements in ushift and create pod post that
 func createPingPodforUshift(oc *exutil.CLI, pod_pmtrs map[string]string) (err error) {
 	PodGenericYaml := getFileContentforUshift("microshift", "ping-for-pod-generic.yaml")
 	//replace all variables as per createPodforUshift() arguements

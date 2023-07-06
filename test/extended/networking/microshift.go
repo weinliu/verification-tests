@@ -938,4 +938,69 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
 
 	})
+
+	// author: anusaxen@redhat.com
+	g.It("MicroShiftOnly-Author:anusaxen-High-64752-Conntrack rule deletion for UDP traffic when NodePort service ep gets deleted", func() {
+		var (
+			caseID              = "64752"
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			e2eTestNamespace    = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+			udpListenerPod      = filepath.Join(buildPruningBaseDir, "udp-listener.yaml")
+		)
+
+		g.By("Create a namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		pod_pmtrs := map[string]string{
+			"$podname":   "hello-pod",
+			"$namespace": e2eTestNamespace,
+			"$label":     "hello-pod",
+		}
+
+		g.By("creating hello pod client in namespace")
+		createPingPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, "hello-pod")
+
+		g.By("create UDP Listener Pod")
+		createResourceFromFile(oc, e2eTestNamespace, udpListenerPod)
+		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=udp-pod")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=udp-pod not ready")
+
+		//expose udp pod to nodeport service
+		err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("pod", "udp-pod", "-n", e2eTestNamespace, "--type=NodePort", "--port=8080", "--protocol=UDP").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		udpListenerPodIP := getPodIPv4(oc, e2eTestNamespace, "udp-pod")
+
+		g.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+
+		g.By("Get service NodePort and NodeIP value")
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "udp-pod", "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//send a test packet to udp endpoint which will create an udp conntrack entry on the node
+		nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeList.Items[0].Name)
+		cmd_traffic := " for n in {1..3}; do echo $n; sleep 1; done > /dev/udp/" + nodeIP + "/" + nodePort
+
+		_, err = exutil.RemoteShPodWithBash(oc, e2eTestNamespace, "hello-pod", cmd_traffic)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//make sure the corresponding conntrack entry exists for the udp endpoint
+		output, err := exutil.DebugNodeWithChroot(oc, nodeList.Items[0].Name, "conntrack", "-L", "-p", "udp", "--dport", "8080")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, udpListenerPodIP)).Should(o.BeTrue())
+
+		_, err = oc.WithoutNamespace().Run("delete").Args("pod", "-n", e2eTestNamespace, "udp-pod").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//make sure the corresponding conntrack entry goes away as we deleted udp endpoint above
+		output, err = exutil.DebugNodeWithChroot(oc, nodeList.Items[0].Name, "conntrack", "-L", "-p", "udp", "--dport", "8080")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, udpListenerPodIP)).ShouldNot(o.BeTrue())
+
+	})
+
 })
