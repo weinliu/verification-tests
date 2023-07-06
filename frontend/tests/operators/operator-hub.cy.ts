@@ -111,7 +111,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc delete project ${params.ns}`);
   });
 
-  it('(OCP-54037,yapei) Affinity definition support',{tags: ['e2e','admin','@osd-ccs']}, ()=> {
+  it('(OCP-54037,yapei) Affinity definition support',{tags: ['e2e','admin','@osd-ccs','@smoke']}, ()=> {
     cy.createProject(testParams.testNamespace);
     operatorHubPage.installOperator('sonarqube-operator', `${testParams.catalogName}`, `${testParams.testNamespace}`);
     cy.wait(60000);

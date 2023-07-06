@@ -15,7 +15,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc delete project test-ocp40457`);
   });
 
-  it('(OCP-40457,yanpzhan) Install multiple operators in one project', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-40457,yanpzhan) Install multiple operators in one project', {tags: ['e2e','admin','@osd-ccs','@rosa','@smoke']}, () => {
     operatorHubPage.installOperator('etcd', 'community-operators', 'test-ocp40457');
     operatorHubPage.installOperator('argocd-operator', 'community-operators', 'test-ocp40457');
     cy.visit(`/k8s/ns/test-ocp40457/operators.coreos.com~v1alpha1~ClusterServiceVersion`);

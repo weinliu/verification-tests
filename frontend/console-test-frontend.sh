@@ -79,6 +79,8 @@ echo "triggering tests"
 set -x
 if [[ ${TESTS_TO_RUN} == '--spec' ]]; then
     node --max-old-space-size=4096 ./node_modules/.bin/cypress run $@
+elif [[ ${TESTS_TO_RUN} == '--tags' ]]; then
+    node --max-old-space-size=4096 ./node_modules/.bin/cypress run --env grepTags=$2 openshift=true
 else
     yarn run test-cypress-console-headless
 fi
