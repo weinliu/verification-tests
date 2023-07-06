@@ -1236,7 +1236,7 @@ func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 		err1 := fmt.Errorf("TBD supported node status")
 		o.Expect(err1).NotTo(o.HaveOccurred())
 	}
-	err := wait.Poll(10*time.Second, 15*time.Minute, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 15*time.Minute, func() (bool, error) {
 		statusOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[-1].status}").Output()
 		if err != nil {
 			e2e.Logf("\nGet node status with error : %v", err)
