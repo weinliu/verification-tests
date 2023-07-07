@@ -3136,7 +3136,6 @@ nulla pariatur.`
 		mMcp.waitForComplete()
 
 		logger.Infof("OK!\n")
-
 	})
 
 	g.It("Author:sregidor-NonHyperShiftHOST-Low-63784-MCD pivot command should be deprecated", func() {

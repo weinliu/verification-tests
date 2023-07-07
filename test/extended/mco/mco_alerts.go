@@ -22,11 +22,14 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		coMcp *MachineConfigPool
 		// Compact compatible MCP. If the node is compact/SNO this variable will be the master pool, else it will be the worker pool
 		mcp *MachineConfigPool
+		// master MCP
+		mMcp *MachineConfigPool
 	)
 
 	g.JustBeforeEach(func() {
 		coMcp = GetCoreOsCompatiblePool(oc.AsAdmin())
 		mcp = GetCompactCompatiblePool(oc.AsAdmin())
+		mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 
 		preChecks(oc)
 	})
@@ -175,6 +178,108 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 
 		checkFixedAlert(oc, coMcp, expectedAlertName)
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-62075-MCCPoolAlert. Test support for a node pool hierarchy [Disruptive]", func() {
+
+		var (
+			iMcpName              = "infra"
+			expectedAlertName     = "MCCPoolAlert"
+			expectedAlertSeverity = "warning"
+
+			masterNode = mMcp.GetNodesOrFail()[0]
+			mcc        = NewController(oc.AsAdmin())
+		)
+
+		numMasterNodes, err := mMcp.getMachineCount()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the machinecount field in % MCP", mMcp.GetName())
+
+		exutil.By("Add label as infra to the existing master node")
+		infraLabel := "node-role.kubernetes.io/infra"
+		defer func() {
+			// ignore output, just focus on error handling, if error is occurred, fail this case
+			_, deletefailure := masterNode.DeleteLabel(infraLabel)
+			o.Expect(deletefailure).NotTo(o.HaveOccurred())
+		}()
+		_, err = masterNode.AddLabel(infraLabel, "")
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Could not add the label %s to node %s", infraLabel, masterNode)
+		logger.Infof("OK!\n")
+
+		exutil.By("Create custom infra mcp")
+		iMcpTemplate := generateTemplateAbsolutePath("custom-machine-config-pool.yaml")
+		iMcp := NewMachineConfigPool(oc.AsAdmin(), iMcpName)
+		iMcp.template = iMcpTemplate
+		// We need to wait for the label to be delete before removing the MCP. Otherwise the worker pool
+		// becomes Degraded.
+		defer func() {
+			_, deletefailure := masterNode.DeleteLabel(infraLabel)
+
+			// We don't fail if there is a problem because we need to delete the infra MCP
+			// We will try to remove the label again in the next defer section
+			if deletefailure != nil {
+				logger.Errorf("Error deleting label '%s' in node '%s'", infraLabel, masterNode.GetName())
+			}
+
+			_ = masterNode.WaitForLabelRemoved(infraLabel)
+
+			iMcp.delete()
+		}()
+		iMcp.create()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the controller logs are reporting the conflict")
+		o.Eventually(
+			mcc.GetLogs, "5m", "10s",
+		).Should(o.ContainSubstring("Found master node that matches selector for custom pool %s, defaulting to master. This node will not have any custom role configuration as a result. Please review the node to make sure this is intended", iMcpName),
+			"The MCO controller is not reporting a machine config pool conflict in the logs")
+		logger.Infof("OK!\n")
+
+		exutil.By(`Check that the master node remains in master pool and is moved to "infra" pool or simply removed from master pool`)
+		o.Consistently(mMcp.getMachineCount, "30s", "10s").Should(o.Equal(numMasterNodes),
+			"The number of machines in the MCP has changed!\n%s", mMcp.PrettyString())
+
+		o.Consistently(iMcp.getMachineCount, "30s", "10s").Should(o.Equal(0),
+			"No node should be added to the custom pool!\n%s", iMcp.PrettyString())
+		logger.Infof("OK!\n")
+
+		// Check that the expected alert is fired with the right values
+		exutil.By(`Check that the right alert was triggered`)
+
+		expectedAlertLabels := expectedAlertValues{"severity": o.Equal(expectedAlertSeverity)}
+
+		expectedAlertAnnotationDescription := fmt.Sprintf("Node .* has triggered a pool alert due to a label change")
+		expectedAlertAnnotationSummary := "Triggers when nodes in a pool have overlapping labels such as master, worker, and a custom label therefore a choice must be made as to which is honored."
+
+		expectedAlertAnnotations := expectedAlertValues{
+			"description": o.MatchRegexp(expectedAlertAnnotationDescription),
+			"summary":     o.Equal(expectedAlertAnnotationSummary),
+		}
+
+		params := checkFiredAlertParams{
+			expectedAlertName:        expectedAlertName,
+			expectedAlertLabels:      expectedAlertLabels,
+			expectedAlertAnnotations: expectedAlertAnnotations,
+			pendingDuration:          0,
+			stillPresentDuration:     0, // We skip this validation to make the test faster
+		}
+		checkFiredAlert(oc, nil, params)
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the label from the master node in order to fix the problem")
+		_, err = masterNode.DeleteLabel(infraLabel)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Could not delete the %s label in node %s", infraLabel, masterNode)
+
+		o.Expect(
+			masterNode.WaitForLabelRemoved(infraLabel),
+		).To(o.Succeed(),
+			"The label %s was not removed from node %s", infraLabel, masterNode)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the alert is not triggered anymore")
+		checkFixedAlert(oc, coMcp, expectedAlertName)
+		logger.Infof("OK!\n")
+	})
 })
 
 type expectedAlertValues map[string]types.GomegaMatcher
@@ -190,16 +295,18 @@ type checkFiredAlertParams struct {
 }
 
 func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAlertParams) {
-	exutil.By("Wait for MCP to be degraded")
-	o.Eventually(mcp,
-		"15m", "30s").Should(BeDegraded(),
-		"The %s MCP should be degraded when the reboot process is broken. But it didn't.", mcp.GetName())
-	logger.Infof("OK!\n")
+	if mcp != nil {
+		exutil.By("Wait for MCP to be degraded")
+		o.Eventually(mcp,
+			"15m", "30s").Should(BeDegraded(),
+			"The %s MCP should be degraded when the reboot process is broken. But it didn't.", mcp.GetName())
+		logger.Infof("OK!\n")
 
-	exutil.By("Verify that the pool reports the right error message")
-	o.Expect(mcp).To(HaveNodeDegradedMessage(o.MatchRegexp(params.expectedDegradedMessage)),
-		"The %s MCP is not reporting the right error message", mcp.GetName())
-	logger.Infof("OK!\n")
+		exutil.By("Verify that the pool reports the right error message")
+		o.Expect(mcp).To(HaveNodeDegradedMessage(o.MatchRegexp(params.expectedDegradedMessage)),
+			"The %s MCP is not reporting the right error message", mcp.GetName())
+		logger.Infof("OK!\n")
+	}
 
 	exutil.By("Verify that the alert is triggered")
 	o.Eventually(getAlertsByName, "5m", "20s").WithArguments(oc, params.expectedAlertName).
