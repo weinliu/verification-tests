@@ -2808,3 +2808,26 @@ func IsIPv6(str string) bool {
 	ip := net.ParseIP(str)
 	return ip != nil && strings.Contains(str, ":")
 }
+
+// checkSCTPResultPASS
+func checkSCTPResultPASS(oc *exutil.CLI, namespace, sctpServerPodName, sctpClientPodname, dstIP, dstPort string) {
+	exutil.By("sctpserver pod start to wait for sctp traffic")
+	_, _, _, err1 := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	time.Sleep(5 * time.Second)
+
+	exutil.By("check sctp process enabled in the sctp server pod")
+	msg, err2 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
+
+	exutil.By("sctpclient pod start to send sctp traffic")
+	_, err3 := e2eoutput.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+dstIP+" "+dstPort+" --sctp; }")
+	o.Expect(err3).NotTo(o.HaveOccurred())
+
+	exutil.By("server sctp process will end after get sctp traffic from sctp client")
+	time.Sleep(5 * time.Second)
+	msg1, err4 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
+	o.Expect(err4).NotTo(o.HaveOccurred())
+	o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
+}

@@ -428,4 +428,75 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huirwang-Medium-28759-Expose SCTP NodePort Services. [Disruptive]", func() {
+		var (
+			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking/sctp")
+			sctpClientPod        = filepath.Join(buildPruningBaseDir, "sctpclient.yaml")
+			sctpServerPod        = filepath.Join(buildPruningBaseDir, "sctpserver.yaml")
+			sctpModule           = filepath.Join(buildPruningBaseDir, "load-sctp-module.yaml")
+			sctpServerPodName    = "sctpserver"
+			sctpClientPodname    = "sctpclient"
+			sctpServicev4        = filepath.Join(buildPruningBaseDir, "sctpservicev4.yaml")
+			sctpServicev6        = filepath.Join(buildPruningBaseDir, "sctpservicev6.yaml")
+			sctpServiceDualstack = filepath.Join(buildPruningBaseDir, "sctpservicedualstack.yaml")
+		)
+
+		exutil.By("install load-sctp-module in all workers")
+		prepareSCTPModule(oc, sctpModule)
+
+		exutil.By("create new namespace")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		defer exutil.RecoverNamespaceRestricted(oc, ns)
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		exutil.By("create sctpClientPod")
+		createResourceFromFile(oc, ns, sctpClientPod)
+		err1 := waitForPodWithLabelReady(oc, ns, "name=sctpclient")
+		exutil.AssertWaitPollNoErr(err1, "sctpClientPod is not running")
+
+		exutil.By("create sctpServerPod")
+		createResourceFromFile(oc, ns, sctpServerPod)
+		err2 := waitForPodWithLabelReady(oc, ns, "name=sctpserver")
+		exutil.AssertWaitPollNoErr(err2, "sctpServerPod is not running")
+
+		exutil.By("Get sctpServerPod node ")
+		nodeName, err3 := exutil.GetPodNodeName(oc, ns, "sctpserver")
+		exutil.AssertWaitPollNoErr(err3, "Cannot get sctpSeverpod node name")
+
+		ipStackType := checkIPStackType(oc)
+		var sctpService string
+		var expectedSctpService string
+		switch ipStackType {
+		case "ipv4single":
+			sctpService = sctpServicev4
+			expectedSctpService = "sctpservice-v4"
+		case "ipv6single":
+			sctpService = sctpServicev6
+			expectedSctpService = "sctpservice-v6"
+		case "dualstack":
+			sctpService = sctpServiceDualstack
+			expectedSctpService = "sctpservice-dualstack"
+		}
+
+		exutil.By("create sctp service")
+		createResourceFromFile(oc, oc.Namespace(), sctpService)
+		output, err := oc.WithoutNamespace().Run("get").Args("service").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(expectedSctpService))
+
+		exutil.By("get node port and node ip")
+		sctpNodePort := getLoadBalancerSvcNodePort(oc, oc.Namespace(), expectedSctpService)
+		nodeIP1, nodeIP2 := getNodeIP(oc, nodeName)
+
+		exutil.By("Verify sctp nodeport service can be accessed")
+		checkSCTPResultPASS(oc, ns, sctpServerPodName, sctpClientPodname, nodeIP2, sctpNodePort)
+
+		if ipStackType == "dualstack" {
+			exutil.By("Verify sctp nodeport service can be accessed on IPv6")
+			checkSCTPResultPASS(oc, ns, sctpServerPodName, sctpClientPodname, nodeIP1, sctpNodePort)
+		}
+	})
 })
