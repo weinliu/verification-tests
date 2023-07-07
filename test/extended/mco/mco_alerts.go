@@ -105,7 +105,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		checkFixedAlert(oc, mcp, expectedAlertName)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63866-MCDPivotError alert[Disruptive]", func() {
+	g.It("Author:sregidor-VMonly-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63866-MCDPivotError alert[Disruptive]", func() {
 		var (
 			mcName                = "mco-tc-63866-pivot-alert"
 			expectedAlertName     = "MCDPivotError"
