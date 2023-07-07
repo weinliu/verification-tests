@@ -98,7 +98,6 @@ func (s *splunkPodServer) requestSearchTask(query string) (string, error) {
 	params.Set("search", "search "+query)
 
 	resp, err := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs", "", "POST", false, 2, strings.NewReader(params.Encode()), 201)
-
 	if err != nil {
 		return "", err
 	}
@@ -108,7 +107,7 @@ func (s *splunkPodServer) requestSearchTask(query string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return resmap.Sid, err
+	return resmap.Sid, nil
 }
 
 func (s *splunkPodServer) extractSearchResponse(searchID string) (*splunkSearchResult, error) {

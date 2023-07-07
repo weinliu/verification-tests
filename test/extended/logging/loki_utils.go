@@ -78,7 +78,7 @@ func getMinIOCreds(oc *exutil.CLI, ns string) s3Credential {
 
 // initialize a s3 client with credential
 // TODO: add an option to initialize a new client with STS
-func newS3Client(oc *exutil.CLI, cred s3Credential) *s3.Client {
+func newS3Client(cred s3Credential) *s3.Client {
 	var err error
 	var cfg aws.Config
 	if len(cred.Endpoint) > 0 {
@@ -424,7 +424,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	case "s3":
 		{
 			cred := getAWSCredentialFromCluster(oc)
-			client := newS3Client(oc, cred)
+			client := newS3Client(cred)
 			err = createS3Bucket(client, l.bucketName, cred)
 			if err != nil {
 				return err
@@ -479,7 +479,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	case "minio":
 		{
 			cred := getMinIOCreds(oc, minioNS)
-			client := newS3Client(oc, cred)
+			client := newS3Client(cred)
 			err = createS3Bucket(client, l.bucketName, cred)
 			if err != nil {
 				return err
@@ -560,7 +560,7 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	case "s3":
 		{
 			cred := getAWSCredentialFromCluster(oc)
-			client := newS3Client(oc, cred)
+			client := newS3Client(cred)
 			err = deleteS3Bucket(client, l.bucketName)
 		}
 	case "azure":
@@ -589,7 +589,7 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	case "minio":
 		{
 			cred := getMinIOCreds(oc, minioNS)
-			client := newS3Client(oc, cred)
+			client := newS3Client(cred)
 			err = deleteS3Bucket(client, l.bucketName)
 		}
 	}
@@ -702,14 +702,14 @@ func (c *lokiClient) getHTTPRequestHeader() (http.Header, error) {
 	return h, nil
 }
 
-func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) error {
+func (c *lokiClient) doRequest(path, query string, out interface{}) error {
 
 	h, err := c.getHTTPRequestHeader()
 	if err != nil {
 		return err
 	}
 
-	resp, err := doHTTPRequest(h, c.address, path, query, "GET", quiet, c.retries, nil, 200)
+	resp, err := doHTTPRequest(h, c.address, path, query, "GET", c.quiet, c.retries, nil, 200)
 	if err != nil {
 		return err
 	}
@@ -717,11 +717,11 @@ func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) 
 
 }
 
-func (c *lokiClient) doQuery(path string, query string, quiet bool) (*lokiQueryResponse, error) {
+func (c *lokiClient) doQuery(path string, query string) (*lokiQueryResponse, error) {
 	var err error
 	var r lokiQueryResponse
 
-	if err = c.doRequest(path, query, quiet, &r); err != nil {
+	if err = c.doRequest(path, query, &r); err != nil {
 		return nil, err
 	}
 
@@ -774,7 +774,7 @@ func (c *lokiClient) queryRange(logType string, queryStr string, limit int, star
 		logPath = queryRangePath
 	}
 
-	return c.doQuery(logPath, params.encode(), c.quiet)
+	return c.doQuery(logPath, params.encode())
 }
 
 func (c *lokiClient) searchLogsInLoki(logType, query string) (*lokiQueryResponse, error) {
@@ -872,7 +872,7 @@ func (c *lokiClient) listLabelValues(logType, name string, start, end time.Time)
 		path = lpath
 	}
 
-	if err := c.doRequest(path, params.encode(), c.quiet, &labelResponse); err != nil {
+	if err := c.doRequest(path, params.encode(), &labelResponse); err != nil {
 		return nil, err
 	}
 	return &labelResponse, nil
@@ -891,7 +891,7 @@ func (c *lokiClient) listLabelNames(logType string, start, end time.Time) (*labe
 		path = labelsPath
 	}
 
-	if err := c.doRequest(path, params.encode(), c.quiet, &labelResponse); err != nil {
+	if err := c.doRequest(path, params.encode(), &labelResponse); err != nil {
 		return nil, err
 	}
 	return &labelResponse, nil
@@ -911,19 +911,33 @@ func (c *lokiClient) listLabels(logType, labelName string) ([]string, error) {
 	return labelResponse.Data, err
 }
 
-func (c *lokiClient) queryRules(tenant string) ([]byte, error) {
+func (c *lokiClient) queryRules(tenant, ns string) ([]byte, error) {
 	path := apiPath + tenant + rulesPath
+
+	params := url.Values{}
+	if ns != "" {
+		params.Add("kubernetes_namespace_name", ns)
+	}
 
 	h, err := c.getHTTPRequestHeader()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := doHTTPRequest(h, c.address, path, "", "GET", c.quiet, c.retries, nil, 200)
+	resp, err := doHTTPRequest(h, c.address, path, params.Encode(), "GET", c.quiet, c.retries, nil, 200)
 	if err != nil {
+		/*
+			Ignore error "unexpected EOF", adding `h.Add("Accept-Encoding", "identity")` doesn't resolve the error.
+			This seems to be an issue in lokistack when tenant=application, recording rules are not in the response.
+			No error when tenant=infrastructure
+		*/
+		if strings.Contains(err.Error(), "unexpected EOF") && len(resp) > 0 {
+			e2e.Logf("got error %s when reading the response, but ignore it", err.Error())
+			return resp, nil
+		}
 		return nil, err
 	}
-	return resp, err
+	return resp, nil
 
 }
 

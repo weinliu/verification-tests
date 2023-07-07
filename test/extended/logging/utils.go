@@ -537,7 +537,7 @@ func deleteClusterLogging(oc *exutil.CLI, name, namespace string) {
 		cl := ClusterLogging{}
 		json.Unmarshal([]byte(clOutput), &cl)
 		//make sure other resources are removed
-		resources := []resource{{"daemonset", "collector", namespace}}
+		resources := []resource{{"daemonset", "collector", namespace}, {"daemonset", "logfilesmetricexporter", namespace}}
 		if *cl.Spec.LogStoreSpec.Type == "elasticsearch" {
 			resources = append(resources, resource{"elasticsearches.logging.openshift.io", "elasticsearch", namespace})
 			if len(cl.Spec.LogStoreSpec.ElasticsearchSpec.Storage.StorageClassName) > 0 {
@@ -1722,8 +1722,8 @@ type cloudwatchStreamResult struct {
 // In this function, verify all infra logs from all nodes infra (both journal and container) are present on Cloudwatch
 func (cw cloudwatchSpec) infrastructureLogsFound(strict bool) bool {
 	var infraLogGroupNames []string
-	var logFoundAll bool = true
-	var logFoundOne bool = false
+	var logFoundAll = true
+	var logFoundOne = false
 	var streamsToVerify []*cloudwatchStreamResult
 
 	logGroupNames := cw.getCloudwatchLogGroupNames(cw.groupPrefix)
@@ -1773,8 +1773,8 @@ func (cw cloudwatchSpec) infrastructureLogsFound(strict bool) bool {
 //	anli48022-gwbb4-master-1.k8s-audit.log
 //	ip-10-0-136-31.us-east-2.compute.internal.linux-audit.log
 func (cw cloudwatchSpec) auditLogsFound(strict bool) bool {
-	var logFoundAll bool = true
-	var logFoundOne bool = false
+	var logFoundAll = true
+	var logFoundOne = false
 	var auditLogGroupNames []string
 	var streamsToVerify []*cloudwatchStreamResult
 
@@ -1791,7 +1791,7 @@ func (cw cloudwatchSpec) auditLogsFound(strict bool) bool {
 		return false
 	}
 
-	var ovnFoundInit bool = true
+	var ovnFoundInit = true
 	if cw.ovnEnabled {
 		ovnFoundInit = false
 	}
@@ -2007,9 +2007,9 @@ func (cw cloudwatchSpec) applicationLogsFound() bool {
 
 // The common function to verify if logs can be found or not. In general, customized the cloudwatchSpec before call this function
 func (cw cloudwatchSpec) logsFound() bool {
-	var appFound bool = true
-	var infraFound bool = true
-	var auditFound bool = true
+	var appFound = true
+	var infraFound = true
+	var auditFound = true
 
 	for _, logType := range cw.logTypes {
 		if logType == "infrastructure" {
@@ -2452,10 +2452,7 @@ func (gcl googleCloudLogging) removeLogs() error {
 	}
 	defer adminClient.Close()
 
-	if err := adminClient.DeleteLog(ctx, gcl.logName); err != nil {
-		return err
-	}
-	return nil
+	return adminClient.DeleteLog(ctx, gcl.logName)
 }
 
 // getIndexImageTag retruns a tag of index image
@@ -2478,7 +2475,7 @@ func getIndexImageTag(oc *exutil.CLI) (string, error) {
 	return major + "." + strconv.Itoa(newMinor-1), nil
 }
 
-func getExtLokiSecret(oc *exutil.CLI) (string, string, error) {
+func getExtLokiSecret() (string, string, error) {
 	glokiUser := os.Getenv("GLOKIUSER")
 	glokiPwd := os.Getenv("GLOKIPWD")
 	if glokiUser == "" || glokiPwd == "" {

@@ -9,7 +9,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
@@ -327,10 +326,8 @@ func NewAzureContainerClient(oc *CLI, accountName, accountKey, azContainerName s
 
 // CreateAzureStorageBlobContainer creates azure storage container
 func CreateAzureStorageBlobContainer(container azblob.ContainerURL) error {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	// check if the container exists or not
 	// if exists, then remove the blobs in the container, if not, create the container
 	_, err := container.GetProperties(ctx, azblob.LeaseAccessConditions{})
@@ -344,30 +341,29 @@ func CreateAzureStorageBlobContainer(container azblob.ContainerURL) error {
 
 // DeleteAzureStorageBlobContainer deletes azure storage container
 func DeleteAzureStorageBlobContainer(container azblob.ContainerURL) error {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	err := EmptyAzureBlobContainer(container)
 	if err != nil {
 		return err
 	}
 	_, err = container.Delete(ctx, azblob.ContainerAccessConditions{})
-	return err
+	if err != nil {
+		return fmt.Errorf("error deleting container: %v", err)
+	}
+	e2e.Logf("Azure storage container is deleted")
+	return nil
 }
 
-// ListBlobsInAzureContainer lists files in azure storage container
-func ListBlobsInAzureContainer(container azblob.ContainerURL) ([]string, error) {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+// EmptyAzureBlobContainer removes all the files in azure storage container
+func EmptyAzureBlobContainer(container azblob.ContainerURL) error {
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	blobNames := []string{}
 	for marker := (azblob.Marker{}); marker.NotDone(); { // The parens around Marker{} are required to avoid compiler error.
 		// Get a result segment starting with the blob indicated by the current Marker.
 		listBlob, err := container.ListBlobsFlatSegment(ctx, marker, azblob.ListBlobsSegmentOptions{})
 		if err != nil {
-			return blobNames, err
+			return fmt.Errorf("error listing blobs in container: %v", err)
 		}
 
 		// IMPORTANT: ListBlobs returns the start of the next segment; you MUST use this to get
@@ -376,38 +372,13 @@ func ListBlobsInAzureContainer(container azblob.ContainerURL) ([]string, error) 
 
 		// Process the blobs returned in this result segment (if the segment is empty, the loop body won't execute)
 		for _, blobInfo := range listBlob.Segment.BlobItems {
-			blobNames = append(blobNames, blobInfo.Name)
+			blobURL := container.NewBlockBlobURL(blobInfo.Name)
+			_, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
+			if err != nil {
+				return fmt.Errorf("error deleting blob %s: %v", blobInfo.Name, err)
+			}
 		}
 	}
-	return blobNames, nil
-}
-
-// DeleteAzureBlob deletes file from azure storage container
-func DeleteAzureBlob(container azblob.ContainerURL, blobName string) error {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
-	defer cancel()
-
-	blobURL := container.NewBlockBlobURL(blobName)
-	_, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
-	return err
-}
-
-// EmptyAzureBlobContainer removes all the files in azure storage container
-func EmptyAzureBlobContainer(container azblob.ContainerURL) error {
-	blobNames, err := ListBlobsInAzureContainer(container)
-	if err != nil {
-		return fmt.Errorf("can't list blobs in the container: %v", err)
-	}
-	for _, blob := range blobNames {
-		ctx := context.Background()
-		ctx, cancel := context.WithTimeout(ctx, time.Second*60)
-		defer cancel()
-		blobURL := container.NewBlockBlobURL(blob)
-		_, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
-		if err != nil {
-			return fmt.Errorf("error deleting blob %s: %v", blob, err)
-		}
-	}
+	e2e.Logf("deleted all blob items in the container.")
 	return nil
 }

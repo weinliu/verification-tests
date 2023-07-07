@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"time"
 
 	"cloud.google.com/go/storage"
 	o "github.com/onsi/gomega"
 	"google.golang.org/api/iterator"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // Gcloud struct
@@ -106,15 +106,14 @@ func (gcloud *Gcloud) StopInstanceAsync(nodeName string, zoneName string) error 
 
 // CreateGCSBucket creates a GCS bucket in a project
 func CreateGCSBucket(projectID, bucketName string) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// initialize the GCS client, the credentials are got from the env var GOOGLE_APPLICATION_CREDENTIALS
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
 	defer client.Close()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
 
 	// check if the bucket exists or not
 	// if exists, clear all the objects in the bucket
@@ -144,10 +143,8 @@ func CreateGCSBucket(projectID, bucketName string) error {
 
 // ListGCSBuckets gets all the bucket names under the projectID
 func ListGCSBuckets(client storage.Client, projectID string) ([]string, error) {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	var buckets []string
 	it := client.Buckets(ctx, projectID)
 	for {
@@ -163,76 +160,38 @@ func ListGCSBuckets(client storage.Client, projectID string) ([]string, error) {
 	return buckets, nil
 }
 
-// ListObjestsInGCSBucket gets all the objects in a bucket
-func ListObjestsInGCSBucket(client storage.Client, bucket string) ([]string, error) {
-	files := []string{}
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+// EmptyGCSBucket removes all the objects in the bucket
+func EmptyGCSBucket(client storage.Client, bucketName string) error {
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	it := client.Bucket(bucket).Objects(ctx, nil)
+	bucket := client.Bucket(bucketName)
+	it := bucket.Objects(ctx, nil)
 	for {
-		attrs, err := it.Next()
+		objAttrs, err := it.Next()
+		if err != nil && err != iterator.Done {
+			return fmt.Errorf("can't get objects in bucket %s: %v", bucketName, err)
+		}
 		if err == iterator.Done {
 			break
 		}
-		if err != nil {
-			return files, fmt.Errorf("Bucket(%q).Objects: %v", bucket, err)
-		}
-		files = append(files, attrs.Name)
-	}
-	return files, nil
-}
-
-// DeleteFilesInGCSBucket removes the object in the bucket
-func DeleteFilesInGCSBucket(client storage.Client, object, bucket string) error {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
-
-	o := client.Bucket(bucket).Object(object)
-
-	// Optional: set a generation-match precondition to avoid potential race
-	// conditions and data corruptions. The request to upload is aborted if the
-	// object's generation number does not match your precondition.
-	attrs, err := o.Attrs(ctx)
-	if err != nil {
-		return fmt.Errorf("object.Attrs: %v", err)
-	}
-	o = o.If(storage.Conditions{GenerationMatch: attrs.Generation})
-
-	if err := o.Delete(ctx); err != nil {
-		return fmt.Errorf("Object(%q).Delete: %v", object, err)
-	}
-	return nil
-}
-
-// EmptyGCSBucket removes all the objects in the bucket
-func EmptyGCSBucket(client storage.Client, bucket string) error {
-	objects, err := ListObjestsInGCSBucket(client, bucket)
-	if err != nil {
-		return err
-	}
-
-	for _, object := range objects {
-		err = DeleteFilesInGCSBucket(client, object, bucket)
-		if err != nil {
-			return err
+		if err := bucket.Object(objAttrs.Name).Delete(ctx); err != nil {
+			return fmt.Errorf("Object(%q).Delete: %v", objAttrs.Name, err)
 		}
 	}
+	e2e.Logf("deleted all object items in the bucket %s.", bucketName)
 	return nil
 }
 
 // DeleteGCSBucket deletes the GCS bucket
 func DeleteGCSBucket(bucketName string) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
 	defer client.Close()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
-	defer cancel()
 
 	// remove objects
 	err = EmptyGCSBucket(*client, bucketName)
@@ -243,7 +202,7 @@ func DeleteGCSBucket(bucketName string) error {
 	if err := bucket.Delete(ctx); err != nil {
 		return fmt.Errorf("Bucket(%q).Delete: %v", bucketName, err)
 	}
-	fmt.Printf("Bucket %v deleted\n", bucketName)
+	e2e.Logf("Bucket %v is deleted\n", bucketName)
 	return nil
 }
 

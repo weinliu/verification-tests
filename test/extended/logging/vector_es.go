@@ -409,7 +409,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(output).Should(o.ContainSubstring("vector_component_received_event_bytes_total"))
 
 			g.By("Check the Log file metrics exporter metrics")
-			output, err = e2eoutput.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector.openshift-logging.svc:2112/metrics", 10*time.Second, 20*time.Second)
+			output, err = e2eoutput.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://logfilesmetricexporter.openshift-logging.svc:2112/metrics", 10*time.Second, 20*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("log_logged_bytes_total"))
 

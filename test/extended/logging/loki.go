@@ -738,7 +738,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
-			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			lokiUsername, lokiPassword, err := getExtLokiSecret()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiURL := "https://logs-prod3.grafana.net"
 
@@ -802,7 +802,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
-			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			lokiUsername, lokiPassword, err := getExtLokiSecret()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiURL := "https://logs-prod3.grafana.net"
 
@@ -865,7 +865,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
-			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			lokiUsername, lokiPassword, err := getExtLokiSecret()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiURL := "https://logs-prod3.grafana.net"
 

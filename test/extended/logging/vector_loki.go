@@ -843,7 +843,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
-			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			lokiUsername, lokiPassword, err := getExtLokiSecret()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiURL := "https://logs-prod3.grafana.net"
 
@@ -907,7 +907,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
-			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			lokiUsername, lokiPassword, err := getExtLokiSecret()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiURL := "https://logs-prod3.grafana.net"
 
@@ -970,7 +970,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
-			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			lokiUsername, lokiPassword, err := getExtLokiSecret()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiURL := "https://logs-prod3.grafana.net"
 
@@ -1035,7 +1035,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			)
 
 			g.By("Fetch and set the Grafana Loki credentials")
-			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			lokiUsername, lokiPassword, err := getExtLokiSecret()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiURL := "https://logs-prod3.grafana.net"
 
@@ -1154,7 +1154,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			waitForOperatorsRunning(oc)
 
 			g.By("Fetch and set the Grafana Loki credentials")
-			lokiUsername, lokiPassword, err := getExtLokiSecret(oc)
+			lokiUsername, lokiPassword, err := getExtLokiSecret()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lokiURL := "https://logs-prod3.grafana.net"
 
@@ -1948,10 +1948,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Data has been validated in the rules configmap")
 
 			g.By("Querying rules API for application alerting/recording rules")
-			token := getSAToken(oc, "logcollector", ls.namespace)
+			// adding cluster-admin role to a sa, but still can't query rules without `kubernetes_namespace_name=<project-name>`
+			defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "system:serviceaccount:openshift-logging:default").Execute()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "system:serviceaccount:openshift-logging:default").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			token := getSAToken(oc, "default", "openshift-logging")
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(token).retry(5)
-			appRules, err := lc.queryRules("application")
+			appRules, err := lc.queryRules("application", appProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			matchDataInResponse := []string{"name: MyAppLogVolumeAlert", "alert: MyAppLogVolumeIsHigh", "tenantId: application", "name: HighAppLogsToLoki1m", "record: loki:operator:applogs:rate1m"}
 			for _, matchedData := range matchDataInResponse {
@@ -1959,7 +1963,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					g.Fail("Response is missing " + matchedData)
 				}
 			}
-			infraRules, err := lc.queryRules("infrastructure")
+			infraRules, err := lc.queryRules("infrastructure", lokiOperatorNS)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			matchDataInResponse = []string{"name: LokiOperatorLogsHigh", "alert: LokiOperatorLogsAreHigh", "tenantId: infrastructure", "name: LokiOperatorLogsAreHigh1m", "record: loki:operator:infralogs:rate1m"}
 			for _, matchedData := range matchDataInResponse {

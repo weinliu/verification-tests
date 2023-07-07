@@ -1,3 +1,4 @@
+// Package logging is used to test openshift-logging features
 package logging
 
 import (

@@ -197,36 +197,38 @@ func CreateOpenStackContainer(client *gophercloud.ServiceClient, name string) er
 // DeleteOpenStackContainer deletes the storage container from openstack
 func DeleteOpenStackContainer(client *gophercloud.ServiceClient, name string) error {
 	err := EmptyOpenStackContainer(client, name)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		return err
+	}
 	response := containers.Delete(client, name)
 	_, err = response.Extract()
-	return err
+	if err != nil {
+		return fmt.Errorf("error deleting container %s: %v", name, err)
+	}
+	e2e.Logf("Container %s is deleted", name)
+	return nil
 }
 
 // EmptyOpenStackContainer clear all the objects in storage container
 func EmptyOpenStackContainer(client *gophercloud.ServiceClient, name string) error {
-	objectNames, err := ListOpenStackContainerObjects(client, name)
-	if err != nil {
-		return fmt.Errorf("can't list the objects in %s: %v", name, err)
-	}
-	for _, obj := range objectNames {
-		result := objects.Delete(client, name, obj, objects.DeleteOpts{})
-		_, err := result.Extract()
-		if err != nil {
-			return fmt.Errorf("hit error when deleting object %s: %v", obj, err)
-		}
-	}
-	return nil
-}
-
-// ListOpenStackContainerObjects lists all objects in the storage container
-func ListOpenStackContainerObjects(client *gophercloud.ServiceClient, name string) ([]string, error) {
 	pager := objects.List(client, name, &objects.ListOpts{Full: true})
-	names := []string{}
 	err := pager.EachPage(func(page pagination.Page) (bool, error) {
 		objectNames, err := objects.ExtractNames(page)
-		names = append(names, objectNames...)
-		return true, err
+		if err != nil {
+			return false, fmt.Errorf("error getting object names: %v", err)
+		}
+		for _, obj := range objectNames {
+			result := objects.Delete(client, name, obj, objects.DeleteOpts{})
+			_, err := result.Extract()
+			if err != nil {
+				return false, fmt.Errorf("hit error when deleting object %s: %v", obj, err)
+			}
+		}
+		return true, nil
 	})
-	return names, err
+	if err != nil {
+		return fmt.Errorf("error deleting objects in container %s: %v", name, err)
+	}
+	e2e.Logf("deleted all object items in the container %s", name)
+	return nil
 }
