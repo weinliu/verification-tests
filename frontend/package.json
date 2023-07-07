@@ -31,5 +31,8 @@
     "ts-loader": "^6.2.2",
     "typescript": "3.8.3",
     "webpack": "4.44.0"
+  },
+  "resolutions": {
+    "fast-glob": ">=3.2.9 <=3.2.12"
   }
 }
