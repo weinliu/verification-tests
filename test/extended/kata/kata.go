@@ -253,6 +253,66 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 	})
 
+	g.It("Author:tbuskey-Medium-63122-Checking if cluster is ready for peer pods", func() {
+		//	can't *VERIFY* all values but we can ensure the cm/secret variables were added by the users
+		if kataconfig.enablePeerPods == false {
+			g.Skip("STEP Peer pods are not enabled with osc-config or OSCSENABLEPEERPODS")
+		}
+
+		var (
+			err             error
+			msg             string
+			ppConfigMapName = "peer-pods-cm"
+			ppSecretName    = "peer-pods-secret"
+			ppRuntimeClass  = "kata-remote-cc"
+			errors          = 0
+			errorList       = []string{""}
+		)
+
+		msg = fmt.Sprintf("checking %v ", ppSecretName)
+		g.By(msg)
+		msg, err = getPeerPodSecrets(oc, subscription.namespace, iaasPlatform, ppSecretName)
+		if err != nil {
+			e2e.Logf("%v", msg)
+			errors = errors + 1
+			errorList = append(errorList, msg)
+		}
+
+		msg = fmt.Sprintf("checking %v ", ppConfigMapName)
+		g.By(msg)
+		msg, err = getPeerPodConfigMaps(oc, subscription.namespace, iaasPlatform, ppConfigMapName)
+		if err != nil {
+			e2e.Logf("%v", msg)
+			errors = errors + 1
+			errorList = append(errorList, msg)
+		}
+
+		g.By("Verify enablePeerPods is set in kataconfig")
+		msg, err = oc.AsAdmin().Run("get").Args("kataconfig", kataconfig.name, "-n", subscription.namespace, "-o=jsonpath={.spec.enablePeerPods}").Output()
+		if err != nil || msg != "true" {
+			e2e.Logf("STEP ERROR querying kataconfig %v and enablePeerPods setting", kataconfig.name, msg, err)
+			errors = errors + 1
+			errorList = append(errorList, msg)
+		}
+
+		msg = fmt.Sprintf("check runtimeclass for %v", ppRuntimeClass)
+		g.By(msg)
+		msg, err = oc.AsAdmin().Run("get").Args("runtimeclass", "-n", subscription.namespace, "--no-headers").Output()
+		if err != nil || !strings.Contains(msg, ppRuntimeClass) {
+			e2e.Logf("STEP ERROR runtimeclass %v not found", ppRuntimeClass, msg, err)
+			errors = errors + 1
+			errorList = append(errorList, msg)
+		}
+
+		g.By("Check errors")
+		if errors != 0 {
+			e2e.Logf("STEP ERROR: %v error areas:\n    %v", errors, errorList)
+		}
+		o.Expect(errors).To(o.BeZero())
+
+		g.By("SUCCESS - cluster has cm and secrets for peerpods")
+	})
+
 	g.It("Author:abhbaner-High-41566-High-41574-deploy & delete a pod with kata runtime", func() {
 		defaultPodName := "example"
 

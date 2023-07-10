@@ -2,6 +2,7 @@
 package kata
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"math/rand"
@@ -812,4 +813,98 @@ func createServiceAndRoute(oc *exutil.CLI, deployName, podNs string) (host strin
 func deleteRouteAndService(oc *exutil.CLI, deployName, podNs string) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "-n", podNs, deployName, "--ignore-not-found").Execute()
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", "-n", podNs, deployName, "--ignore-not-found").Execute()
+}
+
+func getPeerPodSecrets(oc *exutil.CLI, opNamespace, platform string, ppSecretName string) (msg string, err error) {
+	var (
+		errors       = 0
+		errorList    []string
+		platformVars []string
+	)
+
+	msg, err = oc.AsAdmin().Run("get").Args("secrets", ppSecretName, "-n", opNamespace).Output()
+	if err != nil || strings.Contains(msg, "not found") {
+		msg = fmt.Sprintf("ERROR secret %v is not found %v %v", ppSecretName, msg, err)
+		err = fmt.Errorf("ERROR secret %v is not found %v %v", ppSecretName, msg, err)
+		return msg, err
+	}
+
+	switch platform {
+	case "azure":
+		platformVars = append(platformVars, "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_REGION", "AZURE_RESOURCE_GROUP", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID")
+	case "aws":
+		platformVars = append(platformVars, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_SG_IDS", "AWS_SUBNET_ID", "AWS_VPC_ID")
+	default:
+		msg = fmt.Sprintf("Cloud provider %v is not supported", platform)
+		err = fmt.Errorf("%v", msg)
+		return msg, err
+	}
+
+	for index := range platformVars {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", ppSecretName, "-n", opNamespace, "-o=jsonpath={.data."+platformVars[index]+"}").Output()
+		if err != nil || msg == "" {
+			errors++
+			errorList = append(errorList, platformVars[index])
+		}
+	}
+
+	msg = ""
+	if errors != 0 {
+		msg = fmt.Sprintf("ERROR missing vars in secret %v %v", errors, errorList)
+		err = fmt.Errorf("%v", msg)
+	}
+	return msg, err
+}
+
+func decodeSecret(input string) (msg string, err error) {
+	msg = ""
+
+	debase64, err := base64.StdEncoding.DecodeString(input)
+	if err != nil {
+		msg = fmt.Sprintf("Was not able to decode %v.  %v %v", input, debase64, err)
+	} else {
+		msg = strings.ToLower(fmt.Sprintf("%s", debase64))
+	}
+	return msg, err
+}
+
+func getPeerPodConfigMaps(oc *exutil.CLI, opNamespace, platform, ppConfigMapName string) (msg string, err error) {
+	var (
+		errors       = 0
+		errorList    []string
+		platformVars []string
+	)
+
+	msg, err = oc.AsAdmin().Run("get").Args("cm", ppConfigMapName, "-n", opNamespace).Output()
+	if err != nil || strings.Contains(msg, "not found") {
+		msg = fmt.Sprintf("ERROR cm %v is not found %v %v", ppConfigMapName, msg, err)
+		err = fmt.Errorf("ERROR cm %v is not found %v %v", ppConfigMapName, msg, err)
+		return msg, err
+	}
+
+	switch platform {
+	case "azure":
+		platformVars = append(platformVars, "CLOUD_PROVIDER", "AZURE_IMAGE_ID", "AZURE_INSTANCE_SIZE", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT")
+	case "aws":
+		platformVars = append(platformVars, "CLOUD_PROVIDER", "PODVM_AMI_ID", "PODVM_INSTANCE_TYPE", "VXLAN_PORT")
+	default:
+		msg = fmt.Sprintf("Cloud provider %v is not supported", platform)
+		err = fmt.Errorf("%v %v", msg)
+		return msg, err
+	}
+
+	for index := range platformVars {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", ppConfigMapName, "-n", opNamespace, "-o=jsonpath={.data."+platformVars[index]+"}").Output()
+		if err != nil || msg == "" {
+			errors++
+			errorList = append(errorList, platformVars[index])
+		}
+	}
+
+	msg = ""
+	if errors != 0 {
+		msg = fmt.Sprintf("ERROR missing vars in configmap %v %v", errors, errorList)
+		err = fmt.Errorf("%v", msg)
+	}
+	return msg, err
 }
