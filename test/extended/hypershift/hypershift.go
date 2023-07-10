@@ -26,6 +26,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		oc                                             = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
 		iaasPlatform, hypershiftTeamBaseDir, hcInfraID string
 		hostedcluster                                  *hostedCluster
+		hostedclusterPlatform                          PlatformType
 	)
 
 	g.BeforeEach(func() {
@@ -44,6 +45,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		hypershiftTeamBaseDir = exutil.FixturePath("testdata", "hypershift")
 		// hosted cluster infra ID
 		hcInfraID = doOcpReq(oc, OcpGet, true, "hc", hostedClusterName, "-n", hostedClusterNs, `-ojsonpath={.spec.infraID}`)
+
+		hostedclusterPlatform = doOcpReq(oc, OcpGet, true, "hostedcluster", "-n", hostedcluster.namespace, hostedcluster.name, "-ojsonpath={.spec.platform.type}")
+		e2e.Logf("HostedCluster platform is: %s", hostedclusterPlatform)
 
 		if exutil.IsROSA() {
 			exutil.ROSALogin()

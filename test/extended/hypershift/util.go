@@ -56,6 +56,31 @@ const (
 	HyperShiftResourceTagKeyValue  = "owned"
 )
 
+type PlatformType = string
+
+const (
+	// AWSPlatform represents Amazon Web Services infrastructure.
+	AWSPlatform PlatformType = "AWS"
+
+	// NonePlatform represents user supplied (e.g. bare metal) infrastructure.
+	NonePlatform PlatformType = "None"
+
+	// IBMCloudPlatform represents IBM Cloud infrastructure.
+	IBMCloudPlatform PlatformType = "IBMCloud"
+
+	// AgentPlatform represents user supplied insfrastructure booted with agents.
+	AgentPlatform PlatformType = "Agent"
+
+	// KubevirtPlatform represents Kubevirt infrastructure.
+	KubevirtPlatform PlatformType = "KubeVirt"
+
+	// AzurePlatform represents Azure infrastructure.
+	AzurePlatform PlatformType = "Azure"
+
+	// PowerVSPlatform represents PowerVS infrastructure.
+	PowerVSPlatform PlatformType = "PowerVS"
+)
+
 type AvailabilityPolicy = string
 
 const (
