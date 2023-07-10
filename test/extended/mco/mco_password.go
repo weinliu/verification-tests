@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 
 	expect "github.com/google/goexpect"
@@ -9,6 +10,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-mco] MCO password", func() {
@@ -374,6 +376,66 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		logger.Infof("verifying node %s", node.GetName())
 		bresp, err := node.ExecuteDebugExpectBatch(DefaultExpectTimeout, getPasswdSSHValidator(user))
 		o.Expect(err).NotTo(o.HaveOccurred(), "Ssh login should not be allowed in node %s and should report a 'permission denied' error:\n %s", node.GetName(), bresp)
+		logger.Infof("OK!\n")
+	})
+	g.It("Author:sregidor-NonPreRelease-Medium-64986-Remove all ssh keys [Disruptive]", func() {
+		var (
+			sshMCName    = "99-" + mcp.GetName() + "-ssh"
+			backupMCFile = filepath.Join(e2e.TestContext.OutputDir, "tc-64986-"+sshMCName+".backup.json")
+		)
+
+		exutil.By("Get currently configured authorizedkeys in the cluster")
+		currentMc, err := mcp.GetConfiguredMachineConfig()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the current configuration for %s pool", mcp.GetName())
+
+		initialKeys, err := currentMc.GetAuthorizedKeysByUserAsList("core")
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the current authorizedkeys for user 'core' in %s pool", mcp.GetName())
+
+		logger.Infof("Number of initially configured AuthorizedKeys: %d", len(initialKeys))
+
+		if len(initialKeys) > 1 {
+			logger.Infof("There is more than 1 ssh key configred in this cluster. Probably they have been added manually.")
+			g.Skip("There are more than 1 ssh key configured. The cluster has been probably manually modified. Check the configured ssh keys before running this test.")
+		}
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the ssh key MachineConfig")
+		sshMC := NewMachineConfig(oc.AsAdmin(), sshMCName, mcp.GetName())
+
+		// If the cluster was created with a ssh key, we remove it and force no sshkey in the cluster
+		if sshMC.Exists() {
+			logger.Infof("Save MC information in file: %s", backupMCFile)
+			o.Expect(sshMC.ExportToFile(backupMCFile)).To(o.Succeed(),
+				"It was not possible to save MC %s in file %s", sshMC.GetName(), backupMCFile)
+
+			defer func() {
+				logger.Infof("Restore the removed MC")
+				if !sshMC.Exists() {
+					OCCreate(oc.AsAdmin(), backupMCFile)
+					logger.Infof("Wait for MCP to be updated")
+					mcp.waitForComplete()
+				}
+			}()
+
+			sshMC.delete()
+			logger.Infof("OK!\n")
+
+			exutil.By("Check that the nodes have the correct configuration for ssh keys. No key configured.")
+			checkAuthorizedKeyInNode(mcp.GetCoreOsNodesOrFail()[0], []string{})
+			logger.Infof("OK!\n")
+
+			exutil.By("Restore the deleted MC")
+			o.Expect(OCCreate(oc.AsAdmin(), backupMCFile)).To(o.Succeed(),
+				"The deleted MC could not be restored")
+			mcp.waitForComplete()
+			logger.Infof("OK!\n")
+		} else {
+			logger.Infof("MachineConfig %s does not exist. No need to remove it", sshMC.GetName())
+		}
+
+		exutil.By("Check that the nodes have the correct configuration for ssh keys. Original keys.")
+		checkAuthorizedKeyInNode(mcp.GetCoreOsNodesOrFail()[0], initialKeys)
 		logger.Infof("OK!\n")
 	})
 })

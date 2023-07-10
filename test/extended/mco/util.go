@@ -755,3 +755,7 @@ func RemoveAllMCOPods(oc *exutil.CLI) error {
 
 	return nil
 }
+
+func OCCreate(oc *exutil.CLI, fileName string) error {
+	return oc.WithoutNamespace().Run("create").Args("-f", fileName).Execute()
+}

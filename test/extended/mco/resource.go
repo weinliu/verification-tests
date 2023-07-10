@@ -3,6 +3,7 @@ package mco
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -10,6 +11,7 @@ import (
 	"github.com/onsi/gomega/types"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -42,6 +44,7 @@ type ResourceInterface interface {
 	GetAnnotationOrFail(annotation string) string
 	GetConditionByType(ctype string) string
 	AddLabel(label, value string) error
+	ExportToFile(fileName string) error
 	PrettyString() string
 }
 
@@ -197,6 +200,36 @@ func (r *Resource) AddLabel(label, value string) error {
 // RemoveLabel removes a label to the resource
 func (r *Resource) RemoveLabel(label string) error {
 	return r.oc.WithoutNamespace().Run("label").Args(r.kind, r.name, label+"-").Execute()
+}
+
+// ExportToFile writes the resource json information in a given file.
+func (r *Resource) ExportToFile(fileName string) error {
+
+	// We want to write the json info as "pretty", so that it is human readable.
+	// But we don't want to use "PrettyString" because we want full control on the errors
+	definition, dErr := r.Get(`{}`)
+	if dErr != nil {
+		return dErr
+	}
+
+	var data interface{}
+	if err := json.Unmarshal([]byte(definition), &data); err != nil {
+		return err
+	}
+
+	formattedDefinition, err := json.MarshalIndent(data, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	value := string(formattedDefinition)
+
+	err = os.WriteFile(fileName, []byte(value), 0o644)
+	if err != nil {
+		logger.Infof("Resource %s  has been saved in file %s", r, fileName)
+	}
+
+	return err
 }
 
 // PrettyString returns an indented json string with the definition of the resource
