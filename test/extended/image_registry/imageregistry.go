@@ -509,11 +509,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		)
 		g.By("Import an image stream and set image-lookup")
 		oc.SetupProject()
-		err := oc.Run("import-image").Args("quay.io/openshifttest/hello-openshift:1.2.0", "--scheduled", "--confirm", "--reference-policy=local").Execute()
+		err := oc.Run("import-image").Args("quay.io/openshifttest/hello-openshift:1.2.0", "--scheduled", "--confirm", "--reference-policy=local", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "hello-openshift", "1.2.0")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("set").Args("image-lookup", "hello-openshift").Execute()
+		err = oc.Run("set").Args("image-lookup", "hello-openshift", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the initial statefulset")
@@ -529,7 +529,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-statefulset", 3)
 
 		g.By("setting a trigger, pods are still running")
-		err = oc.Run("set").Args("triggers", "statefulset/example-statefulset", "--from-image=hello-openshift:latest", "--containers", "example-statefulset").Execute()
+		err = oc.Run("set").Args("triggers", "statefulset/example-statefulset", "--from-image=hello-openshift:latest", "--containers", "example-statefulset", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check the pods are running")
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-statefulset", 3)
@@ -1229,7 +1229,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "Failed to update apiserver")
 
 		g.By("Make sure the image can be pulled after add auth")
-		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args(myimage, "newis:latest", "--reference-policy=local", "--insecure", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args(myimage, "newis:latest", "--reference-policy=local", "--insecure", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "newis", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1866,7 +1866,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: jitli@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:jitli-Medium-49747-Configure image registry to skip volume SELinuxLabel [Disruptive]", func() {
-
+		// TODO: remove this skip when the builds v1 API will support producing manifest list images
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "image_registry")
 			machineConfigSource = filepath.Join(buildPruningBaseDir, "machineconfig.yaml")
@@ -3339,7 +3340,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test", "v1")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Tag v1 to latest tag")
-		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("test:v1", "st:latest", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("test:v1", "st:latest", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the imagestream imported image")
@@ -3358,11 +3359,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(strings.Contains(podImage, imagev1id)).To(o.BeTrue())
 
 		g.By("Import second image to the imagestream")
-		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("test:v2", "--from=quay.io/openshifttest/hello-openshift@sha256:f79669a4290b8917fc6f93eb1d2508a9517f36d8887e38745250db2ef4b0bc40", "-n", statefulsetsrc.namespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("test:v2", "--from=quay.io/openshifttest/hello-openshift@sha256:f79669a4290b8917fc6f93eb1d2508a9517f36d8887e38745250db2ef4b0bc40", "--import-mode=PreserveOriginal", "-n", statefulsetsrc.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, statefulsetsrc.namespace, "test", "v2")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("test:v2", "st:latest", "-n", statefulsetsrc.namespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("test:v2", "st:latest", "--import-mode=PreserveOriginal", "-n", statefulsetsrc.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the imagestream imported image")

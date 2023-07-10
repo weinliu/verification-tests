@@ -2,10 +2,11 @@ package imageregistry
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -344,6 +345,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: wewang@redhat.com
 	g.It("ConnectedOnly-Author:wewang-High-16495-High-19196-No prune layer of a valid Image due to minimum aging and prune images when DC reference to invalid image [Disruptive]", func() {
+		// TODO: remove this skip when the builds v1 API will support producing manifest list images
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		// Check if openshift-sample operator installed
 		sampleOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
 		if err != nil && strings.Contains(sampleOut, `openshift-samples" not found`) {
