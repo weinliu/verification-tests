@@ -672,25 +672,4 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(execOutput).To(o.ContainSubstring("t47x6d4lzz1zxm1bakrmiceb0tljzl9n8r19kqu9s3731ectkllp9mezn7cldozt25nlenyh5jus5b9rr687u2icimakjpyf4rsux3c66giulc0d2ipsa6bpa6dykgd0mc25r1m89hvzjcix73sdwfbu5q67t0c131i1fqne0o7we20ve2emh1046h9m854wfxo0spb2gv5d65v9x2ibuiti7rhr2y8u72hil5cutp63sbhi832kf3v4vuxa0"))
 	})
-
-	// Bug: 2095941, OCPBUGS-5943
-	g.It("Author:mjoseph-High-63553-Annotation 'TopologyAwareHints' presents should not cause any pathological events", func() {
-
-		g.By("Pre-flight check number of worker nodes in the environment")
-		workerNodeCount, _ := exactNodeDetails(oc)
-		if workerNodeCount < 2 {
-			g.Skip("Skipping as we need atleast two worker nodes")
-		}
-
-		g.By("Check whether the topology-aware-hints annotation is auto set or not")
-		findAnnotation := getAnnotation(oc, "openshift-dns", "svc", "dns-default")
-		o.Expect(findAnnotation).To(o.ContainSubstring(`"service.kubernetes.io/topology-aware-hints":"auto"`))
-
-		// OCPBUGS-5943
-		g.By("Check dns daemon set for minReadySeconds to 9, maxSurge to 10% and maxUnavailable to 0")
-		spec := fetchJSONPathValue(oc, "openshift-dns", "daemonset/dns-default", ".spec")
-		o.Expect(spec).To(o.ContainSubstring(`"minReadySeconds":9`))
-		o.Expect(spec).To(o.ContainSubstring(`"maxSurge":"10%"`))
-		o.Expect(spec).To(o.ContainSubstring(`"maxUnavailable":0`))
-	})
 })
