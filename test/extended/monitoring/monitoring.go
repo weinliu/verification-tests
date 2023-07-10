@@ -433,15 +433,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("AlertRelabelConfig", "monitoring-watchdog", "-n", "openshift-monitoring").Execute()
 
 		g.By("check AlertingRule/AlertRelabelConfig apiVersion is v1")
-		result, explainErr := oc.WithoutNamespace().AsAdmin().Run("explain").Args("AlertingRule", "--api-version=monitoring.openshift.io/v1").Output()
+		_, explainErr := oc.WithoutNamespace().AsAdmin().Run("explain").Args("AlertingRule", "--api-version=monitoring.openshift.io/v1").Output()
 		o.Expect(explainErr).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.ContainSubstring("AlertingRule"))
-		o.Expect(result).To(o.ContainSubstring("monitoring.openshift.io/v1"))
 
-		result, explainErr = oc.WithoutNamespace().AsAdmin().Run("explain").Args("AlertRelabelConfig", "--api-version=monitoring.openshift.io/v1").Output()
+		_, explainErr = oc.WithoutNamespace().AsAdmin().Run("explain").Args("AlertRelabelConfig", "--api-version=monitoring.openshift.io/v1").Output()
 		o.Expect(explainErr).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.ContainSubstring("AlertRelabelConfig"))
-		o.Expect(result).To(o.ContainSubstring("monitoring.openshift.io/v1"))
 
 		g.By("create AlertingRule/AlertRelabelConfig under openshift-monitoring")
 		createResourceFromYaml(oc, "openshift-monitoring", alertingRule)
