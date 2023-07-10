@@ -3865,6 +3865,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			if !strings.Contains(vcenterInfo, "ibmvcenter.vmc-ci") {
 				g.Skip("Skip for the test cluster vCenter not enable vSAN fileshare service!!!")
 			}
+			myWorker := getOneSchedulableWorker(getAllNodesInfo(oc))
+			if myWorker.availableZone != "" {
+				// volume topology feature for vsphere vsan file share volumes(RWX) is not supported.
+				g.Skip("Skip for multi-zone test clusters do not support this scenario!!!")
+			}
 		}
 
 		// Set up a specified project share for all the phases
