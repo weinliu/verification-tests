@@ -39,10 +39,8 @@ type CatalogSourceObjects struct {
 
 // OperatorNamespace struct to handle creation of namespace
 type OperatorNamespace struct {
-	Name                string
-	NamespaceTemplate   string
-	RoleTemplate        string
-	RoleBindingTemplate string
+	Name              string
+	NamespaceTemplate string
 }
 
 type version struct {
@@ -342,12 +340,4 @@ func (ns *OperatorNamespace) deployOperatorNamespace(oc *exutil.CLI) {
 	e2e.Logf("Creating Netobserv operator namespace")
 	nsParameters := []string{"--ignore-unknown-parameters=true", "-f", ns.NamespaceTemplate}
 	exutil.ApplyClusterResourceFromTemplate(oc, nsParameters...)
-
-	e2e.Logf("Create netobserv operator namespace role")
-	roleParameters := []string{"--ignore-unknown-parameters=true", "-f", ns.RoleTemplate, "-p", "NAMESPACE=" + ns.Name}
-	exutil.ApplyNsResourceFromTemplate(oc, ns.Name, roleParameters...)
-
-	e2e.Logf("Create netobserv operator namespace roleBinding")
-	roleBindingParameters := []string{"--ignore-unknown-parameters=true", "-f", ns.RoleBindingTemplate, "-p", "NAMESPACE=" + ns.Name}
-	exutil.ApplyNsResourceFromTemplate(oc, ns.Name, roleBindingParameters...)
 }

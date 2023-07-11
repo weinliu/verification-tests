@@ -236,3 +236,13 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("statefulset %s is not availabile", name))
 }
+
+func getSecrets(oc *exutil.CLI, namespace string) (string, error) {
+	out, err := oc.AsAdmin().Run("get").Args("secrets", "-n", namespace, "-o", "jsonpath='{range .items[*]}{.metadata.name}{\" \"}'").Output()
+
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+
+}

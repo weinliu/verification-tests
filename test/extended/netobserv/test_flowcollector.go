@@ -3,9 +3,10 @@ package netobserv
 import (
 	"fmt"
 	"math"
+	"strconv"
+
 	"os/exec"
 	filePath "path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -27,21 +27,18 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		netobservNS   = "openshift-netobserv-operator"
 		NOPackageName = "netobserv-operator"
 		catsrc        = resource{"catsrc", "qe-app-registry", "openshift-marketplace"}
-		NOSource      = CatalogSourceObjects{"v1.0.x", catsrc.name, catsrc.namespace}
+		NOSource      = CatalogSourceObjects{"stable", catsrc.name, catsrc.namespace}
 
 		// Template directories
 		baseDir         = exutil.FixturePath("testdata", "netobserv")
 		lokiDir         = exutil.FixturePath("testdata", "netobserv", "loki")
-		kafkaDir        = exutil.FixturePath("testdata", "netobserv", "kafka")
 		subscriptionDir = exutil.FixturePath("testdata", "netobserv", "subscription")
 		flowFixturePath = filePath.Join(baseDir, "flowcollector_v1beta1_template.yaml")
 
-		// Namespace object
+		// Operator namespace object
 		OperatorNS = OperatorNamespace{
-			Name:                netobservNS,
-			NamespaceTemplate:   filePath.Join(subscriptionDir, "namespace.yaml"),
-			RoleTemplate:        filePath.Join(subscriptionDir, "role.yaml"),
-			RoleBindingTemplate: filePath.Join(subscriptionDir, "roleBinding.yaml"),
+			Name:              netobservNS,
+			NamespaceTemplate: filePath.Join(subscriptionDir, "namespace.yaml"),
 		}
 		NO = SubscriptionObjects{
 			OperatorName:  "netobserv-operator",
@@ -55,7 +52,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokiNS          = "openshift-operators-redhat"
 		lokiPackageName = "loki-operator"
 		ls              lokiStack
-		priorExists     = false
+		Lokiexisting    = false
 		lokiSource      = CatalogSourceObjects{"stable", catsrc.name, catsrc.namespace}
 		LO              = SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
@@ -65,6 +62,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 			CatalogSource: lokiSource,
 		}
+		lokiURL string
 	)
 
 	g.BeforeEach(func() {
@@ -74,15 +72,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
-
-		// Check if Network Observability Operator is already present
+		// check if Network Observability Operator is already present
 		NOexisting := checkOperatorStatus(oc, netobservNS, NOPackageName)
 
 		// Create operatorNS and deploy operator if not present
 		if !NOexisting {
 			OperatorNS.deployOperatorNamespace(oc)
 			NO.SubscribeOperator(oc)
-			// Check if NO operator is deployed
+			// check if NO operator is deployed
 			waitForPodReadyWithLabel(oc, netobservNS, "app="+NO.OperatorName)
 			NOStatus := checkOperatorStatus(oc, netobservNS, NOPackageName)
 			o.Expect((NOStatus)).To(o.BeTrue())
@@ -99,12 +96,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy loki operator")
 		namespace := oc.Namespace()
-		priorExists = checkOperatorStatus(oc, lokiNS, lokiPackageName)
+		Lokiexisting = checkOperatorStatus(oc, lokiNS, lokiPackageName)
 
 		// Don't delete if Loki Operator existed already before NetObserv
 		// If Loki Operator was installed by NetObserv tests,
 		// it will install and uninstall after each spec/test.
-		if !priorExists {
+		if !Lokiexisting {
 			LO.SubscribeOperator(oc)
 			waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
 		}
@@ -121,7 +118,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		ls = lokiStack{
 			Name:          "lokistack",
 			Namespace:     namespace,
-			TSize:         "1x.extra-small",
+			TSize:         "1x.demo",
 			StorageType:   objectStorageType,
 			StorageSecret: "objectstore-secret",
 			StorageClass:  sc,
@@ -135,28 +132,28 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		err = ls.deployLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
+
+		// loki URL
+		lokiURL = fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, ls.Namespace)
 	})
 
 	g.AfterEach(func() {
 		ls.removeObjectStorage(oc)
 		ls.removeLokiStack(oc)
-		if !priorExists {
+		if !Lokiexisting {
 			LO.uninstallOperator(oc)
 		}
 	})
 
 	g.It("Author:aramesha-High-54043-verify metric server on TLS [Serial]", func() {
 		namespace := oc.Namespace()
-		g.By("Deploy FlowCollector")
-		// loki URL
-		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, ls.Namespace)
 
+		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
 			Namespace:           namespace,
 			Template:            flowFixturePath,
 			MetricServerTLSType: "AUTO",
 			LokiURL:             lokiURL,
-			LokiAuthToken:       "HOST",
 			LokiTLSEnable:       true,
 			LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 		}
@@ -197,15 +194,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.It("Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
 		namespace := oc.Namespace()
-		g.By("Deploy FlowCollector")
-		// loki URL
-		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, namespace)
 
+		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
 			Namespace:       namespace,
 			Template:        flowFixturePath,
 			LokiURL:         lokiURL,
-			LokiAuthToken:   "HOST",
 			LokiTLSEnable:   true,
 			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 		}
@@ -251,124 +245,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.It("Author:aramesha-High-54840-Use console-plugin authorize API with HOST authToken [Serial]", func() {
+	g.It("NonPreRelease-Author:memodi-High-53595-High-49107-High-45304-High-54929-High-54840-Verify flow correctness [Disruptive][Slow]", func() {
 		namespace := oc.Namespace()
-		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, namespace)
 
-		g.By("Deploy flowcollector with loki in Host and TLS enabled")
-		flow := Flowcollector{
-			Namespace:           namespace,
-			Template:            flowFixturePath,
-			MetricServerTLSType: "AUTO",
-			LokiURL:             lokiURL,
-			LokiAuthToken:       "HOST",
-			LokiTLSEnable:       true,
-			LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-		}
-		defer flow.deleteFlowcollector(oc)
-		flow.createFlowcollector(oc)
-
-		// Service Account name
-		g.By("Ensure flows are observed and all pods are running")
-		exutil.AssertAllPodsToBeReady(oc, namespace)
-		// ensure eBPF pods are ready
-		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
-		// verify logs
-		sa_name := "flowlogs-pipeline"
-		err := verifyTime(oc, namespace, ls.Name, sa_name, namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-	})
-
-	g.It("NonPreRelease-Author:aramesha-High-53597-Verify network flows are captured with Kafka [Serial]", func() {
-		g.By("Skip if test is running on an arm64 cluster (unsupported processor architecture for AMQ Streams)")
-		architecture.SkipArchitectures(oc, architecture.ARM64)
-		g.By("Subscribe to AMQ operator")
-		namespace := oc.Namespace()
-		catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
-		amq := SubscriptionObjects{
-			OperatorName:  "amq-streams-cluster-operator",
-			Namespace:     namespace,
-			PackageName:   "amq-streams",
-			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
-			OperatorGroup: filePath.Join(subscriptionDir, "singlenamespace-og.yaml"),
-			CatalogSource: catsrc,
-		}
-
-		defer amq.uninstallOperator(oc)
-		amq.SubscribeOperator(oc)
-		// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
-		checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
-
-		g.By("Deploy KAFKA")
-		// Kafka metrics config Template path
-		kafkaMetricsPath := filePath.Join(kafkaDir, "kafka-metrics-config.yaml")
-
-		kafkaMetrics := KafkaMetrics{
-			Namespace: namespace,
-			Template:  kafkaMetricsPath,
-		}
-
-		// Kafka Template path
-		kafkaPath := filePath.Join(kafkaDir, "kafka-default.yaml")
-
-		kafka := Kafka{
-			Name:         "kafka-cluster",
-			Namespace:    namespace,
-			Template:     kafkaPath,
-			StorageClass: ls.StorageClass,
-		}
-
-		// Kafka Topic path
-		kafkaTopicPath := filePath.Join(kafkaDir, "kafka-topic.yaml")
-
-		kafkaTopic := KafkaTopic{
-			TopicName: "network-flows",
-			Name:      kafka.Name,
-			Namespace: namespace,
-			Template:  kafkaTopicPath,
-		}
-
-		defer kafkaTopic.deleteKafkaTopic(oc)
-		defer kafka.deleteKafka(oc)
-		kafkaMetrics.deployKafkaMetrics(oc)
-		kafka.deployKafka(oc)
-		kafkaTopic.deployKafkaTopic(oc)
-
-		g.By("Check if Kafka and Kafka topic are ready")
-		// Wait for Kafka and KafkaTopic to be ready
-		waitForKafkaReady(oc, kafka.Name, kafka.Namespace)
-		waitForKafkaTopicReady(oc, kafkaTopic.TopicName, kafkaTopic.Namespace)
-
-		g.By("Deploy FlowCollector")
-		// loki URL
-		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, ls.Namespace)
-
-		flow := Flowcollector{
-			Namespace:           namespace,
-			DeploymentModel:     "KAFKA",
-			Template:            flowFixturePath,
-			MetricServerTLSType: "AUTO",
-			LokiURL:             lokiURL,
-			LokiAuthToken:       "HOST",
-			LokiTLSEnable:       true,
-			LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s", namespace),
-		}
-
-		defer flow.deleteFlowcollector(oc)
-		flow.createFlowcollector(oc)
-
-		g.By("Ensure flows are observed and all pods are running")
-		exutil.AssertAllPodsToBeReady(oc, namespace)
-		// ensure eBPF pods are ready
-		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
-		// verify logs
-		err := verifyTime(oc, namespace, ls.Name, "flowlogs-pipeline-transformer", ls.Namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-	})
-
-	g.It("NonPreRelease-Author:memodi-High-49107-High-45304-High-54929-High-54840-Verify flow correctness with FORWARD authToken [Disruptive][Slow]", func() {
-		namespace := oc.Namespace()
 		g.By("Deploying test server and client pods")
 		template := filePath.Join(baseDir, "test-client-server_template.yaml")
 		testTemplate := TestClientServerTemplate{
@@ -383,15 +262,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Deploy FlowCollector")
-		// loki URL
-		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, namespace)
-
 		flow := Flowcollector{
 			Namespace:       namespace,
 			DeploymentModel: "DIRECT",
 			Template:        flowFixturePath,
 			LokiURL:         lokiURL,
-			LokiAuthToken:   "FORWARD",
 			LokiTLSEnable:   true,
 			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 		}
@@ -403,6 +278,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		exutil.AssertAllPodsToBeReady(oc, namespace)
 		// ensure eBPF pods are ready
 		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+
 		g.By("Wait for 2 mins before logs gets collected and written to loki")
 		time.Sleep(120 * time.Second)
 
@@ -439,34 +315,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		token, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check logs in loki")
-		route := "https://" + getRouteAddress(oc, ls.Namespace, ls.Name)
-		lc := newLokiClient(route).withToken(token).retry(5)
-		lokiQuery := fmt.Sprintf("{app=\"netobserv-flowcollector\", DstK8S_Namespace=\"%s\", SrcK8S_Namespace=\"%s\", FlowDirection=\"0\"}", testTemplate.ClientNS, testTemplate.ServerNS)
-		tenantID := "network"
-
-		err = wait.Poll(30*time.Second, 300*time.Second, func() (done bool, err error) {
-			res, err := lc.searchLogsInLoki(tenantID, lokiQuery)
-			if err != nil {
-				e2e.Logf("\ngot err %v when getting %s logs for query: %s\n", err, tenantID, lokiQuery)
-				return false, err
-			}
-			if len(res.Data.Result) > 0 {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", tenantID))
-		res, err := lc.searchLogsInLoki("network", lokiQuery)
+		g.By("get flowlogs from loki")
+		flowRecords, err := testTemplate.getLokiFlowLogs(oc, token, ls.Namespace, ls.Name)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		flowRecords := []FlowRecord{}
 
-		for _, result := range res.Data.Result {
-			if result.Stream.DstK8S_Namespace == testTemplate.ClientNS && result.Stream.SrcK8S_Namespace == testTemplate.ServerNS && result.Stream.SrcK8S_OwnerName == "nginx-service" {
-				flowRecords, err = getFlowRecords(result.Values)
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-		}
+		g.By("Ensure correctness of flows")
 		var multiplier int = 0
 		switch unit := testTemplate.ObjectSize[len(testTemplate.ObjectSize)-1:]; unit {
 		case "K":
@@ -503,123 +356,216 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(errFlows).Should(o.BeNumerically("<=", tolerance))
 	})
 
-	g.It("NonPreRelease-Author:aramesha-High-57397-Verify network-flows export with Kafka [Serial]", func() {
-		g.By("Skip if test is running on an arm64 cluster (unsupported processor architecture for AMQ Streams)")
-		architecture.SkipArchitectures(oc, architecture.ARM64)
-		g.By("Subscribe to AMQ operator")
-		namespace := oc.Namespace()
-		catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
-		amq := SubscriptionObjects{
-			OperatorName:  "amq-streams-cluster-operator",
-			Namespace:     namespace,
-			PackageName:   "amq-streams",
-			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
-			OperatorGroup: filePath.Join(subscriptionDir, "singlenamespace-og.yaml"),
-			CatalogSource: catsrc,
-		}
+	g.Context("with KAFKA", func() {
+		var (
+			kafkaDir, kafkaTopicPath string
+			AMQexisting              = false
+			amq                      SubscriptionObjects
+			kafka                    Kafka
+			kafkaTopic               KafkaTopic
+			kafkaUser                KafkaUser
+		)
 
-		defer amq.uninstallOperator(oc)
-		amq.SubscribeOperator(oc)
-		// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
-		checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
+		g.BeforeEach(func() {
+			namespace := oc.Namespace()
+			g.By("Skip if test is running on an arm64 cluster (unsupported processor architecture for AMQ Streams)")
+			architecture.SkipArchitectures(oc, architecture.ARM64)
 
-		g.By("Deploy KAFKA")
-		// Kafka metrics config Template path
-		kafkaMetricsPath := filePath.Join(kafkaDir, "kafka-metrics-config.yaml")
+			kafkaDir = exutil.FixturePath("testdata", "netobserv", "kafka")
+			// Kafka Topic path
+			kafkaTopicPath = filePath.Join(kafkaDir, "kafka-topic.yaml")
+			// Kafka TLS Template path
+			kafkaTLSPath := filePath.Join(kafkaDir, "kafka-tls.yaml")
+			// Kafka metrics config Template path
+			kafkaMetricsPath := filePath.Join(kafkaDir, "kafka-metrics-config.yaml")
+			// Kafka User path
+			kafkaUserPath := filePath.Join(kafkaDir, "kafka-user.yaml")
 
-		kafkaMetrics := KafkaMetrics{
-			Namespace: namespace,
-			Template:  kafkaMetricsPath,
-		}
+			g.By("Subscribe to AMQ operator")
+			kafkaSource := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
+			amq = SubscriptionObjects{
+				OperatorName:  "amq-streams-cluster-operator",
+				Namespace:     "openshift-operators",
+				PackageName:   "amq-streams",
+				Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+				CatalogSource: kafkaSource,
+			}
 
-		// Kafka Template path
-		kafkaPath := filePath.Join(kafkaDir, "kafka-default.yaml")
+			// check if amq Streams Operator is already present
+			AMQexisting := checkOperatorStatus(oc, amq.Namespace, amq.PackageName)
+			if !AMQexisting {
+				amq.SubscribeOperator(oc)
+				// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
+				checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
+			}
 
-		kafka := Kafka{
-			Name:         "kafka-cluster",
-			Namespace:    namespace,
-			Template:     kafkaPath,
-			StorageClass: ls.StorageClass,
-		}
+			kafkaMetrics := KafkaMetrics{
+				Namespace: namespace,
+				Template:  kafkaMetricsPath,
+			}
 
-		// Kafka Topic path
-		kafkaTopicPath := filePath.Join(kafkaDir, "kafka-topic.yaml")
+			kafka = Kafka{
+				Name:         "kafka-cluster",
+				Namespace:    namespace,
+				Template:     kafkaTLSPath,
+				StorageClass: ls.StorageClass,
+			}
 
-		// deploy kafka topic
-		kafkaTopic1 := KafkaTopic{
-			TopicName: "network-flows",
-			Name:      kafka.Name,
-			Namespace: namespace,
-			Template:  kafkaTopicPath,
-		}
+			kafkaTopic = KafkaTopic{
+				TopicName: "network-flows",
+				Name:      kafka.Name,
+				Namespace: namespace,
+				Template:  kafkaTopicPath,
+			}
 
-		// deploy kafka topic for export
-		kafkaTopic2 := KafkaTopic{
-			TopicName: "network-flows-export",
-			Name:      kafka.Name,
-			Namespace: namespace,
-			Template:  kafkaTopicPath,
-		}
+			kafkaUser = KafkaUser{
+				UserName:  "flp-kafka",
+				Name:      kafka.Name,
+				Namespace: namespace,
+				Template:  kafkaUserPath,
+			}
 
-		defer kafkaTopic1.deleteKafkaTopic(oc)
-		defer kafkaTopic2.deleteKafkaTopic(oc)
-		defer kafka.deleteKafka(oc)
-		kafkaMetrics.deployKafkaMetrics(oc)
-		kafka.deployKafka(oc)
-		kafkaTopic1.deployKafkaTopic(oc)
-		kafkaTopic1.deployKafkaTopic(oc)
-		kafkaTopic2.deployKafkaTopic(oc)
+			g.By("Deploy KAFKA with TLS")
+			kafkaMetrics.deployKafkaMetrics(oc)
+			kafka.deployKafka(oc)
+			kafkaTopic.deployKafkaTopic(oc)
+			kafkaUser.deployKafkaUser(oc)
 
-		g.By("Check if Kafka and Kafka topic are ready")
-		// Wait for Kafka and KafkaTopic to be ready
-		waitForKafkaReady(oc, kafka.Name, kafka.Namespace)
-		waitForKafkaTopicReady(oc, kafkaTopic1.TopicName, kafkaTopic1.Namespace)
-		waitForKafkaTopicReady(oc, kafkaTopic2.TopicName, kafkaTopic2.Namespace)
+			g.By("Check if Kafka and Kafka topic are ready")
+			// wait for Kafka and KafkaTopic to be ready
+			waitForKafkaReady(oc, kafka.Name, kafka.Namespace)
+			waitForKafkaTopicReady(oc, kafkaTopic.TopicName, kafkaTopic.Namespace)
+		})
 
-		g.By("Deploy FlowCollector")
-		// loki URL
-		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, namespace)
+		g.AfterEach(func() {
+			kafkaUser.deleteKafkaUser(oc)
+			kafkaTopic.deleteKafkaTopic(oc)
+			kafka.deleteKafka(oc)
+			if !AMQexisting {
+				amq.uninstallOperator(oc)
+			}
+			_, err := oc.AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		})
 
-		flow := Flowcollector{
-			Namespace:           namespace,
-			DeploymentModel:     "KAFKA",
-			Template:            flowFixturePath,
-			MetricServerTLSType: "AUTO",
-			LokiURL:             lokiURL,
-			LokiAuthToken:       "HOST",
-			LokiTLSEnable:       true,
-			LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s", namespace),
-		}
+		g.It("NonPreRelease-Author:aramesha-High-56362-High-53597-High-56326-Verify network flows are captured with Kafka with TLS [Serial]", func() {
+			namespace := oc.Namespace()
 
-		defer flow.deleteFlowcollector(oc)
-		flow.createFlowcollector(oc)
+			g.By("Deploy FlowCollector with KAFKA TLS")
+			flow := Flowcollector{
+				Namespace:           namespace,
+				DeploymentModel:     "KAFKA",
+				Template:            flowFixturePath,
+				MetricServerTLSType: "AUTO",
+				LokiURL:             lokiURL,
+				LokiTLSEnable:       true,
+				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
+				KafkaTLSEnable:      true,
+			}
 
-		// Patch flowcollector exporters value
-		patchValue := fmt.Sprintf(`[{"kafka":{"address": "` + flow.KafkaAddress + `", "topic": "network-flows-export"},"type": "KAFKA"}]`)
-		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/exporters", "value": `+patchValue+`}]`, "--type=json").Output()
+			defer flow.deleteFlowcollector(oc)
+			flow.createFlowcollector(oc)
 
-		g.By("Ensure flows are observed and all pods are running")
-		exutil.AssertAllPodsToBeReady(oc, namespace)
-		// ensure eBPF pods are ready
-		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+			g.By("Ensure flows are observed, all pods are running and secrets are synced")
+			exutil.AssertAllPodsToBeReady(oc, namespace)
+			// ensure eBPF pods are ready
+			exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+			// ensure certs are synced to privileged NS
+			secrets, err := getSecrets(oc, namespace+"-privileged")
+			o.Expect(err).ToNot(o.HaveOccurred())
+			o.Expect(secrets).To(o.And(o.ContainSubstring(kafkaUser.UserName), o.ContainSubstring(kafka.Name+"-cluster-ca-cert")))
 
-		g.By("Verify loki and KAFKA logs")
-		verifyTime(oc, namespace, ls.Name, "flowlogs-pipeline-transformer", ls.Namespace)
+			// verify logs
+			g.By("Escalate SA to cluster admin")
+			_, err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 
-		consumerTemplate := filePath.Join(kafkaDir, "topic-consumer.yaml")
-		consumer := resource{"job", kafkaTopic2.TopicName + "-consumer", namespace}
-		defer consumer.clear(oc)
-		err := consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "NAMESPACE="+consumer.namespace, "KAFKA_TOPIC="+kafkaTopic2.TopicName, "CLUSTER_NAME="+kafka.Name)
-		o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Wait for a min before logs gets collected and written to loki")
+			time.Sleep(60 * time.Second)
 
-		waitForPodReadyWithLabel(oc, namespace, "job-name="+kafkaTopic2.TopicName+"-consumer")
+			g.By("Get flowlogs from loki")
+			err = verifyLokilogsTime(oc, ls.Namespace, ls.Name, "flowlogs-pipeline-transformer")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		})
 
-		consumerPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "job-name=network-flows-export-consumer", "-o=jsonpath={.items[0].metadata.name}").Output()
+		g.It("NonPreRelease-Author:aramesha-High-57397-Verify network-flows export with Kafka [Serial]", func() {
+			namespace := oc.Namespace()
 
-		o.Expect(err).NotTo(o.HaveOccurred())
-		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", consumerPodName, `'{"AgentIP":'`)
-		exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with job-name=network-flows-export-consumer label")
-		verifyFlowRecordFromLogs(podLogs)
+			g.By("Deploy kafka Topic for export")
+			// deploy kafka topic for export
+			kafkaTopic2 := KafkaTopic{
+				TopicName: "network-flows-export",
+				Name:      kafka.Name,
+				Namespace: namespace,
+				Template:  kafkaTopicPath,
+			}
+
+			defer kafkaTopic2.deleteKafkaTopic(oc)
+			kafkaTopic2.deployKafkaTopic(oc)
+			waitForKafkaTopicReady(oc, kafkaTopic2.TopicName, kafkaTopic2.Namespace)
+
+			g.By("Deploy FlowCollector with KAFKA TLS")
+			flow := Flowcollector{
+				Namespace:           namespace,
+				DeploymentModel:     "KAFKA",
+				Template:            flowFixturePath,
+				MetricServerTLSType: "AUTO",
+				LokiURL:             lokiURL,
+				LokiTLSEnable:       true,
+				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
+				KafkaTLSEnable:      true,
+			}
+
+			defer flow.deleteFlowcollector(oc)
+			flow.createFlowcollector(oc)
+
+			// patch flowcollector exporters value
+			patchValue := fmt.Sprintf(`[{"kafka":{"address": "` + flow.KafkaAddress + `", "tls":{"caCert":{"certFile": "ca.crt", "name": "kafka-cluster-cluster-ca-cert", "namespace": "` + namespace + `", "type": "secret"},"enable": true, "insecureSkipVerify": false, "userCert":{"certFile": "user.crt", "certKey": "user.key", "name": "` + kafkaUser.UserName + `", "namespace": "` + namespace + `", "type": "secret"}},"topic": "network-flows-export"},"type": "KAFKA"}]`)
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/exporters", "value": `+patchValue+`}]`, "--type=json").Output()
+			// check if patch is succesfull
+			flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.exporters[0].type}'").Output()
+			o.Expect(err).ToNot(o.HaveOccurred())
+			o.Expect(flowPatch).To(o.Equal(`'KAFKA'`))
+
+			g.By("Ensure flows are observed, all pods are running and secrets are synced")
+			exutil.AssertAllPodsToBeReady(oc, namespace)
+			// ensure eBPF pods are ready
+			exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+			// ensure certs are synced to privileged NS
+			secrets, err := getSecrets(oc, namespace+"-privileged")
+			o.Expect(err).ToNot(o.HaveOccurred())
+			o.Expect(secrets).To(o.And(o.ContainSubstring(kafkaUser.UserName), o.ContainSubstring(kafka.Name+"-cluster-ca-cert")))
+
+			// verify logs
+			g.By("Escalate SA to cluster admin")
+			_, err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Wait for a min before logs gets collected and written to loki")
+			time.Sleep(60 * time.Second)
+
+			g.By("Get flowlogs from loki")
+			err = verifyLokilogsTime(oc, ls.Namespace, ls.Name, "flowlogs-pipeline-transformer")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy KAFKA consumer pod")
+			consumerTemplate := filePath.Join(kafkaDir, "topic-consumer-tls.yaml")
+			consumer := resource{"job", kafkaTopic2.TopicName + "-consumer", namespace}
+			defer consumer.clear(oc)
+			err = consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "NAMESPACE="+consumer.namespace, "KAFKA_TOPIC="+kafkaTopic2.TopicName, "CLUSTER_NAME="+kafka.Name, "KAFKA_USER="+kafkaUser.UserName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			waitForPodReadyWithLabel(oc, namespace, "job-name="+consumer.name)
+
+			consumerPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "job-name="+consumer.name, "-o=jsonpath={.items[0].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Verify KAFKA logs")
+			podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", consumerPodName, `'{"AgentIP":'`)
+			exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with job-name=network-flows-export-consumer label")
+			verifyFlowRecordFromLogs(podLogs)
+		})
 	})
 })

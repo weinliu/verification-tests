@@ -1,12 +1,10 @@
 package netobserv
 
 import (
-	"encoding/json"
 	"fmt"
 	filePath "path/filepath"
 	"strconv"
 
-	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -16,19 +14,24 @@ import (
 type Flowcollector struct {
 	Namespace                 string
 	ProcessorKind             string
+	LogType                   string
 	DeploymentModel           string
-	Template                  string
-	MetricServerTLSType       string
 	LokiURL                   string
 	LokiAuthToken             string
 	LokiTLSEnable             bool
 	LokiTLSCertName           string
-	KafkaAddress              string
-	LogType                   string
 	LokiStatusTLSEnable       bool
 	LokiStatusURL             string
 	LokiStatusTLSCertName     string
 	LokiStatusTLSUserCertName string
+	KafkaAddress              string
+	KafkaTLSEnable            bool
+	KafkaClusterName          string
+	KafkaTopic                string
+	KafkaUser                 string
+	MetricServerTLSType       string
+	EbpfCacheActiveTimeout    string
+	Template                  string
 }
 
 // Metrics struct to handle Metrics resources
@@ -48,14 +51,6 @@ type MonitoringConfig struct {
 
 // ForwardClusterRoleBinding struct to handle ClusterRoleBinding in Forward mode
 type ForwardClusterRoleBinding struct {
-	Name               string
-	Namespace          string
-	ServiceAccountName string
-	Template           string
-}
-
-// HostClusterRoleBinding struct to handle ClusterRoleBinding in Host mode
-type HostClusterRoleBinding struct {
 	Name               string
 	Namespace          string
 	ServiceAccountName string
@@ -120,39 +115,12 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		parameters = append(parameters, "LOKI_URL="+flow.LokiURL)
 	}
 
-	if flow.LokiAuthToken != "" {
-		parameters = append(parameters, "LOKI_AUTH_TOKEN="+flow.LokiAuthToken)
-		baseDir := exutil.FixturePath("testdata", "netobserv")
-		if flow.LokiAuthToken == "FORWARD" {
-			forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
-			forwardCRB := ForwardClusterRoleBinding{
-				Namespace:          oc.Namespace(),
-				Template:           forwardCRBPath,
-				ServiceAccountName: flpSA,
-			}
-			forwardCRB.deployForwardCRB(oc)
-		} else if flow.LokiAuthToken == "HOST" {
-			hostCRBPath := filePath.Join(baseDir, "clusterRoleBinding-HOST.yaml")
-
-			hostCRB := HostClusterRoleBinding{
-				Namespace:          oc.Namespace(),
-				Template:           hostCRBPath,
-				ServiceAccountName: flpSA,
-			}
-			hostCRB.deployHostCRB(oc)
-		}
-	}
-
 	if strconv.FormatBool(flow.LokiTLSEnable) != "" {
 		parameters = append(parameters, "LOKI_TLS_ENABLE="+strconv.FormatBool(flow.LokiTLSEnable))
 	}
 
 	if flow.LokiTLSCertName != "" {
 		parameters = append(parameters, "LOKI_TLS_CERT_NAME="+flow.LokiTLSCertName)
-	}
-
-	if flow.KafkaAddress != "" {
-		parameters = append(parameters, "KAFKA_ADDRESS="+flow.KafkaAddress)
 	}
 
 	if flow.LokiStatusURL != "" {
@@ -175,7 +143,41 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		parameters = append(parameters, "LOG_TYPE="+flow.LogType)
 	}
 
+	if flow.KafkaAddress != "" {
+		parameters = append(parameters, "KAFKA_ADDRESS="+flow.KafkaAddress)
+	}
+
+	if strconv.FormatBool(flow.KafkaTLSEnable) != "" {
+		parameters = append(parameters, "KAFKA_TLS_ENABLE="+strconv.FormatBool(flow.KafkaTLSEnable))
+	}
+
+	if flow.KafkaClusterName != "" {
+		parameters = append(parameters, "KAFKA_CLUSTER_NAME="+flow.KafkaClusterName)
+	}
+
+	if flow.KafkaTopic != "" {
+		parameters = append(parameters, "KAFKA_TOPIC="+flow.KafkaTopic)
+	}
+
+	if flow.KafkaUser != "" {
+		parameters = append(parameters, "KAFKA_USER="+flow.KafkaUser)
+	}
+
+	if flow.EbpfCacheActiveTimeout != "" {
+		parameters = append(parameters, "EBPF_CACHEACTIVETIMEOUT="+flow.EbpfCacheActiveTimeout)
+	}
+
 	exutil.ApplyNsResourceFromTemplate(oc, flow.Namespace, parameters...)
+
+	// deploy Forward CRB
+	baseDir := exutil.FixturePath("testdata", "netobserv")
+	forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
+	forwardCRB := ForwardClusterRoleBinding{
+		Namespace:          oc.Namespace(),
+		Template:           forwardCRBPath,
+		ServiceAccountName: flpSA,
+	}
+	forwardCRB.deployForwardCRB(oc)
 }
 
 // delete flowcollector CRD from a cluster
@@ -226,40 +228,4 @@ func (crb *ForwardClusterRoleBinding) deployForwardCRB(oc *exutil.CLI) {
 	}
 
 	exutil.ApplyNsResourceFromTemplate(oc, crb.Namespace, parameters...)
-}
-
-// deploy HostClusterRoleBinding
-func (crb *HostClusterRoleBinding) deployHostCRB(oc *exutil.CLI) {
-	e2e.Logf("Deploy ClusterRoleBinding in Host mode")
-	parameters := []string{"--ignore-unknown-parameters=true", "-f", crb.Template, "-p", "NAMESPACE=" + crb.Namespace}
-
-	if crb.Name != "" {
-		parameters = append(parameters, "NAME="+crb.Name)
-	}
-
-	if crb.ServiceAccountName != "" {
-		parameters = append(parameters, "SERVICE_ACCOUNT_NAME="+crb.ServiceAccountName)
-	}
-
-	exutil.ApplyNsResourceFromTemplate(oc, crb.Namespace, parameters...)
-}
-
-func getFlowRecords(lokiValues [][]string) ([]FlowRecord, error) {
-	flowRecords := []FlowRecord{}
-	for _, values := range lokiValues {
-		e2e.Logf("Flow values are %s", values[1])
-		timestamp, _ := strconv.ParseInt(values[0], 10, 64)
-		var flowlog Flowlog
-		err := json.Unmarshal([]byte(values[1]), &flowlog)
-		if err != nil {
-			return []FlowRecord{}, err
-		}
-		o.Expect(err).ToNot(o.HaveOccurred())
-		flowRecord := FlowRecord{
-			Timestamp: timestamp,
-			Flowlog:   flowlog,
-		}
-		flowRecords = append(flowRecords, flowRecord)
-	}
-	return flowRecords, nil
 }

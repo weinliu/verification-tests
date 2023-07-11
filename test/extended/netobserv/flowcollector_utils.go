@@ -1,6 +1,7 @@
 package netobserv
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -57,6 +58,25 @@ func getFlowlogsPipelinePod(oc *exutil.CLI, ns, name string) string {
 	return podName
 }
 
+func getFlowRecords(lokiValues [][]string) ([]FlowRecord, error) {
+	flowRecords := []FlowRecord{}
+	for _, values := range lokiValues {
+		e2e.Logf("Flow values are %s", values[1])
+		timestamp, _ := strconv.ParseInt(values[0], 10, 64)
+		var flowlog Flowlog
+		err := json.Unmarshal([]byte(values[1]), &flowlog)
+		if err != nil {
+			return []FlowRecord{}, err
+		}
+		flowRecord := FlowRecord{
+			Timestamp: timestamp,
+			Flowlog:   flowlog,
+		}
+		flowRecords = append(flowRecords, flowRecord)
+	}
+	return flowRecords, nil
+}
+
 // Verify flow records from logs
 func verifyFlowRecordFromLogs(podLog string) {
 	re := regexp.MustCompile("{\"AgentIP\":.*")
@@ -66,8 +86,8 @@ func verifyFlowRecordFromLogs(podLog string) {
 	// regex for ip
 	//numBlock := "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
 	//regexPattern := numBlock + "\\." + numBlock + "\\." + numBlock + "\\." + numBlock
-	for i, flow := range flowRecords {
-		e2e.Logf("The %d th flow record is: %v\n\n\n", i, flow)
+	for _, flow := range flowRecords {
+		//e2e.Logf("The %d th flow record is: %v\n\n\n", i, flow)
 		o.Expect(flow).Should(o.And(
 			//o.MatchRegexp(fmt.Sprintf("AgentIP.:%s", regexPattern)),
 			o.MatchRegexp("Bytes.:[0-9]+"),
@@ -90,6 +110,34 @@ func (flowlog *Flowlog) verifyFlowRecord() {
 	o.Expect(flowlog.TimeFlowEndMs).Should(o.BeNumerically(">", compareTimeMs))
 	o.Expect(flowlog.TimeFlowStartMs).Should(o.BeNumerically(">", compareTimeMs))
 	o.Expect(flowlog.TimeReceived).Should(o.BeNumerically(">", compareTime.Unix()))
+}
+
+// Get flows from Loki logs
+func (testTemplate *TestClientServerTemplate) getLokiFlowLogs(oc *exutil.CLI, token, namespace, lokiStackName string) ([]FlowRecord, error) {
+	route := "https://" + getRouteAddress(oc, namespace, lokiStackName)
+	lc := newLokiClient(route).withToken(token).retry(5)
+	lokiQuery := fmt.Sprintf("{app=\"netobserv-flowcollector\", DstK8S_Namespace=\"%s\", SrcK8S_Namespace=\"%s\", FlowDirection=\"0\"}", testTemplate.ClientNS, testTemplate.ServerNS)
+	tenantID := "network"
+
+	var res *lokiQueryResponse
+	err := wait.Poll(30*time.Second, 300*time.Second, func() (done bool, err error) {
+		var qErr error
+		res, qErr = lc.searchLogsInLoki(tenantID, lokiQuery)
+		if qErr != nil {
+			e2e.Logf("\ngot error %v when getting %s logs for query: %s\n", qErr, tenantID, lokiQuery)
+			return false, qErr
+		}
+		return len(res.Data.Result) > 0, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", tenantID))
+	flowRecords := []FlowRecord{}
+
+	for _, result := range res.Data.Result {
+		if result.Stream.DstK8S_Namespace == testTemplate.ClientNS && result.Stream.SrcK8S_Namespace == testTemplate.ServerNS && result.Stream.SrcK8S_OwnerName == "nginx-service" {
+			flowRecords, err = getFlowRecords(result.Values)
+		}
+	}
+	return flowRecords, err
 }
 
 // Verify metrics by doing curl commands
@@ -134,11 +182,11 @@ func verifyCurl(oc *exutil.CLI, podName, ns, curlDest, CertPath string) {
 }
 
 // Verify loki records and if it was written in the last 5 minutes
-func verifyTime(oc *exutil.CLI, namespace, lokiStackName, serviceAccountName, lokiStackNS string) error {
-	bearerToken := getSAToken(oc, serviceAccountName, namespace)
+func verifyLokilogsTime(oc *exutil.CLI, lokiStackNS, lokiStackName, serviceAccountName string) error {
+	bearerToken := getSAToken(oc, serviceAccountName, lokiStackNS)
 	route := "https://" + getRouteAddress(oc, lokiStackNS, lokiStackName)
 	lc := newLokiClient(route).withToken(bearerToken).retry(5)
-	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\"}")
+	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\", FlowDirection=\"0\"}")
 
 	if err != nil {
 		return err
@@ -156,12 +204,13 @@ func verifyTime(oc *exutil.CLI, namespace, lokiStackName, serviceAccountName, lo
 		}
 	}
 
-	for _, flowlog := range flowRecords {
+	for _, r := range flowRecords {
 		now := time.Now().UnixNano()
 		// check if the record is written in the last 5 mins
-		timeminus := now - flowlog.Timestamp
+		timeminus := now - r.Timestamp
 		o.Expect(timeminus).Should(o.BeNumerically(">", 0))
-		o.Expect(timeminus).Should(o.BeNumerically("<=", 300000000000))
+		o.Expect(timeminus).Should(o.BeNumerically("<=", 120000000000))
+		r.Flowlog.verifyFlowRecord()
 	}
 	return nil
 }
