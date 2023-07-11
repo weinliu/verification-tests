@@ -157,30 +157,36 @@ func copyFile(source string, dest string) {
 // Set ENV for oc-mirror credential
 func locatePodmanCred(oc *exutil.CLI, dst string) (err error) {
 	e2e.Logf("Setting env for oc-mirror credential")
-	if err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dst, "--confirm").Execute(); err != nil {
-		err = fmt.Errorf("extract pull-secret failed: %v", err)
-		return
+	if err = exutil.GetPullSec(oc, dst); err != nil {
+		return fmt.Errorf("extract pull-secret failed: %v", err)
 	}
+	if os.Getenv("CLUSTER_PROFILE_DIR") != "" {
+		cmd := fmt.Sprintf("jq -s '.[0]*.[1]' %s %s > %s", dst+"/.dockerconfigjson", os.Getenv("CLUSTER_PROFILE_DIR")+"/pull-secret", dst+"/auth.json")
+		if _, err = exec.Command("bash", "-c", cmd).CombinedOutput(); err != nil {
+			return fmt.Errorf("%s failed: %v", cmd, err)
+		}
+	} else {
+		copyFile(dst+"/.dockerconfigjson", dst+"/auth.json")
+	}
+
 	envDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
 	containerDir := envDir + "/containers/"
 	key := "XDG_RUNTIME_DIR"
 	currentRuntime, ex := os.LookupEnv(key)
 	if !ex {
 		if err = os.MkdirAll(containerDir, 0700); err != nil {
-			err = fmt.Errorf("make dir failed: %v", err)
-			return
+			return fmt.Errorf("make dir failed: %v", err)
 		}
 		os.Setenv(key, envDir)
-		copyFile(dst+"/"+".dockerconfigjson", containerDir+"auth.json")
+		copyFile(dst+"/auth.json", containerDir+"auth.json")
 		return
 	}
 	_, err = os.Stat(currentRuntime + "containers/auth.json")
 	if os.IsNotExist(err) {
 		if err = os.MkdirAll(currentRuntime+"containers", 0700); err != nil {
-			err = fmt.Errorf("make dir failed: %v", err)
-			return
+			return fmt.Errorf("make dir failed: %v", err)
 		}
-		copyFile(dst+"/"+".dockerconfigjson", containerDir+"auth.json")
+		copyFile(dst+"/auth.json", containerDir+"auth.json")
 		return
 	}
 	return
