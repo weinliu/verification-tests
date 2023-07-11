@@ -5857,4 +5857,69 @@ manifests:
 		})
 		exutil.AssertWaitPollNoErr(err, "pod did not showed up with the expected status")
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-11531-APIServer Can access both http and https pods and services via the API proxy [Serial]", func() {
+		g.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
+		g.By("1) Create a new project required for this test execution")
+		oc.SetupProject()
+		projectNs := oc.Namespace()
+
+		g.By("2. Get the clustername")
+		clusterName, clusterErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[0].name}`).Output()
+		o.Expect(clusterErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Cluster Name :: %v", clusterName)
+
+		g.By("3. Point to the API server referring the cluster name")
+		apiserverName, apiErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[?(@.name=="`+clusterName+`")].cluster.server}`).Output()
+		o.Expect(apiErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Server Name :: %v", apiserverName)
+
+		g.By("4) Get access token")
+		token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Define the URL values
+		urls := []struct {
+			URL       string
+			Target    string
+			ExpectStr string
+		}{
+			{
+				URL:       "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83",
+				Target:    "hello-openshift",
+				ExpectStr: "Hello OpenShift!",
+			},
+			{
+				URL:       "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0",
+				Target:    "nginx-alpine",
+				ExpectStr: "Hello-OpenShift nginx",
+			},
+		}
+
+		for i, u := range urls {
+			g.By(fmt.Sprintf("%d.1) Build "+u.Target+" from external source", i+5))
+			appErr := oc.AsAdmin().WithoutNamespace().Run("new-app").Args(u.URL, "-n", projectNs).Execute()
+			o.Expect(appErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("%d.2) Check if pod is properly running with expected status.", i+5))
+			podsList := getPodsListByLabel(oc.AsAdmin(), projectNs, "deployment="+u.Target)
+			exutil.AssertPodToBeReady(oc, podsList[0], projectNs)
+
+			g.By(fmt.Sprintf("%d.4) Perform the proxy GET request to resource REST endpoint with service", i+5))
+			curlUrl := fmt.Sprintf(`%s/api/v1/namespaces/%s/services/http:%s:8080-tcp/proxy/`, apiserverName, projectNs, u.Target)
+			output := clientCurl(token, curlUrl)
+			o.Expect(output).Should(o.ContainSubstring(u.ExpectStr))
+
+			g.By(fmt.Sprintf("%d.4) Perform the proxy GET request to resource REST endpoint with pod", i+5))
+			curlUrl = fmt.Sprintf(`%s/api/v1/namespaces/%s/pods/http:%s:8080/proxy`, apiserverName, projectNs, podsList[0])
+			output = clientCurl(token, curlUrl)
+			o.Expect(output).Should(o.ContainSubstring(u.ExpectStr))
+		}
+	})
 })

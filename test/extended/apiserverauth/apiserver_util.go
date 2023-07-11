@@ -1248,3 +1248,42 @@ func containsAnyWebHookReason(webhookError string, conditionReasons interface{})
 		return false
 	}
 }
+
+func clientCurl(tokenValue string, url string) string {
+	timeoutDuration := 3 * time.Second
+	var bodyString string
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		e2e.Failf("error creating request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+tokenValue)
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   timeoutDuration,
+	}
+
+	errCurl := wait.PollImmediate(10*time.Second, 300*time.Second, func() (bool, error) {
+		resp, err := client.Do(req)
+		if err != nil {
+			return false, nil
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 200 {
+			bodyBytes, _ := ioutil.ReadAll(resp.Body)
+			bodyString = string(bodyBytes)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCurl, fmt.Sprintf("error waiting for curl request output: %v", errCurl))
+	return bodyString
+}
