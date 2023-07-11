@@ -93,6 +93,16 @@
             "preset_vscname": "vpc-block-snapshot"
           }
         ]
+      },
+      {
+        "name": "topolvm",
+        "provisioners": [
+          {
+            "name": "topolvm.io",
+            "preset_scname": "topolvm-provisioner",
+            "preset_vscname": "topolvm-snapclass"
+          }
+        ]
       }
     ]
   }

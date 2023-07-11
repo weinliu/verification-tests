@@ -2,6 +2,7 @@ package storage
 
 import (
 	"path/filepath"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -865,4 +866,495 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, "ls -lZd "+pod.mountPath)).To(o.ContainSubstring("s0:c345,c789"))
 		o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, "ls -lZ "+pod.mountPath+"/hello")).To(o.ContainSubstring("s0:c345,c789"))
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-64839-[MicroShift] [Snapshot] [Filesystem] Should provision storage with snapshot datasource and restore successfully
+	g.It("MicroShiftOnly-Author:rdeore-Critical-64839-[MicroShift] [Snapshot] [Filesystem] Should provision storage with snapshot datasource and restore successfully", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID                 = "64839"
+			e2eTestNamespace       = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate            = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate            = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+		)
+
+		// Check if thin-pool lvm device supported storageClass exists in cluster
+		thinPoolSC := []string{"mysnap-sc"}
+		snapshotSupportedSC := sliceIntersect(thinPoolSC, getAllStorageClass(oc))
+		if len(snapshotSupportedSC) == 0 {
+			g.Skip("Skip test case as thin-pool lvm supported storageClass is not available in microshift cluster!!!")
+		}
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition for the original
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodNamespace(e2eTestNamespace))
+
+		g.By("#. Create a pvc with the preset csi storageclass")
+		pvcOri.scname = thinPoolSC[0]
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		g.By("#. Create pod with the created pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		g.By("#. Write file to volume")
+		podOri.checkMountedVolumeCouldRW(oc)
+
+		// Create volumesnapshot with pre-defined volumesnapshotclass
+		g.By("#. Create volumesnapshot and wait for ready_to_use")
+		presetVscName := getPresetVolumesnapshotClassNameByProvisioner("topolvm", "topolvm.io")
+		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name),
+			setVolumeSnapshotVscname(presetVscName), setVolumeSnapshotNamespace(e2eTestNamespace))
+		volumesnapshot.create(oc)
+		defer volumesnapshot.delete(oc)
+		volumesnapshot.waitReadyToUse(oc)
+
+		// Set the resource definition for restore
+		pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name), setPodNamespace(e2eTestNamespace))
+
+		g.By("#. Create a restored pvc with the thin-pool device supported storageclass")
+		pvcRestore.scname = thinPoolSC[0]
+		pvcRestore.capacity = pvcOri.capacity
+		pvcRestore.createWithSnapshotDataSource(oc)
+		defer pvcRestore.deleteAsAdmin(oc)
+
+		g.By("#. Create pod with the restored pvc and wait for the pod ready")
+		podRestore.create(oc)
+		defer podRestore.deleteAsAdmin(oc)
+		podRestore.waitReady(oc)
+
+		g.By("#. Check the file exist in restored volume")
+		output, err := podRestore.execCommand(oc, "cat "+podRestore.mountPath+"/testfile")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("storage test"))
+		podRestore.checkMountedVolumeCouldRW(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64840-[MicroShift] [Snapshot] [Block] Should provision storage with snapshot datasource and restore successfully
+	g.It("MicroShiftOnly-Author:rdeore-Critical-64840-[MicroShift] [Snapshot] [Block] Should provision storage with snapshot datasource and restore successfully", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID                 = "64840"
+			e2eTestNamespace       = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate            = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate            = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+		)
+
+		// Check if thin-pool lvm device supported storageClass exists in cluster
+		thinPoolSC := []string{"mysnap-sc"}
+		snapshotSupportedSC := sliceIntersect(thinPoolSC, getAllStorageClass(oc))
+		if len(snapshotSupportedSC) == 0 {
+			g.Skip("Skip test case as thin-pool lvm supported storageClass is not available in microshift cluster!!!")
+		}
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition for the original
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"),
+			setPersistentVolumeClaimNamespace(e2eTestNamespace), setPersistentVolumeClaimVolumemode("Block"))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"),
+			setPodPathType("devicePath"), setPodMountPath("/dev/dblock"), setPodNamespace(e2eTestNamespace))
+
+		g.By("#. Create a pvc with the preset csi storageclass")
+		pvcOri.scname = thinPoolSC[0]
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		g.By("#. Create pod with the created pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		g.By("Write file to raw block volume")
+		podOri.writeDataIntoRawBlockVolume(oc)
+		podOri.execCommand(oc, "sync")
+
+		// Create volumesnapshot with pre-defined volumesnapshotclass
+		g.By("#. Create volumesnapshot and wait for ready_to_use")
+		presetVscName := getPresetVolumesnapshotClassNameByProvisioner("topolvm", "topolvm.io")
+		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name),
+			setVolumeSnapshotVscname(presetVscName), setVolumeSnapshotNamespace(e2eTestNamespace))
+		volumesnapshot.create(oc)
+		defer volumesnapshot.delete(oc)
+		volumesnapshot.waitReadyToUse(oc)
+
+		// Set the resource definition for restore
+		pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name),
+			setPersistentVolumeClaimNamespace(e2eTestNamespace), setPersistentVolumeClaimVolumemode("Block"))
+		podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name), setPodVolumeType("volumeDevices"),
+			setPodPathType("devicePath"), setPodMountPath("/dev/dblock"), setPodNamespace(e2eTestNamespace))
+
+		g.By("#. Create a restored pvc with the thin-pool device supported storageclass")
+		pvcRestore.scname = thinPoolSC[0]
+		pvcRestore.capacity = pvcOri.capacity
+		pvcRestore.createWithSnapshotDataSource(oc)
+		defer pvcRestore.deleteAsAdmin(oc)
+
+		g.By("#. Create pod with the restored pvc and wait for the pod ready")
+		podRestore.create(oc)
+		defer podRestore.deleteAsAdmin(oc)
+		podRestore.waitReady(oc)
+
+		g.By("Check the data in the raw block volume")
+		podRestore.checkDataInRawBlockVolume(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64842-[MicroShift] [Snapshot] volumeSnapshotContent should get removed after the corresponding snapshot deletion with deletionPolicy: 'Delete'
+	g.It("MicroShiftOnly-Author:rdeore-Critical-64842-[MicroShift] [Snapshot] volumeSnapshotContent should get removed after the corresponding snapshot deletion with deletionPolicy: 'Delete'", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID                      = "64842"
+			e2eTestNamespace            = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate      = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+			volumeSnapshotClassTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshotclass-template.yaml")
+		)
+
+		// Check if thin-pool lvm device supported storageClass exists in cluster
+		thinPoolSC := []string{"mysnap-sc"}
+		snapshotSupportedSC := sliceIntersect(thinPoolSC, getAllStorageClass(oc))
+		if len(snapshotSupportedSC) == 0 {
+			g.Skip("Skip test case as thin-pool lvm supported storageClass is not available in microshift cluster!!!")
+		}
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition for the original
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodNamespace(e2eTestNamespace))
+
+		g.By("#. Create a pvc with the preset csi storageclass")
+		pvcOri.scname = thinPoolSC[0]
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		g.By("#. Create pod with the created pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		g.By("#. Create a volumeSnapshotClass with 'Delete' deletion policy")
+		volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(topolvmProvisioner), setVolumeSnapshotDeletionpolicy("Delete"))
+		volumesnapshotClass.create(oc)
+		defer volumesnapshotClass.deleteAsAdmin(oc)
+
+		g.By("#. Create volumesnapshot with the 'Delete' deletionpolicy volumesnapshotclass and wait it ready to use")
+		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name),
+			setVolumeSnapshotVscname(volumesnapshotClass.name), setVolumeSnapshotNamespace(e2eTestNamespace))
+		volumesnapshot.create(oc)
+		defer volumesnapshot.delete(oc)
+		volumesnapshot.waitReadyToUse(oc)
+
+		g.By("#. Delete volumesnapshot and check volumesnapshotcontent is deleted accordingly")
+		vscontent := getVSContentByVSname(oc, volumesnapshot.namespace, volumesnapshot.name)
+		volumesnapshot.delete(oc)
+		o.Eventually(func() string {
+			vsoutput, _ := oc.AsAdmin().Run("get").Args("volumesnapshotcontent", vscontent).Output()
+			return vsoutput
+		}, 30*time.Second, 5*time.Second).Should(
+			o.ContainSubstring("Error from server (NotFound): volumesnapshotcontents.snapshot.storage.k8s.io"))
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64843-[MicroShift] [Snapshot] volumeSnapshotContent should NOT be removed after the corresponding snapshot deletion with deletionPolicy: 'Retain'
+	g.It("MicroShiftOnly-Author:rdeore-Critical-64843-[MicroShift] [Snapshot] volumeSnapshotContent should NOT be removed after the corresponding snapshot deletion with deletionPolicy: 'Retain'", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID                      = "64843"
+			e2eTestNamespace            = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate      = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+			volumeSnapshotClassTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshotclass-template.yaml")
+		)
+
+		// Check if thin-pool lvm device supported storageClass exists in cluster
+		thinPoolSC := []string{"mysnap-sc"}
+		snapshotSupportedSC := sliceIntersect(thinPoolSC, getAllStorageClass(oc))
+		if len(snapshotSupportedSC) == 0 {
+			g.Skip("Skip test case as thin-pool lvm supported storageClass is not available in microshift cluster!!!")
+		}
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition for the original
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodNamespace(e2eTestNamespace))
+
+		g.By("#. Create a pvc with the preset csi storageclass")
+		pvcOri.scname = thinPoolSC[0]
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		g.By("#. Create pod with the created pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		g.By("#. Create a volumeSnapshotClass with 'Retain' deletion policy")
+		volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(topolvmProvisioner), setVolumeSnapshotDeletionpolicy("Retain"))
+		volumesnapshotClass.create(oc)
+		defer volumesnapshotClass.deleteAsAdmin(oc)
+
+		g.By("#. Create volumesnapshot with the 'Retain' deletionpolicy volumesnapshotclass and wait it ready to use")
+		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name),
+			setVolumeSnapshotVscname(volumesnapshotClass.name), setVolumeSnapshotNamespace(e2eTestNamespace))
+		volumesnapshot.create(oc)
+		volumesnapshot.waitReadyToUse(oc)
+		vscontent := getVSContentByVSname(oc, volumesnapshot.namespace, volumesnapshot.name)
+		logicalVolumeName := strings.Replace(vscontent, "content", "shot", 1)
+		defer deleteLogicalVolume(oc, logicalVolumeName)
+		defer volumesnapshot.deleteContent(oc, vscontent)
+		defer volumesnapshot.delete(oc)
+
+		g.By("#. Delete volumesnapshot and check volumesnapshotcontent is NOT deleted")
+		volumesnapshot.delete(oc)
+		o.Consistently(func() string {
+			vsoutput, _ := oc.AsAdmin().Run("get").Args("volumesnapshotcontent", vscontent).Output()
+			return vsoutput
+		}, 30*time.Second, 5*time.Second).Should(
+			o.ContainSubstring(vscontent))
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64856-[MicroShift] [Snapshot] snapshot a volume should support different storage class using the same device class as the source pvc
+	g.It("MicroShiftOnly-Author:rdeore-Critical-64856-[MicroShift] [Snapshot] snapshot a volume should support different storage class using the same device class as the source pvc", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID                 = "64856"
+			e2eTestNamespace       = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate            = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate            = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+			storageClassTemplate   = filepath.Join(storageMicroshiftBaseDir, "storageclass-template.yaml")
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "xfs",
+				"topolvm.io/device-class":   "ssd-thin",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		// Check if thin-pool lvm device supported storageClass exists in cluster
+		thinPoolSC := []string{"mysnap-sc"}
+		snapshotSupportedSC := sliceIntersect(thinPoolSC, getAllStorageClass(oc))
+		if len(snapshotSupportedSC) == 0 {
+			g.Skip("Skip test case as thin-pool lvm supported storageClass is not available in microshift cluster!!!")
+		}
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition for the original
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodNamespace(e2eTestNamespace))
+
+		g.By("#. Create a pvc with the preset csi storageclass")
+		pvcOri.scname = thinPoolSC[0]
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		g.By("#. Create pod with the created pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		g.By("#. Write file to volume")
+		podOri.checkMountedVolumeCouldRW(oc)
+
+		// Create volumesnapshot with pre-defined volumesnapshotclass
+		g.By("#. Create volumesnapshot and wait for ready_to_use")
+		presetVscName := getPresetVolumesnapshotClassNameByProvisioner("topolvm", "topolvm.io")
+		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name),
+			setVolumeSnapshotVscname(presetVscName), setVolumeSnapshotNamespace(e2eTestNamespace))
+		volumesnapshot.create(oc)
+		defer volumesnapshot.delete(oc)
+		volumesnapshot.waitReadyToUse(oc)
+
+		g.By("#. Create new storage class that supports thin-pool lvm device")
+		newSC := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+		newSC.provisioner = topolvmProvisioner
+		newSC.createWithExtraParameters(oc, extraParameters)
+		defer newSC.deleteAsAdmin(oc)
+
+		// Set the resource definition for restore
+		pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name), setPodNamespace(e2eTestNamespace))
+
+		g.By("#. Create a restored pvc with the thin-pool device supported storageclass")
+		pvcRestore.scname = newSC.name
+		pvcRestore.capacity = pvcOri.capacity
+		pvcRestore.createWithSnapshotDataSource(oc)
+		defer pvcRestore.deleteAsAdmin(oc)
+
+		g.By("#. Create pod with the restored pvc and wait for the pod ready")
+		podRestore.create(oc)
+		defer podRestore.deleteAsAdmin(oc)
+		podRestore.waitReady(oc)
+
+		g.By("#. Check the file exist in restored volume")
+		output, err := podRestore.execCommand(oc, "cat "+podRestore.mountPath+"/testfile")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("storage test"))
+		podRestore.checkMountedVolumeCouldRW(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64857-[MicroShift] [Clone] [Filesystem] clone a pvc with filesystem VolumeMode
+	g.It("MicroShiftOnly-Author:rdeore-Critical-64857-[MicroShift] [Clone] [Filesystem] clone a pvc with filesystem VolumeMode", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID           = "64857"
+			e2eTestNamespace = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate      = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate      = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+		)
+
+		// Check if thin-pool lvm device supported storageClass exists in cluster
+		thinPoolSC := []string{"mysnap-sc"}
+		snapshotSupportedSC := sliceIntersect(thinPoolSC, getAllStorageClass(oc))
+		if len(snapshotSupportedSC) == 0 {
+			g.Skip("Skip test case as thin-pool lvm supported storageClass is not available in microshift cluster!!!")
+		}
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition for the original
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodNamespace(e2eTestNamespace))
+
+		g.By("Create a pvc with the thin-pool device supported storageclass")
+		pvcOri.scname = thinPoolSC[0]
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		g.By("Create pod with the pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		g.By("Write file to volume")
+		podOri.checkMountedVolumeCouldRW(oc)
+		podOri.execCommand(oc, "sync")
+
+		// Set the resource definition for the clone
+		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(pvcOri.name), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name), setPodNamespace(e2eTestNamespace))
+
+		g.By("Create a clone pvc with the thin-pool device supported storageclass")
+		pvcClone.scname = thinPoolSC[0]
+		pvcClone.capacity = pvcOri.capacity
+		pvcClone.createWithCloneDataSource(oc)
+		defer pvcClone.deleteAsAdmin(oc)
+
+		g.By("Create a pod with the clone pvc and wait for the pod ready")
+		podClone.create(oc)
+		defer podClone.deleteAsAdmin(oc)
+		podClone.waitReady(oc)
+
+		g.By("Delete origial pvc will not impact the cloned one")
+		podOri.deleteAsAdmin(oc)
+		pvcOri.deleteAsAdmin(oc)
+
+		g.By("Check the file exist in cloned volume")
+		output, err := podClone.execCommand(oc, "cat "+podClone.mountPath+"/testfile")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("storage test"))
+		podClone.checkMountedVolumeCouldRW(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64858-[MicroShift] [Clone] [Block] clone a pvc with block VolumeMode
+	g.It("MicroShiftOnly-Author:rdeore-Critical-64858-[MicroShift] [Clone] [Block] clone a pvc with block VolumeMode", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID           = "64858"
+			e2eTestNamespace = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate      = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate      = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+		)
+
+		// Check if thin-pool lvm device supported storageClass exists in cluster
+		thinPoolSC := []string{"mysnap-sc"}
+		snapshotSupportedSC := sliceIntersect(thinPoolSC, getAllStorageClass(oc))
+		if len(snapshotSupportedSC) == 0 {
+			g.Skip("Skip test case as thin-pool lvm supported storageClass is not available in microshift cluster!!!")
+		}
+
+		g.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition for the original
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"),
+			setPersistentVolumeClaimCapacity("1Gi"), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"),
+			setPodPathType("devicePath"), setPodMountPath("/dev/dblock"), setPodNamespace(e2eTestNamespace))
+
+		g.By("Create a pvc with the thin-pool device supported storageclass")
+		pvcOri.scname = thinPoolSC[0]
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		g.By("Create pod with the pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		g.By("Write data to block volume")
+		podOri.writeDataIntoRawBlockVolume(oc)
+		podOri.execCommand(oc, "sync")
+
+		// Set the resource definition for the clone
+		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"),
+			setPersistentVolumeClaimDataSourceName(pvcOri.name), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+		podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name), setPodVolumeType("volumeDevices"),
+			setPodPathType("devicePath"), setPodMountPath("/dev/dblock"), setPodNamespace(e2eTestNamespace))
+
+		g.By("Create a clone pvc with the thin-pool device supported storageclass")
+		pvcClone.scname = thinPoolSC[0]
+		pvcClone.capacity = pvcOri.capacity
+		pvcClone.createWithCloneDataSource(oc)
+		defer pvcClone.deleteAsAdmin(oc)
+
+		g.By("Create a pod with the clone pvc and wait for the pod ready")
+		podClone.create(oc)
+		defer podClone.deleteAsAdmin(oc)
+		podClone.waitReady(oc)
+
+		g.By("Delete origial pvc will not impact the cloned one")
+		podOri.deleteAsAdmin(oc)
+		pvcOri.deleteAsAdmin(oc)
+
+		g.By("Check the data exist in cloned block volume")
+		podClone.checkDataInRawBlockVolume(oc)
+	})
 })
+
+// Delete the logicalVolume created by lvms/topoLVM provisioner
+func deleteLogicalVolume(oc *exutil.CLI, logicalVolumeName string) error {
+	return oc.WithoutNamespace().Run("delete").Args("logicalvolume", logicalVolumeName).Execute()
+}

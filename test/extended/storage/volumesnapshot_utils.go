@@ -91,6 +91,11 @@ func (vs *volumeSnapshot) delete(oc *exutil.CLI) {
 	oc.WithoutNamespace().Run("delete").Args("volumesnapshot", vs.name, "-n", vs.namespace).Execute()
 }
 
+// Delete the VolumeSnapshotContent
+func (vs *volumeSnapshot) deleteContent(oc *exutil.CLI, vsContentName string) error {
+	return oc.WithoutNamespace().Run("delete").Args("volumesnapshotcontent", vsContentName).Execute()
+}
+
 // Check whether the VolumeSnapshot becomes ready_to_use status
 func (vs *volumeSnapshot) checkVsStatusReadyToUse(oc *exutil.CLI) (bool, error) {
 	vsStatus, err := oc.WithoutNamespace().Run("get").Args("volumesnapshot", "-n", vs.namespace, vs.name, "-o=jsonpath={.status.readyToUse}").Output()
