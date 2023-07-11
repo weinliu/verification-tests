@@ -27,10 +27,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://issues.redhat.com/browse/STOR-1074
 	g.It("NonHyperShiftHOST-Author:chaoyang-High-61553-[EXTERNAL][CSO] should be healthy on external platform", func() {
 
-		g.By("Check CSO is healthy")
+		exutil.By("Check CSO is healthy")
 		checkCSOhealthy(oc)
 
-		g.By("Check clusteroperator storage type==Available message is as expected")
+		exutil.By("Check clusteroperator storage type==Available message is as expected")
 		conditions, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "storage", `-o=jsonpath={.status.conditions[?(@.type=="Available")]}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var conditionJSONMap map[string]interface{}
@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(conditionJSONMap["message"]).To(o.Equal("DefaultStorageClassControllerAvailable: No default StorageClass for this platform"))
 
-		g.By("Check pods cluster-storage-operator is running")
+		exutil.By("Check pods cluster-storage-operator is running")
 		checkPodStatusByLabel(oc.AsAdmin(), "openshift-cluster-storage-operator", "name=cluster-storage-operator", "Running")
 
 	})

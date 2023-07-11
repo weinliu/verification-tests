@@ -34,10 +34,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod         = newPod(setPodTemplate(podTemplate), setPodImage("quay.io/openshifttest/base-fedora@sha256:8962182b4bfc7ee362726ad66871334587e7e5695bec3d7cfc3acbca7a4d309c"))
 		)
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Create pod with ephemeral-storage requests and limits setting")
+		exutil.By("# Create pod with ephemeral-storage requests and limits setting")
 		podObjJSONBatchActions := []map[string]string{{"items.0.spec.containers.0.resources.requests.": "set"}, {"items.0.spec.containers.0.resources.limits.": "set"},
 			{"items.0.spec.containers.1.resources.requests.": "set"}, {"items.0.spec.containers.1.resources.limits.": "set"}}
 		multiExtraParameters := []map[string]interface{}{{"ephemeral-storage": "1Gi"}, {"ephemeral-storage": "2Gi"}, {"ephemeral-storage": "2Gi"}, {"ephemeral-storage": "4Gi"}}
@@ -47,10 +47,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Waiting for the pods become running
 		pod.waitReady(oc)
 
-		g.By("# Write 4G data to pod container-0's emptyDir volume")
+		exutil.By("# Write 4G data to pod container-0's emptyDir volume")
 		pod.execCommandInSpecifiedContainer(oc, pod.name+"-container-0", "fallocate -l 4G /mnt/storage/testdada_4G")
 
-		g.By("# Check pod should be still Running")
+		exutil.By("# Check pod should be still Running")
 		// Even though pod's container-0 ephemeral-storage limits is 2Gi, since the ephemeral-storage limits is pod level(disk usage from all containers plus the pod's emptyDir volumes)
 		// the pod's total ephemeral-storage limits is 6Gi, so it'll not be evicted by kubelet
 		isPodReady := func() bool {
@@ -59,10 +59,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 		o.Consistently(isPodReady, 60*time.Second, 10*time.Second).Should(o.BeTrue())
 
-		g.By("# Continue write 3G data to pod container-1's emptyDir volume")
+		exutil.By("# Continue write 3G data to pod container-1's emptyDir volume")
 		pod.execCommandInSpecifiedContainer(oc, pod.name+"-container-1", "fallocate -l 3G /mnt/storage/testdada_3G")
 
-		g.By("# Check pod should be evicted by kubelet")
+		exutil.By("# Check pod should be evicted by kubelet")
 		// pod's emptyDir volume(shared by container-0 and container-1) data reached 7Gi exceeds total ephemeral-storage limits 6Gi, it'll be evicted by kubelet
 		o.Eventually(func() string {
 			reason, _ := pod.getValueByJSONPath(oc, `{.status.reason}`)
@@ -85,10 +85,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod         = newPod(setPodTemplate(podTemplate), setPodImage("quay.io/openshifttest/base-fedora@sha256:8962182b4bfc7ee362726ad66871334587e7e5695bec3d7cfc3acbca7a4d309c"))
 		)
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Create pod with ephemeral-storage requests and limits setting, emptyDir volume with sizeLimit")
+		exutil.By("# Create pod with ephemeral-storage requests and limits setting, emptyDir volume with sizeLimit")
 		podObjJSONBatchActions := []map[string]string{{"items.0.spec.containers.0.resources.requests.": "set"}, {"items.0.spec.containers.0.resources.limits.": "set"},
 			{"items.0.spec.containers.1.resources.requests.": "set"}, {"items.0.spec.containers.1.resources.limits.": "set"}, {"items.0.spec.volumes.0.emptyDir.": "set"}}
 		multiExtraParameters := []map[string]interface{}{{"ephemeral-storage": "1Gi"}, {"ephemeral-storage": "2Gi"}, {"ephemeral-storage": "2Gi"},
@@ -99,10 +99,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Waiting for the pod become 'Running'
 		pod.waitReady(oc)
 
-		g.By("# Write 3.0G data to pod container-0's emptyDir volume")
+		exutil.By("# Write 3.0G data to pod container-0's emptyDir volume")
 		pod.execCommandInSpecifiedContainer(oc, pod.name+"-container-0", "fallocate -l 3.0G /mnt/storage/testdada_3.0G")
 
-		g.By("# Check pod should be still Running")
+		exutil.By("# Check pod should be still Running")
 		// Even though pod's container-0 limits is 2Gi, since the sizeLimit is pod level, it'll not be evicted by kubelet
 		// pod's emptyDir volume mount path "/mnt/storage" usage (3G) is less than sizeLimit: "4Gi"
 		isPodReady := func() bool {
@@ -111,10 +111,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 		o.Consistently(isPodReady, 60*time.Second, 10*time.Second).Should(o.BeTrue())
 
-		g.By("# Write 2.0G data to pod container-1's emptyDir volume")
+		exutil.By("# Write 2.0G data to pod container-1's emptyDir volume")
 		pod.execCommandInSpecifiedContainer(oc, pod.name+"-container-1", "fallocate -l 2.0G /mnt/storage/testdada_2.0G")
 
-		g.By("# Check pod should be evicted by kubelet")
+		exutil.By("# Check pod should be evicted by kubelet")
 		// pod has 'emptyDir.sizeLimit: "4Gi"', even though pod's total ephemeral-storage limits is 6Gi, it'll be evicted by kubelet
 		// pod's emptyDir volume(shared by container-0 and container-1) reached 5G exceeds 'emptyDir.sizeLimit: "4Gi"'
 		o.Eventually(func() string {
@@ -138,10 +138,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod         = newPod(setPodTemplate(podTemplate), setPodImage("quay.io/openshifttest/base-fedora@sha256:8962182b4bfc7ee362726ad66871334587e7e5695bec3d7cfc3acbca7a4d309c"))
 		)
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Create pod with ephemeral-storage requests and limits setting")
+		exutil.By("# Create pod with ephemeral-storage requests and limits setting")
 		podObjJSONBatchActions := []map[string]string{{"items.0.spec.containers.0.resources.requests.": "set"}, {"items.0.spec.containers.0.resources.limits.": "set"},
 			{"items.0.spec.containers.1.resources.limits.": "set"}, {"items.0.spec.containers.0.volumeMounts": "delete"}, {"items.0.spec.containers.1.volumeMounts": "delete"}, {"items.0.spec.volumes": "delete"}}
 		multiExtraParameters := []map[string]interface{}{{"ephemeral-storage": "1Gi"}, {"ephemeral-storage": "2Gi"}, {"ephemeral-storage": "4Gi"}}
@@ -151,10 +151,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Waiting for the pods become running
 		pod.waitReady(oc)
 
-		g.By("# Write 3G data to pod container-0's '/tmp' path")
+		exutil.By("# Write 3G data to pod container-0's '/tmp' path")
 		pod.execCommandInSpecifiedContainer(oc, pod.name+"-container-0", "fallocate -l 3G /tmp/testdada_3G")
 
-		g.By("# Check pod should be evicted by kubelet")
+		exutil.By("# Check pod should be evicted by kubelet")
 		isPodReady := func() bool {
 			isPodReady, _ := checkPodReady(oc, pod.namespace, pod.name)
 			return isPodReady
@@ -185,16 +185,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			maxAllocatableEphemeralStorage   int64
 		)
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Check all nodes should have the 'ephemeral storage capacity' and 'allocatable ephemeral storage' attributes")
+		exutil.By("# Check all nodes should have the 'ephemeral storage capacity' and 'allocatable ephemeral storage' attributes")
 		nodesInfo := getAllNodesInfo(oc)
 		for _, node := range nodesInfo {
 			o.Expect(strSliceContains([]string{node.ephemeralStorageCapacity, node.ephemeralStorageCapacity}, "")).Should(o.BeFalse())
 		}
 
-		g.By("# Get the schedulable Linux worker nodes maximal 'allocatable ephemeral storage'")
+		exutil.By("# Get the schedulable Linux worker nodes maximal 'allocatable ephemeral storage'")
 		schedulableLinuxWorkers := getSchedulableLinuxWorkers(nodesInfo)
 		for _, node := range schedulableLinuxWorkers {
 			currentNodeAllocatableEphemeralStorage, err := strconv.ParseInt(node.allocatableEphemeralStorage, 10, 64)
@@ -206,14 +206,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		e2e.Logf(`The nodesAllocatableEphemeralStorage sort from smallest to largest is: "%+v"`, nodesAllocatableEphemeralStorage)
 		maxAllocatableEphemeralStorage = nodesAllocatableEphemeralStorage[len(nodesAllocatableEphemeralStorage)-1]
 
-		g.By("# Create pod with ephemeral-storage total requests setting exceeds the maximal 'allocatable ephemeral storage' among all schedulable Linux worker nodes")
+		exutil.By("# Create pod with ephemeral-storage total requests setting exceeds the maximal 'allocatable ephemeral storage' among all schedulable Linux worker nodes")
 		podObjJSONBatchActions := []map[string]string{{"items.0.spec.containers.0.resources.requests.": "set"}, {"items.0.spec.containers.0.resources.limits.": "set"},
 			{"items.0.spec.containers.1.resources.requests.": "set"}, {"items.0.spec.containers.0.volumeMounts": "delete"}, {"items.0.spec.containers.1.volumeMounts": "delete"}, {"items.0.spec.volumes": "delete"}}
 		multiExtraParameters := []map[string]interface{}{{"ephemeral-storage": fmt.Sprint(maxAllocatableEphemeralStorage)}, {"ephemeral-storage": fmt.Sprint(maxAllocatableEphemeralStorage)}, {"ephemeral-storage": "1"}}
 		pod.createWithMultiExtraParameters(oc, podObjJSONBatchActions, multiExtraParameters)
 		defer pod.deleteAsAdmin(oc)
 
-		g.By("# Check pod should stuck at 'Pending' status")
+		exutil.By("# Check pod should stuck at 'Pending' status")
 		// Since the total ephemeral-storage requests exceeds all schedulable Linux worker nodes maximal 'allocatable ephemeral storage'
 		// the pod will stuck at 'Pending' and the pod's events should contains 'Insufficient ephemeral-storage' messages
 		o.Eventually(func() string {
@@ -244,14 +244,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Create ephemeral-storage LimitRange")
+		exutil.By("# Create ephemeral-storage LimitRange")
 		ephemeralStorageLimitRange.Create(oc.AsAdmin())
 		defer ephemeralStorageLimitRange.DeleteAsAdmin(oc)
 
-		g.By("# Create pod with ephemeral-storage limits setting exceeds the maximal ephemeral-storage LimitRange should be failed")
+		exutil.By("# Create pod with ephemeral-storage limits setting exceeds the maximal ephemeral-storage LimitRange should be failed")
 		podObjJSONBatchActions := []map[string]string{{"items.0.spec.containers.0.resources.requests.": "set"}, {"items.0.spec.containers.0.resources.limits.": "set"},
 			{"items.0.spec.containers.1.resources.requests.": "set"}, {"items.0.spec.containers.1.resources.limits.": "set"}}
 		multiExtraParameters := []map[string]interface{}{{"ephemeral-storage": "1Gi"}, {"ephemeral-storage": "2Gi"}, {"ephemeral-storage": "2Gi"}, {"ephemeral-storage": "4Gi"}}
@@ -259,20 +259,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		msg, _ := pod.isInvalid().createWithMultiExtraParameters(oc, podObjJSONBatchActions, multiExtraParameters)
 		o.Expect(msg).Should(o.ContainSubstring("is forbidden: maximum ephemeral-storage usage per Container is 2Gi, but limit is 4Gi"))
 
-		g.By("# Create pod with ephemeral-storage limits setting less than the minimal ephemeral-storage LimitRange should be failed")
+		exutil.By("# Create pod with ephemeral-storage limits setting less than the minimal ephemeral-storage LimitRange should be failed")
 		multiExtraParameters[2] = map[string]interface{}{"ephemeral-storage": "400Mi"}
 		multiExtraParameters[3] = map[string]interface{}{"ephemeral-storage": "400Mi"}
 		msg, _ = pod.isInvalid().createWithMultiExtraParameters(oc, podObjJSONBatchActions, multiExtraParameters)
 		o.Expect(msg).Should(o.ContainSubstring("is forbidden: minimum ephemeral-storage usage per Container is 500Mi, but request is 400Mi"))
 
-		g.By("# Create pod without ephemeral-storage requests and limits setting should use the default setting of LimitRange")
+		exutil.By("# Create pod without ephemeral-storage requests and limits setting should use the default setting of LimitRange")
 		pod.create(oc)
 		pod.waitReady(oc)
 
-		g.By("# Write 1.5G data to pod container-0's emptyDir volume")
+		exutil.By("# Write 1.5G data to pod container-0's emptyDir volume")
 		pod.execCommandInSpecifiedContainer(oc, pod.name+"-container-0", "fallocate -l 1.5G /mnt/storage/testdada_1.5G")
 
-		g.By("# Check the pod should be still Running")
+		exutil.By("# Check the pod should be still Running")
 		// Even though pod's container-0 ephemeral-storage limits is 1Gi(default setting in LimitRange per container),
 		// Since the ephemeral-storage limits is pod level(disk usage from all containers plus the pod's emptyDir volumes)
 		// the pod's total ephemeral-storage limits is 2Gi, so it'll not be evicted by kubelet
@@ -281,10 +281,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			return isPodReady
 		}, 60*time.Second, 10*time.Second).Should(o.BeTrue())
 
-		g.By("# Continue write 1G data to pod container-1's emptyDir volume")
+		exutil.By("# Continue write 1G data to pod container-1's emptyDir volume")
 		pod.execCommandInSpecifiedContainer(oc, pod.name+"-container-1", "fallocate -l 1G /mnt/storage/testdada_1G")
 
-		g.By("# Check pod should be evicted by kubelet")
+		exutil.By("# Check pod should be evicted by kubelet")
 		// Pod's emptyDir volume(shared by container-0 and container-1) reached 2.5G exceeds pod's total ephemeral-storage limits 2Gi
 		// It'll be evicted by kubelet
 		o.Eventually(func() string {
@@ -312,14 +312,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Create ephemeral-storage ResourceQuota")
+		exutil.By("# Create ephemeral-storage ResourceQuota")
 		ephemeralStorageResourceQuota.Create(oc.AsAdmin())
 		defer ephemeralStorageResourceQuota.DeleteAsAdmin(oc)
 
-		g.By("# Create pod with ephemeral-storage limits setting exceeds the ephemeral-storage ResourceQuota hard limits should be failed")
+		exutil.By("# Create pod with ephemeral-storage limits setting exceeds the ephemeral-storage ResourceQuota hard limits should be failed")
 		podObjJSONBatchActions := []map[string]string{{"items.0.spec.containers.0.resources.requests.": "set"}, {"items.0.spec.containers.0.resources.limits.": "set"},
 			{"items.0.spec.containers.1.resources.requests.": "set"}, {"items.0.spec.containers.1.resources.limits.": "set"}}
 		multiExtraParameters := []map[string]interface{}{{"ephemeral-storage": "2Gi"}, {"ephemeral-storage": "2Gi"}, {"ephemeral-storage": "1Gi"}, {"ephemeral-storage": "5Gi"}}
@@ -327,12 +327,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		msg, _ := pod.isInvalid().createWithMultiExtraParameters(oc, podObjJSONBatchActions, multiExtraParameters)
 		o.Expect(msg).Should(o.ContainSubstring("is forbidden: exceeded quota: " + ephemeralStorageResourceQuota.Name + ", requested: limits.ephemeral-storage=7Gi, used: limits.ephemeral-storage=0, limited: limits.ephemeral-storage=6Gi"))
 
-		g.By("# Create pod with ephemeral-storage requests and limits setting exceeds the ephemeral-storage ResourceQuota hard requests and limits should be failed")
+		exutil.By("# Create pod with ephemeral-storage requests and limits setting exceeds the ephemeral-storage ResourceQuota hard requests and limits should be failed")
 		multiExtraParameters[2] = map[string]interface{}{"ephemeral-storage": "5Gi"}
 		msg, _ = pod.isInvalid().createWithMultiExtraParameters(oc, podObjJSONBatchActions, multiExtraParameters)
 		o.Expect(msg).Should(o.ContainSubstring("is forbidden: exceeded quota: " + ephemeralStorageResourceQuota.Name + ", requested: limits.ephemeral-storage=7Gi,requests.ephemeral-storage=7Gi, used: limits.ephemeral-storage=0,requests.ephemeral-storage=0, limited: limits.ephemeral-storage=6Gi,requests.ephemeral-storage=6Gi"))
 
-		g.By("# Create pod with ephemeral-storage limits setting less than or equal to hard limits should be successful")
+		exutil.By("# Create pod with ephemeral-storage limits setting less than or equal to hard limits should be successful")
 		container2EphemeralStorageRequests := getRandomNum(1, 4)
 		container2EphemeralStorageLimits := container2EphemeralStorageRequests
 		podEphemeralStorageTotalLimits := container2EphemeralStorageLimits + 2
@@ -341,16 +341,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pod.createWithMultiExtraParameters(oc, podObjJSONBatchActions, multiExtraParameters)
 		pod.waitReady(oc)
 
-		g.By("# Check the ephemeral-storage ResourceQuota status is as expected")
+		exutil.By("# Check the ephemeral-storage ResourceQuota status is as expected")
 		o.Eventually(ephemeralStorageResourceQuota.GetValueByJSONPath(oc, `{.status.used.requests\.ephemeral-storage}`),
 			60*time.Second, 10*time.Second).Should(o.Equal(strconv.FormatInt(podEphemeralStorageTotalLimits, 10) + "Gi"))
 		o.Eventually(ephemeralStorageResourceQuota.GetValueByJSONPath(oc, `{.status.used.limits\.ephemeral-storage}`),
 			60*time.Second, 10*time.Second).Should(o.Equal(strconv.FormatInt(podEphemeralStorageTotalLimits, 10) + "Gi"))
 
-		g.By("# Write data exceeds pod's total ephemeral-storage limits to its emptyDir volume")
+		exutil.By("# Write data exceeds pod's total ephemeral-storage limits to its emptyDir volume")
 		pod.execCommandInSpecifiedContainer(oc, pod.name+"-container-0", "fallocate -l "+strconv.FormatInt(podEphemeralStorageTotalLimits+2, 10)+"G /mnt/storage/testdada")
 
-		g.By("# Check pod should be evicted by kubelet and the ResourceQuota usage updated")
+		exutil.By("# Check pod should be evicted by kubelet and the ResourceQuota usage updated")
 		// Pod's emptyDir volume exceeds pod's total ephemeral-storage limits
 		// It'll be evicted by kubelet
 		o.Eventually(func() string {
@@ -402,7 +402,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			sharedResourceCsiDriverOperatorOriginReplicasNum = sharedResourceCsiDriverOperator.getReplicasNum(oc.AsAdmin())
 		)
 
-		g.By("# Scale down CVO,CSO,SharedResourceCsiDriverOperator and add privileged label to the sharedresource csi driver")
+		exutil.By("# Scale down CVO,CSO,SharedResourceCsiDriverOperator and add privileged label to the sharedresource csi driver")
 		defer waitCSOhealthy(oc.AsAdmin())
 		defer clusterVersionOperator.waitReady(oc.AsAdmin())
 		defer clusterStorageOperator.waitReady(oc.AsAdmin())
@@ -420,18 +420,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer exutil.AddLabelsToSpecificResource(oc.AsAdmin(), sharedResourceCsiDriver, "", "security.openshift.io/csi-ephemeral-volume-profile="+admissionStandards)
 		o.Expect(exutil.AddLabelsToSpecificResource(oc.AsAdmin(), sharedResourceCsiDriver, "", "security.openshift.io/csi-ephemeral-volume-profile=privileged")).Should(o.ContainSubstring("labeled"))
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Create test configmap")
+		exutil.By("# Create test configmap")
 		cm.create(oc)
 		defer cm.deleteAsAdmin(oc)
 
-		g.By("# Create test sharedconfigmap")
+		exutil.By("# Create test sharedconfigmap")
 		mySharedConfigMap.create(oc.AsAdmin())
 		defer mySharedConfigMap.deleteAsAdmin(oc)
 
-		g.By("# Create sharedconfigmap role and add the role to default sa ans project user under the test project")
+		exutil.By("# Create sharedconfigmap role and add the role to default sa ans project user under the test project")
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", cm.namespace, "role", shareCmRoleName, "--verb=get", "--resource=sharedconfigmaps").Execute()).ShouldNot(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", cm.namespace, "role", shareCmRoleName).Execute()
 		patchResourceAsAdmin(oc, cm.namespace, "role/"+shareCmRoleName, `[{"op":"replace","path":"/rules/0/verbs/0","value":"use"}]`, "json")
@@ -440,7 +440,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("policy").Args("-n", cm.namespace, "add-role-to-user", shareCmRoleName, cm.namespace+"-user", "--role-namespace="+cm.namespace).Execute()).ShouldNot(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("-n", cm.namespace, "remove-role-from-user", shareCmRoleName, cm.namespace+"-user", "--role-namespace="+cm.namespace).Execute()
 
-		g.By("# Create deployment with csi sharedresource volume should be denied")
+		exutil.By("# Create deployment with csi sharedresource volume should be denied")
 		defer dep.deleteAsAdmin(oc)
 		msg, err := dep.createWithInlineVolumeWithOutAssert(oc, myCsiSharedresourceInlineVolume)
 		o.Expect(err).Should(o.HaveOccurred())
@@ -448,10 +448,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		keyMsg := fmt.Sprintf("uses an inline volume provided by CSIDriver csi.sharedresource.openshift.io and namespace %s has a pod security enforce level that is lower than privileged", cm.namespace)
 		o.Expect(msg).Should(o.ContainSubstring(keyMsg))
 
-		g.By(`# Add label "pod-security.kubernetes.io/enforce=privileged", "security.openshift.io/scc.podSecurityLabelSync=false" to the test namespace`)
+		exutil.By(`# Add label "pod-security.kubernetes.io/enforce=privileged", "security.openshift.io/scc.podSecurityLabelSync=false" to the test namespace`)
 		o.Expect(exutil.AddLabelsToSpecificResource(oc.AsAdmin(), "ns/"+cm.namespace, "", "pod-security.kubernetes.io/enforce=privileged", "security.openshift.io/scc.podSecurityLabelSync=false")).Should(o.ContainSubstring("labeled"))
 
-		g.By("# Create deployment with csi sharedresource volume should be successful")
+		exutil.By("# Create deployment with csi sharedresource volume should be successful")
 		keyMsg = fmt.Sprintf("uses an inline volume provided by CSIDriver csi.sharedresource.openshift.io and namespace %s has a pod security warn level that is lower than privileged", cm.namespace)
 		defer dep.deleteAsAdmin(oc)
 		msg, err = dep.createWithInlineVolumeWithOutAssert(oc, myCsiSharedresourceInlineVolume)
@@ -460,7 +460,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(msg).Should(o.ContainSubstring(keyMsg))
 		dep.waitReady(oc)
 
-		g.By("# Check the audit log record the csi inline volume used in the test namespace")
+		exutil.By("# Check the audit log record the csi inline volume used in the test namespace")
 		keyMsg = fmt.Sprintf("uses an inline volume provided by CSIDriver csi.sharedresource.openshift.io and namespace %s has a pod security audit level that is lower than privileged", cm.namespace)
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role=master", "--path=kube-apiserver/audit.log").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())

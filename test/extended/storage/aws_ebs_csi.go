@@ -72,23 +72,23 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				pod = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 			)
 
-			g.By("# Create new project for the scenario")
+			exutil.By("# Create new project for the scenario")
 			oc.SetupProject()
 
-			g.By("# Create \"" + volumeType + "\" type aws-ebs-csi storageclass")
+			exutil.By("# Create \"" + volumeType + "\" type aws-ebs-csi storageclass")
 			storageClass.createWithExtraParameters(oc, gererateCsiScExtraParametersByVolType(oc, "ebs.csi.aws.com", volumeType))
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not
 
-			g.By("# Create a pvc with the aws-ebs-csi storageclass")
+			exutil.By("# Create a pvc with the aws-ebs-csi storageclass")
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("# Create pod with the created pvc and wait for the pod ready")
+			exutil.By("# Create pod with the created pvc and wait for the pod ready")
 			pod.create(oc)
 			defer pod.deleteAsAdmin(oc)
 			waitPodReady(oc, pod.namespace, pod.name)
 
-			g.By("# Check the pvc bound pv's type as expected on the aws backend")
+			exutil.By("# Check the pvc bound pv's type as expected on the aws backend")
 			getCredentialFromCluster(oc)
 			volumeID := pvc.getVolumeID(oc)
 			o.Expect(getAwsVolumeTypeByVolumeID(volumeID)).To(o.Equal(volumeType))
@@ -96,14 +96,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			if volumeType == "io1" || volumeType == "io2" {
 				volCapacityInt64, err := strconv.ParseInt(strings.TrimSuffix(pvc.capacity, "Gi"), 10, 64)
 				o.Expect(err).NotTo(o.HaveOccurred())
-				g.By("# Check the pvc bound pv's info on the aws backend, iops = iopsPerGB * volumeCapacity")
+				exutil.By("# Check the pvc bound pv's info on the aws backend, iops = iopsPerGB * volumeCapacity")
 				o.Expect(getAwsVolumeIopsByVolumeID(volumeID)).To(o.Equal(int64(volCapacityInt64 * 50)))
 			}
 
-			g.By("# Check the pod volume can be read and write")
+			exutil.By("# Check the pod volume can be read and write")
 			pod.checkMountedVolumeCouldRW(oc)
 
-			g.By("# Check the pod volume have the exec right")
+			exutil.By("# Check the pod volume have the exec right")
 			pod.checkMountedVolumeHaveExecRight(oc)
 		})
 	}
@@ -135,7 +135,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			myKmsKeyArn            string
 		)
 
-		g.By("# Create or reuse test customer managed kms key for the scenario")
+		exutil.By("# Create or reuse test customer managed kms key for the scenario")
 		presetKeys, _ := getAwsResourcesListByTags(newAwsResourceGroupsTaggingAPIClient(myAwsSession), []string{"kms"}, map[string][]string{"Purpose": {"ocp-storage-qe-ci-test"}})
 		if len(presetKeys.ResourceTagMappingList) > 0 {
 			myKmsKeyArn = *presetKeys.ResourceTagMappingList[0].ResourceARN
@@ -155,10 +155,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			myKmsKeyArn = *myKmsKey.KeyMetadata.Arn
 		}
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Create aws-ebs-csi storageclass with customer kmsKeyId")
+		exutil.By("# Create aws-ebs-csi storageclass with customer kmsKeyId")
 		extraKmsKeyParameter := map[string]interface{}{
 			"parameters":           map[string]string{"kmsKeyId": myKmsKeyArn},
 			"allowVolumeExpansion": true,
@@ -166,48 +166,48 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		storageClass.createWithExtraParameters(oc, extraKmsKeyParameter)
 		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not
 
-		g.By("# Create a pvc with the csi storageclass")
+		exutil.By("# Create a pvc with the csi storageclass")
 		pvcOri.create(oc)
 		defer pvcOri.deleteAsAdmin(oc)
 
-		g.By("# Create pod with the created pvc and wait for the pod ready")
+		exutil.By("# Create pod with the created pvc and wait for the pod ready")
 		podOri.create(oc)
 		defer podOri.deleteAsAdmin(oc)
 		podOri.waitReady(oc)
 
-		g.By("# Check the pod volume can be read and write")
+		exutil.By("# Check the pod volume can be read and write")
 		podOri.checkMountedVolumeCouldRW(oc)
 
-		g.By("# Check the pod volume have the exec right")
+		exutil.By("# Check the pod volume have the exec right")
 		podOri.checkMountedVolumeHaveExecRight(oc)
 
-		g.By("# Check the pvc bound pv info on backend as expected")
+		exutil.By("# Check the pvc bound pv info on backend as expected")
 		volumeInfo, getInfoErr := getAwsVolumeInfoByVolumeID(pvcOri.getVolumeID(oc))
 		o.Expect(getInfoErr).NotTo(o.HaveOccurred())
 		o.Expect(gjson.Get(volumeInfo, `Volumes.0.Encrypted`).Bool()).Should(o.BeTrue())
 		o.Expect(gjson.Get(volumeInfo, `Volumes.0.KmsKeyId`).String()).Should(o.Equal(myKmsKeyArn))
 
 		// Create volumesnapshot with pre-defined volumesnapshotclass
-		g.By("Create volumesnapshot and wait for ready_to_use")
+		exutil.By("Create volumesnapshot and wait for ready_to_use")
 		volumesnapshot.create(oc)
 		defer volumesnapshot.delete(oc)
 		volumesnapshot.waitReadyToUse(oc)
 
-		g.By("Create a restored pvc with the csi storageclass should be successful")
+		exutil.By("Create a restored pvc with the csi storageclass should be successful")
 		pvcRestore.scname = storageClass.name
 		pvcRestore.createWithSnapshotDataSource(oc)
 		defer pvcRestore.deleteAsAdmin(oc)
 
-		g.By("Create pod with the restored pvc and wait for the pod ready")
+		exutil.By("Create pod with the restored pvc and wait for the pod ready")
 		podRestore.create(oc)
 		defer podRestore.deleteAsAdmin(oc)
 		podRestore.waitReady(oc)
 
-		g.By("Check the file exist in restored volume and its exec permission correct")
+		exutil.By("Check the file exist in restored volume and its exec permission correct")
 		podRestore.checkMountedVolumeDataExist(oc, true)
 		podRestore.checkMountedVolumeHaveExecRight(oc)
 
-		g.By("# Check the restored pvc bound pv info on backend as expected")
+		exutil.By("# Check the restored pvc bound pv info on backend as expected")
 		// The restored volume should be encrypted using the same customer kms key
 		volumeInfo, getInfoErr = getAwsVolumeInfoByVolumeID(pvcRestore.getVolumeID(oc))
 		o.Expect(getInfoErr).NotTo(o.HaveOccurred())
@@ -224,14 +224,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skipped: the cluster not satisfy the test scenario")
 		}
 
-		g.By("# Get the origin aws-ebs-csi-driver-controller pod name")
+		exutil.By("# Get the origin aws-ebs-csi-driver-controller pod name")
 		defer waitCSOhealthy(oc.AsAdmin())
 		awsEbsCsiDriverController := newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"), setDeploymentReplicasNo("2"))
 		originPodList := awsEbsCsiDriverController.getPodList(oc.AsAdmin())
 		resourceVersionOri, resourceVersionOriErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("deployment", "aws-ebs-csi-driver-controller", "-n", "openshift-cluster-csi-drivers", "-o=jsonpath={.metadata.resourceVersion}").Output()
 		o.Expect(resourceVersionOriErr).ShouldNot(o.HaveOccurred())
 
-		g.By("# Delete the cloud credential secret and wait aws-ebs-csi-driver-controller ready again ")
+		exutil.By("# Delete the cloud credential secret and wait aws-ebs-csi-driver-controller ready again ")
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-cluster-csi-drivers", "secret/ebs-cloud-credentials").Execute()).NotTo(o.HaveOccurred())
 
 		o.Eventually(func() string {
@@ -244,20 +244,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		waitCSOhealthy(oc.AsAdmin())
 		newPodList := awsEbsCsiDriverController.getPodList(oc.AsAdmin())
 
-		g.By("#check pods are different with original pods")
+		exutil.By("#check pods are different with original pods")
 		o.Expect(len(sliceIntersect(originPodList, newPodList))).Should(o.Equal(0))
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName("gp2-csi"))
 		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
-		g.By("# Create a pvc with the gp2-csi storageclass")
+		exutil.By("# Create a pvc with the gp2-csi storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("# Create pod with the created pvc and wait for the pod ready")
+		exutil.By("# Create pod with the created pvc and wait for the pod ready")
 		pod.create(oc)
 		defer pod.deleteAsAdmin(oc)
 		pod.waitReady(oc)
@@ -294,10 +294,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				validFsFormatBlockSizeValues = []string{"1024", "2048", "4096"}
 			)
 
-			g.By("# Create new project for the scenario")
+			exutil.By("# Create new project for the scenario")
 			oc.SetupProject()
 
-			g.By("# Create aws-ebs-csi storageclass with specifying block size for filesystem format")
+			exutil.By("# Create aws-ebs-csi storageclass with specifying block size for filesystem format")
 			if isGP2volumeSupportOnly(oc) {
 				volumeType = "gp2"
 			}
@@ -308,19 +308,19 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			myStorageClass.createWithExtraParameters(oc, myStorageclassParameters)
 			defer myStorageClass.deleteAsAdmin(oc)
 
-			g.By("# Create a pvc with the aws-ebs-csi storageclass")
+			exutil.By("# Create a pvc with the aws-ebs-csi storageclass")
 			myPvc.create(oc)
 			defer myPvc.deleteAsAdmin(oc)
 
-			g.By("# Create pod with the created pvc and wait for the pod ready")
+			exutil.By("# Create pod with the created pvc and wait for the pod ready")
 			myPod.create(oc)
 			defer myPod.deleteAsAdmin(oc)
 			myPod.waitReady(oc)
 
-			g.By("# Check the volume consumed by pod could be read and written")
+			exutil.By("# Check the volume consumed by pod could be read and written")
 			myPod.checkMountedVolumeCouldRW(oc)
 
-			g.By("# Check the pv volumeAttributes have the filesystem format blocksize setting")
+			exutil.By("# Check the pv volumeAttributes have the filesystem format blocksize setting")
 			o.Expect(checkVolumeCsiContainAttributes(oc, myPvc.getVolumeName(oc), `"blocksize":"`+fsFormatBlockSize+`"`)).Should(o.BeTrue(), "The pv volumeAttributes don't have the filesystem format blocksize setting")
 			o.Expect(myPod.execCommand(oc, "stat -f /mnt/storage/|grep -Eo '^Block size: [0-9]{4}'|awk '{print $3}'")).Should(o.BeElementOf(validFsFormatBlockSizeValues), "The actual filesystem format blocksize setting is not as expected")
 		})

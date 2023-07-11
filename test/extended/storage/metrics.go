@@ -43,23 +43,23 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 		for _, provisioner = range supportProvisioners {
-			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			checkVolumeTypeCountSum(oc, provisioner, storageClassTemplate, pvcTemplate)
 
-			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
 })
 
 func checkVolumeTypeCountSum(oc *exutil.CLI, provisioner string, storageClassTemplate string, pvcTemplate string) {
-	g.By("Check preset volumeMode and the value count")
+	exutil.By("Check preset volumeMode and the value count")
 	mo := newMonitor(oc.AsAdmin())
 	metricOri := mo.getProvisionedVolumesMetric(oc, provisioner)
 
-	g.By("Create a storageClass with the VolumeBindingMode Immediate")
+	exutil.By("Create a storageClass with the VolumeBindingMode Immediate")
 	var scName string
 	if provisioner == "efs.csi.aws.com" {
 		scName = getPresetStorageClassNameByProvisioner(oc, cloudProvider, "efs.csi.aws.com")
@@ -70,7 +70,7 @@ func checkVolumeTypeCountSum(oc *exutil.CLI, provisioner string, storageClassTem
 		scName = storageClass.name
 	}
 
-	g.By("Create a pvc with volumeMode filesystem")
+	exutil.By("Create a pvc with volumeMode filesystem")
 	pvcVmFs := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Filesystem"), setPersistentVolumeClaimName("my-pvc-fs"), setPersistentVolumeClaimStorageClassName(scName))
 	pvcVmFs.create(oc)
 	defer o.Eventually(func() bool {
@@ -80,14 +80,14 @@ func checkVolumeTypeCountSum(oc *exutil.CLI, provisioner string, storageClassTem
 	defer pvcVmFs.deleteAsAdmin(oc)
 	pvcVmFs.waitStatusAsExpected(oc, "Bound")
 
-	g.By("Check Filesystem and value in metric")
+	exutil.By("Check Filesystem and value in metric")
 	o.Eventually(func() bool {
 		metricNew := mo.getProvisionedVolumesMetric(oc, provisioner)
 		return metricNew["Filesystem"] == metricOri["Filesystem"]+1
 	}, 180*time.Second, 5*time.Second).Should(o.BeTrue())
 
 	if (provisioner != "efs.csi.aws.com") && (provisioner != "file.csi.azure.com") {
-		g.By("Create a pvc with volumeMode is Block ")
+		exutil.By("Create a pvc with volumeMode is Block ")
 		pvcVmBl := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimName("my-pvc-bl"), setPersistentVolumeClaimStorageClassName(scName))
 		pvcVmBl.create(oc)
 		defer o.Eventually(func() bool {
@@ -97,7 +97,7 @@ func checkVolumeTypeCountSum(oc *exutil.CLI, provisioner string, storageClassTem
 		defer pvcVmBl.deleteAsAdmin(oc)
 		pvcVmBl.waitStatusAsExpected(oc, "Bound")
 
-		g.By("Check Block and value in metric")
+		exutil.By("Check Block and value in metric")
 		o.Eventually(func() bool {
 			metricNew := mo.getProvisionedVolumesMetric(oc, provisioner)
 			return metricNew["Block"] == metricOri["Block"]+1

@@ -32,7 +32,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("NonHyperShiftHOST-Author:wduan-High-22019-[Storageclass] The cluster-storage-operator should manage pre-defined storage class [Disruptive]", func() {
 
 		// Get pre-defined storageclass and default storageclass from testdata/storage/pre-defined-storageclass.json
-		g.By("Get pre-defined storageclass and default storageclass")
+		exutil.By("Get pre-defined storageclass and default storageclass")
 		cloudProvider = getCloudProvider(oc)
 		preDefinedStorageclassCheck(cloudProvider)
 		defaultsc := getClusterDefaultStorageclassByPlatform(cloudProvider)
@@ -62,7 +62,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: wduan@redhat.com
 	// OCP-52743 - [Storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-52743-[Storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present", func() {
-		g.By("Check default storageclass number should not be greater than one")
+		exutil.By("Check default storageclass number should not be greater than one")
 		allSCRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defaultSCRes := gjson.Get(allSCRes, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true)#.metadata.name")
@@ -71,11 +71,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		switch {
 		case defaultSCNub == 0:
-			g.By("Test finished as there is no default storageclass in this cluster")
+			exutil.By("Test finished as there is no default storageclass in this cluster")
 		case defaultSCNub > 1:
 			g.Fail("The cluster has more than one default storageclass: " + defaultSCRes.String())
 		case defaultSCNub == 1:
-			g.By("The cluster has only one default storageclass, creating pvc without specifying storageclass")
+			exutil.By("The cluster has only one default storageclass, creating pvc without specifying storageclass")
 			var (
 				storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
 				pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -84,11 +84,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			oc.SetupProject() //create new project
 
-			g.By("Define resources")
+			exutil.By("Define resources")
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
-			g.By("Create a pvc without specifying storageclass")
+			exutil.By("Create a pvc without specifying storageclass")
 			// TODO: Adaptation for known product issue https://issues.redhat.com/browse/OCPBUGS-1964
 			// we need to remove the condition after the issue is solved
 			if isGP2volumeSupportOnly(oc) {
@@ -99,18 +99,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("Create deployment with the created pvc and wait for the pod ready")
+			exutil.By("Create deployment with the created pvc and wait for the pod ready")
 			dep.create(oc)
 			defer dep.deleteAsAdmin(oc)
 			dep.waitReady(oc)
 
-			g.By("Check the deployment's pod mounted volume can be read and write")
+			exutil.By("Check the deployment's pod mounted volume can be read and write")
 			dep.checkPodMountedVolumeCouldRW(oc)
 
-			g.By("Check the deployment's pod mounted volume have the exec right")
+			exutil.By("Check the deployment's pod mounted volume have the exec right")
 			dep.checkPodMountedVolumeHaveExecRight(oc)
 
-			g.By("Check the PV's storageclass is default storageclass")
+			exutil.By("Check the PV's storageclass is default storageclass")
 			pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, pvc.namespace, pvc.name)
 			scFromPV, err := getScNamesFromSpecifiedPv(oc, pvName)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -137,13 +137,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 
 		// Set up a specified project share for all the phases
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("******" + cloudProvider + " with provisioner kubernetes.io/no-provisioner test phase start ******")
+		exutil.By("******" + cloudProvider + " with provisioner kubernetes.io/no-provisioner test phase start ******")
 		// Set the resource definition for the scenario
 
-		g.By("# Display the initial Default sc value counts")
+		exutil.By("# Display the initial Default sc value counts")
 		initDefaultSCCount, err := mo.getSpecifiedMetricValue("default_storage_class_count", `data.result.0.value.1`)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		//Adding e2e.logf line to display default sc count value only
@@ -153,11 +153,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for i := 1; i <= 2; i++ {
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("kubernetes.io/no-provisioner"))
 
-			g.By("# Create test storageclass")
+			exutil.By("# Create test storageclass")
 			storageClass.create(oc)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
-			g.By("# Apply patch to created storage class as default one")
+			exutil.By("# Apply patch to created storage class as default one")
 			patchResourceAsAdmin(oc, "", "sc/"+storageClass.name, `{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}`, "merge")
 			defSCCheck, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", storageClass.name, "-o=jsonpath={.metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -165,7 +165,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			e2e.Logf("Changed the storage class %v to default one successfully", storageClass.name)
 		}
 
-		g.By("# Check the default sc count values changed")
+		exutil.By("# Check the default sc count values changed")
 		initDefaultSCIntCount, err := strconv.Atoi(initDefaultSCCount)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Suppose upcoming platform if there are 2 default sc, so adding +1 to existing default sc count with Serial keyword
@@ -173,7 +173,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		newDefaultSCCount := strconv.Itoa(initDefaultSCIntCount + 2)
 		mo.waitSpecifiedMetricValueAsExpected("default_storage_class_count", `data.result.0.value.1`, newDefaultSCCount)
 
-		g.By("# Check the alert raised for MultipleDefaultStorageClasses")
+		exutil.By("# Check the alert raised for MultipleDefaultStorageClasses")
 		checkAlertRaised(oc, "MultipleDefaultStorageClasses")
 	})
 
@@ -187,7 +187,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 		)
 
-		g.By("#. Create new project for the scenario")
+		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject()
 
 		// Set the resource definition for the scenario
@@ -196,17 +196,17 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc1 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 		pvc2 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 
-		g.By("#. Create invalid csi storageclass")
+		exutil.By("#. Create invalid csi storageclass")
 		storageClass1.provisioner = "invalid.csi.provisioner.com" //Setting invalid provisioner
 		storageClass1.create(oc)
 		defer storageClass1.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc1 with the csi storageclass")
+		exutil.By("# Create a pvc1 with the csi storageclass")
 		pvc1.scname = storageClass1.name
 		pvc1.create(oc)
 		defer pvc1.deleteAsAdmin(oc)
 
-		g.By("# Check pvc1 should stuck at Pending status and no volume is provisioned")
+		exutil.By("# Check pvc1 should stuck at Pending status and no volume is provisioned")
 		o.Consistently(func() string {
 			pvc1Event, _ := describePersistentVolumeClaim(oc, pvc1.namespace, pvc1.name)
 			return pvc1Event
@@ -217,17 +217,17 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		))
 		o.Expect(describePersistentVolumeClaim(oc, pvc1.namespace, pvc1.name)).ShouldNot(o.ContainSubstring("Successfully provisioned volume"))
 
-		g.By("# Create invalid inline storageclass")
+		exutil.By("# Create invalid inline storageclass")
 		storageClass2.provisioner = "kubernetes.io/invalid.provisioner.com" //Setting invalid provisioner
 		storageClass2.create(oc)
 		defer storageClass2.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc2 with the inline storageclass")
+		exutil.By("# Create a pvc2 with the inline storageclass")
 		pvc2.scname = storageClass2.name
 		pvc2.create(oc)
 		defer pvc2.deleteAsAdmin(oc)
 
-		g.By("# Check pvc2 should stuck at Pending status and no volume is provisioned")
+		exutil.By("# Check pvc2 should stuck at Pending status and no volume is provisioned")
 		o.Consistently(func() string {
 			pvc2Event, _ := describePersistentVolumeClaim(oc, pvc2.namespace, pvc2.name)
 			return pvc2Event
@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip for non supportable platform")
 		}
 
-		g.By("#. Create new project for the scenario")
+		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Get the provisioner from the cluster
@@ -272,14 +272,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		storageClass1 := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
 		storageClass2 := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
 
-		g.By("# Create csi storageclass")
+		exutil.By("# Create csi storageclass")
 		if defaultSCNub == 0 {
 			storageClass1.create(oc)
 			defer storageClass1.deleteAsAdmin(oc)
 			storageClass2.create(oc)
 			defer storageClass2.deleteAsAdmin(oc)
 
-			g.By("# Setting storageClass1 as default storageClass")
+			exutil.By("# Setting storageClass1 as default storageClass")
 			setSpecifiedStorageClassAsDefault(oc, storageClass1.name)
 			defer setSpecifiedStorageClassAsDefault(oc, storageClass1.name)
 
@@ -288,20 +288,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer storageClass2.deleteAsAdmin(oc)
 		}
 
-		g.By("# Setting storageClass2 as default storageClass")
+		exutil.By("# Setting storageClass2 as default storageClass")
 		setSpecifiedStorageClassAsDefault(oc, storageClass2.name)
 		defer setSpecifiedStorageClassAsDefault(oc, storageClass2.name)
 
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 
-		g.By("# Create pvc without mentioning storageclass name")
+		exutil.By("# Create pvc without mentioning storageclass name")
 		pvc.createWithoutStorageclassname(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("# Check the pvc status to Bound")
+		exutil.By("# Check the pvc status to Bound")
 		pvc.waitStatusAsExpected(oc, "Bound")
 
-		g.By("Check the PV's storageclass should be newly create storageclass")
+		exutil.By("Check the PV's storageclass should be newly create storageclass")
 		volName := pvc.getVolumeName(oc)
 		scFromPV, err := getScNamesFromSpecifiedPv(oc, volName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -345,11 +345,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer setSpecifiedStorageClassAsDefault(oc, oriDefaultSc[0])
 
 		//create new project
-		g.By("#Create new project for the scenario")
+		exutil.By("#Create new project for the scenario")
 		oc.SetupProject()
 
 		//Create pvc without storageclass
-		g.By("#Create pvc without mentioning storageclass name")
+		exutil.By("#Create pvc without mentioning storageclass name")
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 		pvc.createWithoutStorageclassname(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -359,13 +359,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pod.deleteAsAdmin(oc)
 
 		//Check pvc status is pending
-		g.By("#Check pvc status stuck at Pending")
+		exutil.By("#Check pvc status stuck at Pending")
 		o.Consistently(func() string {
 			pvcState, _ := pvc.getStatus(oc)
 			return pvcState
 		}, 60*time.Second, 10*time.Second).Should(o.ContainSubstring("Pending"))
 
-		g.By("#Create new default storageclass")
+		exutil.By("#Create new default storageclass")
 		// Get the provisioner from the cluster
 		provisioner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc/"+oriDefaultSc[0], "-o", "jsonpath={.provisioner}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -376,11 +376,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer sc.deleteAsAdmin(oc)
 		setSpecifiedStorageClassAsDefault(oc, sc.name)
 
-		g.By("Waiting for pod status is Running")
+		exutil.By("Waiting for pod status is Running")
 		pvc.waitStatusAsExpected(oc, "Bound")
 		pod.waitReady(oc)
 
-		g.By("Check the PV's storageclass should be newly create storageclass")
+		exutil.By("Check the PV's storageclass should be newly create storageclass")
 		o.Expect(getScNamesFromSpecifiedPv(oc, pvc.getVolumeName(oc))).To(o.Equal(sc.name))
 
 	})

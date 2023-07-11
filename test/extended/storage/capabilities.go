@@ -26,7 +26,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		// Check resouerce should not be present when Storage CO is disabled
-		g.By("Check resouerce should not be present when Storage CO is disabled")
+		exutil.By("Check resouerce should not be present when Storage CO is disabled")
 		expectSpecifiedResourceExist(oc, "clusteroperator/storage", "", false)
 		expectSpecifiedResourceExist(oc, "storage/cluster", "", false)
 		expectSpecifiedResourceExist(oc, "deployment/cluster-storage-operator", "openshift-cluster-storage-operator", false)
@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		// Check resouerce should not be present when CSISnapshot CO is disabled
-		g.By("Check resouerce should not be present when CSISnapshot CO is disabled")
+		exutil.By("Check resouerce should not be present when CSISnapshot CO is disabled")
 		expectSpecifiedResourceExist(oc, "clusteroperator/csi-snapshot-controller", "", false)
 		expectSpecifiedResourceExist(oc, "CSISnapshotController/cluster", "", false)
 		expectSpecifiedResourceExist(oc, "deployment/csi-snapshot-controller-operator", "openshift-cluster-storage-operator", false)

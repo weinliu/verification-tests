@@ -2,7 +2,6 @@ package storage
 
 import (
 	"fmt"
-	g "github.com/onsi/ginkgo/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -215,7 +214,7 @@ func (pvc *persistentVolumeClaim) createWithoutStorageclassname(oc *exutil.CLI) 
 
 // create multiple PersistentVolumeClaim
 func createMulPVC(oc *exutil.CLI, begin int64, length int64, pvcTemplate string, storageClassName string) []persistentVolumeClaim {
-	g.By("# Create more than node allocatable count pvcs with the preset csi storageclass")
+	exutil.By("# Create more than node allocatable count pvcs with the preset csi storageclass")
 	provisioner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass/"+storageClassName, "-o", "jsonpath={.provisioner}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	provisionerBrief := strings.Split(provisioner, ".")[len(strings.Split(provisioner, "."))-2]

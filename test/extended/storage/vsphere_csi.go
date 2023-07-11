@@ -46,27 +46,27 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 
 		// The storageclass/thin-csi should contain the .parameters.StoragePolicyName, and its value should be like "openshift-storage-policy-*"
-		g.By("1. Check StoragePolicyName exist in storageclass/thin-csi")
+		exutil.By("1. Check StoragePolicyName exist in storageclass/thin-csi")
 		spn, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass/thin-csi", "-o=jsonpath={.parameters.StoragePolicyName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(spn).To(o.ContainSubstring("openshift-storage-policy"))
 
 		// Basic check the provisioning with the storageclass/thin-csi
-		g.By("2. Create new project for the scenario")
+		exutil.By("2. Create new project for the scenario")
 		oc.SetupProject() //create new project
 		pvc.namespace = oc.Namespace()
 		pod.namespace = pvc.namespace
 
-		g.By("3. Create a pvc with the thin-csi storageclass")
+		exutil.By("3. Create a pvc with the thin-csi storageclass")
 		pvc.create(oc)
 		defer pvc.delete(oc)
 
-		g.By("4. Create pod with the created pvc and wait for the pod ready")
+		exutil.By("4. Create pod with the created pvc and wait for the pod ready")
 		pod.create(oc)
 		defer pod.delete(oc)
 		waitPodReady(oc, pod.namespace, pod.name)
 
-		g.By("5. Check the pvc status to Bound")
+		exutil.By("5. Check the pvc status to Bound")
 		o.Expect(getPersistentVolumeClaimStatus(oc, pvc.namespace, pvc.name)).To(o.Equal("Bound"))
 	})
 
@@ -97,10 +97,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			intreeStorageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("kubernetes.io/vsphere-volume"))
 		)
 
-		g.By("# Check the CSI Driver Webhook deployment is ready")
+		exutil.By("# Check the CSI Driver Webhook deployment is ready")
 		webhookDeployment.waitReady(oc.AsAdmin())
 
-		g.By("# Using 'csi.vsphere.vmware.com' as provisioner create storageclass with unsupported parameters")
+		exutil.By("# Using 'csi.vsphere.vmware.com' as provisioner create storageclass with unsupported parameters")
 		for _, unsupportParameter := range unsupportedParameters {
 			storageClassParameters := map[string]string{
 				unsupportParameter: "true",
@@ -115,7 +115,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(interfaceToString(err)).Should(o.ContainSubstring("admission webhook \\\"validation.csi.vsphere.vmware.com\\\" denied the request: Invalid StorageClass Parameters"))
 		}
 
-		g.By("# Using 'kubernetes.io/vsphere-volume' as provisioner create storageclass with allowVolumeExpandsion: true")
+		exutil.By("# Using 'kubernetes.io/vsphere-volume' as provisioner create storageclass with allowVolumeExpandsion: true")
 		extraParameters := map[string]interface{}{
 			"allowVolumeExpansion": true,
 		}
@@ -123,7 +123,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer intreeStorageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 		o.Expect(interfaceToString(err)).Should(o.ContainSubstring("admission webhook \\\"validation.csi.vsphere.vmware.com\\\" denied the request: AllowVolumeExpansion can not be set to true on the in-tree vSphere StorageClass"))
 
-		g.By("# Check csi driver webhook pod log record the failed requests")
+		exutil.By("# Check csi driver webhook pod log record the failed requests")
 		logRecord := webhookDeployment.getLogs(oc.AsAdmin(), "--tail=-1", "--since=10m")
 		o.Expect(logRecord).Should(o.And(
 			o.ContainSubstring("validation of StorageClass: \\\""+intreeStorageClass.name+"\\\" Failed"),
@@ -145,10 +145,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(ioutil.WriteFile(originDriverConfigContentFilePath, []byte(originDriverConfigContent), 0644)).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", originDriverConfigContentFilePath).Execute()
 
-		g.By("# Patch clustercsidriver/csi.vsphere.vmware.com to add topologyCategories")
+		exutil.By("# Patch clustercsidriver/csi.vsphere.vmware.com to add topologyCategories")
 		patchResourceAsAdmin(oc, "", "clustercsidriver/csi.vsphere.vmware.com", `[{"op":"replace","path":"/spec/driverConfig","value":{"driverType":"vSphere","vSphere":{"topologyCategories":["openshift-region","openshift-zone"]}}}]`, "json")
 
-		g.By("# Check alert raised for VSphereTopologyMisconfiguration")
+		exutil.By("# Check alert raised for VSphereTopologyMisconfiguration")
 		checkAlertRaised(oc, "VSphereTopologyMisconfiguration")
 		// Hit oc replace failed one time in defer, so add assertion here to detect issue if happens
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", originDriverConfigContentFilePath).Execute()).ShouldNot(o.HaveOccurred())
@@ -173,22 +173,22 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			myPod              = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(myPvc.name))
 		)
 
-		g.By("#. Create new project for the scenario")
+		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Create a pvc with the preset csi storageclass")
+		exutil.By("# Create a pvc with the preset csi storageclass")
 		myPvc.create(oc)
 		defer myPvc.deleteAsAdmin(oc)
 
-		g.By("# Create pod with the created pvc and wait for the pod ready")
+		exutil.By("# Create pod with the created pvc and wait for the pod ready")
 		myPod.create(oc)
 		defer myPod.deleteAsAdmin(oc)
 		myPod.waitReady(oc)
 
-		g.By("# Check the pod volume can be read and write")
+		exutil.By("# Check the pod volume can be read and write")
 		myPod.checkMountedVolumeCouldRW(oc)
 
-		g.By("# Check the volume is encrypted used the same storagePolicy which set in the storageclass from backend")
+		exutil.By("# Check the volume is encrypted used the same storagePolicy which set in the storageclass from backend")
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

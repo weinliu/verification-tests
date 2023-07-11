@@ -51,40 +51,40 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				setPersistentVolumeCapacity(pvc.capacity), setPersistentVolumeStorageClassName(scName), setPersistentVolumeReclaimPolicy("Delete"), setPersistentVolumeCapacity("5Gi"))
 		)
 
-		g.By("#. Create new project for the scenario")
+		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("#. Create a pv with the storageclass")
+		exutil.By("#. Create a pv with the storageclass")
 		nfsPV.nfsServerIP = svcNfsServer.svc.clusterIP
 		nfsPV.create(oc)
 		defer nfsPV.deleteAsAdmin(oc)
 
-		g.By("#. Create a pvc with the storageclass")
+		exutil.By("#. Create a pvc with the storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("#. Create daemonset pod with the created pvc and wait for the pod ready")
+		exutil.By("#. Create daemonset pod with the created pvc and wait for the pod ready")
 		ds.pvcname = pvc.name
 		ds.create(oc)
 		defer ds.deleteAsAdmin(oc)
 		ds.waitReady(oc)
 
-		g.By("#. Check the pods can write data inside volume")
+		exutil.By("#. Check the pods can write data inside volume")
 		ds.checkPodMountedVolumeCouldWrite(oc)
 
-		g.By("#. Check the original data from pods")
+		exutil.By("#. Check the original data from pods")
 		ds.checkPodMountedVolumeCouldRead(oc)
 
-		g.By("#. Delete the  Resources: daemonset from namespace")
+		exutil.By("#. Delete the  Resources: daemonset from namespace")
 		deleteSpecifiedResource(oc, "daemonset", ds.name, ds.namespace)
 
-		g.By("#. Check the volume umount from the node")
+		exutil.By("#. Check the volume umount from the node")
 		volName := pvc.getVolumeName(oc)
 		for _, nodeName := range getWorkersList(oc) {
 			checkVolumeNotMountOnNode(oc, volName, nodeName)
 		}
 
-		g.By("#. Delete the  Resources: pvc from namespace")
+		exutil.By("#. Delete the  Resources: pvc from namespace")
 		deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
 	})
 
@@ -109,10 +109,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			uniqueNodeNames = make(map[string]bool)
 		)
 
-		g.By("#. Create new project for the scenario")
+		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("#. Create a pv with the storageclass")
+		exutil.By("#. Create a pv with the storageclass")
 		pv.nfsServerIP = svcNfsServer.svc.clusterIP
 		pv.create(oc)
 		defer pv.deleteAsAdmin(oc)
@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pv2.create(oc)
 		defer pv2.deleteAsAdmin(oc)
 
-		g.By("#. Create a pvc with the storageclass")
+		exutil.By("#. Create a pvc with the storageclass")
 		pvc.name = stsVolName + "-" + stsName + "-0"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -128,7 +128,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc2.create(oc)
 		defer pvc2.deleteAsAdmin(oc)
 
-		g.By("#. Create statefulSet pod with the created pvc and wait for the pod ready")
+		exutil.By("#. Create statefulSet pod with the created pvc and wait for the pod ready")
 		sts.scname = scName
 		sts.create(oc)
 		defer sts.deleteAsAdmin(oc)
@@ -139,16 +139,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			uniqueNodeNames[getNodeNameByPod(oc, sts.namespace, podList[i])] = true
 		}
 
-		g.By("#. Check the pods can read/write data inside volume")
+		exutil.By("#. Check the pods can read/write data inside volume")
 		sts.checkMountedVolumeCouldRW(oc)
 
-		g.By("# Check the pod volume have the exec right")
+		exutil.By("# Check the pod volume have the exec right")
 		sts.checkMountedVolumeHaveExecRight(oc)
 
-		g.By("#. Delete the  Resources: statefulSet from namespace")
+		exutil.By("#. Delete the  Resources: statefulSet from namespace")
 		deleteSpecifiedResource(oc, "statefulset", sts.name, sts.namespace)
 
-		g.By("#. Check the volume umount from the node")
+		exutil.By("#. Check the volume umount from the node")
 		volName := sts.pvcname
 		for nodeName := range uniqueNodeNames {
 			checkVolumeNotMountOnNode(oc, volName, nodeName)
@@ -176,48 +176,48 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip: This test needs at least 3 worker nodes, test cluster has less than 3 schedulable workers!")
 		}
 
-		g.By("#. Create new project for the scenario")
+		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("#. Create a pv with the storageclass")
+		exutil.By("#. Create a pv with the storageclass")
 		pv.nfsServerIP = svcNfsServer.svc.clusterIP
 		pv.create(oc)
 		defer pv.deleteAsAdmin(oc)
 
-		g.By("#. Create a pvc with the storageclass")
+		exutil.By("#. Create a pvc with the storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("#. Create deployment consume the created pvc with nodeAffinity Not In nfs-server node and wait for the deployment ready")
+		exutil.By("#. Create deployment consume the created pvc with nodeAffinity Not In nfs-server node and wait for the deployment ready")
 		dep.createWithNodeAffinity(oc, "kubernetes.io/hostname", "NotIn", nfsNodeList)
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("#. Check the pods can read/write data inside volume")
+		exutil.By("#. Check the pods can read/write data inside volume")
 		dep.checkPodMountedVolumeCouldRW(oc)
 
-		g.By("# Run drain cmd to drain the node on which the deployment's pod is located")
+		exutil.By("# Run drain cmd to drain the node on which the deployment's pod is located")
 		volName := pvc.getVolumeName(oc)
 		originNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
 		drainSpecificNode(oc, originNodeName)
 		defer uncordonSpecificNode(oc, originNodeName)
 
-		g.By("# Wait for the deployment become ready again")
+		exutil.By("# Wait for the deployment become ready again")
 		dep.waitReady(oc)
 
-		g.By("# Check testdata still in the volume")
+		exutil.By("# Check testdata still in the volume")
 		output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile*")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("storage test"))
 
-		g.By("# Check the deployment's pod schedule to another ready node")
+		exutil.By("# Check the deployment's pod schedule to another ready node")
 		newNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
 		o.Expect(originNodeName).NotTo(o.Equal(newNodeName))
 
-		g.By("# Bring back the drained node")
+		exutil.By("# Bring back the drained node")
 		uncordonSpecificNode(oc, originNodeName)
 
-		g.By("#. Check the volume umount from the origin node")
+		exutil.By("#. Check the volume umount from the origin node")
 		checkVolumeNotMountOnNode(oc, volName, originNodeName)
 	})
 })

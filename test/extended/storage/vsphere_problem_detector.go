@@ -4,15 +4,16 @@ import (
 	//"path/filepath"
 	"encoding/base64"
 	"fmt"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	"path/filepath"
-	"regexp"
-	"strconv"
-	"strings"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -38,19 +39,19 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author:wduan@redhat.com
 	g.It("NonHyperShiftHOST-Author:wduan-High-44254-[vSphere-Problem-Detector] should check the node hardware version and report in metric for alerter raising by CSO", func() {
 
-		g.By("# Check HW version from vsphere-problem-detector-operator log")
+		exutil.By("# Check HW version from vsphere-problem-detector-operator log")
 		vpdPodlog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/vsphere-problem-detector-operator", "-n", "openshift-cluster-storage-operator", "--limit-bytes", "50000").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(vpdPodlog).NotTo(o.BeEmpty())
 		o.Expect(vpdPodlog).To(o.ContainSubstring("has HW version vmx"))
 
-		g.By("# Get the node hardware version")
+		exutil.By("# Get the node hardware version")
 		re := regexp.MustCompile(`HW version vmx-([0-9][0-9])`)
 		matchRes := re.FindStringSubmatch(vpdPodlog)
 		hwVersion := matchRes[1]
 		e2e.Logf("The node hardware version is %v", hwVersion)
 
-		g.By("# Check HW version from metrics")
+		exutil.By("# Check HW version from metrics")
 		token := getSAToken(oc)
 		url := "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=vsphere_node_hw_version_total"
 		metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("prometheus-k8s-0", "-c", "prometheus", "-n", "openshift-monitoring", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
@@ -58,7 +59,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(metrics).NotTo(o.BeEmpty())
 		o.Expect(metrics).To(o.ContainSubstring("\"hw_version\":\"vmx-" + hwVersion))
 
-		g.By("# Check alert for if there is unsupported HW version")
+		exutil.By("# Check alert for if there is unsupported HW version")
 		if hwVersion == "13" || hwVersion == "14" {
 			e2e.Logf("Checking the CSIWithOldVSphereHWVersion alert")
 			checkAlertRaised(oc, "CSIWithOldVSphereHWVersion")
@@ -67,7 +68,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author:wduan@redhat.com
 	g.It("NonHyperShiftHOST-Author:wduan-Medium-44664-[vSphere-Problem-Detector] The vSphere cluster is marked as Upgradeable=False if vcenter, esxi versions or HW versions are unsupported", func() {
-		g.By("# Get log from vsphere-problem-detector-operator")
+		exutil.By("# Get log from vsphere-problem-detector-operator")
 		podlog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/vsphere-problem-detector-operator", "-n", "openshift-cluster-storage-operator").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -77,7 +78,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			"vCenter version": "Marking cluster un-upgradeable because connected vcenter is on",
 		}
 		for kind, expectedMes := range mes {
-			g.By("# Check upgradeable status and reason is expected from clusterversion")
+			exutil.By("# Check upgradeable status and reason is expected from clusterversion")
 			e2e.Logf("%s: Check upgradeable status and reason is expected from clusterversion if %s not support", kind, kind)
 			matched, _ := regexp.MatchString(expectedMes, podlog)
 			if matched {
@@ -98,7 +99,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author:wduan@redhat.com
 	g.It("NonHyperShiftHOST-Author:wduan-High-45514-[vSphere-Problem-Detector] should report metric about vpshere env", func() {
 		// Add 'vsphere_rwx_volumes_total' metric from ocp 4.10
-		g.By("Check metric: vsphere_vcenter_info, vsphere_esxi_version_total, vsphere_node_hw_version_total, vsphere_datastore_total, vsphere_rwx_volumes_total")
+		exutil.By("Check metric: vsphere_vcenter_info, vsphere_esxi_version_total, vsphere_node_hw_version_total, vsphere_datastore_total, vsphere_rwx_volumes_total")
 		checkStorageMetricsContent(oc, "vsphere_vcenter_info", "api_version")
 		checkStorageMetricsContent(oc, "vsphere_esxi_version_total", "api_version")
 		checkStorageMetricsContent(oc, "vsphere_node_hw_version_total", "hw_version")
@@ -110,7 +111,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author:wduan@redhat.com
 	g.It("NonHyperShiftHOST-Author:wduan-High-37728-[vSphere-Problem-Detector] should report vsphere_cluster_check_total metric correctly", func() {
-		g.By("Check metric vsphere_cluster_check_total should contain CheckDefaultDatastore, CheckFolderPermissions, CheckTaskPermissions, CheckStorageClasses, ClusterInfo check.")
+		exutil.By("Check metric vsphere_cluster_check_total should contain CheckDefaultDatastore, CheckFolderPermissions, CheckTaskPermissions, CheckStorageClasses, ClusterInfo check.")
 		metric := getStorageMetrics(oc, "vsphere_cluster_check_total")
 		clusterCheckList := []string{"CheckDefaultDatastore", "CheckFolderPermissions", "CheckTaskPermissions", "CheckStorageClasses", "ClusterInfo"}
 		for i := range clusterCheckList {
@@ -120,7 +121,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author:jiasun@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiasun-High-44656-[vSphere-Problem-Detector] should check the vsphere version and report in metric for alerter raising by CSO", func() {
-		g.By("Get support vsphere version through openshift version")
+		exutil.By("Get support vsphere version through openshift version")
 		ocSupportVsVersion := map[string]string{
 			"4.12": "7.0.2",
 			"4.13": "7.0.2",
@@ -132,12 +133,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		SupportVsVersion := ocSupportVsVersion[clusterVersions]
 		e2e.Logf("--------------------support vsphere version should be at least %s", SupportVsVersion)
 
-		g.By("Check logs of vsphere problem detector should contain ESXi version")
+		exutil.By("Check logs of vsphere problem detector should contain ESXi version")
 		logs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("-n", "openshift-cluster-storage-operator", "-l", "name=vsphere-problem-detector-operator", "--tail=-1").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(logs, "ESXi version")).To(o.BeTrue())
 
-		g.By("Check version in metric and alert")
+		exutil.By("Check version in metric and alert")
 		mo := newMonitor(oc.AsAdmin())
 		// TODO: Currently we don't consider the different esxi versions test environment, in CI all the esxi should have the same esxi version, we could enhance it if it's needed later.
 		esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", "data.result.0.metric.version")
@@ -153,7 +154,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author:wduan@redhat.com
 	g.It("NonHyperShiftHOST-Author:wduan-High-37729-[vSphere-Problem-Detector] should report vsphere_node_check_total metric correctly", func() {
-		g.By("Check metric vsphere_node_check_total should contain CheckNodeDiskUUID, CheckNodePerf, CheckNodeProviderID, CollectNodeESXiVersion, CollectNodeHWVersion.")
+		exutil.By("Check metric vsphere_node_check_total should contain CheckNodeDiskUUID, CheckNodePerf, CheckNodeProviderID, CollectNodeESXiVersion, CollectNodeHWVersion.")
 		metric := getStorageMetrics(oc, "vsphere_node_check_total")
 		nodeCheckList := []string{"CheckNodeDiskUUID", "CheckNodePerf", "CheckNodeProviderID", "CollectNodeESXiVersion", "CollectNodeHWVersion"}
 		for i := range nodeCheckList {
@@ -164,13 +165,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author:jiasun@redhat.com
 	// OCP-37731 [vSphere-Problem-Detector] should report CheckStorageClass error when invalid storagepolicy or datastore or datastoreURL
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:jiasun-Medium-37731-[vSphere-Problem-Detector] should report CheckStorageClass error when parameters values is wrong [Serial]", func() {
-		g.By("Check origin metric is '0' ")
+		exutil.By("Check origin metric is '0' ")
 		mo := newMonitor(oc.AsAdmin())
 		valueOri, valueErr := mo.getSpecifiedMetricValue("vsphere_cluster_check_errors", "data.result.#(metric.check=CheckStorageClasses).value.1")
 		o.Expect(valueErr).NotTo(o.HaveOccurred())
 		o.Expect(valueOri).To(o.Equal("0"))
 
-		g.By("Create intree storageClass with an invalid storagePolicyName")
+		exutil.By("Create intree storageClass with an invalid storagePolicyName")
 		storageTeamBaseDir := exutil.FixturePath("testdata", "storage")
 		storageClassTemplate := filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 		inTreePolicyStorageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassName("mystorageclass-intreepolicy"), setStorageClassProvisioner("kubernetes.io/vsphere-volume"))
@@ -190,32 +191,32 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		datastoreURLExtra := map[string]string{
 			"datastoreurl": "non:///non/nonexist/",
 		}
-		g.By(" Hard restart the CheckStorageClasses when inTreeprovisioner with invalid storagepolicy")
+		exutil.By(" Hard restart the CheckStorageClasses when inTreeprovisioner with invalid storagepolicy")
 		inTreePolicyStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": policyExtra})
 		defer inTreePolicyStorageClass.deleteAsAdmin(oc)
 		mo.checkInvalidvSphereStorageClassMetric(oc, inTreePolicyStorageClass.name)
 
-		g.By(" Hard restart the CheckStorageClasses when inTreeprovisioner with invalid datastore")
+		exutil.By(" Hard restart the CheckStorageClasses when inTreeprovisioner with invalid datastore")
 		inTreeDatastoreStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": datastoreExtra})
 		defer inTreeDatastoreStorageClass.deleteAsAdmin(oc)
 		mo.checkInvalidvSphereStorageClassMetric(oc, inTreeDatastoreStorageClass.name)
 
-		g.By(" Hard restart the CheckStorageClasses when inTreeprovisioner with invalid datastoreURL")
+		exutil.By(" Hard restart the CheckStorageClasses when inTreeprovisioner with invalid datastoreURL")
 		inTreeDatastoreURLStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": datastoreURLExtra})
 		defer inTreeDatastoreURLStorageClass.deleteAsAdmin(oc)
 		mo.checkInvalidvSphereStorageClassMetric(oc, inTreeDatastoreURLStorageClass.name)
 
-		g.By(" Hard restart the CheckStorageClasses when csiprovisioner with invalid storagepolicy")
+		exutil.By(" Hard restart the CheckStorageClasses when csiprovisioner with invalid storagepolicy")
 		csiPolicyStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": policyExtra})
 		defer csiPolicyStorageClass.deleteAsAdmin(oc)
 		mo.checkInvalidvSphereStorageClassMetric(oc, csiPolicyStorageClass.name)
 
-		g.By(" Hard restart the CheckStorageClasses when csiprovisioner with invalid datastore")
+		exutil.By(" Hard restart the CheckStorageClasses when csiprovisioner with invalid datastore")
 		csiDatastoreStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": datastoreExtra})
 		defer csiDatastoreStorageClass.deleteAsAdmin(oc)
 		mo.checkInvalidvSphereStorageClassMetric(oc, csiDatastoreStorageClass.name)
 
-		g.By(" Hard restart the CheckStorageClasses when csiprovisioner with invalid datastoreURL")
+		exutil.By(" Hard restart the CheckStorageClasses when csiprovisioner with invalid datastoreURL")
 		csiDatastoreURLStorageClass.createWithExtraParameters(oc, map[string]interface{}{"parameters": datastoreURLExtra})
 		defer csiDatastoreURLStorageClass.deleteAsAdmin(oc)
 		mo.checkInvalidvSphereStorageClassMetric(oc, csiDatastoreURLStorageClass.name)
@@ -225,7 +226,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author:pewang@redhat.com
 	// Since it'll restart deployment/vsphere-problem-detector-operator maybe conflict with the other vsphere-problem-detector cases,so set it as [Serial]
 	g.It("NonHyperShiftHOST-NonPreRelease-Author:pewang-High-48763-[vSphere-Problem-Detector] should report 'vsphere_rwx_volumes_total' metric correctly [Serial]", func() {
-		g.By("# Get the value of 'vsphere_rwx_volumes_total' metric real init value")
+		exutil.By("# Get the value of 'vsphere_rwx_volumes_total' metric real init value")
 		// Restart vsphere-problem-detector-operator and get the init value of 'vsphere_rwx_volumes_total' metric
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
 		newInstanceName := vSphereDetectorOperator.getPodList(oc.AsAdmin())[0]
@@ -234,7 +235,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		initCount, err := mo.getSpecifiedMetricValue("vsphere_rwx_volumes_total", `data.result.0.value.1`)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("# Create two manual fileshare persist volumes(vSphere CNS File Volume) and one manual general volume")
+		exutil.By("# Create two manual fileshare persist volumes(vSphere CNS File Volume) and one manual general volume")
 		// The backend service count the total number of 'fileshare persist volumes' by only count the pvs which volumeHandle prefix with `file:`
 		// https://github.com/openshift/vsphere-problem-detector/pull/64/files
 		// So I create 2 pvs volumeHandle prefix with `file:` with different accessModes
@@ -251,7 +252,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		generalPersistVolume.create(oc)
 		defer generalPersistVolume.deleteAsAdmin(oc)
 
-		g.By("# Check the metric update correctly")
+		exutil.By("# Check the metric update correctly")
 		// Since the vsphere-problem-detector update the metric every hour restart the deployment to trigger the update right now
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
 		// Wait for 'vsphere_rwx_volumes_total' metric value update correctly
@@ -259,11 +260,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_rwx_volumes_total", `data.result.0.value.1`, interfaceToString(initCountInt+2))
 
-		g.By("# Delete one RWX pv and wait for it deleted successfully")
+		exutil.By("# Delete one RWX pv and wait for it deleted successfully")
 		rwxPersistVolume.deleteAsAdmin(oc)
 		waitForPersistentVolumeStatusAsExpected(oc, rwxPersistVolume.name, "deleted")
 
-		g.By("# Check the metric update correctly again")
+		exutil.By("# Check the metric update correctly again")
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_rwx_volumes_total", `data.result.0.value.1`, interfaceToString(initCountInt+1))
 	})
@@ -271,7 +272,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author:pewang@redhat.com
 	// Since it'll make the vSphere CSI driver credential invalid during the execution,so mark it Disruptive
 	g.It("NonHyperShiftHOST-Author:pewang-High-48875-[vSphere-CSI-Driver-Operator] should report 'vsphere_csi_driver_error' metric when couldn't connect to vCenter [Disruptive]", func() {
-		g.By("# Get the origin credential of vSphere CSI driver")
+		exutil.By("# Get the origin credential of vSphere CSI driver")
 		// Make sure the CSO is healthy
 		waitCSOhealthy(oc)
 		originCredential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", "-o", "json").Output()
@@ -280,7 +281,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("# Get the credential pwd key name and key value")
+		exutil.By("# Get the credential pwd key name and key value")
 		var pwdKey string
 		dataList := strings.Split(gjson.Get(originCredential, `data`).String(), `"`)
 		for _, subStr := range dataList {
@@ -292,7 +293,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		debugLogf("The credential pwd key name is: \"%s\"", pwdKey)
 		originPwd := gjson.Get(originCredential, `data.*password`).String()
 
-		g.By("# Replace the origin credential of vSphere CSI driver to wrong")
+		exutil.By("# Replace the origin credential of vSphere CSI driver to wrong")
 		invalidPwd := base64.StdEncoding.EncodeToString([]byte(getRandomString()))
 		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+invalidPwd+`"}}`).Output()
 		// Restore the credential of vSphere CSI driver and make sure the CSO recover healthy by defer
@@ -301,10 +302,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(output).To(o.ContainSubstring("patched"))
 		debugLogf("Replace the credential of vSphere CSI driver pwd to invalidPwd: \"%s\" succeed", invalidPwd)
 
-		g.By("# Wait for the 'vsphere_csi_driver_error' metric report with correct content")
+		exutil.By("# Wait for the 'vsphere_csi_driver_error' metric report with correct content")
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_csi_driver_error", `data.result.0.metric.failure_reason`, "vsphere_connection_failed")
 
-		g.By("# Check the cluster could still upgrade and cluster storage operator not available")
+		exutil.By("# Check the cluster could still upgrade and cluster storage operator not available")
 		// Don't block upgrades if we can't connect to vcenter
 		// https://bugzilla.redhat.com/show_bug.cgi?id=2040880
 		waitCSOspecifiedStatusValueAsExpected(oc, "Upgradeable", "True")
@@ -315,13 +316,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-60185 - [vSphere-Problem-Detector] should report 'vsphere_zonal_volumes_total' metric correctly
 	// Add [Serial] because deployment/vsphere-problem-detector-operator restart is needed
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:wduan-High-60185-[vSphere-Problem-Detector] should report 'vsphere_zonal_volumes_total' metric correctly [Serial]", func() {
-		g.By("# Create two manual fileshare persist volumes(vSphere CNS File Volume) and one manual general volume")
+		exutil.By("# Create two manual fileshare persist volumes(vSphere CNS File Volume) and one manual general volume")
 		// Retart vSphereDetectorOperator pod and record oginal vsphere_zonal_volumes_total value
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_zonal_volumes_total", `data.result.0.metric.pod`, vSphereDetectorOperator.getPodList(oc.AsAdmin())[0])
 		initCount, err := mo.getSpecifiedMetricValue("vsphere_zonal_volumes_total", `data.result.0.value.1`)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("# Create vSphere zonal PV with nodeAffinity")
+		exutil.By("# Create vSphere zonal PV with nodeAffinity")
 		storageTeamBaseDir := exutil.FixturePath("testdata", "storage")
 		pvTemplate := filepath.Join(storageTeamBaseDir, "csi-pv-template.yaml")
 
@@ -339,18 +340,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pv.createWithNodeAffinityExpressions(oc.AsAdmin(), []Expression{matchReginExpression, matchZoneExpression})
 		defer pv.deleteAsAdmin(oc)
 
-		g.By("# Check the metric vsphere_zonal_volumes_total")
+		exutil.By("# Check the metric vsphere_zonal_volumes_total")
 		// Since the vsphere-problem-detector update the metric every hour restart the deployment to trigger the update right now
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
 		initCountInt, err := strconv.Atoi(initCount)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_zonal_volumes_total", `data.result.0.value.1`, interfaceToString(initCountInt+1))
 
-		g.By("# Delete the vSphere zonal PV")
+		exutil.By("# Delete the vSphere zonal PV")
 		pv.deleteAsAdmin(oc)
 		waitForPersistentVolumeStatusAsExpected(oc, pv.name, "deleted")
 
-		g.By("# Check the metric vsphere_zonal_volumes_total")
+		exutil.By("# Check the metric vsphere_zonal_volumes_total")
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_zonal_volumes_total", `data.result.0.value.1`, interfaceToString(initCountInt))
 	})

@@ -26,7 +26,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		cloudProvider = getCloudProvider(oc)
 		generalCsiSupportCheck(cloudProvider)
 
-		g.By("# Get the Mgmt cluster version and Guest cluster name")
+		exutil.By("# Get the Mgmt cluster version and Guest cluster name")
 		getClusterVersionChannel(oc)
 
 		// The tc is skipped if it do not find hypershift operator pod inside cluster
@@ -45,7 +45,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Cluster is not of Public kind and skipping the tc")
 		}
 
-		g.By("******" + cloudProvider + " Hypershift test phase start ******")
+		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
 
 		// Currently listing the AWS platforms deployment operators
 		// To do: Include other platform operators when the hypershift operator is supported
@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			"aws": {"aws-ebs-csi-driver-controller", "aws-ebs-csi-driver-operator", "cluster-storage-operator", "csi-snapshot-controller", "csi-snapshot-controller-operator", "csi-snapshot-webhook"},
 		}
 
-		g.By("# Check the deployment operator status in hosted control ns")
+		exutil.By("# Check the deployment operator status in hosted control ns")
 		for _, depName := range depNames[cloudProvider] {
 			dep := newDeployment(setDeploymentName(depName), setDeploymentNamespace(hostedClusterNS+"-"+guestClusterName))
 			deploymentReady, err := dep.checkReady(oc.AsAdmin())
@@ -68,13 +68,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set the guest kubeconfig parameter
 		oc.SetGuestKubeconf(guestClusterKube)
 
-		g.By("# Get the Guest cluster version and platform")
+		exutil.By("# Get the Guest cluster version and platform")
 		getClusterVersionChannel(oc.AsGuestKubeconf())
 		// get IaaS platform of guest cluster
 		iaasPlatform := exutil.CheckPlatform(oc.AsGuestKubeconf())
 		e2e.Logf("Guest cluster platform is %s", iaasPlatform)
 
-		g.By("# Check the Guest cluster does not have deployments")
+		exutil.By("# Check the Guest cluster does not have deployments")
 		clusterNs := []string{"openshift-cluster-csi-drivers", "openshift-cluster-storage-operator"}
 		for _, projectNs := range clusterNs {
 			guestDepNames := getSpecifiedNamespaceDeployments(oc.AsGuestKubeconf(), projectNs)
@@ -88,7 +88,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				e2e.Logf("No deployments are present in ns %v for Guest cluster", projectNs)
 			}
 		}
-		g.By("******" + cloudProvider + " Hypershift test phase finished ******")
+		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
 	})
 
 	// author: ropatil@redhat.com
@@ -96,7 +96,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-63521 - [HyperShiftMGMT-NonHyperShiftHOST][CSI-Driver-Operator][HCP] Check storage operator's serviceaccount should have pull-secrets in its imagePullSecrets
 	g.It("HyperShiftMGMT-NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-High-63521-[CSI-Driver-Operator][HCP] Check storage operator's serviceaccount should have pull-secrets in its imagePullSecrets", func() {
 
-		g.By("******" + cloudProvider + " Hypershift test phase start ******")
+		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
 
 		// Currently listing the AWS platforms deployment operators
 		// To do: Include other platform operators when the hypershift operator is supported
@@ -106,13 +106,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Append general operator csi-snapshot-controller-operator to all platforms
 		operatorNames[cloudProvider] = append(operatorNames[cloudProvider], "csi-snapshot-controller-operator")
 
-		g.By("# Check the service account operator in hosted control ns should have pull-secret")
+		exutil.By("# Check the service account operator in hosted control ns should have pull-secret")
 		for _, operatorName := range operatorNames[cloudProvider] {
 			pullsecret, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", operatorName, "-n", hostedClusterNS+"-"+guestClusterName, "-o=jsonpath={.imagePullSecrets[*].name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Fields(pullsecret)).Should(o.ContainElement("pull-secret"))
 		}
-		g.By("******" + cloudProvider + " Hypershift test phase finished ******")
+		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
 	})
 
 	// author: ropatil@redhat.com
@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-63522 - [HyperShiftMGMT-NonHyperShiftHOST][CSI-Driver-Operator][HCP] Check storage operator's pods should have specific priorityClass
 	g.It("HyperShiftMGMT-NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-High-63522-[CSI-Driver-Operator][HCP] Check storage operator's pods should have specific priorityClass", func() {
 
-		g.By("******" + cloudProvider + " Hypershift test phase start ******")
+		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
 
 		// Currently listing the AWS platforms deployment operators
 		// To do: Include other platform operators when the hypershift operator is supported
@@ -130,13 +130,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Append general operator csi-snapshot-controller to all platforms
 		operatorNames[cloudProvider] = append(operatorNames[cloudProvider], "csi-snapshot-controller", "csi-snapshot-webhook")
 
-		g.By("# Check hcp storage operator's pods should have specific priorityClass")
+		exutil.By("# Check hcp storage operator's pods should have specific priorityClass")
 		for _, operatorName := range operatorNames[cloudProvider] {
 			priorityClass, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", operatorName, "-n", hostedClusterNS+"-"+guestClusterName, "-o=jsonpath={.spec.template.spec.priorityClassName}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Fields(priorityClass)).Should(o.ContainElement("hypershift-control-plane"))
 		}
-		g.By("******" + cloudProvider + " Hypershift test phase finished ******")
+		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
 	})
 
 	// author: ropatil@redhat.com
@@ -144,7 +144,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-63523 - [HyperShiftMGMT-NonHyperShiftHOST][CSI-Driver-Operator][HCP] Check storage operator should not use guest cluster proxy
 	g.It("HyperShiftMGMT-NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-High-63523-[CSI-Driver-Operator][HCP] Check storage operator should not use guest cluster proxy", func() {
 
-		g.By("******" + cloudProvider + " Hypershift test phase start ******")
+		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
 
 		// Currently listing the AWS platforms deployment operators
 		// To do: Include other platform operators when the hypershift operator is supported
@@ -154,19 +154,19 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Append general operator csi-snapshot-controller to all platforms
 		operatorNames[cloudProvider] = append(operatorNames[cloudProvider], "csi-snapshot-controller", "csi-snapshot-controller-operator")
 
-		g.By("# Check hcp storage operator should not use guest cluster proxy")
+		exutil.By("# Check hcp storage operator should not use guest cluster proxy")
 		for _, operatorName := range operatorNames[cloudProvider] {
 			annotationValues, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", operatorName, "-n", hostedClusterNS+"-"+guestClusterName, "-o=jsonpath={.metadata.annotations}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(annotationValues).ShouldNot(o.ContainSubstring("inject-proxy"))
 		}
 
-		g.By("# Check the deployment operator in hosted control ns should have correct SecretName")
+		exutil.By("# Check the deployment operator in hosted control ns should have correct SecretName")
 		for _, operatorName := range operatorNames[cloudProvider] {
 			SecretName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", operatorName, "-n", hostedClusterNS+"-"+guestClusterName, "-o=jsonpath={.spec.template.spec.volumes[*].secret.secretName}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Fields(SecretName)).Should(o.ContainElement("service-network-admin-kubeconfig"))
 		}
-		g.By("******" + cloudProvider + " Hypershift test phase finished ******")
+		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
 	})
 })

@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 
 		// Set up a specified project share for all the phases
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Define the supported skuname
@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		for _, skuname := range skunames {
-			g.By("******" + " The skuname: " + skuname + " test phase start " + "******")
+			exutil.By("******" + " The skuname: " + skuname + " test phase start " + "******")
 
 			// Set the resource definition for the scenario
 			storageClassParameters := map[string]string{
@@ -63,23 +63,23 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
-			g.By("Create csi storageclass with skuname")
+			exutil.By("Create csi storageclass with skuname")
 			storageClass.createWithExtraParameters(oc, extraParameters)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
-			g.By("Create a pvc with the csi storageclass")
+			exutil.By("Create a pvc with the csi storageclass")
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("Create pod with the created pvc and wait for the pod ready")
+			exutil.By("Create pod with the created pvc and wait for the pod ready")
 			pod.create(oc)
 			defer pod.deleteAsAdmin(oc)
 			pod.waitReady(oc)
 
-			g.By("Check the pod volume has the read and write access right")
+			exutil.By("Check the pod volume has the read and write access right")
 			pod.checkMountedVolumeCouldRW(oc)
 
-			g.By("Check the pv.spec.csi.volumeAttributes.skuname")
+			exutil.By("Check the pv.spec.csi.volumeAttributes.skuname")
 			pvName := pvc.getVolumeName(oc)
 			skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -106,14 +106,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 
 		// Set up a specified project share for all the phases
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Define the supported skuname
 		skunames := []string{"Premium_ZRS", "StandardSSD_ZRS"}
 
 		for _, skuname := range skunames {
-			g.By("******" + " The skuname: " + skuname + " test phase start " + "******")
+			exutil.By("******" + " The skuname: " + skuname + " test phase start " + "******")
 
 			// Set the resource definition for the scenario
 			storageClassParameters := map[string]string{
@@ -127,37 +127,37 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
-			g.By("Create csi storageclass with skuname")
+			exutil.By("Create csi storageclass with skuname")
 			storageClass.createWithExtraParameters(oc, extraParameters)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
-			g.By("Create a pvc with the csi storageclass")
+			exutil.By("Create a pvc with the csi storageclass")
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("Create pod with the created pvc and wait for the pod ready")
+			exutil.By("Create pod with the created pvc and wait for the pod ready")
 			pod.create(oc)
 			defer pod.deleteAsAdmin(oc)
 			pod.waitReady(oc)
 
-			g.By("Check the pod volume has the read and write access right")
+			exutil.By("Check the pod volume has the read and write access right")
 			pod.checkMountedVolumeCouldRW(oc)
 
-			g.By("Check the pv.spec.csi.volumeAttributes.skuname")
+			exutil.By("Check the pv.spec.csi.volumeAttributes.skuname")
 			pvName := pvc.getVolumeName(oc)
 			skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("The skuname in PV is: %v.", skunamePv)
 			o.Expect(skunamePv).To(o.Equal(skuname))
 
-			g.By("Delete pod")
+			exutil.By("Delete pod")
 			nodeName := getNodeNameByPod(oc, pod.namespace, pod.name)
 			nodeList := []string{nodeName}
 			volName := pvc.getVolumeName(oc)
 			pod.deleteAsAdmin(oc)
 			checkVolumeNotMountOnNode(oc, volName, nodeName)
 
-			g.By("Create new pod and schedule to another node")
+			exutil.By("Create new pod and schedule to another node")
 			schedulableLinuxWorkers := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
 			if len(schedulableLinuxWorkers) >= 2 {
 				podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
@@ -186,7 +186,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("No enough schedulable node or the cluster is not zoned")
 		}
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource template for the scenario
@@ -209,22 +209,22 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("256Gi"), setPersistentVolumeClaimAccessmode("ReadWriteMany"), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimVolumemode("Block"))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentReplicasNo("2"), setDeploymentPVCName(pvc.name), setDeploymentVolumeType("volumeDevices"), setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"))
 
-		g.By("Create csi storageclass with maxShares")
+		exutil.By("Create csi storageclass with maxShares")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
-		g.By("Create a pvc with the csi storageclass")
+		exutil.By("Create a pvc with the csi storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("Create deployment with the created pvc and wait for the pods ready")
+		exutil.By("Create deployment with the created pvc and wait for the pods ready")
 		dep.createWithTopologySpreadConstraints(oc)
 		defer dep.deleteAsAdmin(oc)
 
-		g.By("Wait for the deployment ready")
+		exutil.By("Wait for the deployment ready")
 		dep.waitReady(oc)
 
-		g.By("Verify two pods are scheduled to different nodes")
+		exutil.By("Verify two pods are scheduled to different nodes")
 		podList := dep.getPodList(oc)
 		nodeName0 := getNodeNameByPod(oc, dep.namespace, podList[0])
 		e2e.Logf("Pod: \"%s\" is running on the node: \"%s\"", podList[0], nodeName0)
@@ -232,7 +232,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		e2e.Logf("Pod: \"%s\" is running on the node: \"%s\"", podList[1], nodeName1)
 		o.Expect(nodeName0).ShouldNot(o.Equal(nodeName1))
 
-		g.By("Check data shared between the pods")
+		exutil.By("Check data shared between the pods")
 		_, err := execCommandInSpecificPod(oc, dep.namespace, podList[0], "/bin/dd  if=/dev/null of="+dep.mpath+" bs=512 count=1 conv=fsync")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = execCommandInSpecificPod(oc, dep.namespace, podList[0], "echo 'test data' > "+dep.mpath+";sync")
@@ -268,7 +268,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 
 		// Set up a specified project share for all the phases
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Define the supported skuname
@@ -287,23 +287,23 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
-		g.By("Create csi storageclass with skuname")
+		exutil.By("Create csi storageclass with skuname")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("Create a pvc with the csi storageclass")
+		exutil.By("Create a pvc with the csi storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		pod.create(oc)
 		defer pod.deleteAsAdmin(oc)
 		pod.waitReady(oc)
 
-		g.By("Check the pod volume has the read and write access right")
+		exutil.By("Check the pod volume has the read and write access right")
 		pod.checkMountedVolumeCouldRW(oc)
 
-		g.By("Check the pv.spec.csi.volumeAttributes.skuname")
+		exutil.By("Check the pv.spec.csi.volumeAttributes.skuname")
 		pvName := pvc.getVolumeName(oc)
 		skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -325,7 +325,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Get the region info
 		region := getClusterRegion(oc)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource definition for the scenario
@@ -340,31 +340,31 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
-		g.By("Create csi storageclass with location")
+		exutil.By("Create csi storageclass with location")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("Create a pvc with the csi storageclass")
+		exutil.By("Create a pvc with the csi storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
 		// create pod make sure the pv is really in expected region and could be attached into the pod
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		pod.create(oc)
 		defer pod.deleteAsAdmin(oc)
 		pod.waitReady(oc)
 
-		g.By("Check the pod volume has the read and write access right")
+		exutil.By("Check the pod volume has the read and write access right")
 		pod.checkMountedVolumeCouldRW(oc)
 
-		g.By("Check the pv.spec.csi.volumeAttributes.location")
+		exutil.By("Check the pv.spec.csi.volumeAttributes.location")
 		pvName := pvc.getVolumeName(oc)
 		locationPv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The location in PV is: %v.", locationPv)
 		o.Expect(locationPv).To(o.Equal(region))
 
-		g.By("Check the pv.nodeAffinity.required.nodeSelectorTerms")
+		exutil.By("Check the pv.nodeAffinity.required.nodeSelectorTerms")
 		if checkNodeZoned(oc) {
 			nodeSelectorTerms, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.nodeAffinity.required.nodeSelectorTerms}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())

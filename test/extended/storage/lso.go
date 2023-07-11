@@ -93,10 +93,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"))
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
 		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -105,12 +105,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer myVolume.detachSucceed(ac)
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
-		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+		exutil.By("# Create a localvolume cr use diskPath by id with the attached volume")
 		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -118,28 +118,28 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("# Write file to raw block volume")
+		exutil.By("# Write file to raw block volume")
 		dep.writeDataBlockType(oc)
 
-		g.By("# Scale down the deployment replicas num to zero")
+		exutil.By("# Scale down the deployment replicas num to zero")
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 
-		g.By("# Scale up the deployment replicas num to 1 and wait it ready")
+		exutil.By("# Scale up the deployment replicas num to 1 and wait it ready")
 		dep.scaleReplicas(oc, "1")
 		dep.waitReady(oc)
 
-		g.By("# Check the data still in the raw block volume")
+		exutil.By("# Check the data still in the raw block volume")
 		dep.checkDataBlockType(oc)
 
-		g.By("# Delete deployment and pvc and check the related pv's status")
+		exutil.By("# Delete deployment and pvc and check the related pv's status")
 		pvName := pvc.getVolumeName(oc)
 		dep.delete(oc)
 		pvc.delete(oc)
 		pvc.waitStatusAsExpected(oc, "deleted")
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
-		g.By("# Create new pvc,deployment and check the data in origin volume is cleaned up")
+		exutil.By("# Create new pvc,deployment and check the data in origin volume is cleaned up")
 		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"), setPersistentVolumeClaimStorageClassName(mylv.scname))
 		pvcNew.create(oc)
@@ -168,10 +168,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod         = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
 		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -180,12 +180,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer myVolume.detachSucceed(ac)
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
-		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+		exutil.By("# Create a localvolume cr use diskPath by id with the attached volume")
 		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -193,22 +193,22 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pod.deleteAsAdmin(oc)
 		pod.waitReady(oc)
 
-		g.By("#. Check the volume fsType as expected")
+		exutil.By("#. Check the volume fsType as expected")
 		volName := pvc.getVolumeName(oc)
 		checkVolumeMountCmdContain(oc, volName, myWorker.name, "xfs")
 
-		g.By("# Check the pod volume can be read and write and have the exec right")
+		exutil.By("# Check the pod volume can be read and write and have the exec right")
 		pod.checkMountedVolumeCouldRW(oc)
 		pod.checkMountedVolumeHaveExecRight(oc)
 
-		g.By("# Delete pod and pvc and check the related pv's status")
+		exutil.By("# Delete pod and pvc and check the related pv's status")
 		pvName := pvc.getVolumeName(oc)
 		pod.delete(oc)
 		pvc.delete(oc)
 		pvc.waitStatusAsExpected(oc, "deleted")
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
-		g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
+		exutil.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
 		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"))
 		pvcNew.create(oc)
@@ -233,10 +233,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod         = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
 		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -245,12 +245,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer myVolume.detachSucceed(ac)
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
-		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+		exutil.By("# Create a localvolume cr use diskPath by id with the attached volume")
 		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -258,22 +258,22 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pod.deleteAsAdmin(oc)
 		pod.waitReady(oc)
 
-		g.By("# Check the volume fsType as expected")
+		exutil.By("# Check the volume fsType as expected")
 		volName := pvc.getVolumeName(oc)
 		checkVolumeMountCmdContain(oc, volName, myWorker.name, "ext4")
 
-		g.By("# Check the pod volume can be read and write and have the exec right")
+		exutil.By("# Check the pod volume can be read and write and have the exec right")
 		pod.checkMountedVolumeCouldRW(oc)
 		pod.checkMountedVolumeHaveExecRight(oc)
 
-		g.By("# Delete pod and pvc and check the related pv's status")
+		exutil.By("# Delete pod and pvc and check the related pv's status")
 		pvName := pvc.getVolumeName(oc)
 		pod.delete(oc)
 		pvc.delete(oc)
 		pvc.waitStatusAsExpected(oc, "deleted")
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
-		g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
+		exutil.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
 		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"))
 		pvcNew.create(oc)
@@ -298,10 +298,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod         = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myMaster := getOneSchedulableMaster(allNodes)
 		myVolume := newEbsVolume(setVolAz(myMaster.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -310,7 +310,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer myVolume.detachSucceed(ac)
 		myVolume.attachToInstanceSucceed(ac, oc, myMaster)
 
-		g.By("# Create a localvolume cr with tolerations use diskPath by id")
+		exutil.By("# Create a localvolume cr with tolerations use diskPath by id")
 		toleration := []map[string]string{
 			{
 				"key":      "node-role.kubernetes.io/master",
@@ -325,7 +325,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		mylv.createWithExtraParameters(oc, tolerationsParameters)
 		defer mylv.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -333,7 +333,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pod.deleteAsAdmin(oc)
 		pod.waitReady(oc)
 
-		g.By("# Check the pod volume can be read and write and have the exec right")
+		exutil.By("# Check the pod volume can be read and write and have the exec right")
 		pod.checkMountedVolumeCouldRW(oc)
 		pod.checkMountedVolumeHaveExecRight(oc)
 	})
@@ -348,10 +348,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			mylv        = newLocalVolume(setLvNamespace(myLso.namespace), setLvTemplate(lvTemplate), setLvFstype("ext4"))
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
 		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -360,14 +360,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer myVolume.detachSucceed(ac)
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
-		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+		exutil.By("# Create a localvolume cr use diskPath by id with the attached volume")
 		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
 		for i := 1; i <= 10; i++ {
 			e2e.Logf("###### The %d loop of test LocalVolume pv cleaned up start ######", i)
-			g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+			exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname))
 			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 			pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
@@ -377,15 +377,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pod.deleteAsAdmin(oc)
 			pod.waitReady(oc)
 
-			g.By("# Write data to the pod's mount volume")
+			exutil.By("# Write data to the pod's mount volume")
 			pod.checkMountedVolumeCouldRW(oc)
 
-			g.By("# Delete pod and pvc")
+			exutil.By("# Delete pod and pvc")
 			pod.deleteAsAdmin(oc)
 			pvc.deleteAsAdmin(oc)
 			pvc.waitStatusAsExpected(oc, "deleted")
 
-			g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
+			exutil.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
 			pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
 				setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"))
 			pvcNew.create(oc)
@@ -397,7 +397,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			// Check the data is cleaned up in the volume
 			podNew.checkMountedVolumeDataExist(oc, false)
 
-			g.By("# Delete the new pod,pvc")
+			exutil.By("# Delete the new pod,pvc")
 			podNew.deleteAsAdmin(oc)
 			pvcNew.deleteAsAdmin(oc)
 			pvcNew.waitStatusAsExpected(oc, "deleted")
@@ -429,10 +429,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				randomExpandInt64 = getRandomNum(5, 10)
 			)
 
-			g.By("# Create a new project for the scenario")
+			exutil.By("# Create a new project for the scenario")
 			oc.SetupProject() //create new project
 
-			g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+			exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 			myWorker := getOneSchedulableWorker(allNodes)
 			myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
 			defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -441,12 +441,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer myVolume.detachSucceed(ac)
 			myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
-			g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+			exutil.By("# Create a localvolume cr use diskPath by id with the attached volume")
 			mylv.deviceID = myVolume.DeviceByID
 			mylv.create(oc)
 			defer mylv.deleteAsAdmin(oc)
 
-			g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+			exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
 			originVolumeCapacity := myVolume.Size
 			pvc.capacity = interfaceToString(originVolumeCapacity) + "Gi"
 			pvc.create(oc)
@@ -455,43 +455,43 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pod.deleteAsAdmin(oc)
 			pod.waitReady(oc)
 
-			g.By("# Check the pod volume can be read and write and have the exec right")
+			exutil.By("# Check the pod volume can be read and write and have the exec right")
 			pod.checkMountedVolumeCouldRW(oc)
 			pod.checkMountedVolumeHaveExecRight(oc)
 
-			g.By("# Expand the volume on backend and waiting for resize complete")
+			exutil.By("# Expand the volume on backend and waiting for resize complete")
 			myVolume.expandSucceed(ac, myVolume.Size+randomExpandInt64)
 
-			g.By("# Patch the LV CR related storageClass allowVolumeExpansion:true")
+			exutil.By("# Patch the LV CR related storageClass allowVolumeExpansion:true")
 			scPatchPath := `{"allowVolumeExpansion":true}`
 			patchResourceAsAdmin(oc, "", "sc/"+mylv.scname, scPatchPath, "merge")
 
-			g.By("# Patch the pv capacity to expandCapacity")
+			exutil.By("# Patch the pv capacity to expandCapacity")
 			pvName := pvc.getVolumeName(oc)
 			expandCapacity := strconv.FormatInt(myVolume.ExpandSize, 10) + "Gi"
 			pvPatchPath := `{"spec":{"capacity":{"storage":"` + expandCapacity + `"}}}`
 			patchResourceAsAdmin(oc, "", "pv/"+pvName, pvPatchPath, "merge")
 
-			g.By("# Patch the pvc capacity to expandCapacity")
+			exutil.By("# Patch the pvc capacity to expandCapacity")
 			pvc.expand(oc, expandCapacity)
 			pvc.waitResizeSuccess(oc, expandCapacity)
 
-			g.By("# Check pod mount volume size updated and the origin data still exist")
+			exutil.By("# Check pod mount volume size updated and the origin data still exist")
 			o.Expect(pod.getPodMountFsVolumeSize(oc)).Should(o.Equal(myVolume.ExpandSize))
 			pod.checkMountedVolumeDataExist(oc, true)
 
-			g.By("# Write larger than origin capacity and less than new capacity data should succeed")
+			exutil.By("# Write larger than origin capacity and less than new capacity data should succeed")
 			msg, err := pod.execCommand(oc, "fallocate -l "+strconv.FormatInt(originVolumeCapacity+getRandomNum(1, 3), 10)+"G "+pod.mountPath+"/"+getRandomString()+" ||true")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
 
-			g.By("# Delete pod and pvc and check the related pv's status")
+			exutil.By("# Delete pod and pvc and check the related pv's status")
 			pod.delete(oc)
 			pvc.delete(oc)
 			pvc.waitStatusAsExpected(oc, "deleted")
 			waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
-			g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
+			exutil.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
 			pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
 				setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(originVolumeCapacity, myVolume.ExpandSize))+"Gi"))
 			pvcNew.create(oc)
@@ -521,10 +521,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"))
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create 2 aws ebs volumes and attach the volume to a schedulable worker node")
+		exutil.By("# Create 2 aws ebs volumes and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
 		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		myVolume1 := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
@@ -540,12 +540,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer myVolume1.detachSucceed(ac)
 		myVolume1.attachToInstanceSucceed(ac, oc, myWorker)
 
-		g.By("# Create a localvolumeSet cr and wait for device provisioned")
+		exutil.By("# Create a localvolumeSet cr and wait for device provisioned")
 		mylvs.create(oc)
 		defer mylvs.deleteAsAdmin(oc)
 		mylvs.waitDeviceProvisioned(oc)
 
-		g.By("# Create a pvc use the localVolumeSet storageClass and create a pod consume the pvc")
+		exutil.By("# Create a pvc use the localVolumeSet storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -553,33 +553,33 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("# Write file to raw block volume")
+		exutil.By("# Write file to raw block volume")
 		dep.writeDataBlockType(oc)
 
-		g.By("# Scale down the deployment replicas num to zero")
+		exutil.By("# Scale down the deployment replicas num to zero")
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 
-		g.By("# Scale up the deployment replicas num to 1 and wait it ready")
+		exutil.By("# Scale up the deployment replicas num to 1 and wait it ready")
 		dep.scaleReplicas(oc, "1")
 		dep.waitReady(oc)
 
-		g.By("# Check the data still in the raw block volume")
+		exutil.By("# Check the data still in the raw block volume")
 		dep.checkDataBlockType(oc)
 
-		g.By("# Delete deployment and pvc and check the related pv's status")
+		exutil.By("# Delete deployment and pvc and check the related pv's status")
 		pvName := pvc.getVolumeName(oc)
 		dep.delete(oc)
 		pvc.delete(oc)
 		pvc.waitStatusAsExpected(oc, "deleted")
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
-		g.By("# LSO localVolumeSet should only provision 1 volume follow the maxDeviceCount restrict")
+		exutil.By("# LSO localVolumeSet should only provision 1 volume follow the maxDeviceCount restrict")
 		lvPvs, err := getPvNamesOfSpecifiedSc(oc, mylvs.scname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(lvPvs) == 1).Should(o.BeTrue())
 
-		g.By("# Create new pvc,deployment and check the data in origin volume is cleaned up")
+		exutil.By("# Create new pvc,deployment and check the data in origin volume is cleaned up")
 		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"), setPersistentVolumeClaimStorageClassName(mylvs.scname))
 		pvcNew.create(oc)
@@ -608,10 +608,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod         = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create 3 different capacity aws ebs volume and attach the volume to a schedulable worker node")
+		exutil.By("# Create 3 different capacity aws ebs volume and attach the volume to a schedulable worker node")
 		// Create 1 aws ebs volume of random size [5-15Gi] and attach to the schedulable worker node
 		// Create 2 aws ebs volumes of random size [1-4Gi] and [16-20Gi] attach to the schedulable worker node
 		myWorker := getOneSchedulableWorker(allNodes)
@@ -635,12 +635,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer maxVolume.detachSucceed(ac)
 		maxVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
-		g.By("# Create a localvolumeSet cr and wait for device provisioned")
+		exutil.By("# Create a localvolumeSet cr and wait for device provisioned")
 		mylvs.create(oc)
 		defer mylvs.deleteAsAdmin(oc)
 		mylvs.waitDeviceProvisioned(oc)
 
-		g.By("# Create a pvc use the localVolumeSet storageClass and create a pod consume the pvc")
+		exutil.By("# Create a pvc use the localVolumeSet storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -648,29 +648,29 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pod.deleteAsAdmin(oc)
 		pod.waitReady(oc)
 
-		g.By("# Check the volume fsType as expected")
+		exutil.By("# Check the volume fsType as expected")
 		pvName := pvc.getVolumeName(oc)
 		checkVolumeMountCmdContain(oc, pvName, myWorker.name, "ext4")
 
-		g.By("# Check the pod volume can be read and write and have the exec right")
+		exutil.By("# Check the pod volume can be read and write and have the exec right")
 		pod.checkMountedVolumeCouldRW(oc)
 		pod.checkMountedVolumeHaveExecRight(oc)
 
-		g.By("# Check the pv OwnerReference has no node related")
+		exutil.By("# Check the pv OwnerReference has no node related")
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.metadata.ownerReferences[?(@.kind==\"Node\")].name}").Output()).Should(o.BeEmpty())
 
-		g.By("# Delete pod and pvc and check the related pv's status")
+		exutil.By("# Delete pod and pvc and check the related pv's status")
 		pod.delete(oc)
 		pvc.delete(oc)
 		pvc.waitStatusAsExpected(oc, "deleted")
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
-		g.By("# LSO localVolumeSet only provision the matched interval capacity [5-15Gi](defined in lvs cr) volume")
+		exutil.By("# LSO localVolumeSet only provision the matched interval capacity [5-15Gi](defined in lvs cr) volume")
 		lvPvs, err := getPvNamesOfSpecifiedSc(oc, mylvs.scname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(lvPvs) == 1).Should(o.BeTrue())
 
-		g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
+		exutil.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
 		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylvs.scname),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"))
 		pvcNew.create(oc)
@@ -699,10 +699,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod         = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
 		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -711,12 +711,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer myVolume.detachSucceed(ac)
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
-		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+		exutil.By("# Create a localvolume cr use diskPath by id with the attached volume")
 		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -724,16 +724,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pod.deleteAsAdmin(oc)
 		pod.waitReady(oc)
 
-		g.By("# Check the pod volume can be read and write")
+		exutil.By("# Check the pod volume can be read and write")
 		pod.checkMountedVolumeCouldRW(oc)
 
-		g.By("# Force delete pod and check the volume umount form the node")
+		exutil.By("# Force delete pod and check the volume umount form the node")
 		pvName := pvc.getVolumeName(oc)
 		nodeName := getNodeNameByPod(oc, pod.namespace, pod.name)
 		pod.forceDelete(oc)
 		checkVolumeNotMountOnNode(oc, pvName, nodeName)
 
-		g.By("# Create new pod and check the data in origin volume is still exist")
+		exutil.By("# Create new pod and check the data in origin volume is still exist")
 		podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 		podNew.create(oc)
 		defer podNew.deleteAsAdmin(oc)
@@ -741,14 +741,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Check the origin wrote data is still in the volume
 		podNew.checkMountedVolumeDataExist(oc, true)
 
-		g.By("# Force delete the project and check the volume umount from the node and become Available")
+		exutil.By("# Force delete the project and check the volume umount from the node and become Available")
 		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", podNew.namespace, "--force", "--grace-period=0").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Waiting for the volume umount successfully
 		checkVolumeNotMountOnNode(oc, pvName, nodeName)
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
-		g.By("Check the diskManager log has no deleter configmap err reported")
+		exutil.By("Check the diskManager log has no deleter configmap err reported")
 		myLso.checkDiskManagerLogContains(oc, "deleter could not get provisioner configmap", false)
 	})
 
@@ -781,10 +781,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvName      string
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
 		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -793,13 +793,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer myVolume.detachSucceed(ac)
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
-		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+		exutil.By("# Create a localvolume cr use diskPath by id with the attached volume")
 		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", pvName).Execute()
 
-		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -807,14 +807,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("# Check the pod volume can be read and write")
+		exutil.By("# Check the pod volume can be read and write")
 		dep.checkPodMountedVolumeCouldRW(oc)
 
-		g.By("# Check the pv OwnerReference has no node related")
+		exutil.By("# Check the pv OwnerReference has no node related")
 		pvName = pvc.getVolumeName(oc)
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.metadata.ownerReferences[?(@.kind==\"Node\")].name}").Output()).Should(o.BeEmpty())
 
-		g.By("# Get the pod locate node's name and cordon the node")
+		exutil.By("# Get the pod locate node's name and cordon the node")
 		o.Expect(getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])).Should(o.Equal(myWorker.name))
 		// Cordon the node
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", "node/"+myWorker.name).Execute()).NotTo(o.HaveOccurred())
@@ -822,7 +822,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer dep.waitReady(oc)
 		defer uncordonSpecificNode(oc, myWorker.name)
 
-		g.By("# Delete the node and check the pv's status not become Terminating for 60s")
+		exutil.By("# Delete the node and check the pv's status not become Terminating for 60s")
 		deleteSpecifiedResource(oc.AsAdmin(), "node", myWorker.name, "")
 		defer waitNodeAvailable(oc, myWorker.name)
 		defer rebootInstanceAndWaitSucceed(ac, myWorker.instanceID)
@@ -849,10 +849,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			mylvd       = newlocalVolumeDiscovery(setLvdNamespace(myLso.namespace), setLvdTemplate(lvdTemplate))
 		)
 
-		g.By("# Create a new project for the scenario")
+		exutil.By("# Create a new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create 2 different aws ebs volume and attach the volume to the same schedulable worker node")
+		exutil.By("# Create 2 different aws ebs volume and attach the volume to the same schedulable worker node")
 		allSchedulableLinuxWorkers := getSchedulableLinuxWorkers(allNodes)
 		if len(allSchedulableLinuxWorkers) == 0 {
 			g.Skip("Skip for there's no schedulable Linux workers in the test cluster")
@@ -873,13 +873,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer myVolumeB.detachSucceed(ac)
 		myVolumeB.attachToInstanceSucceed(ac, oc, myWorker)
 
-		g.By("# Create a localvolumeDiscovery cr and wait for localvolumeDiscoveryResults generated")
+		exutil.By("# Create a localvolumeDiscovery cr and wait for localvolumeDiscoveryResults generated")
 		mylvd.discoverNodes = []string{myWorker.name}
 		mylvd.create(oc)
 		defer mylvd.deleteAsAdmin(oc)
 		mylvd.waitDiscoveryResultsGenerated(oc)
 
-		g.By("# Check the localvolumeDiscoveryResults should contains the myVolumeA and myVolumeB info")
+		exutil.By("# Check the localvolumeDiscoveryResults should contains the myVolumeA and myVolumeB info")
 		o.Expect(mylvd.discoveryResults[myWorker.name]).Should(o.And(
 			o.ContainSubstring(myVolumeA.DeviceByID),
 			o.ContainSubstring(myVolumeB.DeviceByID),
@@ -890,7 +890,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		if len(allSchedulableLinuxWorkers) > 1 {
 			// Check new LocalVolumeDiscoveryResults record is generated if new node is added to LocalVolumeDiscovery
-			g.By("# Add new node to the localvolumeDiscovery should generate new node's localvolumeDiscoveryResults")
+			exutil.By("# Add new node to the localvolumeDiscovery should generate new node's localvolumeDiscoveryResults")
 			nodeB := allSchedulableLinuxWorkers[1]
 			mylvd.discoverNodes = append(mylvd.discoverNodes, nodeB.name)
 			mylvd.ApplyWithSpecificNodes(oc, `kubernetes.io/hostname`, "In", mylvd.discoverNodes)
@@ -898,12 +898,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(mylvd.discoveryResults[nodeB.name]).ShouldNot(o.BeEmpty())
 		}
 
-		g.By("# Create a localvolume cr associate myVolumeA")
+		exutil.By("# Create a localvolume cr associate myVolumeA")
 		mylv.deviceID = myVolumeA.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
-		g.By("# Wait for the localvolume cr provisioned volume and check the pv should be myVolumeA")
+		exutil.By("# Wait for the localvolume cr provisioned volume and check the pv should be myVolumeA")
 		var lvPvs = make([]string, 0, 5)
 		mylv.waitAvailable(oc)
 		o.Eventually(func() string {
@@ -921,13 +921,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(getPvStatusError).ShouldNot(o.HaveOccurred())
 		o.Expect(pvStatus).Should(o.ContainSubstring("Available"))
 
-		g.By("# Create a localvolumeSet cr and wait for device provisioned")
+		exutil.By("# Create a localvolumeSet cr and wait for device provisioned")
 		mylvs.create(oc)
 		defer mylvs.deleteAsAdmin(oc)
 		mylvs.waitDeviceProvisioned(oc)
 
 		// Check CR localvolumeset and localvolume not using same device
-		g.By("# Check the provisioned device should only myVolumeB")
+		exutil.By("# Check the provisioned device should only myVolumeB")
 		o.Consistently(func() int64 {
 			provisionedDeviceCount, _ := mylvs.getTotalProvisionedDeviceCount(oc)
 			return provisionedDeviceCount
@@ -945,7 +945,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(getPvStatusError).ShouldNot(o.HaveOccurred())
 		o.Expect(pvStatus).Should(o.ContainSubstring("Available"))
 
-		g.By("# Delete the localVolume/localVolumeSet/localVolumeDiscovery CR should not stuck")
+		exutil.By("# Delete the localVolume/localVolumeSet/localVolumeDiscovery CR should not stuck")
 		deleteSpecifiedResource(oc.AsAdmin(), "localVolume", mylv.name, mylv.namespace)
 		deleteSpecifiedResource(oc.AsAdmin(), "localVolumeSet", mylvs.name, mylvs.namespace)
 		deleteSpecifiedResource(oc.AsAdmin(), "localVolumeDiscovery", mylvd.name, mylvd.namespace)

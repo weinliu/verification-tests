@@ -61,42 +61,42 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			myWorkers = getTwoSchedulableWorkersWithDifferentAzs(oc)
 		)
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("# Create regional CSI storageclass")
+		exutil.By("# Create regional CSI storageclass")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc with the CSI storageclass")
+		exutil.By("# Create a pvc with the CSI storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("# Create deployment A with the created pvc and wait for it becomes ready")
+		exutil.By("# Create deployment A with the created pvc and wait for it becomes ready")
 		depA.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", myWorkers[0].availableZone)
 		defer depA.deleteAsAdmin(oc)
 		depA.waitReady(oc)
 
-		g.By("# Check deployment's pod mount volume could read and write")
+		exutil.By("# Check deployment's pod mount volume could read and write")
 		depA.checkPodMountedVolumeCouldRW(oc)
 
 		if len(myWorkers) == 2 {
 			// Regional volumes have 2 available zones volumes
-			g.By("Get the regional volume available zones")
+			exutil.By("Get the regional volume available zones")
 			volAvailableZones := pvc.getVolumeNodeAffinityAvailableZones(oc)
 			o.Expect(volAvailableZones).Should(o.HaveLen(2))
 
-			g.By("# Delete the deployment A")
+			exutil.By("# Delete the deployment A")
 			deleteSpecifiedResource(oc, "deployment", depA.name, depA.namespace)
 
-			g.By("# Create deployment B with the same pvc and wait for it becomes ready")
+			exutil.By("# Create deployment B with the same pvc and wait for it becomes ready")
 			// deployment B nodeSelector zone is different from deploymentA
 			o.Expect(volAvailableZones[0]).ShouldNot(o.Equal(volAvailableZones[1]))
 			depB.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", deleteElement(volAvailableZones, myWorkers[0].availableZone)[0])
 			defer depB.deleteAsAdmin(oc)
 			depB.waitReady(oc)
 
-			g.By("# Check deployment B also could read the origin data which is written data by deployment A in different available zones")
+			exutil.By("# Check deployment B also could read the origin data which is written data by deployment A in different available zones")
 			depB.checkPodMountedVolumeDataExist(oc, true)
 		}
 	})
@@ -132,25 +132,25 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		g.By("Create default namespace")
+		exutil.By("Create default namespace")
 		oc.SetupProject() //create new project
 
-		g.By("Create storage class with allowedTopologies")
+		exutil.By("Create storage class with allowedTopologies")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("Create pvc")
+		exutil.By("Create pvc")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("Create deployment with the created pvc and wait for the pod ready")
+		exutil.By("Create deployment with the created pvc and wait for the pod ready")
 		dep.create(oc)
 		defer dep.deleteAsAdmin(oc)
 
-		g.By("Wait for the deployment ready")
+		exutil.By("Wait for the deployment ready")
 		dep.waitReady(oc)
 
-		g.By("Check pv nodeAffinity is two items")
+		exutil.By("Check pv nodeAffinity is two items")
 		pvName := pvc.getVolumeName(oc)
 		outPut, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.nodeAffinity.required.nodeSelectorTerms}").Output()
 		o.Expect(outPut).To(o.ContainSubstring(zones[0]))
@@ -182,26 +182,26 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				pvc          = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 				pod          = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 			)
-			g.By("# Create new project for the scenario")
+			exutil.By("# Create new project for the scenario")
 			oc.SetupProject()
 
-			g.By("# Create \"" + volumeType + "\" type gcp-pd-csi storageclass")
+			exutil.By("# Create \"" + volumeType + "\" type gcp-pd-csi storageclass")
 			storageClass.createWithExtraParameters(oc, extraParameters)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not
 
-			g.By("# Create a pvc with the gcp-pd-csi storageclass")
+			exutil.By("# Create a pvc with the gcp-pd-csi storageclass")
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("# Create pod with the created pvc and wait for the pod ready")
+			exutil.By("# Create pod with the created pvc and wait for the pod ready")
 			pod.create(oc)
 			defer pod.deleteAsAdmin(oc)
 			waitPodReady(oc, pod.namespace, pod.name)
 
-			g.By("# Check the pod volume can be read and write")
+			exutil.By("# Check the pod volume can be read and write")
 			pod.checkMountedVolumeCouldRW(oc)
 
-			g.By("# Check the pod volume have the exec right")
+			exutil.By("# Check the pod volume have the exec right")
 			pod.checkMountedVolumeHaveExecRight(oc)
 		})
 	}
@@ -226,41 +226,41 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"deletionPolicy": "Delete",
 			}
 		)
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 		storageClass.create(oc)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc with the storageclass")
+		exutil.By("# Create a pvc with the storageclass")
 		oripvc.create(oc)
 		defer oripvc.deleteAsAdmin(oc)
 
-		g.By("# Create pod with the created pvc and wait for the pod ready")
+		exutil.By("# Create pod with the created pvc and wait for the pod ready")
 		oripod.create(oc)
 		defer oripod.deleteAsAdmin(oc)
 		waitPodReady(oc, oripod.namespace, oripod.name)
 
-		g.By("# Write file to volume")
+		exutil.By("# Write file to volume")
 		oripod.checkMountedVolumeCouldRW(oc)
 		oripod.execCommand(oc, "sync")
 
-		g.By("# Create new volumesnapshotclass with parameter snapshot-type as image")
+		exutil.By("# Create new volumesnapshotclass with parameter snapshot-type as image")
 		volumesnapshotClass.createWithExtraParameters(oc, vscExtraParameters)
 		defer volumesnapshotClass.deleteAsAdmin(oc)
 
-		g.By("# Create volumesnapshot with new volumesnapshotclass")
+		exutil.By("# Create volumesnapshot with new volumesnapshotclass")
 		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(oripvc.name), setVolumeSnapshotVscname(volumesnapshotClass.name))
 		volumesnapshot.create(oc)
 		defer volumesnapshot.delete(oc) //in case of delete volumesnapshot in the steps is failed
 
-		g.By("# Check volumesnapshotcontent type is disk image")
+		exutil.By("# Check volumesnapshotcontent type is disk image")
 		volumesnapshot.waitReadyToUse(oc)
 		vscontent := getVSContentByVSname(oc, volumesnapshot.namespace, volumesnapshot.name)
 		//  for example, one snapshotHandle is projects/openshift-qe/global/images/snapshot-2e7b8095-198d-48f2-acdc-96b050a9a07a
 		vsContentSnapShotHandle, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vscontent, "-o=jsonpath={.status.snapshotHandle}").Output()
 		o.Expect(vsContentSnapShotHandle).To(o.ContainSubstring("images"))
 
-		g.By("# Restore disk image ")
+		exutil.By("# Restore disk image ")
 		restorepvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name), setPersistentVolumeClaimStorageClassName(storageClass.name))
 		restorepvc.capacity = oripvc.capacity
 		restorepvc.createWithSnapshotDataSource(oc)
@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer restorepod.deleteAsAdmin(oc)
 		restorepod.waitReady(oc)
 
-		g.By("Check the file exist in restored volume")
+		exutil.By("Check the file exist in restored volume")
 		restorepod.checkMountedVolumeDataExist(oc, true)
 		restorepod.checkMountedVolumeCouldWriteData(oc, true)
 		restorepod.checkMountedVolumeHaveExecRight(oc)

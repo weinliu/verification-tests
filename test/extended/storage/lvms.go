@@ -47,18 +47,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClassName   = "lvms-" + volumeGroup
 		)
 
-		g.By("#. Create new project for the scenario")
+		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("#. Define storage resources")
+		exutil.By("#. Define storage resources")
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClassName),
 			setPersistentVolumeClaimCapacity("2Gi"), setPersistentVolumeClaimNamespace(oc.Namespace()))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentNamespace(oc.Namespace()))
 
-		g.By("#. Get thin pool size and over provision limit")
+		exutil.By("#. Get thin pool size and over provision limit")
 		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
 
-		g.By("#. Check PVC can re-size beyond thinpool size, but within overprovisioning limit")
+		exutil.By("#. Check PVC can re-size beyond thinpool size, but within overprovisioning limit")
 		targetCapactiyInt64 := getRandomNum(int64(thinPoolSize+1), int64(thinPoolSize+10))
 		resizeLvmsVolume(oc, pvc, dep, targetCapactiyInt64)
 	})
@@ -76,20 +76,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClassName   = "lvms-" + volumeGroup
 		)
 
-		g.By("#. Create new project for the scenario")
+		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("#. Define storage resources")
+		exutil.By("#. Define storage resources")
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClassName),
 			setPersistentVolumeClaimCapacity("2Gi"), setPersistentVolumeClaimNamespace(oc.Namespace()), setPersistentVolumeClaimVolumemode("Block"))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentVolumeType("volumeDevices"),
 			setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"), setDeploymentNamespace(oc.Namespace()))
 		dep.namespace = pvc.namespace
 
-		g.By("#. Get thin pool size and over provision limit")
+		exutil.By("#. Get thin pool size and over provision limit")
 		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
 
-		g.By("#. Check PVC can re-size beyond thinpool size, but within overprovisioning rate")
+		exutil.By("#. Check PVC can re-size beyond thinpool size, but within overprovisioning rate")
 		targetCapactiyInt64 := getRandomNum(int64(thinPoolSize+1), int64(thinPoolSize+10))
 		resizeLvmsVolume(oc, pvc, dep, targetCapactiyInt64)
 	})
@@ -105,24 +105,24 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClassName = "lvms-" + volumeGroup
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource definition for the original
 		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
-		g.By("Create a pvc with the lvms csi storageclass")
+		exutil.By("Create a pvc with the lvms csi storageclass")
 		pvcOri.scname = storageClassName
 		pvcOri.create(oc)
 		defer pvcOri.deleteAsAdmin(oc)
 
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		podOri.create(oc)
 		defer podOri.deleteAsAdmin(oc)
 		podOri.waitReady(oc)
 
-		g.By("Write file to volume")
+		exutil.By("Write file to volume")
 		podOri.checkMountedVolumeCouldRW(oc)
 		podOri.execCommand(oc, "sync")
 
@@ -130,22 +130,22 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(pvcOri.name))
 		podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
 
-		g.By("Create a clone pvc with the lvms storageclass")
+		exutil.By("Create a clone pvc with the lvms storageclass")
 		pvcClone.scname = storageClassName
 		pvcClone.capacity = pvcOri.capacity
 		pvcClone.createWithCloneDataSource(oc)
 		defer pvcClone.deleteAsAdmin(oc)
 
-		g.By("Create pod with the cloned pvc and wait for the pod ready")
+		exutil.By("Create pod with the cloned pvc and wait for the pod ready")
 		podClone.create(oc)
 		defer podClone.deleteAsAdmin(oc)
 		podClone.waitReady(oc)
 
-		g.By("Delete origial pvc will not impact the cloned one")
+		exutil.By("Delete origial pvc will not impact the cloned one")
 		deleteSpecifiedResource(oc, "pod", podOri.name, podOri.namespace)
 		deleteSpecifiedResource(oc, "pvc", pvcOri.name, pvcOri.namespace)
 
-		g.By("Check the file exist in cloned volume")
+		exutil.By("Check the file exist in cloned volume")
 		podClone.checkMountedVolumeDataExist(oc, true)
 	})
 
@@ -160,24 +160,24 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClassName = "lvms-" + volumeGroup
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource definition for the original
 		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
 		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
-		g.By("Create a pvc with the lvms csi storageclass")
+		exutil.By("Create a pvc with the lvms csi storageclass")
 		pvcOri.scname = storageClassName
 		pvcOri.create(oc)
 		defer pvcOri.deleteAsAdmin(oc)
 
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		podOri.create(oc)
 		defer podOri.deleteAsAdmin(oc)
 		podOri.waitReady(oc)
 
-		g.By("Write file to volume")
+		exutil.By("Write file to volume")
 		podOri.writeDataIntoRawBlockVolume(oc)
 		podOri.execCommand(oc, "sync")
 
@@ -185,22 +185,22 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(pvcOri.name))
 		podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
-		g.By("Create a clone pvc with the lvms storageclass")
+		exutil.By("Create a clone pvc with the lvms storageclass")
 		pvcClone.scname = storageClassName
 		pvcClone.capacity = pvcOri.capacity
 		pvcClone.createWithCloneDataSource(oc)
 		defer pvcClone.deleteAsAdmin(oc)
 
-		g.By("Create pod with the cloned pvc and wait for the pod ready")
+		exutil.By("Create pod with the cloned pvc and wait for the pod ready")
 		podClone.create(oc)
 		defer podClone.deleteAsAdmin(oc)
 		podClone.waitReady(oc)
 
-		g.By("Delete origial pvc will not impact the cloned one")
+		exutil.By("Delete origial pvc will not impact the cloned one")
 		deleteSpecifiedResource(oc, "pod", podOri.name, podOri.namespace)
 		deleteSpecifiedResource(oc, "pvc", pvcOri.name, pvcOri.namespace)
 
-		g.By("Check the file exist in cloned volume")
+		exutil.By("Check the file exist in cloned volume")
 		podClone.checkDataInRawBlockVolume(oc)
 	})
 
@@ -217,29 +217,29 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			volumeSnapshotClassName = "lvms-" + volumeGroup
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource definition for the original
 		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
-		g.By("Create a pvc with the lvms csi storageclass")
+		exutil.By("Create a pvc with the lvms csi storageclass")
 		pvcOri.scname = storageClassName
 		pvcOri.create(oc)
 		defer pvcOri.deleteAsAdmin(oc)
 
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		podOri.create(oc)
 		defer podOri.deleteAsAdmin(oc)
 		podOri.waitReady(oc)
 
-		g.By("Write file to volume")
+		exutil.By("Write file to volume")
 		podOri.checkMountedVolumeCouldRW(oc)
 		podOri.execCommand(oc, "sync")
 
 		// Create volumesnapshot with pre-defined volumesnapshotclass
-		g.By("Create volumesnapshot and wait for ready_to_use")
+		exutil.By("Create volumesnapshot and wait for ready_to_use")
 		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(volumeSnapshotClassName))
 		volumesnapshot.create(oc)
 		defer volumesnapshot.delete(oc)
@@ -249,18 +249,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
 		podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
-		g.By("Create a restored pvc with the lvms storageclass")
+		exutil.By("Create a restored pvc with the lvms storageclass")
 		pvcRestore.scname = storageClassName
 		pvcRestore.capacity = pvcOri.capacity
 		pvcRestore.createWithSnapshotDataSource(oc)
 		defer pvcRestore.deleteAsAdmin(oc)
 
-		g.By("Create pod with the restored pvc and wait for the pod ready")
+		exutil.By("Create pod with the restored pvc and wait for the pod ready")
 		podRestore.create(oc)
 		defer podRestore.deleteAsAdmin(oc)
 		podRestore.waitReady(oc)
 
-		g.By("Check the file exist in restored volume")
+		exutil.By("Check the file exist in restored volume")
 		podRestore.checkMountedVolumeDataExist(oc, true)
 	})
 
@@ -277,29 +277,29 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			volumeSnapshotClassName = "lvms-" + volumeGroup
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource definition for the original
 		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
 		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
-		g.By("Create a pvc with the lvms csi storageclass")
+		exutil.By("Create a pvc with the lvms csi storageclass")
 		pvcOri.scname = storageClassName
 		pvcOri.create(oc)
 		defer pvcOri.deleteAsAdmin(oc)
 
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		podOri.create(oc)
 		defer podOri.deleteAsAdmin(oc)
 		podOri.waitReady(oc)
 
-		g.By("Write file to volume")
+		exutil.By("Write file to volume")
 		podOri.writeDataIntoRawBlockVolume(oc)
 		podOri.execCommand(oc, "sync")
 
 		// Create volumesnapshot with pre-defined volumesnapshotclass
-		g.By("Create volumesnapshot and wait for ready_to_use")
+		exutil.By("Create volumesnapshot and wait for ready_to_use")
 		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(volumeSnapshotClassName))
 		volumesnapshot.create(oc)
 		defer volumesnapshot.delete(oc)
@@ -309,18 +309,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
 		podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
-		g.By("Create a restored pvc with the lvms storageclass")
+		exutil.By("Create a restored pvc with the lvms storageclass")
 		pvcRestore.scname = storageClassName
 		pvcRestore.capacity = pvcOri.capacity
 		pvcRestore.createWithSnapshotDataSource(oc)
 		defer pvcRestore.deleteAsAdmin(oc)
 
-		g.By("Create pod with the restored pvc and wait for the pod ready")
+		exutil.By("Create pod with the restored pvc and wait for the pod ready")
 		podRestore.create(oc)
 		defer podRestore.deleteAsAdmin(oc)
 		podRestore.waitReady(oc)
 
-		g.By("Check the file exist in restored volume")
+		exutil.By("Check the file exist in restored volume")
 		podRestore.checkDataInRawBlockVolume(oc)
 	})
 
@@ -337,7 +337,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClassName = "lvms-" + volumeGroup
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource definition for the original
@@ -346,21 +346,21 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
 		pvcCapacity := strconv.FormatInt(int64(thinPoolSize)+getRandomNum(2, 10), 10) + "Gi"
 
-		g.By("Create a pvc with the lvms csi storageclass and capacity bigger than disk size")
+		exutil.By("Create a pvc with the lvms csi storageclass and capacity bigger than disk size")
 		pvcOri.scname = storageClassName
 		pvcOri.capacity = pvcCapacity
 		pvcOri.create(oc)
 		defer pvcOri.deleteAsAdmin(oc)
 
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		podOri.create(oc)
 		defer podOri.deleteAsAdmin(oc)
 		podOri.waitReady(oc)
 
-		g.By("Check volume size is bigger than disk size")
+		exutil.By("Check volume size is bigger than disk size")
 		checkVolumeBiggerThanDisk(oc, pvcOri.name, pvcOri.namespace, thinPoolSize)
 
-		g.By("Write file to volume")
+		exutil.By("Write file to volume")
 		podOri.checkMountedVolumeCouldRW(oc)
 		podOri.execCommand(oc, "sync")
 
@@ -368,25 +368,25 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(pvcOri.name))
 		podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
 
-		g.By("Create a clone pvc with the lvms storageclass")
+		exutil.By("Create a clone pvc with the lvms storageclass")
 		pvcClone.scname = storageClassName
 		pvcClone.capacity = pvcOri.capacity
 		pvcClone.createWithCloneDataSource(oc)
 		defer pvcClone.deleteAsAdmin(oc)
 
-		g.By("Create pod with the cloned pvc and wait for the pod ready")
+		exutil.By("Create pod with the cloned pvc and wait for the pod ready")
 		podClone.create(oc)
 		defer podClone.deleteAsAdmin(oc)
 		podClone.waitReady(oc)
 
-		g.By("Check clone volume size is bigger than disk size")
+		exutil.By("Check clone volume size is bigger than disk size")
 		checkVolumeBiggerThanDisk(oc, pvcClone.name, pvcClone.namespace, thinPoolSize)
 
-		g.By("Delete origial pvc will not impact the cloned one")
+		exutil.By("Delete origial pvc will not impact the cloned one")
 		podOri.deleteAsAdmin(oc)
 		pvcOri.deleteAsAdmin(oc)
 
-		g.By("Check the file exist in cloned volume")
+		exutil.By("Check the file exist in cloned volume")
 		podClone.checkMountedVolumeDataExist(oc, true)
 	})
 
@@ -403,7 +403,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClassName = "lvms-" + volumeGroup
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource definition for the original
@@ -412,21 +412,21 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
 		pvcCapacity := strconv.FormatInt(int64(thinPoolSize)+getRandomNum(2, 10), 10) + "Gi"
 
-		g.By("Create a pvc with the lvms csi storageclass")
+		exutil.By("Create a pvc with the lvms csi storageclass")
 		pvcOri.scname = storageClassName
 		pvcOri.capacity = pvcCapacity
 		pvcOri.create(oc)
 		defer pvcOri.deleteAsAdmin(oc)
 
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		podOri.create(oc)
 		defer podOri.deleteAsAdmin(oc)
 		podOri.waitReady(oc)
 
-		g.By("Check volume size is bigger than disk size")
+		exutil.By("Check volume size is bigger than disk size")
 		checkVolumeBiggerThanDisk(oc, pvcOri.name, pvcOri.namespace, thinPoolSize)
 
-		g.By("Write file to volume")
+		exutil.By("Write file to volume")
 		podOri.writeDataIntoRawBlockVolume(oc)
 		podOri.execCommand(oc, "sync")
 
@@ -434,25 +434,25 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(pvcOri.name))
 		podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
-		g.By("Create a clone pvc with the lvms storageclass")
+		exutil.By("Create a clone pvc with the lvms storageclass")
 		pvcClone.scname = storageClassName
 		pvcClone.capacity = pvcOri.capacity
 		pvcClone.createWithCloneDataSource(oc)
 		defer pvcClone.deleteAsAdmin(oc)
 
-		g.By("Create pod with the cloned pvc and wait for the pod ready")
+		exutil.By("Create pod with the cloned pvc and wait for the pod ready")
 		podClone.create(oc)
 		defer podClone.deleteAsAdmin(oc)
 		podClone.waitReady(oc)
 
-		g.By("Check clone volume size is bigger than disk size")
+		exutil.By("Check clone volume size is bigger than disk size")
 		checkVolumeBiggerThanDisk(oc, pvcClone.name, pvcClone.namespace, thinPoolSize)
 
-		g.By("Delete origial pvc will not impact the cloned one")
+		exutil.By("Delete origial pvc will not impact the cloned one")
 		podOri.deleteAsAdmin(oc)
 		pvcOri.deleteAsAdmin(oc)
 
-		g.By("Check the file exist in cloned volume")
+		exutil.By("Check the file exist in cloned volume")
 		podClone.checkDataInRawBlockVolume(oc)
 	})
 
@@ -471,7 +471,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			volumeSnapshotClassName = "lvms-" + volumeGroup
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource definition for the original
@@ -480,26 +480,26 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
 		pvcCapacity := strconv.FormatInt(int64(thinPoolSize)+getRandomNum(2, 10), 10) + "Gi"
 
-		g.By("Create a pvc with the lvms csi storageclass and capacity bigger than disk size")
+		exutil.By("Create a pvc with the lvms csi storageclass and capacity bigger than disk size")
 		pvcOri.scname = storageClassName
 		pvcOri.capacity = pvcCapacity
 		pvcOri.create(oc)
 		defer pvcOri.deleteAsAdmin(oc)
 
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		podOri.create(oc)
 		defer podOri.deleteAsAdmin(oc)
 		podOri.waitReady(oc)
 
-		g.By("Check volume size is bigger than disk size")
+		exutil.By("Check volume size is bigger than disk size")
 		checkVolumeBiggerThanDisk(oc, pvcOri.name, pvcOri.namespace, thinPoolSize)
 
-		g.By("Write file to volume")
+		exutil.By("Write file to volume")
 		podOri.checkMountedVolumeCouldRW(oc)
 		podOri.execCommand(oc, "sync")
 
 		// Create volumesnapshot with pre-defined volumesnapshotclass
-		g.By("Create volumesnapshot and wait for ready_to_use")
+		exutil.By("Create volumesnapshot and wait for ready_to_use")
 		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(volumeSnapshotClassName))
 		volumesnapshot.create(oc)
 		defer volumesnapshot.delete(oc)
@@ -509,21 +509,21 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
 		podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
-		g.By("Create a restored pvc with the lvms storageclass")
+		exutil.By("Create a restored pvc with the lvms storageclass")
 		pvcRestore.scname = storageClassName
 		pvcRestore.capacity = pvcOri.capacity
 		pvcRestore.createWithSnapshotDataSource(oc)
 		defer pvcRestore.deleteAsAdmin(oc)
 
-		g.By("Create pod with the restored pvc and wait for the pod ready")
+		exutil.By("Create pod with the restored pvc and wait for the pod ready")
 		podRestore.create(oc)
 		defer podRestore.deleteAsAdmin(oc)
 		podRestore.waitReady(oc)
 
-		g.By("Check restored volume size is bigger than disk size")
+		exutil.By("Check restored volume size is bigger than disk size")
 		checkVolumeBiggerThanDisk(oc, pvcRestore.name, pvcRestore.namespace, thinPoolSize)
 
-		g.By("Check the file exist in restored volume")
+		exutil.By("Check the file exist in restored volume")
 		podRestore.checkMountedVolumeDataExist(oc, true)
 	})
 
@@ -542,7 +542,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			volumeSnapshotClassName = "lvms-" + volumeGroup
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		// Set the resource definition for the original
@@ -551,26 +551,26 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
 		pvcCapacity := strconv.FormatInt(int64(thinPoolSize)+getRandomNum(2, 10), 10) + "Gi"
 
-		g.By("Create a pvc with the lvms csi storageclass")
+		exutil.By("Create a pvc with the lvms csi storageclass")
 		pvcOri.scname = storageClassName
 		pvcOri.capacity = pvcCapacity
 		pvcOri.create(oc)
 		defer pvcOri.deleteAsAdmin(oc)
 
-		g.By("Create pod with the created pvc and wait for the pod ready")
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
 		podOri.create(oc)
 		defer podOri.deleteAsAdmin(oc)
 		podOri.waitReady(oc)
 
-		g.By("Check volume size is bigger than disk size")
+		exutil.By("Check volume size is bigger than disk size")
 		checkVolumeBiggerThanDisk(oc, pvcOri.name, pvcOri.namespace, thinPoolSize)
 
-		g.By("Write file to volume")
+		exutil.By("Write file to volume")
 		podOri.writeDataIntoRawBlockVolume(oc)
 		podOri.execCommand(oc, "sync")
 
 		// Create volumesnapshot with pre-defined volumesnapshotclass
-		g.By("Create volumesnapshot and wait for ready_to_use")
+		exutil.By("Create volumesnapshot and wait for ready_to_use")
 		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(volumeSnapshotClassName))
 		volumesnapshot.create(oc)
 		defer volumesnapshot.delete(oc)
@@ -580,21 +580,21 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
 		podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
-		g.By("Create a restored pvc with the lvms storageclass")
+		exutil.By("Create a restored pvc with the lvms storageclass")
 		pvcRestore.scname = storageClassName
 		pvcRestore.capacity = pvcOri.capacity
 		pvcRestore.createWithSnapshotDataSource(oc)
 		defer pvcRestore.deleteAsAdmin(oc)
 
-		g.By("Create pod with the restored pvc and wait for the pod ready")
+		exutil.By("Create pod with the restored pvc and wait for the pod ready")
 		podRestore.create(oc)
 		defer podRestore.deleteAsAdmin(oc)
 		podRestore.waitReady(oc)
 
-		g.By("Check restored volume size is bigger than disk size")
+		exutil.By("Check restored volume size is bigger than disk size")
 		checkVolumeBiggerThanDisk(oc, pvcRestore.name, pvcRestore.namespace, thinPoolSize)
 
-		g.By("Check the file exist in restored volume")
+		exutil.By("Check the file exist in restored volume")
 		podRestore.checkDataInRawBlockVolume(oc)
 	})
 })
@@ -666,36 +666,36 @@ func getOverProvisionLimitByVolumeGroup(oc *exutil.CLI, volumeGroup string) int 
 // Performing test steps for LVMS PVC volume Resizing
 func resizeLvmsVolume(oc *exutil.CLI, pvc persistentVolumeClaim, dep deployment, expandedCapactiyInt64 int64) {
 	// Set up a specified project share for all the phases
-	g.By("#. Create a pvc with the csi storageclass")
+	exutil.By("#. Create a pvc with the csi storageclass")
 	pvc.create(oc)
 	defer pvc.deleteAsAdmin(oc)
 
-	g.By("#. Create deployment with the created pvc and wait for the pod ready")
+	exutil.By("#. Create deployment with the created pvc and wait for the pod ready")
 	dep.create(oc)
 	defer dep.deleteAsAdmin(oc)
 
-	g.By("#. Wait for the deployment ready")
+	exutil.By("#. Wait for the deployment ready")
 	dep.waitReady(oc)
 
-	g.By("#. Write data in pod")
+	exutil.By("#. Write data in pod")
 	if dep.typepath == "mountPath" {
 		dep.checkPodMountedVolumeCouldRW(oc)
 	} else {
 		dep.writeDataBlockType(oc)
 	}
 
-	g.By("#. Apply the patch to Resize the pvc volume")
+	exutil.By("#. Apply the patch to Resize the pvc volume")
 	capacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc.capacity, "Gi"), 10, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	expandedCapactiy := strconv.FormatInt(expandedCapactiyInt64, 10) + "Gi"
 	o.Expect(applyVolumeResizePatch(oc, pvc.name, pvc.namespace, expandedCapactiy)).To(o.ContainSubstring("patched"))
 	pvc.capacity = expandedCapactiy
 
-	g.By("#. Waiting for the pvc capacity update sucessfully")
+	exutil.By("#. Waiting for the pvc capacity update sucessfully")
 	waitPVVolSizeToGetResized(oc, pvc.namespace, pvc.name, pvc.capacity)
 	pvc.waitResizeSuccess(oc, pvc.capacity)
 
-	g.By("#. Check origin data intact and write new data in pod")
+	exutil.By("#. Check origin data intact and write new data in pod")
 	if dep.typepath == "mountPath" {
 		dep.checkPodMountedVolumeDataExist(oc, true)
 		// After volume expand write data more than the old capacity should succeed

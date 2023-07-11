@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		for _, provisioner = range supportProvisioners {
-			g.By("****** Snapshot upgrade for " + cloudProvider + " platform with provisioner: " + provisioner + " test phase start" + "******")
+			exutil.By("****** Snapshot upgrade for " + cloudProvider + " platform with provisioner: " + provisioner + " test phase start" + "******")
 
 			// Set the namespace
 			provName := strings.ReplaceAll(provisioner, ".", "-")
@@ -82,20 +82,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				g.Skip("Skip the tc as Project " + namespace + " does not exists, it probably means there is no pre-check for this upgrade case")
 			}
 
-			g.By("# Check the pod status in Running state")
+			exutil.By("# Check the pod status in Running state")
 			// Set the resource definition for the original restore dep
 			depResBeforeUpgrade := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvcResBeforeUpgradeName), setDeploymentName(depResBeforeUpgradeName), setDeploymentNamespace(namespace), setDeploymentApplabel("mydep-rest-beforeupgrade-"+caseID))
 			depResBeforeUpgrade.checkReady(oc.AsAdmin())
 			defer deleteFuncCall(oc.AsAdmin(), namespace, depResBeforeUpgradeName, pvcResBeforeUpgradeName, scName, volumeSnapshotName)
 
-			g.By("# Check volumesnapshot status and should be True")
+			exutil.By("# Check volumesnapshot status and should be True")
 			o.Eventually(func() string {
 				vsStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshot", "-n", namespace, volumeSnapshotName, "-o=jsonpath={.status.readyToUse}").Output()
 				return vsStatus
 			}, 120*time.Second, 5*time.Second).Should(o.Equal("true"))
 			e2e.Logf("The volumesnapshot %s ready_to_use status in namespace %s is in expected True status", volumeSnapshotName, namespace)
 
-			g.By("# Check the pod volume has original data and write new data")
+			exutil.By("# Check the pod volume has original data and write new data")
 			o.Expect(execCommandInSpecificPod(oc.AsAdmin(), depResBeforeUpgrade.namespace, depResBeforeUpgrade.getPodList(oc.AsAdmin())[0], "cat "+depResBeforeUpgrade.mpath+"/beforeupgrade-testdata-"+caseID)).To(o.ContainSubstring("Storage Upgrade Test"))
 			depResBeforeUpgrade.checkPodMountedVolumeDataExist(oc.AsAdmin(), true)
 			depResBeforeUpgrade.checkPodMountedVolumeCouldRW(oc.AsAdmin())
@@ -110,7 +110,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcResAfterUpgrade := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumeSnapshotName), setPersistentVolumeClaimName(pvcResAfterUpgradeName), setPersistentVolumeClaimStorageClassName(scName), setPersistentVolumeClaimNamespace(namespace))
 			depResAfterUpgrade := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvcResAfterUpgradeName), setDeploymentName(depResAfterUpgradeName), setDeploymentNamespace(namespace))
 
-			g.By("# Create a restored pvc with the preset csi storageclass")
+			exutil.By("# Create a restored pvc with the preset csi storageclass")
 			if provisioner == "filestore.csi.storage.gke.io" {
 				var getCapacityErr error
 				pvcResAfterUpgrade.capacity, getCapacityErr = getPvCapacityByPvcName(oc.AsAdmin(), pvcResBeforeUpgradeName, namespace)
@@ -122,17 +122,17 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcResAfterUpgrade.createWithSnapshotDataSource(oc.AsAdmin())
 			defer pvcResAfterUpgrade.deleteAsAdmin(oc.AsAdmin())
 
-			g.By("# Create deployment with the restored pvc and wait for the pod ready")
+			exutil.By("# Create deployment with the restored pvc and wait for the pod ready")
 			depResAfterUpgrade.create(oc.AsAdmin())
 			defer depResAfterUpgrade.deleteAsAdmin(oc)
 			depResAfterUpgrade.waitReady(oc.AsAdmin())
 
-			g.By("# Check the pod volume has original data")
+			exutil.By("# Check the pod volume has original data")
 			depResAfterUpgrade.checkPodMountedVolumeDataExist(oc.AsAdmin(), true)
 			depResAfterUpgrade.checkPodMountedVolumeCouldRW(oc.AsAdmin())
 			depResAfterUpgrade.checkPodMountedVolumeHaveExecRight(oc.AsAdmin())
 
-			g.By("****** Snapshot upgrade for " + cloudProvider + " platform with provisioner: " + provisioner + " test phase finished" + "******")
+			exutil.By("****** Snapshot upgrade for " + cloudProvider + " platform with provisioner: " + provisioner + " test phase finished" + "******")
 		}
 	})
 })
@@ -148,6 +148,6 @@ func deleteFuncCall(oc *exutil.CLI, namespace string, depName string, pvcName st
 
 // function to check project not exists, return true if does not exists
 func isProjectNotExists(oc *exutil.CLI, namespace string) bool {
-	g.By("# Check project not exists")
+	exutil.By("# Check project not exists")
 	return !isSpecifiedResourceExist(oc, "ns/"+namespace, "")
 }

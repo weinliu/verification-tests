@@ -63,50 +63,50 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		// Deploy iscsi target server
-		g.By("#. Deploy iscsi target server for the test scenario")
+		exutil.By("#. Deploy iscsi target server for the test scenario")
 		svcIscsiServer := setupIscsiServer(oc, storageTeamBaseDir)
 		defer svcIscsiServer.uninstall(oc)
 
-		g.By("#. Create a pv with the storageclass")
+		exutil.By("#. Create a pv with the storageclass")
 		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
 		pv.create(oc)
 		defer pv.deleteAsAdmin(oc)
 
-		g.By("#. Create a pvc with the storageclass")
+		exutil.By("#. Create a pvc with the storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("#. Create deployment consume the created pvc and wait for the deployment ready")
+		exutil.By("#. Create deployment consume the created pvc and wait for the deployment ready")
 		dep.create(oc)
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("#. Check the pods can read/write data inside volume")
+		exutil.By("#. Check the pods can read/write data inside volume")
 		dep.checkPodMountedVolumeCouldRW(oc)
 
-		g.By("#. Run drain cmd to drain the node on which the deployment's pod is located")
+		exutil.By("#. Run drain cmd to drain the node on which the deployment's pod is located")
 		originNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
 		volName := pvc.getVolumeName(oc)
 		//drainSpecificNode(oc, originNodeName)
 		drainNodeWithPodLabel(oc, originNodeName, dep.applabel)
 		defer uncordonSpecificNode(oc, originNodeName)
 
-		g.By("#. Wait for the deployment become ready again")
+		exutil.By("#. Wait for the deployment become ready again")
 		dep.waitReady(oc)
 
-		g.By("#. Check testdata still in the volume")
+		exutil.By("#. Check testdata still in the volume")
 		output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile*")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("storage test"))
 
-		g.By("#. Check the deployment's pod schedule to another ready node")
+		exutil.By("#. Check the deployment's pod schedule to another ready node")
 		newNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
 		o.Expect(originNodeName).NotTo(o.Equal(newNodeName))
 
-		g.By("#. Bring back the drained node")
+		exutil.By("#. Bring back the drained node")
 		uncordonSpecificNode(oc, originNodeName)
 
-		g.By("#. Check the volume umount from the origin node")
+		exutil.By("#. Check the volume umount from the origin node")
 		checkVolumeNotMountOnNode(oc, volName, originNodeName)
 	})
 
@@ -115,7 +115,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-OSD_CCS-ARO-Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working [Serial]", func() {
 
 		// Deploy iscsi target server
-		g.By("#. Deploy iscsi target server for the test scenario")
+		exutil.By("#. Deploy iscsi target server for the test scenario")
 		svcIscsiServer := setupIscsiServer(oc, storageTeamBaseDir)
 		defer svcIscsiServer.uninstall(oc)
 
@@ -133,59 +133,59 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				setServicePort(port), setServiceTargetPort(port), setServiceProtocol("TCP"))
 		)
 
-		g.By("#. Create a new iscsi service")
+		exutil.By("#. Create a new iscsi service")
 		svc.create(oc)
 		defer svc.deleteAsAdmin(oc)
 		svc.getClusterIP(oc)
 
-		g.By("#. Create a network portal on iscsi-target using new service IP")
+		exutil.By("#. Create a network portal on iscsi-target using new service IP")
 		svcIscsiServer.createIscsiNetworkPortal(oc, svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
 		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
 
-		g.By("#. Create a pv with the storageclass")
+		exutil.By("#. Create a pv with the storageclass")
 		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
 		pv.iscsiPortals = []string{svc.clusterIP + ":" + port}
 		pv.create(oc)
 		defer pv.deleteAsAdmin(oc)
 
-		g.By("#. Create a pvc with the storageclass")
+		exutil.By("#. Create a pvc with the storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("#. Create deployment to consume the created pvc and wait for the deployment ready")
+		exutil.By("#. Create deployment to consume the created pvc and wait for the deployment ready")
 		dep.create(oc)
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("#. Check the pods can read/write data inside volume")
+		exutil.By("#. Check the pods can read/write data inside volume")
 		dep.checkPodMountedVolumeCouldRW(oc)
 
-		g.By("#. Check the deployment's pod mounted volume have the exec right")
+		exutil.By("#. Check the deployment's pod mounted volume have the exec right")
 		dep.checkPodMountedVolumeHaveExecRight(oc)
 
-		g.By("#. Check the volume mounted on the pod located node filesystem type as expected")
+		exutil.By("#. Check the volume mounted on the pod located node filesystem type as expected")
 		volName := pvc.getVolumeName(oc)
 		nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
 		checkVolumeMountCmdContain(oc, volName, nodeName, "ext4")
 
-		g.By("#. Delete the first iscsi service")
+		exutil.By("#. Delete the first iscsi service")
 		deleteSpecifiedResource(oc.AsAdmin(), "svc", svcIscsiServer.svc.name, svcIscsiServer.svc.namespace)
 
-		g.By("#. Scale down the replicas number to 0")
+		exutil.By("#. Scale down the replicas number to 0")
 		dep.scaleReplicas(oc, "0")
 
-		g.By("#. Wait for the deployment scale down completed and check nodes has no mounted volume")
+		exutil.By("#. Wait for the deployment scale down completed and check nodes has no mounted volume")
 		dep.waitReady(oc)
 		checkVolumeNotMountOnNode(oc, volName, nodeName)
 
-		g.By("#. Scale up the deployment replicas number to 1")
+		exutil.By("#. Scale up the deployment replicas number to 1")
 		dep.scaleReplicas(oc, "1")
 
-		g.By("#. Wait for the deployment scale up completed")
+		exutil.By("#. Wait for the deployment scale up completed")
 		// Enhance for OVN network type test clusters
 		dep.longerTime().waitReady(oc)
 
-		g.By("#. Check testdata still in the volume and volume has exec right")
+		exutil.By("#. Check testdata still in the volume and volume has exec right")
 		output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile*")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("storage test"))
@@ -223,44 +223,44 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 
 		// Deploy iscsi target server
-		g.By("#. Deploy iscsi target server for the test scenario")
+		exutil.By("#. Deploy iscsi target server for the test scenario")
 		svcIscsiServer := setupIscsiServer(oc, storageTeamBaseDir)
 		defer svcIscsiServer.uninstall(oc)
 		iscsiTargetPodName := svcIscsiServer.deploy.getPodList(oc)[0]
 
-		g.By("#. Create a secret for iscsi chap authentication")
+		exutil.By("#. Create a secret for iscsi chap authentication")
 		sec.createWithExtraParameters(oc, extraParameters)
 		defer sec.deleteAsAdmin(oc)
 
-		g.By("#. Enable iscsi target discovery authentication and set user credentials")
+		exutil.By("#. Enable iscsi target discovery authentication and set user credentials")
 		msg, _err := svcIscsiServer.enableTargetDiscoveryAuth(oc, true, iscsiTargetPodName)
 		defer svcIscsiServer.enableTargetDiscoveryAuth(oc, false, iscsiTargetPodName)
 		o.Expect(_err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("Parameter enable is now 'True'"))
 		svcIscsiServer.setTargetDiscoveryAuthCreds(oc, "user", "demo", "muser", "mpass", iscsiTargetPodName)
 
-		g.By("#. Create a pv with the storageclass")
+		exutil.By("#. Create a pv with the storageclass")
 		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
 		pv.secretName = sec.name
 		pv.create(oc)
 		defer pv.deleteAsAdmin(oc)
 
-		g.By("#. Create a pvc with the storageclass")
+		exutil.By("#. Create a pvc with the storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("#. Create deployment to consume the created pvc and wait for the deployment ready")
+		exutil.By("#. Create deployment to consume the created pvc and wait for the deployment ready")
 		dep.create(oc)
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("#. Check the deployment's pods can read/write data inside volume and have the exec right")
+		exutil.By("#. Check the deployment's pods can read/write data inside volume and have the exec right")
 		dep.checkPodMountedVolumeCouldRW(oc)
 		dep.checkPodMountedVolumeHaveExecRight(oc)
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 
-		g.By("#. Update chap-secret file with invalid password and reschedule deployment to check pod creation fails")
+		exutil.By("#. Update chap-secret file with invalid password and reschedule deployment to check pod creation fails")
 		patchSecretInvalidPwd := `{"data":{"discovery.sendtargets.auth.password":"bmV3UGFzcwo="}}`
 		patchResourceAsAdmin(oc, oc.Namespace(), "secret/"+sec.name, patchSecretInvalidPwd, "merge")
 		expectedMsg := "Login failed to authenticate with target"
@@ -269,26 +269,26 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 
-		g.By("#. Update chap-secret file with valid password again and reschedule deployment to check pod creation successful")
+		exutil.By("#. Update chap-secret file with valid password again and reschedule deployment to check pod creation successful")
 		patchSecretOriginalPwd := `{"data":{"discovery.sendtargets.auth.password":"ZGVtbw=="}}`
 		patchResourceAsAdmin(oc, oc.Namespace(), "secret/"+sec.name, patchSecretOriginalPwd, "merge")
 		dep.scaleReplicas(oc, "1")
 		dep.waitReady(oc)
 
-		g.By("#. Check testdata still exists in the volume and volume has exec right")
+		exutil.By("#. Check testdata still exists in the volume and volume has exec right")
 		dep.checkPodMountedVolumeDataExist(oc, true)
 		dep.checkPodMountedVolumeHaveExecRight(oc)
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 
-		g.By("#. Make username & password empty in chap-secret file and reschedule deployment to check pod creation fails")
+		exutil.By("#. Make username & password empty in chap-secret file and reschedule deployment to check pod creation fails")
 		patchResourceAsAdmin(oc, oc.Namespace(), "secret/"+sec.name, "[{\"op\": \"remove\", \"path\": \"/data\"}]", "json")
 		dep.scaleReplicas(oc, "1")
 		checkMsgExistsInPodDescription(oc, dep.getPodListWithoutFilterStatus(oc)[0], expectedMsg)
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 
-		g.By("#. Disable target discovery authentication and reschedule deployment to check pod creation successful")
+		exutil.By("#. Disable target discovery authentication and reschedule deployment to check pod creation successful")
 		msg, _err = svcIscsiServer.enableTargetDiscoveryAuth(oc, false, iscsiTargetPodName)
 		o.Expect(_err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("Parameter enable is now 'False'"))
@@ -317,31 +317,31 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		// Deploy iscsi target server
-		g.By("#. Deploy iscsi target server for the test scenario")
+		exutil.By("#. Deploy iscsi target server for the test scenario")
 		svcIscsiServer := setupIscsiServer(oc, storageTeamBaseDir)
 		defer svcIscsiServer.uninstall(oc)
 
-		g.By("#. Create a pv with the storageclass")
+		exutil.By("#. Create a pv with the storageclass")
 		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
 		pv.create(oc)
 		defer pv.deleteAsAdmin(oc)
 
-		g.By("#. Create a pvc with the storageclass")
+		exutil.By("#. Create a pvc with the storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("#. Create deployment consume the created pvc and wait for the deployment ready")
+		exutil.By("#. Create deployment consume the created pvc and wait for the deployment ready")
 		dep.create(oc)
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("#. Check the pods can read/write data inside volume")
+		exutil.By("#. Check the pods can read/write data inside volume")
 		dep.checkPodMountedVolumeCouldRW(oc)
 
-		g.By("#. Check the deployment's pod mounted volume have the exec right")
+		exutil.By("#. Check the deployment's pod mounted volume have the exec right")
 		dep.checkPodMountedVolumeHaveExecRight(oc)
 
-		g.By("#. Check pod is stuck at Pending caused by Multi-Attach error for volume")
+		exutil.By("#. Check pod is stuck at Pending caused by Multi-Attach error for volume")
 		nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
 		pod.createWithNodeAffinity(oc, "kubernetes.io/hostname", "NotIn", []string{nodeName})
 		defer pod.deleteAsAdmin(oc)
@@ -353,18 +353,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.ContainSubstring("Volume is already used by pod"),
 		))
 
-		g.By("#. Check pod2 mount the iscsi volume successfully and is Running")
+		exutil.By("#. Check pod2 mount the iscsi volume successfully and is Running")
 		pod2.createWithNodeAffinity(oc, "kubernetes.io/hostname", "In", []string{nodeName})
 		defer pod2.deleteAsAdmin(oc)
 		pod2.waitReady(oc)
 
-		g.By("#. Check pod2 can read previously written data inside volume")
+		exutil.By("#. Check pod2 can read previously written data inside volume")
 		o.Expect(execCommandInSpecificPod(oc, dep.namespace, pod2.name, "cat /mnt/storage/testfile_*")).To(o.ContainSubstring("storage test"))
 
-		g.By("#. Check pod2 can read/write data inside volume")
+		exutil.By("#. Check pod2 can read/write data inside volume")
 		pod2.checkMountedVolumeCouldRW(oc)
 
-		g.By("#. Check pod2's mounted volume have the exec right")
+		exutil.By("#. Check pod2's mounted volume have the exec right")
 		pod2.checkMountedVolumeHaveExecRight(oc)
 	})
 })

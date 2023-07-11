@@ -49,24 +49,24 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
-		g.By("Create storageclass for Azure with skuname")
+		exutil.By("Create storageclass for Azure with skuname")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("Create PVC")
+		exutil.By("Create PVC")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("Create machineset")
+		exutil.By("Create machineset")
 		testMachineset.CreateMachineSet(oc)
 		defer testMachineset.DeleteMachineSet(oc)
 
-		g.By("Create pod with selector label ultrassd")
+		exutil.By("Create pod with selector label ultrassd")
 		pod.create(oc)
 		defer pod.delete(oc)
 		pod.waitReady(oc)
 
-		g.By("Check the pv.spec.csi.volumeAttributes.skuname")
+		exutil.By("Check the pv.spec.csi.volumeAttributes.skuname")
 		pvName := pvc.getVolumeName(oc)
 		skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

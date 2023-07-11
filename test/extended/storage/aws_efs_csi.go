@@ -73,56 +73,56 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("****** AWS EFS test phase start ******")
+		exutil.By("****** AWS EFS test phase start ******")
 
 		// Set the resource definition
 		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("efs.csi.aws.com"))
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
-		g.By("# Create csi storageclass")
+		exutil.By("# Create csi storageclass")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("# Create a pvc with the csi storageclass")
+		exutil.By("# Create a pvc with the csi storageclass")
 		pvc.scname = storageClass.name
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("# Create deployment with the created pvc and wait ready")
+		exutil.By("# Create deployment with the created pvc and wait ready")
 		dep.create(oc)
 		defer dep.delete(oc)
 		dep.waitReady(oc)
 
-		g.By("# Check the deployment's pod mounted volume do not have permission to write")
+		exutil.By("# Check the deployment's pod mounted volume do not have permission to write")
 		output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "echo \"helloworld\" > /mnt/storage/testfile1.txt")
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Permission denied"))
 
-		g.By("****** AWS EFS test phase finished ******")
+		exutil.By("****** AWS EFS test phase finished ******")
 	})
 
 	// author: ropatil@redhat.com
 	// OCP-51206 - [AWS-EFS-CSI-Driver] [Dynamic PV] [block volume] should not support
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51206-[AWS-EFS-CSI-Driver] [Dynamic PV] [block volume] should not support", func() {
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("****** AWS EFS test phase start ******")
+		exutil.By("****** AWS EFS test phase start ******")
 
 		// Set the resource definition for raw block volume
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
 
-		g.By("Create a pvc with the preset csi storageclass")
+		exutil.By("Create a pvc with the preset csi storageclass")
 		pvc.scname = scName
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("# Wait for the pvc reach to Pending")
+		exutil.By("# Wait for the pvc reach to Pending")
 		o.Consistently(func() string {
 			pvcState, _ := pvc.getStatus(oc)
 			return pvcState
@@ -131,7 +131,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		output, _ := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
 		o.Expect(output).Should(o.ContainSubstring("only filesystem volumes are supported"))
 
-		g.By("****** AWS EFS test phase finished ******")
+		exutil.By("****** AWS EFS test phase finished ******")
 	})
 
 	// author: jiasun@redhat.com
@@ -144,7 +144,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podTemplate        = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 		)
 
-		g.By("#. Create new project for the scenario")
+		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject() //create new project
 		namespace := oc.Namespace()
 
@@ -193,16 +193,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			return len(strings.Fields(pvcCount))
 		}, 5*time.Minute, 15*time.Second).Should(o.Equal(int(maxAccessPointNum)))
 
-		g.By("# Check another pvc provisioned by same sc should be failed ")
+		exutil.By("# Check another pvc provisioned by same sc should be failed ")
 		pvcname := "my-pvc-" + strconv.FormatInt(maxAccessPointNum, 10)
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", pvcname, "-n", oc.Namespace(), "--ignore-not-found").Execute()
 		pvclist[maxAccessPointNum].create(oc)
 		waitResourceSpecifiedEventsOccurred(oc, pvclist[maxAccessPointNum].namespace, pvclist[maxAccessPointNum].name, "AccessPointLimitExceeded", "reached the maximum number of access points")
 
-		g.By("****** Create test pods schedule to workers ******")
+		exutil.By("****** Create test pods schedule to workers ******")
 		nodeSelector := make(map[string]string)
 
-		g.By("# Create pods consume the 1000 pvcs, all pods should become Running normally")
+		exutil.By("# Create pods consume the 1000 pvcs, all pods should become Running normally")
 		defer func() {
 			o.Expect(oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", oc.Namespace(), "pod", "--all", "--ignore-not-found").Execute()).NotTo(o.HaveOccurred())
 		}()
@@ -248,7 +248,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				e2e.Logf(`------Create pods on %d node %s is Done--------`, i, allNodes[i].name)
 			}
 
-			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
 
@@ -269,25 +269,25 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("****** AWS EFS test phase start ******")
+		exutil.By("****** AWS EFS test phase start ******")
 
 		// Set the resource definition for raw block volume
 		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("efs.csi.aws.com"), setStorageClassVolumeBindingMode("Immediate"))
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 
-		g.By("# Create csi storageclass")
+		exutil.By("# Create csi storageclass")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("Create a pvc with the csi storageclass")
+		exutil.By("Create a pvc with the csi storageclass")
 		pvc.scname = storageClass.name
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("# Wait for the pvc reach to Pending")
+		exutil.By("# Wait for the pvc reach to Pending")
 		o.Consistently(func() string {
 			pvcState, _ := pvc.getStatus(oc)
 			return pvcState
@@ -296,7 +296,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		output, _ := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
 		o.Expect(output).Should(o.ContainSubstring("Provisioning mode efs1-ap is not supported"))
 
-		g.By("****** AWS EFS test phase finished ******")
+		exutil.By("****** AWS EFS test phase finished ******")
 	})
 
 	// author: ropatil@redhat.com
@@ -310,14 +310,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		newpvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvc.capacity), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
 		newdep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(newpvc.name))
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("****** AWS EFS test phase start ******")
+		exutil.By("****** AWS EFS test phase start ******")
 
 		encryptionInTransitFeatureTest(oc, pv, pvc, dep, newpvc, newdep, "false")
 
-		g.By("****** AWS EFS test phase finished ******")
+		exutil.By("****** AWS EFS test phase finished ******")
 	})
 
 	// author: ropatil@redhat.com
@@ -331,14 +331,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		newpvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvc.capacity), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
 		newdep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(newpvc.name))
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("****** AWS EFS test phase start ******")
+		exutil.By("****** AWS EFS test phase start ******")
 
 		encryptionInTransitFeatureTest(oc, pv, pvc, dep, newpvc, newdep, "true")
 
-		g.By("****** AWS EFS test phase finished ******")
+		exutil.By("****** AWS EFS test phase finished ******")
 	})
 
 	// https://github.com/kubernetes-sigs/aws-efs-csi-driver/blob/master/examples/kubernetes/access_points/specs/example.yaml
@@ -358,12 +358,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		newpvcB := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvcB.capacity), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
 		newdepA := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(newpvcA.name), setDeploymentMountpath("/data-dir1"), setDeploymentApplabel("myapp-ap"))
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("****** AWS EFS test phase start ******")
+		exutil.By("****** AWS EFS test phase start ******")
 
-		g.By("# Create a pvcA, pvcB with the csi storageclass")
+		exutil.By("# Create a pvcA, pvcB with the csi storageclass")
 		pvcA.scname = scName
 		pvcB.scname = scName
 		pvcA.create(oc)
@@ -371,7 +371,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcB.create(oc)
 		defer pvcB.deleteAsAdmin(oc)
 
-		g.By("# Create deployment with the created pvc and wait ready")
+		exutil.By("# Create deployment with the created pvc and wait ready")
 		depA.create(oc)
 		defer depA.deleteAsAdmin(oc)
 		depB.create(oc)
@@ -379,15 +379,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		depA.waitReady(oc)
 		depB.waitReady(oc)
 
-		g.By("# Check the pod volume can be read and write")
+		exutil.By("# Check the pod volume can be read and write")
 		depA.checkPodMountedVolumeCouldRW(oc)
 		depB.checkPodMountedVolumeCouldRW(oc)
 
-		g.By("# Check the pod volume have the exec right")
+		exutil.By("# Check the pod volume have the exec right")
 		depA.checkPodMountedVolumeHaveExecRight(oc)
 		depB.checkPodMountedVolumeHaveExecRight(oc)
 
-		g.By("# Create pv using Volume handle")
+		exutil.By("# Create pv using Volume handle")
 		pvA.scname = "pv-sc-" + getRandomString()
 		pvA.volumeHandle = pvcA.getVolumeID(oc)
 		pvB.scname = "pv-sc-" + getRandomString()
@@ -397,7 +397,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvB.create(oc)
 		defer pvB.deleteAsAdmin(oc)
 
-		g.By("# Create new pvc using pv storageclass name")
+		exutil.By("# Create new pvc using pv storageclass name")
 		newpvcA.scname = pvA.scname
 		newpvcB.scname = pvB.scname
 		newpvcA.create(oc)
@@ -405,38 +405,38 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		newpvcB.create(oc)
 		defer newpvcB.deleteAsAdmin(oc)
 
-		g.By("# Create new dep using new pvc")
+		exutil.By("# Create new dep using new pvc")
 		newdepA.create(oc)
 		defer newdepA.deleteAsAdmin(oc)
 		newdepA.waitReady(oc)
 
-		g.By("# Update the new dep with additional volume and wait till it gets ready")
+		exutil.By("# Update the new dep with additional volume and wait till it gets ready")
 		newdepA.setVolumeAdd(oc, "/data-dir2", "local1", newpvcB.name)
 		podsList := newdepA.getPodList(oc)
 		updatedPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podsList[0], "-n", oc.Namespace(), "-o=jsonpath={.spec.containers[0].volumeMounts[*].mountPath}").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(updatedPod).Should(o.ContainSubstring("/data-dir2"))
 
-		g.By("# Get the volumename and pod located node name")
+		exutil.By("# Get the volumename and pod located node name")
 		volNameA := newpvcA.getVolumeName(oc)
 		volNameB := newpvcB.getVolumeName(oc)
 		nodeName := getNodeNameByPod(oc, newdepA.namespace, newdepA.getPodList(oc)[0])
 		checkVolumeMountOnNode(oc, volNameA, nodeName)
 		checkVolumeMountOnNode(oc, volNameB, nodeName)
 
-		g.By("# Check the pod volume has original data")
+		exutil.By("# Check the pod volume has original data")
 		newdepA.checkPodMountedVolumeDataExist(oc, true)
 		newdepA.checkPodMountedVolumeCouldRW(oc)
 		newdepA.mpath = "/data-dir2"
 		newdepA.checkPodMountedVolumeDataExist(oc, true)
 		newdepA.checkPodMountedVolumeCouldRW(oc)
 
-		g.By("# Check the pod volume have the exec right")
+		exutil.By("# Check the pod volume have the exec right")
 		newdepA.checkPodMountedVolumeHaveExecRight(oc)
 		newdepA.mpath = "/data-dir2"
 		newdepA.checkPodMountedVolumeHaveExecRight(oc)
 
-		g.By("****** AWS EFS test phase finished ******")
+		exutil.By("****** AWS EFS test phase finished ******")
 	})
 
 	// author: ropatil@redhat.com
@@ -458,19 +458,19 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		g.By("# Reboot the EFS driver controller pods")
+		exutil.By("# Reboot the EFS driver controller pods")
 		//TODO: No need of hardreset after the fix of bug https://bugzilla.redhat.com/show_bug.cgi?id=2102008
 		efsDriverController.hardRestart(oc.AsAdmin())
 
-		g.By("****** AWS EFS test phase start ******")
+		exutil.By("****** AWS EFS test phase start ******")
 
 		// Set the resource definition
 		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("efs.csi.aws.com"))
-		g.By("# Create csi storageclass")
+		exutil.By("# Create csi storageclass")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		for i := 0; i < 2; i++ {
@@ -478,28 +478,28 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
-			g.By("# Create a pvc with the csi storageclass")
+			exutil.By("# Create a pvc with the csi storageclass")
 			pvc.scname = storageClass.name
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("# Create deployment with the created pvc and wait ready")
+			exutil.By("# Create deployment with the created pvc and wait ready")
 			dep.create(oc)
 			defer dep.deleteAsAdmin(oc)
 			dep.waitReady(oc)
 
-			g.By("# Check the pod volume can be read and write")
+			exutil.By("# Check the pod volume can be read and write")
 			dep.checkPodMountedVolumeCouldRW(oc)
 
-			g.By("# Check the pod volume have the exec right")
+			exutil.By("# Check the pod volume have the exec right")
 			dep.checkPodMountedVolumeHaveExecRight(oc)
 
-			g.By("# Check the pod POSIX user values")
+			exutil.By("# Check the pod POSIX user values")
 			gidRangeValue, err := getGidRangeStartValueFromStorageClass(oc, storageClass.name)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "ls -la "+dep.mpath)).To(o.ContainSubstring(strconv.Itoa(gidRangeValue + i)))
 		}
-		g.By("****** AWS EFS test phase finished ******")
+		exutil.By("****** AWS EFS test phase finished ******")
 	})
 
 	// author: ropatil@redhat.com
@@ -522,19 +522,19 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		g.By("# Reboot the EFS driver controller pods")
+		exutil.By("# Reboot the EFS driver controller pods")
 		//TODO: No need of hardreset after the fix of bug https://bugzilla.redhat.com/show_bug.cgi?id=2102008
 		efsDriverController.hardRestart(oc.AsAdmin())
 
-		g.By("****** AWS EFS test phase start ******")
+		exutil.By("****** AWS EFS test phase start ******")
 
 		// Set the resource definition
 		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("efs.csi.aws.com"))
-		g.By("# Create csi storageclass")
+		exutil.By("# Create csi storageclass")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
 		for i := 0; i < 3; i++ {
@@ -542,16 +542,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
-			g.By("# Create a pvc with the csi storageclass")
+			exutil.By("# Create a pvc with the csi storageclass")
 			pvc.scname = storageClass.name
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("# Create deployment with the created pvc and wait ready")
+			exutil.By("# Create deployment with the created pvc and wait ready")
 			dep.create(oc)
 			defer dep.deleteAsAdmin(oc)
 			if i == 2 {
-				g.By("# Wait for the pvc reach to Pending")
+				exutil.By("# Wait for the pvc reach to Pending")
 				o.Consistently(func() string {
 					pvcState, _ := pvc.getStatus(oc)
 					return pvcState
@@ -565,10 +565,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			dep.waitReady(oc)
 		}
 
-		g.By("# Reboot the EFS driver controller pods")
+		exutil.By("# Reboot the EFS driver controller pods")
 		efsDriverController.hardRestart(oc.AsAdmin())
 
-		g.By("****** AWS EFS test phase finished ******")
+		exutil.By("****** AWS EFS test phase finished ******")
 	})
 
 	// author: ropatil@redhat.com
@@ -579,72 +579,72 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
-		g.By("Create new project for the scenario")
+		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		g.By("****** AWS EFS test phase start ******")
+		exutil.By("****** AWS EFS test phase start ******")
 
-		g.By("# Create a pvc with the csi storageclass")
+		exutil.By("# Create a pvc with the csi storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("# Create deployment with the created pvc and wait ready")
+		exutil.By("# Create deployment with the created pvc and wait ready")
 		dep.create(oc)
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("# Check the pod volume can be read and write")
+		exutil.By("# Check the pod volume can be read and write")
 		dep.checkPodMountedVolumeCouldRW(oc)
 
-		g.By("# Check the pod volume have the exec right")
+		exutil.By("# Check the pod volume have the exec right")
 		dep.checkPodMountedVolumeHaveExecRight(oc)
 
-		g.By("****** AWS EFS test phase finished ******")
+		exutil.By("****** AWS EFS test phase finished ******")
 	})
 })
 
 // Test steps for Encryption in transit feature
 func encryptionInTransitFeatureTest(oc *exutil.CLI, pv persistentVolume, pvc persistentVolumeClaim, dep deployment, newpvc persistentVolumeClaim, newdep deployment, encryptionValue string) {
-	g.By("# Create a pvc with the csi storageclass")
+	exutil.By("# Create a pvc with the csi storageclass")
 	pvc.create(oc)
 	defer pvc.deleteAsAdmin(oc)
 
-	g.By("# Create deployment with the created pvc and wait ready")
+	exutil.By("# Create deployment with the created pvc and wait ready")
 	dep.create(oc)
 	defer dep.deleteAsAdmin(oc)
 	dep.waitReady(oc)
 
-	g.By("# Check the pod volume can be read and write")
+	exutil.By("# Check the pod volume can be read and write")
 	dep.checkPodMountedVolumeCouldRW(oc)
 
-	g.By("# Check the pod volume have the exec right")
+	exutil.By("# Check the pod volume have the exec right")
 	dep.checkPodMountedVolumeHaveExecRight(oc)
 
-	g.By("# Create pv using Volume handle")
+	exutil.By("# Create pv using Volume handle")
 	pv.scname = "pv-sc-" + getRandomString()
 	pv.volumeHandle = pvc.getVolumeID(oc)
 	pv.create(oc)
 	defer pv.deleteAsAdmin(oc)
 
-	g.By("# Create new pvc using pv storageclass name")
+	exutil.By("# Create new pvc using pv storageclass name")
 	newpvc.scname = pv.scname
 	newpvc.create(oc)
 	defer newpvc.deleteAsAdmin(oc)
 
-	g.By("# Create new dep using new pvc")
+	exutil.By("# Create new dep using new pvc")
 	newdep.create(oc)
 	defer newdep.deleteAsAdmin(oc)
 	newdep.waitReady(oc)
 
-	g.By("# Get the volumename and check volume mounted on the pod located node")
+	exutil.By("# Get the volumename and check volume mounted on the pod located node")
 	volName := newpvc.getVolumeName(oc)
 	nodeName := getNodeNameByPod(oc, newdep.namespace, newdep.getPodList(oc)[0])
 	checkVolumeMountOnNode(oc, volName, nodeName)
 
-	g.By("# Check volume has encryption transit attributes")
+	exutil.By("# Check volume has encryption transit attributes")
 	content := "encryptInTransit: " + "\" + encryptionValue + \""
 	checkVolumeCsiContainAttributes(oc, volName, content)
 
-	g.By("# Check the pod volume has original data")
+	exutil.By("# Check the pod volume has original data")
 	dep.checkPodMountedVolumeDataExist(oc, true)
 }

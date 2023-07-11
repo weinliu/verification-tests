@@ -31,14 +31,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				setDeploymentMountpath("/mnt/storage/cm.cnf"))
 		)
 
-		g.By("# Create new project for the scenario")
+		exutil.By("# Create new project for the scenario")
 		oc.SetupProject()
 
-		g.By("# Create configmap")
+		exutil.By("# Create configmap")
 		cm.create(oc)
 		defer cm.deleteAsAdmin(oc)
 
-		g.By("# Create a deployment with the configmap using subpath and wait for the deployment ready")
+		exutil.By("# Create a deployment with the configmap using subpath and wait for the deployment ready")
 		// Define the configMap volume
 		var myCmVol configMapVolumeWithPaths
 		myCmVol.Name = cm.name
@@ -57,7 +57,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
-		g.By("# Check the deployment's pod mount the configmap correctly")
+		exutil.By("# Check the deployment's pod mount the configmap correctly")
 		// Only when subPath and configMap volume items.*.path match config file content could mount
 		podName := dep.getPodList(oc)[0]
 		output, err := execCommandInSpecificPod(oc, dep.namespace, podName, "cat /mnt/storage/cm.cnf")
@@ -72,21 +72,21 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#mounted-configmaps-are-updated-automatically
 		// Note: A container using a ConfigMap as a subPath volume will not receive ConfigMap updates.
-		g.By("# Update the configMap and check the deployment's mount content couldn't hot update because of using subpath")
+		exutil.By("# Update the configMap and check the deployment's mount content couldn't hot update because of using subpath")
 		patchResourceAsAdmin(oc, cm.namespace, "cm/"+cm.name, "[{\"op\":\"replace\", \"path\":\"/data/storage.cnf\", \"value\":\"newConfig-v2\"}]", "json")
 		o.Consistently(func() string {
 			cmContent, _ := execCommandInSpecificPod(oc, dep.namespace, podName, "cat /mnt/storage/cm.cnf")
 			return cmContent
 		}, 30*time.Second, 10*time.Second).Should(o.ContainSubstring("e2e-test = true"))
 
-		g.By("# Restart the deployment the mount content should update to the newest")
+		exutil.By("# Restart the deployment the mount content should update to the newest")
 		dep.restart(oc)
 		podName = dep.getPodList(oc)[0]
 		output, err = execCommandInSpecificPod(oc, dep.namespace, podName, "cat /mnt/storage/cm.cnf")
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("newConfig-v2"))
 
-		g.By("# Delete the deployment should successfully not stuck at Terminating status")
+		exutil.By("# Delete the deployment should successfully not stuck at Terminating status")
 		deleteSpecifiedResource(oc, "deployment", dep.name, dep.namespace)
 	})
 })
