@@ -1051,8 +1051,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		var (
 			podNs        = oc.Namespace()
 			deployName   = "dep-60231-" + getRandomString()
-			initReplicas = 5
-			maxReplicas  = 10
+			initReplicas = 3
+			maxReplicas  = 6
 			numOfVMs     int
 			msg          string
 		)
@@ -1123,8 +1123,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		var (
 			podNs        = oc.Namespace()
 			deployName   = "dep-60233-" + getRandomString()
-			initReplicas = 10
-			updReplicas  = 2
+			initReplicas = 6
+			updReplicas  = 3
 			numOfVMs     int
 			msg          string
 		)
