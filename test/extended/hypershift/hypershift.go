@@ -790,6 +790,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	// author: mihuang@redhat.com
 	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:mihuang-Critical-49436-Test Nodepool conditions[Serial]", func() {
 		g.By("Create nodepool and check nodepool conditions in progress util ready")
+
+		if hostedclusterPlatform == AgentPlatform {
+			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
+		}
+
 		replica := 1
 		npNameInPlace := "49436np-inplace-" + strings.ToLower(exutil.RandStrDefault())
 		npNameReplace := "49436np-replace-" + strings.ToLower(exutil.RandStrDefault())
@@ -966,6 +971,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	// author: mihuang@redhat.com
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:mihuang-Critical-60744-Better signal for NodePool inability to talk to management side[Serial][Disruptive]", func() {
 		g.By("Create a nodepool to verify that NodePool inability to talk to management side")
+
+		if hostedclusterPlatform == AgentPlatform {
+			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
+		}
+
 		replica := 1
 		nodepoolName := "60744np-" + strings.ToLower(exutil.RandStrDefault())
 		defer hostedcluster.deleteNodePool(nodepoolName)
@@ -1047,6 +1057,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: mihuang@redhat.com
 	g.It("HyperShiftMGMT-Author:mihuang-Critical-62195-Add validation for taint.value in nodePool[Serial][Disruptive]", func() {
+
+		if hostedclusterPlatform == AgentPlatform {
+			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
+		}
+
 		g.By("Create a nodepool with invalid taint value and check the ValidConfiguration conditions of hostedcluster CR")
 		nodepoolName := "62195np" + strings.ToLower(exutil.RandStrDefault())
 		defer func() {
@@ -1283,6 +1298,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-NonPreRelease-Author:heli-Critical-52318-[AWS]-Enforce machineconfiguration.openshift.io/role worker in machine config[Serial]", func() {
+
+		if hostedclusterPlatform == AgentPlatform {
+			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
+		}
+
 		g.By("create a configmap for MachineConfig")
 		fakePubKey := "AAAAB3NzaC1yc2EAAAADAQABAAABgQC0IRdwFtIIy0aURM64dDy0ogqJlV0aqDqw1Pw9VFc8bFSI7zxQ2c3Tt6GrC+Eg7y6mXQbw59laiGlyA+Qmyg0Dgd7BUVg1r8j" +
 			"RR6Xhf5XbI+tQBhoTQ6BBJKejE60LvyVUiBstGAm7jy6BkfN/5Ulvd8r3OVDYcKczVECWuOQeuPRyTHomR4twQj79+shZkN6tjptQOTTSDJJYIZOmaj9TsDN4bLIxqDYWZC0F6+" +
@@ -1474,6 +1494,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: liangli@redhat.com
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:liangli-Critical-63535-Stop triggering rollout on labels/taint change[Serial]", func() {
+
+		if hostedclusterPlatform == AgentPlatform {
+			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
+		}
+
 		caseID := "63535"
 		dir := "/tmp/hypershift" + caseID
 		defer os.RemoveAll(dir)
