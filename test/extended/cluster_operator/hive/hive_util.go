@@ -1523,6 +1523,22 @@ func getCondition(oc *exutil.CLI, kind, resourceName, namespace, conditionType s
 	return condition
 }
 
+func checkCondition(oc *exutil.CLI, kind, resourceName, namespace, conditionType string, expectKeyValue map[string]string, hint string) func() bool {
+	e2e.Logf(hint)
+	return func() bool {
+		condition := getCondition(oc, kind, resourceName, namespace, conditionType)
+		for key, expectValue := range expectKeyValue {
+			if actualValue, ok := condition[key]; !ok || actualValue != expectValue {
+				e2e.Logf("For condition %s's %s, expected value is %s, actual value is %v, retrying ...", conditionType, key, expectValue, actualValue)
+				return false
+			}
+		}
+		e2e.Logf("For condition %s, all fields checked are expected, proceeding to the next step ...", conditionType)
+		return true
+	}
+
+}
+
 // Get AWS credentials stored in the root Secret
 func extractAWSCredentials(oc *exutil.CLI) (AWSAccessKeyID string, AWSSecretAccessKey string) {
 	AWSAccessKeyID, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_access_key_id", "--to=-").Outputs()

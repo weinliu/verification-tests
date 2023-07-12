@@ -70,6 +70,255 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "43100"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-High-43100-[AWS]Hive supports hibernating AWS cluster with spot instances [Serial]", func() {
+		testCaseID := "43100"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		g.By("Config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		g.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Check Aws ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		e2e.Logf("Create tmp directory")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		defer os.RemoveAll(tmpDir)
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create spots instances, one with On-Demand and another with setting maxPrice")
+		spotMachinepoolYaml := `
+apiVersion: hive.openshift.io/v1
+kind: MachinePool
+metadata:
+  name: ` + cdName + `-spot
+  namespace: ` + oc.Namespace() + `
+spec:
+  clusterDeploymentRef:
+    name: ` + cdName + `
+  name: spot
+  platform:
+    aws:
+      rootVolume:
+        iops: 100
+        size: 22
+        type: gp2
+      type: m4.xlarge
+      spotMarketOptions: {}
+  replicas: 1`
+		var filename = tmpDir + "/" + testCaseID + "-machinepool-spot.yaml"
+		defer os.Remove(filename)
+		err = ioutil.WriteFile(filename, []byte(spotMachinepoolYaml), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-spot"})
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		spotMachinepool2Yaml := `
+apiVersion: hive.openshift.io/v1
+kind: MachinePool
+metadata:
+  name: ` + cdName + `-spot2
+  namespace: ` + oc.Namespace() + `
+spec:
+  clusterDeploymentRef:
+    name: ` + cdName + `
+  name: spot2
+  platform:
+    aws:
+      rootVolume:
+        iops: 100
+        size: 22
+        type: gp2
+      type: m4.xlarge
+      spotMarketOptions: 
+        maxPrice: "0.1"
+  replicas: 1`
+		var filename2 = tmpDir + "/" + testCaseID + "-machinepool-spot2.yaml"
+		defer os.Remove(filename2)
+		err = ioutil.WriteFile(filename2, []byte(spotMachinepool2Yaml), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-spot2"})
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Login to target cluster, check spot instances are created")
+		e2e.Logf("Extracting kubeconfig ...")
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+
+		var oldSpotMachineName, oldSpotMachineName2 string
+		checkSpotMachineName := func() bool {
+			stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfig, "machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.name}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("machine list: %s", stdout)
+			oldSpotMachineName = ""
+			oldSpotMachineName2 = ""
+			for _, MachineName := range strings.Split(stdout, " ") {
+				if strings.Contains(MachineName, "spot-") {
+					oldSpotMachineName = MachineName
+				}
+				if strings.Contains(MachineName, "spot2-") {
+					oldSpotMachineName2 = MachineName
+				}
+			}
+			e2e.Logf("oldSpotMachineName: %s, oldSpotMachineName2: %s", oldSpotMachineName, oldSpotMachineName2)
+			return strings.Contains(oldSpotMachineName, "spot-") && strings.Contains(oldSpotMachineName2, "spot2-")
+		}
+		o.Eventually(checkSpotMachineName).WithTimeout(DefaultTimeout * time.Second).WithPolling(5 * time.Second).Should(o.BeTrue())
+
+		// Get AWS client
+		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		ec2Client := ec2.NewFromConfig(cfg)
+
+		e2e.Logf("Waiting until the spot VMs are created...")
+		var describeInstancesOutput *ec2.DescribeInstancesOutput
+		waitUntilSpotVMCreated := func() bool {
+			describeInstancesOutput, err = ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
+				Filters: []types.Filter{
+					{
+						Name: aws.String("tag:Name"),
+						// Globbing leads to filtering AFTER returning a page of instances
+						// This results in the necessity of looping through pages of instances,
+						// i.e. some extra complexity.
+						Values: []string{oldSpotMachineName, oldSpotMachineName2},
+					},
+				},
+				MaxResults: aws.Int32(6),
+			})
+			if err != nil {
+				e2e.Logf("Error when get describeInstancesOutput: %s", err.Error())
+				return false
+			}
+			e2e.Logf("Check result length: %d", len(describeInstancesOutput.Reservations))
+			for _, reservation := range describeInstancesOutput.Reservations {
+				instanceLen := len(reservation.Instances)
+				if instanceLen != 1 {
+					e2e.Logf("instanceLen should be 1, actual number is %d", instanceLen)
+					return false
+				}
+				e2e.Logf("Instance ID: %s, status: %s", *reservation.Instances[0].InstanceId, reservation.Instances[0].State.Name)
+				if reservation.Instances[0].State.Name != "running" {
+					e2e.Logf("Instances state should be running, actual state is %s", reservation.Instances[0].State.Name)
+					return false
+				}
+			}
+			return len(describeInstancesOutput.Reservations) == 2
+		}
+		o.Eventually(waitUntilSpotVMCreated).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		g.By("Hibernating the cluster and check ClusterDeployment Hibernating condition")
+		// the MachinePool can not be deleted when the ClusterDeployment is in Hibernating state
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", `--patch={"spec":{"powerState": "Running"}}`).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", `--patch={"spec":{"powerState": "Hibernating"}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		expectKeyValue := map[string]string{
+			"status":  "True",
+			"reason":  "Hibernating",
+			"message": "Cluster is stopped",
+		}
+		waitForHibernating := checkCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "Hibernating", expectKeyValue, "wait for cluster hibernating")
+		o.Eventually(waitForHibernating).WithTimeout(10 * time.Minute).WithPolling(15 * time.Second).Should(o.BeTrue())
+
+		g.By("Check spot instances are terminated")
+		waitUntilSpotVMTerminated := func() bool {
+			describeInstancesOutput, err = ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
+				Filters: []types.Filter{
+					{
+						Name: aws.String("tag:Name"),
+						// Globbing leads to filtering AFTER returning a page of instances
+						// This results in the necessity of looping through pages of instances,
+						// i.e. some extra complexity.
+						Values: []string{oldSpotMachineName, oldSpotMachineName2},
+					},
+				},
+				MaxResults: aws.Int32(6),
+			})
+			if err != nil {
+				e2e.Logf("Error when get describeInstancesOutput: %s", err.Error())
+				return false
+			}
+			e2e.Logf("Check result length: %d", len(describeInstancesOutput.Reservations))
+			for _, reservation := range describeInstancesOutput.Reservations {
+				instanceLen := len(reservation.Instances)
+				if instanceLen != 1 {
+					e2e.Logf("instanceLen should be 1, actual number is %d", instanceLen)
+					return false
+				}
+				e2e.Logf("Instance ID: %s, status: %s", *reservation.Instances[0].InstanceId, reservation.Instances[0].State.Name)
+				if reservation.Instances[0].State.Name != "terminated" {
+					e2e.Logf("Instances state should be terminated, actual state is %s", reservation.Instances[0].State.Name)
+					return false
+				}
+			}
+			return true
+		}
+		o.Eventually(waitUntilSpotVMTerminated).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		g.By("Start cluster again, check ClusterDeployment back to running again")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", `--patch={"spec":{"powerState": "Running"}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		expectKeyValue2 := map[string]string{
+			"status":  "False",
+			"reason":  "ResumingOrRunning",
+			"message": "Cluster is resuming or running, see Ready condition for details",
+		}
+		waitForHibernating2 := checkCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "Hibernating", expectKeyValue2, "wait for cluster being resumed")
+		o.Eventually(waitForHibernating2).WithTimeout(10 * time.Minute).WithPolling(15 * time.Second).Should(o.BeTrue())
+
+		e2e.Logf("Making sure the cluster is in the \"Running\" powerstate ...")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.powerState}"}).check(oc)
+
+		g.By("Login to target cluster, check the new spot instances are created")
+		var newSpotMachineName, newSpotMachineName2 string
+		checkSpotMachineName2 := func() bool {
+			stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfig, "machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.name}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("machine list: %s", stdout)
+			newSpotMachineName = ""
+			newSpotMachineName2 = ""
+			for _, MachineName := range strings.Split(stdout, " ") {
+				if strings.Contains(MachineName, "spot-") {
+					newSpotMachineName = MachineName
+				}
+				if strings.Contains(MachineName, "spot2-") {
+					newSpotMachineName2 = MachineName
+				}
+			}
+			e2e.Logf("newSpotMachineName: %s, newSpotMachineName2: %s", newSpotMachineName, newSpotMachineName2)
+			return strings.Contains(newSpotMachineName, "spot-") && strings.Contains(newSpotMachineName2, "spot2-") && oldSpotMachineName != newSpotMachineName && oldSpotMachineName2 != newSpotMachineName2
+		}
+		o.Eventually(checkSpotMachineName2).WithTimeout(DefaultTimeout * time.Second).WithPolling(5 * time.Second).Should(o.BeTrue())
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "32135"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Medium-32135-[aws]kubeconfig and password secrets need to be owned by ClusterDeployment after installed [Serial]", func() {
 		testCaseID := "32135"
