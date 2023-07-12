@@ -420,59 +420,115 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: zzhao@redhat.com
-	g.It("MicroShiftOnly-Author:zzhao-Critical-60968-Check loadbalance service works well on Microshift", func() {
+	// modified: asood@redhat.com
+	g.It("MicroShiftOnly-Author:zzhao-Critical-60968-Check loadbalance service with different external and internal traffic policies works well on Microshift", func() {
 		var (
 			caseID           = "60968"
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+			etp              string
+			itp              string
+			nodeName         string
+			nodeIP           string
+			serviceName      string
+			output           string
 		)
 
-		g.By("Create a namespace for the scenario")
+		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
+		exutil.By("Creating pods in namespace")
+		for j := 0; j < 2; j++ {
+			pod_pmtrs := map[string]string{
+				"$podname":   "hello-pod-" + strconv.Itoa(j),
+				"$namespace": e2eTestNamespace,
+				"$label":     "hello-pod",
+			}
+
+			createPingPodforUshift(oc, pod_pmtrs)
+			waitPodReady(oc, e2eTestNamespace, "hello-pod-"+strconv.Itoa(j))
+		}
+
+		exutil.By("Creating test pod in namespace")
 		pod_pmtrs := map[string]string{
-			"$podname":   "hello-pod",
+			"$podname":   "test-pod",
 			"$namespace": e2eTestNamespace,
-			"$label":     "hello-pod",
+			"$label":     "test-pod",
 		}
-
-		g.By("creating hello pod in namespace")
 		createPingPodforUshift(oc, pod_pmtrs)
-		waitPodReady(oc, e2eTestNamespace, "hello-pod")
+		waitPodReady(oc, e2eTestNamespace, "test-pod")
 
-		svc_pmtrs := map[string]string{
-			"$servicename":           "lbtest",
-			"$namespace":             e2eTestNamespace,
-			"$label":                 "test-service",
-			"$internalTrafficPolicy": "",
-			"$externalTrafficPolicy": "",
-			"$ipFamilyPolicy":        "",
-			"$selector":              "hello-pod",
-			"$serviceType":           "LoadBalancer",
-		}
-		createServiceforUshift(oc, svc_pmtrs)
-
-		g.By("Get service port and NodeIP value")
-
-		svcPort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "lbtest", "-o=jsonpath={.spec.ports[*].port}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod", "-o=jsonpath={.spec.nodeName}").Output()
+		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod-0", "-o=jsonpath={.spec.nodeName}").Output()
 		o.Expect(podErr).NotTo(o.HaveOccurred())
-		nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeName)
-		svcURL := net.JoinHostPort(nodeIP, svcPort)
-		g.By("curl loadbalance Service")
-		output, err := exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+		nodeIP = getNodeIPv4(oc, e2eTestNamespace, nodeName)
 
-		g.By("Delete lb service")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "lbtest", "-n", e2eTestNamespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("curl loadbalance Service")
-		output, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+		policy := [2]string{"Cluster", "Local"}
+
+		for i := 0; i < 2; i++ {
+			if i == 0 {
+				itp = ""
+				etp = policy[i]
+				exutil.By(fmt.Sprintf("Create LoadBalance service with ETP and ITP as %s", policy[i]))
+				serviceName = "lbtest-etp-itp-" + strings.ToLower(etp)
+			} else {
+				etp = policy[i]
+				itp = policy[i]
+				exutil.By(fmt.Sprintf("Create LoadBalance service with ETP and ITP as %s", policy[i]))
+				serviceName = "lbtest-etp-itp-" + strings.ToLower(policy[i])
+			}
+
+			svc_pmtrs := map[string]string{
+				"$servicename":           serviceName,
+				"$namespace":             e2eTestNamespace,
+				"$label":                 "test-service",
+				"$internalTrafficPolicy": itp,
+				"$externalTrafficPolicy": etp,
+				"$ipFamilyPolicy":        "",
+				"$selector":              "hello-pod",
+				"$serviceType":           "LoadBalancer",
+			}
+			createServiceforUshift(oc, svc_pmtrs)
+
+			exutil.By(fmt.Sprintf("Get service port and NodeIP value for service %s", serviceName))
+
+			svcPort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, serviceName, "-o=jsonpath={.spec.ports[*].port}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			svcURL := net.JoinHostPort(nodeIP, svcPort)
+			if serviceName == "lbtest-etp-itp-cluster" {
+				//Access service from host networked pod
+				exutil.By(fmt.Sprintf("Curl LoadBalance service %s", serviceName))
+				output, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+				exutil.By(fmt.Sprintf("Delete lb service %s", serviceName))
+				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", serviceName, "-n", e2eTestNamespace).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				//firewalld entries are removed when service is deleted
+				exutil.By(fmt.Sprintf("Curl LoadBalance service %s again", serviceName))
+				output, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
+				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+
+			} else {
+				// Access service from within cluster from pod on cluster network
+				exutil.By(fmt.Sprintf("Curl loadbalance Service %s from within cluster", serviceName))
+				output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "test-pod", "curl --connect-timeout 5 -s "+svcURL)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+				exutil.By(fmt.Sprintf("Delete lb service %s", serviceName))
+				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", serviceName, "-n", e2eTestNamespace).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				exutil.By(fmt.Sprintf("Curl loadbalance Service %s again from within cluster", serviceName))
+				output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "test-pod", "curl --connect-timeout 5 -s "+svcURL)
+				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+
+			}
+		}
 
 	})
 	// author: zzhao@redhat.com
