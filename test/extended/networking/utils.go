@@ -2831,3 +2831,31 @@ func checkSCTPResultPASS(oc *exutil.CLI, namespace, sctpServerPodName, sctpClien
 	o.Expect(err4).NotTo(o.HaveOccurred())
 	o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 }
+
+func isOVNIC(oc *exutil.CLI) bool {
+	ovnNamespace := "openshift-ovn-kubernetes"
+	ovnMasterPods, err := exutil.GetAllPodsWithLabel(oc, ovnNamespace, "app=ovnkube-master")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(len(ovnMasterPods) > 0).Should(o.BeTrue())
+
+	containers, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", ovnMasterPods[0], "-n", ovnNamespace, "-o=jsonpath={.spec.containers[*].name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(containers, "ovnkube-control-plane") {
+		return true
+	}
+	return false
+}
+
+func ovnDBpod(oc *exutil.CLI) string {
+	if isOVNIC(oc) {
+		// If OVN-IC cluster, will execute the ovndb command in ovnkube-node pod
+		ovnNodePods, err := exutil.GetAllPodsWithLabel(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(ovnNodePods) > 0).Should(o.BeTrue())
+		return ovnNodePods[0]
+	} else {
+		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		return ovnMasterPodName
+	}
+
+}

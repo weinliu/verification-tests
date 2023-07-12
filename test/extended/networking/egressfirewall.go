@@ -25,6 +25,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-egressfirewall", exutil.KubeConfigPath())
+	var aclLogPath string
 	g.BeforeEach(func() {
 		networkType := exutil.CheckNetworkType(oc)
 		o.Expect(networkType).NotTo(o.BeEmpty())
@@ -33,6 +34,12 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		}
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, egressfirewall cannot be tested on proxy cluster, skip the test.")
+		}
+
+		if isOVNIC(oc) {
+			aclLogPath = "--path=ovn-ic/acl-audit-log.log"
+		} else {
+			aclLogPath = "--path=ovn/acl-audit-log.log"
 		}
 	})
 
@@ -82,7 +89,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("7. Verify acl logs for egressfirewall generated. \n")
 		egressFwRegex := fmt.Sprintf("EF:%s:.*", ns1)
-		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		r := regexp.MustCompile(egressFwRegex)
 		matches := r.FindAllString(aclLogs, -1)
@@ -139,7 +146,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("6. Verify acl logs for egressfirewall generated. \n")
 		egressFwRegex := fmt.Sprintf("EF:%s:.*", ns1)
-		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		r := regexp.MustCompile(egressFwRegex)
 		matches := r.FindAllString(aclLogs, -1)
@@ -154,7 +161,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("9. Verify no incremental acl logs. \n")
-		aclLogs2, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+		aclLogs2, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		matches2 := r.FindAllString(aclLogs2, -1)
 		aclLogNum2 := len(matches2)
@@ -168,7 +175,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("12. Verify new acl logs for egressfirewall generated. \n")
-		aclLogs3, err3 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+		aclLogs3, err3 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		matches3 := r.FindAllString(aclLogs3, -1)
 		aclLogNum3 := len(matches3)
@@ -220,7 +227,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("6. Verify acl logs for egressfirewall generated. \n")
 		egressFwRegex := fmt.Sprintf("EF:%s:.*", ns1)
-		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		r := regexp.MustCompile(egressFwRegex)
 		matches := r.FindAllString(aclLogs, -1)
@@ -249,7 +256,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		g.By("10. Verify no acl logs for egressfirewall generated in ns2. \n")
 		egressFwRegexNs2 := fmt.Sprintf("egressFirewall_%s_.*", ns2)
 		o.Consistently(func() int {
-			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			r2 := regexp.MustCompile(egressFwRegexNs2)
 			matches2 := r2.FindAllString(aclLogs2, -1)
@@ -273,7 +280,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("13. Verify no acl logs for egressfirewall generated in ns2. \n")
 		o.Consistently(func() int {
-			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			r2 := regexp.MustCompile(egressFwRegexNs2)
 			matches2 := r2.FindAllString(aclLogs2, -1)
@@ -328,7 +335,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("Check the result, default deny rules should have lower priority than allow rules\n")
 		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:k8s.ovn.org/name=%s", ns1)
-		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		ovnMasterPodName := ovnDBpod(oc)
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 
@@ -377,7 +384,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("Get the base number of egressfirewall rules\n")
 		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:k8s.ovn.org/name=%s", ns1)
-		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		ovnMasterPodName := ovnDBpod(oc)
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The egressfirewall rules before restart ovn master pod: \n %s", listOutput)
@@ -389,7 +396,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
 
 		g.By("Check the result, the number of egressfirewal rules should be same as before.")
-		ovnMasterPodName = getOVNLeaderPod(oc, "north")
+		ovnMasterPodName = ovnDBpod(oc)
 		listOutput, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The egressfirewall rules after restart ovn master pod: \n %s", listOutput)
@@ -536,7 +543,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("Check ovn db, corresponding egressfirewall acls were deleted.")
 		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:k8s.ovn.org/name=%s", ns1)
-		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		ovnMasterPodName := ovnDBpod(oc)
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The egressfirewall rules after project deleted: \n %s", listOutput)
@@ -554,9 +561,6 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		}
 
 		ipStackType := checkIPStackType(oc)
-		if ipStackType != "ipv4single" {
-			g.Skip("skip due to bug https://issues.redhat.com/browse/OCPBUGS-8473 for now, will add it back once bug fixed!!")
-		}
 
 		node1 := nodeList.Items[0].Name
 		node2 := nodeList.Items[1].Name
@@ -643,9 +647,6 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		}
 
 		ipStackType := checkIPStackType(oc)
-		if ipStackType != "ipv4single" {
-			g.Skip("skip due to bug https://issues.redhat.com/browse/OCPBUGS-8473 for now, will add it back once bug fixed!!")
-		}
 
 		node1 := nodeList.Items[0].Name
 		node2 := nodeList.Items[1].Name
@@ -759,7 +760,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		g.By("Check ovn db, the stale chassis for deleted node should be deleted")
 		for _, machine := range []string{nodeName0, nodeName1} {
 			ovnACLCmd := fmt.Sprintf("ovn-sbctl --columns _uuid,hostname list chassis")
-			ovnMasterSourthDBLeaderPod := getOVNLeaderPod(oc, "south")
+			ovnMasterSourthDBLeaderPod := ovnDBpod(oc)
 			o.Eventually(func() string {
 				outPut, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterSourthDBLeaderPod, ovnACLCmd)
 				o.Expect(listErr).NotTo(o.HaveOccurred())
