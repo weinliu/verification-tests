@@ -124,3 +124,17 @@ func restartMicroshiftService(oc *exutil.CLI, nodeName string) {
 	exec.Command("bash", "-c", "sleep 60").Output()
 	checkNodeStatus(oc, nodeName, "Ready")
 }
+
+func getSecondaryNICip(oc *exutil.CLI) string {
+	masterPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-ovn-kubernetes", "-l", "app=ovnkube-master", "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	//primary nic will have lowest metric of 100 followed by higher metric of secondary nic. So we will look for 2nd default route line on iproute and grep its src ip which will be 2nd nic
+	//nic names keep changing so relying on metric logic
+	cmd := "ip route | sed -n '2p' | grep -oE '\\b([0-9]{1,3}\\.){3}[0-9]{1,3}\\b' | sed -n '2p'"
+	sec_int, err := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", masterPodName, cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	re := regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b`)
+	sec_int = re.FindAllString(sec_int, -1)[0]
+	e2e.Logf("Secondary Interface IP is : %s", sec_int)
+	return sec_int
+}
