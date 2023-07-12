@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -2800,6 +2801,7 @@ spec:
 			serviceEndpoint string
 			servicechkout   string
 			servicechkerror error
+			serviceIP       net.IP
 		)
 
 		g.By("1. Create one new namespace for the test scenario")
@@ -2849,7 +2851,14 @@ spec:
 		randomServicePort := int(getRandomNum(6000, 9000))
 		clusterIP, svcErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "default", "service", "kubernetes", `-o=jsonpath={.spec.clusterIP}`).Output()
 		o.Expect(svcErr).NotTo(o.HaveOccurred())
-		serviceIP := getServiceIP(oc, clusterIP)
+		err = wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			serviceIP = getServiceIP(oc, clusterIP)
+			if serviceIP.String() == "172.30.0.0" {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Failed to get one available service IP!")
 
 		g.By("4) Create clusterip service with --clusterip")
 		servicecreateout, servicecreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--clusterip", fmt.Sprintf("%v", serviceIP.String()), "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
@@ -2863,8 +2872,8 @@ spec:
 			serviceEndpoint = fmt.Sprintf("[%v]:%v", serviceIP.String(), randomServicePort)
 		}
 		// retry 3 times, sometimes, the endpoint is not ready for accessing.
-		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
-			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceEndpoint).Output()
+		err = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", "--connect-timeout", "2", serviceEndpoint).Output()
 			if err != nil {
 				return false, nil
 			}
@@ -2889,7 +2898,15 @@ spec:
 		} else {
 			serviceEndpoint = fmt.Sprintf("[%v]:%v", allottedServiceIP, randomServicePort)
 		}
-		servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceEndpoint).Output()
+		// retry 3 times, sometimes, the endpoint is not ready for accessing.
+		err = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", "--connect-timeout", "2", serviceEndpoint).Output()
+			if err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Unable to access the %s", serviceEndpoint))
 		o.Expect(servicechkerror).NotTo(o.HaveOccurred())
 		o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
 		servicedelerror = oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
