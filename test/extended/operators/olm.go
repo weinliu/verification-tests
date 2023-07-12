@@ -6709,6 +6709,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-50136, author: kuiwang@redhat.com
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:kuiwang-Medium-50136-automatic upgrade for failed operator installation csv fails", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6810,6 +6811,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-50138, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-50138-automatic upgrade for failed operator installation ip fails", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10107,6 +10109,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-60114, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-60114-olm serves an api to discover all versions of an operator", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10555,6 +10558,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 	// It will cover test case: OCP-22200, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-22200-add minimum kube version to CSV [Slow] [Flaky]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -11027,6 +11031,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// It will cover test case: OCP-25679, OCP-21418(acutally it covers OCP-25679), author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-High-25679-Medium-21418-Cluster resource created and deleted correctly [Serial]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -11247,6 +11252,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// It will cover test case: OCP-24906, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24906-Operators requesting cluster-scoped permission can trigger kube GC bug [Serial]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -12880,6 +12886,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// Test case: OCP-30695, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-30695-oc adm catalog mirror should mirror bundle images", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			// it is prepared index, and no need to remove it.
 			indexImageTag   = "quay.io/olmqe/cockroachdb-index:2.1.11-30695"
@@ -13113,6 +13120,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 
 	// It will cover test case: OCP-45381, author: kuiwang@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-ConnectedOnly-Author:kuiwang-Medium-45381-Support custom catalogs in hypershift", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
