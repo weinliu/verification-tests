@@ -1360,20 +1360,20 @@ func checkHiveConfigMetric(oc *exutil.CLI, field string, expectedResult string, 
 func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string, installConfigSecret interface{}, cd interface{}) {
 	switch x := cd.(type) {
 	case clusterDeployment:
-		g.By("Create AWS ClusterDeployment..." + ns)
+		exutil.By("Create AWS ClusterDeployment..." + ns)
 		imageSet := clusterImageSet{
 			name:         x.name + "-imageset",
 			releaseImage: testOCPImage,
 			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
 		}
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		imageSet.create(oc)
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy AWS platform credentials...")
+		exutil.By("Copy AWS platform credentials...")
 		createAWSCreds(oc, ns)
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, ns)
-		g.By("Create AWS Install-Config Secret...")
+		exutil.By("Create AWS Install-Config Secret...")
 		switch ic := installConfigSecret.(type) {
 		case installConfig:
 			ic.create(oc)
@@ -1382,20 +1382,20 @@ func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string
 		}
 		x.create(oc)
 	case gcpClusterDeployment:
-		g.By("Create gcp ClusterDeployment..." + ns)
+		exutil.By("Create gcp ClusterDeployment..." + ns)
 		imageSet := clusterImageSet{
 			name:         x.name + "-imageset",
 			releaseImage: testOCPImage,
 			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
 		}
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		imageSet.create(oc)
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy GCP platform credentials...")
+		exutil.By("Copy GCP platform credentials...")
 		createGCPCreds(oc, ns)
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, ns)
-		g.By("Create GCP Install-Config Secret...")
+		exutil.By("Create GCP Install-Config Secret...")
 		switch ic := installConfigSecret.(type) {
 		case gcpInstallConfig:
 			ic.create(oc)
@@ -1404,20 +1404,20 @@ func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string
 		}
 		x.create(oc)
 	case azureClusterDeployment:
-		g.By("Create azure ClusterDeployment..." + ns)
+		exutil.By("Create azure ClusterDeployment..." + ns)
 		imageSet := clusterImageSet{
 			name:         x.name + "-imageset",
 			releaseImage: testOCPImage,
 			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
 		}
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		imageSet.create(oc)
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy Azure platform credentials...")
+		exutil.By("Copy Azure platform credentials...")
 		createAzureCreds(oc, ns)
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, ns)
-		g.By("Create Azure Install-Config Secret...")
+		exutil.By("Create Azure Install-Config Secret...")
 		switch ic := installConfigSecret.(type) {
 		case azureInstallConfig:
 			ic.create(oc)
@@ -1426,7 +1426,7 @@ func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string
 		}
 		x.create(oc)
 	default:
-		g.By("unknown ClusterDeployment type")
+		exutil.By("unknown ClusterDeployment type")
 	}
 }
 

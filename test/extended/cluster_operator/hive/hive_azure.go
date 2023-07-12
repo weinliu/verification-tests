@@ -55,7 +55,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Azure Install-Config Secret...")
+		exutil.By("Config Azure Install-Config Secret...")
 		installConfigSecret := azureInstallConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -66,7 +66,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			azureType:  AzurePublic,
 			template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
 		}
-		g.By("Config Azure ClusterDeployment...")
+		exutil.By("Config Azure ClusterDeployment...")
 		cluster := azureClusterDeployment{
 			fake:                "false",
 			name:                cdName,
@@ -86,7 +86,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Create worker and infra MachinePool ...")
+		exutil.By("Create worker and infra MachinePool ...")
 		workermachinepoolAzureTemp := filepath.Join(testDataDir, "machinepool-worker-azure.yaml")
 		inframachinepoolAzureTemp := filepath.Join(testDataDir, "machinepool-infra-azure.yaml")
 		workermp := machinepool{
@@ -107,10 +107,10 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		workermp.create(oc)
 		inframp.create(oc)
 
-		g.By("Check Azure ClusterDeployment installed flag is true")
+		exutil.By("Check Azure ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, AzureClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("OCP-28657: Hive supports remote Machine Set Management for Azure")
+		exutil.By("OCP-28657: Hive supports remote Machine Set Management for Azure")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
 		err := os.MkdirAll(tmpDir, 0777)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -181,22 +181,22 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
-		g.By("Check if ClusterImageSet was created successfully")
+		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
-		g.By("Copy Azure platform credentials...")
+		exutil.By("Copy Azure platform credentials...")
 		createAzureCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create ClusterPool...")
+		exutil.By("Create ClusterPool...")
 		poolTemp := filepath.Join(testDataDir, "clusterpool-azure.yaml")
 		pool := azureClusterPool{
 			name:           poolName,
@@ -218,11 +218,11 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
-		g.By("Check if Azure ClusterPool created successfully and become ready")
+		exutil.By("Check if Azure ClusterPool created successfully and become ready")
 		//runningCount is 0 so pool status should be standby: 1, ready: 0
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, AzureClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
-		g.By("Check if CD is Hibernating")
+		exutil.By("Check if CD is Hibernating")
 		cdListStr := getCDlistfromPool(oc, poolName)
 		var cdArray []string
 		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
@@ -230,15 +230,15 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i]}).check(oc)
 		}
 
-		g.By("Patch pool.spec.lables.test=test...")
+		exutil.By("Patch pool.spec.lables.test=test...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"labels":{"test":"test"}}}`}).check(oc)
 
-		g.By("The existing CD in the pool has no test label")
+		exutil.By("The existing CD in the pool has no test label")
 		for i := range cdArray {
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "test", nok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.labels}"}).check(oc)
 		}
 
-		g.By("The new CD in the pool should have the test label")
+		exutil.By("The new CD in the pool should have the test label")
 		e2e.Logf("Delete the old CD in the pool")
 		newCheck("expect", "delete", asAdmin, withoutNamespace, contain, "delete", ok, ClusterUninstallTimeout, []string{"ClusterDeployment", cdArray[0], "-n", cdArray[0]}).check(oc)
 		e2e.Logf("Get the CD list from the pool again.")
@@ -257,7 +257,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Azure Install-Config Secret...")
+		exutil.By("Config Azure Install-Config Secret...")
 		installConfigSecret := azureInstallConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -268,7 +268,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			azureType:  AzurePublic,
 			template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
 		}
-		g.By("Config Azure ClusterDeployment...")
+		exutil.By("Config Azure ClusterDeployment...")
 		cluster := azureClusterDeployment{
 			fake:                "false",
 			name:                cdName,
@@ -288,13 +288,13 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check Azure ClusterDeployment installed flag is true")
+		exutil.By("Check Azure ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, AzureClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("Check CD has Hibernating condition")
+		exutil.By("Check CD has Hibernating condition")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
 
-		g.By("patch the CD to Hibernating...")
+		exutil.By("patch the CD to Hibernating...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Hibernating"}}`}).check(oc)
 		e2e.Logf("Wait for CD to be Hibernating")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
@@ -303,7 +303,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
 
-		g.By("patch the CD to Running...")
+		exutil.By("patch the CD to Running...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
 		e2e.Logf("Wait for CD to be Running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
@@ -326,22 +326,22 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
-		g.By("Check if ClusterImageSet was created successfully")
+		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
-		g.By("Copy Azure platform credentials...")
+		exutil.By("Copy Azure platform credentials...")
 		createAzureCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Step1 : Create ClusterPool...")
+		exutil.By("Step1 : Create ClusterPool...")
 		poolTemp := filepath.Join(testDataDir, "clusterpool-azure.yaml")
 		pool := azureClusterPool{
 			name:           poolName,
@@ -363,25 +363,25 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
-		g.By("Step2 : Check if Azure ClusterPool created successfully and become ready")
+		exutil.By("Step2 : Check if Azure ClusterPool created successfully and become ready")
 		//runningCount is 1 so pool status should be ready: 1
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, AzureClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.ready}"}).check(oc)
 
-		g.By("Get cd name from cdlist")
+		exutil.By("Get cd name from cdlist")
 		cdListStr := getCDlistfromPool(oc, poolName)
 		var cdArray []string
 		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
 		o.Expect(len(cdArray)).Should(o.BeNumerically(">=", 1))
 		oldCdName := cdArray[0]
 
-		g.By("Step4 : wait 7 mins")
+		exutil.By("Step4 : wait 7 mins")
 		//hibernateAfter is 5 min, wait for > 5 min (Need wait hardcode timer instead of check any condition here so use Sleep function directly) to check the cluster is still running status.
 		time.Sleep((HibernateAfterTimer + DefaultTimeout) * time.Second)
 
-		g.By("Step6 and Step7 : Check unclaimed cluster is still in Running status after hibernateAfter time, because of runningcount=1")
+		exutil.By("Step6 and Step7 : Check unclaimed cluster is still in Running status after hibernateAfter time, because of runningcount=1")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, DefaultTimeout, []string{"ClusterDeployment", oldCdName, "-n", oldCdName}).check(oc)
 
-		g.By("Step8 :Check installedTimestap and hibernating lastTransitionTime filed.")
+		exutil.By("Step8 :Check installedTimestap and hibernating lastTransitionTime filed.")
 		installedTimestap, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", oldCdName, "-n", oldCdName, `-o=jsonpath={.status.installedTimestamp}`))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		hibernateTransition, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", oldCdName, "-n", oldCdName, `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].lastTransitionTime}`))
@@ -390,7 +390,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		e2e.Logf("Timestamp difference is %v min", difference.Minutes())
 		o.Expect(difference.Minutes()).Should(o.BeNumerically("<=", 1))
 
-		g.By("Step4 : Create ClusterClaim...")
+		exutil.By("Step4 : Create ClusterClaim...")
 		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
 		claimName := poolName + "-claim"
 		claim := clusterClaim{
@@ -406,17 +406,17 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("get clusterclaim timestamp,creationTimestamp is %s", claimedTimestamp)
 
-		g.By("Check if ClusterClaim created successfully and become running")
+		exutil.By("Check if ClusterClaim created successfully and become running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace(), claimName}).check(oc)
 
-		g.By("Check if CD is Hibernating")
+		exutil.By("Check if CD is Hibernating")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, 2*ClusterResumeTimeout, []string{"ClusterDeployment", oldCdName, "-n", oldCdName}).check(oc)
 
 		hibernateTimestamp, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", oldCdName, "-n", oldCdName, `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].lastProbeTime}`))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("get hibernattimestaps, hibernateTimestamp is %s", hibernateTimestamp)
 
-		g.By("Step5 : Get Timestamp difference")
+		exutil.By("Step5 : Get Timestamp difference")
 		difference = hibernateTimestamp.Sub(claimedTimestamp)
 		e2e.Logf("Timestamp difference is %v mins", difference.Minutes())
 		o.Expect(difference.Minutes()).Should(o.BeNumerically(">=", 5))
@@ -430,7 +430,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Azure Install-Config Secret...")
+		exutil.By("Config Azure Install-Config Secret...")
 		installConfigSecret := azureInstallConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -441,7 +441,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			azureType:  AzurePublic,
 			template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
 		}
-		g.By("Config Azure ClusterDeployment...")
+		exutil.By("Config Azure ClusterDeployment...")
 		cluster := azureClusterDeployment{
 			fake:                "false",
 			name:                cdName,
@@ -461,7 +461,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Create infra MachinePool ...")
+		exutil.By("Create infra MachinePool ...")
 		inframachinepoolAzureTemp := filepath.Join(testDataDir, "machinepool-infra-azure.yaml")
 		inframp := machinepool{
 			namespace:   oc.Namespace(),
@@ -472,7 +472,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"})
 		inframp.create(oc)
 
-		g.By("Check if ClusterDeployment created successfully and become Provisioned")
+		exutil.By("Check if ClusterDeployment created successfully and become Provisioned")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, AzureClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
@@ -483,7 +483,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		kubeconfig := tmpDir + "/kubeconfig"
 		e2e.Logf("Patch static replicas to autoscaler")
 
-		g.By("OCP-52415: [Azure]Allow minReplicas autoscaling of MachinePools to be 0")
+		exutil.By("OCP-52415: [Azure]Allow minReplicas autoscaling of MachinePools to be 0")
 		e2e.Logf("Check hive allow set minReplicas=0 without zone setting")
 		autoScalingMax := "3"
 		autoScalingMin := "0"
@@ -530,7 +530,7 @@ spec:
 		e2e.Logf("Check replicas is 0")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 2*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 
-		g.By("Check Hive supports autoscale for Azure")
+		exutil.By("Check Hive supports autoscale for Azure")
 		patchYaml := `
 spec:
   scaleDown:
@@ -568,22 +568,22 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
-		g.By("Check if ClusterImageSet was created successfully")
+		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
-		g.By("Copy Azure platform credentials...")
+		exutil.By("Copy Azure platform credentials...")
 		createAzureCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create Install-Config Secret...")
+		exutil.By("Create Install-Config Secret...")
 		installConfigTemp := filepath.Join(testDataDir, "azure-install-config.yaml")
 		installConfigSecretName := cdName + "-install-config"
 		installConfigSecret := installConfig{
@@ -597,7 +597,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Get domain from installerimage...")
+		exutil.By("Get domain from installerimage...")
 		clusterVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-o=jsonpath={.status.desired.version}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterVersion).NotTo(o.BeEmpty())
@@ -632,11 +632,11 @@ spec:
 			func() {
 				//create cluster
 				if scenarios[i].copyCliDomain == "true" && scenarios[i].installerImageOverride == overrideInstallerImage {
-					g.By("Config Azure ClusterDeployment,with hive.openshift.io/cli-domain-from-installer-image=true and installerImageOverride set...")
+					exutil.By("Config Azure ClusterDeployment,with hive.openshift.io/cli-domain-from-installer-image=true and installerImageOverride set...")
 				} else if scenarios[i].copyCliDomain == "false" && scenarios[i].installerImageOverride == overrideInstallerImage {
-					g.By("Config Azure ClusterDeployment,with hive.openshift.io/cli-domain-from-installer-image=false and installerImageOverride set...")
+					exutil.By("Config Azure ClusterDeployment,with hive.openshift.io/cli-domain-from-installer-image=false and installerImageOverride set...")
 				} else if scenarios[i].copyCliDomain == "true" && scenarios[i].installerImageOverride == "" {
-					g.By("Config Azure ClusterDeployment,with hive.openshift.io/cli-domain-from-installer-image=true and installerImageOverride unset...")
+					exutil.By("Config Azure ClusterDeployment,with hive.openshift.io/cli-domain-from-installer-image=true and installerImageOverride unset...")
 				}
 				cluster := azureClusterDeployment{
 					fake:                   "false",
@@ -660,7 +660,7 @@ spec:
 				cluster.create(oc)
 
 				//get conditions
-				g.By("Check if provisioning pod create success")
+				exutil.By("Check if provisioning pod create success")
 				newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Provisioning", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace()}).check(oc)
 
 				e2e.Logf("Check cd .status.installerImage")
@@ -676,15 +676,15 @@ spec:
 				e2e.Logf("cliImageDomain is %s", cliImageDomain)
 				//check conditions for scenarios
 				if scenarios[i].copyCliDomain == "true" && scenarios[i].installerImageOverride == overrideInstallerImage {
-					g.By("Check if both cliImage and installerImage use the new domain")
+					exutil.By("Check if both cliImage and installerImage use the new domain")
 					o.Expect(overrideImageDomain).To(o.Equal(overrideDomain))
 					o.Expect(cliImageDomain).To(o.Equal(overrideDomain))
 				} else if scenarios[i].copyCliDomain == "false" && scenarios[i].installerImageOverride == overrideInstallerImage {
-					g.By("Check if cliImage use offical domain and installerImage use the new domain")
+					exutil.By("Check if cliImage use offical domain and installerImage use the new domain")
 					o.Expect(overrideImageDomain).To(o.Equal(overrideDomain))
 					o.Expect(cliImageDomain).To(o.Equal(installerDomain))
 				} else {
-					g.By("Check if both cliImage and installerImage use the offical image")
+					exutil.By("Check if both cliImage and installerImage use the offical image")
 					o.Expect(overrideImageDomain).To(o.Equal(installerDomain))
 					o.Expect(cliImageDomain).To(o.Equal(installerDomain))
 				}

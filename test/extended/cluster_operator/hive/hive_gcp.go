@@ -57,7 +57,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config GCP Install-Config Secret...")
+		exutil.By("Config GCP Install-Config Secret...")
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(projectID).NotTo(o.BeEmpty())
@@ -70,7 +70,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			projectid:  projectID,
 			template:   filepath.Join(testDataDir, "gcp-install-config.yaml"),
 		}
-		g.By("Config GCP ClusterDeployment...")
+		exutil.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -89,7 +89,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Create worker and infra MachinePool ...")
+		exutil.By("Create worker and infra MachinePool ...")
 		workermachinepoolGCPTemp := filepath.Join(testDataDir, "machinepool-worker-gcp.yaml")
 		inframachinepoolGCPTemp := filepath.Join(testDataDir, "machinepool-infra-gcp.yaml")
 		workermp := machinepool{
@@ -110,10 +110,10 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		workermp.create(oc)
 		inframp.create(oc)
 
-		g.By("Check GCP ClusterDeployment installed flag is true")
+		exutil.By("Check GCP ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("OCP-28636: Hive supports remote Machine Set Management for GCP")
+		exutil.By("OCP-28636: Hive supports remote Machine Set Management for GCP")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
 		err = os.MkdirAll(tmpDir, 0777)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -187,22 +187,22 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
-		g.By("Check if ClusterImageSet was created successfully")
+		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the pool
-		g.By("Copy GCP platform credentials...")
+		exutil.By("Copy GCP platform credentials...")
 		createGCPCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create ClusterPool...")
+		exutil.By("Create ClusterPool...")
 		poolTemp := filepath.Join(testDataDir, "clusterpool-gcp.yaml")
 		pool := gcpClusterPool{
 			name:           poolName,
@@ -223,11 +223,11 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
-		g.By("Check if GCP ClusterPool created successfully and become ready")
+		exutil.By("Check if GCP ClusterPool created successfully and become ready")
 		//runningCount is 0 so pool status should be standby: 1, ready: 0
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
-		g.By("Check if CD is Hibernating")
+		exutil.By("Check if CD is Hibernating")
 		cdListStr := getCDlistfromPool(oc, poolName)
 		var cdArray []string
 		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
@@ -235,15 +235,15 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i]}).check(oc)
 		}
 
-		g.By("Patch pool.spec.lables.test=test...")
+		exutil.By("Patch pool.spec.lables.test=test...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"labels":{"test":"test"}}}`}).check(oc)
 
-		g.By("The existing CD in the pool has no test label")
+		exutil.By("The existing CD in the pool has no test label")
 		for i := range cdArray {
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "test", nok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.labels}"}).check(oc)
 		}
 
-		g.By("The new CD in the pool should have the test label")
+		exutil.By("The new CD in the pool should have the test label")
 		e2e.Logf("Delete the old CD in the pool")
 		newCheck("expect", "delete", asAdmin, withoutNamespace, contain, "delete", ok, ClusterUninstallTimeout, []string{"ClusterDeployment", cdArray[0], "-n", cdArray[0]}).check(oc)
 		e2e.Logf("Get the CD list from the pool again.")
@@ -268,22 +268,22 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
-		g.By("Check if ClusterImageSet was created successfully")
+		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
-		g.By("Copy GCP platform credentials...")
+		exutil.By("Copy GCP platform credentials...")
 		createGCPCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create ClusterPool...")
+		exutil.By("Create ClusterPool...")
 		poolTemp := filepath.Join(testDataDir, "clusterpool-gcp.yaml")
 		pool := gcpClusterPool{
 			name:           poolName,
@@ -312,7 +312,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		o.Expect(len(oldClusterDeploymentName) > 0).Should(o.BeTrue())
 		e2e.Logf("old cd name:" + oldClusterDeploymentName[0])
 
-		g.By("OCP-45158: Check Provisioned condition")
+		exutil.By("OCP-45158: Check Provisioned condition")
 		e2e.Logf("Check ClusterDeployment is provisioning")
 		expectedResult := "message:Cluster is provisioning,reason:Provisioning,status:False"
 		jsonPath := "-o=jsonpath={\"message:\"}{.status.conditions[?(@.type==\"Provisioned\")].message}{\",reason:\"}{.status.conditions[?(@.type==\"Provisioned\")].reason}{\",status:\"}{.status.conditions[?(@.type==\"Provisioned\")].status}"
@@ -321,11 +321,11 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		expectedResult = "message:Cluster is provisioned,reason:Provisioned,status:True"
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedResult, ok, ClusterInstallTimeout, []string{"ClusterDeployment", oldClusterDeploymentName[0], "-n", oldClusterDeploymentName[0], jsonPath}).check(oc)
 
-		g.By("Check if GCP ClusterPool created successfully and become ready")
+		exutil.By("Check if GCP ClusterPool created successfully and become ready")
 		//runningCount is 0 so pool status should be standby: 1, ready: 0
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
-		g.By("test OCP-44475")
+		exutil.By("test OCP-44475")
 		e2e.Logf("oc patch ClusterPool 'spec.baseDomain'")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterPool", poolName, "-n", oc.Namespace(), "-p", `{"spec":{"baseDomain":"`+GCPBaseDomain2+`"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -355,7 +355,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config GCP Install-Config Secret...")
+		exutil.By("Config GCP Install-Config Secret...")
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(projectID).NotTo(o.BeEmpty())
@@ -368,7 +368,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			projectid:  projectID,
 			template:   filepath.Join(testDataDir, "gcp-install-config.yaml"),
 		}
-		g.By("Config GCP ClusterDeployment...")
+		exutil.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -387,7 +387,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check GCP ClusterDeployment installed flag is true")
+		exutil.By("Check GCP ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
@@ -397,7 +397,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
 		kubeconfig := tmpDir + "/kubeconfig"
 
-		g.By("OCP-41499: Add condition in ClusterDeployment status for paused syncset")
+		exutil.By("OCP-41499: Add condition in ClusterDeployment status for paused syncset")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace()}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"SyncSetFailed\")].status}"}).check(oc)
 		e2e.Logf("Add \"hive.openshift.io/syncset-pause\" annotation in ClusterDeployment, and delete ClusterSync CR")
@@ -414,7 +414,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"SyncSetFailed\")].status}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace()}).check(oc)
 
-		g.By("OCP-34404: Hive adds muti-modes for syncset to handle applying resources too large")
+		exutil.By("OCP-34404: Hive adds muti-modes for syncset to handle applying resources too large")
 		e2e.Logf("Create SyncSet with default applyBehavior.")
 		syncSetName := testCaseID + "-syncset-1"
 		configMapName := testCaseID + "-configmap-1"
@@ -556,7 +556,7 @@ spec:
 		e2e.Logf("Check data field in ConfigMap on target cluster should update, patch foo and add foo3.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, `{"foo":"bar-test","foo2":"bar2","foo3":"bar3"}`, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName3, "-n", configMapNamespace3, "-o=jsonpath={.data}"}).check(oc)
 
-		g.By("OCP-25333: Changing apiGroup for ClusterRoleBinding in SyncSet doesn't delete the CRB")
+		exutil.By("OCP-25333: Changing apiGroup for ClusterRoleBinding in SyncSet doesn't delete the CRB")
 		e2e.Logf("Create SyncSet with invalid apiGroup in resource CR.")
 		syncSetName4 := testCaseID + "-syncset-4"
 		syncsetYaml := `
@@ -600,7 +600,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config GCP Install-Config Secret...")
+		exutil.By("Config GCP Install-Config Secret...")
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(projectID).NotTo(o.BeEmpty())
@@ -613,7 +613,7 @@ spec:
 			projectid:  projectID,
 			template:   filepath.Join(testDataDir, "gcp-install-config.yaml"),
 		}
-		g.By("Config GCP ClusterDeployment...")
+		exutil.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -632,11 +632,11 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check GCP ClusterDeployment installed flag is true")
+		exutil.By("Check GCP ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
-		g.By("Check CD has Hibernating condition")
+		exutil.By("Check CD has Hibernating condition")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
-		g.By("patch the CD to Hibernating...")
+		exutil.By("patch the CD to Hibernating...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Hibernating"}}`}).check(oc)
 		e2e.Logf("Wait for CD to be Hibernating")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
@@ -645,7 +645,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
 
-		g.By("patch the CD to Running...")
+		exutil.By("patch the CD to Running...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
 		e2e.Logf("Wait for CD to be Running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
@@ -663,7 +663,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config GCP Install-Config Secret...")
+		exutil.By("Config GCP Install-Config Secret...")
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(projectID).NotTo(o.BeEmpty())
@@ -676,7 +676,7 @@ spec:
 			projectid:  projectID,
 			template:   filepath.Join(testDataDir, "gcp-install-config.yaml"),
 		}
-		g.By("Config GCP ClusterDeployment...")
+		exutil.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -695,7 +695,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Create infra MachinePool ...")
+		exutil.By("Create infra MachinePool ...")
 		inframachinepoolGCPTemp := filepath.Join(testDataDir, "machinepool-infra-gcp.yaml")
 		inframp := machinepool{
 			namespace:   oc.Namespace(),
@@ -706,7 +706,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"})
 		inframp.create(oc)
 
-		g.By("Check if ClusterDeployment created successfully and become Provisioned")
+		exutil.By("Check if ClusterDeployment created successfully and become Provisioned")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
@@ -717,7 +717,7 @@ spec:
 		kubeconfig := tmpDir + "/kubeconfig"
 		e2e.Logf("Patch static replicas to autoscaler")
 
-		g.By("OCP-52411: [GCP]Allow minReplicas autoscaling of MachinePools to be 0")
+		exutil.By("OCP-52411: [GCP]Allow minReplicas autoscaling of MachinePools to be 0")
 		e2e.Logf("Check hive allow set minReplicas=0 without zone setting")
 		autoScalingMax := "4"
 		autoScalingMin := "0"
@@ -764,7 +764,7 @@ spec:
 		e2e.Logf("Check replicas is 0")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0 0", ok, 2*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 
-		g.By("Check Hive supports autoscale for GCP")
+		exutil.By("Check Hive supports autoscale for GCP")
 		patchYaml := `
 spec:
   scaleDown:
@@ -803,19 +803,19 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
-		g.By("Copy GCP platform credentials...")
+		exutil.By("Copy GCP platform credentials...")
 		createGCPCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create GCP Install-Config Secret...")
+		exutil.By("Create GCP Install-Config Secret...")
 		installConfigTemp := filepath.Join(testDataDir, "gcp-install-config.yaml")
 		installConfigSecretName := cdName + "-install-config"
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
@@ -833,7 +833,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Create GCP ClusterDeployment...")
+		exutil.By("Create GCP ClusterDeployment...")
 		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-gcp.yaml")
 		clusterVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-o=jsonpath={.status.desired.version}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -861,7 +861,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
 
-		g.By("Check installer image is overrided via \"installerImageOverride\" field")
+		exutil.By("Check installer image is overrided via \"installerImageOverride\" field")
 		e2e.Logf("Check cd .status.installerImage")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, installerImageForOverride, ok, 2*DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installerImage}"}).check(oc)
 		e2e.Logf("Check Installer commitID in provision pod log matches commitID from overrided Installer image")
@@ -894,22 +894,22 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
-		g.By("Check if ClusterImageSet was created successfully")
+		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the pool
-		g.By("Copy GCP platform credentials...")
+		exutil.By("Copy GCP platform credentials...")
 		createGCPCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create ClusterPool...")
+		exutil.By("Create ClusterPool...")
 		poolTemp := filepath.Join(testDataDir, "clusterpool-gcp.yaml")
 		pool := gcpClusterPool{
 			name:           poolName,
@@ -931,11 +931,11 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
 
-		g.By("Check if GCP ClusterPool created successfully and become ready")
+		exutil.By("Check if GCP ClusterPool created successfully and become ready")
 		//runningCount is 2 so pool status should be standby: 0, ready: 2
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.ready}"}).check(oc)
 
-		g.By("Check if CD is Running")
+		exutil.By("Check if CD is Running")
 		cdListStr := getCDlistfromPool(oc, poolName)
 		var cdArray []string
 		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
@@ -943,7 +943,7 @@ spec:
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i]}).check(oc)
 		}
 
-		g.By("Create ClusterClaim...")
+		exutil.By("Create ClusterClaim...")
 		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
 		claimName1 := poolName + "-claim-1"
 		claim1 := clusterClaim{
@@ -957,7 +957,7 @@ spec:
 		e2e.Logf("Check if ClusterClaim %s created successfully", claimName1)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName1, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace(), "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
-		g.By("Check Metrics for ClusterClaim...")
+		exutil.By("Check Metrics for ClusterClaim...")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
@@ -965,12 +965,12 @@ spec:
 		query2 := "hive_clusterclaim_assignment_delay_seconds_count"
 		query3 := "hive_clusterclaim_assignment_delay_seconds_bucket"
 		query := []string{query1, query2, query3}
-		g.By("Check hive metrics for clusterclaim exist")
+		exutil.By("Check hive metrics for clusterclaim exist")
 		checkMetricExist(oc, ok, token, thanosQuerierURL, query)
 		e2e.Logf("Check metric %s Value is 1", query2)
 		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "1", token, thanosQuerierURL, query2)
 
-		g.By("Create another ClusterClaim...")
+		exutil.By("Create another ClusterClaim...")
 		claimName2 := poolName + "-claim-2"
 		claim2 := clusterClaim{
 			name:            claimName2,
@@ -1004,19 +1004,19 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
-		g.By("Don't copy GCP platform credentials make install fail...")
+		exutil.By("Don't copy GCP platform credentials make install fail...")
 		//createGCPCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create GCP Install-Config Secret...")
+		exutil.By("Create GCP Install-Config Secret...")
 		installConfigTemp := filepath.Join(testDataDir, "gcp-install-config.yaml")
 		installConfigSecretName := cdName + "-install-config"
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
@@ -1034,7 +1034,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Get SA token to check Metrics...")
+		exutil.By("Get SA token to check Metrics...")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
@@ -1043,10 +1043,10 @@ spec:
 		for i := 0; i < len(installAttemptsLimit); i++ {
 			func() {
 				if installAttemptsLimit[i] == 3 {
-					g.By("Config GCP ClusterDeployment with installAttemptsLimit=3 and make install fail..")
+					exutil.By("Config GCP ClusterDeployment with installAttemptsLimit=3 and make install fail..")
 				} else {
-					g.By("Config GCP ClusterDeployment with installAttemptsLimit=1 and make install success..")
-					g.By("Copy GCP platform credentials make install success...")
+					exutil.By("Config GCP ClusterDeployment with installAttemptsLimit=1 and make install success..")
+					exutil.By("Copy GCP platform credentials make install success...")
 					createGCPCreds(oc, oc.Namespace())
 				}
 				cluster := gcpClusterDeployment{
@@ -1074,19 +1074,19 @@ spec:
 					queryFailCount := "hive_cluster_deployment_install_failure_total_count"
 					queryFailBucket := "hive_cluster_deployment_install_failure_total_bucket"
 					queryFail := []string{queryFailSum, queryFailCount, queryFailBucket}
-					g.By("Check hive metrics for cd install fail")
+					exutil.By("Check hive metrics for cd install fail")
 					checkMetricExist(oc, ok, token, thanosQuerierURL, queryFail)
 					e2e.Logf("Check metric %s with install_attempt = 2", queryFailCount)
 					checkResourcesMetricValue(oc, GCPRegion, HiveNamespace, "2", token, thanosQuerierURL, queryFailCount)
 					e2e.Logf("delete cd and create a success case")
 				} else {
-					g.By("Check GCP ClusterDeployment installed flag is true")
+					exutil.By("Check GCP ClusterDeployment installed flag is true")
 					newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 					querySuccSum := "hive_cluster_deployment_install_success_total_sum"
 					querySuccCount := "hive_cluster_deployment_install_success_total_count"
 					querySuccBucket := "hive_cluster_deployment_install_success_total_bucket"
 					querySuccess := []string{querySuccSum, querySuccCount, querySuccBucket}
-					g.By("Check hive metrics for cd installed successfully")
+					exutil.By("Check hive metrics for cd installed successfully")
 					checkMetricExist(oc, ok, token, thanosQuerierURL, querySuccess)
 					e2e.Logf("Check metric %s with with install_attempt = 0", querySuccCount)
 					checkResourcesMetricValue(oc, GCPRegion, HiveNamespace, "0", token, thanosQuerierURL, querySuccCount)

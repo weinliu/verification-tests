@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -85,7 +85,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -104,7 +104,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check Aws ClusterDeployment installed flag is true")
+		exutil.By("Check Aws ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		e2e.Logf("Create tmp directory")
@@ -113,7 +113,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		err := os.MkdirAll(tmpDir, 0777)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create spots instances, one with On-Demand and another with setting maxPrice")
+		exutil.By("Create spots instances, one with On-Demand and another with setting maxPrice")
 		spotMachinepoolYaml := `
 apiVersion: hive.openshift.io/v1
 kind: MachinePool
@@ -169,7 +169,7 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Login to target cluster, check spot instances are created")
+		exutil.By("Login to target cluster, check spot instances are created")
 		e2e.Logf("Extracting kubeconfig ...")
 		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
 		kubeconfig := tmpDir + "/kubeconfig"
@@ -234,7 +234,7 @@ spec:
 		}
 		o.Eventually(waitUntilSpotVMCreated).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
 
-		g.By("Hibernating the cluster and check ClusterDeployment Hibernating condition")
+		exutil.By("Hibernating the cluster and check ClusterDeployment Hibernating condition")
 		// the MachinePool can not be deleted when the ClusterDeployment is in Hibernating state
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", `--patch={"spec":{"powerState": "Running"}}`).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", `--patch={"spec":{"powerState": "Hibernating"}}`).Execute()
@@ -247,7 +247,7 @@ spec:
 		waitForHibernating := checkCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "Hibernating", expectKeyValue, "wait for cluster hibernating")
 		o.Eventually(waitForHibernating).WithTimeout(10 * time.Minute).WithPolling(15 * time.Second).Should(o.BeTrue())
 
-		g.By("Check spot instances are terminated")
+		exutil.By("Check spot instances are terminated")
 		waitUntilSpotVMTerminated := func() bool {
 			describeInstancesOutput, err = ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
 				Filters: []types.Filter{
@@ -282,7 +282,7 @@ spec:
 		}
 		o.Eventually(waitUntilSpotVMTerminated).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
 
-		g.By("Start cluster again, check ClusterDeployment back to running again")
+		exutil.By("Start cluster again, check ClusterDeployment back to running again")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", `--patch={"spec":{"powerState": "Running"}}`).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		expectKeyValue2 := map[string]string{
@@ -296,7 +296,7 @@ spec:
 		e2e.Logf("Making sure the cluster is in the \"Running\" powerstate ...")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.powerState}"}).check(oc)
 
-		g.By("Login to target cluster, check the new spot instances are created")
+		exutil.By("Login to target cluster, check the new spot instances are created")
 		var newSpotMachineName, newSpotMachineName2 string
 		checkSpotMachineName2 := func() bool {
 			stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfig, "machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.name}").Outputs()
@@ -325,7 +325,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -334,7 +334,7 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -353,7 +353,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check ownerReference for secrets kubeconfig and password, before installed, it is only owned by ClusterProvision.")
+		exutil.By("Check ownerReference for secrets kubeconfig and password, before installed, it is only owned by ClusterProvision.")
 		ClusterprovisionName := getClusterprovisionName(oc, cdName, oc.Namespace())
 		kubeconfigName := ClusterprovisionName + "-admin-kubeconfig"
 		passwordName := ClusterprovisionName + "-admin-password"
@@ -362,26 +362,26 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", ok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", nok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 
-		g.By("Check ClusterDeployment is installed.")
+		exutil.By("Check ClusterDeployment is installed.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("Check ownership again, it will be owned by both ClusterProvision and ClusterDeployment.")
+		exutil.By("Check ownership again, it will be owned by both ClusterProvision and ClusterDeployment.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", ok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", ok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", ok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", ok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 
-		g.By("Delete ClusterProvision.")
+		exutil.By("Delete ClusterProvision.")
 		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterProvision", ClusterprovisionName, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Check kubeconfig and password secrets are still exist and owned by clusterdeployment.")
+		exutil.By("Check kubeconfig and password secrets are still exist and owned by clusterdeployment.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", nok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", ok, DefaultTimeout, []string{"secret", kubeconfigName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterProvision", nok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterDeployment", ok, DefaultTimeout, []string{"secret", passwordName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences}"}).check(oc)
 
-		g.By("Delete clusterdeployment, kubeconfig and password secrets will be deleted.")
+		exutil.By("Delete clusterdeployment, kubeconfig and password secrets will be deleted.")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, kubeconfigName, nok, DefaultTimeout, []string{"secret", "-n", oc.Namespace()}).check(oc)
@@ -395,7 +395,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -405,10 +405,10 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Create Route53-aws-creds in hive namespace")
+		exutil.By("Create Route53-aws-creds in hive namespace")
 		createRoute53AWSCreds(oc, oc.Namespace())
 
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "true",
 			name:                 cdName,
@@ -428,14 +428,14 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check Aws ClusterDeployment installed flag is true")
+		exutil.By("Check Aws ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, FakeClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("Edit secret aws-creds and change the data to an invalid value")
+		exutil.By("Edit secret aws-creds and change the data to an invalid value")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "aws-creds", "--type", `merge`, `--patch={"data": {"aws_access_key_id": "MTIzNDU2"}}`, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Delete the cd, and then hive will hit DeprovisionLaunchError=AuthenticationFailed, and stuck in deprovision process")
+		exutil.By("Delete the cd, and then hive will hit DeprovisionLaunchError=AuthenticationFailed, and stuck in deprovision process")
 		cmd, _, _, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName, "-n", oc.Namespace()).Background()
 		defer cmd.Process.Kill()
 		waitForDeprovisionLaunchError := func() bool {
@@ -457,12 +457,12 @@ spec:
 		}
 		o.Eventually(waitForDeprovisionLaunchError).WithTimeout(ClusterUninstallTimeout * time.Second).WithPolling(30 * time.Second).Should(o.BeTrue())
 
-		g.By("Set cd.spec.preserveOnDelete = true on cd")
+		exutil.By("Set cd.spec.preserveOnDelete = true on cd")
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "--type", "json", "-p", "[{\"op\": \"remove\", \"path\": \"/spec/preserveOnDelete\"}]").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "--type", `merge`, `--patch={"spec": {"preserveOnDelete": true}}`, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Check in this situation, hive would be able to remove dnszone and CD CR directly")
+		exutil.By("Check in this situation, hive would be able to remove dnszone and CD CR directly")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
 	})
@@ -474,7 +474,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -483,7 +483,7 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -561,22 +561,22 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
-		g.By("Check if ClusterImageSet was created successfully")
+		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy AWS platform credentials...")
+		exutil.By("Copy AWS platform credentials...")
 		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create ClusterPool...")
+		exutil.By("Create ClusterPool...")
 		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
 		pool := clusterPool{
 			name:           poolName,
@@ -597,9 +597,9 @@ spec:
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
-		g.By("Check if ClusterPool created successfully")
+		exutil.By("Check if ClusterPool created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterPool", "-n", oc.Namespace()}).check(oc)
-		g.By("Check hive will propagate the annotation to all created ClusterDeployment")
+		exutil.By("Check hive will propagate the annotation to all created ClusterDeployment")
 		cdName, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", "-A", "-o=jsonpath={.items[0].metadata.name}").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cdNameSpace := cdName
@@ -607,7 +607,7 @@ spec:
 		//runningCount is 0 so pool status should be standby: 1, ready: 0
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, FakeClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
-		g.By("Create ClusterClaim...")
+		exutil.By("Create ClusterClaim...")
 		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
 		claimName := poolName + "-claim"
 		claim := clusterClaim{
@@ -618,9 +618,9 @@ spec:
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName})
 		claim.create(oc)
-		g.By("Check if ClusterClaim created successfully")
+		exutil.By("Check if ClusterClaim created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
-		g.By("Check claiming a fake cluster works well")
+		exutil.By("Check claiming a fake cluster works well")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
 		waitForClusterClaimRunning := func() bool {
 			condition := getCondition(oc, "ClusterClaim", claimName, oc.Namespace(), "ClusterRunning")
@@ -641,7 +641,7 @@ spec:
 		}
 		o.Eventually(waitForClusterClaimRunning).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
 
-		g.By("Check clusterMetadata field of fake cluster, all fields have values")
+		exutil.By("Check clusterMetadata field of fake cluster, all fields have values")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.spec.clusterMetadata.adminKubeconfigSecretRef.name}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.spec.clusterMetadata.adminPasswordSecretRef.name}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.spec.clusterMetadata.clusterID}"}).check(oc)
@@ -655,7 +655,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -664,7 +664,7 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -683,7 +683,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Create SyncSet for resource apply......")
+		exutil.By("Create SyncSet for resource apply......")
 		syncSetName := testCaseID + "-syncset1"
 		configMapName := testCaseID + "-configmap1"
 		configMapNamespace := testCaseID + "-configmap1-ns"
@@ -761,7 +761,7 @@ spec:
 		}
 		o.Eventually(waitForSyncsetFail).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
 
-		g.By("OCP-29855:Hive treates bad syncsets as controller warnings instead of controller errors")
+		exutil.By("OCP-29855:Hive treates bad syncsets as controller warnings instead of controller errors")
 		waitForClustersyncFail1 := func() bool {
 			condition := getCondition(oc, "clustersync", cdName, oc.Namespace(), "Failed")
 			if status, ok := condition["status"]; !ok || status != "True" {
@@ -795,7 +795,7 @@ spec:
 		o.Eventually(checkclustersyncLog1).WithTimeout(600 * time.Second).WithPolling(60 * time.Second).Should(o.BeTrue())
 		cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetPatchName})
 
-		g.By("Extracting kubeconfig ...")
+		exutil.By("Extracting kubeconfig ...")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
 		defer os.RemoveAll(tmpDir)
 		err := os.MkdirAll(tmpDir, 0777)
@@ -876,7 +876,7 @@ spec:
 			   Con: cannot think of any
 			Here we are using option 3).
 		*/
-		g.By("Getting a Let's Encrypt certificate for " + apiEndpoint + " & " + appsEndpointGlobbing)
+		exutil.By("Getting a Let's Encrypt certificate for " + apiEndpoint + " & " + appsEndpointGlobbing)
 		// Get Lego user and config
 		privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -914,7 +914,7 @@ spec:
 		certificates, err := client.Certificate.Obtain(request)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Writing certificates & private key to files...")
+		exutil.By("Writing certificates & private key to files...")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
 		defer os.RemoveAll(tmpDir)
 		err = os.MkdirAll(tmpDir, 0777)
@@ -932,19 +932,19 @@ spec:
 		err = os.WriteFile(privateKeyFilePath, certificates.PrivateKey, 0777)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Creating serving-cert Secret which will be referenced in CD's manifest...")
+		exutil.By("Creating serving-cert Secret which will be referenced in CD's manifest...")
 		servingCertificateSecretName := "serving-cert"
 		defer oc.AsAdmin().Run("delete").Args("secret", servingCertificateSecretName).Execute()
 		err = oc.AsAdmin().Run("create").Args("secret", "tls", servingCertificateSecretName, "--cert="+fullChainFilePath, "--key="+privateKeyFilePath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Creating ca-cert Secret which will be referenced in HiveConfig/hive...")
+		exutil.By("Creating ca-cert Secret which will be referenced in HiveConfig/hive...")
 		caCertificateSecretName := "ca-cert"
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", caCertificateSecretName, "-n=hive").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", caCertificateSecretName, "--from-file=ca.crt="+chainFilePath, "-n=hive").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Referencing ca-cert Secret in HiveConfig/hive...")
+		exutil.By("Referencing ca-cert Secret in HiveConfig/hive...")
 		patch := `
 spec:
   additionalCertificateAuthoritiesSecretRef:
@@ -953,7 +953,7 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Creating ClusterDeployment...")
+		exutil.By("Creating ClusterDeployment...")
 		installConfigSecretName := cdName + "-install-config"
 		installConfigSecret := installConfig{
 			name1:      installConfigSecretName,
@@ -981,7 +981,7 @@ spec:
 		defer cleanCD(oc, cd.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cd.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cd)
 
-		g.By("Patching CD s.t. it references the serving certificate Secret...")
+		exutil.By("Patching CD s.t. it references the serving certificate Secret...")
 		patch = fmt.Sprintf(`
 spec:
   certificateBundles:
@@ -998,10 +998,10 @@ spec:
 		err = oc.AsAdmin().Run("patch").Args("clusterdeployment", cdName, "--type=merge", "-p", patch).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Waiting for the CD to be installed...")
+		exutil.By("Waiting for the CD to be installed...")
 		newCheck("expect", "get", asAdmin, requireNS, compare, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("Making sure the target cluster is using the right certificate...")
+		exutil.By("Making sure the target cluster is using the right certificate...")
 		endpointCertIsGood := func(endpoint string) bool {
 			e2e.Logf("Checking certificates for endpoint %v ...", endpoint)
 			conn, err := tls.Dial("tcp", endpoint, &tls.Config{InsecureSkipVerify: true})
@@ -1039,13 +1039,13 @@ spec:
 		// The kubeconfig obtained (for ex. Secret/fxie-hive-1-0-wlqg2-admin-kubeconfig.data["kubeconfig"]) has the
 		// CA certs integrated, so we should be able to communicate to the target cluster without the following error:
 		// "x509: certificate signed by unknown authority".
-		g.By("Communicating to the target cluster using the kubeconfig with Let's Encrypt's CA...")
+		exutil.By("Communicating to the target cluster using the kubeconfig with Let's Encrypt's CA...")
 		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
 		kubeconfigPath := tmpDir + "/kubeconfig"
 		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--kubeconfig", kubeconfigPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("OCP-64550: Hive should be able to delete Secret/hive-additional-ca")
+		exutil.By("OCP-64550: Hive should be able to delete Secret/hive-additional-ca")
 		// Make sure the hive-additional-CA Secret still exists at this moment
 		stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Secret", hiveAdditionalCASecret, "-n", HiveNamespace).Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1075,7 +1075,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Preparing an incomplete pull-secret ...")
+		exutil.By("Preparing an incomplete pull-secret ...")
 		var pullSecretMapIncomplete map[string]map[string]map[string]string
 		stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to", "-").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1083,7 +1083,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		delete(pullSecretMapIncomplete["auths"], "registry.ci.openshift.org")
 
-		g.By("Creating an incomplete pull-secret in Hive's namespace and the temporary project's namespace respectively ...")
+		exutil.By("Creating an incomplete pull-secret in Hive's namespace and the temporary project's namespace respectively ...")
 		pullSecretBsIncomplete, _ := json.Marshal(pullSecretMapIncomplete)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", PullSecret, "-n", HiveNamespace).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", PullSecret, "--from-literal=.dockerconfigjson="+string(pullSecretBsIncomplete), "-n", HiveNamespace).Execute()
@@ -1092,7 +1092,7 @@ spec:
 		err = oc.Run("create").Args("secret", "generic", PullSecret, "--from-literal=.dockerconfigjson="+string(pullSecretBsIncomplete)).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Patching HiveConfig so that it refers to an incomplete global pull-secret ...")
+		exutil.By("Patching HiveConfig so that it refers to an incomplete global pull-secret ...")
 		patch := `
 spec:
   globalPullSecretRef:
@@ -1101,7 +1101,7 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Creating ClusterImageSet ...")
+		exutil.By("Creating ClusterImageSet ...")
 		clusterImageSetName := cdName + "-imageset"
 		imageSet := clusterImageSet{
 			name:         clusterImageSetName,
@@ -1111,7 +1111,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
 		imageSet.create(oc)
 
-		g.By("Creating install-config Secret ...")
+		exutil.By("Creating install-config Secret ...")
 		installConfigSecretName := cdName + "-install-config"
 		installConfigSecret := installConfig{
 			name1:      installConfigSecretName,
@@ -1124,10 +1124,10 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Copying AWS credentials...")
+		exutil.By("Copying AWS credentials...")
 		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Creating ClusterDeployment with an incomplete pull-secret ...")
+		exutil.By("Creating ClusterDeployment with an incomplete pull-secret ...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -1146,7 +1146,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
 
-		g.By("Waiting for the cluster installation to fail ...")
+		exutil.By("Waiting for the cluster installation to fail ...")
 		waitForAPIWaitFailure := func() bool {
 			condition := getCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "ProvisionFailed")
 			if status, ok := condition["status"]; !ok || status != "True" {
@@ -1174,7 +1174,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Creating install-config Secret...")
+		exutil.By("Creating install-config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -1183,7 +1183,7 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("Creating ClusterDeployment...")
+		exutil.By("Creating ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -1202,11 +1202,11 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Making sure the cluster is installed and in the \"Running\" powerstate ...")
+		exutil.By("Making sure the cluster is installed and in the \"Running\" powerstate ...")
 		newCheck("expect", "get", asAdmin, false, compare, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
 		newCheck("expect", "get", asAdmin, false, compare, "Running", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.status.powerState}"}).check(oc)
 
-		g.By("Extracting kubeconfig ...")
+		exutil.By("Extracting kubeconfig ...")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
 		err := os.MkdirAll(tmpDir, 0777)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1214,7 +1214,7 @@ spec:
 		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
 		kubeconfig := tmpDir + "/kubeconfig"
 
-		g.By("Comparing conditions obtained from ClusterOperator and ClusterState ...")
+		exutil.By("Comparing conditions obtained from ClusterOperator and ClusterState ...")
 		var clusterStateConditions, clusterOperatorConditions map[string][]map[string]string
 		clusterStateJSONPath := `{"{"}{range .status.clusterOperators[:-1]}"{.name}":{.conditions},{end}{range .status.clusterOperators[-1]}"{.name}":{.conditions}{end}{"}"}`
 		clusterOperatorJSONPath := `{"{"}{range .items[:-1]}"{.metadata.name}":{.status.conditions},{end}{range .items[-1]}"{.metadata.name}":{.status.conditions}{end}{"}"}`
@@ -1260,22 +1260,22 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
-		g.By("Check if ClusterImageSet was created successfully")
+		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy AWS platform credentials...")
+		exutil.By("Copy AWS platform credentials...")
 		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create ClusterPool...")
+		exutil.By("Create ClusterPool...")
 		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
 		pool := clusterPool{
 			name:           poolName,
@@ -1296,11 +1296,11 @@ spec:
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
-		g.By("Check if ClusterPool created successfully")
+		exutil.By("Check if ClusterPool created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterPool", "-n", oc.Namespace()}).check(oc)
 
-		g.By("OCP-42251 - Initialize hive CR conditions")
-		g.By("OCP-42251 Step 1: Check all conditions type of ClusterPool")
+		exutil.By("OCP-42251 - Initialize hive CR conditions")
+		exutil.By("OCP-42251 Step 1: Check all conditions type of ClusterPool")
 		allClusterPoolConditionTypes := []string{"MissingDependencies", "CapacityAvailable", "AllClustersCurrent", "InventoryValid", "DeletionPossible"}
 		sort.Strings(allClusterPoolConditionTypes)
 		checkClusterPoolConditionType := func() bool {
@@ -1315,7 +1315,7 @@ spec:
 
 		e2e.Logf("Check if ClusterDeployment is created")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterDeployment", "-A"}).check(oc)
-		g.By("OCP-42251 Step 2: Check all conditions type of ClusterDeployment")
+		exutil.By("OCP-42251 Step 2: Check all conditions type of ClusterDeployment")
 		cdName, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", "-A", "-o=jsonpath={.items[0].metadata.name}").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cdNameSpace := cdName
@@ -1333,7 +1333,7 @@ spec:
 		}
 		o.Eventually(checkClusterDeploymentConditionType).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
 
-		g.By("OCP-42251 Step 3: Check all conditions type of MachinePool")
+		exutil.By("OCP-42251 Step 3: Check all conditions type of MachinePool")
 		machinepoolName := cdName + "-worker"
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, machinepoolName, ok, DefaultTimeout, []string{"Machinepool", "-n", cdNameSpace}).check(oc)
 		allMachinepoolConditionTypes := []string{"NotEnoughReplicas", "NoMachinePoolNameLeasesAvailable", "InvalidSubnets", "UnsupportedConfiguration"}
@@ -1348,11 +1348,11 @@ spec:
 		}
 		o.Eventually(checkMachinePoolConditionType).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
 
-		g.By("Check if ClusterPool become ready")
+		exutil.By("Check if ClusterPool become ready")
 		//runningCount is 0 so pool status should be standby: 1, ready: 0
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
-		g.By("Create ClusterClaim...")
+		exutil.By("Create ClusterClaim...")
 		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
 		claimName := poolName + "-claim"
 		claim := clusterClaim{
@@ -1363,10 +1363,10 @@ spec:
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName})
 		claim.create(oc)
-		g.By("Check if ClusterClaim created successfully")
+		exutil.By("Check if ClusterClaim created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
 
-		g.By("OCP-42251 Step 4: Check all conditions type of ClusterClaim")
+		exutil.By("OCP-42251 Step 4: Check all conditions type of ClusterClaim")
 		allClusterClaimConditionTypes := []string{"Pending", "ClusterRunning"}
 		sort.Strings(allClusterClaimConditionTypes)
 		checkClusterClaimConditionType := func() bool {
@@ -1379,7 +1379,7 @@ spec:
 		}
 		o.Eventually(checkClusterClaimConditionType).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
 
-		g.By("Check if ClusterClaim become running")
+		exutil.By("Check if ClusterClaim become running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
 	})
 
@@ -1391,7 +1391,7 @@ spec:
 		cdName := "cd-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Creating ClusterDeployment ...")
+		exutil.By("Creating ClusterDeployment ...")
 		installConfig := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -1443,7 +1443,7 @@ spec:
 
 		// Make sure resources are created with the target tag
 		targetTag := "kubernetes.io/cluster/" + infraID
-		g.By("Checking that resources are created with the target tag " + targetTag)
+		exutil.By("Checking that resources are created with the target tag " + targetTag)
 		describeTagsOutput, err := ec2Client.DescribeTags(context.Background(), &ec2.DescribeTagsInput{
 			Filters: []types.Filter{
 				{
@@ -1456,7 +1456,7 @@ spec:
 		o.Expect(len(describeTagsOutput.Tags)).NotTo(o.BeZero())
 
 		// Make sure the IAM users are tagged
-		g.By("Looking for IAM users prefixed with infraID ...")
+		exutil.By("Looking for IAM users prefixed with infraID ...")
 		pagination := aws.Int32(50)
 		userFound, username := false, ""
 		listUsersOutput := &iam.ListUsersOutput{}
@@ -1482,7 +1482,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(userFound).To(o.BeTrue())
 
-		g.By("Looking for tags on user " + username)
+		exutil.By("Looking for tags on user " + username)
 		listUserTagsOutput, err := iamClient.ListUserTags(context.Background(), &iam.ListUserTagsInput{
 			UserName: aws.String(username),
 		})
@@ -1498,7 +1498,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Selecting a custom OCP version to install ...")
+		exutil.By("Selecting a custom OCP version to install ...")
 		ocpVersion := extractRelfromImg(testOCPImage)
 		xyzVersion := strings.Split(ocpVersion, ".")
 		majorVersion := xyzVersion[0]
@@ -1511,7 +1511,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Will install OCP version " + customOCPImage)
 
-		g.By("config Install-Config Secret...")
+		exutil.By("config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -1520,7 +1520,7 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("config ClusterDeployment...")
+		exutil.By("config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -1538,9 +1538,9 @@ spec:
 		}
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, customOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
-		g.By("hive.go namespace..." + oc.Namespace())
+		exutil.By("hive.go namespace..." + oc.Namespace())
 
-		g.By("Create worker and infra MachinePool ...")
+		exutil.By("Create worker and infra MachinePool ...")
 		workermachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-worker-aws.yaml")
 		inframachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-infra-aws.yaml")
 		workermp := machinepool{
@@ -1561,7 +1561,7 @@ spec:
 		workermp.create(oc)
 		inframp.create(oc)
 
-		g.By("Check if ClusterDeployment created successfully and become Provisioned")
+		exutil.By("Check if ClusterDeployment created successfully and become Provisioned")
 		e2e.Logf("test OCP-25310")
 		//newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
@@ -1579,7 +1579,7 @@ spec:
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, ocpVersion, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installVersion}"}).check(oc)
 		}
 
-		g.By("OCP-23165:Hive supports remote Machine Set Management for AWS")
+		exutil.By("OCP-23165:Hive supports remote Machine Set Management for AWS")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
 		err = os.MkdirAll(tmpDir, 0777)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1641,7 +1641,7 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
@@ -1650,13 +1650,13 @@ spec:
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy AWS platform credentials...")
+		exutil.By("Copy AWS platform credentials...")
 		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create ClusterPool...")
+		exutil.By("Create ClusterPool...")
 		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
 		pool := clusterPool{
 			name:           poolName,
@@ -1695,7 +1695,7 @@ spec:
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "10m", ok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.spec.hibernateAfter}"}).check(oc)
 		}
 
-		g.By("OCP-44945, step 5: Patch .spec.runningCount=1...")
+		exutil.By("OCP-44945, step 5: Patch .spec.runningCount=1...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"runningCount":1}}`}).check(oc)
 
 		e2e.Logf("OCP-44945, step 6: Check the unclaimed clusters in the pool, CD whose creationTimestamp is the oldest becomes Running")
@@ -1712,7 +1712,7 @@ spec:
 		e2e.Logf("The CD with the oldest creationTimestamp is %s", oldestCD)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD}).check(oc)
 
-		g.By("OCP-44945, step 7: Patch pool.spec.runningCount=3...")
+		exutil.By("OCP-44945, step 7: Patch pool.spec.runningCount=3...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"runningCount":3}}`}).check(oc)
 
 		e2e.Logf("OCP-44945, step 7: check runningCount=3 but pool size is still 2")
@@ -1724,7 +1724,7 @@ spec:
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i]}).check(oc)
 		}
 
-		g.By("OCP-44945, step 8: Claim a CD from the pool...")
+		exutil.By("OCP-44945, step 8: Claim a CD from the pool...")
 		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
 		claimName := poolName + "-claim"
 		claim := clusterClaim{
@@ -1746,7 +1746,7 @@ spec:
 		e2e.Logf("OCP-37528, step 6: Check the claimed CD is in Hibernating status due to hibernateAfter=10m")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout+5*DefaultTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
 
-		g.By("OCP-37527, step 4: patch the CD to Running...")
+		exutil.By("OCP-37527, step 4: patch the CD to Running...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
 		e2e.Logf("Wait for CD to be Running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
@@ -1764,7 +1764,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -1773,7 +1773,7 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -1792,7 +1792,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Create SyncSet for resource apply......")
+		exutil.By("Create SyncSet for resource apply......")
 		syncSetName := testCaseID + "-syncset1"
 		configMapName := testCaseID + "-configmap1"
 		configMapNamespace := testCaseID + "-" + getRandomString() + "-hive1"
@@ -1823,7 +1823,7 @@ spec:
 		e2e.Logf("Check if syncSet is created successfully.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName, ok, DefaultTimeout, []string{"SyncSet", syncSetName, "-n", oc.Namespace()}).check(oc)
 
-		g.By("Test Syncset Resource part......")
+		exutil.By("Test Syncset Resource part......")
 		e2e.Logf("OCP-34719, step 3: Check if clustersync and clustersynclease are created successfully.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace()}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterSyncLease", cdName, "-n", oc.Namespace()}).check(oc)
@@ -1911,7 +1911,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, errorMessage, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Failed")].message}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Failed")].status}`}).check(oc)
 
-		g.By("OCP-23876: Test Syncset Patch part......")
+		exutil.By("OCP-23876: Test Syncset Patch part......")
 		e2e.Logf("Create a test ConfigMap CR on target cluster.")
 		configMapNameInRemote := testCaseID + "-patch-test"
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("--kubeconfig="+kubeconfig, "ConfigMap", configMapNameInRemote, "-n", configMapNamespace).Execute()
@@ -1969,7 +1969,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "json", ok, DefaultTimeout, []string{"SyncSet", syncSetPatchName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.spec.patches[?(@.name==\"%s\")].patchType}", configMapNameInRemote)}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "baz-json", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapNameInRemote, "-n", configMapNamespace, "-o=jsonpath={.data.foo}"}).check(oc)
 
-		g.By("OCP-25334: Test Syncset SecretReference part......")
+		exutil.By("OCP-25334: Test Syncset SecretReference part......")
 		syncSetSecretName := testCaseID + "-syncset-secret"
 		syncSecretTemp := filepath.Join(testDataDir, "syncset-secret.yaml")
 		sourceName := testCaseID + "-secret"
@@ -2010,17 +2010,17 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
 		oc.SetupProject()
 		e2e.Logf("Don't copy AWS platform credentials to make install failed.")
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create Install-Config Secret...")
+		exutil.By("Create Install-Config Secret...")
 		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
 		installConfigSecretName := cdName + "-install-config"
 		installConfigSecret := installConfig{
@@ -2034,7 +2034,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Create ClusterDeployment with installAttemptsLimit=0...")
+		exutil.By("Create ClusterDeployment with installAttemptsLimit=0...")
 		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
 		clusterLimit0 := clusterDeployment{
 			fake:                 "false",
@@ -2055,7 +2055,7 @@ spec:
 		clusterLimit0.create(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "InstallAttemptsLimitReached", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"ProvisionStopped\")].reason}"}).check(oc)
 		o.Expect(checkResourceNumber(oc, cdName, []string{"pods", "-A"})).To(o.Equal(0))
-		g.By("Delete the ClusterDeployment and recreate it with installAttemptsLimit=1...")
+		exutil.By("Delete the ClusterDeployment and recreate it with installAttemptsLimit=1...")
 		cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		clusterLimit1 := clusterDeployment{
 			fake:                 "false",
@@ -2085,7 +2085,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -2094,7 +2094,7 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2113,10 +2113,10 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check if ClusterDeployment created successfully")
+		exutil.By("Check if ClusterDeployment created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("test OCP-23308: Hive install log does not contain admin credentials, but contains REDACTED LINE OF OUTPUT")
+		exutil.By("test OCP-23308: Hive install log does not contain admin credentials, but contains REDACTED LINE OF OUTPUT")
 		provisionPodName := getProvisionPodNames(oc, cdName, oc.Namespace())[0]
 		cmd, stdout, err := oc.Run("logs").Args("-f", provisionPodName, "-c", "hive").BackgroundRC()
 		defer cmd.Process.Kill()
@@ -2130,14 +2130,14 @@ spec:
 		targetFound := assertLogs(f, targetLines, nil, 3*time.Minute)
 		o.Expect(targetFound).To(o.BeTrue())
 
-		g.By("test OCP-32223 check install")
+		exutil.By("test OCP-32223 check install")
 		provisionName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.provisionRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(provisionName).NotTo(o.BeEmpty())
 		e2e.Logf("test OCP-32223 install")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "true", ok, DefaultTimeout, []string{"job", provisionName + "-provision", "-n", oc.Namespace(), "-o=jsonpath={.metadata.labels.hive\\.openshift\\.io/install}"}).check(oc)
 
-		g.By("test OCP-35193 check uninstall")
+		exutil.By("test OCP-35193 check uninstall")
 		e2e.Logf("get aws_access_key_id by secretName")
 		awsAccessKeyID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "aws-creds", "-n", oc.Namespace(), "-o=jsonpath={.data.aws_access_key_id}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2145,7 +2145,7 @@ spec:
 		e2e.Logf("Modify aws creds to invalid")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "aws-creds", "-n", oc.Namespace(), "-p", `{"data":{"aws_access_key_id":null}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("delete ClusterDeployment")
+		exutil.By("delete ClusterDeployment")
 		_, _, _, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName, "-n", oc.Namespace()).Background()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"clusterdeprovision", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="AuthenticationFailure")].status}`}).check(oc)
@@ -2159,7 +2159,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "AuthenticationSucceeded", ok, DefaultTimeout, []string{"clusterdeprovision", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="AuthenticationFailure")].reason}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DeprovisionLaunchError")].status}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "AuthenticationSucceeded", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DeprovisionLaunchError")].reason}`}).check(oc)
-		g.By("test OCP-32223 check uninstall")
+		exutil.By("test OCP-32223 check uninstall")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "true", ok, DefaultTimeout, []string{"job", cdName + "-uninstall", "-n", oc.Namespace(), "-o=jsonpath={.metadata.labels.hive\\.openshift\\.io/uninstall}"}).check(oc)
 	})
 
@@ -2171,7 +2171,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -2180,7 +2180,7 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2199,13 +2199,13 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check AWS ClusterDeployment installed flag is true")
+		exutil.By("Check AWS ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("Check CD has Hibernating condition")
+		exutil.By("Check CD has Hibernating condition")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
 
-		g.By("patch the CD to Hibernating...")
+		exutil.By("patch the CD to Hibernating...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Hibernating"}}`}).check(oc)
 		e2e.Logf("Wait for CD to be Hibernating")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
@@ -2214,7 +2214,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
 
-		g.By("patch the CD to Running...")
+		exutil.By("patch the CD to Running...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
 		e2e.Logf("Wait for CD to be Running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
@@ -2231,7 +2231,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret with iops=1...")
+		exutil.By("Config Install-Config Secret with iops=1...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -2241,7 +2241,7 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2260,7 +2260,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Create worker and infra MachinePool with IOPS optional ...")
+		exutil.By("Create worker and infra MachinePool with IOPS optional ...")
 		workermachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-worker-aws.yaml")
 		workermp := machinepool{
 			namespace:   oc.Namespace(),
@@ -2283,7 +2283,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"})
 		inframp.create(oc)
 
-		g.By("Check if ClusterDeployment created successfully and become Provisioned")
+		exutil.By("Check if ClusterDeployment created successfully and become Provisioned")
 		//newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		e2e.Logf("Check worker machinepool .spec.platform.aws.rootVolume.iops = 2")
@@ -2291,7 +2291,7 @@ spec:
 		e2e.Logf("Check infra machinepool .spec.platform.aws.rootVolume.iops = 1")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.spec.platform.aws.rootVolume.iops}"}).check(oc)
 
-		g.By("OCP-23677: Allow modification of machine pool labels and taints")
+		exutil.By("OCP-23677: Allow modification of machine pool labels and taints")
 		e2e.Logf("Patching machinepool ...")
 		patchYaml := `
 spec:
@@ -2331,7 +2331,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -2341,10 +2341,10 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Create Route53-aws-creds in hive namespace")
+		exutil.By("Create Route53-aws-creds in hive namespace")
 		createRoute53AWSCreds(oc, oc.Namespace())
 
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2364,29 +2364,29 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check Aws ClusterDeployment installed flag is true")
+		exutil.By("Check Aws ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("OCP-33045 - Prevent ClusterDeployment deletion until managed DNSZone is gone")
-		g.By("Delete route53-aws-creds in hive namespace")
+		exutil.By("OCP-33045 - Prevent ClusterDeployment deletion until managed DNSZone is gone")
+		exutil.By("Delete route53-aws-creds in hive namespace")
 		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "route53-aws-creds", "-n", HiveNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Try to delete cd")
+		exutil.By("Try to delete cd")
 		cmd, _, _, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("cd", cdName, "-n", oc.Namespace()).Background()
 		defer cmd.Process.Kill()
 
-		g.By("Check the deprovision pod is completed")
+		exutil.By("Check the deprovision pod is completed")
 		DeprovisionPodName := getDeprovisionPodName(oc, cdName, oc.Namespace())
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Completed", ok, ClusterUninstallTimeout, []string{"pod", DeprovisionPodName, "-n", oc.Namespace()}).check(oc)
-		g.By("Check the cd is not removed")
+		exutil.By("Check the cd is not removed")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace()}).check(oc)
-		g.By("Check the dnszone is not removed")
+		exutil.By("Check the dnszone is not removed")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
 
-		g.By("Create route53-aws-creds in hive namespace")
+		exutil.By("Create route53-aws-creds in hive namespace")
 		createRoute53AWSCreds(oc, oc.Namespace())
 
-		g.By("Wait until dnszone controller next reconcile, verify dnszone and cd are removed.")
+		exutil.By("Wait until dnszone controller next reconcile, verify dnszone and cd are removed.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
 	})
@@ -2398,10 +2398,10 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Remove Route53-aws-creds in hive namespace if exists to make DNSNotReady")
+		exutil.By("Remove Route53-aws-creds in hive namespace if exists to make DNSNotReady")
 		cleanupObjects(oc, objectTableRef{"secret", HiveNamespace, "route53-aws-creds"})
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -2411,7 +2411,7 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2431,7 +2431,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check DNSNotReady, Provisioned and ProvisionStopped condiitons")
+		exutil.By("Check DNSNotReady, Provisioned and ProvisionStopped condiitons")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].status}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "DNS Zone not yet available", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].message}`}).check(oc)
 
@@ -2442,7 +2442,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "DNSNotReadyTimedOut", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].reason}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="ProvisionStopped")].status}`}).check(oc)
 
-		g.By("Check DNSNotReadyTimeOut beacuse the default timeout is 10 min")
+		exutil.By("Check DNSNotReadyTimeOut beacuse the default timeout is 10 min")
 		creationTimestamp, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.creationTimestamp}"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("get cluster create timestamp,creationTimestampp is %v", creationTimestamp)
@@ -2462,7 +2462,7 @@ spec:
 		testCaseID := "23676"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 
-		g.By("Creating Install-Config Secret...")
+		exutil.By("Creating Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -2472,7 +2472,7 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Creating ClusterDeployment...")
+		exutil.By("Creating ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2491,7 +2491,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Getting infraID from CD...")
+		exutil.By("Getting infraID from CD...")
 		var infraID string
 		var err error
 		getInfraIDFromCD := func() bool {
@@ -2505,7 +2505,7 @@ spec:
 		cfg := getDefaultAWSConfig(oc, AWSRegion)
 		ec2Client := ec2.NewFromConfig(cfg)
 
-		g.By("Waiting until the master VMs are created...")
+		exutil.By("Waiting until the master VMs are created...")
 		var describeInstancesOutput *ec2.DescribeInstancesOutput
 		waitUntilMasterVMCreated := func() bool {
 			describeInstancesOutput, err = ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
@@ -2525,7 +2525,7 @@ spec:
 		o.Eventually(waitUntilMasterVMCreated).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
 
 		// Terminate all master VMs so the Kubernetes API is never up. Provision may fail at earlier stages though.
-		g.By("Terminating the master VMs...")
+		exutil.By("Terminating the master VMs...")
 		var instancesToTerminate []string
 		for _, reservation := range describeInstancesOutput.Reservations {
 			instancesToTerminate = append(instancesToTerminate, *reservation.Instances[0].InstanceId)
@@ -2537,11 +2537,11 @@ spec:
 		e2e.Logf("Terminating master VMs %v", instancesToTerminate)
 
 		// The stage at which provision fails is not guaranteed. Here we just make sure provision actually fails.
-		g.By("Waiting for the first provision Pod to fail...")
+		exutil.By("Waiting for the first provision Pod to fail...")
 		provisionPod1 := getProvisionPodNames(oc, cdName, oc.Namespace())[0]
 		newCheck("expect", "get", asAdmin, requireNS, compare, "Failed", ok, 1800, []string{"pod", provisionPod1, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("Waiting for the second provision Pod to be created...")
+		exutil.By("Waiting for the second provision Pod to be created...")
 		var provisionPod2 string
 		waitForProvisionPod2 := func() bool {
 			provisionPodNames := getProvisionPodNames(oc, cdName, oc.Namespace())
@@ -2553,7 +2553,7 @@ spec:
 		}
 		o.Eventually(waitForProvisionPod2).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
 
-		g.By(fmt.Sprintf("Making sure provision Pod 2 (%s) cleans up the resources created in the previous attempt...", provisionPod2))
+		exutil.By(fmt.Sprintf("Making sure provision Pod 2 (%s) cleans up the resources created in the previous attempt...", provisionPod2))
 		cmd, stdout, err := oc.Run("logs").Args("-f", provisionPod2, "-c", "hive").BackgroundRC()
 		defer cmd.Process.Kill()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2579,7 +2579,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Creating ClusterImageSet ...")
+		exutil.By("Creating ClusterImageSet ...")
 		clusterImageSetName := cdName + "-imageset"
 		imageSet := clusterImageSet{
 			name:         clusterImageSetName,
@@ -2589,7 +2589,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
 		imageSet.create(oc)
 
-		g.By("Creating install-config Secret ...")
+		exutil.By("Creating install-config Secret ...")
 		installConfigSecretName := cdName + "-install-config"
 		installConfigSecret := installConfig{
 			name1:      installConfigSecretName,
@@ -2602,13 +2602,13 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Creating pull-secret ...")
+		exutil.By("Creating pull-secret ...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Copying AWS credentials...")
+		exutil.By("Copying AWS credentials...")
 		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Creating ClusterDeployment with a 64-character-long cluster name ...")
+		exutil.By("Creating ClusterDeployment with a 64-character-long cluster name ...")
 		clusterName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen] + "-" + "123456789012345678901234567890123456789012345"
 		clusterDeployment := clusterDeployment{
 			fake:                 "false",
@@ -2668,7 +2668,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -2678,7 +2678,7 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2697,7 +2697,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("OCP-22382: clusterdeployment.spec does not allow edit during an update")
+		exutil.By("OCP-22382: clusterdeployment.spec does not allow edit during an update")
 		e2e.Logf("Make sure a provision Pod is created in the project's namespace")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "-provision-", ok, DefaultTimeout, []string{"pod", "-n", oc.Namespace()}).check(oc)
 
@@ -2727,7 +2727,7 @@ spec:
 		createAWSCreds(oc, oc.Namespace())
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create ClusterPool, wait for it to be ready")
+		exutil.By("Create ClusterPool, wait for it to be ready")
 		poolName := "clusterpool-" + resourceNameSuffix
 		clusterPool := clusterPool{
 			name:           poolName,
@@ -2817,7 +2817,7 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", adminKubeconfigSecretName, "-n", hiveCluster2NS, "--from-file", kubeconfigToAdopt).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By(fmt.Sprintf("Adopt cluster %v into cluster %v", clusterToAdopt, hiveCluster2))
+		exutil.By(fmt.Sprintf("Adopt cluster %v into cluster %v", clusterToAdopt, hiveCluster2))
 		adoptCDName := clusterToAdopt + "-adopt"
 		adoptCD := clusterDeploymentAdopt{
 			name:               adoptCDName,
@@ -2838,10 +2838,10 @@ spec:
 		}
 		adoptCD.create(oc)
 
-		g.By("Make sure the adopted CD is running on Hive cluster 2")
+		exutil.By("Make sure the adopted CD is running on Hive cluster 2")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, 600, []string{"ClusterDeployment", adoptCDName, "-n", hiveCluster2NS, "-o=jsonpath={.status.powerState}"}).check(oc)
 
-		g.By("Make sure SyncSet works on Hive cluster 2")
+		exutil.By("Make sure SyncSet works on Hive cluster 2")
 		syncSetName := "syncset-" + resourceNameSuffix
 		configMapName := "configmap-" + resourceNameSuffix
 		configMapNamespace := "namespace-" + resourceNameSuffix
@@ -2858,7 +2858,7 @@ spec:
 		syncSetResource.create(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName, ok, DefaultTimeout, []string{"cm", configMapName, "-n", configMapNamespace, "--kubeconfig", kubeconfigToAdopt}).check(oc)
 
-		g.By("Delete the adopted CD on Hive cluster 2")
+		exutil.By("Delete the adopted CD on Hive cluster 2")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", adoptCDName, "-n", hiveCluster2NS).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Make sure the adopted CD is gone on Hive cluster 2")
@@ -2886,7 +2886,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("OCP-24693: Support a global pull secret override")
+		exutil.By("OCP-24693: Support a global pull secret override")
 
 		e2e.Logf("Granting temp user permission to create secret in Hive's namespace ...")
 		// This is done so that the createPullSecret function can be used on Hive's namespace
@@ -2906,7 +2906,7 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "-n=hive", "--type=merge", "-p", patch).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -2916,7 +2916,7 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2945,10 +2945,10 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-worker"})
 		workermp.create(oc)
 
-		g.By("Check if ClusterDeployment created successfully")
+		exutil.By("Check if ClusterDeployment created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("OCP-22381: machinepool.spec.plaform does not allow edit")
+		exutil.By("OCP-22381: machinepool.spec.plaform does not allow edit")
 		e2e.Logf("Patch worker machinepool .spec.platform")
 		patchYaml := `
 spec:
@@ -2966,7 +2966,7 @@ spec:
 		e2e.Logf("Check machines type is still m4.xlarge")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "m4.xlarge", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.spec.platform.aws.type}"}).check(oc)
 
-		g.By("OCP-34882: [AWS]Hive should be able to create additional machinepool after deleting all MachinePools")
+		exutil.By("OCP-34882: [AWS]Hive should be able to create additional machinepool after deleting all MachinePools")
 		e2e.Logf("Delete all machinepools")
 		cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-worker"})
 		e2e.Logf("Check there are no machinepools existing")
@@ -3009,7 +3009,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -3019,7 +3019,7 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -3038,7 +3038,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Create worker and infra MachinePool ...")
+		exutil.By("Create worker and infra MachinePool ...")
 		workermachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-worker-aws.yaml")
 		inframachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-infra-aws.yaml")
 		workermp := machinepool{
@@ -3059,11 +3059,11 @@ spec:
 		workermp.create(oc)
 		inframp.create(oc)
 
-		g.By("Check if ClusterDeployment created successfully and become Provisioned")
+		exutil.By("Check if ClusterDeployment created successfully and become Provisioned")
 		//newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("OCP-28867: Hive supports an optional autoscaler settings instead of static replica count")
+		exutil.By("OCP-28867: Hive supports an optional autoscaler settings instead of static replica count")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
 		err := os.MkdirAll(tmpDir, 0777)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3137,7 +3137,7 @@ spec:
 		staticConfig := fmt.Sprintf("{\"spec\": {\"replicas\": %s}}", replicas)
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "--type", "merge", "-p", staticConfig}).check(oc)
 
-		g.By("OCP-41776: [AWS]Allow minReplicas autoscaling of MachinePools to be 0")
+		exutil.By("OCP-41776: [AWS]Allow minReplicas autoscaling of MachinePools to be 0")
 		e2e.Logf("Check hive allow set minReplicas=0 without zone setting")
 		autoScalingMax = "3"
 		autoScalingMin = "0"
@@ -3209,7 +3209,7 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
@@ -3219,10 +3219,10 @@ spec:
 		err := oc.Run("create").Args("secret", "generic", AWSCreds, "--from-literal=aws_access_key_id=test", "--from-literal=aws_secret_access_key=test", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create Install-Config Secret...")
+		exutil.By("Create Install-Config Secret...")
 		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
 		installConfigSecretName := cdName + "-install-config"
 		installConfigSecret := installConfig{
@@ -3236,7 +3236,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Create ClusterDeployment with installAttemptsLimit=3...")
+		exutil.By("Create ClusterDeployment with installAttemptsLimit=3...")
 		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
 		cluster := clusterDeployment{
 			fake:                 "false",
@@ -3256,11 +3256,11 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
 
-		g.By("OCP-23289: Check hive reports current number of install job retries in cluster deployment status...")
+		exutil.By("OCP-23289: Check hive reports current number of install job retries in cluster deployment status...")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installRestarts}"}).check(oc)
 		o.Expect(checkResourceNumber(oc, cdName, []string{"pods", "-A"})).To(o.Equal(3))
 
-		g.By("OCP-39813: Check provision metric reporting number of install restarts...")
+		exutil.By("OCP-39813: Check provision metric reporting number of install restarts...")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
@@ -3279,7 +3279,7 @@ spec:
 		e2e.Logf("Check modifying is successful")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"hiveconfig", "hive", "-o=jsonpath={.spec.maintenanceMode}"}).check(oc)
 
-		g.By("Check hive-clustersync and hive-controllers pods scale down, hive-operator and hiveadmission pods are not affected.")
+		exutil.By("Check hive-clustersync and hive-controllers pods scale down, hive-operator and hiveadmission pods are not affected.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", nok, DefaultTimeout, []string{"pod", "--selector=control-plane=clustersync",
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", nok, DefaultTimeout, []string{"pod", "--selector=control-plane=controller-manager",
@@ -3307,7 +3307,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -3316,7 +3316,7 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "true",
 			name:                 cdName,
@@ -3335,7 +3335,7 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check if ClusterDeployment created successfully")
+		exutil.By("Check if ClusterDeployment created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 	})
 
@@ -3364,25 +3364,25 @@ spec:
 			template:     imageSetTemp,
 		}
 
-		g.By("Create ClusterImageSet...")
+		exutil.By("Create ClusterImageSet...")
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName2})
 		imageSet2.create(oc)
 
-		g.By("Check if ClusterImageSet was created successfully")
+		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet", "-A", "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName2, ok, DefaultTimeout, []string{"ClusterImageSet", "-A", "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
-		g.By("Copy AWS platform credentials...")
+		exutil.By("Copy AWS platform credentials...")
 		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
+		exutil.By("Copy pull-secret...")
 		createPullSecret(oc, oc.Namespace())
 
-		g.By("Create Install-Config template Secret...")
+		exutil.By("Create Install-Config template Secret...")
 		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
 		installConfigSecretName := poolName + "-install-config-template"
 		installConfigSecret := installConfig{
@@ -3396,7 +3396,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Create ClusterPool...")
+		exutil.By("Create ClusterPool...")
 		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
 		pool := clusterPool{
 			name:           poolName,
@@ -3418,7 +3418,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
 
-		g.By("Check if ClusterPool created successfully and become ready")
+		exutil.By("Check if ClusterPool created successfully and become ready")
 		//runningCount is 0 so pool status should be standby: 2, ready: 0
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, 2*DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 		e2e.Logf("Check ClusterPool Condition \"AllClustersCurrent\"")
@@ -3450,7 +3450,7 @@ spec:
 			default:
 				g.Fail("Given field" + v + " are not supported")
 			}
-			g.By(caseID + ": Change " + v + " field of a steady pool, all unclaimed clusters will be recreated")
+			exutil.By(caseID + ": Change " + v + " field of a steady pool, all unclaimed clusters will be recreated")
 			e2e.Logf("oc patch ClusterPool field %s", v)
 			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterPool", poolName, "-n", oc.Namespace(), "-p", patchYaml, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -3465,7 +3465,7 @@ spec:
 			}
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, 2*DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 		}
-		g.By("Check Metrics for ClusterPool...")
+		exutil.By("Check Metrics for ClusterPool...")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
@@ -3482,7 +3482,7 @@ spec:
 		cdName2 := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config cd1 Install-Config Secret...")
+		exutil.By("Config cd1 Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName1 + "-install-config",
 			namespace:  oc.Namespace(),
@@ -3492,7 +3492,7 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Config ClusterDeployment1...")
+		exutil.By("Config ClusterDeployment1...")
 		clusterImageSetName1 := cdName1 + "-imageset" + "-non-exist"
 		cluster1 := clusterDeployment{
 			fake:                 "false",
@@ -3512,7 +3512,7 @@ spec:
 		defer cleanCD(oc, cluster1.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster1.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster1)
 
-		g.By("Creating cd2 install-config Secret ...")
+		exutil.By("Creating cd2 install-config Secret ...")
 		installConfigSecretName := cdName2 + "-install-config"
 		installConfigSecret = installConfig{
 			name1:      installConfigSecretName,
@@ -3525,7 +3525,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Creating cd2 ClusterImageSet with WrongReleaseImage...")
+		exutil.By("Creating cd2 ClusterImageSet with WrongReleaseImage...")
 		clusterImageSetName2 := cdName2 + "-imageset"
 		WrongReleaseImage := "registry.ci.openshift.org/ocp/release:4.13.0-0.nightly-2023-02-26-081527-non-exist"
 		imageSet := clusterImageSet{
@@ -3536,7 +3536,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName2})
 		imageSet.create(oc)
 
-		g.By("Creating cd2 with an incomplete pull-secret ...")
+		exutil.By("Creating cd2 with an incomplete pull-secret ...")
 		cluster2 := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName2,
@@ -3555,20 +3555,20 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName2})
 		cluster2.create(oc)
 
-		g.By("Check cd1 conditions with type 'RequirementsMet',return the message 'ClusterImageSet clusterImageSetName is not available'")
+		exutil.By("Check cd1 conditions with type 'RequirementsMet',return the message 'ClusterImageSet clusterImageSetName is not available'")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, fmt.Sprintf("ClusterImageSet %s is not available", clusterImageSetName1), ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"RequirementsMet\")].message}'"}).check(oc)
-		g.By("Check cd1 conditions with type 'RequirementsMet',return the reason 'ClusterImageSetNotFound'")
+		exutil.By("Check cd1 conditions with type 'RequirementsMet',return the reason 'ClusterImageSetNotFound'")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterImageSetNotFound", ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"RequirementsMet\")].reason}'"}).check(oc)
-		g.By("Check cd1 conditions with type 'RequirementsMet',return the status 'False'")
+		exutil.By("Check cd1 conditions with type 'RequirementsMet',return the status 'False'")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"RequirementsMet\")].status}'"}).check(oc)
-		g.By("Check cd1 conditions with type 'ClusterImageSetNotFound', return no output")
+		exutil.By("Check cd1 conditions with type 'ClusterImageSetNotFound', return no output")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "", ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ClusterImageSetNotFound\")]}'"}).check(oc)
 
-		g.By("Check pod pf cd2, return the status 'failed with Init:ImagePullBackOff'")
+		exutil.By("Check pod pf cd2, return the status 'failed with Init:ImagePullBackOff'")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Init:ImagePullBackOff", ok, DefaultTimeout, []string{"pod", "-n", oc.Namespace(), "--selector", "hive.openshift.io/imageset=true", "--selector", fmt.Sprintf("hive.openshift.io/cluster-deployment-name=%s", cdName2), "--no-headers"}).check(oc)
-		g.By("Check cd2 conditions with type 'installImagesNotResolved',return the reason 'JobToResolveImagesFailed'")
+		exutil.By("Check cd2 conditions with type 'installImagesNotResolved',return the reason 'JobToResolveImagesFailed'")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "JobToResolveImagesFailed", ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"InstallImagesNotResolved\")].reason}'"}).check(oc)
-		g.By("Check cd2 conditions with type 'RequirementsMet',return the status 'True'")
+		exutil.By("Check cd2 conditions with type 'RequirementsMet',return the status 'True'")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"InstallImagesNotResolved\")].status}'"}).check(oc)
 
 	})
@@ -3580,7 +3580,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config cd Install-Config Secret...")
+		exutil.By("Config cd Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -3590,7 +3590,7 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -3609,10 +3609,10 @@ spec:
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
-		g.By("Check install status...")
+		exutil.By("Check install status...")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("edit the cd CRs apiURLOverride field with a vaild apiURL")
+		exutil.By("edit the cd CRs apiURLOverride field with a vaild apiURL")
 		ValidApiUrl := "https://api." + cdName + ".qe.devcluster.openshift.com:6443"
 		stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cd", cdName, "-n", oc.Namespace(), "--type=merge", "-p", fmt.Sprintf("{\"spec\":{\"controlPlaneConfig\":{\"apiURLOverride\": \"%s\"}}}", ValidApiUrl)).Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3620,7 +3620,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].status}'"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterReachable", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].reason}'"}).check(oc)
 
-		g.By("edit the cd CRs apiURLOverride field with an invaild apiURL")
+		exutil.By("edit the cd CRs apiURLOverride field with an invaild apiURL")
 		InvalidApiUrl := "https://api." + cdName + "-non-exist.qe.devcluster.openshift.com:6443"
 		stdout, _, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cd", cdName, "-n", oc.Namespace(), "--type=merge", "-p", fmt.Sprintf("{\"spec\":{\"controlPlaneConfig\":{\"apiURLOverride\": \"%s\"}}}", InvalidApiUrl)).Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3644,7 +3644,7 @@ spec:
 		}
 		o.Eventually(waitForAPIWaitFailure).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
 
-		g.By("edit the cd CRs apiURLOverride field with a vaild apiURL again")
+		exutil.By("edit the cd CRs apiURLOverride field with a vaild apiURL again")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, fmt.Sprintf("clusterdeployment.hive.openshift.io/"+cdName+" patched"), ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", fmt.Sprintf("{\"spec\":{\"controlPlaneConfig\":{\"apiURLOverride\": \"%s\"}}}", ValidApiUrl)}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].status}'"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ClusterReachable", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"ActiveAPIURLOverride\")].reason}'"}).check(oc)
@@ -3653,11 +3653,11 @@ spec:
 	//author: kcui@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "32007"|./bin/extended-platform-tests run --timeout 20m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-32007-[AWS]Hive can prevent cluster deletion accidentally via a set on hiveconfig[Serial]", func() {
-		g.By("Add \"deleteProtection: enabled\"  in hiveconfig.spec")
+		exutil.By("Add \"deleteProtection: enabled\"  in hiveconfig.spec")
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/deleteProtection"}]`).Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig/hive", "--type", `merge`, `--patch={"spec": {"deleteProtection": "enabled"}}`).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check modifying is successful")
+		exutil.By("Check modifying is successful")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "enabled", ok, DefaultTimeout, []string{"hiveconfig", "hive", "-o=jsonpath={.spec.deleteProtection}"}).check(oc)
 
 		testCaseID := "32007"
@@ -3665,7 +3665,7 @@ spec:
 		cdName2 := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config cd1 Install-Config Secret...")
+		exutil.By("Config cd1 Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName1 + "-install-config",
 			namespace:  oc.Namespace(),
@@ -3675,7 +3675,7 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Config ClusterDeployment1...")
+		exutil.By("Config ClusterDeployment1...")
 		clusterImageSetName1 := cdName1 + "-imageset"
 		cluster1 := clusterDeployment{
 			fake:                 "true",
@@ -3695,7 +3695,7 @@ spec:
 		defer cleanCD(oc, cluster1.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster1.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster1)
 
-		g.By("Creating cd2 install-config Secret ...")
+		exutil.By("Creating cd2 install-config Secret ...")
 		installConfigSecretName := cdName2 + "-install-config"
 		installConfigSecret = installConfig{
 			name1:      installConfigSecretName,
@@ -3708,7 +3708,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
 
-		g.By("Creating cd2 ClusterImageSet")
+		exutil.By("Creating cd2 ClusterImageSet")
 		clusterImageSetName2 := cdName2 + "-imageset"
 		imageSet := clusterImageSet{
 			name:         clusterImageSetName2,
@@ -3718,7 +3718,7 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName2})
 		imageSet.create(oc)
 
-		g.By("Creating cd2")
+		exutil.By("Creating cd2")
 		cluster2 := clusterDeployment{
 			fake:                 "true",
 			name:                 cdName2,
@@ -3736,32 +3736,32 @@ spec:
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName2})
 		cluster2.create(oc)
-		g.By("Add annotations hive.openshift.io/protected-delete: \"false\" in cd2 CRs")
+		exutil.By("Add annotations hive.openshift.io/protected-delete: \"false\" in cd2 CRs")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, fmt.Sprintf("clusterdeployment.hive.openshift.io/"+cdName2+" patched"), ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "--type", "merge", "-p", "{\"metadata\":{\"annotations\":{\"hive.openshift.io/protected-delete\": \"false\"}}}"}).check(oc)
 
-		g.By("Check Hive add the \"hive.openshift.io/protected-delete\" annotation to cd1 after installation")
+		exutil.By("Check Hive add the \"hive.openshift.io/protected-delete\" annotation to cd1 after installation")
 		e2e.Logf("Check cd1 is installed.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, FakeClusterInstallTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "-o=jsonpath='{.metadata.annotations.hive\\.openshift\\.io/protected-delete}'"}).check(oc)
 
-		g.By("delete cd1 will failed")
+		exutil.By("delete cd1 will failed")
 		_, stderr, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName1, "-n", oc.Namespace()).Outputs()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(stderr).To(o.ContainSubstring("metadata.annotations.hive.openshift.io/protected-delete: Invalid value: \"true\": cannot delete while annotation is present"))
 
-		g.By("edit hive.openshift.io/protected-delete: to \"false\" in cd1")
+		exutil.By("edit hive.openshift.io/protected-delete: to \"false\" in cd1")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, fmt.Sprintf("clusterdeployment.hive.openshift.io/"+cdName1+" patched"), ok, DefaultTimeout, []string{"ClusterDeployment", cdName1, "-n", oc.Namespace(), "--type", "merge", "-p", "{\"metadata\":{\"annotations\":{\"hive.openshift.io/protected-delete\": \"false\"}}}"}).check(oc)
 
-		g.By("delete cd1 again and success")
+		exutil.By("delete cd1 again and success")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName1, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check cd1 has been deleted.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName1, nok, FakeClusterInstallTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
 
-		g.By("Check Hive didn't rewrite the \"hive.openshift.io/protected-delete\" annotation to cd2 after installation")
+		exutil.By("Check Hive didn't rewrite the \"hive.openshift.io/protected-delete\" annotation to cd2 after installation")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "false", ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "-o=jsonpath='{.metadata.annotations.hive\\.openshift\\.io/protected-delete}'"}).check(oc)
 
-		g.By("delete cd2 success")
+		exutil.By("delete cd2 success")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName2, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check cd2 has been deleted.")
@@ -3776,7 +3776,7 @@ spec:
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
-		g.By("Config Install-Config Secret...")
+		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
@@ -3786,10 +3786,10 @@ spec:
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
 
-		g.By("Create Route53-aws-creds in hive namespace")
+		exutil.By("Create Route53-aws-creds in hive namespace")
 		createRoute53AWSCreds(oc, oc.Namespace())
 
-		g.By("Config ClusterDeployment...")
+		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "true",
 			name:                 cdName,
@@ -3812,7 +3812,7 @@ spec:
 		e2e.Logf("Check dnszone has been created.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName+"-zone", ok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
 
-		g.By("check and record the messages of .metadata.ownerReferences1 and .metadata.resourceVersion1")
+		exutil.By("check and record the messages of .metadata.ownerReferences1 and .metadata.resourceVersion1")
 		stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences[0]}").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var ownerReferences1 map[string]any
@@ -3821,11 +3821,11 @@ spec:
 		resourceVersion1, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "-o=jsonpath={.metadata.resourceVersion}").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("delete ownerReferences of the dnszone")
+		exutil.By("delete ownerReferences of the dnszone")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "--type=json", "-p", `[{"op":"remove", "path": "/metadata/ownerReferences"}]`).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check and record the messages of .metadata.ownerReferences2 and .metadata.resourceVersion2")
+		exutil.By("check and record the messages of .metadata.ownerReferences2 and .metadata.resourceVersion2")
 		stdout, _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "-o=jsonpath={.metadata.ownerReferences[0]}").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var ownerReferences2 map[string]any
@@ -3834,7 +3834,7 @@ spec:
 		resourceVersion2, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnszone", cdName+"-zone", "-n", oc.Namespace(), "-o=jsonpath={.metadata.resourceVersion}").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check the .metadata.ownerReferences is the same as before and the .metadata.resourceVersion is different")
+		exutil.By("check the .metadata.ownerReferences is the same as before and the .metadata.resourceVersion is different")
 		CheckSameOrNot := func() bool {
 			if ownerReferences1["apiVersion"] == "" || ownerReferences1["blockOwnerDeletion"] != true || ownerReferences1["controller"] != true ||
 				ownerReferences1["kind"] != "ClusterDeployment" || ownerReferences1["name"] != cdName || ownerReferences1["uid"] == "" || resourceVersion1 == "" {
@@ -3859,7 +3859,7 @@ spec:
 	//author: kcui@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "30089"|./bin/extended-platform-tests run --timeout 15m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-Medium-30089-[AWS]Hive components will be teared down when HiveConfig is deleted[Disruptive]", func() {
-		g.By("Check the hive-controllers and hiveadmission are running")
+		exutil.By("Check the hive-controllers and hiveadmission are running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"deployment", "-n", "hive"}).check(oc)
@@ -3867,10 +3867,10 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
 
-		g.By("Delete hiveconfig")
+		exutil.By("Delete hiveconfig")
 		newCheck("expect", "delete", asAdmin, withoutNamespace, contain, "hiveconfig.hive.openshift.io \"hive\" deleted", ok, DefaultTimeout, []string{"hiveconfig", "hive"}).check(oc)
 
-		g.By("Check hive-controllers and hiveadmission were teared down or deleted")
+		exutil.By("Check hive-controllers and hiveadmission were teared down or deleted")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", nok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", nok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", nok, DefaultTimeout, []string{"deployment", "-n", "hive"}).check(oc)
@@ -3878,10 +3878,10 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", nok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", nok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
 
-		g.By("Create the hive resources again")
+		exutil.By("Create the hive resources again")
 		hc.createIfNotExist(oc)
 
-		g.By("Check the resources again")
+		exutil.By("Check the resources again")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"pods", "-n", "hive"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"deployment", "-n", "hive"}).check(oc)

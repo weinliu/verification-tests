@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		switch iaasPlatform {
 		case "aws":
-			g.By("Config Install-Config Secret...")
+			exutil.By("Config Install-Config Secret...")
 			installConfigSecret := installConfig{
 				name1:      cdName + "-install-config",
 				namespace:  oc.Namespace(),
@@ -62,7 +62,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 				region:     AWSRegion2,
 				template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 			}
-			g.By("Config ClusterDeployment...")
+			exutil.By("Config ClusterDeployment...")
 			cluster := clusterDeployment{
 				fake:                 "false",
 				name:                 cdName,
@@ -81,7 +81,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 			createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 		case "gcp":
-			g.By("Config GCP Install-Config Secret...")
+			exutil.By("Config GCP Install-Config Secret...")
 			projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(projectID).NotTo(o.BeEmpty())
@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 				projectid:  projectID,
 				template:   filepath.Join(testDataDir, "gcp-install-config.yaml"),
 			}
-			g.By("Config GCP ClusterDeployment...")
+			exutil.By("Config GCP ClusterDeployment...")
 			cluster := gcpClusterDeployment{
 				fake:                 "false",
 				name:                 cdName,
@@ -113,7 +113,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 			createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 		case "azure":
-			g.By("Config Azure Install-Config Secret...")
+			exutil.By("Config Azure Install-Config Secret...")
 			installConfigSecret := azureInstallConfig{
 				name1:      cdName + "-install-config",
 				namespace:  oc.Namespace(),
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 				azureType:  AzurePublic,
 				template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
 			}
-			g.By("Config Azure ClusterDeployment...")
+			exutil.By("Config Azure ClusterDeployment...")
 			cluster := azureClusterDeployment{
 				fake:                "false",
 				name:                cdName,
@@ -147,7 +147,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			g.Skip("unsupported ClusterDeployment type")
 		}
 
-		g.By("Check provision pod can't be created")
+		exutil.By("Check provision pod can't be created")
 		watchProvisionpod := func() bool {
 			stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace()).Outputs()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -159,7 +159,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 		o.Consistently(watchProvisionpod).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
 
-		g.By("Check conditions of ClusterDeployment, the type RequirementsMet should be False")
+		exutil.By("Check conditions of ClusterDeployment, the type RequirementsMet should be False")
 		waitForClusterDeploymentRequirementsMetFail := func() bool {
 			condition := getCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "RequirementsMet")
 			if status, ok := condition["status"]; !ok || status != "False" {
@@ -182,37 +182,37 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 	//author: lwan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Critical-29670-install/uninstall hive operator from OperatorHub", func() {
-		g.By("Check Subscription...")
+		exutil.By("Check Subscription...")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "AllCatalogSourcesHealthy", ok, DefaultTimeout, []string{"sub", sub.name, "-n",
 			sub.namespace, "-o=jsonpath={.status.conditions[0].reason}"}).check(oc)
 
-		g.By("Check Hive Operator pods are created !!!")
+		exutil.By("Check Hive Operator pods are created !!!")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-operator", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=hive-operator",
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		g.By("Check Hive Operator pods are in running state !!!")
+		exutil.By("Check Hive Operator pods are in running state !!!")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=hive-operator", "-n",
 			sub.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		g.By("Hive Operator sucessfully installed !!! ")
+		exutil.By("Hive Operator sucessfully installed !!! ")
 
-		g.By("Check hive-clustersync pods are created !!!")
+		exutil.By("Check hive-clustersync pods are created !!!")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=clustersync",
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		g.By("Check hive-clustersync pods are in running state !!!")
+		exutil.By("Check hive-clustersync pods are in running state !!!")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=clustersync", "-n",
 			sub.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		g.By("Check hive-controllers pods are created !!!")
+		exutil.By("Check hive-controllers pods are created !!!")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=controller-manager",
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		g.By("Check hive-controllers pods are in running state !!!")
+		exutil.By("Check hive-controllers pods are in running state !!!")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=controller-manager", "-n",
 			sub.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		g.By("Check hiveadmission pods are created !!!")
+		exutil.By("Check hiveadmission pods are created !!!")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"pod", "--selector=app=hiveadmission",
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		g.By("Check hiveadmission pods are in running state !!!")
+		exutil.By("Check hiveadmission pods are in running state !!!")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"pod", "--selector=app=hiveadmission", "-n",
 			sub.namespace, "-o=jsonpath={.items[*].status.phase}"}).check(oc)
-		g.By("Hive controllers,clustersync and hiveadmission sucessfully installed !!! ")
+		exutil.By("Hive controllers,clustersync and hiveadmission sucessfully installed !!! ")
 	})
 
 	//author: lwan@redhat.com
@@ -224,7 +224,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer recoverClusterMonitoring(oc, &needRecover, &prevConfig)
 		exposeMetrics(oc, testDataDir, &needRecover, &prevConfig)
 
-		g.By("Check hive-operator metrics can be queried from thanos-querier")
+		exutil.By("Check hive-operator metrics can be queried from thanos-querier")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
@@ -235,7 +235,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		query := []string{query1, query2, query3, query4}
 		checkMetricExist(oc, ok, token, thanosQuerierURL, query)
 
-		g.By("Check HiveConfig status from Metric...")
+		exutil.By("Check HiveConfig status from Metric...")
 		expectedType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.status.conditions[0].type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		expectedReason, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.status.conditions[0].reason}").Output()
