@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -224,5 +226,63 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 		o.Expect(myCSIEncryptionScPolicyName).ShouldNot(o.BeEmpty(), "The storageclass storagePolicyName setting is empty")
 		o.Expect(policyQueryResults[0].GetPbmProfile().Name).Should(o.Equal(myCSIEncryptionScPolicyName), "The volume encrypted storagePolicy is not as expected")
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-65024 - [vSphere-CSI-Driver-Operator] [CSIMigration-optOut] vsphereStorageDriver:"CSIWithMigrationDriver" is the only supported value and allowed to deleted in storage.spec [Serial]
+	g.It("NonHyperShiftHOST-Author:ropatil-Medium-65024-[vSphere-CSI-Driver-Operator] [CSIMigration-optOut] vsphereStorageDriver: CSIWithMigrationDriver is the only supported value and allowed to deleted in storage.spec [Serial]", func() {
+
+		exutil.By("################### Test phase start ######################")
+
+		exutil.By("# Check the storage cluster spec, should not contain vsphereStorageDriver parameter and get total nodes count")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storage/cluster", "-o=jsonpath={.spec}").Output()
+		e2e.Logf("Storage cluster output is %v", output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("vsphereStorageDriver"))
+		nodesNameArray, err := exec.Command("bash", "-c", `oc get nodes --no-headers | awk '{print $1}' | tr '\n' ' '`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("# Add parameter vsphereStorageDriver with valid value CSIWithMigrationDriver")
+		path := `{"spec":{"vsphereStorageDriver":"CSIWithMigrationDriver"}}`
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("storage/cluster", "-p", path, "--type=merge").Output()
+		o.Expect(output).To(o.ContainSubstring("patched"))
+		defer waitCSOhealthy(oc.AsAdmin())
+		defer func() {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storage/cluster", "-o=jsonpath={.spec}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "CSIWithMigrationDriver") {
+				patchResourceAsAdmin(oc, "", "storage/cluster", `[{"op":"remove","path":"/spec/vsphereStorageDriver"}]`, "json")
+			}
+		}()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("storage/cluster", "-o=jsonpath={.spec.vsphereStorageDriver}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("CSIWithMigrationDriver"))
+
+		exutil.By("# Check the cluster nodes are healthy")
+		o.Consistently(func() int {
+			nodesReadyArray, err := exec.Command("bash", "-c", `oc get nodes --no-headers | awk '{print $2}' | tr '\n' ' '`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return len(strings.Split(string(nodesReadyArray), " "))
+		}, 60*time.Second, 5*time.Second).Should(o.Equal(len(strings.Split(string(nodesNameArray), " "))))
+
+		exutil.By("# Modify value of vsphereStorageDriver to valid value LegacyDeprecatedInTreeDriver and is not allowed to change")
+		path = `{"spec":{"vsphereStorageDriver":"LegacyDeprecatedInTreeDriver"}}`
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("storage/cluster", "-p", path, "--type=merge").Output()
+		o.Expect(output).To(o.ContainSubstring("VSphereStorageDriver can not be set to LegacyDeprecatedInTreeDriver"))
+		o.Expect(output).NotTo(o.ContainSubstring("Unsupported value"))
+
+		exutil.By("# Delete the parameter vsphereStorageDriver and check the parameter is not present")
+		patchResourceAsAdmin(oc, "", "storage/cluster", `[{"op":"remove","path":"/spec/vsphereStorageDriver"}]`, "json")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("storage/cluster", "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("vsphereStorageDriver"))
+
+		exutil.By("# Add parameter vsphereStorageDriver with invalid random value and is not allowed to change")
+		invalidValue := "optIn-" + getRandomString()
+		path = `{"spec":{"vsphereStorageDriver":"` + invalidValue + `"}}`
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("storage/cluster", "-p", path, "--type=merge").Output()
+		o.Expect(output).Should(o.ContainSubstring(`Unsupported value: "` + invalidValue + `": supported values: "", "LegacyDeprecatedInTreeDriver", "CSIWithMigrationDriver"`))
+
+		exutil.By("################### Test phase finished ######################")
 	})
 })
