@@ -448,10 +448,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		ntoRes := ntoResource{
-			name:        "user-max-cgroup-namespaces",
+			name:        "kernel-pid-max",
 			namespace:   ntoNamespace,
 			template:    customTunedProfileile,
-			sysctlparm:  "user.max_cgroup_namespaces",
+			sysctlparm:  "kernel.pid_max",
 			sysctlvalue: "128888",
 		}
 		defer func() {
@@ -477,8 +477,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
-		g.By("Check all nodes for user.max_cgroup_namespaces value, all node should different from 128888")
-		compareSysctlDifferentFromSpecifiedValueByName(oc, "user.max_cgroup_namespaces", "128888")
+		g.By("Check all nodes for kernel.pid_max value, all node should different from 128888")
+		compareSysctlDifferentFromSpecifiedValueByName(oc, "kernel.pid_max", "128888")
 
 		g.By("Label tuned pod as tuned.openshift.io/elasticsearch=")
 		err = exutil.LabelPod(oc, ntoNamespace, tunedPodName, "tuned.openshift.io/elasticsearch=")
@@ -487,14 +487,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check current profile for each node")
 		ntoRes.assertTunedProfileApplied(oc)
 
-		g.By("Compare if the value user.max_cgroup_namespaces in on node with labeled pod, should be 128888")
-		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "user.max_cgroup_namespaces", "", "128888")
+		g.By("Compare if the value kernel.pid_max in on node with labeled pod, should be 128888")
+		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "kernel.pid_max", "", "128888")
 
 		g.By("Delete labeled tuned pod by name")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", tunedPodName, "-n", ntoNamespace).Execute()
 
-		g.By("Check all nodes for user.max_cgroup_namespaces value, all node should different from 128888")
-		compareSysctlDifferentFromSpecifiedValueByName(oc, "user.max_cgroup_namespaces", "128888")
+		g.By("Check all nodes for kernel.pid_max value, all node should different from 128888")
+		compareSysctlDifferentFromSpecifiedValueByName(oc, "kernel.pid_max", "128888")
 
 	})
 
@@ -2295,7 +2295,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-stalld", "-n", ntoNamespace, "--ignore-not-found").Execute()
-		defer exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/usr/bin/throttlectl", "on")
+		defer exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "/usr/bin/throttlectl", "on")
 
 		//Switch off throttlectl to improve sucessfull rate of stalld starting
 		g.By("Set off for /usr/bin/throttlectl before enable stalld")
@@ -2342,13 +2342,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if stalld service is running ...")
-		stalldStatus, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "systemctl", "status", "stalld")
+		stalldStatus, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "systemctl", "status", "stalld")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldStatus).NotTo(o.BeEmpty())
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
 
 		g.By("Get stalld PID on labeled node ...")
-		stalldPIDStatus, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efZ | grep stalld | grep -v grep")
+		stalldPIDStatus, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efZ | grep stalld | grep -v grep")
 		e2e.Logf("stalldPIDStatus is :\n%v", stalldPIDStatus)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldPIDStatus).NotTo(o.BeEmpty())
@@ -2356,12 +2356,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(stalldPIDStatus).To(o.ContainSubstring("-t 20"))
 
 		g.By("Get stalld PID on labeled node ...")
-		stalldPID, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'")
+		stalldPID, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldPID).NotTo(o.BeEmpty())
 
 		g.By("Get status of chrt -p stalld PID on labeled node ...")
-		chrtStalldPIDOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "chrt -ap "+stalldPID)
+		chrtStalldPIDOutput, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "chrt -ap "+stalldPID)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(chrtStalldPIDOutput).NotTo(o.BeEmpty())
 		o.Expect(chrtStalldPIDOutput).To(o.ContainSubstring("SCHED_FIFO"))
@@ -2795,7 +2795,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(AssertTunedAppliedToNode(oc, tunedNodeName, "cpus=")).To(o.Equal(false))
 	})
 
-	g.It("ROSA-Author:liqcui-Medium-63223-NTO support tuning sysctl and kernel bools that applied to all nodes of nodepool-level settings in hypershift. [Disruptive]", func() {
+	g.It("ROSA--NonHyperShiftHOST-Author:liqcui-Medium-63223-NTO support tuning sysctl and kernel bools that applied to all nodes of nodepool-level settings in hypershift. [Disruptive]", func() {
 		//Only execute on ROSA hosted cluster
 		isROSA := isROSAHostedCluster(oc)
 		if !isROSA {

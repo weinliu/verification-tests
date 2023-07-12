@@ -209,7 +209,7 @@ func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
 		//output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
-		stdOut, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
+		stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
 		conntrackMax := regexpstr.FindString(stdOut)
 		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -229,7 +229,7 @@ func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, tunedNodeName, sysc
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
 		//output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
-		stdOut, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
+		stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
 		conntrackMax := regexpstr.FindString(stdOut)
 		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
 		o.Expect(err).NotTo(o.HaveOccurred())
