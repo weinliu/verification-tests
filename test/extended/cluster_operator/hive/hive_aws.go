@@ -649,6 +649,135 @@ spec:
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "42661"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Medium-42661-[aws]Simulate hibernation for fake clusters [Serial]", func() {
+		testCaseID := "42661"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		exutil.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		exutil.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
+		exutil.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		exutil.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		exutil.By("Create fake ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
+		pool := clusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "true",
+			baseDomain:     AWSBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "aws",
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
+			size:           1,
+			maxSize:        1,
+			runningCount:   0,
+			maxConcurrent:  2,
+			hibernateAfter: "1m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+		exutil.By("Check if ClusterPool created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterPool", "-n", oc.Namespace()}).check(oc)
+		//runningCount is 0 so pool status should be standby: 1, ready: 0
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, FakeClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+
+		exutil.By("Check all clusters in cluster pool are in Hibernating status")
+		cdName, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", "-A", "-o=jsonpath={.items[0].metadata.name}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cdNameSpace := cdName
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Hibernating", ok, HibernateAfterTimer, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.status.powerState}"}).check(oc)
+
+		exutil.By("Create ClusterClaim...")
+		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
+		claimName := poolName + "-claim"
+		claim := clusterClaim{
+			name:            claimName,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName,
+			template:        claimTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName})
+		claim.create(oc)
+		exutil.By("Check if ClusterClaim created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
+		exutil.By("Check claiming a fake cluster works well")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
+		exutil.By("Check cluster is in Running status")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, HibernateAfterTimer, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.status.powerState}"}).check(oc)
+
+		exutil.By("Hibernating it again, check it can be hibernated again")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", cdNameSpace, "--type", "merge", `--patch={"spec":{"powerState": "Hibernating"}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Hibernating", ok, HibernateAfterTimer, []string{"ClusterDeployment", cdName, "-n", cdNameSpace, "-o=jsonpath={.status.powerState}"}).check(oc)
+
+		cdName = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+
+		exutil.By("Config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		exutil.By("Create fake ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "true",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          imageSetName,
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		installConfigSecret.create(oc)
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+
+		exutil.By("Check fake cluster is in Running status")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, HibernateAfterTimer, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.powerState}"}).check(oc)
+
+		exutil.By("Hibernating the fake cluster ,check it can be hibernated")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", `--patch={"spec":{"powerState": "Hibernating"}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Hibernating", ok, HibernateAfterTimer, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.powerState}"}).check(oc)
+
+		exutil.By("Restart it again, check it back to running again")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", `--patch={"spec":{"powerState": "Running"}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, HibernateAfterTimer, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.powerState}"}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "25443"|./bin/extended-platform-tests run --timeout 70m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Low-25443-Low-29855-[aws]Clusterdeployment contains Status.Condition of SyncSet status in case of syncset is invalid [Serial]", func() {
 		testCaseID := "25443"
