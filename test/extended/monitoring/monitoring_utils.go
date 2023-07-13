@@ -373,3 +373,24 @@ func queryFromPod(oc *exutil.CLI, url, token, ns, pod, container, metricString s
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
 }
+
+// check config exist or absent in yaml/json
+func checkYamlconfig(oc *exutil.CLI, ns string, components string, componentsName string, cmd string, checkValue string, expectExist bool) {
+	configCheck := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(components, componentsName, cmd, "-n", ns).Output()
+		if expectExist {
+			if err != nil || !strings.Contains(output, checkValue) {
+				return false, nil
+			}
+			return true, nil
+		}
+		if !expectExist {
+			if err != nil || !strings.Contains(output, checkValue) {
+				return true, nil
+			}
+			return false, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(configCheck, fmt.Sprintf("base on `expectExist=%v`, did (not) find \"%s\" exist", expectExist, checkValue))
+}

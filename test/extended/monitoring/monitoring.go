@@ -1469,6 +1469,57 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).To(o.ContainSubstring("--collector.ksmd"))
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-High-64537-CMO deploys monitoring console-plugin [Serial]", func() {
+		var (
+			monitoringPluginConfig = filepath.Join(monitoringBaseDir, "monitoringPlugin-config.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("skip the case if console CO is absent")
+		checkCO, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/console").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(checkCO, "console") {
+			g.Skip("This case is not executable when console CO is absent")
+		}
+
+		g.By("apply monitoringPlugin config and wait for all pods ready")
+		createResourceFromYaml(oc, "openshift-monitoring", monitoringPluginConfig)
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+
+		g.By("check monitoring-plugin ConfigMap/ConsolePlugin/PodDisruptionBudget/ServiceAccount/Service/deployment are exist")
+		resourceNames := []string{"ConfigMap", "ConsolePlugin", "PodDisruptionBudget", "ServiceAccount", "Service", "deployment"}
+		for _, resource := range resourceNames {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "monitoring-plugin", "-n", "openshift-monitoring").Output()
+			o.Expect(output).To(o.ContainSubstring("monitoring-plugin"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		// this step is aim to give time to monitoring-plugin pods loading
+		g.By("check monitoring-plugin container usage")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=sum(rate(container_cpu_usage_seconds_total{container="monitoring-plugin",namespace="openshift-monitoring"}[5m]))'`, token, `"value"`, uwmLoadTime)
+
+		g.By("check monitoring-plugin pod config")
+		monitoringPluginPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range monitoringPluginPodNames {
+			e2e.Logf("If the pod is not ready or not found, it means the pod:{%s} was restarted during the test, pod name changed", pod)
+			exutil.AssertPodToBeReady(oc, pod, "openshift-monitoring")
+			cmd := "-ojsonpath={.spec.nodeSelector}"
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `{"node-role.kubernetes.io/worker":""}`, true)
+			cmd = "-ojsonpath={.spec.topologySpreadConstraints}"
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `{"maxSkew":1,"topologyKey":"kubernetes.io/hostname","whenUnsatisfiable":"DoNotSchedule"}`, true)
+			cmd = "-ojsonpath={.spec.tolerations}"
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `{"operator":"Exists"}`, true)
+			cmd = "-ojsonpath={.spec.containers[].resources}"
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `"requests":{"cpu":"15m","memory":"60Mi"}`, true)
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `"limits":{"cpu":"30m","memory":"120Mi"}`, true)
+		}
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
