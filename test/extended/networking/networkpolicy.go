@@ -217,6 +217,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
+	// modified by: asood@redhat.com
 	g.It("NonHyperShiftHOST-Author:anusaxen-Medium-49686-network policy with ingress rule with ipBlock", func() {
 		var (
 			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
@@ -226,9 +227,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		)
 
 		ipStackType := checkIPStackType(oc)
-		if ipStackType == "ipv4single" {
-			g.Skip("This case requires dualstack or Single Stack Ipv6 cluster")
-		}
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -288,10 +287,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("ipblock-dual-cidrs-ingress"))
 		} else {
+			// For singlestack getPodIP returns second parameter empty therefore use helloPod1ns1IPv6 variable but append it
+			// with CIDR based on stack.
+			var helloPod1ns1IPWithCidr string
+			if ipStackType == "ipv6single" {
+				helloPod1ns1IPWithCidr = helloPod1ns1IPv6WithCidr
+			} else {
+				helloPod1ns1IPWithCidr = helloPod1ns1IPv6 + "/32"
+			}
 			npIPBlockNS1 := ipBlockIngressSingle{
 				name:      "ipblock-single-cidr-ingress",
 				template:  ipBlockIngressTemplateSingle,
-				cidr:      helloPod1ns1IPv6WithCidr,
+				cidr:      helloPod1ns1IPWithCidr,
 				namespace: ns1,
 			}
 			npIPBlockNS1.createipBlockIngressObjectSingle(oc)
@@ -360,10 +367,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			}
 			npIPBlockNS1New.createipBlockIngressObjectDual(oc)
 		} else {
+			// For singlestack getPodIP returns second parameter empty therefore use helloPod2ns2IPv6 variable but append it
+			// with CIDR based on stack.
+			var helloPod2ns2IPWithCidr string
+			if ipStackType == "ipv6single" {
+				helloPod2ns2IPWithCidr = helloPod2ns2IPv6WithCidr
+			} else {
+				helloPod2ns2IPWithCidr = helloPod2ns2IPv6 + "/32"
+			}
 			npIPBlockNS1New := ipBlockIngressSingle{
 				name:      "ipblock-single-cidr-ingress",
 				template:  ipBlockIngressTemplateSingle,
-				cidr:      helloPod2ns2IPv6WithCidr,
+				cidr:      helloPod2ns2IPWithCidr,
 				namespace: ns1,
 			}
 			npIPBlockNS1New.createipBlockIngressObjectSingle(oc)
@@ -1137,7 +1152,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ovnMasterPodName := getOVNLeaderPod(oc, "north")
 		g.By("get ACLs related to ns")
 		//list ACLs only related namespace in test
-		listACLCmd := "ovn-nbctl list ACL | grep -C 5 " + oc.Namespace() + "_ARPallowPolicy"
+		listACLCmd := "ovn-nbctl list ACL | grep -C 5 " + "NP:" + oc.Namespace() + " | grep -C 5 type=arpAllow"
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Output %s", listOutput)
