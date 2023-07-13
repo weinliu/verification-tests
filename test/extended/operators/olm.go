@@ -6709,7 +6709,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-50136, author: kuiwang@redhat.com
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:kuiwang-Medium-50136-automatic upgrade for failed operator installation csv fails", func() {
-		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6727,7 +6726,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 2378 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-multi",
 				template:    catsrcImageTemplate,
 			}
 			subOadp = subscriptionDescription{
@@ -6811,7 +6810,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-50138, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-50138-automatic upgrade for failed operator installation ip fails", func() {
-		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6829,7 +6827,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 2378 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-multi",
 				template:    catsrcImageTemplate,
 			}
 			subOadp = subscriptionDescription{
@@ -10177,7 +10175,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 
 		exutil.By("fbc based image without deprecated bundle")
-		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-fbc"
+		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-fbc-multi"
 		catsrc.createWithCheck(oc, itName, dr)
 		entries := getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
 		ok1AlphaAssertion(entries)
@@ -10194,7 +10192,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.delete(itName, dr)
 
 		exutil.By("ffbc based image with deprecated bundle made by properties.yaml")
-		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-fbc-deprecate-nomigrate"
+		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-fbc-deprecate-nomigrate-multi"
 		catsrc.createWithCheck(oc, itName, dr)
 		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
 		ok1AlphaAssertion(entries)
@@ -13121,7 +13119,6 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 
 	// It will cover test case: OCP-45381, author: kuiwang@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-ConnectedOnly-Author:kuiwang-Medium-45381-Support custom catalogs in hypershift", func() {
-		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -13139,7 +13136,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 				displayName: "Test Catsrc 2378 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-multi",
 				template:    catsrcImageTemplate,
 			}
 			subOadp = subscriptionDescription{
