@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
@@ -32,7 +31,7 @@ const (
 
 func buildPushOperatorImage(architecture architecture.Architecture, tmpPath, imageTag, tokenDir string) {
 
-	g.By("Build and Push the operator image with architecture")
+	exutil.By("Build and Push the operator image with architecture")
 	podmanCLI := container.NewPodmanCLI()
 	podmanCLI.ExecCommandPath = tmpPath
 	output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", architecture.String(), "--tag", imageTag,
