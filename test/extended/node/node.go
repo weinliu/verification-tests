@@ -850,6 +850,40 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
+
+	g.It("NonPreRelease-Longduration-Author:minmli-High-57401-Create ImageDigestMirrorSet successfully [Disruptive][Slow]", func() {
+		//If a cluster contains any ICSP or IDMS, it will skip the case
+		if checkICSP(oc) || checkIDMS(oc) {
+			g.Skip("This cluster contain ICSP or IDMS, skip the test.")
+		}
+		exutil.By("Create an ImageDigestMirrorSet")
+		idms := filepath.Join(buildPruningBaseDir, "ImageDigestMirrorSet.yaml")
+		defer func() {
+			err := checkMachineConfigPoolStatus(oc, "master")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+			err = checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + idms).Execute()
+
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + idms).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the mcp finish updating")
+		err = checkMachineConfigPoolStatus(oc, "master")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+		err = checkMachineConfigPoolStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("Check the ImageDigestMirrorSet apply to config")
+		err = checkRegistryForIdms(oc)
+		exutil.AssertWaitPollNoErr(err, "check registry config failed")
+
+		exutil.By("The ImageContentSourcePolicy can't exist wiht ImageDigestMirrorSet or ImageTagMirrorSet")
+		icsp := filepath.Join(buildPruningBaseDir, "ImageContentSourcePolicy.yaml")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", icsp).Output()
+		o.Expect(strings.Contains(out, "Kind.ImageContentSourcePolicy: Forbidden: can't create ImageContentSourcePolicy when ImageDigestMirrorSet resources exist")).To(o.BeTrue())
+	})
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {

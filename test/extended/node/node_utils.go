@@ -1440,3 +1440,41 @@ func createCRClusterresourceoverride(oc *exutil.CLI) {
 	e2e.Logf("/n Cluster Resource Overrride status is %v", cro)
 
 }
+
+func checkICSP(oc *exutil.CLI) bool {
+	icsp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(icsp, "No resources found") {
+		e2e.Logf("there is no ImageContentSourcePolicy in this cluster")
+		return false
+	}
+	return true
+}
+
+func checkIDMS(oc *exutil.CLI) bool {
+	icsp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageDigestMirrorSet").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(icsp, "No resources found") {
+		e2e.Logf("there is no ImageDigestMirrorSet in this cluster")
+		return false
+	}
+	return true
+}
+
+func checkRegistryForIdms(oc *exutil.CLI) error {
+	return wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodename := nodeList.Items[0].Name
+		registry, _ := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/containers/registries.conf")
+		//not handle err as a workaround of issue: debug container needs more time to start in 4.13&4.14
+		//o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(string(registry), "registry.access.redhat.com/ubi9/ubi-minimal") && strings.Contains(string(registry), "example.io/example/ubi-minimal") && strings.Contains(string(registry), "example.com/example/ubi-minimal") && strings.Contains(string(registry), "pull-from-mirror = \"digest-only\"") && strings.Contains(string(registry), "location = \"registry.example.com/example\"") && strings.Contains(string(registry), "blocked = true") {
+			e2e.Logf("ImageDigestMirrorSet apply successfully!")
+		} else {
+			e2e.Logf("ImageDigestMirrorSet apply failed!")
+			return false, nil
+		}
+		return true, nil
+	})
+}
