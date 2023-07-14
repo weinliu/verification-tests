@@ -86,7 +86,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		sub.delete(oc)
 
 		g.By("Delete CSV...")
-		installedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace, "-o=jsonpath={.items[0].metadata.name}").Output()
+		installedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace, "-o=jsonpath={.items[?(@.spec.displayName==\"OpenShift Update Service\")].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(installedCSV).NotTo(o.BeEmpty())
 		removeResource(oc, "-n", sub.namespace, "csv", installedCSV)
