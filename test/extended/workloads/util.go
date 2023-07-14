@@ -1319,3 +1319,65 @@ func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.D
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
 }
+
+func createCSAndISCP(oc *exutil.CLI) {
+	var files []string
+	var yamlFiles []string
+
+	root := "oc-mirror-workspace"
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		e2e.Failf("Can't walk the oc-mirror-workspace directory")
+	}
+
+	for _, file := range files {
+		if matched, _ := regexp.MatchString("yaml", file); matched {
+			fmt.Println("file name is %v \n", file)
+			yamlFiles = append(yamlFiles, file)
+		}
+	}
+
+	defer func() {
+		for _, deleteFileName := range yamlFiles {
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", deleteFileName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	}()
+
+	for _, yamlFileName := range yamlFiles {
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", yamlFileName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+
+	e2e.Logf("Check the version and item from catalogsource")
+	//oc get pod -n openshift-marketplace -l olm.catalogSource=redhat-operator-index
+	assertPodOutput(oc, "olm.catalogSource=case60601-redhat-operator-index", "openshift-marketplace", "Running")
+
+	//oc get packagemanifests --selector=catalog=redhat-operator-index -o=jsonpath='{.items[*].metadata.name}'
+	waitErr := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+		out, err := oc.AsAdmin().Run("get").Args("packagemanifests", "--selector=catalog=case60601-redhat-operator-index", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-marketplace").Output()
+		mirrorItemList := strings.Fields(out)
+		if len(mirrorItemList) != 1 || err != nil {
+			e2e.Logf("the err:%v and mirrorItemList: %v, and try next round", err, mirrorItemList)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "max time reached but still can't find  packagemanifest")
+}
+
+func assertPodOutput(oc *exutil.CLI, podLabel string, namespace string, expected string) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		podStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", podLabel).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("the result of pod:%v", podStatus)
+		if strings.Contains(podStatus, expected) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with %s is not expected %s", podLabel, expected))
+}
