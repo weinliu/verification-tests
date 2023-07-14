@@ -1378,7 +1378,7 @@ spec:
 	//author: jshu@redhat.com sguo@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "33832"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33832-Low-42251-[aws]Hive supports ClusterPool [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33832-Low-42251-Medium-43033-[aws]Hive supports ClusterPool [Serial]", func() {
 		testCaseID := "33832"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -1510,6 +1510,21 @@ spec:
 
 		exutil.By("Check if ClusterClaim become running")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
+
+		exutil.By("OCP-43033: oc get clusterclaim should report ClusterDeleted")
+		exutil.By("Delete the ClusterDeployment")
+		cmd, _, _, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("cd", cdName, "-n", cdNameSpace).Background()
+		defer cmd.Process.Kill()
+
+		exutil.By("Check ClusterRunning conditions of clusterclaim")
+
+		expectKeyValue := map[string]string{
+			"status":  "False",
+			"reason":  "ClusterDeleted",
+			"message": "Assigned cluster has been deleted",
+		}
+		waitForClusterRunningFalse := checkCondition(oc, "ClusterClaim", claimName, oc.Namespace(), "ClusterRunning", expectKeyValue, "wait for ClusterRunning false")
+		o.Eventually(waitForClusterRunningFalse).WithTimeout(ClusterUninstallTimeout * time.Second).WithPolling(15 * time.Second).Should(o.BeTrue())
 	})
 
 	//author: fxie@redhat.com
