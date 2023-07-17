@@ -157,4 +157,36 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			return result
 		}, "60s", "5s").Should(o.BeTrue(), fmt.Sprintf("daemonset.apps/whereabouts-reconciler is not deleted"))
 	})
+
+	// author: weliang@redhat.com
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-64958-Unable to set default-route when istio sidecar is injected. [Serial]", func() {
+		//https://issues.redhat.com/browse/OCPBUGS-7844
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			netAttachDefFile    = filepath.Join(buildPruningBaseDir, "multus/istiosidecar-NAD.yaml")
+			testPod             = filepath.Join(buildPruningBaseDir, "multus/istiosidecar-pod.yaml")
+		)
+
+		exutil.By("Create a new namespace")
+		ns1 := "test-64958"
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(ns1)
+		oc.CreateSpecifiedNamespaceAsAdmin(ns1)
+
+		exutil.By("Create a custom resource network-attach-defintion in the namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", netAttachDefFile, "-n", ns1).Execute()
+		netAttachDefErr := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile, "-n", ns1).Execute()
+		o.Expect(netAttachDefErr).NotTo(o.HaveOccurred())
+		netAttachDefOutput, netAttachDefOutputErr := oc.AsAdmin().Run("get").Args("net-attach-def", "-n", ns1).Output()
+		o.Expect(netAttachDefOutputErr).NotTo(o.HaveOccurred())
+		o.Expect(netAttachDefOutput).To(o.ContainSubstring("test-nad"))
+
+		exutil.By("Create a pod consuming above network-attach-defintion in ns1")
+		createResourceFromFile(oc, ns1, testPod)
+		o.Expect(waitForPodWithLabelReady(oc, ns1, "name=testpod")).NotTo(o.HaveOccurred(), "The test pod in ns/%s is not ready", ns1)
+
+		exutil.By("Check the default-route is created when istio sidecar is injected")
+		routeLog, routeErr := execCommandInSpecificPod(oc, ns1, "testpod", "ip route")
+		o.Expect(routeErr).NotTo(o.HaveOccurred())
+		o.Expect(routeLog).To(o.ContainSubstring("default via 172.19.55.99 dev net1"))
+	})
 })
