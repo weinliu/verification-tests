@@ -3,6 +3,7 @@ package util
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -107,12 +108,22 @@ func ListAllMachineNames(oc *CLI) []string {
 	return strings.Split(machineNames, " ")
 }
 
-// ListWorkerMachineSetNames list all worker machineSets
+// ListWorkerMachineSetNames list all linux worker machineSets
 func ListWorkerMachineSetNames(oc *CLI) []string {
 	e2e.Logf("Listing all MachineSets ...")
 	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return strings.Split(machineSetNames, " ")
+	workerMachineSetNames := strings.Split(machineSetNames, " ")
+	var linuxWorkerMachineSetNames []string
+	for _, workerMachineSetName := range workerMachineSetNames {
+		machineSetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, workerMachineSetName, "-o=jsonpath={.spec.template.metadata.labels}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(machineSetLabels, `"machine.openshift.io/os-id":"Windows"`) {
+			linuxWorkerMachineSetNames = append(linuxWorkerMachineSetNames, workerMachineSetName)
+		}
+	}
+	e2e.Logf("linuxWorkerMachineSetNames: %s", linuxWorkerMachineSetNames)
+	return linuxWorkerMachineSetNames
 }
 
 // ListWorkerMachineNames list all worker machines
@@ -177,6 +188,12 @@ func WaitForMachinesRunning(oc *CLI, machineNumber int, machineSetName string) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[*].status.phase}").Output()
+			if strings.Contains(output, "Failed") {
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
+				e2e.Logf("%v", output)
+				return false, fmt.Errorf("Some machine go into Failed phase!")
+			}
 			e2e.Logf("Expected %v  machine are not Running yet and waiting up to 1 minutes ...", machineNumber)
 			return false, nil
 		}
@@ -184,6 +201,8 @@ func WaitForMachinesRunning(oc *CLI, machineNumber int, machineSetName string) {
 		return true, nil
 	})
 	if pollErr != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
+		e2e.Logf("%v", output)
 		e2e.Failf("Expected %v  machines are not Running after waiting up to 16 minutes ...", machineNumber)
 	}
 	e2e.Logf("All machines are Running ...")
