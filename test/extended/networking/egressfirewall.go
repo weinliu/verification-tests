@@ -1301,6 +1301,51 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			}, "120s", "10s").Should(o.BeTrue(), "Allow rule did not work as expected in second namespace after rule change for IPv6 !!")
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-High-65173-Misconfigured Egress Firewall can be corrected.", func() {
+		//This is from customer bug https://issues.redhat.com/browse/OCPBUGS-15182
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressFWTemplate2   = filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
+		)
+
+		exutil.By("Obtain the namespace \n")
+		ns := oc.Namespace()
+
+		exutil.By("Create an EgressFirewall with missing cidr prefix\n")
+		egressFW2 := egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Deny",
+			cidr:      "1.1.1.1",
+			template:  egressFWTemplate2,
+		}
+		egressFW2.createEgressFW2Object(oc)
+
+		exutil.By("Verify EgressFirewall was not applied correctly\n")
+		checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			output, efErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", "-n", ns, egressFW2.name).Output()
+			if efErr != nil {
+				e2e.Logf("Failed to get egressfirewall %v, error: %s. Trying again", egressFW2, efErr)
+				return false, nil
+			}
+			if !strings.Contains(output, "EgressFirewall Rules not correctly added") {
+				e2e.Logf("The egressfirewall output message not expexted, trying again. \n %s", output)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("EgressFirewall with missing cidr prefix should not be applied correctly!"))
+
+		exutil.By("Apply EgressFirewall again with correct cidr\n")
+		egressFW2.cidr = "1.1.1.0/24"
+		egressFW2.createEgressFW2Object(oc)
+
+		exutil.By("Verify EgressFirewall was applied correctly\n")
+		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
