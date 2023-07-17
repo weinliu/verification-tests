@@ -443,6 +443,22 @@ func (po *pod) getValueByJSONPath(oc *exutil.CLI, jsonPath string) (string, erro
 	return oc.WithoutNamespace().AsAdmin().Run("get").Args("-n", po.namespace, "pod/"+po.name, "-o", "jsonpath="+jsonPath).Output()
 }
 
+// Check Pod status consistently
+func (po *pod) checkStatusConsistently(oc *exutil.CLI, status string, waitTime time.Duration) {
+	o.Consistently(func() string {
+		podStatus, _ := getPodStatus(oc, po.namespace, po.name)
+		return podStatus
+	}, waitTime*time.Second, 5*time.Second).Should(o.ContainSubstring(status))
+}
+
+// Check Pod status eventually, minimum waitTime required is 20 seconds
+func (po *pod) checkStatusEventually(oc *exutil.CLI, status string, waitTime time.Duration) {
+	o.Eventually(func() string {
+		podStatus, _ := getPodStatus(oc, po.namespace, po.name)
+		return podStatus
+	}, waitTime*time.Second, waitTime*time.Second/20).Should(o.ContainSubstring(status))
+}
+
 // Get the phase, status of specified pod
 func getPodStatus(oc *exutil.CLI, namespace string, podName string) (string, error) {
 	podStatus, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.phase}").Output()

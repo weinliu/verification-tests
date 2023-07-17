@@ -4654,6 +4654,328 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}()
 		}
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-64157-[CSI-Driver] [Dynamic PV] [Filesystem default] ReadWriteOncePod volume will succeed mounting when consumed by a single pod on a node, and will fail to mount when consumed by second pod
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-Critical-64157-[CSI-Driver] [Dynamic PV] [Filesystem default] ReadWriteOncePod volume will succeed mounting when consumed by a single pod on a node, and will fail to mount when consumed by second pod", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "filestore.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOncePod"))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			pod2 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.scname = scName
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			exutil.By("#. Check the pod volume can be read and write")
+			pod.checkMountedVolumeCouldRW(oc)
+
+			exutil.By("#. Check the pod volume have the exec right")
+			pod.checkMountedVolumeHaveExecRight(oc)
+
+			exutil.By("#. Create second pod with the created pvc and check pod event shows scheduling failed")
+			pod2.create(oc)
+			defer pod2.deleteAsAdmin(oc)
+			pod2.checkStatusConsistently(oc, "Pending", 20)
+			waitResourceSpecifiedEventsOccurred(oc, pod2.namespace, pod2.name, "FailedScheduling", "node has pod using PersistentVolumeClaim with the same name and ReadWriteOncePod access mode")
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64158-[CSI-Driver] [Dynamic PV] [Filesystem default] ReadWriteOncePod volume will fail to mount when consumed by second pod on a different node
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-Critical-64158-[CSI-Driver] [Dynamic PV] [Filesystem default] ReadWriteOncePod volume will fail to mount when consumed by second pod on a different node", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "filestore.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOncePod"))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			pod2 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.scname = scName
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			exutil.By("#. Check the pod volume can be read and write")
+			pod.checkMountedVolumeCouldRW(oc)
+
+			exutil.By("#. Check the pod volume have the exec right")
+			pod.checkMountedVolumeHaveExecRight(oc)
+
+			exutil.By("#. Create second pod on a different node with the same pvc and check pod event shows scheduling failed")
+			nodeName := getNodeNameByPod(oc, pod.namespace, pod.name)
+			pod2.createWithNodeAffinity(oc, "kubernetes.io/hostname", "NotIn", []string{nodeName})
+			defer pod2.deleteAsAdmin(oc)
+			pod2.checkStatusConsistently(oc, "Pending", 20)
+			waitResourceSpecifiedEventsOccurred(oc, pod2.namespace, pod2.name, "FailedScheduling", "node has pod using PersistentVolumeClaim with the same name and ReadWriteOncePod access mode")
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64159-[CSI-Driver] [Dynamic PV] [Filesystem default] ReadWriteOncePod volume will succeed mounting when consumed by a second pod as soon as first pod is deleted
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-Critical-64159-[CSI-Driver] [Dynamic PV] [Filesystem default] ReadWriteOncePod volume will succeed mounting when consumed by a second pod as soon as first pod is deleted", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "filestore.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOncePod"))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			pod2 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.scname = scName
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			exutil.By("#. Check the pod volume can be read and write")
+			pod.checkMountedVolumeCouldRW(oc)
+
+			exutil.By("#. Check the pod volume have the exec right")
+			pod.checkMountedVolumeHaveExecRight(oc)
+
+			exutil.By("#. Create second pod with the created pvc and check pod goes into Pending status")
+			pod2.create(oc)
+			defer pod2.deleteAsAdmin(oc)
+			pod2.checkStatusConsistently(oc, "Pending", 20)
+
+			exutil.By("#. Delete first pod and check second pod goes into Runnning status")
+			deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
+			pod2.checkStatusEventually(oc, "Running", 30)
+
+			exutil.By("#. Check the second pod volume have existing data")
+			pod2.checkMountedVolumeDataExist(oc, true)
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64161-[CSI-Driver] [Dynamic PV] [Filesystem default] Low-priority pod requesting a ReadWriteOncePod volume that's already in-use will result in it being Unschedulable
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-Critical-64161-[CSI-Driver] [Dynamic PV] [Filesystem default] Low-priority pod requesting a ReadWriteOncePod volume that's already in-use will result in it being Unschedulable", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "filestore.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir    = exutil.FixturePath("testdata", "storage")
+			pvcTemplate           = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate           = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			priorityClassTemplate = filepath.Join(storageTeamBaseDir, "priorityClass-template.yaml")
+			supportProvisioners   = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("#. Create a low Priority Class and high Priority Class")
+		priorityClassLow := newPriorityClass(setPriorityClassTemplate(priorityClassTemplate), setPriorityClassValue("1000"), setPriorityClassDescription("This is a custom LOW priority class"))
+		priorityClassHigh := newPriorityClass(setPriorityClassTemplate(priorityClassTemplate), setPriorityClassValue("2000"), setPriorityClassDescription("This is a custom HIGH priority class"))
+		priorityClassLow.Create(oc)
+		defer priorityClassLow.DeleteAsAdmin(oc)
+		priorityClassHigh.Create(oc)
+		defer priorityClassHigh.DeleteAsAdmin(oc)
+
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOncePod"))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			pod2 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			extraParameters_pod := map[string]interface{}{
+				"jsonPath":          `items.0.spec.`,
+				"priorityClassName": priorityClassHigh.name,
+			}
+			extraParameters_pod2 := map[string]interface{}{
+				"jsonPath":          `items.0.spec.`,
+				"priorityClassName": priorityClassLow.name,
+			}
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.scname = scName
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("#. Create a high priority pod with the created pvc and wait for the pod ready")
+			pod.createWithExtraParameters(oc, extraParameters_pod)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			exutil.By("#. Check the pod volume can be read and write")
+			pod.checkMountedVolumeCouldRW(oc)
+
+			exutil.By("#. Check the pod volume have the exec right")
+			pod.checkMountedVolumeHaveExecRight(oc)
+
+			exutil.By("#. Create a low priority pod with the created pvc and check pod event shows scheduling failed")
+			pod2.createWithExtraParameters(oc, extraParameters_pod2)
+			defer pod2.deleteAsAdmin(oc)
+			pod2.checkStatusConsistently(oc, "Pending", 20)
+			waitResourceSpecifiedEventsOccurred(oc, pod2.namespace, pod2.name, "FailedScheduling", "node has pod using PersistentVolumeClaim with the same name and ReadWriteOncePod access mode")
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-64160-[CSI-Driver] [Dynamic PV] [Filesystem default] High-priority pod requesting a ReadWriteOncePod volume that's already in-use will result in the preemption of the pod previously using the volume
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-Critical-64160-[CSI-Driver] [Dynamic PV] [Filesystem default] High-priority pod requesting a ReadWriteOncePod volume that's already in-use will result in the preemption of the pod previously using the volume", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "filestore.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir    = exutil.FixturePath("testdata", "storage")
+			pvcTemplate           = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate           = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			priorityClassTemplate = filepath.Join(storageTeamBaseDir, "priorityClass-template.yaml")
+			supportProvisioners   = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("#. Create a low Priority Class and high Priority Class")
+		priorityClassLow := newPriorityClass(setPriorityClassTemplate(priorityClassTemplate), setPriorityClassValue("1000"), setPriorityClassDescription("This is a custom LOW priority class"))
+		priorityClassHigh := newPriorityClass(setPriorityClassTemplate(priorityClassTemplate), setPriorityClassValue("2000"), setPriorityClassDescription("This is a custom HIGH priority class"))
+		priorityClassLow.Create(oc)
+		defer priorityClassLow.DeleteAsAdmin(oc)
+		priorityClassHigh.Create(oc)
+		defer priorityClassHigh.DeleteAsAdmin(oc)
+
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOncePod"))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			pod2 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			extraParameters_pod := map[string]interface{}{
+				"jsonPath":          `items.0.spec.`,
+				"priorityClassName": priorityClassLow.name,
+			}
+			extraParameters_pod2 := map[string]interface{}{
+				"jsonPath":          `items.0.spec.`,
+				"priorityClassName": priorityClassHigh.name,
+			}
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.scname = scName
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("#. Create a low priority pod with the created pvc and wait for the pod ready")
+			pod.createWithExtraParameters(oc, extraParameters_pod)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			exutil.By("#. Check the pod volume can be read and write")
+			pod.checkMountedVolumeCouldRW(oc)
+
+			exutil.By("#. Create a high priority pod with the created pvc and check low priority pod is preempted")
+			pod2.createWithExtraParameters(oc, extraParameters_pod2)
+			defer pod2.deleteAsAdmin(oc)
+			pod2.checkStatusEventually(oc, "Running", 30)
+			waitResourceSpecifiedEventsOccurred(oc, pod.namespace, pod.name, "Preempted by a pod on node")
+
+			exutil.By("#. Check the low priority pod is deleted from cluster")
+			checkResourcesNotExist(oc, "pod", pod.name, pod.namespace)
+
+			exutil.By("#. Check new pod volume can access existing data")
+			pod2.checkMountedVolumeDataExist(oc, true)
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 })
 
 // Performing test steps for Online Volume Resizing

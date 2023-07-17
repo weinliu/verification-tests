@@ -67,3 +67,70 @@ func (rq *ResourceQuota) GetValueByJSONPath(oc *exutil.CLI, jsonPath string) str
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return output
 }
+
+// PriorityClass struct definition
+type PriorityClass struct {
+	name        string
+	value       string
+	description string
+	template    string
+}
+
+// function option mode to change the default value of PriorityClass parameters,eg. name, value
+type priorityClassOption func(*PriorityClass)
+
+// Replace the default value of PriorityClass name parameter
+func setPriorityClassName(name string) priorityClassOption {
+	return func(this *PriorityClass) {
+		this.name = name
+	}
+}
+
+// Replace the default value of PriorityClass template parameter
+func setPriorityClassTemplate(template string) priorityClassOption {
+	return func(this *PriorityClass) {
+		this.template = template
+	}
+}
+
+// Replace the default value of PriorityClass Value parameter
+func setPriorityClassValue(value string) priorityClassOption {
+	return func(this *PriorityClass) {
+		this.value = value
+	}
+}
+
+// Replace the default value of PriorityClass Description parameter
+func setPriorityClassDescription(description string) priorityClassOption {
+	return func(this *PriorityClass) {
+		this.description = description
+	}
+}
+
+// Creates new PriorityClass with customized parameters
+func (pc *PriorityClass) Create(oc *exutil.CLI) {
+	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", pc.template, "-p", "PRIORITYCLASS_NAME="+pc.name,
+		"VALUE="+pc.value, "DESCRIPTION="+pc.description)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// DeleteAsAdmin deletes the PriorityClass by kubeadmin
+func (pc *PriorityClass) DeleteAsAdmin(oc *exutil.CLI) {
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("PriorityClass/"+pc.name, "--ignore-not-found").Execute()
+}
+
+// Create a new customized PriorityClass object
+func newPriorityClass(opts ...priorityClassOption) PriorityClass {
+	defaultPriorityClass := PriorityClass{
+		name:        "my-priorityclass-" + getRandomString(),
+		template:    "priorityClass-template.yaml",
+		value:       "1000000000",
+		description: "Custom priority class",
+	}
+
+	for _, o := range opts {
+		o(&defaultPriorityClass)
+	}
+
+	return defaultPriorityClass
+}
