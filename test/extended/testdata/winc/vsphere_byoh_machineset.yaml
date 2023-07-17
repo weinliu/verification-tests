@@ -36,7 +36,7 @@ spec:
             creationTimestamp: null
           network:
             devices:
-            - networkName: qe-segment
+            - networkName: devqe-segment-221
           numCPUs: 4
           numCoresPerSocket: 1
           snapshot: ""
@@ -44,7 +44,7 @@ spec:
           userDataSecret:
             name: windows-user-data
           workspace:
-            datacenter: SDDC-Datacenter
-            datastore: WorkloadDatastore
-            folder: /SDDC-Datacenter/vm/<infrastructureID>
-            server: vcenter.sddc-44-236-21-251.vmwarevmc.com
+            datacenter: DEVQEdatacenter
+            datastore: /DEVQEdatacenter/datastore/vsanDatastore
+            folder: /DEVQEdatacenter/datastore/vsanDatastore/vm/<infrastructureID>
+            server: vcenter.devqe.ibmc.devcluster.openshift.com

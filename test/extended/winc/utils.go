@@ -30,7 +30,7 @@ var (
 	windowsWorkloads   = "win-webserver"
 	linuxWorkloads     = "linux-webserver"
 	nutanix_proxy_host = "10.0.77.69"
-	vsphere_bastion    = "bastion.vmc.ci.openshift.org"
+	vsphere_bastion    = "10.0.76.163"
 	nutanixProxyUser   = "root"
 	defaultWindowsMS   = "windows"
 )
