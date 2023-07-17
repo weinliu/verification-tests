@@ -292,7 +292,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
 
 		g.By("Creating Windows machineset with 1")
-		setMachineset(oc, iaasPlatform, machinesetName, getConfigMapData(oc, "primary_windows_image"))
+		setMachineset(oc, iaasPlatform, getConfigMapData(oc, "primary_windows_image"))
 		waitForMachinesetReady(oc, machinesetName, 25, 1)
 
 		g.By("Creating cluster and machine autoscaller")
@@ -323,7 +323,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 	// author rrasouli@redhat.com
 
-	g.It("Smokerun-Longduration-Author:rrasouli-NonPreRelease-High-37096-Schedule Windows workloads with cluster running multiple Windows OS variants [Slow][Disruptive]", func() {
+	g.It("Longduration-Author:rrasouli-NonPreRelease-High-37096-Schedule Windows workloads with cluster running multiple Windows OS variants [Slow][Disruptive]", func() {
 		if iaasPlatform != "azure" && iaasPlatform != "aws" {
 			// Currently vSphere and GCP supports only Windows 2022
 			g.Skip("Only Azure and AWS are supporting multiple operating systems, skipping")
@@ -505,8 +505,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Scale up the MachineSet")
 		e2e.Logf("Scalling up the Windows node to 3")
 		windowsMachineSetName := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 15, 3, false)
 		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
+		scaleWindowsMachineSet(oc, windowsMachineSetName, 15, 3, false)
 		waitWindowsNodesReady(oc, 3, 1200*time.Second)
 		// Testing the Windows server is reachable via Linux pod
 		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
@@ -753,7 +753,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Creating Windows machineset with 1")
 		machinesetName := getWindowsMachineSetName(oc, "winc", iaasPlatform, zone)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
-		setMachineset(oc, iaasPlatform, machinesetName, getConfigMapData(oc, "primary_windows_image"))
+		setMachineset(oc, iaasPlatform, getConfigMapData(oc, "primary_windows_image"))
 
 		g.By("Check Windows machine should be in Provisioning phase and not reconciled without cloud-private-key and windows-user-data")
 		pollErr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {

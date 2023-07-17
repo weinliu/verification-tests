@@ -32,6 +32,7 @@ var (
 	nutanix_proxy_host = "10.0.77.69"
 	vsphere_bastion    = "bastion.vmc.ci.openshift.org"
 	nutanixProxyUser   = "root"
+	defaultWindowsMS   = "windows"
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
@@ -148,6 +149,29 @@ func getNumNodesWithAnnotation(oc *exutil.CLI, annotationValue string) int {
 }
 
 func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, zone string) string {
+	// Using SHARED_DIR env var to know if the test runs on Prow or Jenkins
+	val, prow := os.LookupEnv("SHARED_DIR")
+	if prow && val != "" {
+		machineSets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets", "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, ms := range strings.Split(machineSets, " ") {
+			if strings.Contains(ms, "winworker") {
+				if name == defaultWindowsMS {
+					// if name was "windows" it means that we are looking for the default MachineSet
+					return ms
+				} else {
+					// if name is different than "windows", it means we are creating one via
+					// setMachineset function.
+					if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+						return strings.ReplaceAll(ms, "winworker", name+"-worker")
+					}
+					return name
+				}
+			}
+		}
+		e2e.Failf("MachineSet with substring winworker not found in Prow's cluster. Found: %s", machineSets)
+
+	}
 	machinesetName := name
 	if iaasPlatform == "vsphere" || iaasPlatform == "nutanix" && name == "windows" {
 		machinesetName = "winworker"
@@ -163,6 +187,7 @@ func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, 
 
 	}
 	return machinesetName
+
 }
 
 func getWindowsHostNames(oc *exutil.CLI) []string {
@@ -456,12 +481,20 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, machineSetName string, fi
 		o.Expect(err).NotTo(o.HaveOccurred())
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.gcp.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		defaultMachineSet, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset}").Output()
+		// Obtain the projectId and email from the existing machineSet
+		project, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachineset, "-n", mcoNamespace, defaultMachineSet, "-o=jsonpath={.spec.template.spec.providerSpec.value.projectID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		email, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachineset, "-n", mcoNamespace, defaultMachineSet, "-o=jsonpath={.spec.template.spec.providerSpec.value.serviceAccounts[0].email}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestFile, err := exutil.GenerateManifestFile(
 			oc, "winc", fileName,
 			map[string]string{"<infrastructureID>": infrastructureID},
 			map[string]string{"<zone>": zone},
 			map[string]string{"<zone_suffix>": strings.Split(zone, "-")[2]},
 			map[string]string{"<region>": region},
+			map[string]string{"<project>": project},
+			map[string]string{"<email>": email},
 			map[string]string{"<gcp_windows_image>": strings.Trim(imageID, `'`)},
 			map[string]string{"<name>": machineSetName},
 		)
@@ -755,7 +788,7 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressesType []string, machin
 	return addressesArray
 }
 
-func setMachineset(oc *exutil.CLI, iaasPlatform string, machinesetName string, winVersion string) {
+func setMachineset(oc *exutil.CLI, iaasPlatform string, winVersion string) {
 	machinesetFileName := iaasPlatform + "_windows_machineset.yaml"
 	err := configureMachineset(oc, iaasPlatform, "winc", machinesetFileName, winVersion)
 	o.Expect(err).NotTo(o.HaveOccurred())

@@ -39,7 +39,7 @@ spec:
           networkInterfaces:
           - network: <infrastructureID>-network
             subnetwork: <infrastructureID>-worker-subnet
-          projectID: openshift-qe
+          projectID: <project>
           region: <region>
           zone: <zone>
           tags:
@@ -51,7 +51,7 @@ spec:
             sizeGb: 128
             type: pd-ssd
           serviceAccounts:
-          - email: <infrastructureID>-w@openshift-qe.iam.gserviceaccount.com
+          - email: <email>
             scopes:
             - https://www.googleapis.com/auth/cloud-platform
           userDataSecret:
