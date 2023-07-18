@@ -1381,3 +1381,15 @@ func assertPodOutput(oc *exutil.CLI, podLabel string, namespace string, expected
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with %s is not expected %s", podLabel, expected))
 }
+
+// this function is used to check whether proxy is configured or not
+func checkProxy(oc *exutil.CLI) bool {
+	httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	httpsProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpsProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if httpProxy != "" || httpsProxy != "" {
+		return true
+	}
+	return false
+}

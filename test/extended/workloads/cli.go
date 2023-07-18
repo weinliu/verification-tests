@@ -93,6 +93,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Longduration-ConnectedOnly-NonPreRelease-Author:yinzhou-High-43032-oc adm release mirror generating correct imageContentSources when using --to and --to-release-image [Slow]", func() {
+		if checkProxy(oc) {
+			g.Skip("This is proxy cluster, command in pod without proxy will failed, skip it.")
+		}
+
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podMirrorT := filepath.Join(buildPruningBaseDir, "pod_mirror.yaml")
 		g.By("create new namespace")
@@ -198,6 +202,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-43034-should not show signature verify error msgs while trying to mirror OCP image repository to [Flaky]", func() {
+		if checkProxy(oc) {
+			g.Skip("This is proxy cluster, command in pod without proxy will failed, skip the test.")
+		}
+
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podMirrorT := filepath.Join(buildPruningBaseDir, "pod_mirror.yaml")
 		g.By("create new namespace")
