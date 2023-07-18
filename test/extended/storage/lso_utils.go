@@ -119,14 +119,21 @@ func (lso *localStorageOperator) getCurrentCSV(oc *exutil.CLI) string {
 func (lso *localStorageOperator) checkPackagemanifestsExistInClusterCatalogs(oc *exutil.CLI) {
 	catalogs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "packagemanifests.packages.operators.coreos.com", "-o=jsonpath={.items[?(@.metadata.name==\"local-storage-operator\")].metadata.labels.catalog}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if catalogs == "" {
+	catalogsList := strings.Fields(catalogs)
+	// Check whether the preview catalogsource exists
+	isPreviewExist, index := exutil.StringsSliceElementsHasPrefix(catalogsList, "oo-", true)
+	switch {
+	case catalogs == "":
 		g.Skip("Skipped: Local storage Operator packagemanifests not exist in cluster catalogs")
-	} else if strings.Contains(catalogs, qeCatalogSource) {
+	case isPreviewExist: // Used for lso presubmit test jobs
+		lso.source = catalogsList[index]
+		lso.channel = "preview"
+	case strings.Contains(catalogs, qeCatalogSource):
 		lso.source = qeCatalogSource
-	} else if strings.Contains(catalogs, redhatCatalogSource) {
+	case strings.Contains(catalogs, redhatCatalogSource):
 		lso.source = redhatCatalogSource
-	} else {
-		lso.source = strings.Split(catalogs, " ")[0]
+	default:
+		lso.source = catalogsList[0]
 	}
 	e2e.Logf(`Local storage Operator exist in "catalogs: %s", use "channel: %s", "source: %s" start test`, catalogs, lso.channel, lso.source)
 }
