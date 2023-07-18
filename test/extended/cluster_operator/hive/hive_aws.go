@@ -70,6 +70,53 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "37464"|./bin/extended-platform-tests run --timeout 20m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-High-37464-[aws]Seperate clustersync controller from hive-controllers, meanwhile make it be able to scale up/down [Serial]", func() {
+		exutil.By("Check the statefulset in hive namespace")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DefaultTimeout, []string{"statefulset", "-n", HiveNamespace}).check(oc)
+
+		exutil.By("check there is a separate pod for clustersync")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync-0", ok, DefaultTimeout, []string{"pods", "-n", HiveNamespace}).check(oc)
+
+		exutil.By("Patching HiveConfig to scale up clustersync pod")
+		patch := `
+spec:
+  controllersConfig:
+    controllers:
+    - config:
+        replicas: 2
+      name: clustersync`
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/controllersConfig"}]`).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check statefulset replicas scale up to 2")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "2", ok, DefaultTimeout, []string{"statefulset", "hive-clustersync", "-o=jsonpath={.status.replicas}", "-n", HiveNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync-1", ok, DefaultTimeout, []string{"pods", "-n", HiveNamespace}).check(oc)
+
+		exutil.By("Wait for 10 min to hive next reconcile finish, then check the hive-clustersync-1 pod is still there")
+		time.Sleep(10 * time.Minute)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "2", ok, DefaultTimeout, []string{"statefulset", "hive-clustersync", "-o=jsonpath={.status.replicas}", "-n", HiveNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync-1", ok, DefaultTimeout, []string{"pods", "-n", HiveNamespace}).check(oc)
+
+		exutil.By("Scale down replicas to 1 again via editing hiveconfig, check it can scale down")
+		patch = `
+spec:
+  controllersConfig:
+    controllers:
+    - config:
+        replicas: 1
+      name: clustersync`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check statefulset replicas scale down to 1 again,")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1", ok, DefaultTimeout, []string{"statefulset", "hive-clustersync", "-o=jsonpath={.status.replicas}", "-n", HiveNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync-0", ok, DefaultTimeout, []string{"pods", "-n", HiveNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync-1", nok, DefaultTimeout, []string{"pods", "-n", HiveNamespace}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "43100"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-High-43100-[AWS]Hive supports hibernating AWS cluster with spot instances [Serial]", func() {
 		testCaseID := "43100"
