@@ -198,7 +198,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		opensslCmd := "openssl x509 -noout -text -in " + dirname + "/tls.crt"
 		ssloutput, sslerr := exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(sslerr).NotTo(o.HaveOccurred())
-		if !strings.Contains(string(ssloutput), "http01-test."+ingressDomain[0]) {
+		if !strings.Contains(string(ssloutput), "http01-test."+strings.Split(ingressDomain[0], "'")[1]) {
 			e2e.Failf("Failure: The certificate is indeed issued by Let's Encrypt, the Subject Alternative Name is indeed the specified DNS_NAME failed.")
 		}
 	})
