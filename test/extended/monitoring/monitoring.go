@@ -1520,6 +1520,48 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
+	g.It("Author:tagao-High-63658-check On/Off switch of mountstats Collector in Node Exporter [Serial]", func() {
+		var (
+			enableMountstats    = filepath.Join(monitoringBaseDir, "enableMountstats.yaml")
+			enableMountstatsNFS = filepath.Join(monitoringBaseDir, "enableMountstats_nfs.yaml")
+		)
+		g.By("delete uwm-config/cm-config and pvcs at the end of the case")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc", "-l", "app.kubernetes.io/name=prometheus", "-n", "openshift-monitoring").Execute()
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("check mountstats collector is disabled by default")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--no-collector.mountstats"))
+
+		g.By("check mountstats metrics in prometheus k8s pod, should not have related metrics")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="mountstats"}'`, token, `"result":[]`, uwmLoadTime)
+
+		g.By("enable mountstats in CMO")
+		createResourceFromYaml(oc, "openshift-monitoring", enableMountstats)
+
+		g.By("check mountstats metrics in prometheus k8s pod again")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="mountstats"}'`, token, `"collector":"mountstats"`, 3*uwmLoadTime)
+
+		g.By("check mountstats in daemonset")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--collector.mountstats"))
+
+		g.By("check nfs metrics if need")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sc").Output()
+		if strings.Contains(output, "nfs") {
+			createResourceFromYaml(oc, "openshift-monitoring", enableMountstatsNFS)
+			exutil.AssertPodToBeReady(oc, "prometheus-k8s-0", "openshift-monitoring")
+			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_mountstats_nfs_read_bytes_total'`, token, `"__name__":"node_mountstats_nfs_read_bytes_total"`, 3*uwmLoadTime)
+			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_mountstats_nfs_write_bytes_total'`, token, `"__name__":"node_mountstats_nfs_write_bytes_total"`, 3*uwmLoadTime)
+			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_mountstats_nfs_operations_requests_total'`, token, `"__name__":"node_mountstats_nfs_operations_requests_total"`, 3*uwmLoadTime)
+		} else {
+			e2e.Logf("no need to check nfs metrics for this env")
+		}
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
