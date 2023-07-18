@@ -1520,6 +1520,42 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-High-63657-check On/Off switch of systemd Collector in Node Exporter [Serial]", func() {
+		var (
+			enableSystemdUnits = filepath.Join(monitoringBaseDir, "enableSystemdUnits.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("check systemd Collector is disabled by default")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--no-collector.systemd"))
+
+		g.By("check systemd metrics in prometheus k8s pod, should not have related metrics")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="systemd"}'`, token, `"result":[]`, uwmLoadTime)
+
+		g.By("enable systemd and units in CMO")
+		createResourceFromYaml(oc, "openshift-monitoring", enableSystemdUnits)
+
+		g.By("check systemd related metrics in prometheus k8s pod again")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="systemd"}'`, token, `"collector":"systemd"`, 3*uwmLoadTime)
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_systemd_system_running'`, token, `"node_systemd_system_running"`, 3*uwmLoadTime)
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_systemd_timer_last_trigger_seconds'`, token, `"node_systemd_timer_last_trigger_seconds"`, 3*uwmLoadTime)
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_systemd_units'`, token, `"node_systemd_units"`, 3*uwmLoadTime)
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_systemd_version'`, token, `"node_systemd_version"`, 3*uwmLoadTime)
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_systemd_unit_state'`, token, `"node_systemd_unit_state"`, 3*uwmLoadTime)
+
+		g.By("check systemd in daemonset")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--collector.systemd"))
+		o.Expect(output).To(o.ContainSubstring("--collector.systemd.unit-include=^(network.+|nss.+|logrotate.timer)$"))
+	})
+
+	// author: tagao@redhat.com
 	g.It("Author:tagao-High-63658-check On/Off switch of mountstats Collector in Node Exporter [Serial]", func() {
 		var (
 			enableMountstats    = filepath.Join(monitoringBaseDir, "enableMountstats.yaml")
