@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -4081,4 +4082,164 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"svc", "-n", "hive"}).check(oc)
 	})
 
+	//author: kcui@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "35209"|./bin/extended-platform-tests run --timeout 45m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-Medium-35209-[AWS][Hive]Allow setting lifetime for claims[Serial]", func() {
+		testCaseID := "35209"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		exutil.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		exutil.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
+		exutil.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		exutil.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		exutil.By("Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
+		pool := clusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "true",
+			baseDomain:     AWSBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "aws",
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
+			size:           4,
+			maxSize:        4,
+			runningCount:   4,
+			maxConcurrent:  4,
+			hibernateAfter: "360m",
+			template:       poolTemp,
+		}
+
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+
+		//the lifetime set for 4 claims initially
+		lifetimeMinuteInitials := []int{4, 8, 12, 20}
+		e2e.Logf("lifetimeMinuteInitials[] of four claims are %vm %vm(==default) %vm %vm(>maximum)", lifetimeMinuteInitials[0], lifetimeMinuteInitials[1], lifetimeMinuteInitials[2], lifetimeMinuteInitials[3])
+
+		defaultLifetimeMinute := 8
+		maximumLifetimeMinute := 16
+		e2e.Logf("defaultLifetimeMinute is %vm, maximumLifetimeMinute is %vm", defaultLifetimeMinute, maximumLifetimeMinute)
+
+		exutil.By("Add claimLifetime field (default and maximum) in .spec of clusterpool CR...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", fmt.Sprintf("{\"spec\":{\"claimLifetime\":{\"default\": \"%dm\"}}}", defaultLifetimeMinute)}).check(oc)
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", fmt.Sprintf("{\"spec\":{\"claimLifetime\":{\"maximum\": \"%dm\"}}}", maximumLifetimeMinute)}).check(oc)
+
+		exutil.By("Check if ClusterPool has already existed")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterPool", "-n", oc.Namespace()}).check(oc)
+
+		exutil.By("Create 4 clusterclaims named claim1 & claim2 & claim3 & claim4 with different .spec.lifetime from lifetimeMinuteInitials[]")
+		for claimIndex, lifetimeMinuteInitial := range lifetimeMinuteInitials {
+			exutil.By("Create a clusterclaim named claim" + strconv.Itoa(claimIndex+1))
+			claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
+			claimName := poolName + "-claim" + strconv.Itoa(claimIndex+1)
+			claim := clusterClaim{
+				name:            claimName,
+				namespace:       oc.Namespace(),
+				clusterPoolName: poolName,
+				template:        claimTemp,
+			}
+			defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName})
+			claim.create(oc)
+
+			exutil.By("patch claim" + strconv.Itoa(claimIndex+1) + " with spec.lifetime=" + strconv.Itoa(lifetimeMinuteInitial) + "m")
+			e2e.Logf("patch the lifetime if it not equals to defaultLifetimeMinute")
+			//if the .spec.lifetime is nil and default is not nil, it will be auto-filled by default lifetime
+			if lifetimeMinuteInitial != defaultLifetimeMinute {
+				newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"clusterclaim", claimName, "-n", oc.Namespace(), "--type", "merge", "-p", fmt.Sprintf("{\"spec\":{\"lifetime\": \"%dm\"}}", lifetimeMinuteInitial)}).check(oc)
+			}
+			exutil.By("check the lifetime if it equals to lifetimeMinuteInitial[] or default or maximum lifetime")
+			//if the lifetimeMinuteSet > maximumLifetimeMinute, the liftime will be maximumLifetimeMinute, not the lifetimeMinuteSet
+			lifetimeMinuteFinal := int(math.Min(float64(lifetimeMinuteInitial), float64(maximumLifetimeMinute)))
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, fmt.Sprintf("%dm", lifetimeMinuteFinal), ok, DefaultTimeout, []string{"clusterclaim", claimName, "-n", oc.Namespace(), "-o=jsonpath={.status.lifetime}"}).check(oc)
+		}
+
+		//allowable for time error
+		timeThreshold := 30.0
+		//Check which claimName is timeout, between [0,4] is valid
+		timeoutClaimName := 0
+		//check each claimIndex status in different time
+		checkClaimStatus := func() bool {
+			//totally there are 4 claims, judge which claims should exist
+			if timeoutClaimName < 4 {
+				exutil.By(fmt.Sprintf("claim %d-4 should exist， check if it is really exist, by checking there are not deletionTimestamp", timeoutClaimName+1))
+				for claimNo := 4; claimNo > timeoutClaimName; claimNo-- {
+					claimName := poolName + "-claim" + strconv.Itoa(claimNo)
+					stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterclaim", claimName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.deletionTimestamp}").Outputs()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					//no deletionTimestamp means this claim still exist
+					o.Expect(stdout).To(o.Equal(""))
+				}
+			} else {
+				exutil.By("all claim should not exist, no need to check which claim still alive")
+			}
+
+			//there is no claim be end of life, return directly
+			if timeoutClaimName == 0 {
+				e2e.Logf("all claims exist, no need to check which claim disappears")
+				timeoutClaimName++
+				return true
+			}
+
+			//check the claim timeoutClaimName will be deleted in this time
+			exutil.By(fmt.Sprintf("check if claim 1-%d not exist or being deleted, only need to check the claim%v", timeoutClaimName, timeoutClaimName))
+			claimName := poolName + "-claim" + strconv.Itoa(timeoutClaimName)
+			//check if the claim has already been deleted
+			stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterclaim", "-n", oc.Namespace()).Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			//if the claim has been deleted, return directly
+			if !strings.Contains(stdout, claimName) {
+				e2e.Logf("the claim%d has been deleted, waiting for checking claim%d", timeoutClaimName, timeoutClaimName+1)
+				timeoutClaimName++
+				return true
+			}
+
+			//record creationTimestamp
+			stdout, _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterclaim", claimName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.creationTimestamp}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			creationTime, err := time.Parse(time.RFC3339, stdout)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			//record deletionTimestamp
+			stdout, _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterclaim", claimName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.deletionTimestamp}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(stdout).NotTo(o.Equal(""))
+			deletionTime, err := time.Parse(time.RFC3339, stdout)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			//calculate the lifetimeMinuteSet for this claimIndex
+			lifetimeMinuteFinal := int(math.Min(float64(lifetimeMinuteInitials[timeoutClaimName-1]), float64(maximumLifetimeMinute)))
+
+			//calculate the time error, and it should be less than the allowable time error set
+			gapTime := deletionTime.Sub(creationTime.Add(time.Duration(lifetimeMinuteFinal) * time.Minute))
+			o.Expect(math.Abs(gapTime.Seconds()) < timeThreshold).To(o.BeTrue())
+
+			timeoutClaimName++
+			return true
+		}
+
+		exutil.By("check the claim status on timeline")
+		o.Consistently(checkClaimStatus).WithTimeout(time.Duration(maximumLifetimeMinute+1) * time.Minute).WithPolling(time.Duration(lifetimeMinuteInitials[0]) * time.Minute).Should(o.BeTrue())
+	})
 })
