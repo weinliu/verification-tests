@@ -466,6 +466,13 @@ func SkipForIBMCloud(oc *exutil.CLI) {
 	}
 }
 
+// SkipNonHypershiftGuestClusters mean to skip test for non hypershift hosted cluster
+func SkipNonHypershiftHostedClusters(oc *exutil.CLI) {
+	if !exutil.IsHypershiftHostedCluster(oc) {
+		g.Skip("Skip since it is non hypershift hosted cluster")
+	}
+}
+
 func assertKeywordsExistsInFile(oc *exutil.CLI, keywords string, filePath string, flag bool) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		mnodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos",

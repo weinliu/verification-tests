@@ -4824,3 +4824,151 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 	})
 })
+
+var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on hypershift hosted cluster", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                                     = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
+		buildPruningBaseDir                    string
+		og                                     operatorGroupDescription
+		ogCoTemplate                           string
+		scansettingbindingTemplate             string
+		sub                                    subscriptionDescription
+		subCoHypershiftHostedTemplate          string
+		tprofileCisHypershiftHostedTemplate    string
+		tprofilePcidssHypershiftHostedTemplate string
+	)
+
+	g.BeforeEach(func() {
+		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
+		ogCoTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
+		scansettingbindingTemplate = filepath.Join(buildPruningBaseDir, "scansettingbinding.yaml")
+		subCoHypershiftHostedTemplate = filepath.Join(buildPruningBaseDir, "subscription_hypershift_env.yaml")
+		tprofileCisHypershiftHostedTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-cis-hypershift-hosted.yaml")
+		tprofilePcidssHypershiftHostedTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-pci-dss-hypershift-hosted.yaml")
+		og = operatorGroupDescription{
+			name:      "openshift-compliance",
+			namespace: "openshift-compliance",
+			template:  ogCoTemplate,
+		}
+		sub = subscriptionDescription{
+			subName:                "compliance-operator",
+			namespace:              "openshift-compliance",
+			channel:                "stable",
+			ipApproval:             "Automatic",
+			operatorPackage:        "compliance-operator",
+			catalogSourceName:      "qe-app-registry",
+			catalogSourceNamespace: "openshift-marketplace",
+			startingCSV:            "",
+			currentCSV:             "",
+			installedCSV:           "",
+			template:               subCoHypershiftHostedTemplate,
+			singleNamespace:        true,
+		}
+
+		g.By("Skip test when precondition not meet !!!")
+		SkipNonHypershiftHostedClusters(oc)
+		SkipMissingCatalogsource(oc)
+		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
+		SkipMissingDefaultSC(oc)
+		SkipMissingRhcosWorkers(oc)
+
+		g.By("Install Compliance Operator and check it is sucessfully installed !!! ")
+		createComplianceOperator(oc, sub, og)
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonPreRelease-Author:xiyuan-High-63796-Scan hosted cluster for ocp4-cis and ocp4-cis-node profiles on hypershift hosted cluster [Serial]", func() {
+		var tprofileCis = "cis-compliance-hypershift" + getRandomString()
+		var ssb = scanSettingBindingDescription{
+			name:            "test-cis-" + getRandomString(),
+			namespace:       sub.namespace,
+			profilekind1:    "TailoredProfile",
+			profilename1:    tprofileCis,
+			profilename2:    "ocp4-cis-node",
+			scansettingname: "default",
+			template:        scansettingbindingTemplate,
+		}
+
+		defer cleanupObjects(oc,
+			objectTableRef{"scansettingbinding", sub.namespace, ssb.name},
+			objectTableRef{"tailoredprofile", sub.namespace, ssb.profilename1})
+
+		g.By("Create tailoredprofile for ocp4-cis and check status !!!\n")
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", sub.namespace, "-f", tprofileCisHypershiftHostedTemplate, "-p", "NAME="+tprofileCis,
+			"NAMESPACE="+sub.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", sub.namespace, tprofileCis,
+			"-o=jsonpath={.status.state}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", sub.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status !!!\n")
+		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", sub.namespace)
+
+		g.By("Check complianceSuite name and result.. !!!\n")
+		sub.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+		sub.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
+
+		g.By("Verify result for rules in compliancecheckresult.. !!!.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-configure-network-policies-namespaces",
+			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-idp-is-configured",
+			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-kubeadmin-removed",
+			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
+
+		g.By("ocp-63796 Scan hosted cluster for ocp4-cis and ocp4-cis-node profiles on hypershift hosted cluster... !!!\n")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonPreRelease-Author:xiyuan-High-63795-Scan hosted cluster for ocp4-pci-dss and ocp4-pci-dss-node profiles on hypershift hosted cluster [Serial]", func() {
+		var tprofileCis = "pci-dss-compliance-hypershift" + getRandomString()
+		var ssb = scanSettingBindingDescription{
+			name:            "test-pci-dss" + getRandomString(),
+			namespace:       sub.namespace,
+			profilekind1:    "TailoredProfile",
+			profilename1:    tprofileCis,
+			profilename2:    "ocp4-pci-dss-node",
+			scansettingname: "default",
+			template:        scansettingbindingTemplate,
+		}
+
+		defer cleanupObjects(oc,
+			objectTableRef{"scansettingbinding", sub.namespace, ssb.name},
+			objectTableRef{"tailoredprofile", sub.namespace, ssb.profilename1})
+
+		g.By("Create tailoredprofile for ocp4-pci-dss and check status !!!\n")
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", sub.namespace, "-f", tprofilePcidssHypershiftHostedTemplate, "-p", "NAME="+tprofileCis,
+			"NAMESPACE="+sub.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", sub.namespace, tprofileCis,
+			"-o=jsonpath={.status.state}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", sub.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status !!!\n")
+		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", sub.namespace)
+
+		g.By("Check complianceSuite name and result.. !!!\n")
+		sub.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+		sub.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
+
+		g.By("Verify result for rules in compliancecheckresult.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-configure-network-policies-namespaces",
+			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-idp-is-configured",
+			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-kubeadmin-removed",
+			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
+
+		g.By("ocp-63795 Scan hosted cluster for ocp4-pci-dss and ocp4-pci-dss-node profiles on hypershift hosted cluster... !!!\n")
+	})
+})
