@@ -61,6 +61,21 @@ func createPingPodforUshift(oc *exutil.CLI, pod_pmtrs map[string]string) (err er
 	return err
 }
 
+// get pod yaml file, replace varibles as per requirements in ushift and create pod on host network
+func createHostNetworkedPodforUshift(oc *exutil.CLI, pod_pmtrs map[string]string) (err error) {
+	PodHostYaml := getFileContentforUshift("microshift", "pod-specific-host.yaml")
+	//replace all variables as per createPodforUshift() arguements
+	for rep, value := range pod_pmtrs {
+		PodHostYaml = strings.ReplaceAll(PodHostYaml, rep, value)
+	}
+	podFileName := "temp-pod-host" + getRandomString() + ".yaml"
+	defer os.Remove(podFileName)
+	os.WriteFile(podFileName, []byte(PodHostYaml), 0644)
+	// create ping pod on the host network for Microshift
+	_, err = oc.WithoutNamespace().Run("create").Args("-f", podFileName).Output()
+	return err
+}
+
 func rebootUshiftNode(oc *exutil.CLI, nodeName string) {
 	rebootNode(oc, nodeName)
 	exec.Command("bash", "-c", "sleep 60").Output()

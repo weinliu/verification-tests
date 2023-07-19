@@ -1091,4 +1091,99 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: asood@redhat.com
+	g.It("MicroShiftOnly-Author:asood-Medium-63770-Ensure LoadBalancer service serving pods on hostnetwork or cluster network accessible only from primary node IP address and continues to serve after firewalld reload[Disruptive]", func() {
+		var (
+			caseID           = "63770"
+			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+		)
+
+		exutil.By("Create a namespace for the scenario")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		err := exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+
+		pod_pmtrs := map[string]string{
+			"$podname":   "hello-pod-host",
+			"$namespace": e2eTestNamespace,
+			"$label":     "hello-pod-host",
+			"$nodename":  nodeList.Items[0].Name,
+		}
+		exutil.By("Creating hello pod on host network in namespace")
+		createHostNetworkedPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, "hello-pod-host")
+
+		pod_pmtrs = map[string]string{
+			"$podname":   "hello-pod-cluster",
+			"$namespace": e2eTestNamespace,
+			"$label":     "hello-pod-cluster",
+		}
+
+		exutil.By("Creating hello pod on cluster network in namespace")
+		createPingPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, "hello-pod-cluster")
+		secNICIP := getSecondaryNICip(oc)
+
+		podType := [2]string{"host", "cluster"}
+		for _, svcSuffix := range podType {
+			exutil.By(fmt.Sprintf("Creating service for hello pod on %s network in namespace", svcSuffix))
+			serviceName := "test-service-" + svcSuffix
+			svc_pmtrs := map[string]string{
+				"$servicename":           serviceName,
+				"$namespace":             e2eTestNamespace,
+				"$label":                 "test-service",
+				"$internalTrafficPolicy": "",
+				"$externalTrafficPolicy": "",
+				"$ipFamilyPolicy":        "",
+				"$selector":              "hello-pod-" + svcSuffix,
+				"$serviceType":           "LoadBalancer",
+			}
+			createServiceforUshift(oc, svc_pmtrs)
+
+			exutil.By(fmt.Sprintf("Construct the URLs for the  %s service", serviceName))
+			nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod-"+svcSuffix, "-o=jsonpath={.spec.nodeName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeName)
+
+			svcPort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, serviceName, "-o=jsonpath={.spec.ports[*].port}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			svcURL := net.JoinHostPort(nodeIP, svcPort)
+			secNICURL := net.JoinHostPort(secNICIP, svcPort)
+
+			exutil.By(fmt.Sprintf("Checking service for hello pod on %s network is accessible on primary interface", svcSuffix))
+			output, err := exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+			exutil.By(fmt.Sprintf("Checking service for hello pod on %s network is not accessible on secondary interface", svcSuffix))
+			output, err = exutil.DebugNode(oc, nodeName, "curl", secNICURL, "-s", "--connect-timeout", "5")
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+
+			exutil.By("Reload the firewalld")
+			_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "firewall-cmd --reload")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			firewallState, err := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "firewall-cmd --state")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(firewallState).To(o.ContainSubstring("running"))
+
+			exutil.By(fmt.Sprintf("Checking service for hello pod on %s network is accessible after firewalld reload", svcSuffix))
+			output, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+			exutil.By(fmt.Sprintf("Delete LB service %s", serviceName))
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", serviceName, "-n", e2eTestNamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+		}
+
+	})
+
 })
