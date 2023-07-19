@@ -31,7 +31,8 @@ var (
 	linuxWorkloads     = "linux-webserver"
 	nutanix_proxy_host = "10.0.77.69"
 	vsphere_bastion    = "10.0.76.163"
-	nutanixProxyUser   = "root"
+	// Bastion user used for Nutanix and vSphere IBMC
+	sshProxyUser   = "root"
 	defaultWindowsMS   = "windows"
 )
 
@@ -232,10 +233,8 @@ func getAdministratorNameByPlatform(iaasPlatform string) (admin string) {
 }
 
 func getBastionSSHUser(iaasPlatform string) (user string) {
-	if iaasPlatform == "vsphere" {
-		return "openshift-qe"
-	} else if iaasPlatform == "nutanix" {
-		return nutanixProxyUser
+	if iaasPlatform == "nutanix" || iaasPlatform == "vsphere"{
+		return sshProxyUser
 	}
 	return "core"
 }
