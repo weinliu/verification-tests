@@ -44,7 +44,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-High-53223-Verify ACL audit logs can be generated for traffic hit EgressFirewall rules.", func() {
+	g.It("ROSA-OSD_CCS-ConnectedOnly-Author:huirwang-High-53223-Verify ACL audit logs can be generated for traffic hit EgressFirewall rules.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -103,7 +103,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-Medium-53224-Disable and enable acl logging for EgressFirewall.", func() {
+	g.It("ROSA-OSD_CCS-ConnectedOnly-Author:huirwang-Medium-53224-Disable and enable acl logging for EgressFirewall.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -552,7 +552,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-High-60488-EgressFirewall works for a nodeSelector for matchLabels.", func() {
+	g.It("ROSA-OSD_CCS-ConnectedOnly-Author:huirwang-High-60488-EgressFirewall works for a nodeSelector for matchLabels.", func() {
 		g.By("Label one node to match egressfirewall rule")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -638,7 +638,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-High-60812-EgressFirewall works for a nodeSelector for matchExpressions.", func() {
+	g.It("ROSA-OSD_CCS-ConnectedOnly-Author:huirwang-High-60812-EgressFirewall works for a nodeSelector for matchExpressions.", func() {
 		g.By("Label one node to match egressfirewall rule")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())

@@ -18,7 +18,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	var oc = exutil.NewCLI("networking-sctp", exutil.KubeConfigPath())
 
 	// author: weliang@redhat.com
-	g.It("Longduration-Author:weliang-Medium-28757-Establish pod to pod SCTP connections. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-Longduration-Author:weliang-Medium-28757-Establish pod to pod SCTP connections. [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/sctp")
 			sctpClientPod       = filepath.Join(buildPruningBaseDir, "sctpclient.yaml")
@@ -100,7 +100,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("Longduration-NonPreRelease-Author:weliang-Medium-28758-Expose SCTP ClusterIP Services. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:weliang-Medium-28758-Expose SCTP ClusterIP Services. [Disruptive]", func() {
 		var (
 			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking/sctp")
 			sctpClientPod        = filepath.Join(buildPruningBaseDir, "sctpclient.yaml")
@@ -430,7 +430,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Longduration-NonPreRelease-Author:huirwang-Medium-28759-Expose SCTP NodePort Services. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:huirwang-Medium-28759-Expose SCTP NodePort Services. [Disruptive]", func() {
 		var (
 			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking/sctp")
 			sctpClientPod        = filepath.Join(buildPruningBaseDir, "sctpclient.yaml")
