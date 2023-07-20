@@ -1,6 +1,7 @@
 package securityandcompliance
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 type fileintegrity struct {
@@ -122,16 +124,16 @@ func deleteNamespace(oc *exutil.CLI, namespace string) {
 }
 
 func getWorkerCount(oc *exutil.CLI) int {
-	workerNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=").Output()
+	workerNodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	nodeCount := int(strings.Count(workerNodeDetails, "Ready")) + int(strings.Count(workerNodeDetails, "NotReady"))
+	nodeCount := len(workerNodes)
 	return nodeCount
 }
 
 func getNodeCount(oc *exutil.CLI) int {
-	RhcosNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=kubernetes.io/os=linux").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	rhcosCount := int(strings.Count(RhcosNodeDetails, "Ready")) + int(strings.Count(RhcosNodeDetails, "NotReady"))
+	nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+	o.Expect(nodeErr).NotTo(o.HaveOccurred())
+	rhcosCount := len(nodeList.Items)
 	return rhcosCount
 }
 

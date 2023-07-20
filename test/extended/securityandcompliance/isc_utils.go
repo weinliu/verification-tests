@@ -473,6 +473,15 @@ func SkipNonHypershiftHostedClusters(oc *exutil.CLI) {
 	}
 }
 
+// SkipClustersWithRhelNodes mean to skip test for clusters with rhel nodes
+func SkipClustersWithRhelNodes(oc *exutil.CLI) {
+	rhelWorkers, err := exutil.GetAllWorkerNodesByOSID(oc, "rhel")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(rhelWorkers) > 0 {
+		g.Skip("Skip for clusters with rhel nodes")
+	}
+}
+
 func assertKeywordsExistsInFile(oc *exutil.CLI, keywords string, filePath string, flag bool) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		mnodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos",
