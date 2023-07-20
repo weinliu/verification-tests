@@ -185,7 +185,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the command should be defined")
-		comm, err := oc.Run("get").WithoutNamespace().Args("dc/dc44797", "-n", oc.Namespace(), "-o=jsonpath={.spec.template.spec.containers[0].command[0]}").Output()
+		comm, _, err := oc.Run("get").WithoutNamespace().Args("dc/dc44797", "-n", oc.Namespace(), "-o=jsonpath={.spec.template.spec.containers[0].command[0]}").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.ExpectEqual("tail", comm)
 
