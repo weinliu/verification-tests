@@ -342,6 +342,19 @@ func (po *pod) checkMountedVolumeCouldRW(oc *exutil.CLI) {
 	po.checkMountedVolumeDataExist(oc, true)
 }
 
+// Check the pod mounted volume could write in specific container
+func (po *pod) checkMountedVolumeCouldWriteInSpecificContainer(oc *exutil.CLI, containerName string) {
+	_, err := po.execCommandInSpecifiedContainer(oc, containerName, "echo \"storage test\" >"+po.mountPath+"/testfile")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = po.execCommandInSpecifiedContainer(oc, containerName, "sync -f "+po.mountPath+"/testfile")
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Check the pod mounted volume could read from specific container
+func (po *pod) checkMountedVolumeCouldReadFromSpecificContainer(oc *exutil.CLI, containerName string) {
+	o.Expect(po.execCommandInSpecifiedContainer(oc, containerName, "cat "+po.mountPath+"/testfile")).To(o.ContainSubstring("storage test"))
+}
+
 // Check the pod mounted volume origin wrote data 'testfile' exist or not
 func (po *pod) checkMountedVolumeDataExist(oc *exutil.CLI, checkFlag bool) {
 	if checkFlag {

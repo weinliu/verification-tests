@@ -4976,6 +4976,60 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: rdeore@redhat.com
+	// OCP-64707-[CSI-Driver] [Dynamic PV] [Filesystem default] ReadWriteOncePod volume should be successfully mounted when consumed by a single pod with multiple containers
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-Critical-64707-[CSI-Driver] [Dynamic PV] [Filesystem default] ReadWriteOncePod volume should be successfully mounted when consumed by a single pod with multiple containers", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "filestore.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-with-multiple-containers-using-pvc-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOncePod"))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.scname = scName
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			exutil.By("#. Check from pod container-0's volume should read and write data")
+			pod.checkMountedVolumeCouldWriteInSpecificContainer(oc, pod.name+"-container-0")
+			pod.checkMountedVolumeCouldReadFromSpecificContainer(oc, pod.name+"-container-0")
+
+			exutil.By("#. Check previous data exists in pod container-1's volume")
+			pod.checkMountedVolumeCouldReadFromSpecificContainer(oc, pod.name+"-container-1")
+			pod.execCommandInSpecifiedContainer(oc, pod.name+"-container-1", "rm -rf "+pod.mountPath+"/testfile")
+
+			exutil.By("#. Check from pod container-1's volume should read and write data")
+			pod.checkMountedVolumeCouldWriteInSpecificContainer(oc, pod.name+"-container-1")
+			pod.checkMountedVolumeCouldReadFromSpecificContainer(oc, pod.name+"-container-1")
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 })
 
 // Performing test steps for Online Volume Resizing
