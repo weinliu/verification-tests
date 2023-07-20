@@ -244,6 +244,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		machineList := exutil.ListAllMachineNames(oc)
 		for _, machineName := range machineList {
 			nodeName := exutil.GetNodeNameFromMachine(oc, machineName)
+			if nodeName == "" {
+				continue
+			}
 			machineProviderID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machineName, "-o=jsonpath={.spec.providerID}", "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			nodeProviderID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.providerID}").Output()
