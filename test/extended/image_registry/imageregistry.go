@@ -1376,7 +1376,24 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:xiuwang-High-48739-Pull through works with icsp which source and mirror without full path", func() {
+	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:xiuwang-High-48739-Pull through works with icsp which source and mirror without full path [Disruptive]", func() {
+		var (
+			icspFile = filepath.Join(imageRegistryBaseDir, "icsp-full-mirrors.yaml")
+			icspsrc  = icspSource{
+				name:     "image-policy-fullmirror",
+				mirrors:  "",
+				source:   "registry.redhat.io",
+				template: icspFile,
+			}
+			mc = machineConfig{
+				name:     "",
+				pool:     "worker",
+				source:   "",
+				path:     "",
+				template: "",
+			}
+		)
+
 		g.By("Check if image-policy-aosqe created")
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1396,10 +1413,35 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		createSimpleRunPod(oc, "skopeo:latest", expectInfo)
 
 		g.By("Create imagestream using source image which use the whole mirrors")
-		manifest := saveImageMetadataName(oc, "rhel8/mysql-80")
-		mysqlImage := "registry.redhat.io/rhel8/mysql-80@" + manifest
+		// Get mirror registry with 5000 port, registry.redhat.io/rhel8 images have been mirrored into it
+		mirrorReg, mrerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagecontentsourcepolicy/image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[?(@.source==\"registry.redhat.io\")].mirrors[]}").Output()
+		o.Expect(mrerr).NotTo(o.HaveOccurred())
+		cmd := fmt.Sprintf(`echo '%v' | awk -F ':' '{print $1}'`, mirrorReg)
+		mReg6001, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args(mysqlImage, "mysqlx:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		// 6001 mirror registry can't mirror images into, so make up the 5000 port and add icsp for test
+		mReg := strings.TrimSuffix(string(mReg6001), "\n") + ":5000"
+		icspsrc.mirrors = mReg
+
+		g.By("Create imagecontentsourcepolicy with full mirrors for 5000 port")
+		defer func() {
+			icspsrc.delete(oc)
+			// Update registry of icsp will restart crio to apply change to every node
+			// Need ensure master and worker update completed
+			mc.waitForMCPComplete(oc)
+			mc.pool = "master"
+			mc.waitForMCPComplete(oc)
+		}()
+		icspsrc.create(oc)
+
+		// Get auth of mirror registry
+		tempDataDir, err := extractPullSecret(oc)
+		defer os.RemoveAll(tempDataDir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Get the manifest list image for multiarch cluster
+		manifestList := getManifestList(oc, mReg+"/rhel8/mysql-80:latest", tempDataDir+"/.dockerconfigjson")
+		o.Expect(manifestList).NotTo(o.BeEmpty())
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("registry.redhat.io/rhel8/mysql-80@"+manifestList, "mysqlx:latest", "--reference-policy=local", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "mysqlx", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1809,7 +1851,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		myimage := regRoute + "/" + oc.Namespace() + "/test-49455:latest"
 		cmd := "oc image info " + myimage + " -ojson -a " + authFile + " --insecure|jq -r '.layers[0].digest'"
 		imageblob, err := exec.Command("bash", "-c", cmd).Output()
-		e2e.Logf(" imageblob is %s", imageblob)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		token, err := getSAToken(oc, "builder", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2388,9 +2429,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("image-policy-aosqe"))
 
 		g.By("Could pull image from secure registry using node credentials")
-		mirrorReg, mrerr := exec.Command("bash", "-c", "oc get imagecontentsourcepolicy image-policy-aosqe -o jsonpath={.spec.repositoryDigestMirrors[0].mirrors[0]} | awk -F'/' '{print $1}'").Output()
+		// Get mirror registry with 5000 port, registry.redhat.io/rhel8 images have been mirrored into it
+		mirrorReg, mrerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagecontentsourcepolicy/image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[?(@.source==\"registry.redhat.io\")].mirrors[]}").Output()
 		o.Expect(mrerr).NotTo(o.HaveOccurred())
-		mReg := strings.TrimSuffix(string(mirrorReg), "\n")
+		cmd := fmt.Sprintf(`echo '%v' | awk -F ':' '{print $1}'`, mirrorReg)
+		mReg6001, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// 6001 mirror registry can't mirror images into, so make up the 5000 port
+		mReg := strings.TrimSuffix(string(mReg6001), "\n") + ":5000"
+
 		err = oc.AsAdmin().Run("import-image").Args("httpd-dis:latest", "--from="+mReg+"/rhel8/httpd-24:latest", "--import-mode=PreserveOriginal", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "httpd-dis", "latest")

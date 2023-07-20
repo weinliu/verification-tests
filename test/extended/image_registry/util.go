@@ -423,11 +423,13 @@ func checkPodsRunningWithLabel(oc *exutil.CLI, namespace, label string, number i
 
 type icspSource struct {
 	name     string
+	mirrors  string
+	source   string
 	template string
 }
 
 func (icspsrc *icspSource) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", icspsrc.template, "-p", "NAME="+icspsrc.name)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", icspsrc.template, "-p", "NAME="+icspsrc.name, "MIRRORS="+icspsrc.mirrors, "SOURCE="+icspsrc.source)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1259,4 +1261,11 @@ func (c *imageObject) getManifestObject(oc *exutil.CLI, resource, name, namespac
 	o.Expect(err).NotTo(o.HaveOccurred())
 	c.os = strings.Split(osList, " ")
 	return c
+}
+
+func getManifestList(oc *exutil.CLI, image, auth string) string {
+	jqCMD := fmt.Sprintf(`oc image info %s -a %s --insecure --show-multiarch -o json| jq -r '.[0].listDigest'`, image, auth)
+	manifestList, err := exec.Command("bash", "-c", jqCMD).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.TrimSuffix(string(manifestList), "\n")
 }
