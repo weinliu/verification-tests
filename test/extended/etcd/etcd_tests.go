@@ -116,10 +116,6 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	g.It("NonHyperShiftHOST-PstChkUpgrade-ConnectedOnly-Author:skundu-NonPreRelease-Critical-22665-Check etcd image have been update to target release value after upgrade [Serial]", func() {
 		g.By("Test for case OCP-22665 Check etcd image have been update to target release value after upgrade.")
 		g.By("Check if it's a proxy cluster")
-		httpProxy, httpsProxy := getGlobalProxy(oc)
-		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
-			g.Skip("Skip for proxy platform")
-		}
 
 		e2e.Logf("Discover all the etcd pods")
 		etcdPodList := getPodListByLabel(oc, "etcd=true")
@@ -137,12 +133,24 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		o.Expect(errClvr).NotTo(o.HaveOccurred())
 		e2e.Logf("clusterVersion is %v", clusterVersion)
 
-		g.By("Run the command on node(s)")
-		res := verifyImageIDInDebugNode(oc, masterNodeList, etcdImageID, clusterVersion)
-		if res {
-			e2e.Logf("Image version of etcd successfully updated to the target release")
+		httpProxy, httpsProxy := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			e2e.Logf("It's a  proxy platform.")
+			ret := verifyImageIDwithProxy(oc, masterNodeList, httpProxy, httpsProxy, etcdImageID, clusterVersion)
+			if ret {
+				e2e.Logf("Image version of etcd successfully updated to the target release on all the node(s) of cluster with proxy")
+			} else {
+				e2e.Failf("etcd Image update to target release on proxy cluster failed")
+			}
+
 		} else {
-			e2e.Failf("etcd Image update to target release failed")
+			g.By("Run the command on node(s)")
+			res := verifyImageIDInDebugNode(oc, masterNodeList, etcdImageID, clusterVersion)
+			if res {
+				e2e.Logf("Image version of etcd successfully updated to the target release on all the node(s)")
+			} else {
+				e2e.Failf("etcd Image update to target release failed")
+			}
 		}
 	})
 

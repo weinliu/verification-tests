@@ -67,18 +67,23 @@ func getIpOfMasterNode(oc *exutil.CLI, labelKey string) string {
 }
 
 func verifyImageIDInDebugNode(oc *exutil.CLI, nodeNameList []string, imageID string, cVersion string) bool {
-	found := false
+	found := 0
 	for _, node := range nodeNameList {
 		resultOutput, err := exutil.DebugNodeWithChroot(oc, node, "oc", "adm", "release", "info", "--registry-config=/var/lib/kubelet/config.json", cVersion, "--image-for=etcd")
 		if strings.Contains(resultOutput, imageID) && err == nil {
 			e2e.Logf("Image %v successfully deployed on node %v", imageID, node)
-			found = true
+			found += 1
 		} else {
-			found = false
-			e2e.Failf("expected image %v not found on node %v", imageID, node)
+			e2e.Logf("Failed to deploy image %v on node %v", imageID, node)
 		}
 	}
-	return found
+	if found == len(nodeNameList) {
+		return true
+	} else {
+		return false
+
+	}
+
 }
 
 func verifySSLHealth(oc *exutil.CLI, ipOfNode string, node string) bool {
@@ -215,4 +220,24 @@ func getGlobalProxy(oc *exutil.CLI) (string, string) {
 	httpsProxy, httsperr := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpsProxy}").Output()
 	o.Expect(httsperr).NotTo(o.HaveOccurred())
 	return httpProxy, httpsProxy
+}
+
+func verifyImageIDwithProxy(oc *exutil.CLI, nodeNameList []string, httpProxy string, httpsProxy string, imageID string, cVersion string) bool {
+	found := 0
+	cmd := "export http_proxy=" + httpProxy + ";export https_proxy=" + httpsProxy + ";oc adm release info --registry-config=/var/lib/kubelet/config.json " + cVersion + " --image-for=etcd"
+	for _, node := range nodeNameList {
+		resultOutput, err := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", cmd)
+		if strings.Contains(resultOutput, imageID) && err == nil {
+			e2e.Logf("Image %v successfully deployed on node %v", imageID, node)
+			found += 1
+		} else {
+			e2e.Logf("Failed to deploy Image %v on node %v", imageID, node)
+		}
+	}
+	if found == len(nodeNameList) {
+		return true
+	} else {
+		return false
+
+	}
 }
