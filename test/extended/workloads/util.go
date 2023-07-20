@@ -1320,7 +1320,7 @@ func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.D
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
 }
 
-func createCSAndISCP(oc *exutil.CLI) {
+func createCSAndISCP(oc *exutil.CLI, podLabel string, namespace string, expectedStatus string, packageNum int) {
 	var files []string
 	var yamlFiles []string
 
@@ -1354,19 +1354,20 @@ func createCSAndISCP(oc *exutil.CLI) {
 
 	e2e.Logf("Check the version and item from catalogsource")
 	//oc get pod -n openshift-marketplace -l olm.catalogSource=redhat-operator-index
-	assertPodOutput(oc, "olm.catalogSource=case60601-redhat-operator-index", "openshift-marketplace", "Running")
+	assertPodOutput(oc, "olm.catalogSource="+podLabel, namespace, expectedStatus)
 
 	//oc get packagemanifests --selector=catalog=redhat-operator-index -o=jsonpath='{.items[*].metadata.name}'
 	waitErr := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
-		out, err := oc.AsAdmin().Run("get").Args("packagemanifests", "--selector=catalog=case60601-redhat-operator-index", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-marketplace").Output()
+		out, err := oc.AsAdmin().Run("get").Args("packagemanifests", "--selector=catalog="+podLabel, "-o=jsonpath={.items[*].metadata.name}", "-n", namespace).Output()
 		mirrorItemList := strings.Fields(out)
-		if len(mirrorItemList) != 1 || err != nil {
+		if len(mirrorItemList) != packageNum || err != nil {
 			e2e.Logf("the err:%v and mirrorItemList: %v, and try next round", err, mirrorItemList)
 			return false, nil
 		}
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, "max time reached but still can't find  packagemanifest")
+
 }
 
 func assertPodOutput(oc *exutil.CLI, podLabel string, namespace string, expected string) {

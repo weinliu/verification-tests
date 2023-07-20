@@ -672,7 +672,123 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Checkpoint for 60602")
-		createCSAndISCP(oc)
+		createCSAndISCP(oc, "case60601-redhat-operator-index", "openshift-marketplace", "Running", 1)
 	})
 
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Hign-65149-mirror2disk and disk2mirror workflow for local oci catalog [Serial]", func() {
+		g.By("Set registry config")
+		dirname := "/tmp/case65149"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		publicRegistry, err := exutil.GetMirrorRegistry(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Registry is %s", publicRegistry)
+		if publicRegistry == "" {
+			g.Skip("There is no public registry, skip.")
+		}
+
+		g.By("Copy the catalog as OCI FBC")
+		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-index")
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			_, err := exec.Command("bash", "-c", command).Output()
+			if err != nil {
+				e2e.Logf("copy failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		ociFilterConfig := filepath.Join(ocmirrorBaseDir, "config-oci-65149.yaml")
+		defer os.RemoveAll("oc-mirror-workspace")
+		defer os.RemoveAll("olm_artifacts")
+		g.By("Starting mirror2disk ....")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "file://"+dirname).Execute()
+			if err != nil {
+				e2e.Logf("mirror to disk failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+		g.By("Starting disk2mirror  ....")
+		mirrorErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("disk to registry failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(mirrorErr, "max time reached but the disk to registry still failed")
+
+		createCSAndISCP(oc, "cs-test", "openshift-marketplace", "Running", 2)
+	})
+
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Critical-65150-mirror2disk and disk2mirror workflow for local multi oci catalog [Serial]", func() {
+		g.By("Set registry config")
+		dirname := "/tmp/case65150"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		publicRegistry, err := exutil.GetMirrorRegistry(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Registry is %s", publicRegistry)
+		if publicRegistry == "" {
+			g.Skip("There is no public registry, skip.")
+		}
+
+		g.By("Copy the multi-arch catalog as OCI FBC")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-multi-index")
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			_, err := exec.Command("bash", "-c", command).Output()
+			if err != nil {
+				e2e.Logf("copy failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		ociFilterConfig := filepath.Join(ocmirrorBaseDir, "config-oci-65150.yaml")
+		g.By("update the operator mirror config file")
+		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, publicRegistry, ociFilterConfig)
+		e2e.Logf("Check sed cmd %s description:", sedCmd)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer os.RemoveAll("oc-mirror-workspace")
+		defer os.RemoveAll("olm_artifacts")
+		g.By("Starting mirror2disk ....")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "file://"+dirname, "--ignore-history").Execute()
+			if err != nil {
+				e2e.Logf("mirror to disk failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+		g.By("Starting disk2mirror  ....")
+		mirrorErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("disk to registry failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(mirrorErr, "max time reached but the disk to registry still failed")
+		createCSAndISCP(oc, "cs-case65150-oci-multi-index", "openshift-marketplace", "Running", 1)
+	})
 })
