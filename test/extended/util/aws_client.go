@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3"
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -542,4 +543,51 @@ func (sc *S3Client) HeadBucket(name string) error {
 
 	return nil
 
+}
+
+// IAMClient struct for IAM operations
+type IAMClient struct {
+	svc *iam.IAM
+}
+
+// NewIAMClient constructor to create IAM client with default credential and config
+// Should use GetAwsCredentialFromCluster(oc) to set ENV first before using it
+func NewIAMClient() *IAMClient {
+	return &IAMClient{
+		svc: iam.New(
+			session.Must(session.NewSession()),
+			aws.NewConfig(),
+		),
+	}
+}
+
+// NewIAMClientFromCredFile constructor to create IAM client with user's credential file
+func NewIAMClientFromCredFile(filename, region string) *IAMClient {
+	return &IAMClient{
+		svc: iam.New(
+			session.Must(session.NewSession()),
+			aws.NewConfig().WithCredentials(credentials.NewSharedCredentials(filename, "default")).WithRegion(region),
+		),
+	}
+}
+
+func (iamClient *IAMClient) DeleteOpenIDConnectProviderByProviderName(providerName string) error {
+	oidcProviderList, err := iamClient.svc.ListOpenIDConnectProviders(&iam.ListOpenIDConnectProvidersInput{})
+	if err != nil {
+		return err
+	}
+
+	for _, provider := range oidcProviderList.OpenIDConnectProviderList {
+		if strings.Contains(*provider.Arn, providerName) {
+			_, err := iamClient.svc.DeleteOpenIDConnectProvider(&iam.DeleteOpenIDConnectProviderInput{
+				OpenIDConnectProviderArn: provider.Arn,
+			})
+			if err != nil {
+				e2e.Logf("Failed to Delete existing OIDC provider arn: %s for providerName: %s", *provider.Arn, providerName)
+				return err
+			}
+			break
+		}
+	}
+	return nil
 }

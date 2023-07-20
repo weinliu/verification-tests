@@ -21,26 +21,31 @@ type installHelper struct {
 	dir          string
 	s3Client     *exutil.S3Client
 	iaasPlatform string
+	installType  AWSEndpointAccessType
+	externalDNS  bool
 }
 
 type createCluster struct {
-	PullSecret              string `param:"pull-secret"`
-	AWSCreds                string `param:"aws-creds"`
-	AzureCreds              string `param:"azure-creds"`
-	Name                    string `param:"name"`
-	BaseDomain              string `param:"base-domain"`
-	Namespace               string `param:"namespace"`
-	NodePoolReplicas        *int   `param:"node-pool-replicas"`
-	Region                  string `param:"region"`
-	Location                string `param:"location"`
-	InfraJSON               string `param:"infra-json"`
-	IamJSON                 string `param:"iam-json"`
-	InfraID                 string `param:"infra-id"`
-	RootDiskSize            *int   `param:"root-disk-size"`
-	AdditionalTags          string `param:"additional-tags"`
-	InfraAvailabilityPolicy string `param:"infra-availability-policy"`
-	Zones                   string `param:"zones"`
-	SSHKey                  string `param:"ssh-key"`
+	PullSecret              string                `param:"pull-secret"`
+	AWSCreds                string                `param:"aws-creds"`
+	AzureCreds              string                `param:"azure-creds"`
+	Name                    string                `param:"name"`
+	BaseDomain              string                `param:"base-domain"`
+	Namespace               string                `param:"namespace"`
+	NodePoolReplicas        *int                  `param:"node-pool-replicas"`
+	Region                  string                `param:"region"`
+	Location                string                `param:"location"`
+	InfraJSON               string                `param:"infra-json"`
+	IamJSON                 string                `param:"iam-json"`
+	InfraID                 string                `param:"infra-id"`
+	RootDiskSize            *int                  `param:"root-disk-size"`
+	AdditionalTags          string                `param:"additional-tags"`
+	InfraAvailabilityPolicy string                `param:"infra-availability-policy"`
+	Zones                   string                `param:"zones"`
+	SSHKey                  string                `param:"ssh-key"`
+	Annotations             string                `param:"annotations"`
+	EndpointAccess          AWSEndpointAccessType `param:"endpoint-access"`
+	ExternalDnsDomain       string                `param:"external-dns-domain"`
 }
 
 type infra struct {
@@ -143,6 +148,26 @@ func (i *iam) withInfraID(InfraID string) *iam {
 func (i *iam) withOutputFile(OutputFile string) *iam {
 	i.OutputFile = OutputFile
 	return i
+}
+
+func (c *createCluster) withEndpointAccess(endpointAccess AWSEndpointAccessType) *createCluster {
+	c.EndpointAccess = endpointAccess
+	return c
+}
+
+func (c *createCluster) withAnnotations(annotations string) *createCluster {
+	c.Annotations = annotations
+	return c
+}
+
+func (c *createCluster) withExternalDnsDomain(externalDnsDomain string) *createCluster {
+	c.ExternalDnsDomain = externalDnsDomain
+	return c
+}
+
+func (c *createCluster) withBaseDomain(baseDomain string) *createCluster {
+	c.BaseDomain = baseDomain
+	return c
 }
 
 func (receiver *installHelper) createClusterAWSCommonBuilder() *createCluster {
@@ -274,12 +299,18 @@ func (receiver *installHelper) hyperShiftInstall() {
 		e2e.Logf("Config AWS Bucket")
 		receiver.newAWSS3Client()
 		receiver.createAWSS3Bucket()
-		_, err := os.Stat(receiver.dir + "/aws-private-creds")
-		if err == nil {
-			cmd = fmt.Sprintf("hypershift install --private-platform AWS --aws-private-creds %s --aws-private-region %s --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s", receiver.dir+"/aws-private-creds", receiver.region, receiver.bucketName, receiver.dir+"/credentials", receiver.region)
-		} else {
-			cmd = fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s", receiver.bucketName, receiver.dir+"/credentials", receiver.region)
+		cmd = fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s ", receiver.bucketName, receiver.dir+"/credentials", receiver.region)
+
+		//publicAndPrivate
+		if receiver.installType == PublicAndPrivate || receiver.installType == Private {
+			privateCred := getAWSPrivateCredentials()
+			cmd = cmd + fmt.Sprintf(" --private-platform AWS --aws-private-creds %s --aws-private-region=%s ", privateCred, receiver.region)
 		}
+
+		if receiver.externalDNS {
+			cmd = cmd + fmt.Sprintf(" --external-dns-provider=aws --external-dns-credentials=%s --external-dns-domain-filter=%s ", receiver.dir+"/credentials", HyperShiftExternalDNS)
+		}
+
 	case "azure":
 		e2e.Logf("extract Azure Credentials")
 		receiver.extractAzureCredentials()
@@ -287,6 +318,7 @@ func (receiver *installHelper) hyperShiftInstall() {
 	default:
 	}
 	o.Expect(cmd).ShouldNot(o.BeEmpty())
+	e2e.Logf("run hypershift install command: %s", cmd)
 	_, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	e2e.Logf("check hyperShift operator install")
@@ -325,6 +357,7 @@ func (receiver *installHelper) createAWSHostedClusters(createCluster *createClus
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	var bashClient = NewCmdClient().WithShowInfo(true)
 	cmd := fmt.Sprintf("hypershift create cluster aws %s", strings.Join(vars, " "))
+	e2e.Logf("run hypershift create command: %s", cmd)
 	_, err = bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	e2e.Logf("check AWS HostedClusters ready")

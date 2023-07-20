@@ -607,4 +607,57 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
 
+	// author: heli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:heli-Critical-62085-[HyperShiftINSTALL] The cluster should be deleted successfully when there is no identity provider [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 62085 is for AWS - skipping test ...")
+		}
+
+		caseID := "62085"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config AWS Bucket And install HyperShift operator")
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
+		region, err := getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          dir,
+			iaasPlatform: iaasPlatform,
+			installType:  PublicAndPrivate,
+			region:       region,
+			externalDNS:  true,
+		}
+
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName("hypershift-" + caseID).
+			withNodePoolReplicas(2).
+			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withEndpointAccess(PublicAndPrivate).
+			withExternalDnsDomain(HyperShiftExternalDNS).
+			withBaseDomain(HyperShiftExternalDNSBaseDomain)
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
+
+		g.By("create HostedClusters node ready")
+		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
+		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+
+		g.By("delete OpenID connect from aws IAM Identity providers")
+		infraID := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedCluster.name, "-n", hostedCluster.namespace, `-ojsonpath={.spec.infraID}`)
+		provider := fmt.Sprintf("%s.s3.%s.amazonaws.com/%s", bucketName, region, infraID)
+		e2e.Logf("trying to delete OpenIDConnectProvider: %s", provider)
+		exutil.GetAwsCredentialFromCluster(oc)
+		o.Expect(exutil.NewIAMClient().DeleteOpenIDConnectProviderByProviderName(provider)).ShouldNot(o.HaveOccurred())
+	})
 })
