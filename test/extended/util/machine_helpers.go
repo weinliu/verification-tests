@@ -113,6 +113,9 @@ func ListWorkerMachineSetNames(oc *CLI) []string {
 	e2e.Logf("Listing all MachineSets ...")
 	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	if machineSetNames == "" {
+		g.Skip("Skip this test scenario because there are no machinesets in this cluster")
+	}
 	workerMachineSetNames := strings.Split(machineSetNames, " ")
 	var linuxWorkerMachineSetNames []string
 	for _, workerMachineSetName := range workerMachineSetNames {
