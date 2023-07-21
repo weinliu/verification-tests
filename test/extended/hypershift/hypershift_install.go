@@ -608,12 +608,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Longduration-NonPreRelease-Author:heli-Critical-62085-[HyperShiftINSTALL] The cluster should be deleted successfully when there is no identity provider [Serial]", func() {
+	g.It("Longduration-NonPreRelease-Author:heli-Critical-62085-Critical-60483-[HyperShiftINSTALL] The cluster should be deleted successfully when there is no identity provider [Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 62085 is for AWS - skipping test ...")
 		}
 
-		caseID := "62085"
+		caseID := "62085-60483"
 		dir := "/tmp/hypershift" + caseID
 		defer os.RemoveAll(dir)
 		err := os.MkdirAll(dir, 0755)
@@ -658,6 +658,44 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		provider := fmt.Sprintf("%s.s3.%s.amazonaws.com/%s", bucketName, region, infraID)
 		e2e.Logf("trying to delete OpenIDConnectProvider: %s", provider)
 		exutil.GetAwsCredentialFromCluster(oc)
-		o.Expect(exutil.NewIAMClient().DeleteOpenIDConnectProviderByProviderName(provider)).ShouldNot(o.HaveOccurred())
+		iamClient := exutil.NewIAMClient()
+		o.Expect(iamClient.DeleteOpenIDConnectProviderByProviderName(provider)).ShouldNot(o.HaveOccurred())
+
+		g.By("update control plane policy to remove security operations")
+		roleAndPolicyName := infraID + "-control-plane-operator"
+		var policyDocument = `{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateVpcEndpoint",
+        "ec2:ModifyVpcEndpoint",
+        "ec2:DeleteVpcEndpoints",
+        "ec2:CreateTags",
+        "route53:ListHostedZones",
+        "ec2:DescribeVpcs",
+        "ec2:DescribeVpcEndpoints"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "route53:ChangeResourceRecordSets",
+        "route53:ListResourceRecordSets"
+      ],
+      "Resource": "arn:aws:route53:::hostedzone/Z08584472H531BKOV71X7"
+    }
+  ]
+}`
+		policy, err := iamClient.GetRolePolicy(roleAndPolicyName, roleAndPolicyName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("original role policy is %s", policy)
+		o.Expect(iamClient.UpdateRolePolicy(roleAndPolicyName, roleAndPolicyName, policyDocument)).NotTo(o.HaveOccurred())
+		policy, err = iamClient.GetRolePolicy(roleAndPolicyName, roleAndPolicyName)
+		e2e.Logf("updated role policy is %s", policy)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(policy).ShouldNot(o.ContainSubstring("SecurityGroup"))
 	})
 })

@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -590,4 +591,38 @@ func (iamClient *IAMClient) DeleteOpenIDConnectProviderByProviderName(providerNa
 		}
 	}
 	return nil
+}
+
+func (iamClient *IAMClient) GetRolePolicy(roleName, policyName string) (string, error) {
+	rc, err := iamClient.svc.GetRolePolicy(&iam.GetRolePolicyInput{
+		PolicyName: aws.String(policyName),
+		RoleName:   aws.String(roleName),
+	})
+
+	if err != nil {
+		e2e.Logf("Failed to GetRolePolicy with roleName: %s policyName %s error %s", roleName, policyName, err.Error())
+		return "", err
+	}
+
+	decodePolicy, err := url.QueryUnescape(*rc.PolicyDocument)
+	if err != nil {
+		e2e.Logf("Failed to QueryUnescape role policy: role %s policyName %s error %s original rc %s", roleName, policyName, err.Error(), *rc.PolicyDocument)
+		return "", err
+	}
+
+	return decodePolicy, nil
+}
+
+func (iamClient *IAMClient) UpdateRolePolicy(roleName, policyName, policyDocument string) error {
+	_, err := iamClient.svc.PutRolePolicy(&iam.PutRolePolicyInput{
+		RoleName:       aws.String(roleName),
+		PolicyName:     aws.String(policyName),
+		PolicyDocument: aws.String(policyDocument),
+	})
+
+	if err != nil {
+		e2e.Logf("Failed to UpdateRolePolicy for roleName: %s policyName %s error %s", roleName, policyName, err.Error())
+	}
+
+	return err
 }
