@@ -154,8 +154,17 @@ func deleteControlPlaneMachineSet(oc *exutil.CLI) {
 // activeControlPlaneMachineSet active the ControlPlaneMachineSet
 func activeControlPlaneMachineSet(oc *exutil.CLI) {
 	e2e.Logf("Active ControlPlaneMachineSet ...")
-	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+		cpmsState, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace, "-o=jsonpath={.spec.state}").Output()
+		if cpmsState != "Active" {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Output()
+			e2e.Logf("controlplanemachineset status is: %s, waiting up to 2 seconds, then patch output: %s", cpmsState, output)
+			return false, nil
+		}
+		e2e.Logf("controlplanemachineset is in Active state")
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "controlplanemachineset is not in Active state")
 }
 
 // replaceOneMasterMachine create a new master machine and delete the old master machine
