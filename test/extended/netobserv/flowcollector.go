@@ -24,11 +24,13 @@ type Flowcollector struct {
 	LokiStatusURL             string
 	LokiStatusTLSCertName     string
 	LokiStatusTLSUserCertName string
+	LokiNamespace             string
 	KafkaAddress              string
 	KafkaTLSEnable            bool
 	KafkaClusterName          string
 	KafkaTopic                string
 	KafkaUser                 string
+	KafkaNamespace            string
 	MetricServerTLSType       string
 	EbpfCacheActiveTimeout    string
 	Template                  string
@@ -139,6 +141,10 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		parameters = append(parameters, "LOKI_STATUS_TLS_USER_CERT_NAME="+flow.LokiStatusTLSUserCertName)
 	}
 
+	if flow.LokiNamespace != "" {
+		parameters = append(parameters, "LOKI_NAMESPACE="+flow.LokiNamespace)
+	}
+
 	if flow.LogType != "" {
 		parameters = append(parameters, "LOG_TYPE="+flow.LogType)
 	}
@@ -161,6 +167,10 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 
 	if flow.KafkaUser != "" {
 		parameters = append(parameters, "KAFKA_USER="+flow.KafkaUser)
+	}
+
+	if flow.KafkaNamespace != "" {
+		parameters = append(parameters, "KAFKA_NAMESPACE="+flow.KafkaNamespace)
 	}
 
 	if flow.EbpfCacheActiveTimeout != "" {

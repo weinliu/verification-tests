@@ -61,7 +61,6 @@ func getFlowlogsPipelinePod(oc *exutil.CLI, ns, name string) string {
 func getFlowRecords(lokiValues [][]string) ([]FlowRecord, error) {
 	flowRecords := []FlowRecord{}
 	for _, values := range lokiValues {
-		e2e.Logf("Flow values are %s", values[1])
 		timestamp, _ := strconv.ParseInt(values[0], 10, 64)
 		var flowlog Flowlog
 		err := json.Unmarshal([]byte(values[1]), &flowlog)
@@ -182,8 +181,8 @@ func verifyCurl(oc *exutil.CLI, podName, ns, curlDest, CertPath string) {
 }
 
 // Verify loki records and if it was written in the last 5 minutes
-func verifyLokilogsTime(oc *exutil.CLI, lokiStackNS, lokiStackName, serviceAccountName string) error {
-	bearerToken := getSAToken(oc, serviceAccountName, lokiStackNS)
+func verifyLokilogsTime(oc *exutil.CLI, lokiStackNS, flowNS, lokiStackName, serviceAccountName string) error {
+	bearerToken := getSAToken(oc, serviceAccountName, flowNS)
 	route := "https://" + getRouteAddress(oc, lokiStackNS, lokiStackName)
 	lc := newLokiClient(route).withToken(bearerToken).retry(5)
 	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\", FlowDirection=\"0\"}")

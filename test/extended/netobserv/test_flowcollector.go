@@ -361,6 +361,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			kafkaDir, kafkaTopicPath string
 			AMQexisting              = false
 			amq                      SubscriptionObjects
+			kafkaMetrics             KafkaMetrics
 			kafka                    Kafka
 			kafkaTopic               KafkaTopic
 			kafkaUser                KafkaUser
@@ -392,14 +393,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			}
 
 			// check if amq Streams Operator is already present
-			AMQexisting := checkOperatorStatus(oc, amq.Namespace, amq.PackageName)
+			AMQexisting = checkOperatorStatus(oc, amq.Namespace, amq.PackageName)
 			if !AMQexisting {
 				amq.SubscribeOperator(oc)
 				// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
 				checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
 			}
 
-			kafkaMetrics := KafkaMetrics{
+			kafkaMetrics = KafkaMetrics{
 				Namespace: namespace,
 				Template:  kafkaMetricsPath,
 			}
@@ -444,8 +445,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			if !AMQexisting {
 				amq.uninstallOperator(oc)
 			}
-			_, err := oc.AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
 		})
 
 		g.It("NonPreRelease-Author:aramesha-High-56362-High-53597-High-56326-Verify network flows are captured with Kafka with TLS [Serial]", func() {
@@ -478,6 +477,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			// verify logs
 			g.By("Escalate SA to cluster admin")
+			defer func() {
+				g.By("Remove cluster role")
+				_, err = oc.AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
 			_, err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -485,7 +489,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			time.Sleep(60 * time.Second)
 
 			g.By("Get flowlogs from loki")
-			err = verifyLokilogsTime(oc, ls.Namespace, ls.Name, "flowlogs-pipeline-transformer")
+			err = verifyLokilogsTime(oc, ls.Namespace, ls.Namespace, ls.Name, "flowlogs-pipeline-transformer")
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
 
@@ -547,7 +551,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			time.Sleep(60 * time.Second)
 
 			g.By("Get flowlogs from loki")
-			err = verifyLokilogsTime(oc, ls.Namespace, ls.Name, "flowlogs-pipeline-transformer")
+			defer func() {
+				g.By("Remove cluster role")
+				_, err = oc.AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
+			err = verifyLokilogsTime(oc, ls.Namespace, ls.Namespace, ls.Name, "flowlogs-pipeline-transformer")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy KAFKA consumer pod")
@@ -566,6 +575,59 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", consumerPodName, `'{"AgentIP":'`)
 			exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with job-name=network-flows-export-consumer label")
 			verifyFlowRecordFromLogs(podLogs)
+		})
+
+		g.It("NonPreRelease-Author:aramesha-High-64880-Verify secrets copied for Loki and Kafka when deployed in NS other than flowcollector pods [Serial]", func() {
+			namespace := oc.Namespace()
+
+			g.By("Create a new namespace for flowcollector")
+			flowNS := "netobserv-test"
+			defer oc.DeleteSpecifiedNamespaceAsAdmin(flowNS)
+			oc.CreateSpecifiedNamespaceAsAdmin(flowNS)
+
+			g.By("Deploy FlowCollector with KAFKA TLS")
+			flow := Flowcollector{
+				Namespace:           flowNS,
+				DeploymentModel:     "KAFKA",
+				Template:            flowFixturePath,
+				MetricServerTLSType: "AUTO",
+				LokiURL:             lokiURL,
+				LokiTLSEnable:       true,
+				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				LokiNamespace:       namespace,
+				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
+				KafkaTLSEnable:      true,
+				KafkaNamespace:      namespace,
+			}
+
+			defer flow.deleteFlowcollector(oc)
+			flow.createFlowcollector(oc)
+
+			g.By("Ensure flows are observed, all pods are running and secrets are synced")
+			exutil.AssertAllPodsToBeReady(oc, flowNS)
+			// ensure eBPF pods are ready
+			exutil.AssertAllPodsToBeReady(oc, flowNS+"-privileged")
+			// ensure certs are synced to privileged NS
+			secrets, err := getSecrets(oc, flowNS+"-privileged")
+			o.Expect(err).ToNot(o.HaveOccurred())
+			o.Expect(secrets).To(o.And(o.ContainSubstring(kafkaUser.UserName), o.ContainSubstring(kafka.Name+"-cluster-ca-cert")))
+
+			// verify logs
+			g.By("Escalate SA to cluster admin")
+			defer func() {
+				g.By("Remove cluster role")
+				_, err = oc.AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer", "-n", flowNS).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
+			_, err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer", "-n", flowNS).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Wait for a min before logs gets collected and written to loki")
+			time.Sleep(60 * time.Second)
+
+			g.By("Get flowlogs from loki")
+			err = verifyLokilogsTime(oc, namespace, flowNS, ls.Name, "flowlogs-pipeline-transformer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 		})
 	})
 })
