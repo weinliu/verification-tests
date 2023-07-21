@@ -10737,7 +10737,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 	// It will cover test case: OCP-24664, author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-24664-CRD updates if new schemas are backwards compatible", func() {
-		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
