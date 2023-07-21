@@ -54,6 +54,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		iaasPlatform   string
 		ManualPickup   bool
 		podShippedFile string
+		podSysctlFile  string
+		ntoTunedPidMax string
 	)
 
 	g.BeforeEach(func() {
@@ -65,7 +67,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ManualPickup = true
 
 		podShippedFile = exutil.FixturePath("testdata", "psap", "nto", "pod-shipped.yaml")
-
+		podSysctlFile = exutil.FixturePath("testdata", "psap", "nto", "nto-sysctl-pod.yaml")
+		ntoTunedPidMax = exutil.FixturePath("testdata", "psap", "nto", "nto-tuned-pidmax.yaml")
 	})
 
 	// author: liqcui@redhat.com
@@ -647,7 +650,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
 		AppImageName := exutil.GetImagestreamImageName(oc, "tests")
 		if len(AppImageName) == 0 {
-			AppImageName = "quay.io/openshifttest/hello-openshift:multiarch"
+			AppImageName = "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
 		}
 
 		//Create a nginx web application pod
@@ -1814,7 +1817,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
 		AppImageName := exutil.GetImagestreamImageName(oc, "tests")
 		if len(AppImageName) == 0 {
-			AppImageName = "quay.io/openshifttest/hello-openshift:multiarch"
+			AppImageName = "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
 		}
 
 		//Create a hugepages-app application pod
@@ -2849,5 +2852,91 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The value of /proc/cmdline on node %v is: \n%v\n", tunedNodeName, debugNodeStdout)
 		o.Expect(debugNodeStdout).To(o.ContainSubstring("hugepagesz=2M hugepages=50"))
+	})
+
+	g.It("ROSA-NonHyperShiftHOST-Author:liqcui-Medium-65371-NTO TuneD prevent from reverting node level profiles on termination [Disruptive]", func() {
+
+		//Use the last worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		oc.SetupProject()
+		ntoTestNS := oc.Namespace()
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "tuning-pidmax", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		g.By("Label the node with node-role.kubernetes.io/worker-tuning=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create tuning-pidmax profile")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, ntoTunedPidMax)
+
+		g.By("Check if new profile in in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		AppImageName := exutil.GetImagestreamImageName(oc, "tests")
+
+		clusterVersion, _, err := exutil.GetClusterVersion(oc)
+		e2e.Logf("Current clusterVersion is [ %v ]", clusterVersion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterVersion).NotTo(o.BeEmpty())
+
+		e2e.Logf("Current profile for each node: \n%v", output)
+		g.By("Create pod that deletect the value of kernel.pid_max ")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoTestNS, "--ignore-unknown-parameters=true", "-f", podSysctlFile, "-p", "IMAGE_NAME="+AppImageName, "RUNASNONROOT=true")
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		//Check if sysctlpod pod is ready
+		exutil.AssertPodToBeReady(oc, "sysctlpod", ntoTestNS)
+
+		g.By("Get the sysctlpod status")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoTestNS, "pods").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The status of pod sysctlpod: \n%v", output)
+
+		g.By("Check the the value of kernel.pid_max in the pod sysctlpod, the expected value should be kernel.pid_max = 181818")
+		podLogStdout, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("sysctlpod", "--tail=1", "-n", ntoTestNS).Output()
+		e2e.Logf("Logs of sysctlpod before delete tuned pod is [ %v ]", podLogStdout)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podLogStdout).NotTo(o.BeEmpty())
+		o.Expect(podLogStdout).To(o.ContainSubstring("kernel.pid_max = 181818"))
+
+		g.By("Delete tuned pod on the labeled node, and make sure the kernel.pid_max don't revert to origin value")
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", tunedPodName, "-n", ntoNamespace).Execute()).NotTo(o.HaveOccurred())
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check tuned pod status after delete tuned pod")
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName = getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		//Check if tuned pod that deleted is ready
+		exutil.AssertPodToBeReady(oc, tunedPodName, ntoNamespace)
+
+		g.By("Check the the value of kernel.pid_max in the pod sysctlpod again, the expected value still be kernel.pid_max = 181818")
+		podLogStdout, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("sysctlpod", "--tail=2", "-n", ntoTestNS).Output()
+		e2e.Logf("Logs of sysctlpod after delete tuned pod is [ %v ]", podLogStdout)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podLogStdout).NotTo(o.BeEmpty())
+		o.Expect(podLogStdout).To(o.ContainSubstring("kernel.pid_max = 181818"))
+		o.Expect(podLogStdout).NotTo(o.ContainSubstring("kernel.pid_max not equal 181818"))
 	})
 })

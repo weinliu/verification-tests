@@ -25,5 +25,6 @@ objects:
         operand:
           tunedConfig:
             reapply_sysctl: ${{REAPPLY_SYSCTL}}
+          debug: false
 parameters:
 - name: REAPPLY_SYSCTL
