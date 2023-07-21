@@ -5939,4 +5939,43 @@ manifests:
 			o.Expect(output).Should(o.ContainSubstring(u.ExpectStr))
 		}
 	})
+
+	// author: dpunia@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-High-12193-APIServer User can get node selector from a project", func() {
+		var (
+			caseID        = "ocp-12193"
+			firstProject  = "e2e-apiserver-first" + caseID + "-" + exutil.GetRandomString()
+			secondProject = "e2e-apiserver-second" + caseID + "-" + exutil.GetRandomString()
+			labelValue    = "qa" + exutil.GetRandomString()
+		)
+		oc.SetupProject()
+		userName := oc.Username()
+
+		g.By("Pre-requisities, capturing current-context from cluster.")
+		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
+		o.Expect(contxtErr).NotTo(o.HaveOccurred())
+		defer func() {
+			useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
+			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("1) Create a project without node selector")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", firstProject).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("new-project", firstProject, "--admin="+userName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2) Create a project with node selector")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", secondProject).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("new-project", secondProject, "--node-selector=env="+labelValue, "--description=testnodeselector", "--admin="+userName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3) Check node selector field for above 2 projects")
+		firstProjectOut, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", firstProject, "--as="+userName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(firstProjectOut).Should(o.MatchRegexp("Node Selector:.*<none>"))
+
+		secondProjectOut, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", secondProject, "--as="+userName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(secondProjectOut).Should(o.MatchRegexp("Node Selector:.*env=" + labelValue))
+	})
 })
