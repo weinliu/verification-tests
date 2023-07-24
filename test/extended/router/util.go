@@ -1297,3 +1297,25 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 	}
 	return newStatusToCompare
 }
+
+// this function will check the status of dns record in ingress operator
+func checkDnsRecordStatusOfIngressOperator(oc *exutil.CLI, dnsRecordsName, statusToSearch, stringToCheck string) []string {
+	jsonPath := fmt.Sprintf(`.status.zones[*].conditions[*].%s`, statusToSearch)
+	status := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/"+dnsRecordsName, jsonPath)
+	statusList := strings.Split(status, " ")
+	for _, line := range statusList {
+		o.Expect(stringToCheck).To(o.ContainSubstring(line))
+	}
+	return statusList
+}
+
+// this function is to check whether the DNS Zone details are present in ingresss operator records
+func checkDnsRecordsInIngressOperator(oc *exutil.CLI, recordName, privateZoneId, publicZoneId string) {
+	// Collecting zone details from ingress operator
+	Zones := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/"+recordName, ".status.zones[*].dnsZone")
+	// check the private and public zone detail are matching
+	o.Expect(Zones).To(o.ContainSubstring(privateZoneId))
+	if publicZoneId != "" {
+		o.Expect(Zones).To(o.ContainSubstring(publicZoneId))
+	}
+}

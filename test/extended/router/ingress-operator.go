@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1159,5 +1160,92 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(output, "\"localEndpoints\": 1")).To(o.BeTrue())
 		}
+	})
+
+	g.It("NonHyperShiftHOST-Author:mjoseph-Critical-64611-Ingress operator support for private hosted zones in Shared VPC clusters", func() {
+		exutil.By("Pre-flight check for the platform type")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		exutil.By("Pre-flight check for the shared VPC platform")
+		// privateZoneIAMRole needs to be present for shared vpc cluster
+		privateZoneIAMRole, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.platform.aws}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(privateZoneIAMRole, "privateZoneIAMRole") {
+			g.Skip("Skip since this is not a shared vpc cluster")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp1 := filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
+		customTemp2 := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		var (
+			ingctrl1 = ingressControllerDescription{
+				name:      "ocp64611external",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp1,
+			}
+			ingctrl2 = ingressControllerDescription{
+				name:      "ocp64611clb",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp2,
+			}
+		)
+
+		exutil.By("1. Check the STS Role in the cluster")
+		output, ouputErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("CredentialsRequest/openshift-ingress", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.providerSpec.statementEntries[0].action}").Output()
+		o.Expect(ouputErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("sts:AssumeRole"))
+
+		exutil.By("2. Check whether the privateZoneIAMRole is created using the ARN")
+		arn, getArnErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.platform.aws.privateZoneIAMRole}").Output()
+		o.Expect(getArnErr).NotTo(o.HaveOccurred())
+		privateZoneIAMRoleRegex := regexp.MustCompile("arn:(aws|aws-cn|aws-us-gov):iam::[0-9]{12}:role/.*")
+		privateZoneIAMRoleMatch := privateZoneIAMRoleRegex.FindStringSubmatch(arn)
+		o.Expect(arn).To(o.ContainSubstring(privateZoneIAMRoleMatch[0]))
+
+		exutil.By("3. Check the default DNS management status")
+		dnsManagementPolicy := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/default-wildcard", ".spec.dnsManagementPolicy")
+		o.Expect("Managed").To(o.ContainSubstring(dnsManagementPolicy))
+
+		exutil.By("4. Collecting the public zone and private zone id from dns config")
+		privateZoneId := fetchJSONPathValue(oc, "openshift-dns", "dns.config/cluster", ".spec.privateZone.id")
+		publicZoneId := fetchJSONPathValue(oc, "openshift-dns", "dns.config/cluster", ".spec.publicZone.id")
+
+		exutil.By("5. Collecting zone details from default ingress controller and cross checking it wih dns config details")
+		checkDnsRecordsInIngressOperator(oc, "default-wildcard", privateZoneId, publicZoneId)
+
+		exutil.By("6. Check the default dnsrecord of the ingress operator to confirm there is no degardes")
+		checkDnsRecordStatusOfIngressOperator(oc, "default-wildcard", "status", "True")
+		checkDnsRecordStatusOfIngressOperator(oc, "default-wildcard", "reason", "ProviderSuccess")
+
+		exutil.By("7. Create two custom ingresscontrollers")
+		baseDomain := getBaseDomain(oc)
+		ingctrl1.domain = ingctrl1.name + "." + baseDomain
+		ingctrl2.domain = ingctrl2.name + "." + baseDomain
+		defer ingctrl1.delete(oc)
+		ingctrl1.create(oc)
+		defer ingctrl2.delete(oc)
+		ingctrl2.create(oc)
+		err1 := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
+		err2 := waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
+		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
+		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+
+		exutil.By("8. Check the custom DNS management status")
+		dnsManagementPolicy1 := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/ocp64611external-wildcard", ".spec.dnsManagementPolicy")
+		o.Expect("Managed").To(o.ContainSubstring(dnsManagementPolicy1))
+		dnsManagementPolicy2 := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/ocp64611clb-wildcard", ".spec.dnsManagementPolicy")
+		o.Expect("Managed").To(o.ContainSubstring(dnsManagementPolicy2))
+
+		exutil.By("9. Collecting zone details from custom ingress controller and cross checking it wih dns zone details")
+		checkDnsRecordsInIngressOperator(oc, "ocp64611external-wildcard", privateZoneId, publicZoneId)
+		checkDnsRecordsInIngressOperator(oc, "ocp64611clb-wildcard", privateZoneId, publicZoneId)
+
+		exutil.By("10. Check the custom dnsrecord of the ingress operator to confirm there is no degardes")
+		checkDnsRecordStatusOfIngressOperator(oc, "ocp64611external-wildcard", "status", "True")
+		checkDnsRecordStatusOfIngressOperator(oc, "ocp64611external-wildcard", "reason", "ProviderSuccess")
+		checkDnsRecordStatusOfIngressOperator(oc, "ocp64611clb-wildcard", "status", "True")
+		checkDnsRecordStatusOfIngressOperator(oc, "ocp64611clb-wildcard", "reason", "ProviderSuccess")
 	})
 })
