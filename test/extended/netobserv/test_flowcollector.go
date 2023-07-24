@@ -5,7 +5,6 @@ import (
 	"math"
 	"strconv"
 
-	"os/exec"
 	filePath "path/filepath"
 	"strings"
 	"time"
@@ -145,104 +144,88 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.It("Author:aramesha-High-54043-verify metric server on TLS [Serial]", func() {
-		namespace := oc.Namespace()
+	g.Context("FLP metrics:", func() {
+		g.When("process.metrics.TLS == DISABLED", func() {
+			g.It("Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
+				var (
+					flpPromSM = "flowlogs-pipeline-monitor"
+					flpPromSA = "flowlogs-pipeline-prom"
+					namespace = oc.Namespace()
+				)
 
-		g.By("Deploy FlowCollector")
-		flow := Flowcollector{
-			Namespace:           namespace,
-			Template:            flowFixturePath,
-			MetricServerTLSType: "AUTO",
-			LokiURL:             lokiURL,
-			LokiTLSEnable:       true,
-			LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-		}
+				flow := Flowcollector{
+					Namespace:       namespace,
+					Template:        flowFixturePath,
+					LokiURL:         lokiURL,
+					LokiTLSEnable:   true,
+					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				}
+				defer flow.deleteFlowcollector(oc)
+				flow.createFlowcollector(oc)
+				exutil.AssertAllPodsToBeReady(oc, namespace)
+				exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 
-		defer flow.deleteFlowcollector(oc)
-		flow.createFlowcollector(oc)
+				FLPpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=flowlogs-pipeline")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				// Liveliness URL
+				curlLive := "http://localhost:8080/live"
 
-		g.By("Deploy metrics")
-		// metrics Template path
-		promMetricsFixturePath := filePath.Join(baseDir, "monitoring.yaml")
+				for _, pod := range FLPpods {
+					command := []string{"exec", "-n", namespace, pod, "--", "curl", "-s", curlLive}
+					output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(output).To(o.Equal("{}"))
+				}
 
-		metric := Metrics{
-			Namespace: namespace,
-			Template:  promMetricsFixturePath,
-			Scheme:    "https",
-		}
+				tlsScheme, err := getMetricsScheme(oc, flpPromSM)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				tlsScheme = strings.Trim(tlsScheme, "'")
+				o.Expect(tlsScheme).To(o.Equal("http"))
 
-		metric.createMetrics(oc)
+				g.By("Verify prometheus is able to scrape FLP metrics")
+				expectedServerName := fmt.Sprintf("%s.%s.svc", flpPromSA, namespace)
+				flpMetricsURL := fmt.Sprintf("%s://%s:9102/metrics", tlsScheme, expectedServerName)
+				verifyFLPPromMetrics(oc, flpMetricsURL)
+			})
+		})
 
-		g.By("Ensure FLP pods eBPF pods and lokistack are ready")
-		exutil.AssertAllPodsToBeReady(oc, namespace)
-		// ensure eBPF pods are ready
-		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+		g.When("processor metrics.TLS == AUTO", func() {
+			g.It("Author:aramesha-High-54043-Verify flowlogs-pipeline metrics [Serial]", func() {
+				var (
+					flpPromSM = "flowlogs-pipeline-monitor"
+					flpPromSA = "flowlogs-pipeline-prom"
+					namespace = oc.Namespace()
+				)
+				flow := Flowcollector{
+					Namespace:           namespace,
+					Template:            flowFixturePath,
+					LokiURL:             lokiURL,
+					LokiTLSEnable:       true,
+					MetricServerTLSType: "AUTO",
+					LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				}
+				defer flow.deleteFlowcollector(oc)
+				flow.createFlowcollector(oc)
+				g.By("Ensure flowcollector pods are ready")
+				exutil.AssertAllPodsToBeReady(oc, namespace)
+				exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 
-		g.By("Verify metrics by running curl on FLP pod")
-		curlDest := fmt.Sprintf("https://flowlogs-pipeline-prom.%s.svc:9102/metrics", namespace)
+				tlsScheme, err := getMetricsScheme(oc, flpPromSM)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				tlsScheme = strings.Trim(tlsScheme, "'")
+				o.Expect(tlsScheme).To(o.Equal("https"))
 
-		podName := getFlowlogsPipelinePod(oc, namespace, "flowlogs-pipeline")
-		// certificate path
-		flowlogsPodCertPath := "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
-		verifyCurl(oc, podName, namespace, curlDest, flowlogsPodCertPath)
+				serverName, err := getMetricsServerName(oc, flpPromSM)
+				serverName = strings.Trim(serverName, "'")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				expectedServerName := fmt.Sprintf("%s.%s.svc", flpPromSA, namespace)
+				o.Expect(serverName).To(o.Equal(expectedServerName))
 
-		g.By("Verify metrics by running curl on prometheus pod")
-		// certificate path
-		promCertPath := "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt"
-		verifyCurl(oc, "prometheus-k8s-0", "openshift-monitoring", curlDest, promCertPath)
-	})
-
-	g.It("Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
-		namespace := oc.Namespace()
-
-		g.By("Deploy FlowCollector")
-		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSEnable:   true,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-		}
-
-		defer flow.deleteFlowcollector(oc)
-		flow.createFlowcollector(oc)
-
-		g.By("Ensure FLP pods, eBPF pods and lokistack are ready")
-		exutil.AssertAllPodsToBeReady(oc, namespace)
-		// ensure eBPF pods are ready
-		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
-
-		// get all flowlogs pipeline pods
-		FLPpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=flowlogs-pipeline")
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Ensure metrics are reported")
-		// Metrics URL
-		curlMetrics := fmt.Sprintf("http://flowlogs-pipeline-prom.%s.svc:9102/metrics", namespace)
-
-		for _, pod := range FLPpods {
-			command := []string{"exec", "-n", namespace, pod, "--", "curl", "-s", "-v", "-L", curlMetrics}
-			output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().OutputToFile("metrics.txt")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).NotTo(o.BeEmpty(), "No Metrics found")
-
-			metric, _ := exec.Command("bash", "-c", "cat "+output+" | grep -o \"HTTP/1.1.*\"| tail -1 | awk '{print $2}'").Output()
-			httpCode := strings.TrimSpace(string(metric))
-			o.Expect(httpCode).NotTo(o.BeEmpty(), "HTTP Code not found")
-			e2e.Logf("The http code is : %v", httpCode)
-			o.Expect(httpCode).To(o.Equal("200"))
-		}
-
-		g.By("Ensure liveliness/readiness of FLP pods")
-		// Liveliness URL
-		curlLive := "http://localhost:8080/live"
-
-		for _, pod := range FLPpods {
-			command := []string{"exec", "-n", namespace, pod, "--", "curl", "-s", curlLive}
-			output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.Equal("{}"))
-		}
+				g.By("Verify prometheus is able to scrape FLP metrics")
+				flpMetricsURL := fmt.Sprintf("%s://%s:9102/metrics", tlsScheme, serverName)
+				verifyFLPPromMetrics(oc, flpMetricsURL)
+			})
+		})
 	})
 
 	g.It("NonPreRelease-Author:memodi-High-53595-High-49107-High-45304-High-54929-High-54840-Verify flow correctness [Disruptive][Slow]", func() {
@@ -468,12 +451,30 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Ensure flows are observed, all pods are running and secrets are synced")
 			exutil.AssertAllPodsToBeReady(oc, namespace)
-			// ensure eBPF pods are ready
 			exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 			// ensure certs are synced to privileged NS
 			secrets, err := getSecrets(oc, namespace+"-privileged")
 			o.Expect(err).ToNot(o.HaveOccurred())
 			o.Expect(secrets).To(o.And(o.ContainSubstring(kafkaUser.UserName), o.ContainSubstring(kafka.Name+"-cluster-ca-cert")))
+
+			g.By("Verify prometheus is able to scrape metrics for FLP-KAFKA")
+			flpPrpmSM := "flowlogs-pipeline-transformer-monitor"
+			tlsScheme, err := getMetricsScheme(oc, flpPrpmSM)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			tlsScheme = strings.Trim(tlsScheme, "'")
+			o.Expect(tlsScheme).To(o.Equal("https"))
+
+			serverName, err := getMetricsServerName(oc, flpPrpmSM)
+			serverName = strings.Trim(serverName, "'")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			flpPromSA := "flowlogs-pipeline-transformer-prom"
+			expectedServerName := fmt.Sprintf("%s.%s.svc", flpPromSA, namespace)
+			o.Expect(serverName).To(o.Equal(expectedServerName))
+
+			// verify FLP metrics are being populated with KAFKA
+			g.By("Verify prometheus is able to scrape FLP metrics")
+			flpMetricsURL := fmt.Sprintf("%s://%s:9102/metrics", tlsScheme, serverName)
+			verifyFLPPromMetrics(oc, flpMetricsURL)
 
 			// verify logs
 			g.By("Escalate SA to cluster admin")

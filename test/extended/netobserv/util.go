@@ -164,6 +164,13 @@ func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	return err
 }
 
+// get name of flowlogsPipeline pod by label
+func getFlowlogsPipelinePod(oc *exutil.CLI, ns, name string) string {
+	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", "app="+name, "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return podName
+}
+
 func waitPodReady(oc *exutil.CLI, ns string, label string) {
 	podName := getFlowlogsPipelinePod(oc, ns, label)
 	exutil.AssertPodToBeReady(oc, podName, ns)
