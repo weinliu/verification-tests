@@ -666,7 +666,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jiazha-High-48980-oc adm catalog mirror image to local", func() {
-		mirroredImage := "quay.io/olmqe/sriov-fec:v4.9"
+		mirroredImage := "quay.io/olmqe/nginxolm-operator-index:v1"
 
 		exutil.By("1) get the cluster auth")
 		tokenDir := "/tmp/olm-48980"
@@ -681,14 +681,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		exutil.By("2) mirror image to local")
 		defer os.RemoveAll("v2/")
-		defer exec.Command("bash", "-c", "rm -rf manifests-sriov-fec-*").Output()
+		defer exec.Command("bash", "-c", "rm -rf manifests-nginxolm-operator-*").Output()
 		logs, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", mirroredImage, "file:///local/index", "-a", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
 		if err != nil || strings.Contains(logs, "error mirroring image") {
 			e2e.Failf("Fail to mirror image to local, error:%v, logs:%v", err, logs)
 		}
 		exutil.By("3) mirror local image to the docker registry")
 		defer os.RemoveAll("manifests-index/")
-		logs, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", "file://local/index/olmqe/sriov-fec:v4.9", "localhost:5000/test", "-a", "/home/cloud-user/auth.json").Output()
+		logs, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", "file://local/index/olmqe/nginxolm-operator-index:v1", "localhost:5000/test", "-a", "/home/cloud-user/auth.json").Output()
 		if err != nil || strings.Contains(logs, "error mirroring image") {
 			e2e.Failf("Fail to mirror image to localhost:5000, error:%v, logs:%v", err, logs)
 		}
