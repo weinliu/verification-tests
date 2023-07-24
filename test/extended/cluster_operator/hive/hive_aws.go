@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -21,16 +22,23 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
+	cloudFormationTypes "github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/registration"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+
+	"github.com/openshift/openshift-tests-private/test/extended/testdata"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -368,7 +376,7 @@ spec:
 
 	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "32135"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Medium-32135-[aws]kubeconfig and password secrets need to be owned by ClusterDeployment after installed [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Medium-32135-[aws]kubeconfig and password secrets need to be owned by ClusterDeployment after installed [Serial]", func() {
 		testCaseID := "32135"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -2270,6 +2278,307 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"pods", "-n", oc.Namespace()}).check(oc)
 	})
 
+	// Author: fxie@redhat.com
+	// ./bin/extended-platform-tests run all --dry-run|grep "41212"|./bin/extended-platform-tests run --timeout 75m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-41212-Hive supports to install private cluster[Serial]", func() {
+		var (
+			testCaseID = "41212"
+			cdName     = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+			stackName  = "endpointvpc-stack-" + testCaseID
+			azCount    = 3
+			// Should not overlap with the CIDR of the associate VPC
+			cidr = "10.1.0.0/16"
+
+			callCmd = func(cmd *exec.Cmd) error {
+				e2e.Logf("Calling command: %v", cmd)
+				out, err := cmd.CombinedOutput()
+				e2e.Logf("Command output: %s", out)
+				return err
+			}
+			waitForHiveadmissionRedeployment = func(initialHiveConfigGenInt int) bool {
+				// Make sure HiveConfig's generation is new
+				hiveConfigGen, _, err := oc.
+					AsAdmin().
+					WithoutNamespace().
+					Run("get").
+					Args("hiveconfig/hive", "-o=jsonpath={.metadata.generation}").
+					Outputs()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				hiveConfigGenInt, err := strconv.Atoi(hiveConfigGen)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if hiveConfigGenInt <= initialHiveConfigGenInt {
+					e2e.Logf("HiveConfig generation (%v) <= initial HiveConfig generation (%v), keep polling",
+						hiveConfigGenInt, initialHiveConfigGenInt)
+					return false
+				}
+
+				// Make sure the generation is observed
+				hiveConfigGenObs, _, err := oc.
+					AsAdmin().
+					WithoutNamespace().
+					Run("get").
+					Args("hiveconfig/hive", "-o=jsonpath={.status.observedGeneration}").
+					Outputs()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				hiveConfigGenObsInt, err := strconv.Atoi(hiveConfigGenObs)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if hiveConfigGenObsInt != hiveConfigGenInt {
+					e2e.Logf("HiveConfig observed generation (%v) != HiveConfig generation (%v), keep polling",
+						hiveConfigGenObsInt, hiveConfigGenInt)
+					return false
+				}
+
+				return true
+			}
+			checkCDConditions = func() bool {
+				awsPrivateLinkFailedCondition :=
+					getCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "AWSPrivateLinkFailed")
+				if status, ok := awsPrivateLinkFailedCondition["status"]; !ok || status != "False" {
+					e2e.Logf("For condition AWSPrivateLinkFailed, status = %s, keep polling", status)
+					return false
+				}
+				awsPrivateLinkReadyCondition :=
+					getCondition(oc, "ClusterDeployment", cdName, oc.Namespace(), "AWSPrivateLinkReady")
+				if status, ok := awsPrivateLinkReadyCondition["status"]; !ok || status != "True" {
+					e2e.Logf("For condition AWSPrivateLinkReady, status = %s, keep polling", status)
+					return false
+				}
+				return true
+			}
+		)
+
+		exutil.By("Extracting Hiveutil")
+		tmpDir := "/tmp/" + testCaseID + "-" + getRandomString()
+		defer func(tempdir string) {
+			_ = os.RemoveAll(tempdir)
+		}(tmpDir)
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		hiveutilPath := extractHiveutil(oc, tmpDir)
+		e2e.Logf("hiveutil extracted to %v", hiveutilPath)
+
+		exutil.By("Standing up an endpoint VPC and related resources")
+		endpointVpcTemp, err :=
+			testdata.Asset("test/extended/testdata/cluster_operator/hive/cloudformation-endpointvpc-temp.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		cloudFormationClient := cloudformation.NewFromConfig(cfg)
+
+		defer func() {
+			// Open question: should we make sure the deletion finishes without error?
+			e2e.Logf("Deleting CloudFormation stack")
+			_, err := cloudFormationClient.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
+				StackName: aws.String(stackName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		e2e.Logf("Creating CloudFormation stack")
+		_, err = cloudFormationClient.CreateStack(context.Background(), &cloudformation.CreateStackInput{
+			StackName:    aws.String(stackName),
+			TemplateBody: aws.String(string(endpointVpcTemp)),
+			Parameters: []cloudFormationTypes.Parameter{
+				{
+					ParameterKey:   aws.String("AvailabilityZoneCount"),
+					ParameterValue: aws.String(strconv.Itoa(azCount)),
+				},
+				{
+					ParameterKey:   aws.String("VpcCidr"),
+					ParameterValue: aws.String(cidr),
+				},
+			},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Making sure the CloudFormation stack is ready")
+		var vpcId, privateSubnetIds string
+		waitUntilStackIsReady := func() bool {
+			describeStackOutput, err := cloudFormationClient.DescribeStacks(context.Background(),
+				&cloudformation.DescribeStacksInput{
+					StackName: aws.String(stackName),
+				},
+			)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(describeStackOutput.Stacks)).To(o.Equal(1))
+
+			stackStatus := describeStackOutput.Stacks[0].StackStatus
+			if stackStatus != cloudFormationTypes.StackStatusCreateComplete {
+				e2e.Logf("Stack status = %s, keep polling", stackStatus)
+				return false
+			}
+
+			// Get stack info once it is ready
+			for _, output := range describeStackOutput.Stacks[0].Outputs {
+				switch aws.ToString(output.OutputKey) {
+				case "VpcId":
+					vpcId = aws.ToString(output.OutputValue)
+				case "PrivateSubnetIds":
+					privateSubnetIds = aws.ToString(output.OutputValue)
+				}
+			}
+			return true
+		}
+		o.Eventually(waitUntilStackIsReady).WithTimeout(15 * time.Minute).WithPolling(1 * time.Minute).Should(o.BeTrue())
+		e2e.Logf("VpcId = %s, PrivateSubnetIds = %s", vpcId, privateSubnetIds)
+
+		// Some (idempotent) awsprivatelink subcommands below are polled until succeed.
+		// Rationale:
+		// Calling an awsprivatelink subcommand immediately after another might fail
+		// due to etcd being only eventually consistent (as opposed to strongly consistent).
+		// In fact, awsprivatelink subcommands often starts off GETTING resources,
+		// which are processed and UPDATED before the command terminates.
+		// As a result, the later command might end up getting stale resources,
+		// causing the UPDATE request it makes to fail.
+		exutil.By("Setting up privatelink")
+		defer func() {
+			cmd := exec.Command(hiveutilPath, "awsprivatelink", "disable", "-d")
+			o.Eventually(callCmd).WithTimeout(3 * time.Minute).WithPolling(1 * time.Minute).WithArguments(cmd).Should(o.BeNil())
+		}()
+		// This is the first awsprivatelink subcommand, so no need to poll
+		cmd := exec.Command(hiveutilPath, "awsprivatelink", "enable", "--creds-secret", "kube-system/aws-creds", "-d")
+		err = callCmd(cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Sleep for a few seconds, so the first round of polling is more likely to succeed
+		time.Sleep(5 * time.Second)
+		// Get HiveConfig's generation, which will be used to make sure HiveConfig is updated.
+		initialHiveConfigGen, _, err := oc.AsAdmin().
+			WithoutNamespace().
+			Run("get").
+			Args("hiveconfig/hive", "-o=jsonpath={.metadata.generation}").
+			Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		initialHiveConfigGenInt, err := strconv.Atoi(initialHiveConfigGen)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Found HiveConfig generation = %v after enabling awsprivatelink", initialHiveConfigGenInt)
+
+		e2e.Logf("Setting up endpoint VPC")
+		defer func() {
+			cmd := exec.Command(
+				hiveutilPath, "awsprivatelink",
+				"endpointvpc", "remove", vpcId,
+				"--creds-secret", "kube-system/aws-creds",
+				"-d",
+			)
+			o.Eventually(callCmd).WithTimeout(3 * time.Minute).WithPolling(1 * time.Minute).WithArguments(cmd).Should(o.BeNil())
+		}()
+		cmd = exec.Command(
+			hiveutilPath, "awsprivatelink",
+			"endpointvpc", "add", vpcId,
+			"--region", "us-east-2",
+			"--creds-secret", "kube-system/aws-creds",
+			"--subnet-ids", privateSubnetIds,
+			"-d",
+		)
+		o.Eventually(callCmd).WithTimeout(3 * time.Minute).WithPolling(1 * time.Minute).WithArguments(cmd).Should(o.BeNil())
+
+		// It is necessary to wait for the re-deployment of Hive-admission, otherwise the CD gets rejected.
+		exutil.By("Waiting for the re-deployment of Hive-admission")
+		o.Eventually(waitForHiveadmissionRedeployment).
+			WithTimeout(3 * time.Minute).
+			WithPolling(1 * time.Minute).
+			WithArguments(initialHiveConfigGenInt).
+			Should(o.BeTrue())
+		// Wait until the new hiveadmission Deployment is available
+		err = oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("wait").
+			Args("deploy/hiveadmission", "-n", HiveNamespace, "--for", "condition=available", "--timeout=3m").
+			Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Creating ClusterImageSet")
+		clusterImageSetName := cdName + "-imageset"
+		imageSet := clusterImageSet{
+			name:         clusterImageSetName,
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
+		imageSet.create(oc)
+
+		exutil.By("Creating install-config Secret")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			publish:    PublishInternal,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		exutil.By("Copying AWS credentials")
+		createAWSCreds(oc, oc.Namespace())
+
+		exutil.By("Copying pull secret")
+		createPullSecret(oc, oc.Namespace())
+
+		exutil.By("Creating ClusterDeployment")
+		clusterDeployment := clusterDeploymentPrivateLink{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 1,
+			template:             filepath.Join(testDataDir, "clusterdeployment-aws-privatelink.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		clusterDeployment.create(oc)
+
+		exutil.By("Waiting for installation to finish")
+		newCheck("expect", "get", asAdmin, requireNS, compare, "true", ok,
+			ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		exutil.By("Checking CD.status")
+		o.Eventually(checkCDConditions).WithTimeout(3 * time.Minute).WithPolling(1 * time.Minute).Should(o.BeTrue())
+		privateLinkStatus, _, err := oc.
+			AsAdmin().
+			Run("get").
+			Args("clusterdeployment", cdName, "-o", "jsonpath={.status.platformStatus.aws.privateLink}").
+			Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Now CD.status.platformStatus.aws.privateLink looks like: \n%s", privateLinkStatus)
+		// Open question: should we check if the IDs in privateLinkStatus are correct ?
+		o.Expect(strings.Contains(privateLinkStatus, "hostedZoneID")).To(o.BeTrue())
+		o.Expect(strings.Contains(privateLinkStatus, "vpcEndpointID")).To(o.BeTrue())
+		o.Expect(strings.Contains(privateLinkStatus, "vpcEndpointService")).To(o.BeTrue())
+		o.Expect(strings.Contains(privateLinkStatus, "defaultAllowedPrincipal")).To(o.BeTrue())
+
+		exutil.By("Making sure the private target cluster is not directly reachable")
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+		_, _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--kubeconfig", kubeconfig).Outputs()
+		o.Expect(err).To(o.HaveOccurred())
+
+		exutil.By("Making sure the target cluster is reachable from the Hive cluster")
+		// Due to the PrivateLink networking setup (through awsprivatelink subcommands called above),
+		// the target cluster can only be accessed from worker nodes of the Hive cluster.
+		// This is not a problem for the Hive operator, as its Pods are deployed on the worker nodes by default.
+		selectors := map[string]string{
+			"node-role.kubernetes.io/worker": "",
+		}
+		workerNodeNames := getNodeNames(oc, selectors)
+		kubeconfigByteSlice, err := os.ReadFile(kubeconfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Ensure literal interpretation by Bash
+		kubeconfigSingleQuotedStr := "'" + string(kubeconfigByteSlice) + "'"
+		// Take care of the SCC setup
+		output, err := exutil.DebugNode(oc, workerNodeNames[0], "bash", "-c",
+			fmt.Sprintf("set +x; echo %s > kubeconfig; oc get co --kubeconfig kubeconfig", kubeconfigSingleQuotedStr))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("cloud-credential"))
+	})
+
 	//author: liangli@redhat.com fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "32223"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-32223-Medium-35193-High-23308-[aws]Hive ClusterDeployment Check installed and uninstalled [Serial]", func() {
@@ -2650,7 +2959,7 @@ spec:
 
 	//author: fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run | grep "23676" | ./bin/extended-platform-tests run --timeout 40m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:fxie-High-23676-[AWS]Create cluster with master terminated by manipulation[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-23676-[AWS]Create cluster with master terminated by manipulation[Serial]", func() {
 		testCaseID := "23676"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 

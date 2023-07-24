@@ -101,6 +101,7 @@ type installConfig struct {
 	name2      string
 	region     string
 	template   string
+	publish    string
 }
 
 type clusterDeployment struct {
@@ -135,6 +136,22 @@ type clusterDeploymentAdopt struct {
 	pullSecretRef      string
 	preserveOnDelete   bool
 	template           string
+}
+
+type clusterDeploymentPrivateLink struct {
+	fake                 string
+	name                 string
+	namespace            string
+	baseDomain           string
+	clusterName          string
+	manageDNS            bool
+	credRef              string
+	region               string
+	imageSetRef          string
+	installConfigSecret  string
+	pullSecretRef        string
+	installAttemptsLimit int
+	template             string
 }
 
 type machinepool struct {
@@ -318,6 +335,12 @@ type legoUser struct {
 	key          crypto.PrivateKey
 }
 
+// General Configurations
+const (
+	PublishExternal = "External"
+	PublishInternal = "Internal"
+)
+
 // Hive Configurations
 const (
 	HiveNamespace             = "hive" //Hive Namespace
@@ -325,6 +348,7 @@ const (
 	hiveAdditionalCASecret    = "hive-additional-ca"
 	PrometheusURL             = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
 	thanosQuerierURL          = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query?query="
+	HiveImgRepoOnQuay         = "app-sre"
 	ClusterInstallTimeout     = 3600
 	DefaultTimeout            = 120
 	FakeClusterInstallTimeout = 600
@@ -512,7 +536,11 @@ func (claim *clusterClaim) create(oc *exutil.CLI) {
 }
 
 func (config *installConfig) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region)
+	// Set default value
+	if config.publish == "" {
+		config.publish = "External"
+	}
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PUBLISH="+config.publish)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -523,6 +551,11 @@ func (cluster *clusterDeployment) create(oc *exutil.CLI) {
 
 func (cluster *clusterDeploymentAdopt) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "ADMINKUBECONFIGREF="+cluster.adminKubeconfigRef, "CLUSTERID="+cluster.clusterID, "INFRAID="+cluster.infraID, "CLUSTERNAME="+cluster.clusterName, "MANAGEDNS="+strconv.FormatBool(cluster.manageDNS), "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "PULLSECRETREF="+cluster.pullSecretRef, "PRESERVEONDELETE="+strconv.FormatBool(cluster.preserveOnDelete))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (cluster *clusterDeploymentPrivateLink) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "MANAGEDNS="+strconv.FormatBool(cluster.manageDNS), "CREDREF="+cluster.credRef, "REGION="+cluster.region, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef, "INSTALLATTEMPTSLIMIT="+strconv.Itoa(cluster.installAttemptsLimit))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1581,4 +1614,56 @@ func newLegoDNSProvider(
 		SecretAccessKey:    secretAccessKey,
 	}
 	return legoroute53.NewDNSProviderConfig(legoRoute53Config)
+}
+
+// Extract hiveutil (from the latest Hive image) into dir and return the executable's path
+func extractHiveutil(oc *exutil.CLI, dir string) string {
+	e2e.Logf("Getting tag of the latest Hive image")
+	cmd := exec.Command(
+		"bash",
+		"-c",
+		fmt.Sprintf("curl -sk https://quay.io/api/v1/repository/%s/hive/tag/ "+
+			"| jq '.tags | sort_by(.start_ts) | reverse | .[0].name'", HiveImgRepoOnQuay),
+	)
+	latestImgTag, err := cmd.CombinedOutput()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	latestImgTagStr := strings.Trim(strings.TrimSuffix(string(latestImgTag), "\n"), "\"")
+
+	e2e.Logf("Extracting hiveutil from image %v (latest) ...", latestImgTagStr)
+	err = oc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("image", "extract").
+		Args(fmt.Sprintf("quay.io/%s/hive:%s", HiveImgRepoOnQuay, latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
+		Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	hiveutilPath := dir + "/hiveutil"
+
+	e2e.Logf("Making hiveutil executable ...")
+	cmd = exec.Command("chmod", "+x", hiveutilPath)
+	_, err = cmd.CombinedOutput()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("Making sure hiveutil is functional ...")
+	cmd = exec.Command(hiveutilPath)
+	out, err := cmd.CombinedOutput()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(string(out)).To(o.ContainSubstring("Available Commands"))
+	o.Expect(string(out)).To(o.ContainSubstring("awsprivatelink"))
+
+	return hiveutilPath
+}
+
+func getNodeNames(oc *exutil.CLI, labels map[string]string) []string {
+	e2e.Logf("Extracting Node names")
+	args := []string{"node"}
+	for k, v := range labels {
+		args = append(args, fmt.Sprintf("--selector=%s=%s", k, v))
+	}
+	args = append(args, "-o=jsonpath={.items[*].metadata.name}")
+	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeNames := strings.Split(stdout, " ")
+	e2e.Logf("Nodes extracted = %v", nodeNames)
+	return nodeNames
 }
