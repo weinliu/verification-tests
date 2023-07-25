@@ -12,6 +12,31 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+type HostedClusterPlatformType = string
+
+const (
+	// AWSPlatform represents Amazon Web Services infrastructure.
+	AWSPlatform HostedClusterPlatformType = "AWS"
+
+	// NonePlatform represents user supplied (e.g. bare metal) infrastructure.
+	NonePlatform HostedClusterPlatformType = "None"
+
+	// IBMCloudPlatform represents IBM Cloud infrastructure.
+	IBMCloudPlatform HostedClusterPlatformType = "IBMCloud"
+
+	// AgentPlatform represents user supplied insfrastructure booted with agents.
+	AgentPlatform HostedClusterPlatformType = "Agent"
+
+	// KubevirtPlatform represents Kubevirt infrastructure.
+	KubevirtPlatform HostedClusterPlatformType = "KubeVirt"
+
+	// AzurePlatform represents Azure infrastructure.
+	AzurePlatform HostedClusterPlatformType = "Azure"
+
+	// PowerVSPlatform represents PowerVS infrastructure.
+	PowerVSPlatform HostedClusterPlatformType = "PowerVS"
+)
+
 // ValidHypershiftAndGetGuestKubeConf check if it is hypershift env and get kubeconf of the hosted cluster
 // the first return is hosted cluster name
 // the second return is the file of kubeconfig of the hosted cluster
@@ -188,4 +213,13 @@ func ROSAValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string, string) {
 
 	hostedClusterKubeconfigFile := os.Getenv("SHARED_DIR") + "/nested_kubeconfig"
 	return clusterName, hostedClusterKubeconfigFile, hostedclusterNS
+}
+
+// GetHostedClusterPlatformType returns a hosted cluster platform type
+// oc is the management cluster client to query the hosted cluster platform type based on hostedcluster CR obj
+func GetHostedClusterPlatformType(oc *CLI, clusterName, clusterNamespace string) (HostedClusterPlatformType, error) {
+	if IsHypershiftHostedCluster(oc) {
+		return "", fmt.Errorf("this is a hosted cluster env. You should use oc of the management cluster")
+	}
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", clusterName, "-n", clusterNamespace, `-ojsonpath={.spec.platform.type}`).Output()
 }
