@@ -50,6 +50,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		exutil.SkipConditionally(oc)
 		ms := exutil.MachineSetDescription{"machineset-43764", 1}
+		defer exutil.WaitForMachinesDisapper(oc, "machineset-43764")
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -117,6 +118,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-36989"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 

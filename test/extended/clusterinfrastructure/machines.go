@@ -28,6 +28,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		exutil.SkipConditionally(oc)
 		ms := exutil.MachineSetDescription{"machineset-45772", 0}
+		defer exutil.WaitForMachinesDisapper(oc, "machineset-45772")
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with empty clusterID")
@@ -43,6 +44,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		machinesetName := "machineset-45377"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with acceleratedNetworking: true")
@@ -67,6 +69,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		machinesetName := "machineset-46967"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with Ephemeral OS Disks - OS cache placement")
@@ -101,6 +104,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-46303"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -130,6 +134,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipConditionally(oc)
 		machinesetName := "machineset-47177-47201"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with lifecycle hook")
@@ -178,6 +183,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipConditionally(oc)
 		machinesetName := "machineset-47230"
 		ms := exutil.MachineSetDescription{machinesetName, 1}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -217,6 +223,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-44977"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with GPU")
@@ -263,6 +270,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-35513"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
@@ -291,6 +299,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48012"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with gp3 iops 5000")
@@ -326,6 +335,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a spot instance on azure")
 		exutil.SkipConditionally(oc)
 		ms := exutil.MachineSetDescription{"machineset-33040", 0}
+		defer exutil.WaitForMachinesDisapper(oc, "machineset-33040")
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, "machineset-33040", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
@@ -354,6 +364,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48594"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with networkInterfaceType: EFA")
@@ -381,6 +392,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48595"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with networkInterfaceType: invalid")
@@ -404,6 +416,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-49827"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -430,6 +443,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-50731"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -470,6 +484,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-37915"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -492,6 +507,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a machineset configuring boot diagnostics with Azure managed storage accounts")
 		machinesetName := "machineset-52471-1"
 		ms1 := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms1.DeleteMachineSet(oc)
 		ms1.CreateMachineSet(oc)
 
@@ -505,6 +521,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create machineset configuring boot diagnostics with Customer managed storage accounts")
 		machinesetName = "machineset-52471-2"
 		ms2 := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms2.DeleteMachineSet(oc)
 		ms2.CreateMachineSet(oc)
 
@@ -531,6 +548,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a machineset")
 		machinesetName := "machineset-52473-1"
 		ms1 := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms1.DeleteMachineSet(oc)
 		ms1.CreateMachineSet(oc)
 
@@ -564,6 +582,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-36489"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -614,6 +633,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-51013"
 		ms := exutil.MachineSetDescription{machinesetName, 1}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 	})
@@ -625,6 +645,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-59718"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset adding these new fields")
@@ -650,6 +671,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-59760"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -682,6 +704,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-57438"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -707,6 +730,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48464"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -732,6 +756,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-39639"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -753,6 +778,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetNameDefault := "machineset-32269-default"
 		msDefault := exutil.MachineSetDescription{machinesetNameDefault, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetNameDefault)
 		defer msDefault.DeleteMachineSet(oc)
 		msDefault.CreateMachineSet(oc)
 
@@ -765,6 +791,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset deleting instanceType credentialsSecret and userDataSecret fileds")
 		machinesetName := "machineset-32269"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateAwsMachinesetWithDefaultValues(oc)
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1}}`, "--type=merge").Execute()

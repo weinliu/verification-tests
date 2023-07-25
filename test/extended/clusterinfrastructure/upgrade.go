@@ -84,6 +84,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			g.Skip("Skip this test scenario because it is not supported on the " + region + " region, because this region doesn't have zones")
 		}
 		ms := exutil.MachineSetDescription{"machineset-41804", 0}
+		defer exutil.WaitForMachinesDisapper(oc, "machineset-41804")
 		defer ms.DeleteMachineSet(oc)
 
 		g.By("Check machine and node were still be labelled `interruptible-instance`")
@@ -100,6 +101,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset")
 		machinesetName := "machineset-61086"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
