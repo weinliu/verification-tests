@@ -653,8 +653,16 @@ func (vol *ebsVolume) expand(ac *ec2.EC2, expandCapacity int64) error {
 
 // Expand the EBS volume capacity and wait for the expanding succeed
 func (vol *ebsVolume) expandSucceed(ac *ec2.EC2, expandCapacity int64) {
-	err := vol.expand(ac, expandCapacity)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	err := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+		expandErr := vol.expand(ac, expandCapacity)
+		// On AWS some regions the volume resize service usually has the service busy 503 error, after retry it could be successful
+		if expandErr != nil {
+			e2e.Logf(`Sending the volume:%s expand request failed of "%s", try again`, vol.volumeID, expandErr.Error())
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for sending the volume:%s expand request successfully timeout", vol.volumeID))
 	vol.waitSizeAsExpected(ac, expandCapacity)
 }
 
