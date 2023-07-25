@@ -46,5 +46,5 @@ spec:
           workspace:
             datacenter: DEVQEdatacenter
             datastore: /DEVQEdatacenter/datastore/vsanDatastore
-            folder: /DEVQEdatacenter/datastore/vsanDatastore/vm/<infrastructureID>
+            folder: /DEVQEdatacenter/vm/<infrastructureID>
             server: vcenter.devqe.ibmc.devcluster.openshift.com
