@@ -4778,6 +4778,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
+
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -4973,6 +4974,89 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod2.checkMountedVolumeDataExist(oc, true)
 
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-64289-[Storageclass] Volume expand failed when nodeexpandsecret is absent", func() {
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "disk.csi.azure.com", "vpc.block.csi.ibm.io", "csi.vsphere.vmware.com", "efs.csi.aws.com", "file.csi.azure.com", "filestore.csi.storage.gke.io"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject()
+
+		for _, provisioner = range supportProvisioners {
+			func() {
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+				var (
+					storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+					storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+					pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+					podTemplate            = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+					secretName             = "storage" + getRandomString()
+					storageClassParameters = map[string]string{
+						"csi.storage.k8s.io/node-expand-secret-name":      secretName,
+						"csi.storage.k8s.io/node-expand-secret-namespace": "openshift-cluster-csi-drivers",
+					}
+				)
+				extraParameters := map[string]interface{}{
+					"parameters":           storageClassParameters,
+					"allowVolumeExpansion": true,
+				}
+
+				g.By("Create storageclass with not existed nodeexpand secret")
+				storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+				pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+				storageClass.provisioner = provisioner
+				storageClass.createWithExtraParameters(oc, extraParameters)
+				defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+				g.By("Create pvc with the csi storageclass")
+				pvc.create(oc)
+				defer pvc.deleteAsAdmin(oc)
+
+				g.By("Create pod with the created pvc and wait the pod is running")
+				pod.create(oc)
+				defer pod.deleteAsAdmin(oc)
+				pod.waitReady(oc)
+
+				g.By("Apply the patch to resize pvc capacity")
+				oriPVCSize := pvc.capacity
+				originSizeInt64, err := strconv.ParseInt(strings.TrimRight(pvc.capacity, "Gi"), 10, 64)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				expandSizeInt64 := originSizeInt64 + getRandomNum(5, 10)
+				expandedCapactiy := strconv.FormatInt(expandSizeInt64, 10) + "Gi"
+				pvc.expand(oc, expandedCapactiy)
+
+				g.By("Check VolumeResizeFailed")
+				o.Eventually(func() bool {
+					events := []string{"VolumeResizeFailed", "failed to get NodeExpandSecretRef"}
+					Info, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", pod.namespace, "--field-selector=involvedObject.name="+pod.name).Output()
+					if err != nil {
+						e2e.Logf("The events of %s are %s", pod.name, Info)
+						return false
+					}
+					for count := range events {
+						if !strings.Contains(Info, events[count]) {
+							return false
+						}
+					}
+					return true
+				}, 480*time.Second, 10*time.Second).Should(o.BeTrue())
+				o.Consistently(func() string {
+					pvcResizeCapacity, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", pvc.name, "-n", pvc.namespace, "-o=jsonpath={.status.capacity.storage}").Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					return pvcResizeCapacity
+				}, 60*time.Second, 5*time.Second).Should(o.Equal(oriPVCSize))
+
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+
+			}()
 		}
 	})
 
