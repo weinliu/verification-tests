@@ -441,6 +441,20 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: wewang@redhat.com
 	g.It("ConnectedOnly-Author:wewang-Medium-54964-Hard pruning the registry should not lead to unexpected blob deletion [Disruptive]", func() {
+		// When registry configured pvc or emptryDir, the replicas is 1 and with recreate pod policy.
+		// This is not suitable for the defer recoverage. Only run this case on cloud storage.
+		platforms := map[string]bool{
+			"aws":          true,
+			"azure":        true,
+			"gcp":          true,
+			"alibabacloud": true,
+			"ibmcloud":     true,
+		}
+		if !platforms[exutil.CheckPlatform(oc)] {
+			g.Skip("Skip for non-supported platform")
+		}
+
+		g.By("Config image registry to emptydir")
 		defer recoverRegistryStorageConfig(oc)
 		defer recoverRegistryDefaultReplicas(oc)
 		configureRegistryStorageToEmptyDir(oc)
