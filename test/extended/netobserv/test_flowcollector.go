@@ -159,6 +159,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 					LokiURL:         lokiURL,
 					LokiTLSEnable:   true,
 					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					LokiNamespace:   namespace,
 				}
 				defer flow.deleteFlowcollector(oc)
 				flow.createFlowcollector(oc)
@@ -203,6 +204,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 					LokiTLSEnable:       true,
 					MetricServerTLSType: "AUTO",
 					LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					LokiNamespace:       namespace,
 				}
 				defer flow.deleteFlowcollector(oc)
 				flow.createFlowcollector(oc)
@@ -252,6 +254,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			LokiURL:         lokiURL,
 			LokiTLSEnable:   true,
 			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -442,8 +445,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				LokiURL:             lokiURL,
 				LokiTLSEnable:       true,
 				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				LokiNamespace:       namespace,
 				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
 				KafkaTLSEnable:      true,
+				KafkaNamespace:      namespace,
 			}
 
 			defer flow.deleteFlowcollector(oc)
@@ -519,8 +524,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				LokiURL:             lokiURL,
 				LokiTLSEnable:       true,
 				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				LokiNamespace:       namespace,
 				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
 				KafkaTLSEnable:      true,
+				KafkaNamespace:      namespace,
 			}
 
 			defer flow.deleteFlowcollector(oc)
