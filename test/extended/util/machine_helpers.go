@@ -191,11 +191,18 @@ func WaitForMachinesRunning(oc *CLI, machineNumber int, machineSetName string) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
-			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[*].status.phase}").Output()
-			if strings.Contains(output, "Failed") {
+			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[*].status.phase}").Output()
+			if strings.Contains(phase, "Failed") {
 				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
 				e2e.Logf("%v", output)
 				return false, fmt.Errorf("Some machine go into Failed phase!")
+			}
+			if strings.Contains(phase, "Provisioning") {
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
+				if strings.Contains(output, "InsufficientInstanceCapacity") {
+					e2e.Logf("%v", output)
+					return false, fmt.Errorf("InsufficientInstanceCapacity")
+				}
 			}
 			e2e.Logf("Expected %v  machine are not Running yet and waiting up to 1 minutes ...", machineNumber)
 			return false, nil
@@ -204,6 +211,9 @@ func WaitForMachinesRunning(oc *CLI, machineNumber int, machineSetName string) {
 		return true, nil
 	})
 	if pollErr != nil {
+		if pollErr.Error() == "InsufficientInstanceCapacity" {
+			g.Skip("InsufficientInstanceCapacity, skip this test")
+		}
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
 		e2e.Logf("%v", output)
 		e2e.Failf("Expected %v  machines are not Running after waiting up to 16 minutes ...", machineNumber)

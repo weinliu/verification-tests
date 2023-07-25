@@ -789,4 +789,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(userDataSecretMachine).Should(o.Equal(userDataSecretMachineset))
 	})
+
+	//author huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-37497-ClusterInfrastructure Dedicated Spot Instances could be created [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		architecture.SkipNonAmd64SingleArch(oc)
+		g.By("Create a new machineset")
+		machinesetName := "machineset-37497"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset to Dedicated Spot Instances")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotMarketOptions":{},"instanceType":"c4.8xlarge","placement": {"tenancy": "dedicated"}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+	})
 })
