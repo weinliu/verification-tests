@@ -79,6 +79,71 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "41525"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-High-41525-[aws]Log diffs when validation rejects immutable modifications [Serial]", func() {
+		testCaseID := "41525"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		exutil.By("Config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		exutil.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "true",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		exutil.By("Patch immutable fields of ClusterDeployment")
+		patchCDName := "test-cluster"
+		patchBaseDomain := "test.com"
+		patchRegion := "us-east-1"
+		patchimageSetRefName := "test-imageset"
+		patch := `
+spec:
+  baseDomain: ` + patchBaseDomain + `
+  clusterName: ` + patchCDName + `
+  platform:
+    aws:
+      region: ` + patchRegion + `
+  provisioning:
+    imageSetRef:
+      name: ` + patchimageSetRefName
+		_, stderr, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, `--type=merge`, "-p", patch, "-n", oc.Namespace()).Outputs()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(stderr).To(o.ContainSubstring("Attempted to change ClusterDeployment.Spec which is immutable"))
+		o.Expect(stderr).To(o.ContainSubstring(fmt.Sprintf("ClusterName: (%s => %s)", cdName, patchCDName)))
+		o.Expect(stderr).To(o.ContainSubstring(fmt.Sprintf("BaseDomain: (%s => %s)", AWSBaseDomain, patchBaseDomain)))
+		o.Expect(stderr).To(o.ContainSubstring(fmt.Sprintf("Platform.AWS.Region: (%s => %s)", AWSRegion, patchRegion)))
+		o.Expect(stderr).To(o.ContainSubstring(fmt.Sprintf("Provisioning.ImageSetRef.Name: (%s => %s)", cdName+"-imageset", patchimageSetRefName)))
+
+		exutil.By("Check .spec of ClusterDeployment, the fields tried to be changed above didn't change,")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, cdName, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.clusterName}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, AWSBaseDomain, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.baseDomain}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, AWSRegion, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.platform.aws.region}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName+"-imageset", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.provisioning.imageSetRef}"}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "37464"|./bin/extended-platform-tests run --timeout 20m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-High-37464-[aws]Seperate clustersync controller from hive-controllers, meanwhile make it be able to scale up/down [Serial]", func() {
 		exutil.By("Check the statefulset in hive namespace")
