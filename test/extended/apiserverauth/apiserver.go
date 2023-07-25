@@ -1508,36 +1508,41 @@ spec:
 		g.By("2) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames)
 
-		resource = "configmap"
-		resourceNames = []string{"config", "openshift-kube-storage-version-migrator-operator-lock"}
+		resource = "lease"
+		resourceNames = []string{"openshift-kube-storage-version-migrator-operator-lock"}
 		namespace := "openshift-kube-storage-version-migrator-operator"
 		g.By("3) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
+		resource = "configmap"
+		resourceNames = []string{"config"}
+		g.By("4) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+
 		resource = "service"
 		resourceNames = []string{"metrics"}
-		g.By("4) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
+		g.By("5) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "serviceaccount"
 		resourceNames = []string{"kube-storage-version-migrator-operator"}
-		g.By("5) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		g.By("6) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "deployment"
 		resourceNames = []string{"kube-storage-version-migrator-operator"}
-		g.By("6) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		g.By("7) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "serviceaccount"
 		resourceNames = []string{"kube-storage-version-migrator-sa"}
 		namespace = "openshift-kube-storage-version-migrator"
-		g.By("7) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		g.By("8) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "deployment"
 		resourceNames = []string{"migrator"}
-		g.By("8) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		g.By("9) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 	})
 
