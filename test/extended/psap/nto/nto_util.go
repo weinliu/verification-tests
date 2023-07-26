@@ -999,16 +999,19 @@ func assertNTOCustomProfileStatus(oc *exutil.CLI, ntoNamespace string, tunedNode
 
 func isROSAHostedCluster(oc *exutil.CLI) bool {
 
-	clusterType := ""
+	var clusterType string
 	//Check if it's ROSA hosted cluster
 	sharedDir := os.Getenv("SHARED_DIR")
 	if len(sharedDir) != 0 {
 		fmt.Println("SHARED_DIR was found ")
 		byteArray, err := ioutil.ReadFile(sharedDir + "/cluster-type")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			clusterType = ""
+		} else {
+			clusterType = string(byteArray)
+			clusterType = strings.ToLower(clusterType)
+		}
 
-		clusterType = string(byteArray)
-		clusterType = strings.ToLower(clusterType)
 	}
 	return strings.Contains(clusterType, "rosa")
 }

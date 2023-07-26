@@ -14,6 +14,9 @@ objects:
         [main]
         summary=Custom OpenShift profile
         include=openshift-node
+        [sysctl]
+        kernel.sched_rt_runtime_us = -1
+
         [service]
         service.stalld=${STALLD_STATUS} 
         #STALLD_STATUS is stop,disable or start,enable
