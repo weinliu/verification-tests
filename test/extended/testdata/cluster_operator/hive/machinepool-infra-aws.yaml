@@ -18,6 +18,8 @@ objects:
     name: infra
     platform:
       aws:
+        metadataService:
+          authentication: ${AUTHENTICATION}
         rootVolume:
           iops: ${{IOPS}}
           size: 22
@@ -33,5 +35,4 @@ parameters:
 - name: NAMESPACE
 - name: IOPS
   value: "100"
-
-
+- name: AUTHENTICATION

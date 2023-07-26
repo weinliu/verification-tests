@@ -2790,6 +2790,149 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
 	})
 
+	//author: fxie@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "63275"|./bin/extended-platform-tests run --timeout 70m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-63275-[aws]Hive support for AWS IMDSv2 [Serial]", func() {
+		var (
+			testCaseID   = "63275"
+			cdName       = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+			workerMpName = "worker"
+			infraMpName  = "infra"
+			infraMpName2 = "infra-2"
+		)
+
+		exutil.By("Creating ClusterDeployment")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		clusterDeployment := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 1,
+		}
+		defer cleanCD(oc, clusterDeployment.name+"-imageset", oc.Namespace(), installConfigSecret.name1, clusterDeployment.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, clusterDeployment)
+
+		exutil.By("Wait for the cluster to be installed")
+		newCheck("expect", "get", asAdmin, requireNS, compare, "true", ok,
+			ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		exutil.By("Creating temporary directory")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		defer func() {
+			_ = os.RemoveAll(tmpDir)
+		}()
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Saving kubeconfig of the target cluster")
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+
+		exutil.By("Creating worker MachinePool with metadataService.authentication un-specified")
+		workermp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    filepath.Join(testDataDir, "machinepool-worker-aws.yaml"),
+		}
+		workermp.create(oc)
+
+		exutil.By("Creating infra MachinePool with metadataService.authentication = Optional")
+		inframp := machinepool{
+			namespace:      oc.Namespace(),
+			clusterName:    cdName,
+			authentication: "Optional",
+			template:       filepath.Join(testDataDir, "machinepool-infra-aws.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{
+			"MachinePool", oc.Namespace(), fmt.Sprintf("%s-%s", cdName, infraMpName),
+		})
+		inframp.create(oc)
+
+		exutil.By("Creating another infra MachinePool with metadataService.authentication = Required")
+		fullInframpName2 := fmt.Sprintf("%s-%s", cdName, infraMpName2)
+		inframp2 := `
+apiVersion: hive.openshift.io/v1
+kind: MachinePool
+metadata:
+  name: ` + fullInframpName2 + `
+  namespace: ` + oc.Namespace() + `
+spec:
+  clusterDeploymentRef:
+    name: ` + cdName + `
+  name: ` + infraMpName2 + `
+  platform:
+    aws:
+      metadataService:
+        authentication: Required
+      rootVolume:
+        size: 22
+        type: gp2
+      type: m4.xlarge
+  replicas: 1`
+		filename := tmpDir + "/" + testCaseID + infraMpName2
+		err = os.WriteFile(filename, []byte(inframp2), 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), fullInframpName2})
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Extracting Instance IDs")
+		instanceIdByMachinePool := make(map[string]string)
+		machinePools := []string{workerMpName, infraMpName, infraMpName2}
+		getInstanceIds := func() bool {
+			for _, machinePool := range machinePools {
+				instanceIds := getMachinePoolInstancesIds(oc, machinePool, kubeconfig)
+				if len(instanceIds) == 0 {
+					e2e.Logf("%s Machines not found, keep polling", machinePool)
+					return false
+				}
+				instanceIdByMachinePool[machinePool] = instanceIds[0]
+			}
+
+			return true
+		}
+		o.Eventually(getInstanceIds).WithTimeout(10 * time.Minute).WithPolling(30 * time.Second).Should(o.BeTrue())
+		e2e.Logf("Instance IDs found: %v", instanceIdByMachinePool)
+
+		exutil.By("Checking IMDSv2 settings")
+		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		ec2Client := ec2.NewFromConfig(cfg)
+		expectedIMDSv2 := map[string]string{
+			workerMpName: "optional",
+			infraMpName:  "optional",
+			infraMpName2: "required",
+		}
+		for machinePool, instanceId := range instanceIdByMachinePool {
+			e2e.Logf("Checking IDMSv2 settings on a %s instance", machinePool)
+			describeInstancesOutput, err := ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
+				InstanceIds: []string{instanceId},
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(describeInstancesOutput.Reservations)).To(o.Equal(1))
+			o.Expect(len(describeInstancesOutput.Reservations[0].Instances)).To(o.Equal(1))
+			o.Expect(string(describeInstancesOutput.Reservations[0].Instances[0].MetadataOptions.HttpTokens)).
+				To(o.Equal(expectedIMDSv2[machinePool]))
+			// Limit the frequency of API calls
+			time.Sleep(5 * time.Second)
+		}
+	})
+
 	//author: mihuang@redhat.com fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "49471"|./bin/extended-platform-tests run --timeout 70m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-49471-High-23677-[aws]Change EC2RootVolume: make IOPS optional [Serial]", func() {

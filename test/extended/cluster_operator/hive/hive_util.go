@@ -155,10 +155,11 @@ type clusterDeploymentPrivateLink struct {
 }
 
 type machinepool struct {
-	clusterName string
-	namespace   string
-	iops        int
-	template    string
+	clusterName    string
+	namespace      string
+	iops           int
+	template       string
+	authentication string
 }
 
 type syncSetResource struct {
@@ -560,7 +561,7 @@ func (cluster *clusterDeploymentPrivateLink) create(oc *exutil.CLI) {
 }
 
 func (machine *machinepool) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME="+machine.clusterName, "NAMESPACE="+machine.namespace, "IOPS="+strconv.Itoa(machine.iops))
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME="+machine.clusterName, "NAMESPACE="+machine.namespace, "IOPS="+strconv.Itoa(machine.iops), "AUTHENTICATION="+machine.authentication)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1666,4 +1667,24 @@ func getNodeNames(oc *exutil.CLI, labels map[string]string) []string {
 	nodeNames := strings.Split(stdout, " ")
 	e2e.Logf("Nodes extracted = %v", nodeNames)
 	return nodeNames
+}
+
+func getMachinePoolInstancesIds(oc *exutil.CLI, machinePoolName string, kubeconfigPath string) []string {
+	// The command below does not error out if the selector does not have a match
+	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").
+		Args(
+			"machine",
+			fmt.Sprintf("--selector=machine.openshift.io/cluster-api-machine-role=%s", machinePoolName),
+			"-n", "openshift-machine-api", "-o=jsonpath={.items[*].status.providerStatus.instanceId}",
+			"--kubeconfig", kubeconfigPath,
+		).
+		Outputs()
+	// When stdout is an empty string, strings.Split(stdout, " ") = []string{""}
+	// We do not want this, so return an empty slice
+	if len(stdout) == 0 {
+		return []string{}
+	}
+
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(stdout, " ")
 }
