@@ -4035,4 +4035,59 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			e2e.Failf("Get is/layers permission is not correct.")
 		}
 	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-12765-Allow imagestream request deployment config triggers by different mode('TagreferencePolicy':source/local)", func() {
+		g.By("Import an image to create imagestream with source policy")
+		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/deployment-example@sha256:9d29ff0fdbbec33bb4eebb0dbe0d0f3860a856987e5481bb0fc39f3aba086184", "deployment-source:latest", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "deployment-source", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create deployment with imagestream and check the image info")
+		err = oc.WithoutNamespace().AsAdmin().Run("set").Args("image-lookup", "deployment-source", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("deployment", "deployment-source", "--image=deployment-source", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check whether the image can be pulled from external registry")
+		expectInfo := `Successfully pulled image "quay.io/openshifttest/deployment-example`
+		pollErr := wait.Poll(15*time.Second, 200*time.Second, func() (bool, error) {
+			output, describeErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "app=deployment-source", "-n", oc.Namespace()).Output()
+			o.Expect(describeErr).NotTo(o.HaveOccurred())
+			if strings.Contains(output, expectInfo) {
+				return true, nil
+			}
+			e2e.Logf("Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Pod doesn't show expected log %v", expectInfo))
+
+		g.By("Import an image to create imagestream with local policy")
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/deployment-example@sha256:9d29ff0fdbbec33bb4eebb0dbe0d0f3860a856987e5481bb0fc39f3aba086184", "deployment-local:latest", "--import-mode=PreserveOriginal", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "deployment-local", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create deployment with imagestream and check the image info")
+		err = oc.WithoutNamespace().AsAdmin().Run("set").Args("image-lookup", "deployment-local", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("deployment", "deployment-local", "--image=deployment-local", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check whether the image can be pulled from internal registry")
+		expectInfo = `Successfully pulled image "image-registry.openshift-image-registry.svc:5000`
+		pollErr = wait.Poll(15*time.Second, 200*time.Second, func() (bool, error) {
+			output, describeErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "app=deployment-local", "-n", oc.Namespace()).Output()
+			o.Expect(describeErr).NotTo(o.HaveOccurred())
+			if strings.Contains(output, expectInfo) {
+				return true, nil
+			}
+			e2e.Logf("Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Pod doesn't show expected log %v", expectInfo))
+
+	})
 })
