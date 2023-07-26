@@ -1106,6 +1106,19 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		o.Expect(strings.Contains(out, "example-preserveoriginal")).To(o.BeTrue())
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-63850-Critical-64919-Verify oc image extract and oc adm release info -h contains --idms-file", func() {
+		g.By("Check oc image extract and oc adm release info -h does not show --icsp-file flag")
+		imageExtractOutput, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", "-h").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(imageExtractOutput, "--idms-file")).To(o.BeTrue())
+		o.Expect(strings.Contains(imageExtractOutput, "--icsp-file")).To(o.BeFalse())
+		releaseInfoOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "-h").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(releaseInfoOutput, "--idms-file")).To(o.BeTrue())
+		o.Expect(strings.Contains(releaseInfoOutput, "--icsp-file")).To(o.BeFalse())
+	})
+
 })
 
 // ClientVersion ...
