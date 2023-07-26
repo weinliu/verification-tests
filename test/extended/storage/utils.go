@@ -987,14 +987,29 @@ func isSpecifiedAPIExist(oc *exutil.CLI, apiNameAndVersion string) bool {
 
 // isCRDSpecificFieldExist checks whether the CRD specified field exist, returns bool
 func isCRDSpecificFieldExist(oc *exutil.CLI, crdFieldPath string) bool {
-	crdFieldInfo, getInfoErr := oc.AsAdmin().WithoutNamespace().Run("explain").Args(crdFieldPath).Output()
-	if getInfoErr != nil {
-		if strings.Contains(crdFieldInfo, "the server doesn't have a resource type") {
-			return false
+	var (
+		crdFieldInfo string
+		getInfoErr   error
+	)
+	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		crdFieldInfo, getInfoErr = oc.AsAdmin().WithoutNamespace().Run("explain").Args(crdFieldPath).Output()
+		e2e.Logf("******crdFieldInfo: %s . Err:\n%v******", crdFieldInfo, getInfoErr)
+		if getInfoErr != nil && strings.Contains(crdFieldInfo, "the server doesn't have a resource type") {
+			if strings.Contains(crdFieldInfo, "the server doesn't have a resource type") {
+				e2e.Logf("The test cluster specified crd field: %s is not exist.", crdFieldPath)
+				return true, nil
+			}
+			// TODO: The "couldn't find resource" error info sometimes(very low frequency) happens in few cases but I couldn't reproduce it, this retry solution should be an enhancement
+			if strings.Contains(getInfoErr.Error(), "couldn't find resource") {
+				e2e.Logf("Failed to check whether the specified crd field: %s exist, try again. Err:\n%v", crdFieldPath, getInfoErr)
+				return false, nil
+			}
+			return false, getInfoErr
 		}
-		o.Expect(getInfoErr).NotTo(o.HaveOccurred())
-	}
-	return true
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check whether the specified: %s crd field exist timeout.", crdFieldPath))
+	return !strings.Contains(crdFieldInfo, "the server doesn't have a resource type")
 }
 
 // isMicroShiftCluster judges whether the test cluster is microshift cluster
