@@ -79,7 +79,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-Critical-48916-Critical-48917-Install seconday scheduler operator via a deployment & verify user is able to schedule pod using secondary-scheduler [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-Critical-48916-Critical-48917-Install seconday scheduler operator via a deployment & verify user is able to schedule pod using secondary-scheduler [Serial][Flaky]", func() {
 		secondarySchedPodT := filepath.Join(buildPruningBaseDir, "deployPodWithScheduler.yaml")
 		schedPodWithOutSchedT := filepath.Join(buildPruningBaseDir, "deployPodWithOutScheduler.yaml")
 
