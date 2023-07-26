@@ -644,7 +644,8 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: rugong@redhat.com
-	g.It("Author:rugong-Low-37697-Allow Users To Manage Their Own Tokens", func() {
+	// Adding the NonHyperShiftHOST label because developers appear to not fix the known bug https://issues.redhat.com/browse/OCPBUGS-3873
+	g.It("NonHyperShiftHOST-Author:rugong-Low-37697-Allow Users To Manage Their Own Tokens", func() {
 		oc.SetupProject()
 		user1Name := oc.Username()
 		userOauthAccessTokenYamlPath, err := os.MkdirTemp("/tmp/", "tmp_37697")
