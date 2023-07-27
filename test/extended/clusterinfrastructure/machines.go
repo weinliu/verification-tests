@@ -834,4 +834,31 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-64909-AWS Placement group support for MAPI [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if region != "us-east-2" {
+			g.Skip("Not support region " + region + " for the case for now.")
+		}
+		g.By("Create a new machineset")
+		machinesetName := "machineset-64909"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with Placement group")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placementGroupName":"pgcluster"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with Placement group")
+		placementGroupName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.placementGroupName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("placementGroupName:%s", placementGroupName)
+		o.Expect(placementGroupName).Should(o.Equal("pgcluster"))
+	})
 })
