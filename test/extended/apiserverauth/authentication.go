@@ -941,7 +941,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: dmukherj@redhat.com
-	g.It("Author:dmukherj-High-47941-User should not be allowed to create privileged ephemeral container without required privileges", func() {
+	g.It("ConnectedOnly-Author:dmukherj-High-47941-User should not be allowed to create privileged ephemeral container without required privileges", func() {
 		g.By("1. Create a namespace as normal user")
 		oc.SetupProject()
 		testNamespace := oc.Namespace()
