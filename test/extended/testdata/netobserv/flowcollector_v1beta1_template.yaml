@@ -30,7 +30,9 @@ objects:
           interfaces: [ ]
           excludeInterfaces: ["lo"]
           logLevel: info
-          privileged: false
+          privileged: "${{EBPF_PRIVILEGED}}"
+          enablePktDrop: "${{PACKET_DROP_ENABLE}}"
+          enableDNSTracking: "${{DNS_TRACKING_ENABLE}}"
           resources:
             requests:
               memory: 50Mi
@@ -42,8 +44,6 @@ objects:
         port: 2055
         imagePullPolicy: IfNotPresent
         logLevel: trace
-        enableKubeProbes: true
-        healthPort: 8080
         profilePort: 6060
         metrics:
           server:
@@ -60,12 +60,13 @@ objects:
             memory: 100Mi
             cpu: 100m
           limits:
-            memory: 300Mi
+            memory: 800Mi
         kafkaConsumerReplicas: 3
         kafkaConsumerAutoscaler: null
         kafkaConsumerQueueCapacity: 1000
         kafkaConsumerBatchSize: 10485760
         logTypes: "${LOG_TYPE}"
+        conversationTerminatingTimeout: 5s
         conversationHeartbeatInterval: 30s
         conversationEndTimeout: 10s
       kafka:
@@ -85,6 +86,7 @@ objects:
             certKey: user.key
             namespace: "${KAFKA_NAMESPACE}"
       loki:
+        enable: "${{LOKI_ENABLE}}"
         authToken: FORWARD
         url: "${LOKI_URL}"
         statusUrl: "${LOKI_STATUS_URL}"
@@ -116,6 +118,7 @@ objects:
         maxBackoff: 5s
         maxRetries: 2
       consolePlugin:
+        enable: "${{PLUGIN_ENABLE}}"
         register: true
         imagePullPolicy: IfNotPresent
         port: 9001
@@ -160,10 +163,20 @@ parameters:
     value: "netobserv"
   - name: DEPLOYMENT_MODEL
     value: "DIRECT"
-  - name: LOG_TYPE
-    value: "FLOWS"
+  - name: EBPF_CACHEACTIVETIMEOUT
+    value: 15s
+  - name: EBPF_PRIVILEGED
+    value: "false"
+  - name: PACKET_DROP_ENABLE
+    value: "false"
+  - name: DNS_TRACKING_ENABLE
+    value: "false"
   - name: METRIC_SERVER_TLS_TYPE
     value: "DISABLED"
+  - name: LOG_TYPE
+    value: "FLOWS"
+  - name: LOKI_ENABLE
+    value: "true"
   - name: LOKI_URL
     value: "https://lokistack-gateway-http.netobserv.svc.cluster.local:8080/api/logs/v1/network/"
   - name: LOKI_TLS_ENABLE
@@ -192,5 +205,5 @@ parameters:
     value: "flp-kafka"
   - name: KAFKA_NAMESPACE
     value: "netobserv"
-  - name: EBPF_CACHEACTIVETIMEOUT
-    value: 15s
+  - name: PLUGIN_ENABLE
+    value: "true"

@@ -156,10 +156,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				flow := Flowcollector{
 					Namespace:       namespace,
 					Template:        flowFixturePath,
+					LokiEnable:      true,
 					LokiURL:         lokiURL,
 					LokiTLSEnable:   true,
 					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 					LokiNamespace:   namespace,
+					PluginEnable:    true,
 				}
 				defer flow.deleteFlowcollector(oc)
 				flow.createFlowcollector(oc)
@@ -200,11 +202,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				flow := Flowcollector{
 					Namespace:           namespace,
 					Template:            flowFixturePath,
+					LokiEnable:          true,
 					LokiURL:             lokiURL,
 					LokiTLSEnable:       true,
 					MetricServerTLSType: "AUTO",
 					LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 					LokiNamespace:       namespace,
+					PluginEnable:        true,
 				}
 				defer flow.deleteFlowcollector(oc)
 				flow.createFlowcollector(oc)
@@ -251,10 +255,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			Namespace:       namespace,
 			DeploymentModel: "DIRECT",
 			Template:        flowFixturePath,
+			LokiEnable:      true,
 			LokiURL:         lokiURL,
 			LokiTLSEnable:   true,
 			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 			LokiNamespace:   namespace,
+			PluginEnable:    true,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -262,7 +268,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Ensure flows are observed and all pods are running")
 		exutil.AssertAllPodsToBeReady(oc, namespace)
-		// ensure eBPF pods are ready
 		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 
 		g.By("Wait for 2 mins before logs gets collected and written to loki")
@@ -442,10 +447,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				DeploymentModel:     "KAFKA",
 				Template:            flowFixturePath,
 				MetricServerTLSType: "AUTO",
+				LokiEnable:          true,
 				LokiURL:             lokiURL,
 				LokiTLSEnable:       true,
 				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 				LokiNamespace:       namespace,
+				PluginEnable:        true,
 				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
 				KafkaTLSEnable:      true,
 				KafkaNamespace:      namespace,
@@ -499,7 +506,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
 
-		g.It("NonPreRelease-Author:aramesha-High-57397-Verify network-flows export with Kafka [Serial]", func() {
+		g.It("NonPreRelease-Author:aramesha-High-57397-High-65116-Verify network-flows export with Kafka and netobserv installation without Loki [Serial]", func() {
 			namespace := oc.Namespace()
 
 			g.By("Deploy kafka Topic for export")
@@ -521,10 +528,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				DeploymentModel:     "KAFKA",
 				Template:            flowFixturePath,
 				MetricServerTLSType: "AUTO",
+				LokiEnable:          true,
 				LokiURL:             lokiURL,
 				LokiTLSEnable:       true,
 				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 				LokiNamespace:       namespace,
+				PluginEnable:        true,
 				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
 				KafkaTLSEnable:      true,
 				KafkaNamespace:      namespace,
@@ -541,14 +550,16 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(err).ToNot(o.HaveOccurred())
 			o.Expect(flowPatch).To(o.Equal(`'KAFKA'`))
 
-			g.By("Ensure flows are observed, all pods are running and secrets are synced")
+			g.By("Ensure flows are observed, all pods are running and secrets are synced and plugin pod is deployed")
 			exutil.AssertAllPodsToBeReady(oc, namespace)
-			// ensure eBPF pods are ready
 			exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 			// ensure certs are synced to privileged NS
 			secrets, err := getSecrets(oc, namespace+"-privileged")
 			o.Expect(err).ToNot(o.HaveOccurred())
 			o.Expect(secrets).To(o.And(o.ContainSubstring(kafkaUser.UserName), o.ContainSubstring(kafka.Name+"-cluster-ca-cert")))
+			consolePod, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(consolePod)).To(o.Equal(1))
 
 			// verify logs
 			g.By("Escalate SA to cluster admin")
@@ -579,10 +590,64 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			consumerPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "job-name="+consumer.name, "-o=jsonpath={.items[0].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Verify KAFKA logs")
+			g.By("Verify KAFKA consumer pod logs")
 			podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", consumerPodName, `'{"AgentIP":'`)
 			exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with job-name=network-flows-export-consumer label")
 			verifyFlowRecordFromLogs(podLogs)
+
+			g.By("Verify NetObserv can be installed without Loki")
+			flow.deleteFlowcollector(oc)
+			//Ensure FLP and eBPF pods are deleted
+			checkPodDeleted(oc, namespace, "app=flowlogs-pipeline", "flowlogs-pipeline")
+			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
+
+			flow.DeploymentModel = "DIRECT"
+			flow.LokiEnable = false
+			flow.createFlowcollector(oc)
+
+			g.By("Ensure all pods are running and consolePlugin pod is not deployed")
+			exutil.AssertAllPodsToBeReady(oc, namespace)
+			exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+			consolePod, err = exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(consolePod)).To(o.Equal(0))
+
+			g.By("Verify KAFKA consumer pod logs")
+			podLogs, err = exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", consumerPodName, `'{"AgentIP":'`)
+			exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with job-name=network-flows-export-consumer label")
+			verifyFlowRecordFromLogs(podLogs)
+
+			g.By("Verify console plugin pod is not deployed when its disabled in flowcollector")
+			flow.deleteFlowcollector(oc)
+			//Ensure FLP and eBPF pods are deleted
+			checkPodDeleted(oc, namespace, "app=flowlogs-pipeline", "flowlogs-pipeline")
+			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
+
+			flow.PluginEnable = false
+			flow.createFlowcollector(oc)
+
+			g.By("Ensure all pods are running and consolePlugin pod is not deployed")
+			exutil.AssertAllPodsToBeReady(oc, namespace)
+			exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+			consolePod, err = exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(consolePod)).To(o.Equal(0))
+
+			g.By("Verify console plugin pod is not deployed when its disabled in flowcollector even when loki is enabled")
+			flow.deleteFlowcollector(oc)
+			//Ensure FLP and eBPF pods are deleted
+			checkPodDeleted(oc, namespace, "app=flowlogs-pipeline", "flowlogs-pipeline")
+			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
+
+			flow.LokiEnable = true
+			flow.createFlowcollector(oc)
+
+			g.By("Ensure all pods are running and consolePlugin pod is not observed")
+			exutil.AssertAllPodsToBeReady(oc, namespace)
+			exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+			consolePod, err = exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(consolePod)).To(o.Equal(0))
 		})
 
 		g.It("NonPreRelease-Author:aramesha-High-64880-Verify secrets copied for Loki and Kafka when deployed in NS other than flowcollector pods [Serial]", func() {
@@ -599,10 +664,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				DeploymentModel:     "KAFKA",
 				Template:            flowFixturePath,
 				MetricServerTLSType: "AUTO",
+				LokiEnable:          true,
 				LokiURL:             lokiURL,
 				LokiTLSEnable:       true,
 				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 				LokiNamespace:       namespace,
+				PluginEnable:        true,
 				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
 				KafkaTLSEnable:      true,
 				KafkaNamespace:      namespace,
@@ -613,7 +680,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Ensure flows are observed, all pods are running and secrets are synced")
 			exutil.AssertAllPodsToBeReady(oc, flowNS)
-			// ensure eBPF pods are ready
 			exutil.AssertAllPodsToBeReady(oc, flowNS+"-privileged")
 			// ensure certs are synced to privileged NS
 			secrets, err := getSecrets(oc, flowNS+"-privileged")

@@ -15,6 +15,7 @@ type Flowcollector struct {
 	ProcessorKind             string
 	LogType                   string
 	DeploymentModel           string
+	LokiEnable                bool
 	LokiURL                   string
 	LokiAuthToken             string
 	LokiTLSEnable             bool
@@ -32,6 +33,10 @@ type Flowcollector struct {
 	KafkaNamespace            string
 	MetricServerTLSType       string
 	EbpfCacheActiveTimeout    string
+	EbpfPrivileged            bool
+	PacketDropEnable          bool
+	DNSTrackingEnable         bool
+	PluginEnable              bool
 	Template                  string
 }
 
@@ -97,35 +102,39 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		parameters = append(parameters, "METRIC_SERVER_TLS_TYPE="+flow.MetricServerTLSType)
 	}
 
-	if flow.LokiURL != "" {
+	if !flow.LokiEnable {
+		parameters = append(parameters, "LOKI_ENABLE="+strconv.FormatBool(flow.LokiEnable))
+	}
+
+	if flow.LokiEnable && flow.LokiURL != "" {
 		parameters = append(parameters, "LOKI_URL="+flow.LokiURL)
 	}
 
-	if strconv.FormatBool(flow.LokiTLSEnable) != "" {
+	if flow.LokiEnable && flow.LokiTLSEnable {
 		parameters = append(parameters, "LOKI_TLS_ENABLE="+strconv.FormatBool(flow.LokiTLSEnable))
 	}
 
-	if flow.LokiTLSCertName != "" {
+	if flow.LokiEnable && flow.LokiTLSCertName != "" {
 		parameters = append(parameters, "LOKI_TLS_CERT_NAME="+flow.LokiTLSCertName)
 	}
 
-	if flow.LokiStatusURL != "" {
+	if flow.LokiEnable && flow.LokiStatusURL != "" {
 		parameters = append(parameters, "LOKI_STATUS_URL="+flow.LokiStatusURL)
 	}
 
-	if strconv.FormatBool(flow.LokiStatusTLSEnable) != "" {
+	if flow.LokiEnable && flow.LokiStatusTLSEnable {
 		parameters = append(parameters, "LOKI_STATUS_TLS_ENABLE="+strconv.FormatBool(flow.LokiStatusTLSEnable))
 	}
 
-	if flow.LokiStatusTLSCertName != "" {
+	if flow.LokiEnable && flow.LokiStatusTLSCertName != "" {
 		parameters = append(parameters, "LOKI_STATUS_TLS_USER_CERT_NAME="+flow.LokiStatusTLSCertName)
 	}
 
-	if flow.LokiStatusTLSUserCertName != "" {
+	if flow.LokiEnable && flow.LokiStatusTLSUserCertName != "" {
 		parameters = append(parameters, "LOKI_STATUS_TLS_USER_CERT_NAME="+flow.LokiStatusTLSUserCertName)
 	}
 
-	if flow.LokiNamespace != "" {
+	if flow.LokiEnable && flow.LokiNamespace != "" {
 		parameters = append(parameters, "LOKI_NAMESPACE="+flow.LokiNamespace)
 	}
 
@@ -137,7 +146,7 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		parameters = append(parameters, "KAFKA_ADDRESS="+flow.KafkaAddress)
 	}
 
-	if strconv.FormatBool(flow.KafkaTLSEnable) != "" {
+	if flow.KafkaTLSEnable {
 		parameters = append(parameters, "KAFKA_TLS_ENABLE="+strconv.FormatBool(flow.KafkaTLSEnable))
 	}
 
@@ -161,6 +170,22 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		parameters = append(parameters, "EBPF_CACHEACTIVETIMEOUT="+flow.EbpfCacheActiveTimeout)
 	}
 
+	if !flow.PluginEnable {
+		parameters = append(parameters, "PLUGIN_ENABLE="+strconv.FormatBool(flow.PluginEnable))
+	}
+
+	if flow.EbpfPrivileged {
+		parameters = append(parameters, "EBPF_PRIVILEGED="+strconv.FormatBool(flow.EbpfPrivileged))
+	}
+
+	if flow.PacketDropEnable {
+		parameters = append(parameters, "PACKET_DROP_ENABLE="+strconv.FormatBool(flow.PacketDropEnable))
+	}
+
+	if flow.DNSTrackingEnable {
+		parameters = append(parameters, "DNS_TRACKING_ENABLE="+strconv.FormatBool(flow.DNSTrackingEnable))
+	}
+
 	exutil.ApplyNsResourceFromTemplate(oc, flow.Namespace, parameters...)
 
 	// deploy Forward CRB
@@ -171,7 +196,9 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		Template:           forwardCRBPath,
 		ServiceAccountName: flpSA,
 	}
-	forwardCRB.deployForwardCRB(oc)
+	if flow.LokiEnable && flow.PluginEnable {
+		forwardCRB.deployForwardCRB(oc)
+	}
 }
 
 // delete flowcollector CRD from a cluster

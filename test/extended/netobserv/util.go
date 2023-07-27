@@ -257,3 +257,15 @@ func getSecrets(oc *exutil.CLI, namespace string) (string, error) {
 	exutil.AssertWaitPollNoErr(err, "Secrets not available")
 	return secrets, err
 }
+
+// check pods with label that are fully deleted
+func checkPodDeleted(oc *exutil.CLI, ns string, label string, checkValue string) {
+	podCheck := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
+		if err != nil || strings.Contains(output, checkValue) {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(podCheck, fmt.Sprintf("found \"%s\" exist or not fully deleted", checkValue))
+}
