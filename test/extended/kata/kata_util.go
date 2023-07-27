@@ -15,6 +15,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -268,32 +269,28 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 }
 
 func checkKataInstalled(oc *exutil.CLI, sub SubscriptionDescription, kcName string) bool {
-	var (
-		jsonpathSubState   = "-o=jsonpath={.status.state}"
-		jsonpathCsv        = "-o=jsonpath={.status.installedCSV}"
-		jsonpathCsvState   = "-o=jsonpath={.status.phase}{.status.reason}"
-		jsonpathKataconfig = "-o=jsonpath={.status.installationStatus.IsInProgress}{.status.unInstallationStatus.inProgress.status}"
-		expectSubState     = "AtLatestKnown"
-		expectCsvState     = "SucceededInstallSucceeded"
-	)
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, jsonpathSubState).Output()
-	if err != nil || msg != expectSubState {
-		e2e.Logf("issue with subscription or state isn't expected: %v, actual: %v error: %v", expectSubState, msg, err)
+	jsonSubStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
+	if err != nil || gjson.Get(jsonSubStatus, "state").String() != "AtLatestKnown" {
+		e2e.Logf("issue with subscription or state isn't expected: %v, actual: %v error: %v", "AtLatestKnown", jsonSubStatus, err)
 	} else {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, jsonpathCsv).Output()
-		if err != nil || !strings.Contains(msg, sub.subName) {
-			e2e.Logf("Error: get installedCSV for subscription %v %v", msg, err)
+		if !strings.Contains(gjson.Get(jsonSubStatus, "installedCSV").String(), sub.subName) {
+			e2e.Logf("Error: get installedCSV for subscription %v %v", jsonSubStatus, err)
 		} else {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", msg, "-n", sub.namespace, jsonpathCsvState).Output()
-			if err != nil || msg != expectCsvState {
-				e2e.Logf("Error: CSV in wrong state, expected: %v actual: %v %v", expectCsvState, msg, err)
+			csvName := gjson.Get(jsonSubStatus, "installedCSV").String()
+			jsonCsvStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
+			if err != nil ||
+				gjson.Get(jsonCsvStatus, "phase").String() != "Succeeded" ||
+				gjson.Get(jsonCsvStatus, "reason").String() != "InstallSucceeded" {
+				e2e.Logf("Error: CSV in wrong state, expected: %v actual:\n%v %v", "InstallSucceeded", jsonCsvStatus, err)
 			} else {
-				msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, jsonpathKataconfig).Output()
+				jsonKataStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
 				// DEBUG upper or lowercase the msg so just 1 comparision
-				if err == nil && strings.ToLower(msg) == "false" {
+				if err == nil &&
+					strings.ToLower(gjson.Get(jsonKataStatus, "installationStatus.IsInProgress").String()) == "false" &&
+					gjson.Get(jsonKataStatus, "unInstallationStatus.inProgress.status").String() == "" {
 					return true
 				}
-				e2e.Logf("Error: Kataconfig in wrong state, expected: false actual: %v error: %v", msg, err)
+				e2e.Logf("Error: Kataconfig in wrong state, expected: false actual: %v error: %v", jsonKataStatus, err)
 			}
 		}
 	}
@@ -309,7 +306,6 @@ func subscriptionIsFinished(oc *exutil.CLI, sub SubscriptionDescription) (msg st
 	g.By("(2) Subscription checking")
 	errCheck := wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
-		// o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(msg, "AtLatestKnown") == 0 {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 			return true, nil
@@ -458,7 +454,7 @@ func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, er
 	if errCheck != nil {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status}").Output()
 		e2e.Logf("timed out %v != %v %v", replicas, msg, err)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
+		msg = gjson.Get(msg, "readyReplicas").String()
 	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Deployment has %v replicas, not %v %v", replicas, msg, err))
 	return msg, err
@@ -469,97 +465,76 @@ func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, 
 	testrun = testrunDefault
 	testrun.exists = false
 
-	// icspNeeded is set if either of the Images has "brew.registry.redhat.io" in it
-
-	// is a configmap there?  IFF not, don't put an error in the log!
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs).Output()
-	if err != nil || !strings.Contains(msg, cmName) {
-		testrun.exists = false
-		return testrun, msg, err
-	}
-
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
 	if err != nil {
 		e2e.Logf("Configmap is not found: msg %v err: %v", msg, err)
-		testrun.exists = false
 	} else {
-		testrun.exists = true
-		// cm should have a data section
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName, "-o=jsonpath={.data}").Output()
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName, "-o", "jsonpath={.data}").Output()
 		if err != nil {
-			e2e.Failf("Configmap %v has error, no .data: %v %v", cmName, msg, err)
+			e2e.Failf("Configmap %v has error, no .data: %v %v", cmName, configmapData, err)
+			return testrun, msg, err
+		}
+		testrun.exists = true
+		e2e.Logf("configmap Data is:\n%v", configmapData)
+		if gjson.Get(configmapData, "catalogsourcename").Exists() {
+			testrun.catalogSourceName = gjson.Get(configmapData, "catalogsourcename").String()
 		}
 
-		// look at all the items for a value.  If they are not empty, change the defaults
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.catalogsourcename}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.catalogSourceName = msg
+		if gjson.Get(configmapData, "channel").Exists() {
+			testrun.channel = gjson.Get(configmapData, "channel").String()
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.channel}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.channel = msg
+
+		if gjson.Get(configmapData, "icspneeded").Exists() {
+			testrun.icspNeeded = gjson.Get(configmapData, "icspneeded").Bool()
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.icspneeded}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.icspNeeded, err = strconv.ParseBool(msg)
-			if err != nil {
-				e2e.Failf("Error in %v config map.  icspneeded must be a golang true or false string", cmName)
-			}
-		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.katamonitormage}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.katamonitorImage = msg
-			if strings.Contains(msg, "brew.registry.redhat.io") {
+
+		if gjson.Get(configmapData, "katamonitormage").Exists() {
+			testrun.katamonitorImage = gjson.Get(configmapData, "katamonitormage").String()
+			if strings.Contains(testrun.katamonitorImage, "brew.registry.redhat.io") {
 				testrun.icspNeeded = true
 			}
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.mustgatherimage}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.mustgatherImage = msg
-			if strings.Contains(msg, "brew.registry.redhat.io") {
+
+		if gjson.Get(configmapData, "mustgatherimage").Exists() {
+			testrun.mustgatherImage = gjson.Get(configmapData, "mustgatherimage").String()
+			if strings.Contains(testrun.mustgatherImage, "brew.registry.redhat.io") {
 				testrun.icspNeeded = true
 			}
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.eligibility}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.eligibility, err = strconv.ParseBool(msg)
+
+		if gjson.Get(configmapData, "eligibility").Exists() {
+			testrun.eligibility = gjson.Get(configmapData, "eligibility").Bool()
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.eligibleSingleNode}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.eligibleSingleNode, err = strconv.ParseBool(msg)
+
+		if gjson.Get(configmapData, "eligibleSingleNode").Exists() {
+			testrun.eligibleSingleNode = gjson.Get(configmapData, "eligibleSingleNode").Bool()
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.labelsinglenode}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.labelSingleNode, err = strconv.ParseBool(msg)
+
+		if gjson.Get(configmapData, "labelsinglenode").Exists() {
+			testrun.labelSingleNode = gjson.Get(configmapData, "labelsinglenode").Bool()
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.operatorVer}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.operatorVer = msg
+
+		if gjson.Get(configmapData, "operatorVer").Exists() {
+			testrun.operatorVer = gjson.Get(configmapData, "operatorVer").String()
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.runtimeClassName}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.runtimeClassName = msg
+
+		if gjson.Get(configmapData, "runtimeClassName").Exists() {
+			testrun.runtimeClassName = gjson.Get(configmapData, "runtimeClassName").String()
 		}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.enablePeerPods}", "-n", cmNs).Output()
-		if err == nil && len(msg) > 0 {
-			testrun.enablePeerPods, err = strconv.ParseBool(msg)
+
+		if gjson.Get(configmapData, "enablePeerPods").Exists() {
+			testrun.enablePeerPods = gjson.Get(configmapData, "enablePeerPods").Bool()
 		}
 	}
 	return testrun, msg, err
 }
 
 func getClusterVersion(oc *exutil.CLI) (clusterVersion, ocpMajorVer, ocpMinorVer string) {
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("version").Args("-o", "yaml").Output()
-	if err != nil || msg == "" {
-		e2e.Logf("Error: could not get oc version: %v %v", msg, err)
+	jsonVersion, err := oc.AsAdmin().WithoutNamespace().Run("version").Args("-o", "json").Output()
+	if err != nil || jsonVersion == "" || !gjson.Get(jsonVersion, "openshiftVersion").Exists() {
+		e2e.Logf("Error: could not get oc version: %v %v", jsonVersion, err)
 	}
-	for _, s := range strings.Split(msg, "\n") {
-		if strings.Contains(s, "openshiftVersion") {
-			sa := strings.Split(s, " ")
-			clusterVersion = sa[1]
-			break
-		}
-	}
+	clusterVersion = gjson.Get(jsonVersion, "openshiftVersion").String()
 	sa := strings.Split(clusterVersion, ".")
 	ocpMajorVer = sa[0]
 	ocpMinorVer = sa[1]
@@ -730,12 +705,9 @@ func labelSelectedNodes(oc *exutil.CLI, opNamespace, selectorLabel, customLabel 
 }
 
 func LabelNode(oc *exutil.CLI, opNamespace, node, customLabel string) {
-	//check if node has the label already
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.metadata.labels}").Output()
-	if err == nil && !strings.Contains(msg, customLabel) {
-		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, customLabel).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	}
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, customLabel).Output()
+	e2e.Logf("%v applied and output was: %v %v", customLabel, msg, err)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func getInstancesOnNode(oc *exutil.CLI, opNamespace, node string) (instances int, err error) {

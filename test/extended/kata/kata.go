@@ -13,6 +13,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -45,6 +46,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		podRunState        = "Running"
 		featureLabel       = "feature.node.kubernetes.io/runtime.kata=true"
 		workerLabel        = "node-role.kubernetes.io/worker"
+		kataocLabel        = "node-role.kubernetes.io/kata-oc"
 		customLabel        = "custom-label=test"
 	)
 
@@ -170,7 +172,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		// We need the testrun values from the CM or env further down even if OSC is already installed
 		if checkKataInstalled(oc, subscription, kataconfig.name) {
-			g.By(fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, kataconfig.name))
+			msgSuccess := fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, kataconfig.name)
+			e2e.Logf(msgSuccess)
+			g.By(msgSuccess)
 			return
 		}
 
@@ -185,8 +189,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		_, err = subscribeFromTemplate(oc, subscription, subTemplate)
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
-		//label all worker nodes for checkNodeEligibility
 		if kataconfig.eligibility {
+			e2e.Logf("Label worker nodes for eligibility feature")
 			if testrunInitial.eligibleSingleNode {
 				workerList, _, _ := getNodeListByLabel(oc, subscription.namespace, workerLabel)
 				o.Expect(len(workerList)).NotTo(o.Equal(0))
@@ -196,7 +200,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			}
 		}
 
-		//check and label nodes (or single node for custom label)
+		e2e.Logf("check and label nodes (or single node for custom label)")
 		nodeCustomList, _, err := getNodeListByLabel(oc, subscription.namespace, customLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeCustomList) > 0 {
@@ -223,12 +227,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	})
 
 	g.It("Author:abhbaner-High-43522-Common Kataconfig installation", func() {
-		var (
-			nodeKataList          []string
-			totalNodesJsonpath    = "-o=jsonpath={.status.totalNodesCount}"
-			completedNodeJsonpath = "-o=jsonpath={.status.installationStatus.completed.completedNodesCount}"
-			completedListJsonpath = "-o=jsonpath={.status.installationStatus.completed.completedNodesList}"
-		)
 		g.By("Install Common kataconfig and verify it")
 		e2e.Logf("common kataconfig %v is installed", kataconfig.name)
 
@@ -236,18 +234,17 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeKataCount := fmt.Sprintf("%d", len(nodeKataList))
 
-		totalCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconfig.name, totalNodesJsonpath).Output()
+		jsonKataStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconfig.name, "-o=jsonpath={.status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		totalCount := gjson.Get(jsonKataStatus, "totalNodesCount").String()
 		o.Expect(totalCount).To(o.Equal(nodeKataCount))
 
-		completeCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconfig.name, completedNodeJsonpath).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		completeCount := gjson.Get(jsonKataStatus, "installationStatus.completed.completedNodesCount").String()
 		o.Expect(totalCount).To(o.Equal(completeCount))
 
-		completededList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconfig.name, completedListJsonpath).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(completededList)).NotTo(o.Equal(0))
-		e2e.Logf("Completed nodes are %v", completededList[0])
+		completededListCount := gjson.Get(jsonKataStatus, "installationStatus.completed.completedNodesList.#").String()
+		o.Expect(completededListCount == totalCount)
+		e2e.Logf("Completed nodes are %v", gjson.Get(jsonKataStatus, "installationStatus.completed.completedNodesList").String())
 
 		g.By("SUCCESSS - kataconfig installed and it's structure is verified")
 
@@ -1056,8 +1053,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			numOfVMs     int
 			msg          string
 		)
-
-		kataNodes, msg, err := getAllKataNodes(oc, testrunInitial.eligibility, subscription.namespace, featureLabel, customLabel)
+		kataNodes, msg, err := getNodeListByLabel(oc, subscription.namespace, kataocLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
 
@@ -1129,7 +1125,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			msg          string
 		)
 
-		kataNodes, msg, err := getAllKataNodes(oc, testrunInitial.eligibility, subscription.namespace, featureLabel, customLabel)
+		kataNodes, msg, err := getNodeListByLabel(oc, subscription.namespace, kataocLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
 
