@@ -369,6 +369,17 @@ func (receiver *installHelper) createAWSHostedClusters(createCluster *createClus
 	return cluster
 }
 
+func (receiver *installHelper) createAWSHostedClusterWithoutCheck(createCluster *createCluster) *hostedCluster {
+	vars, err := parse(createCluster)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift create cluster aws %s", strings.Join(vars, " "))
+	e2e.Logf("run hypershift create command: %s", cmd)
+	_, err = bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
+}
+
 func (receiver *installHelper) createAzureHostedClusters(createCluster *createCluster) *hostedCluster {
 	vars, err := parse(createCluster)
 	o.Expect(err).ShouldNot(o.HaveOccurred())

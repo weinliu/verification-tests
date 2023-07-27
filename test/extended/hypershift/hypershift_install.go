@@ -698,4 +698,65 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(policy).ShouldNot(o.ContainSubstring("SecurityGroup"))
 	})
+
+	g.It("Longduration-NonPreRelease-Author:heli-Critical-60484-[HyperShiftINSTALL] HostedCluster deletion shouldn't hang when OIDC provider/STS is configured incorrectly [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 60484 is for AWS - skipping test ...")
+		}
+
+		caseID := "60484"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config AWS Bucket")
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
+		region, err := getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          dir,
+			iaasPlatform: iaasPlatform,
+			installType:  PublicAndPrivate,
+			region:       region,
+		}
+
+		defer installHelper.deleteAWSS3Bucket()
+		installHelper.newAWSS3Client()
+		installHelper.createAWSS3Bucket()
+
+		g.By("install HO without s3 credentials")
+		var installCMD = fmt.Sprintf("hypershift install "+
+			"--oidc-storage-provider-s3-bucket-name %s "+
+			"--oidc-storage-provider-s3-region %s "+
+			"--private-platform AWS "+
+			"--aws-private-creds %s "+
+			"--aws-private-region=%s",
+			bucketName, region, getAWSPrivateCredentials(), region)
+		var cmdClient = NewCmdClient().WithShowInfo(true)
+
+		defer installHelper.hyperShiftUninstall()
+		_, err = cmdClient.Run(installCMD).Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName("hypershift-" + caseID).
+			withNodePoolReplicas(0).
+			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withEndpointAccess(PublicAndPrivate)
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		hc := installHelper.createAWSHostedClusterWithoutCheck(createCluster)
+
+		g.By("check hosted cluster condition ValidOIDCConfiguration")
+		o.Eventually(func() string {
+			return doOcpReq(oc, OcpGet, false, "hostedcluster", hc.name, "-n", hc.namespace, "--ignore-not-found", "-o", `jsonpath={.status.conditions[?(@.type=="ValidOIDCConfiguration")].status}`)
+		}, DefaultTimeout, DefaultTimeout/10).Should(o.ContainSubstring("False"))
+
+		msg := doOcpReq(oc, OcpGet, false, "hostedcluster", hc.name, "-n", hc.namespace, "--ignore-not-found", "-o", `jsonpath={.status.conditions[?(@.type=="ValidOIDCConfiguration")].message}`)
+		e2e.Logf("error msg of condition ValidOIDCConfiguration is %s", msg)
+	})
 })
