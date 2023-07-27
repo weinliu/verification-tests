@@ -3017,7 +3017,7 @@ spec:
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 
 		g.By("3) Update pod's image using patch command")
-		patch := `{"spec":{"containers":[{"name":"hello-openshift","image":"quay.io/openshifttest/hello-openshift:multiarch"}]}}`
+		patch := `{"spec":{"containers":[{"name":"hello-openshift","image":"quay.io/openshifttest/hello-openshift:1.2.0"}]}}`
 		output, err := oc.Run("patch").Args("pod", podName, "-n", namespace, "-p", patch).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("patched"))
