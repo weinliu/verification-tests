@@ -1248,4 +1248,109 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		checkDnsRecordStatusOfIngressOperator(oc, "ocp64611clb-wildcard", "status", "True")
 		checkDnsRecordStatusOfIngressOperator(oc, "ocp64611clb-wildcard", "reason", "ProviderSuccess")
 	})
+
+	// author: mjoseph@redhat.com
+	g.It("Author:mjoseph-High-65827-allow Ingress to modify the HAProxy Log Length when using a Sidecar", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-sidecar.yaml")
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp65827",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Create one custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("2. Check the env variable of the router pod to verify the default log length")
+		newrouterpod := getRouterPod(oc, "ocp65827")
+		logLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
+		o.Expect(logLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=1024`))
+
+		exutil.By("3. Check the haproxy config on the router pod to verify the default log length is enabled")
+		checkoutput := readRouterPodData(oc, newrouterpod, "cat haproxy.config", "1024")
+		o.Expect(checkoutput).To(o.ContainSubstring(`log /var/lib/rsyslog/rsyslog.sock len 1024 local1 info`))
+
+		exutil.By("4. Patch the existing custom ingress controller with minimum log length value")
+		routerpod := getRouterPod(oc, "ocp65827")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp65827", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"container\":{\"maxLength\":480}}}}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		exutil.By("5. Check the env variable of the router pod to verify the minimum log length")
+		newrouterpod = getRouterPod(oc, "ocp65827")
+		minimumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
+		o.Expect(minimumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=480`))
+
+		exutil.By("6. Patch the existing custom ingress controller with maximum log length value")
+		routerpod = getRouterPod(oc, "ocp65827")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp65827", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"container\":{\"maxLength\":8192}}}}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		exutil.By("7. Check the env variable of the router pod to verify the maximum log length")
+		newrouterpod = getRouterPod(oc, "ocp65827")
+		maximumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
+		o.Expect(maximumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=8192`))
+	})
+
+	// author: mjoseph@redhat.com
+	g.It("Author:mjoseph-Low-65903-ingresscontroller should deny invalid maxlengh value when using a Sidecar", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp1 := filepath.Join(buildPruningBaseDir, "ingresscontroller-syslog.yaml")
+		customTemp2 := filepath.Join(buildPruningBaseDir, "ingresscontroller-sidecar.yaml")
+
+		var (
+			ingctrl1 = ingressControllerDescription{
+				name:      "ocp65903syslog",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp1,
+			}
+			ingctrl2 = ingressControllerDescription{
+				name:      "ocp65903sidecar",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp2,
+			}
+		)
+		exutil.By("1. Create two custom ingresscontrollers")
+		baseDomain := getBaseDomain(oc)
+		ingctrl1.domain = ingctrl1.name + "." + baseDomain
+		ingctrl2.domain = ingctrl2.name + "." + baseDomain
+		defer ingctrl1.delete(oc)
+		ingctrl1.create(oc)
+		defer ingctrl2.delete(oc)
+		ingctrl2.create(oc)
+		err1 := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
+		err2 := waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
+		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
+		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+
+		exutil.By("2. Check the haproxy config on the syslog router pod to verify the default log length")
+		syslogRouterpod := getRouterPod(oc, "ocp65903syslog")
+		checkoutput1 := readRouterPodData(oc, syslogRouterpod, "cat haproxy.config", "1024")
+		o.Expect(checkoutput1).To(o.ContainSubstring(`log 1.2.3.4:514 len 1024 local1 info`))
+
+		exutil.By("3. Check the haproxy config on the sidecar router pod to verify the default log length")
+		sidecarRouterpod := getRouterPod(oc, "ocp65903sidecar")
+		checkoutput2 := readRouterPodData(oc, sidecarRouterpod, "cat haproxy.config", "1024")
+		o.Expect(checkoutput2).To(o.ContainSubstring(`log /var/lib/rsyslog/rsyslog.sock len 1024 local1 info`))
+
+		exutil.By("4. Patch the existing sidecar ingress controller with log length value less than minimum threshold")
+		output1, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresscontroller/ocp65903sidecar", "-p", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"container\":{\"maxLength\":479}}}}}}", "--type=merge", "-n", ingctrl2.namespace).Output()
+		o.Expect(output1).To(o.ContainSubstring("spec.logging.access.destination.container.maxLength: Invalid value: 479: spec.logging.access.destination.container.maxLength in body should be greater than or equal to 480"))
+
+		exutil.By("5. Patch the existing sidecar ingress controller with log length value more than maximum threshold")
+		output2, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresscontroller/ocp65903sidecar", "-p", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"container\":{\"maxLength\":8193}}}}}}", "--type=merge", "-n", ingctrl2.namespace).Output()
+		o.Expect(output2).To(o.ContainSubstring("spec.logging.access.destination.container.maxLength: Invalid value: 8193: spec.logging.access.destination.container.maxLength in body should be less than or equal to 8192"))
+	})
 })
