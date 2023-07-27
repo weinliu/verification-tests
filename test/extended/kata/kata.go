@@ -217,6 +217,10 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		msg, err = createKataConfig(oc, kataconfig, subscription)
 		e2e.Logf("---------- kataconfig %v create succeeded %v %v", kataconfig.name, msg, err)
+
+		if kataconfig.enablePeerPods {
+			checkPeerPodControl(oc, opNamespace, podRunState)
+		}
 	})
 
 	g.It("Author:abhbaner-High-39499-Operator installation", func() {

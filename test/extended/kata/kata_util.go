@@ -880,3 +880,127 @@ func getPeerPodConfigMaps(oc *exutil.CLI, opNamespace, platform, ppConfigMapName
 	}
 	return msg, err
 }
+
+func checkPeerPodControl(oc *exutil.CLI, opNamespace, expStatus string) (msg string, err error) {
+	// This would check peer pod webhook pod , peerpodconfig-ctrl-caa pods , webhook service and endpoints attached to the svc
+	var (
+		peerpodconfigCtrlCaaPods []string
+		webhookPods              []string
+		webhooksvc               = "peer-pods-webhook-svc"
+	)
+
+	g.By("Check for peer pods webhook pod")
+	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+		msg, err := oc.AsAdmin().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", opNamespace).Output()
+		if err != nil {
+			return false, err
+		}
+		if strings.Contains(msg, "peer-pods-webhook") {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil || msg == "" || errCheck != nil {
+		e2e.Logf(" %v %v, %v", msg, err, errCheck)
+	}
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("peer pod webhook pod did not start: %v", errCheck))
+
+	//webhook pod names
+	msg, err = oc.AsAdmin().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", opNamespace).Output()
+	for _, whPod := range strings.Fields(msg) {
+		if strings.Contains(whPod, "peer-pods-webhook") {
+			webhookPods = append(webhookPods, whPod)
+		}
+	}
+
+	//count check
+	whPodCount := len(webhookPods)
+	if whPodCount != 2 {
+		e2e.Logf("There should be two webhook pods, instead there are: %v", whPodCount)
+		return
+	}
+
+	//pod state check
+	for _, podName := range webhookPods {
+		checkControlPod(oc, podName, opNamespace, expStatus)
+	}
+
+	g.By("Check for peer pods ctrl caa pod")
+	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", opNamespace).Output()
+		if strings.Contains(msg, "peerpodconfig-ctrl-caa-daemon") {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil || msg == "" || errCheck != nil {
+		e2e.Logf(" %v %v, %v", msg, err, errCheck)
+	}
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("peer pod ctrl caa pod did not start: %v: %v %v", msg, err))
+
+	//peerpodconfig ctrl CAA pod names
+	msg, err = oc.AsAdmin().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", opNamespace).Output()
+	for _, ppconfigCaaPod := range strings.Fields(msg) {
+		if strings.Contains(ppconfigCaaPod, "peerpodconfig-ctrl-caa") {
+			peerpodconfigCtrlCaaPods = append(peerpodconfigCtrlCaaPods, ppconfigCaaPod)
+		}
+	}
+
+	//pod state check
+	for _, podName := range peerpodconfigCtrlCaaPods {
+		checkControlPod(oc, podName, opNamespace, expStatus)
+	}
+
+	//webhook service
+	checkControlSvc(oc, opNamespace, webhooksvc)
+	g.By("SUCCESS - peerpod config check passed")
+	return msg, err
+
+}
+
+func checkControlPod(oc *exutil.CLI, podName, podNs, expStatus string) (msg string, err error) {
+	var actualStatus string
+	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+		actualStatus, _ = oc.AsAdmin().Run("get").Args("pods", podName, "-n", podNs, "-o=jsonpath={.status.phase}").Output()
+		if strings.Contains(actualStatus, expStatus) {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil || msg == "" || errCheck != nil {
+		e2e.Logf(" %v %v, %v", msg, err, errCheck)
+	}
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod %v is not correct status in ns %v. Expected status: %v, Actual status: %v", podName, podNs, expStatus, actualStatus))
+	return msg, err
+}
+
+func checkControlSvc(oc *exutil.CLI, svcNs, svcName string) (msg string, err error) {
+	g.By("Check for " + svcName + "service")
+	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().Run("get").Args("service", svcName, "-n", svcNs, "-o=jsonpath={.metadata.name}").Output()
+		if strings.Contains(msg, svcName) {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil || msg == "" || errCheck != nil {
+		e2e.Logf(" %v %v, %v", msg, err, errCheck)
+	}
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Service %v not found , error: %v", svcName, err))
+
+	g.By("Check for " + svcName + "service endpoints")
+	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().Run("get").Args("ep", svcName, "-n", svcNs, "-o=jsonpath={.subsets..addresses..ip}").Output()
+		if strings.ContainsAny(msg, "0123456789") {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil || msg == "" || errCheck != nil {
+		e2e.Logf(" %v %v, %v", msg, err, errCheck)
+	}
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v does not have endpoints attached to it;   err: %v", svcName, err))
+
+	g.By("SUCCESS - service check passed")
+	return msg, err
+}
