@@ -1598,6 +1598,52 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-64868-netclass/netdev device configuration [Serial]", func() {
+		var (
+			ignoredNetworkDevices = filepath.Join(monitoringBaseDir, "ignoredNetworkDevices-lo.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("check netclass/netdev device configuration")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--collector.netclass.ignored-devices=^(veth.*|[a-f0-9]{15}|enP.*|ovn-k8s-mp[0-9]*|br-ex|br-int|br-ext|br[0-9]*|tun[0-9]*|cali[a-f0-9]*)$"))
+		o.Expect(output).To(o.ContainSubstring("--collector.netdev.device-exclude=^(veth.*|[a-f0-9]{15}|enP.*|ovn-k8s-mp[0-9]*|br-ex|br-int|br-ext|br[0-9]*|tun[0-9]*|cali[a-f0-9]*)$"))
+
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("check lo devices exist, and able to see related metrics")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=group by(device) (node_network_info)'`, token, `"device":"lo"`, uwmLoadTime)
+
+		g.By("modify cm to ignore lo devices")
+		createResourceFromYaml(oc, "openshift-monitoring", ignoredNetworkDevices)
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+
+		g.By("check metrics again, should not see lo device metrics")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_network_info{device="lo"}'`, token, `"result":[]`, 3*uwmLoadTime)
+
+		g.By("check netclass/netdev device configuration, no lo devices")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--collector.netclass.ignored-devices=^(lo)$"))
+		o.Expect(output).To(o.ContainSubstring("--collector.netdev.device-exclude=^(lo)$"))
+
+		g.By("modify cm to ignore all devices")
+		// % oc -n openshift-monitoring patch cm cluster-monitoring-config -p '{"data": {"config.yaml": "nodeExporter:\n ignoredNetworkDevices: [.*]"}}' --type=merge
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "cluster-monitoring-config", "-p", `{"data": {"config.yaml": "nodeExporter:\n ignoredNetworkDevices: [.*]"}}`, "--type=merge", "-n", "openshift-monitoring").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check metrics again, should not see all device metrics")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=group by(device) (node_network_info)'`, token, `"result":[]`, 3*uwmLoadTime)
+
+		g.By("check netclass/netdev device configuration again")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("--collector.netclass.ignored-devices=^(.*)$"))
+		o.Expect(output).To(o.ContainSubstring("--collector.netdev.device-exclude=^(.*)$"))
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
