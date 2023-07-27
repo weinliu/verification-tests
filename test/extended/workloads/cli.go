@@ -1119,6 +1119,20 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		o.Expect(strings.Contains(releaseInfoOutput, "--icsp-file")).To(o.BeFalse())
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-63855-Medium-64944-Verify oc image extract and oc adm release info throws error when both --icsp-file and -idms-file flag is used", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		idmsFile63855 := filepath.Join(buildPruningBaseDir, "idmsFile63855.yaml")
+		icspFile63855 := filepath.Join(buildPruningBaseDir, "icspFile63855.yaml")
+		g.By("Check oc image extract and oc adm release info throws error when both --icsp-file and --idms-file flag is used")
+		imageExtractOutput, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", "quay.io/openshift-release-dev/ocp-release:4.12.5-x86_64", "--path=/usr/bin/oc-mirror:.", "--idms-file="+idmsFile63855, "--icsp-file="+icspFile63855, "--insecure", "--confirm").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(imageExtractOutput, "error: icsp-file and idms-file are mutually exclusive")).To(o.BeTrue())
+		releaseInfoOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "quay.io/openshift-release-dev/ocp-release:4.12.5-x86_64", "--idms-file="+idmsFile63855, "--icsp-file="+icspFile63855).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(releaseInfoOutput, "error: icsp-file and idms-file are mutually exclusive")).To(o.BeTrue())
+	})
+
 })
 
 // ClientVersion ...
