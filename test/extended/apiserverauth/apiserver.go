@@ -3429,17 +3429,7 @@ EOF`, dcpolicyrepo)
 		servicePort2 := rand.Intn(3000) + 6000
 		npLeftBound, npRightBound := getNodePortRange(oc)
 		g.By(fmt.Sprintf("7) Create another nodeport service with random target port %d and node port [%d-%d]", servicePort2, npLeftBound, npRightBound))
-		// retry 3 times to avoid node port collision: https://issues.redhat.com/browse/OCPQE-10011
 		generatedNodePort = rand.Intn(npRightBound-npLeftBound) + npLeftBound
-		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
-			if isTargetPortAvailable(oc, generatedNodePort) {
-				return true, nil
-			}
-			// reassign port if not available
-			generatedNodePort = rand.Intn(npRightBound-npLeftBound) + npLeftBound
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Failed to get an available node port")
 		err1 := oc.Run("create").Args("service", "nodeport", serviceName, fmt.Sprintf("--node-port=%d", generatedNodePort), fmt.Sprintf("--tcp=%d:8080", servicePort2)).Execute()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		defer oc.Run("delete").Args("service", serviceName).Execute()

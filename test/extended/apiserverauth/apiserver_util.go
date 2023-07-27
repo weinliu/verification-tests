@@ -391,21 +391,6 @@ func getNodePortRange(oc *exutil.CLI) (int, int) {
 	return leftBound, rightBound
 }
 
-func isTargetPortAvailable(oc *exutil.CLI, port int) bool {
-	masterNodes, err := exutil.GetClusterNodesBy(oc, "master")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	for _, masterNode := range masterNodes {
-		cmd := fmt.Sprintf("netstat -tulpn | grep LISTEN | { grep :%d || true; }", port)
-		checkPortResult, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		checkPortResult = strings.Trim(strings.Trim(checkPortResult, "\n"), " ")
-		if checkPortResult != "" {
-			return false
-		}
-	}
-	return true
-}
-
 // Get a random number of int32 type [m,n], n > m
 func getRandomNum(m int32, n int32) int32 {
 	rand.Seed(time.Now().UnixNano())
