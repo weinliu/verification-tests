@@ -608,12 +608,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Longduration-NonPreRelease-Author:heli-Critical-62085-Critical-60483-[HyperShiftINSTALL] The cluster should be deleted successfully when there is no identity provider [Serial]", func() {
+	g.It("Longduration-NonPreRelease-Author:heli-Critical-62085-Critical-60483-Critical-64808-[HyperShiftINSTALL] The cluster should be deleted successfully when there is no identity provider [Serial]", func() {
 		if iaasPlatform != "aws" {
-			g.Skip("IAAS platform is " + iaasPlatform + " while 62085 is for AWS - skipping test ...")
+			g.Skip("IAAS platform is " + iaasPlatform + " while 62085,60483,64808 is for AWS - skipping test ...")
 		}
 
-		caseID := "62085-60483"
+		caseID := "62085-60483-64808"
 		dir := "/tmp/hypershift" + caseID
 		defer os.RemoveAll(dir)
 		err := os.MkdirAll(dir, 0755)
@@ -674,8 +674,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
         "ec2:DeleteVpcEndpoints",
         "ec2:CreateTags",
         "route53:ListHostedZones",
-        "ec2:DescribeVpcs",
-        "ec2:DescribeVpcEndpoints"
+        "ec2:DescribeVpcs"
       ],
       "Resource": "*"
     },
@@ -697,6 +696,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		e2e.Logf("updated role policy is %s", policy)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(policy).ShouldNot(o.ContainSubstring("SecurityGroup"))
+
+		g.By("ocp-64808 check hosted condition ValidAWSIdentityProvider should be unknown")
+		o.Eventually(func() string {
+			return doOcpReq(oc, OcpGet, true, "hostedcluster", hostedCluster.name, "-n", hostedCluster.namespace, `-ojsonpath={.status.conditions[?(@.type=="ValidAWSIdentityProvider")].status}`)
+		}, DefaultTimeout, DefaultTimeout/10).Should(o.ContainSubstring("False"), fmt.Sprintf("%s expected condition ValidAWSIdentityProvider False status not found error", hostedCluster.name))
+
 	})
 
 	g.It("Longduration-NonPreRelease-Author:heli-Critical-60484-[HyperShiftINSTALL] HostedCluster deletion shouldn't hang when OIDC provider/STS is configured incorrectly [Serial]", func() {
