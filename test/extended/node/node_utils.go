@@ -1478,3 +1478,20 @@ func checkRegistryForIdms(oc *exutil.CLI) error {
 		return true, nil
 	})
 }
+
+func checkImgSignature(oc *exutil.CLI) error {
+	return wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodename := nodeList.Items[0].Name
+		imgSig, _ := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/containers/policy.json")
+		//not handle err as a workaround of issue: debug container needs more time to start in 4.13&4.14
+		//o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(string(imgSig), "registry.access.redhat.com") && strings.Contains(string(imgSig), "signedBy") && strings.Contains(string(imgSig), "GPGKeys") && strings.Contains(string(imgSig), "/etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release") && strings.Contains(string(imgSig), "registry.redhat.io") {
+			e2e.Logf("Image signature verified pass!")
+			return true, nil
+		}
+		e2e.Logf("Image signature verified failed!")
+		return false, nil
+	})
+}

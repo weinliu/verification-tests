@@ -884,6 +884,28 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		out, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", icsp).Output()
 		o.Expect(strings.Contains(out, "Kind.ImageContentSourcePolicy: Forbidden: can't create ImageContentSourcePolicy when ImageDigestMirrorSet resources exist")).To(o.BeTrue())
 	})
+
+	//author: minmli@redhat.com
+	g.It("Author:minmli-Medium-59552-Enable image signature verification for Red Hat Container Registries [Serial]", func() {
+		exutil.By("Apply a machine config to set image signature policy for worker nodes")
+		mcImgSig := filepath.Join(buildPruningBaseDir, "machineconfig-image-signature-59552.yaml")
+		mcpName := "worker"
+		defer func() {
+			err := checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + mcImgSig).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + mcImgSig).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the mcp finish updating")
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("Check the signature configuration policy.json")
+		err = checkImgSignature(oc)
+		exutil.AssertWaitPollNoErr(err, "check signature configuration failed")
+	})
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {
