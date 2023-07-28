@@ -4090,4 +4090,37 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Pod doesn't show expected log %v", expectInfo))
 
 	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-65979-Expose registry CAs as one to mco", func() {
+		g.By("Check if there is image-registry-ca cm configured")
+		cmCons, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", "-n", "openshift-config-managed").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(cmCons, "image-registry-ca") {
+			g.Skip("No image-registry-ca cm configured")
+		}
+
+		g.By("Check if image-registry-certificates cm contains the content of image-registry-ca cm")
+		imageRegCA, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", "image-registry-ca", "-o=jsonpath={.data}", "-n", "openshift-config-managed").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		imageRegCA = strings.TrimSuffix(string(imageRegCA), "}")
+		imageRegCA = strings.TrimPrefix(string(imageRegCA), "{")
+		regCerts, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", "image-registry-certificates", "-o=jsonpath={.data}", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(regCerts, imageRegCA) {
+			e2e.Failf("image-registry-certificates doesn't contain the content of image-registry-ca configmap")
+		}
+
+		g.By("image-registry-ca cm doesn't contain the content of additionalTrustedCA")
+		trustCAName, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("image.config", "-o=jsonpath={..spec.additionalTrustedCA.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if trustCAName != "" {
+			addTrustCA, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", trustCAName, "-o=jsonpath={.data}", "-n", "openshift-config").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			addTrustCA = strings.TrimSuffix(string(addTrustCA), "}")
+			addTrustCA = strings.TrimPrefix(string(addTrustCA), "{")
+			if strings.Contains(imageRegCA, addTrustCA) {
+				e2e.Failf("image-registry-ca shouldn't contain the content of the additionalTrustedCA")
+			}
+		}
+	})
 })
