@@ -118,17 +118,17 @@ func createCertManagerOperator(oc *exutil.CLI) {
 
 	// checking subscription status
 	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "cert-manager-operator-sub", "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
+		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-cert-manager-operator", "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(subState, "AtLatestKnown") == 0 {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription cert-manager-operator-sub is not correct status"))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription openshift-cert-manager-operator is not correct status"))
 
 	// checking csv status
-	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "cert-manager-operator-sub", "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-cert-manager-operator", "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
 	errCheck = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {

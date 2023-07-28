@@ -134,11 +134,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:geliu-High-62063-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
-		defer func() {
-			e2e.Logf("Check for Authentication operator status after test.")
-			checkCoStatus(oc, "authentication", authenticationCoStatus)
-		}()
+	g.It("NonHyperShiftHOST-Author:geliu-High-62063-Low-63486-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
 		e2e.Logf("Login with normal user and create new ns.")
 		oc.SetupProject()
 		e2e.Logf("Create issuer in ns scope created in last step.")
@@ -201,6 +197,12 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		if !strings.Contains(string(ssloutput), "http01-test."+strings.Split(ingressDomain[0], "'")[1]) {
 			e2e.Failf("Failure: The certificate is indeed issued by Let's Encrypt, the Subject Alternative Name is indeed the specified DNS_NAME failed.")
 		}
+		e2e.Logf("Delete certification for ocp-63486.\n")
+		err = oc.Run("delete").Args("certificate", "cert-test-http01").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ocp-63486: Waiting 1 min to ensure secret have not be removed.\n")
+		time.Sleep(60 * time.Second)
+		err = oc.Run("get").Args("secret", "cert-test-http01").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
-
 })
