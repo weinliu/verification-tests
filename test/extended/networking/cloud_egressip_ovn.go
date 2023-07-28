@@ -168,15 +168,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
-		g.By("1.1 Label EgressIP node")
+		exutil.By("1.1 Label EgressIP node")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
-		g.By("1.2 Apply EgressLabel Key to one node.")
+		exutil.By("1.2 Apply EgressLabel Key to one node.")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel)
 
-		g.By("2.1 Create first egressip object")
+		exutil.By("2.1 Create first egressip object")
 		freeIPs := findFreeIPs(oc, egressNode, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -193,7 +193,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 
-		g.By("2.2 Create second egressip object")
+		exutil.By("2.2 Create second egressip object")
 		egressip2 := egressIPResource1{
 			name:          "egressip-47272-2",
 			template:      egressIP2Template,
@@ -208,16 +208,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip2.name)
 		o.Expect(len(egressIPMaps2)).Should(o.Equal(1))
 
-		g.By("3.1 create first namespace")
+		exutil.By("3.1 create first namespace")
 		oc.SetupProject()
 		ns1 := oc.Namespace()
 
-		g.By("3.2 Apply a label to first namespace")
+		exutil.By("3.2 Apply a label to first namespace")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3.3 Create a pod in first namespace. ")
+		exutil.By("3.3 Create a pod in first namespace. ")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns1,
@@ -227,21 +227,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("3.4 Apply label to pod in first namespace")
+		exutil.By("3.4 Apply label to pod in first namespace")
 		err = exutil.LabelPod(oc, ns1, pod1.name, "color=pink")
 		defer exutil.LabelPod(oc, ns1, pod1.name, "color-")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4.1 create second namespace")
+		exutil.By("4.1 create second namespace")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
-		g.By("4.2 Apply a label to second namespace")
+		exutil.By("4.2 Apply a label to second namespace")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "org=qe").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "org-").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4.3 Create a pod in second namespace ")
+		exutil.By("4.3 Create a pod in second namespace ")
 		pod2 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns2,
@@ -251,25 +251,25 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod2.name, "-n", pod2.namespace).Execute()
 		waitPodReady(oc, pod2.namespace, pod2.name)
 
-		g.By("4.4 Apply label to pod in second namespace")
+		exutil.By("4.4 Apply label to pod in second namespace")
 		err = exutil.LabelPod(oc, ns2, pod2.name, "color=blue")
 		defer exutil.LabelPod(oc, ns2, pod2.name, "color-")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("5.1 Check source IP in first namespace using first egressip object")
+		exutil.By("5.1 Check source IP in first namespace using first egressip object")
 		var dstHost, primaryInf string
 		var infErr, snifErr error
 		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By(" Use IP-echo service to verify egressIP.")
+			exutil.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
 			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, freeIPs[0])
 
-			g.By("5.2 Check source IP in second namespace using second egressip object")
+			exutil.By("5.2 Check source IP in second namespace using second egressip object")
 			verifyEgressIPWithIPEcho(oc, pod2.namespace, pod2.name, ipEchoURL, true, freeIPs[1])
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
@@ -278,17 +278,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer deleteTcpdumpDS(oc, "tcpdump-47272", ns2)
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns2, "tcpdump-47272", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
-			g.By("Verify from tcpDump that source IP is EgressIP")
+			exutil.By("Verify from tcpDump that source IP is EgressIP")
 			egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, freeIPs[0], dstHost, ns2, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
-			g.By("5.2 Check source IP in second namespace using second egressip object")
+			exutil.By("5.2 Check source IP in second namespace using second egressip object")
 			egressErr2 := verifyEgressIPinTCPDump(oc, pod2.name, pod2.namespace, freeIPs[1], dstHost, ns2, tcpdumpDS.name, true)
 			o.Expect(egressErr2).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s", freeIPs[1]))
 		default:
 			g.Skip("Skip for not support scenarios!")
 		}
 
-		g.By("Pods will not be affected by the egressIP set on other netnamespace.!!! ")
+		exutil.By("Pods will not be affected by the egressIP set on other netnamespace.!!! ")
 	})
 
 	// author: huirwang@redhat.com
@@ -298,15 +298,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
-		g.By("1.1 Label EgressIP node")
+		exutil.By("1.1 Label EgressIP node")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
-		g.By("1.2 Apply EgressLabel Key to one node.")
+		exutil.By("1.2 Apply EgressLabel Key to one node.")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel)
 
-		g.By("2.1 Create first egressip object")
+		exutil.By("2.1 Create first egressip object")
 		freeIPs := findFreeIPs(oc, egressNode, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -323,16 +323,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 
-		g.By("3.1 create first namespace")
+		exutil.By("3.1 create first namespace")
 		oc.SetupProject()
 		ns1 := oc.Namespace()
 
-		g.By("3.2 Apply a label to first namespace")
+		exutil.By("3.2 Apply a label to first namespace")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3.3 Create a pod in first namespace. ")
+		exutil.By("3.3 Create a pod in first namespace. ")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns1,
@@ -342,32 +342,32 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("3.4 Apply label to pod in first namespace")
+		exutil.By("3.4 Apply label to pod in first namespace")
 		err = exutil.LabelPod(oc, ns1, pod1.name, "color=pink")
 		defer exutil.LabelPod(oc, ns1, pod1.name, "color-")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4. Update the egressip in egressip object")
+		exutil.By("4. Update the egressip in egressip object")
 		updateEgressIPObject(oc, egressip1.name, freeIPs[1])
 
-		g.By("5. Check source IP is updated IP")
+		exutil.By("5. Check source IP is updated IP")
 		var dstHost, primaryInf string
 		var infErr, snifErr error
 		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By(" Use IP-echo service to verify egressIP.")
+			exutil.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
 			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, freeIPs[1])
 
-			g.By("6. Remove labels from test pod.")
+			exutil.By("6. Remove labels from test pod.")
 			err = exutil.LabelPod(oc, ns1, pod1.name, "color-")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("7. Check source IP is not EgressIP")
+			exutil.By("7. Check source IP is not EgressIP")
 			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, false, freeIPs[1])
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
@@ -376,15 +376,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer deleteTcpdumpDS(oc, "tcpdump-47164", ns1)
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns1, "tcpdump-47164", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
-			g.By("Verify from tcpDump that source IP is EgressIP")
+			exutil.By("Verify from tcpDump that source IP is EgressIP")
 			egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, freeIPs[1], dstHost, ns1, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s", freeIPs[1]))
 
-			g.By("6. Remove labels from test pod.")
+			exutil.By("6. Remove labels from test pod.")
 			err = exutil.LabelPod(oc, ns1, pod1.name, "color-")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("7. Check source IP is not EgressIP")
+			exutil.By("7. Check source IP is not EgressIP")
 			egressErr = verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, freeIPs[1], dstHost, ns1, tcpdumpDS.name, false)
 			o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Should not get egressip:%s", freeIPs[1]))
 
@@ -400,7 +400,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
-		g.By("1. Get two worker nodes with same subnets")
+		exutil.By("1. Get two worker nodes with same subnets")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
@@ -408,11 +408,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("The prerequirement was not fullfilled, skip the case!!")
 		}
 
-		g.By("2. Apply EgressLabel Key for this test on one node.")
+		exutil.By("2. Apply EgressLabel Key for this test on one node.")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
 
-		g.By("3. Create an egressip object")
+		exutil.By("3. Create an egressip object")
 		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -424,15 +424,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressip1.createEgressIPObject1(oc)
 		defer egressip1.deleteEgressIPObject1(oc)
 
-		g.By("4. Check only one EgressIP assigned in the object.")
+		exutil.By("4. Check only one EgressIP assigned in the object.")
 		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
 
-		g.By("5. Apply EgressLabel Key for this test on second node.")
+		exutil.By("5. Apply EgressLabel Key for this test on second node.")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
 
-		g.By("6. Check two EgressIP assigned in the object.")
+		exutil.By("6. Check two EgressIP assigned in the object.")
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
 
 	})
@@ -443,7 +443,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
-		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet \n")
+		exutil.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet \n")
 		var egressNode1, egressNode2 string
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -454,19 +454,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressNode1 = egressNodes[0]
 		egressNode2 = egressNodes[1]
 
-		g.By("2. Apply EgressLabel Key for this test on one node.\n")
+		exutil.By("2. Apply EgressLabel Key for this test on one node.\n")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
 
-		g.By("3.1 Create new namespace\n")
+		exutil.By("3.1 Create new namespace\n")
 		oc.SetupProject()
 		ns1 := oc.Namespace()
-		g.By("3.2 Apply label to namespace\n")
+		exutil.By("3.2 Apply label to namespace\n")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Output()
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4. Create a pod in first namespace. \n")
+		exutil.By("4. Create a pod in first namespace. \n")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns1,
@@ -475,7 +475,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod1.createPingPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("5. Create an egressip object\n")
+		exutil.By("5. Create an egressip object\n")
 		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -487,16 +487,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressip1.createEgressIPObject1(oc)
 		defer egressip1.deleteEgressIPObject1(oc)
 
-		g.By("4. Check EgressIP assigned in the object.\n")
+		exutil.By("4. Check EgressIP assigned in the object.\n")
 		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
 
-		g.By("5. Update Egress node to egressNode2.\n")
+		exutil.By("5. Update Egress node to egressNode2.\n")
 		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
 
-		g.By("6. Check the egress node was updated in the egressip object.\n")
+		exutil.By("6. Check the egress node was updated in the egressip object.\n")
 		egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 			egressIPMaps = getAssignedEIPInEIPObject(oc, egressip1.name)
 			if len(egressIPMaps) != 1 || egressIPMaps[0]["node"] == egressNode1 {
@@ -508,17 +508,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to update egress node:%s", egressipErr))
 		o.Expect(egressIPMaps[0]["node"]).Should(o.ContainSubstring(egressNode2))
 
-		g.By("7. Check the source ip.\n")
+		exutil.By("7. Check the source ip.\n")
 		var dstHost, primaryInf string
 		var infErr, snifErr error
 		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By(" Use IP-echo service to verify egressIP.")
+			exutil.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
 			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, egressIPMaps[0]["egressIP"])
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode2)
@@ -527,7 +527,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer deleteTcpdumpDS(oc, "tcpdump-47028", ns1)
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns1, "tcpdump-47028", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
-			g.By("Verify from tcpDump that source IP is EgressIP")
+			exutil.By("Verify from tcpDump that source IP is EgressIP")
 			egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps[0]["egressIP"], dstHost, ns1, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 		default:
@@ -542,15 +542,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
-		g.By("1.1 Label EgressIP node\n")
+		exutil.By("1.1 Label EgressIP node\n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
-		g.By("1.2 Apply EgressLabel Key to one node.\n")
+		exutil.By("1.2 Apply EgressLabel Key to one node.\n")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 
-		g.By("2.1 Create first egressip object\n")
+		exutil.By("2.1 Create first egressip object\n")
 		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -565,31 +565,31 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressip1.createEgressIPObject2(oc)
 		defer egressip1.deleteEgressIPObject1(oc)
 
-		g.By("3.1 create first namespace\n")
+		exutil.By("3.1 create first namespace\n")
 		oc.SetupProject()
 		ns1 := oc.Namespace()
 
-		g.By("3.2 Apply a label to test namespace.\n")
+		exutil.By("3.2 Apply a label to test namespace.\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3.3 Create pods in test namespace. \n")
+		exutil.By("3.3 Create pods in test namespace. \n")
 		createResourceFromFile(oc, ns1, testPodFile)
 		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
-		g.By("3.4 Apply label to one pod in test namespace\n")
+		exutil.By("3.4 Apply label to one pod in test namespace\n")
 		testPodName := getPodName(oc, ns1, "name=test-pods")
 		err = exutil.LabelPod(oc, ns1, testPodName[0], "color=pink")
 		defer exutil.LabelPod(oc, ns1, testPodName[0], "color-")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4. Check only one EgressIP assigned in the object.\n")
+		exutil.By("4. Check only one EgressIP assigned in the object.\n")
 		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
 
-		g.By("5.Reboot egress node.\n")
+		exutil.By("5.Reboot egress node.\n")
 		defer checkNodeStatus(oc, egressNode, "Ready")
 		rebootNode(oc, egressNode)
 		checkNodeStatus(oc, egressNode, "NotReady")
@@ -601,20 +601,20 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer exutil.LabelPod(oc, ns1, testPodName[0], "color-")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("7. Check EgressIP assigned in the object.\n")
+		exutil.By("7. Check EgressIP assigned in the object.\n")
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
 
-		g.By("8. Check source IP is egressIP \n")
+		exutil.By("8. Check source IP is egressIP \n")
 		var dstHost, primaryInf string
 		var infErr, snifErr error
 		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By(" Use IP-echo service to verify egressIP.")
+			exutil.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf(" ipEchoURL is %v", ipEchoURL)
 			verifyEgressIPWithIPEcho(oc, ns1, testPodName[0], ipEchoURL, true, freeIPs[0])
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
@@ -623,7 +623,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer deleteTcpdumpDS(oc, "tcpdump-47031", ns1)
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns1, "tcpdump-47031", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
-			g.By("Verify from tcpDump that source IP is EgressIP")
+			exutil.By("Verify from tcpDump that source IP is EgressIP")
 			egressErr := verifyEgressIPinTCPDump(oc, testPodName[0], ns1, freeIPs[0], dstHost, ns1, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 		default:
@@ -638,11 +638,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
-		g.By("create new namespace\n")
+		exutil.By("create new namespace\n")
 		oc.SetupProject()
 		ns1 := oc.Namespace()
 
-		g.By("Label EgressIP node\n")
+		exutil.By("Label EgressIP node\n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
@@ -650,18 +650,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("The prerequirement was not fullfilled, skip the case!!")
 		}
 
-		g.By("Apply EgressLabel Key for this test on one node.\n")
+		exutil.By("Apply EgressLabel Key for this test on one node.\n")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
 
-		g.By("Apply label to namespace\n")
+		exutil.By("Apply label to namespace\n")
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create an egressip object\n")
+		exutil.By("Create an egressip object\n")
 		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 4)
 		o.Expect(len(freeIPs)).Should(o.Equal(4))
 		egressip1 := egressIPResource1{
@@ -679,7 +679,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
 
-		g.By("Create another egressip object\n")
+		exutil.By("Create another egressip object\n")
 		egressip2 := egressIPResource1{
 			name:      "egressip-47034",
 			template:  egressIPTemplate,
@@ -695,7 +695,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		verifyExpectedEIPNumInEIPObject(oc, egressip2.name, 2)
 
-		g.By("Create a pod ")
+		exutil.By("Create a pod ")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns1,
@@ -704,16 +704,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod1.createPingPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("Create sencond namespace.")
+		exutil.By("Create sencond namespace.")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
-		g.By("Apply label to second namespace\n")
+		exutil.By("Apply label to second namespace\n")
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "name-").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "name=qe").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create a pod in second namespace")
+		exutil.By("Create a pod in second namespace")
 		pod2 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns2,
@@ -722,7 +722,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod2.createPingPod(oc)
 		waitPodReady(oc, pod2.namespace, pod2.name)
 
-		g.By("Check source IP is randomly one of egress ips.\n")
+		exutil.By("Check source IP is randomly one of egress ips.\n")
 		var dstHost, primaryInf string
 		var infErr, snifErr error
 		var tcpdumpDS *tcpdumpDaemonSet
@@ -740,7 +740,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[0]))
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[1]))
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump", "true")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump")
@@ -752,7 +752,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns2, "tcpdump-47032", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
 
-			g.By("Check source IP is randomly one of egress ips for both namespaces.")
+			exutil.By("Check source IP is randomly one of egress ips for both namespaces.")
 			egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 				randomStr, url := getRequestURL(dstHost)
 				_, err := execCommandInSpecificPod(oc, pod2.namespace, pod2.name, "for i in {1..10}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
@@ -795,25 +795,25 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
 
-		g.By("1. Label EgressIP node\n")
+		exutil.By("1. Label EgressIP node\n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		egressNode := nodeList.Items[0].Name
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2. Apply EgressLabel Key for this test on one node.\n")
+		exutil.By("2. Apply EgressLabel Key for this test on one node.\n")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 
-		g.By("3. create new namespace\n")
+		exutil.By("3. create new namespace\n")
 		oc.SetupProject()
 		ns1 := oc.Namespace()
 
-		g.By("4. Apply label to namespace\n")
+		exutil.By("4. Apply label to namespace\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 
-		g.By("5. Create an egressip object\n")
+		exutil.By("5. Create an egressip object\n")
 		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -827,18 +827,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
 
-		g.By("6. Create test pods \n")
+		exutil.By("6. Create test pods \n")
 		createResourceFromFile(oc, ns1, testPodFile)
 		err = waitForPodWithLabelReady(oc, oc.Namespace(), "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
-		g.By("7. Create default deny ingress type networkpolicy in test namespace\n")
+		exutil.By("7. Create default deny ingress type networkpolicy in test namespace\n")
 		createResourceFromFile(oc, ns1, networkPolicyFile)
 		output, err := oc.Run("get").Args("networkpolicy").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("default-deny-ingress"))
 
-		g.By("8. Create an EgressFirewall object with rule deny.")
+		exutil.By("8. Create an EgressFirewall object with rule deny.")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns1,
@@ -849,17 +849,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressFW2.createEgressFW2Object(oc)
 		defer egressFW2.deleteEgressFW2Object(oc)
 
-		g.By("9. Get test pods IP and test pod name in test namespace\n")
+		exutil.By("9. Get test pods IP and test pod name in test namespace\n")
 		testPodName := getPodName(oc, oc.Namespace(), "name=test-pods")
 
-		g.By("10. Check network policy works. \n")
+		exutil.By("10. Check network policy works. \n")
 		CurlPod2PodFail(oc, ns1, testPodName[0], ns1, testPodName[1])
 
-		g.By("11. Check EgressFirewall policy works. \n")
+		exutil.By("11. Check EgressFirewall policy works. \n")
 		_, err = e2eoutput.RunHostCmd(ns1, testPodName[0], "curl -s ifconfig.me --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("12.Update EgressFirewall to allow")
+		exutil.By("12.Update EgressFirewall to allow")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns1, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -868,7 +868,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By("13. Check EgressFirewall Allow rule works and EgressIP works.\n")
+			exutil.By("13. Check EgressFirewall Allow rule works and EgressIP works.\n")
 			egressipErr := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 				sourceIP, err := e2eoutput.RunHostCmd(ns1, testPodName[0], "curl -s "+ipEchoURL+" --connect-timeout 5")
 				if err != nil {
@@ -884,7 +884,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			})
 			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
@@ -894,7 +894,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns1, "tcpdump-47023", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
 
-			g.By("13. Verify from tcpdump that source IP is EgressIP")
+			exutil.By("13. Verify from tcpdump that source IP is EgressIP")
 			egressErr := verifyEgressIPinTCPDump(oc, testPodName[0], ns1, egressIPMaps[0]["egressIP"], dstHost, ns1, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 
@@ -910,31 +910,31 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
-		g.By("1. Label EgressIP node\n")
+		exutil.By("1. Label EgressIP node\n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		egressNode := nodeList.Items[0].Name
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2. Apply EgressLabel Key for this test on one node.\n")
+		exutil.By("2. Apply EgressLabel Key for this test on one node.\n")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 
-		g.By("3. create first namespace\n")
+		exutil.By("3. create first namespace\n")
 		oc.SetupProject()
 		ns1 := oc.Namespace()
 
-		g.By("4. Create test pods in first namespace. \n")
+		exutil.By("4. Create test pods in first namespace. \n")
 		createResourceFromFile(oc, ns1, testPodFile)
 		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 		testPodNs1Name := getPodName(oc, ns1, "name=test-pods")
 
-		g.By("5. Apply label to ns1 namespace\n")
+		exutil.By("5. Apply label to ns1 namespace\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 
-		g.By("6. Create an egressip object\n")
+		exutil.By("6. Create an egressip object\n")
 		freeIPs := findFreeIPs(oc, egressNode, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -948,26 +948,26 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
 
-		g.By("7. create new namespace\n")
+		exutil.By("7. create new namespace\n")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
-		g.By("8. Apply label to namespace\n")
+		exutil.By("8. Apply label to namespace\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "name-").Execute()
 
-		g.By("9. Create test pods in second namespace  \n")
+		exutil.By("9. Create test pods in second namespace  \n")
 		createResourceFromFile(oc, ns2, testPodFile)
 		err = waitForPodWithLabelReady(oc, ns2, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 		testPodNs2Name := getPodName(oc, ns2, "name=test-pods")
 
-		g.By("create new namespace\n")
+		exutil.By("create new namespace\n")
 		oc.SetupProject()
 		ns3 := oc.Namespace()
 
-		g.By("Create test pods in third namespace  \n")
+		exutil.By("Create test pods in third namespace  \n")
 		createResourceFromFile(oc, ns3, testPodFile)
 		err = waitForPodWithLabelReady(oc, ns3, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
@@ -978,22 +978,22 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By("10. Check source IP from both namespace, should be egressip.  \n")
+			exutil.By("10. Check source IP from both namespace, should be egressip.  \n")
 			verifyEgressIPWithIPEcho(oc, ns1, testPodNs1Name[0], ipEchoURL, true, freeIPs...)
 			verifyEgressIPWithIPEcho(oc, ns1, testPodNs1Name[1], ipEchoURL, true, freeIPs...)
 			verifyEgressIPWithIPEcho(oc, ns2, testPodNs2Name[0], ipEchoURL, true, freeIPs...)
 			verifyEgressIPWithIPEcho(oc, ns2, testPodNs2Name[1], ipEchoURL, true, freeIPs...)
 			verifyEgressIPWithIPEcho(oc, ns3, testPodNs3Name[0], ipEchoURL, false, freeIPs...)
 
-			g.By("11. Remove matched labels from namespace ns1  \n")
+			exutil.By("11. Remove matched labels from namespace ns1  \n")
 			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("12.  Check source IP from namespace ns1, should not be egressip. \n")
+			exutil.By("12.  Check source IP from namespace ns1, should not be egressip. \n")
 			verifyEgressIPWithIPEcho(oc, ns1, testPodNs1Name[0], ipEchoURL, false, freeIPs...)
 			verifyEgressIPWithIPEcho(oc, ns1, testPodNs1Name[1], ipEchoURL, false, freeIPs...)
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
@@ -1003,7 +1003,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns2, "tcpdump-47017", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
 
-			g.By("10.Check source IP from both namespace, should be egressip. ")
+			exutil.By("10.Check source IP from both namespace, should be egressip. ")
 			egressErr := verifyEgressIPinTCPDump(oc, testPodNs1Name[0], ns1, egressIPMaps[0]["egressIP"], dstHost, ns2, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 			egressErr = verifyEgressIPinTCPDump(oc, testPodNs1Name[1], ns1, egressIPMaps[0]["egressIP"], dstHost, ns2, tcpdumpDS.name, true)
@@ -1015,11 +1015,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			egressErr = verifyEgressIPinTCPDump(oc, testPodNs3Name[0], ns3, egressIPMaps[0]["egressIP"], dstHost, ns2, tcpdumpDS.name, false)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 
-			g.By("11. Remove matched labels from namespace ns1  \n")
+			exutil.By("11. Remove matched labels from namespace ns1  \n")
 			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("12.  Check source IP from namespace ns1, should not be egressip. \n")
+			exutil.By("12.  Check source IP from namespace ns1, should not be egressip. \n")
 			egressErr = verifyEgressIPinTCPDump(oc, testPodNs1Name[0], ns1, egressIPMaps[0]["egressIP"], dstHost, ns2, tcpdumpDS.name, false)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 			egressErr = verifyEgressIPinTCPDump(oc, testPodNs1Name[1], ns1, egressIPMaps[0]["egressIP"], dstHost, ns2, tcpdumpDS.name, false)
@@ -1038,29 +1038,24 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 		timer := estimateTimeoutForEgressIP(oc) * 2
 
-		platform := exutil.CheckPlatform(oc)
-		e2e.Logf("\n\nThe platform is %v,\n", platform)
-
-		// Due to OCPBUGS-4563, temporarily remove Azure as acceptedPlatform to skip the test on Azure
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "nutanix")
-
 		// This test case is not supposed to run on some special AWS/GCP cluster with STS, use specialPlatformCheck function to identify such a cluster
-		isSpecialSTSCluster := specialPlatformCheck(oc)
-		if !acceptedPlatform || (isSpecialSTSCluster && strings.Contains(platform, "aws")) || (isSpecialSTSCluster && strings.Contains(platform, "gcp")) {
-			g.Skip("This test case should be run on AWS, GCP, OSP, vSphere and IPI BM, skip for other platforms or special AWS/GCP STS cluster!!")
+		// For Azure cluster, if it has special credential type, this test case should be skipped as well
+		isSpecialSTSorCredCluster := specialPlatformCheck(oc)
+		if isSpecialSTSorCredCluster {
+			g.Skip("Skipped: This test case is not suitable for special AWS/GCP STS cluster or Azure with special credential type!!")
 		}
 
-		g.By("1. create new namespace\n")
+		exutil.By("1. create new namespace\n")
 		ns1 := oc.Namespace()
 
-		g.By("2. Label EgressIP node\n")
+		exutil.By("2. Label EgressIP node\n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 3 {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
 
-		g.By("3. Apply EgressLabel Key for this test on 3 nodes.\n")
+		exutil.By("3. Apply EgressLabel Key for this test on 3 nodes.\n")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, egressNodeLabel, "true")
@@ -1068,12 +1063,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, egressNodeLabel)
 
-		g.By("4. Apply label to namespace\n")
+		exutil.By("4. Apply label to namespace\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 
-		g.By("5. Create an egressip object\n")
+		exutil.By("5. Create an egressip object\n")
 		sub1 := getEgressCIDRsForNode(oc, nodeList.Items[0].Name)
 		freeIP1 := findUnUsedIPsOnNode(oc, nodeList.Items[0].Name, sub1, 1)
 		o.Expect(len(freeIP1) == 1).Should(o.BeTrue())
@@ -1093,11 +1088,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressip1.createEgressIPObject1(oc)
 		defer egressip1.deleteEgressIPObject1(oc)
 
-		g.By("6. Update an egressip object with three egressips.\n")
+		exutil.By("6. Update an egressip object with three egressips.\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/egressip-47033", "-p", "{\"spec\":{\"egressIPs\":[\""+freeIP1[0]+"\",\""+freeIP2[0]+"\",\""+freeIP3[0]+"\"]}}", "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("7. Create a pod \n")
+		exutil.By("7. Create a pod \n")
 		pod1 := pingPodResourceNode{
 			name:      "hello-pod",
 			namespace: ns1,
@@ -1107,7 +1102,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod1.createPingPodNode(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("8. Check source IP is randomly one of egress ips.\n")
+		exutil.By("8. Check source IP is randomly one of egress ips.\n")
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 3)
 
 		var dstHost, primaryInf string
@@ -1124,7 +1119,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIP2[0]))
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIP3[0]))
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "tcpdump", "true")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "tcpdump")
@@ -1138,7 +1133,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns1, "tcpdump-47033", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
 
-			g.By("Verify all egressIP is randomly used as sourceIP.")
+			exutil.By("Verify all egressIP is randomly used as sourceIP.")
 			egressipErr := wait.Poll(30*time.Second, timer, func() (bool, error) {
 				randomStr, url := getRequestURL(dstHost)
 				_, cmdErr := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..30}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
@@ -1169,7 +1164,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\n\n\n the worker node to be shutdown is: %v\n\n\n", nodeToBeShutdown)
 		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeToBeShutdown, "tcpdump")
 
-		g.By("9. Stop one egress node.\n")
+		exutil.By("9. Stop one egress node.\n")
 		var instance []string
 		var zone string
 		var az *exutil.AzureSession
@@ -1247,12 +1242,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
 		}
 
-		g.By("10. Check EgressIP updated in EIP object, sourceIP contains 2 IPs. \n")
+		exutil.By("10. Check EgressIP updated in EIP object, sourceIP contains 2 IPs. \n")
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
 
 		switch flag {
 		case "ipecho":
-			egressipErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			egressipErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 				sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..30}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 				e2e.Logf(sourceIP)
 				if err != nil {
@@ -1269,7 +1264,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			})
 			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
 		case "tcpdump":
-			g.By("Verify other available egressIP is randomly used as sourceIP.")
+			exutil.By("Verify other available egressIP is randomly used as sourceIP.")
 			egressipErr := wait.Poll(30*time.Second, timer, func() (bool, error) {
 				randomStr, url := getRequestURL(dstHost)
 				_, cmdErr := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..30}; do curl -s "+url+" --connect-timeout 5 ; sleep 3;echo ;done")
@@ -1294,7 +1289,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Skip for not support scenarios!")
 		}
 
-		g.By("11. Start the stopped egress node \n")
+		exutil.By("11. Start the stopped egress node \n")
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
@@ -1333,7 +1328,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
 		}
 
-		g.By("12. Check source IP is randomly one of 3 egress IPs.\n")
+		exutil.By("12. Check source IP is randomly one of 3 egress IPs.\n")
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 3)
 
 		switch flag {
@@ -1388,24 +1383,24 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
-		g.By("1. Get list of nodes \n")
+		exutil.By("1. Get list of nodes \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 
-		g.By("2. Apply EgressLabel Key for this test on one node.\n")
+		exutil.By("2. Apply EgressLabel Key for this test on one node.\n")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 
-		g.By("3.1 Get temp namespace\n")
+		exutil.By("3.1 Get temp namespace\n")
 		oc.SetupProject()
 		ns1 := oc.Namespace()
 
-		g.By("3.2 Apply label to namespace\n")
+		exutil.By("3.2 Apply label to namespace\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4. Create a pod in temp namespace. \n")
+		exutil.By("4. Create a pod in temp namespace. \n")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns1,
@@ -1414,7 +1409,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod1.createPingPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("5. Create an egressip object\n")
+		exutil.By("5. Create an egressip object\n")
 		freeIPs := findFreeIPs(oc, egressNode, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -1426,7 +1421,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressip1.createEgressIPObject1(oc)
 		defer egressip1.deleteEgressIPObject1(oc)
 
-		g.By("4. Check EgressIP assigned in the object.\n")
+		exutil.By("4. Check EgressIP assigned in the object.\n")
 		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
 
@@ -1435,24 +1430,24 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By("5. Check the source ip.\n")
+			exutil.By("5. Check the source ip.\n")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
 			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, egressIPMaps[0]["egressIP"])
 
-			g.By("6. Delete the test pod and recreate it. \n")
+			exutil.By("6. Delete the test pod and recreate it. \n")
 			// Add more times to delete pod and recreate pod. This is to cover bug https://bugzilla.redhat.com/show_bug.cgi?id=2117310
-			g.By("6. Delete the test pod and recreate it. \n")
+			exutil.By("6. Delete the test pod and recreate it. \n")
 			for i := 0; i < 15; i++ {
 				e2e.Logf("Delete and recreate pod for the %v time", i)
 				pod1.deletePingPod(oc)
 				pod1.createPingPod(oc)
 				waitPodReady(oc, pod1.namespace, pod1.name)
 
-				g.By("7. Check the source ip.\n")
+				exutil.By("7. Check the source ip.\n")
 				verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, egressIPMaps[0]["egressIP"])
 			}
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
@@ -1462,18 +1457,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns1, "tcpdump-53069", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
 
-			g.By("5. Verify from tcpdump that source IP is EgressIP")
+			exutil.By("5. Verify from tcpdump that source IP is EgressIP")
 			egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps[0]["egressIP"], dstHost, ns1, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 
-			g.By("6. Delete the test pod and recreate it for. \n")
+			exutil.By("6. Delete the test pod and recreate it for. \n")
 			for i := 0; i < 15; i++ {
 				e2e.Logf("Delete and recreate pod for the %v time", i)
 				pod1.deletePingPod(oc)
 				pod1.createPingPod(oc)
 				waitPodReady(oc, pod1.namespace, pod1.name)
 
-				g.By("7. Verify from tcpdump that source IP is EgressIP")
+				exutil.By("7. Verify from tcpdump that source IP is EgressIP")
 				egressErr = verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps[0]["egressIP"], dstHost, ns1, tcpdumpDS.name, true)
 				o.Expect(egressErr).NotTo(o.HaveOccurred())
 			}
@@ -1500,17 +1495,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		egressNode1 := egressNodes[0]
 
-		g.By("1. Create a namespace, apply namespace label to it that matches the one defined in egressip object.")
+		exutil.By("1. Create a namespace, apply namespace label to it that matches the one defined in egressip object.")
 		oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
 		exutil.SetNamespacePrivileged(oc, ns)
 
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2. Choose a node as EgressIP node, label the node to be egress assignable")
+		exutil.By("2. Choose a node as EgressIP node, label the node to be egress assignable")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
 
-		g.By("3. Create an egressip object")
+		exutil.By("3. Create an egressip object")
 		freeIPs := findFreeIPs(oc, egressNode1, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -1526,7 +1521,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 
-		g.By("4. Create a pod in the namespace and apply pod label to the pod that matches the podLabel defined in egressip object created in step 2.")
+		exutil.By("4. Create a pod in the namespace and apply pod label to the pod that matches the podLabel defined in egressip object created in step 2.")
 		createResourceFromFile(oc, ns, statefulSetHelloPod)
 		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
@@ -1535,17 +1530,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		err = exutil.LabelPod(oc, ns, helloPodname[0], "color=pink")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("5. Check source IP is the assigned egress IP address")
+		exutil.By("5. Check source IP is the assigned egress IP address")
 		var dstHost, primaryInf string
 		var infErr, snifErr error
 		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By(" Use IP-echo service to verify egressIP.")
+			exutil.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
 			verifyEgressIPWithIPEcho(oc, ns, helloPodname[0], ipEchoURL, true, freeIPs[0])
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode1)
@@ -1554,7 +1549,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer deleteTcpdumpDS(oc, "tcpdump-56875", ns)
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-56875", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
-			g.By("Verify from tcpDump that source IP is EgressIP")
+			exutil.By("Verify from tcpDump that source IP is EgressIP")
 			egressErr := verifyEgressIPinTCPDump(oc, helloPodname[0], ns, freeIPs[0], dstHost, ns, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s", freeIPs[0]))
 		default:
@@ -1587,7 +1582,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
 
-		g.By("1. Check EgressIP in EIP object, sourceIP contains one IP. \n")
+		exutil.By("1. Check EgressIP in EIP object, sourceIP contains one IP. \n")
 		EIPObjects := getOVNEgressIPObject(oc)
 		o.Expect(len(EIPObjects) == 1).Should(o.BeTrue())
 		EIPObjectName := EIPObjects[0]
@@ -1602,17 +1597,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		podErr := exutil.LabelPod(oc, ns, helloPodname[0], "color=pink")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
 
-		g.By("2. Check source IP from the test pod of the namespace is the assigned egress IP address")
+		exutil.By("2. Check source IP from the test pod of the namespace is the assigned egress IP address")
 		var dstHost, primaryInf string
 		var infErr, snifErr error
 		var tcpdumpDS, tcpdumpDS2, tcpdumpDS3 *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By(" Use IP-echo service to verify egressIP.")
+			exutil.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
 			verifyEgressIPWithIPEcho(oc, ns, helloPodname[0], ipEchoURL, true, egressIPMaps[0]["egressIP"])
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
 			primaryInf, infErr = getSnifPhyInf(oc, egressNode1)
@@ -1621,14 +1616,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer deleteTcpdumpDS(oc, "tcpdump-56875", ns)
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-56875", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
-			g.By("Verify from tcpDump that source IP is EgressIP")
+			exutil.By("Verify from tcpDump that source IP is EgressIP")
 			egressErr := verifyEgressIPinTCPDump(oc, helloPodname[0], ns, egressIPMaps[0]["egressIP"], dstHost, ns, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s", egressIPMaps[0]["egressIP"]))
 		default:
 			g.Skip("Skip for not support scenarios!")
 		}
 
-		g.By("3. Find another scheduleable node that is in the same subnet of first egress node, label it as the second egress node")
+		exutil.By("3. Find another scheduleable node that is in the same subnet of first egress node, label it as the second egress node")
 		var egressNode2 string
 		platform := exutil.CheckPlatform(oc)
 		if strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") {
@@ -1663,7 +1658,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressNodeList = exutil.GetNodeListByLabel(oc, egressNodeLabel)
 		o.Expect(len(egressNodeList) == 2).Should(o.BeTrue())
 
-		g.By("4. Unlabel the first egress node to cause egressIP failover to the second egress node")
+		exutil.By("4. Unlabel the first egress node to cause egressIP failover to the second egress node")
 		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
 
 		// stateful test pod would be recreated during failover, wait for pod to be ready and relabel the pod
@@ -1673,19 +1668,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		err = exutil.LabelPod(oc, ns, helloPodname[0], "color=pink")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("5. Check EgressIP assigned to the second egress node.\n")
+		exutil.By("5. Check EgressIP assigned to the second egress node.\n")
 		o.Eventually(func() bool {
 			egressIPMaps = getAssignedEIPInEIPObject(oc, EIPObjectName)
 			return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == egressNode2
 		}, "300s", "10s").Should(o.BeTrue(), "egressIP was not migrated to second egress node after unlabel first egress node!!")
 
-		g.By("6. Check source IP from the test pod of the namespace is still the egressIP after egressIP failover \n")
+		exutil.By("6. Check source IP from the test pod of the namespace is still the egressIP after egressIP failover \n")
 		switch flag {
 		case "ipecho":
-			g.By(" Use IP-echo service to verify egressIP.")
+			exutil.By(" Use IP-echo service to verify egressIP.")
 			verifyEgressIPWithIPEcho(oc, ns, helloPodname[0], ipEchoURL, true, egressIPMaps[0]["egressIP"])
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
 			deleteTcpdumpDS(oc, "tcpdump-56875", ns)
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2")
@@ -1696,18 +1691,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer deleteTcpdumpDS(oc, "tcpdump-56875-2", ns)
 			tcpdumpDS2, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-56875-2", "tcpdump2", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
-			g.By("Verify from tcpDump that source IP is EgressIP")
+			exutil.By("Verify from tcpDump that source IP is EgressIP")
 			egressErr := verifyEgressIPinTCPDump(oc, helloPodname[0], ns, egressIPMaps[0]["egressIP"], dstHost, ns, tcpdumpDS2.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("After failover, failed to get expected egressip:%s in tcpdump", egressIPMaps[0]["egressIP"]))
 		default:
 			g.Skip("Skip for not support scenarios!")
 		}
 
-		g.By("7. Delete egressIP object, verify egressip is cleared\n")
+		exutil.By("7. Delete egressIP object, verify egressip is cleared\n")
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("egressip", EIPObjectName).Execute()).NotTo(o.HaveOccurred())
 		waitCloudPrivateIPconfigUpdate(oc, egressIPMaps[0]["egressIP"], false)
 
-		g.By("8. Verify node's IP will be used as source IP from the namespace and test pod\n")
+		exutil.By("8. Verify node's IP will be used as source IP from the namespace and test pod\n")
 		// Find the node that the hello-pod resides on
 		PodNodeName, nodeErr := exutil.GetPodNodeName(oc, ns, helloPodname[0])
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
@@ -1784,7 +1779,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
-		g.By("1 Get list of nodes \n")
+		exutil.By("1 Get list of nodes \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
@@ -1792,7 +1787,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			g.Skip("The prerequirement was not fullfilled, skip the case!!")
 		}
 
-		g.By("2 Create first egressip object \n")
+		exutil.By("2 Create first egressip object \n")
 		freeIPs := findFreeIPs(oc, egressNodes[0], 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -1807,7 +1802,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressip1.createEgressIPObject2(oc)
 		defer egressip1.deleteEgressIPObject1(oc)
 
-		g.By("3. Check warning event. \n")
+		exutil.By("3. Check warning event. \n")
 		warnErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 			warningEvent, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", "default").Output()
 			if err != nil {
@@ -1822,17 +1817,17 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		})
 		exutil.AssertWaitPollNoErr(warnErr, "Warning event doesn't conclude: NoMatchingNodeFound.")
 
-		g.By("4 Apply EgressLabel Key to nodes. \n")
+		exutil.By("4 Apply EgressLabel Key to nodes. \n")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
 
-		g.By("5. Check EgressIP assigned in the object.\n")
+		exutil.By("5. Check EgressIP assigned in the object.\n")
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1), "EgressIP object should get one applied item, but actually not.")
 
-		g.By("6 Create second egressip object with same egressIP \n")
+		exutil.By("6 Create second egressip object with same egressIP \n")
 		egressip2 := egressIPResource1{
 			name:          "egressip-47024",
 			template:      egressIP2Template,
@@ -1845,16 +1840,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressip2.createEgressIPObject2(oc)
 		defer egressip2.deleteEgressIPObject1(oc)
 
-		g.By("7 Check the second egressIP object, no egressIP assigned  .\n")
+		exutil.By("7 Check the second egressIP object, no egressIP assigned  .\n")
 		egressIPStatus, egressIPerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressip", egressip2.name, "-ojsonpath={.status.items}").Output()
 		o.Expect(egressIPerr).NotTo(o.HaveOccurred())
 		o.Expect(egressIPStatus).To(o.Equal(""))
 
-		g.By("8. Edit the second egressIP object to another IP\n")
+		exutil.By("8. Edit the second egressIP object to another IP\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/"+egressip2.name, "-p", "{\"spec\":{\"egressIPs\":[\""+freeIPs[1]+"\"]}}", "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("9. Check egressIP assigned in the second object.\n")
+		exutil.By("9. Check egressIP assigned in the second object.\n")
 		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip2.name)
 		o.Expect(len(egressIPMaps2)).Should(o.Equal(1), "EgressIP object should get one applied item, but actually not.")
 
@@ -1866,29 +1861,29 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
 
-		g.By("1 Get list of nodes \n")
+		exutil.By("1 Get list of nodes \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 
-		g.By("2 Apply EgressLabel Key to one node. \n")
+		exutil.By("2 Apply EgressLabel Key to one node. \n")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 
-		g.By("3. create new namespace\n")
+		exutil.By("3. create new namespace\n")
 		ns1 := oc.Namespace()
 
-		g.By("4. Apply label to namespace\n")
+		exutil.By("4. Apply label to namespace\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("5. Create test pods and scale test pods to 10 \n")
+		exutil.By("5. Create test pods and scale test pods to 10 \n")
 		createResourceFromFile(oc, ns1, testPodFile)
 		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=10", "-n", ns1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
-		g.By("6. Create an egressip object\n")
+		exutil.By("6. Create an egressip object\n")
 		freeIPs := findFreeIPs(oc, egressNode, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -1902,16 +1897,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
 
-		g.By("7.Scale down CNO to 0 \n")
+		exutil.By("7.Scale down CNO to 0 \n")
 		defer oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "network-operator", "--replicas=1", "-n", "openshift-network-operator").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "network-operator", "--replicas=0", "-n", "openshift-network-operator").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("8.Delete ovnkube-master pods \n")
+		exutil.By("8.Delete ovnkube-master pods \n")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-l", "app=ovnkube-master", "-n", "openshift-ovn-kubernetes").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("9. Scale test pods to 1 \n")
+		exutil.By("9. Scale test pods to 1 \n")
 		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=1", "-n", ns1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podsErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
@@ -1927,13 +1922,13 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		testPodName := getPodName(oc, ns1, "name=test-pods")
 		_, testPodIPv4 := getPodIP(oc, ns1, testPodName[0])
 
-		g.By("10. Scale up CNO to 1 \n")
+		exutil.By("10. Scale up CNO to 1 \n")
 		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "network-operator", "--replicas=1", "-n", "openshift-network-operator").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
 		exutil.AssertWaitPollNoErr(err, "ovnkube-master pods are not ready")
 
-		g.By("11. Check lr-policy-list and snat in northdb. \n")
+		exutil.By("11. Check lr-policy-list and snat in northdb. \n")
 		ovnPod := getOVNLeaderPod(oc, "north")
 		o.Expect(ovnPod != "").Should(o.BeTrue())
 		lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep -v inport"
@@ -1973,16 +1968,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
-		g.By("1 Get list of nodes \n")
+		exutil.By("1 Get list of nodes \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 
-		g.By("2 Apply EgressLabel Key to one node. \n")
+		exutil.By("2 Apply EgressLabel Key to one node. \n")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 
-		g.By("3 Get IP capacity of the node. \n")
+		exutil.By("3 Get IP capacity of the node. \n")
 		ipCapacity := getIPv4Capacity(oc, egressNode)
 		o.Expect(ipCapacity != "").Should(o.BeTrue())
 		ipCap, _ := strconv.Atoi(ipCapacity)
@@ -1991,7 +1986,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		}
 		exceedNum := ipCap + 1
 
-		g.By("4 Create egressip objects \n")
+		exutil.By("4 Create egressip objects \n")
 		sub1 := getIfaddrFromNode(egressNode, oc)
 		freeIPs := findUnUsedIPsOnNode(oc, egressNode, sub1, exceedNum)
 		o.Expect(len(freeIPs) == exceedNum).Should(o.BeTrue())
@@ -2011,7 +2006,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			egressIPConfig[i].createEgressIPObject2(oc)
 		}
 
-		g.By("5 Check ipCapacity+1 number egressIP created,but one is not assigned egress node \n")
+		exutil.By("5 Check ipCapacity+1 number egressIP created,but one is not assigned egress node \n")
 		egressIPErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 			egressIPOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressip").Output()
 			e2e.Logf(egressIPOutput)
@@ -2030,7 +2025,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		})
 		exutil.AssertWaitPollNoErr(egressIPErr, fmt.Sprintf(" Error at getting EgressIPs or EgressIPs were not assigned corrently."))
 
-		g.By("6. Check warning event. \n")
+		exutil.By("6. Check warning event. \n")
 		warnErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 			warningEvent, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", "default").Output()
 			if err != nil {
@@ -2058,13 +2053,13 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			g.Skip("This case requires IPv4 cluster only")
 		}
 
-		g.By("1 check ovnkube-config configmap if egressip-node-healthcheck-port=9107 is in it \n")
+		exutil.By("1 check ovnkube-config configmap if egressip-node-healthcheck-port=9107 is in it \n")
 		configmapName := "ovnkube-config"
 		envString := " egressip-node-healthcheck-port=9107"
 		cmCheckErr := checkEnvInConfigMap(oc, "openshift-ovn-kubernetes", configmapName, envString)
 		o.Expect(cmCheckErr).NotTo(o.HaveOccurred())
 
-		g.By("2 get leader ovnkube-master pod and ovnkube-node pods \n")
+		exutil.By("2 get leader ovnkube-master pod and ovnkube-node pods \n")
 		readyErr := waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
 		exutil.AssertWaitPollNoErr(readyErr, "ovnkube-master pods are not ready")
 		ovnMasterPodName := getOVNKMasterPod(oc)
@@ -2073,7 +2068,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.AssertWaitPollNoErr(readyErr, "ovnkube-node pods are not ready")
 		ovnkubeNodePods := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 
-		g.By("3 Check each ovnkube-node pod's log that health check server is started on it \n")
+		exutil.By("3 Check each ovnkube-node pod's log that health check server is started on it \n")
 		expectedString := "Starting Egress IP Health Server on "
 		for _, ovnkubeNodePod := range ovnkubeNodePods {
 			podLogs, LogErr := checkLogMessageInPod(oc, "openshift-ovn-kubernetes", "ovnkube-node", ovnkubeNodePod, "'egress ip'")
@@ -2081,7 +2076,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			o.Expect(podLogs).To(o.ContainSubstring(expectedString))
 		}
 
-		g.By("4 Get list of nodes, pick one as egressNode, apply EgressLabel Key to it \n")
+		exutil.By("4 Get list of nodes, pick one as egressNode, apply EgressLabel Key to it \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
@@ -2090,13 +2085,13 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 
-		g.By("5 Check leader ovnkube-master pod's log that health check connection has been made to the egressNode on port 9107 \n")
+		exutil.By("5 Check leader ovnkube-master pod's log that health check connection has been made to the egressNode on port 9107 \n")
 		expectedString = "Connected to " + egressNode + " (" + nodeOVNK8sMgmtIP + ":9107)"
 		podLogs, LogErr := checkLogMessageInPod(oc, "openshift-ovn-kubernetes", "ovnkube-master", ovnMasterPodName, "'"+expectedString+"'"+"| tail -1")
 		o.Expect(LogErr).NotTo(o.HaveOccurred())
 		o.Expect(podLogs).To(o.ContainSubstring(expectedString))
 
-		g.By("6. Create an egressip object, verify egressIP is assigned to the egressNode")
+		exutil.By("6. Create an egressip object, verify egressIP is assigned to the egressNode")
 		freeIPs := findFreeIPs(oc, egressNode, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -2113,7 +2108,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 
-		g.By("7. Add iptables on to block port 9107 on egressNode, verify from log of ovnkube-master pod that the health check connection is closed.\n")
+		exutil.By("7. Add iptables on to block port 9107 on egressNode, verify from log of ovnkube-master pod that the health check connection is closed.\n")
 		defer exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-D", "INPUT", "-p", "tcp", "--destination-port", "9107", "-j", "DROP")
 		_, debugNodeErr := exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-I", "INPUT", "1", "-p", "tcp", "--destination-port", "9107", "-j", "DROP")
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
@@ -2127,11 +2122,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		o.Expect(LogErr).NotTo(o.HaveOccurred())
 		o.Expect(podLogs).To(o.ContainSubstring(expectedString2))
 
-		g.By("8. Verify egressIP is not assigned after blocking iptable rule on port 9170 is added.\n")
+		exutil.By("8. Verify egressIP is not assigned after blocking iptable rule on port 9170 is added.\n")
 		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(0))
 
-		g.By("9. Delete the iptables rule, verify from log of ovnkube-master pod that the health check connection is re-established.\n")
+		exutil.By("9. Delete the iptables rule, verify from log of ovnkube-master pod that the health check connection is re-established.\n")
 		_, debugNodeErr = exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-D", "INPUT", "-p", "tcp", "--destination-port", "9107", "-j", "DROP")
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
 
@@ -2140,11 +2135,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		o.Expect(LogErr).NotTo(o.HaveOccurred())
 		o.Expect(podLogs).To(o.ContainSubstring(expectedString))
 
-		g.By("10. Verify egressIP is re-applied after blocking iptable rule on port 9170 is deleted.\n")
+		exutil.By("10. Verify egressIP is re-applied after blocking iptable rule on port 9170 is deleted.\n")
 		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
 
-		g.By("11. Unlabel the egressNoe egressip-assignable, verify from log of ovnkube-master pod that the health check connection is closed.\n")
+		exutil.By("11. Unlabel the egressNoe egressip-assignable, verify from log of ovnkube-master pod that the health check connection is closed.\n")
 		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel)
 		expectedString = "Closing connection with " + egressNode + " (" + nodeOVNK8sMgmtIP + ":9107)"
 
@@ -2159,7 +2154,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
 
-		g.By("1 Get list of nodes \n")
+		exutil.By("1 Get list of nodes \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
@@ -2167,26 +2162,26 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			g.Skip("The prerequirement was not fullfilled, skip the case!!")
 		}
 
-		g.By("2 Apply EgressLabel Key to one node. \n")
+		exutil.By("2 Apply EgressLabel Key to one node. \n")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
 
-		g.By("3. create new namespace\n")
+		exutil.By("3. create new namespace\n")
 		ns1 := oc.Namespace()
 
-		g.By("4. Apply label to namespace\n")
+		exutil.By("4. Apply label to namespace\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("5. Create test pods and scale test pods to 10 \n")
+		exutil.By("5. Create test pods and scale test pods to 10 \n")
 		createResourceFromFile(oc, ns1, testPodFile)
 		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=10", "-n", ns1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
-		g.By("6. Create an egressip object\n")
+		exutil.By("6. Create an egressip object\n")
 		ipStackType := checkIPStackType(oc)
 		var freeIPs []string
 		lspExpNum := 10
@@ -2217,7 +2212,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressip1.createEgressIPObject1(oc)
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
 
-		g.By("5.Reboot egress node.\n")
+		exutil.By("5.Reboot egress node.\n")
 		defer checkNodeStatus(oc, egressNodes[0], "Ready")
 		rebootNode(oc, egressNodes[0])
 		checkNodeStatus(oc, egressNodes[0], "NotReady")
@@ -2225,7 +2220,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
-		g.By("6. Check lr-policy-list and snat in northdb. \n")
+		exutil.By("6. Check lr-policy-list and snat in northdb. \n")
 		lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep -v inport"
 		lspErr := searchOVNDBForSpecCmd(oc, lspCmd, "100 ", lspExpNum)
 		exutil.AssertWaitPollNoErr(lspErr, ("The lr-policy-list was not synced correctly! "))
@@ -2237,16 +2232,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-High-55632-After enable egress node, egress node shouldn't generate broadcast ARP for service IPs. [Serial]", func() {
 		e2e.Logf("This case is from customer bug: https://bugzilla.redhat.com/show_bug.cgi?id=2052975")
-		g.By("1 Get list of nodes \n")
+		exutil.By("1 Get list of nodes \n")
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
 		egessNode := nodeList.Items[0].Name
 
-		g.By("2 Apply EgressLabel Key to one node. \n")
+		exutil.By("2 Apply EgressLabel Key to one node. \n")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel, "true")
 
-		g.By("3. Check no ARP broadcast for service IPs\n")
+		exutil.By("3. Check no ARP broadcast for service IPs\n")
 		e2e.Logf("Trying to get physical interface on the node,%s", egessNode)
 		phyInf, nicError := getSnifPhyInf(oc, egessNode)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
@@ -2266,10 +2261,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			egressIPTemplate       = filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 		)
 
-		g.By(" Get list of nodes \n")
+		exutil.By(" Get list of nodes \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Apply EgressLabel Key to one node. \n")
+		exutil.By("Apply EgressLabel Key to one node. \n")
 		egessNode := nodeList.Items[0].Name
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel, "true")
@@ -2283,10 +2278,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, egressNodeLabel, "true")
 		}
 
-		g.By("Get namespace\n")
+		exutil.By("Get namespace\n")
 		ns1 := oc.Namespace()
 
-		g.By("create 1st hello pod in ns1")
+		exutil.By("create 1st hello pod in ns1")
 		pod1 := pingPodResource{
 			name:      "hello-pod1",
 			namespace: ns1,
@@ -2296,7 +2291,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
 		waitPodReady(oc, ns1, pod1.name)
 
-		g.By("Create a test service which is in front of the above pods")
+		exutil.By("Create a test service which is in front of the above pods")
 		svc := genericServiceResource{
 			servicename:           "test-service",
 			namespace:             ns1,
@@ -2316,11 +2311,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		svc.createServiceFromParams(oc)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", svc.servicename, "-n", svc.namespace).Execute()
 
-		g.By("Apply label to namespace\n")
+		exutil.By("Apply label to namespace\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("6. Create an egressip object\n")
+		exutil.By("6. Create an egressip object\n")
 		var freeIPs []string
 		switch ipStackType {
 		case "ipv4single":
@@ -2354,7 +2349,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		//Get one non-egress node
 		masterNode, errNode := exutil.GetFirstMasterNode(oc)
 		o.Expect(errNode).NotTo(o.HaveOccurred())
-		g.By("verify egressIP object was applied to egress node.")
+		exutil.By("verify egressIP object was applied to egress node.")
 		if ipStackType == "dualstack" {
 			verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
 			// This is to cover case OCP-43465
@@ -2365,9 +2360,9 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
 		}
 
-		g.By("curl from egress node to service:port")
+		exutil.By("curl from egress node to service:port")
 		CurlNode2SvcPass(oc, nodeList.Items[0].Name, ns1, svc.servicename)
-		g.By("curl from non egress node to service:port")
+		exutil.By("curl from non egress node to service:port")
 		CurlNode2SvcPass(oc, masterNode, ns1, svc.servicename)
 	})
 
@@ -2381,7 +2376,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
-		g.By("Create a new machineset with 2 nodes")
+		exutil.By("Create a new machineset with 2 nodes")
 		exutil.SkipConditionally(oc)
 		machinesetName := "machineset-61344"
 		ms := exutil.MachineSetDescription{machinesetName, 2}
@@ -2392,11 +2387,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
 		nodeName1 := exutil.GetNodeNameFromMachine(oc, machineName[1])
 
-		g.By("Apply EgressLabel Key to one node. \n")
+		exutil.By("Apply EgressLabel Key to one node. \n")
 		// No defer here, as this node will be deleted explicitly in the following step.
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeName0, egressNodeLabel, "true")
 
-		g.By("Create an egressip object\n")
+		exutil.By("Create an egressip object\n")
 		freeIPs := findFreeIPs(oc, nodeName0, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -2412,16 +2407,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		defer egressip1.deleteEgressIPObject1(oc)
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
 
-		g.By("Apply egess label to another worker node.\n")
+		exutil.By("Apply egess label to another worker node.\n")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeName1, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeName1, egressNodeLabel, "true")
 
-		g.By("Remove the first egress node.\n")
+		exutil.By("Remove the first egress node.\n")
 		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("machines.machine.openshift.io", machineName[0], "-n", "openshift-machine-api").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 
-		g.By("Verify egressIP was moved to second egress node.\n")
+		exutil.By("Verify egressIP was moved to second egress node.\n")
 		o.Eventually(func() bool {
 			egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
 			return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == nodeName1
@@ -2435,23 +2430,23 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 
-		g.By("Verify there are two more worker nodes in the cluster.")
+		exutil.By("Verify there are two more worker nodes in the cluster.")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
 
-		g.By("Get namespace")
+		exutil.By("Get namespace")
 		ns := oc.Namespace()
 
-		g.By("Apply EgressLabel Key to one node. \n")
+		exutil.By("Apply EgressLabel Key to one node. \n")
 		egessNode := nodeList.Items[0].Name
 		nonEgressNode := nodeList.Items[1].Name
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel, "true")
 
-		g.By("6. Create an egressip object\n")
+		exutil.By("6. Create an egressip object\n")
 		ipStackType := checkIPStackType(oc)
 		var freeIPs []string
 		if ipStackType == "ipv6single" {
@@ -2462,7 +2457,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			o.Expect(len(freeIPs)).Should(o.Equal(1))
 		}
 
-		g.By("Create an egressip object\n")
+		exutil.By("Create an egressip object\n")
 		egressip1 := egressIPResource1{
 			name:          "egressip-64293-1",
 			template:      egressIP1Template,
@@ -2476,7 +2471,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		defer egressip1.deleteEgressIPObject1(oc)
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
 
-		g.By("Create a test pod on non-egress node\n")
+		exutil.By("Create a test pod on non-egress node\n")
 		pod1 := pingPodResourceNode{
 			name:      "hello-pod1",
 			namespace: ns,
@@ -2486,7 +2481,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		pod1.createPingPodNode(oc)
 		waitPodReady(oc, ns, pod1.name)
 
-		g.By("patch label to namespace and pod")
+		exutil.By("patch label to namespace and pod")
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2494,7 +2489,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		err = exutil.LabelPod(oc, ns, pod1.name, "color=pink")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Should be able to access the api service\n")
+		exutil.By("Should be able to access the api service\n")
 		//  The backend pod of api server are hostnetwork pod and located on master nodes.  That are different nodes from egress nodes as egress nodes are worker nodes here.
 		svcIP, _ := getSvcIP(oc, "default", "kubernetes")
 		curlCmd := fmt.Sprintf("curl -s %s --connect-timeout 5", net.JoinHostPort(svcIP, "443"))
@@ -2533,17 +2528,17 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 			g.Skip("This is proxy cluster, skip the test.")
 		}
 
-		g.By("Get the temporary namespace")
+		exutil.By("Get the temporary namespace")
 		ns := oc.Namespace()
 
-		g.By("Get schedulable worker nodes")
+		exutil.By("Get schedulable worker nodes")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
 
-		g.By("Create tcpdump sniffer Daemonset.")
+		exutil.By("Create tcpdump sniffer Daemonset.")
 		primaryInf, infErr := getSnifPhyInf(oc, egressNode)
 		o.Expect(infErr).NotTo(o.HaveOccurred())
 		dstHost := nslookDomainName("ifconfig.me")
@@ -2551,16 +2546,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		tcpdumpDS, snifErr := createSnifferDaemonset(oc, ns, "tcpdump-47163", "tcpdump", "true", dstHost, primaryInf, 80)
 		o.Expect(snifErr).NotTo(o.HaveOccurred())
 
-		g.By("Apply EgressLabel Key for this test on one node.")
+		exutil.By("Apply EgressLabel Key for this test on one node.")
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 
-		g.By("Apply label to namespace")
+		exutil.By("Apply label to namespace")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name=test").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name-").Output()
 
-		g.By("Create an egressip object")
+		exutil.By("Create an egressip object")
 		freeIPs := findFreeIPs(oc, egressNode, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
@@ -2574,7 +2569,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue(), fmt.Sprintf("The egressIP was not assigned correctly!"))
 
-		g.By("Create a pod ")
+		exutil.By("Create a pod ")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns,
@@ -2584,11 +2579,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		defer pod1.deletePingPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("Check source IP is EgressIP")
+		exutil.By("Check source IP is EgressIP")
 		egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps1[0]["egressIP"], dstHost, ns, tcpdumpDS.name, true)
 		o.Expect(egressErr).NotTo(o.HaveOccurred())
 
-		g.By("Deleting egressip object")
+		exutil.By("Deleting egressip object")
 		egressip1.deleteEgressIPObject1(oc)
 		waitCloudPrivateIPconfigUpdate(oc, egressIPMaps1[0]["egressIP"], false)
 		egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
@@ -2601,16 +2596,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		})
 		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to clear egressip:%s", egressipErr))
 
-		g.By("Recreating egressip object")
+		exutil.By("Recreating egressip object")
 		egressip1.createEgressIPObject1(oc)
 		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps2) == 1).Should(o.BeTrue(), fmt.Sprintf("The egressIP was not assigned correctly!"))
 
-		g.By("Check source IP is EgressIP")
+		exutil.By("Check source IP is EgressIP")
 		egressErr = verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps2[0]["egressIP"], dstHost, ns, tcpdumpDS.name, true)
 		o.Expect(egressErr).NotTo(o.HaveOccurred())
 
-		g.By("Deleting EgressIP object and recreating it works!!! ")
+		exutil.By("Deleting EgressIP object and recreating it works!!! ")
 
 	})
 
@@ -2621,7 +2616,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		completedPodTemplate := filepath.Join(buildPruningBaseDir, "countdown-job-completed-pod.yaml")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
-		g.By("1. Get list of nodes, get two worker nodes that have same subnet, use them as egress nodes\n")
+		exutil.By("1. Get list of nodes, get two worker nodes that have same subnet, use them as egress nodes\n")
 		var egressNode1, egressNode2 string
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2632,13 +2627,13 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		egressNode1 = egressNodes[0]
 		egressNode2 = egressNodes[1]
 
-		g.By("2. Apply EgressLabel Key to two egress nodes.")
+		exutil.By("2. Apply EgressLabel Key to two egress nodes.")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel, "true")
 
-		g.By("3. Create an egressip object")
+		exutil.By("3. Create an egressip object")
 		freeIPs := findFreeIPs(oc, egressNode1, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 
@@ -2669,7 +2664,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		}
 		e2e.Logf("\n Get the egressNode that did not host egressIP address previously: %v\n", hostLeft)
 
-		g.By("4. create a namespace, apply label to the namespace")
+		exutil.By("4. create a namespace, apply label to the namespace")
 		ns1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, ns1)
 
@@ -2677,7 +2672,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		nsLabelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
 		o.Expect(nsLabelErr).NotTo(o.HaveOccurred())
 
-		g.By("5.1 Create a statefulSet Hello pod in the namespace, apply pod label to it. ")
+		exutil.By("5.1 Create a statefulSet Hello pod in the namespace, apply pod label to it. ")
 		createResourceFromFile(oc, ns1, statefulSetPodTemplate)
 		podErr := waitForPodWithLabelReady(oc, ns1, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
@@ -2690,7 +2685,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		helloPodIPv4, _ := getPodIP(oc, ns1, statefulSetPodName[0])
 		e2e.Logf("Pod's IP for the statefulSet Hello Pod is:%v", helloPodIPv4)
 
-		g.By("5.2 Create a completed pod in the namespace, apply pod label to it. ")
+		exutil.By("5.2 Create a completed pod in the namespace, apply pod label to it. ")
 		createResourceFromFile(oc, ns1, completedPodTemplate)
 		completedPodName := getPodName(oc, ns1, "job-name=countdown")
 		waitPodReady(oc, ns1, completedPodName[0])
@@ -2702,7 +2697,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		completedPodIPv4, _ := getPodIP(oc, ns1, completedPodName[0])
 		e2e.Logf("Pod's IP for the completed countdown pod is:%v", completedPodIPv4)
 
-		g.By("6. Check SNATs of stateful pod and completed pod on the egressNode before rebooting it.\n")
+		exutil.By("6. Check SNATs of stateful pod and completed pod on the egressNode before rebooting it.\n")
 		routerIDOfEgressNode1, routerErr := getRouterID(oc, nodeToBeRebooted)
 		o.Expect(routerErr).NotTo(o.HaveOccurred())
 		e2e.Logf("routerID Of node to be rebooted is:%v", routerIDOfEgressNode1)
@@ -2712,12 +2707,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		o.Expect(snatIP).Should(o.Equal(helloPodIPv4))
 		o.Expect(snatIP).ShouldNot(o.Equal(completedPodIPv4))
 
-		g.By("7. Reboot egress node.\n")
+		exutil.By("7. Reboot egress node.\n")
 		defer checkNodeStatus(oc, egressIPMaps1[0]["node"], "Ready")
 		rebootNode(oc, egressIPMaps1[0]["node"])
 		checkNodeStatus(oc, egressIPMaps1[0]["node"], "NotReady")
 
-		g.By("8. As soon as the rebooted node is in NotReady state, delete the statefulSet pod to force it be recreated while the node is rebooting.\n")
+		exutil.By("8. As soon as the rebooted node is in NotReady state, delete the statefulSet pod to force it be recreated while the node is rebooting.\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", statefulSetPodName[0], "-n", ns1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podErr = waitForPodWithLabelReady(oc, ns1, "app=hello")
@@ -2740,32 +2735,32 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		newCompletedPodIPv4, _ := getPodIP(oc, ns1, newCompletedPodName[0])
 		e2e.Logf("Pod's IP for the new completed countdown pod is:%v", newCompletedPodIPv4)
 
-		g.By("9. Check egress node in egress object again, egressIP should fail to the second egressNode.\n")
+		exutil.By("9. Check egress node in egress object again, egressIP should fail to the second egressNode.\n")
 		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
 		newEgressIPHostNode := egressIPMaps1[0]["node"]
 		e2e.Logf("new egressNode that hosts the egressIP is:%v", newEgressIPHostNode)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.Equal(hostLeft[0]))
 
-		g.By("10. Check SNAT on the second egressNode\n")
+		exutil.By("10. Check SNAT on the second egressNode\n")
 		routerIDOfEgressNode2, routerErr := getRouterID(oc, hostLeft[0])
 		o.Expect(routerErr).NotTo(o.HaveOccurred())
 		snatIP, snatErr = getSNATofEgressIP(oc, routerIDOfEgressNode2, freeIPs[0])
 		o.Expect(snatErr).NotTo(o.HaveOccurred())
 
 		e2e.Logf("After egressIP failover, the SNAT IP for the egressIP on second router is:%v", snatIP)
-		g.By("10.1 There should be the IP of the newly created statefulState hello pod, not the IP of old hello pod.\n")
+		exutil.By("10.1 There should be the IP of the newly created statefulState hello pod, not the IP of old hello pod.\n")
 		o.Expect(snatIP).Should(o.Equal(newHelloPodIPv4))
 		o.Expect(snatIP).ShouldNot(o.Equal(helloPodIPv4))
 
-		g.By("10.2 There should be no SNAT for old or new completed pod's IP.\n")
+		exutil.By("10.2 There should be no SNAT for old or new completed pod's IP.\n")
 		o.Expect(snatIP).ShouldNot(o.Equal(newEgressIPHostNode)) //there should be no SNAT for completed pod's old or new IP address
 		o.Expect(snatIP).ShouldNot(o.Equal(completedPodIPv4))    //there should be no SNAT for completed pod's old or new IP address
 
 		// Make sure the rebooted node is back to Ready state
 		checkNodeStatus(oc, egressIPMaps1[0]["node"], "Ready")
 
-		g.By("11. Check SNAT on all other unassigned nodes, it should be no stale NAT on all other unassigned nodes.\n")
+		exutil.By("11. Check SNAT on all other unassigned nodes, it should be no stale NAT on all other unassigned nodes.\n")
 		var unassignedNodes []string
 		for i := 0; i < len(nodeList.Items); i++ {
 			if nodeList.Items[i].Name != newEgressIPHostNode {
@@ -2804,7 +2799,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
-		g.By("1. Check ovnkube-config configmap in hypershift mgmt NS if egressip-node-healthcheck-port=9107 is in it \n")
+		exutil.By("1. Check ovnkube-config configmap in hypershift mgmt NS if egressip-node-healthcheck-port=9107 is in it \n")
 
 		configmapName := "ovnkube-config"
 		envString := " egressip-node-healthcheck-port=9107"
@@ -2812,7 +2807,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		cmCheckErr := checkEnvInConfigMap(oc, hyperShiftMgmtNS, configmapName, envString)
 		o.Expect(cmCheckErr).NotTo(o.HaveOccurred())
 
-		g.By("2. Check if ovnkube-master is ready on hypershift cluster \n")
+		exutil.By("2. Check if ovnkube-master is ready on hypershift cluster \n")
 		readyErr := waitForPodWithLabelReady(oc, hyperShiftMgmtNS, "app=ovnkube-master")
 		exutil.AssertWaitPollNoErr(readyErr, "ovnkube-master pods are not ready on the hypershift cluster")
 
@@ -2823,7 +2818,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		exutil.AssertWaitPollNoErr(readyErr, "ovnkube-node pods are not ready on hosted cluster")
 		ovnkubeNodePods := getPodNameOnHostedCluster(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 
-		g.By("3. Get list of scheduleable nodes on hosted cluster, pick one as egressNode, apply EgressLabel Key to it \n")
+		exutil.By("3. Get list of scheduleable nodes on hosted cluster, pick one as egressNode, apply EgressLabel Key to it \n")
 		scheduleableNodes, err := getReadySchedulableNodesOnHostedCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Pick first scheduleable node as egressNode
@@ -2833,7 +2828,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		labelValue := ""
 		exutil.AddLabelToNode(oc.AsAdmin().AsGuestKubeconf(), egressNode, egressNodeLabel, labelValue)
 
-		g.By("4. Check leader ovnkube-master pod's log that health check connection has been made to the egressNode on port 9107 \n")
+		exutil.By("4. Check leader ovnkube-master pod's log that health check connection has been made to the egressNode on port 9107 \n")
 		// get the OVNK8s managementIP for the egressNode on hosted cluster
 		nodeOVNK8sMgmtIP := getOVNK8sNodeMgmtIPv4OnHostedCluster(oc, egressNode)
 		e2e.Logf("\n\n OVNK8s managementIP of the egressNode on hosted cluster is: %s\n\n", nodeOVNK8sMgmtIP)
@@ -2843,7 +2838,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		o.Expect(LogErr).NotTo(o.HaveOccurred())
 		o.Expect(podLogs).To(o.ContainSubstring(expectedConnectString))
 
-		g.By("5. Check each ovnkube-node pod's log on hosted cluster that health check server is started on it \n")
+		exutil.By("5. Check each ovnkube-node pod's log on hosted cluster that health check server is started on it \n")
 		expectedSeverStartString := "Starting Egress IP Health Server on "
 		for _, ovnkubeNodePod := range ovnkubeNodePods {
 			podLogs, LogErr := checkLogMessageInPodOnHostedCluster(oc, "openshift-ovn-kubernetes", "ovnkube-node", ovnkubeNodePod, "'egress ip'")
@@ -2851,7 +2846,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 			o.Expect(podLogs).To(o.ContainSubstring(expectedSeverStartString))
 		}
 
-		g.By("6. Create an egressip object, verify egressIP is assigned to the egressNode")
+		exutil.By("6. Create an egressip object, verify egressIP is assigned to the egressNode")
 		freeIPs := findFreeIPs(oc.AsAdmin().AsGuestKubeconf(), egressNode, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -2868,7 +2863,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc.AsAdmin().AsGuestKubeconf(), egressip1.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 
-		g.By("7. Add iptables on to block port 9107 on egressNode, verify from log of ovnkube-master pod that the health check connection is closed.\n")
+		exutil.By("7. Add iptables on to block port 9107 on egressNode, verify from log of ovnkube-master pod that the health check connection is closed.\n")
 		delCmdOptions := []string{"iptables", "-D", "INPUT", "-p", "tcp", "--destination-port", "9107", "-j", "DROP"}
 		addCmdOptions := []string{"iptables", "-I", "INPUT", "1", "-p", "tcp", "--destination-port", "9107", "-j", "DROP"}
 		defer execCmdOnDebugNodeOfHostedCluster(oc, egressNode, delCmdOptions)
@@ -2884,10 +2879,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		o.Expect(LogErr).NotTo(o.HaveOccurred())
 		o.Expect(podLogs).To(o.ContainSubstring(expectedCouldNotConnectString))
 
-		g.By("8. Verify egressIP is not in cloudprivateipconfig after blocking iptable rule on port 9170 is added.\n")
+		exutil.By("8. Verify egressIP is not in cloudprivateipconfig after blocking iptable rule on port 9170 is added.\n")
 		waitCloudPrivateIPconfigUpdate(oc, freeIPs[0], false)
 
-		g.By("9. Delete the iptables rule, verify from log of ovnkube-master pod that the health check connection is re-established.\n")
+		exutil.By("9. Delete the iptables rule, verify from log of ovnkube-master pod that the health check connection is re-established.\n")
 		debugNodeErr = execCmdOnDebugNodeOfHostedCluster(oc, egressNode, delCmdOptions)
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
 
@@ -2895,11 +2890,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		o.Expect(LogErr).NotTo(o.HaveOccurred())
 		o.Expect(podLogs).To(o.ContainSubstring(expectedConnectString))
 
-		g.By("10. Verify egressIP is re-applied after blocking iptable rule on port 9170 is deleted.\n")
+		exutil.By("10. Verify egressIP is re-applied after blocking iptable rule on port 9170 is deleted.\n")
 		egressIPMaps := getAssignedEIPInEIPObject(oc.AsAdmin().AsGuestKubeconf(), egressip1.name)
 		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
 
-		g.By("11. Unlabel the egressNoe egressip-assignable, verify from log of ovnkube-master pod that the health check connection is closed.\n")
+		exutil.By("11. Unlabel the egressNoe egressip-assignable, verify from log of ovnkube-master pod that the health check connection is closed.\n")
 		exutil.DeleteLabelFromNode(oc.AsAdmin().AsGuestKubeconf(), egressNode, egressNodeLabel)
 
 		podLogs, LogErr = checkLogMessageInPod(oc, hyperShiftMgmtNS, "ovnkube-master", leaderOVNMasterPodName, "'"+expectedCloseConnectString+"'"+"| tail -1")
@@ -2939,24 +2934,24 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP IPv6", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
-		g.By("create new namespace")
+		exutil.By("create new namespace")
 		ns := oc.Namespace()
 
-		g.By("Label EgressIP node")
+		exutil.By("Label EgressIP node")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode1 := nodeList.Items[0].Name
 
-		g.By("Apply EgressLabel Key for this test on one node.")
+		exutil.By("Apply EgressLabel Key for this test on one node.")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
 
-		g.By("Apply label to namespace")
+		exutil.By("Apply label to namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Output()
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create an egressip object")
+		exutil.By("Create an egressip object")
 		freeIPv6s := findFreeIPv6s(oc, egressNode1, 1)
 		o.Expect(len(freeIPv6s)).Should(o.Equal(1))
 
@@ -2974,7 +2969,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP IPv6", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 
-		g.By("Create a pod ")
+		exutil.By("Create a pod ")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: oc.Namespace(),
@@ -2983,12 +2978,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP IPv6", func() {
 		pod1.createPingPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("Apply label to pod")
+		exutil.By("Apply label to pod")
 		err = exutil.LabelPod(oc, ns, pod1.name, "color=pink")
 		defer exutil.LabelPod(oc, ns, pod1.name, "color-")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Start tcpdump on node1")
+		exutil.By("Start tcpdump on node1")
 		e2e.Logf("Trying to get physical interface on the node,%s", egressNode1)
 		phyInf, nicError := getSnifPhyInf(oc, egressNode1)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
@@ -2998,7 +2993,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP IPv6", func() {
 		defer cmdTcpdump.Process.Kill()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Check source IP is EgressIP")
+		exutil.By("Check source IP is EgressIP")
 		pingCmd := fmt.Sprintf("ping -c4 %s", rduBastionHost)
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())

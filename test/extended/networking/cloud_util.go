@@ -1170,6 +1170,11 @@ func specialPlatformCheck(oc *exutil.CLI) bool {
 		if credErr != nil {
 			specialPlatform = true
 		}
+	case "azure":
+		credErr := getAzureCredentialFromCluster(oc)
+		if credErr != nil {
+			specialPlatform = true
+		}
 	default:
 		e2e.Logf("Skip this check for other platforms that do not have special STS scenario.")
 	}
