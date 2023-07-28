@@ -205,20 +205,24 @@ func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName, runtimeClass
 
 // author: abhbaner@redhat.com, vvoronko@redhat.com
 func deleteKataPod(oc *exutil.CLI, podNs, delPodName string) bool {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", delPodName, "-n", podNs).Output()
+	return deleteKataResource(oc, "pod", podNs, delPodName)
+}
+
+func deleteKataResource(oc *exutil.CLI, res, resNs, resName string) bool {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(res, resName, "-n", resNs, "--ignore-not-found").Output()
 	if err != nil {
-		e2e.Logf("issue deleting pod %v in namespace %v, output: %v/nerror: %v", delPodName, podNs, output, err)
+		e2e.Logf("issue deleting %v %v in namespace %v, output: %v/nerror: %v", res, resName, resNs, output, err)
 		return false
 	}
 
 	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
-		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", delPodName, "-n", podNs).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(res, resName, "-n", resNs).Output()
 		if err != nil {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod %v was not finally deleted in ns %v", delPodName, podNs))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v %v was not finally deleted in ns %v", res, resName, resNs))
 	return true
 }
 
@@ -458,6 +462,10 @@ func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, er
 	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Deployment has %v replicas, not %v %v", replicas, msg, err))
 	return msg, err
+}
+
+func deleteDeployment(oc *exutil.CLI, deployNs, deployName string) bool {
+	return deleteKataResource(oc, "deploy", deployNs, deployName)
 }
 
 func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, cmName string) (testrun TestrunConfigmap, msg string, err error) {
