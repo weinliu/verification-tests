@@ -64,7 +64,7 @@ function handle_filters {
   fi
   echo "try to handler filters..."
   filter_tmp=${filter_tmp:4}
-  filter_tmp="~DEPRECATED&;${filter_tmp}"
+  filter_tmp="~Flaky&;~DEPRECATED&;${filter_tmp}"
   filters=(${filter_tmp//;/ })
 
   filters_and=()
