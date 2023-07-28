@@ -1210,7 +1210,7 @@ nulla pariatur.`
 		logger.Infof("Validating that the operator pod has the right SCC")
 		logger.Debugf("Machine-config-operator pod definition:\n%s", mcoPod.PrettyString())
 		// on baremetal cluster, value of openshift.io/scc is nfs-provisioner, on AWS cluster it is hostmount-anyuid
-		o.Expect(scc).Should(o.SatisfyAny(o.Equal("hostmount-anyuid"), o.Equal("nfs-provisioner")),
+		o.Expect(scc).Should(o.SatisfyAny(o.Equal("hostmount-anyuid"), o.Equal("nfs-provisioner"), o.Equal("anyuid")),
 			`machine-config-operator pod is not using the right SCC`)
 
 		exutil.By("Validate machine-config-daemon clusterrole")
