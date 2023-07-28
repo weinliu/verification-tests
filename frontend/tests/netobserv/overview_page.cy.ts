@@ -118,6 +118,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             //select all panels
             cy.get(overviewSelectors.panelsModal).contains('Select all').click();
             cy.get(overviewSelectors.panelsModal).contains('Save').click();
+            cy.wait(5000)
             cy.checkPanelsNum(6);
 
             //check if all panels are rendered
@@ -144,7 +145,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
     })
 
     afterEach("test", function () {
-        cy.get('#reset-filters-button').should('exist').click()
+        netflowPage.resetClearFilters()
     })
 
     after("after all tests are done", function () {

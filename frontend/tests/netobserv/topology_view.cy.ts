@@ -16,13 +16,13 @@ const metricType = [
 ]
 
 function getTopologyScopeURL(scope: string): string {
-    return `**/topology?filters=*&limit=50&recordType=flowLog&reporter=destination&timeRange=300&rateInterval=30s&step=15s&type=bytes&scope=${scope}`
+    return `**/topology?filters=*&limit=50&recordType=flowLog&reporter=destination&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=${scope}`
+
 }
 
 function getTopologyResourceScopeGroupURL(groups: string): string {
-    return `**/topology?filters=*&limit=50&recordType=flowLog&reporter=destination&timeRange=300&rateInterval=30s&step=15s&type=bytes&scope=resource&groups=${groups}`
+    return `**/topology?filters=*&limit=50&recordType=flowLog&reporter=destination&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=resource&groups=${groups}`
 }
-// NETOBSERV-784 bug can fail some cases where some topoloigy tests may crash console.
 
 describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOBSERV'] }, function () {
     before('any test', function () {
@@ -305,7 +305,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
     })
 
     afterEach("test", function () {
-        cy.get('#reset-filters-button').should('exist').click()
+        netflowPage.resetClearFilters()
     })
 
     after("after all tests are done", function () {

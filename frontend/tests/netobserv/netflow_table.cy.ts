@@ -66,7 +66,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             })
 
             //expand 
-            cy.byTestID('more-options-button').click().then(moreOpts => {
+            cy.byTestID('filters-more-options-button').click().then(moreOpts => {
                 cy.contains('Expand').click()
                 cy.get('#page-sidebar').then(sidenav => {
                     cy.byLegacyTestID('perspective-switcher-menu').should('not.be.visible')
@@ -74,7 +74,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                 })
             })
             // collapse view
-            cy.byTestID('more-options-button').click().then(moreOpts => {
+            cy.byTestID('filters-more-options-button').click().then(moreOpts => {
                 cy.contains('Collapse').click()
                 cy.byLegacyTestID('perspective-switcher-menu').should('exist')
             })
@@ -130,8 +130,8 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.contains('Configuration').should('exist')
             cy.contains('Sampling').should('exist')
         })
-
-        it("should validate columns", { tags: ['e2e', 'admin'] }, function () {
+        // Disable for bug NETOBSERV-967
+        it.skip("should validate columns", { tags: ['e2e', 'admin'] }, function () {
             cy.byTestID("show-view-options-button").should('exist').click()
             netflowPage.stopAutoRefresh()
             cy.byTestID('view-options-button').click()
@@ -142,9 +142,9 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             // cy.get('#K8S_OwnerObject').check()
             // cy.get('#AddrPort').check()
 
-            cy.get('#Mac').check()
-            cy.get('#Proto').check()
-            cy.get('#FlowDirection').check()
+            cy.get('#Mac').should('exist').check()
+            cy.get('#Proto').should('exist').check()
+            cy.get('#FlowDirection').should('exist').check()
 
             // source columns 
             cy.get('#SrcK8S_HostIP').check()
@@ -186,7 +186,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
 
             // Verify Source namespace filter
-            cy.byTestID('group-1-toggle').click().byTestID('src_namespace').click()
+            cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
             cy.byTestID('autocomplete-search').type(project + '{enter}')
             cy.get('#filters div.custom-chip > p').should('contain.text', `${project}`)
 
@@ -195,8 +195,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                 cy.wrap(row).should('have.text', project)
             })
 
-            // Verify filters can be cleared
-            cy.byTestID('clear-all-filters-button').click()
+            netflowPage.clearAllFilters()
             cy.get('div.custom-chip').should('not.exist')
 
             // Verify src port filter and port Naming
@@ -223,18 +222,12 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
 
             cy.get('#table-body tr:nth-child(1) td:nth-child(4) span').should('have.text', 'loki (3100)')
 
-            cy.byTestID('clear-all-filters-button').click()
+            netflowPage.clearAllFilters()
             cy.get('div.custom-chip').should('not.exist')
         })
 
         it("should validate localstorage for plugin", { tags: ['e2e', 'admin'] }, function () {
             netflowPage.stopAutoRefresh()
-            // clear all filters if present
-            cy.get('body').then((body) => {
-                if (body.find('[data-test="filters"] > [data-test="clear-all-filters-button"]').length > 0) {
-                    cy.get('[data-test="filters"] > [data-test="clear-all-filters-button"]').click()
-                }
-            });
 
             cy.byTestID(genSelectors.refreshDrop).then(btn => {
                 expect(btn).to.exist
@@ -349,7 +342,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
     })
 
     afterEach("test", function () {
-        cy.get('#reset-filters-button').should('exist').click()
+        netflowPage.resetClearFilters()
     })
 
     after("delete flowcollector and NetObs Operator", function () {

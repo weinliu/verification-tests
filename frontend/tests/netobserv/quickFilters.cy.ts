@@ -90,7 +90,7 @@ describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, fu
     })
 
     afterEach("test", function () {
-        cy.get('#reset-filters-button').should('exist').click()
+        netflowPage.resetClearFilters()
     })
 
     after("all tests", function () {

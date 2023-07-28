@@ -6,7 +6,7 @@ export const netflowPage = {
         // wait for all calls to complete before checking due to bug
         cy.wait('@call1', { timeout: 60000 }).wait('@call1')
 
-        cy.get('[data-test="filters"] > [data-test="clear-all-filters-button"]').should('exist').click()
+        netflowPage.clearAllFilters()
 
         // set the page to auto refresh
         cy.byTestID(genSelectors.refreshDrop).then(btn => {
@@ -29,6 +29,16 @@ export const netflowPage = {
             cy.wrap(btn).click().then(drop => {
                 cy.get('[data-test="OFF_KEY"]').should('exist').click()
             })
+        })
+    },
+    resetClearFilters: () => {
+        cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
+            cy.contains("Reset defaults").should('exist').click()
+        })
+    },
+    clearAllFilters: () => {
+        cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
+            cy.contains("Clear all").should('exist').click()
         })
     }
 }
@@ -131,13 +141,13 @@ export namespace histogramSelectors {
 
 Cypress.Commands.add('showAdvancedOptions', () => {
     cy.get('#show-view-options-button')
-      .then(function ($button) {
-        if ($button.text() === 'Hide advanced options') {
-          return;
-        } else {
-          cy.get('#show-view-options-button').click();
-        }
-      })
+        .then(function ($button) {
+            if ($button.text() === 'Hide advanced options') {
+                return;
+            } else {
+                cy.get('#show-view-options-button').click();
+            }
+        })
 });
 
 Cypress.Commands.add('checkPanelsNum', (panels = 4) => {
@@ -162,14 +172,14 @@ Cypress.Commands.add('openPanelsModal', () => {
 Cypress.Commands.add('checkPopupItems', (id, names) => {
     for (let i = 0; i < names.length; i++) {
         cy.get(id).contains(names[i])
-          .closest('.pf-c-data-list__item-row').find('.pf-c-data-list__check');
-      }
+            .closest('.pf-c-data-list__item-row').find('.pf-c-data-list__check');
+    }
 });
 
 Cypress.Commands.add('selectPopupItems', (id, names) => {
     for (let i = 0; i < names.length; i++) {
-      cy.get(id).contains(names[i])
-        .closest('.pf-c-data-list__item-row').find('.pf-c-data-list__check').click();
+        cy.get(id).contains(names[i])
+            .closest('.pf-c-data-list__item-row').find('.pf-c-data-list__check').click();
     }
 });
 
@@ -193,13 +203,13 @@ Cypress.Commands.add('checkQuerySummary', (metric) => {
 declare global {
     namespace Cypress {
         interface Chainable {
-        showAdvancedOptions(): Chainable<Element>
-        checkPanelsNum(panels?: number): Chainable<Element>
-        checkPanel(panelName : string[]): Chainable<Element>
-        openPanelsModal(): Chainable<Element>
-        selectPopupItems(id: string, names: string[]): Chainable<Element>
-        checkPopupItems(id: string, names: string[]): Chainable<Element>
-        checkQuerySummary(metric: JQuery<HTMLElement>): Chainable<Element>
-      }
+            showAdvancedOptions(): Chainable<Element>
+            checkPanelsNum(panels?: number): Chainable<Element>
+            checkPanel(panelName: string[]): Chainable<Element>
+            openPanelsModal(): Chainable<Element>
+            selectPopupItems(id: string, names: string[]): Chainable<Element>
+            checkPopupItems(id: string, names: string[]): Chainable<Element>
+            checkQuerySummary(metric: JQuery<HTMLElement>): Chainable<Element>
+        }
     }
 }
