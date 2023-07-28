@@ -1441,6 +1441,27 @@ func createCRClusterresourceoverride(oc *exutil.CLI) {
 
 }
 
+//this function is to test config changes to Cluster Resource Override Webhook
+
+func testCRClusterresourceoverride(oc *exutil.CLI) {
+
+	patch := `[{"op": "replace", "path": "/spec/podResourceOverride/spec/cpuRequestToLimitPercent", "value":40},{"op": "replace", "path": "/spec/podResourceOverride/spec/limitCPUToMemoryPercent", "value":90},{"op": "replace", "path": "/spec/podResourceOverride/spec/memoryRequestToLimitPercent", "value":50}]`
+
+	test, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterresourceoverride.operator.autoscaling.openshift.io", "cluster", "--type=json", "-p", patch).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("\n Parameters edited %v", test)
+	o.Expect(strings.Contains(test, "clusterresourceoverride.operator.autoscaling.openshift.io/cluster patched")).To(o.BeTrue())
+
+	cpuRequestToLimitPercent, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterResourceOverride", "cluster", "-o=jsonpath={.spec.podResourceOverride.spec.cpuRequestToLimitPercent}").Output()
+	limitCPUToMemoryPercent, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterResourceOverride", "cluster", "-o=jsonpath={.spec.podResourceOverride.spec.limitCPUToMemoryPercent}").Output()
+	memoryRequestToLimitPercent, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterResourceOverride", "cluster", "-o=jsonpath={.spec.podResourceOverride.spec.memoryRequestToLimitPercent}").Output()
+	if cpuRequestToLimitPercent == "40" && limitCPUToMemoryPercent == "90" && memoryRequestToLimitPercent == "50" {
+		e2e.Logf("Successfully updated the file")
+	} else {
+		e2e.Failf("Cluster resource overrides not updated successfully")
+	}
+}
+
 func checkICSP(oc *exutil.CLI) bool {
 	icsp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

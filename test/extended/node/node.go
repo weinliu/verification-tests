@@ -999,7 +999,32 @@ var _ = g.Describe("[sig-node] NODE Install and verify Cluster Resource Override
 
 		})
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("can not get cluster with output %v, the error is %v", croCR, err))
-		g.By("Operator is installed successfully")
+		e2e.Logf("Operator is installed successfully")
+	})
+
+	g.It("Author:asahay-Medium-27075-Testing the config changes. [Serial]", func() {
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterResourceOverride", "cluster").Execute()
+		createCRClusterresourceoverride(oc)
+		var err error
+		var croCR string
+		errCheck := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			croCR, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterResourceOverride", "cluster", "-n", "clusterresourceoverride-operator").Output()
+			if err != nil {
+				e2e.Logf("error  %v, please try next round", err)
+				return false, nil
+			}
+			if !strings.Contains(croCR, "cluster") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("can not get cluster with output %v, the error is %v", croCR, err))
+		e2e.Logf("Operator is installed successfully")
+
+		g.By("Testing the changes\n")
+		testCRClusterresourceoverride(oc)
+
 	})
 
 })
