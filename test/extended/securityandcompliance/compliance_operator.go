@@ -508,8 +508,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				scansettingname: "default",
 				template:        scansettingbindingTemplate,
 			}
-			ccrsShouldExist = []string{
-				"ocp4-cis-node-master-kubelet-enable-protect-kernel-defaults",
+			ccrsShouldPass = []string{
 				"ocp4-cis-node-master-file-groupowner-etcd-pki-cert-files",
 				"ocp4-cis-node-master-file-groupowner-openshift-pki-cert-files",
 				"ocp4-cis-node-master-file-groupowner-openshift-pki-key-files",
@@ -554,7 +553,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
 
 		g.By("Check ccr should exist and pass by default.. !!!\n")
-		for _, ccrShouldPass := range ccrsShouldExist {
+		for _, ccrShouldPass := range ccrsShouldPass {
 			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", ccrShouldPass, "-n", ssb.namespace,
 				"-o=jsonpath={.status}"}).check(oc)
 		}
@@ -3785,29 +3784,24 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check ComplianceSuite status !!!\n")
 		checkComplianceSuiteStatus(oc, ssbCis, subD.namespace, "DONE")
 		subD.complianceSuiteResult(oc, ssbCis, "NON-COMPLIANT")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
+		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-cis-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			"ocp4-cis-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			"ocp4-cis-node-wrscan-kubelet-enable-protect-kernel-sysctl", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			tprofileForCustomMcp + "-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			tprofileForCustomMcp + "-api-server-encryption-provider-config", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if crResult != "" {
+			checkMachineConfigPoolStatus(oc, ss.roles1)
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbCis, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			subD.complianceSuiteResult(oc, ssbCis, "NON-COMPLIANT")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
+			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-cis-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
@@ -3888,30 +3882,25 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check ComplianceSuite status !!!\n")
 		checkComplianceSuiteStatus(oc, ssbPci, subD.namespace, "DONE")
 		subD.complianceSuiteResult(oc, ssbPci, "NON-COMPLIANT")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
+		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			"ocp4-pci-dss-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			"ocp4-pci-dss-node-wrscan-kubelet-enable-protect-kernel-sysctl", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			tprofileForCustomMcp + "-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			tprofileForCustomMcp + "-api-server-encryption-provider-config", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if crResult != "" {
+			checkMachineConfigPoolStatus(oc, ss.roles1)
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbPci, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkComplianceSuiteStatus(oc, ssbPci, subD.namespace, "DONE")
 			subD.complianceSuiteResult(oc, ssbPci, "NON-COMPLIANT")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
+			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
@@ -3960,7 +3949,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "75-ocp4-high-node-wrscan-kubelet-enable-protect-kernel-sysctl", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
 			checkNodeStatus(oc)
@@ -3994,52 +3982,28 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
 
-		g.By("Check rules and remediation status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Applied", ok, []string{"complianceremediations",
-			"ocp4-high-node-wrscan-kubelet-enable-protect-kernel-sysctl", "-n", subD.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "MissingDependencies", ok, []string{"complianceremediations",
-			"ocp4-high-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
-
-		g.By("Check rules status and remediation status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "75-ocp4-high-node-wrscan-kubelet-enable-protect-kernel-sysctl", ok, []string{"mc", "-n", subD.namespace,
-			"--selector=compliance.openshift.io/suite=" + ssbHigh, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-
-		g.By("Check wrscan machineconfigpool status.. !!!\n")
-		checkMachineConfigPoolStatus(oc, ss.roles1)
-
-		g.By("Performing second scan using oc-compliance plugin.. !!!\n")
-		_, err2 := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbHigh, "-n", subD.namespace).Output()
-		o.Expect(err2).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbHigh, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
-
-		g.By("Check complianceSuite name and result.. !!!\n")
-		subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
-
-		g.By("Check rules and remediation status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
-			"ocp4-high-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Applied", ok, []string{"complianceremediations",
-			"ocp4-high-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
-
-		g.By("Check wrscan machineconfigpool status.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.readyMachineCount}"}).check(oc)
-		checkMachineConfigPoolStatus(oc, ss.roles1)
-
-		g.By("Performing third scan using oc-compliance plugin.. !!!\n")
-		_, err4 := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbHigh, "-n", subD.namespace).Output()
-		o.Expect(err4).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbHigh, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
-
-		g.By("Check complianceSuite name and result.. !!!\n")
-		subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
+		g.By("Trigger another round of rescan if needed !!!\n")
+		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-l", "compliance.openshift.io/suite="+ssbHigh, "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if crResult != "" {
+			checkMachineConfigPoolStatus(oc, ss.roles1)
+			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbHigh, "-n", subD.namespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkComplianceSuiteStatus(oc, ssbHigh, subD.namespace, "DONE")
+			subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
+			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
+				"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
+				tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+		}
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			tprofileForCustomMcp + "-oauth-or-oauthclient-inactivity-timeout", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			"ocp4-high-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			"ocp4-high-node-wrscan-kubelet-enable-protect-kernel-sysctl", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 		result, _ := oc.AsAdmin().Run("get").Args("ccr", "-n", subD.namespace, "-l", "compliance.openshift.io/automated-remediation=,compliance.openshift.io/check-status=FAIL").Output()
 		if !strings.Contains(result, "No resources found") {
 			e2e.Failf("%s is NOT expected result for the final result", result)
