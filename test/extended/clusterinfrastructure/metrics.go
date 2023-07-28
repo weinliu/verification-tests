@@ -134,4 +134,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Check metrics mapi_instance_create_failed is shown")
 		checkMetricsShown(oc, "mapi_instance_create_failed", machineName)
 	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-25615-Medium-37264-Machine metrics should be collected [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "ibmcloud", "alibabacloud", "nutanix", "openstack")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-25615-37264"
+		ms := exutil.MachineSetDescription{machinesetName, 1}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Check metrics mapi_machine_created_timestamp_seconds is shown")
+		checkMetricsShown(oc, "mapi_machine_created_timestamp_seconds")
+
+		g.By("Check metrics mapi_machine_phase_transition_seconds_sum is shown")
+		checkMetricsShown(oc, "mapi_machine_phase_transition_seconds_sum")
+	})
 })
