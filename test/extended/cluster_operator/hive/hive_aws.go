@@ -770,8 +770,8 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "42661"|./bin/extended-platform-tests run --timeout 15m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Medium-42661-[aws]Simulate hibernation for fake clusters [Serial]", func() {
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "42661"|./bin/extended-platform-tests run --timeout 25m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Medium-42661-Low-39179-[aws]Simulate hibernation for fake clusters [Serial]", func() {
 		testCaseID := "42661"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -896,6 +896,14 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", `--patch={"spec":{"powerState": "Running"}}`).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, HibernateAfterTimer, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.powerState}"}).check(oc)
+
+		exutil.By("OCP-39179: Autogenerate Cluster ID in hive for fake cluster instead of fixed value fake-cluster-id")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "fake-cluster-id", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.clusterMetadata.clusterID}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "fake-cluster-", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.clusterMetadata.clusterID}"}).check(oc)
+
+		ClusterprovisionName := getClusterprovisionName(oc, cdName, oc.Namespace())
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "fake-cluster-id", nok, DefaultTimeout, []string{"ClusterProvision", ClusterprovisionName, "-n", oc.Namespace(), "-o=jsonpath={.spec.clusterID}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "fake-cluster-", ok, DefaultTimeout, []string{"ClusterProvision", ClusterprovisionName, "-n", oc.Namespace(), "-o=jsonpath={.spec.clusterID}"}).check(oc)
 	})
 
 	//author: sguo@redhat.com
