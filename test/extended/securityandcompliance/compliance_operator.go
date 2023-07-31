@@ -3153,7 +3153,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-41153-There are OpenSCAP checks created to verify that the cluster is compliant  for the section 5 of the Kubernetes CIS profile [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-41153-There are OpenSCAP checks created to verify that the cluster is compliant  for the section 5 of the Kubernetes CIS profile [Serial]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "cis-test" + getRandomString(),
 			namespace:       "",
@@ -3181,8 +3181,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"ocp4-cis-accounts-unique-service-account", "ocp4-cis-accounts-restrict-service-account-tokens", "ocp4-cis-scc-limit-privileged-containers", "ocp4-cis-scc-limit-process-id-namespace",
 			"ocp4-cis-scc-limit-ipc-namespace", "ocp4-cis-scc-limit-network-namespace", "ocp4-cis-scc-limit-privilege-escalation", "ocp4-cis-scc-limit-root-containers",
 			"ocp4-cis-scc-limit-net-raw-capability", "ocp4-cis-scc-limit-container-allowed-capabilities", "ocp4-cis-scc-drop-container-capabilities", "ocp4-cis-configure-network-policies",
-			"ocp4-cis-configure-network-policies-namespaces", "ocp4-cis-secrets-no-environment-variables", "ocp4-cis-secrets-consider-external-storage", "ocp4-cis-general-configure-imagepolicywebhook",
-			"ocp4-cis-general-namespaces-in-use", "ocp4-cis-general-default-seccomp-profile", "ocp4-cis-general-apply-scc", "ocp4-cis-general-default-namespace-use"}
+			"ocp4-cis-configure-network-policies-namespaces", "ocp4-cis-secrets-no-environment-variables", "ocp4-cis-secrets-consider-external-storage", "ocp4-cis-ocp-allowed-registries",
+			"ocp4-cis-ocp-allowed-registries-for-import", "ocp4-cis-ocp-insecure-registries", "ocp4-cis-ocp-insecure-allowed-registries-for-import", "ocp4-cis-general-namespaces-in-use",
+			"ocp4-cis-general-default-seccomp-profile", "ocp4-cis-general-apply-scc", "ocp4-cis-general-default-namespace-use"}
 		checkRulesExistInComplianceCheckResult(oc, cisRlueList, subD.namespace)
 
 		g.By("ocp-41153 There are OpenSCAP checks created to verify that the cluster is compliant for the section 5 of the Kubernetes CIS profile... !!!!\n ")
@@ -3754,6 +3755,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbCis, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
 			checkNodeStatus(oc)
@@ -3852,6 +3855,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbPci, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
 			checkNodeStatus(oc)
@@ -3992,7 +3997,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			checkComplianceSuiteStatus(oc, ssbHigh, subD.namespace, "DONE")
 			subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-				"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+				"ocp4-high-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		}

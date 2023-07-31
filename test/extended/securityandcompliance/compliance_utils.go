@@ -810,10 +810,12 @@ func getNonControlNamespaces(oc *exutil.CLI, status string) []string {
 }
 
 func checkRulesExistInComplianceCheckResult(oc *exutil.CLI, cisRlueList []string, namespace string) {
+	ccr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, v := range cisRlueList {
-		e2e.Logf("the rule: %v", v)
-		newCheck("expect", asAdmin, withoutNamespace, contain, v, ok, []string{"compliancecheckresult", "-n", namespace,
-			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		if !strings.Contains(ccr, v) {
+			e2e.Failf("The ccr list %s doesn't contains the rule %v", ccr, v)
+		}
 	}
 }
 
