@@ -72,30 +72,70 @@ func getSAToken(oc *exutil.CLI) string {
 
 // Check the alert raised (pending or firing)
 func checkAlertRaised(oc *exutil.CLI, alertName string) {
+	o.Eventually(func() bool {
+		return isSpecifiedAlertRaised(oc, alertName)
+	}, 720*time.Second, 30*time.Second).Should(o.BeTrue())
+}
+
+// function to check the alert node name
+func checkAlertNodeNameMatchDesc(oc *exutil.CLI, alertName string, nodeName string) bool {
+	alertData := getAlertContent(oc, alertName)
+	description := gjson.Get(alertData, "annotations.description").String()
+	nodeNameAlert := strings.SplitAfter(description, "spec.nodeName=")
+	nodeNameAlert = strings.Split(nodeNameAlert[1], " --all-namespaces")
+	if nodeNameAlert[0] == nodeName {
+		e2e.Logf("Node name for alert %v is %v", alertName, nodeName)
+		return true
+	}
+	return false
+}
+
+// function to get the alert content for specified alert
+func getAlertContent(oc *exutil.CLI, alertName string) string {
+	checkAlertRaised(oc, alertName)
+
+	var alertData string
 	token := getSAToken(oc)
 	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", prometheusK8s, "-n", prometheusNamespace, "-o=jsonpath={.spec.host}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\")'", token, url, alertName)
-	//alertAnnoCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\").annotations'", token, url, alertName)
-	//alertStateCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\").state'", token, url, alertName)
-	err = wait.Poll(30*time.Second, 720*time.Second, func() (bool, error) {
-		result, err := exec.Command("bash", "-c", alertCMD).Output()
-		if err != nil {
-			e2e.Logf("Error retrieving prometheus alert: %v, retry ...", err)
-			return false, nil
+	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts", token, url)
+	result, err := exec.Command("bash", "-c", alertCMD).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	alertNamesList := gjson.Get(string(result), "data.alerts.#.labels.alertname").String()
+	alertNamesList = strings.ReplaceAll(alertNamesList, "[", "")
+	alertNamesList = strings.ReplaceAll(alertNamesList, "]", "")
+	alertNamesList = strings.ReplaceAll(alertNamesList, "\"", "")
+	for i, value := range strings.Split(alertNamesList, ",") {
+		if value == alertName {
+			alertData = gjson.Get(string(result), "data.alerts."+strconv.Itoa(i)).String()
+			break
 		}
-		if len(string(result)) == 0 {
-			e2e.Logf("Prometheus alert is nil, retry ...")
-			return false, nil
-		}
-		if !strings.Contains(string(result), "firing") && !strings.Contains(string(result), "pending") {
-			e2e.Logf(string(result))
-			return false, fmt.Errorf("alert state is not firing or pending")
-		}
+	}
+	return alertData
+}
+
+// Check the alert is not there (pending or firing) for about 720sec
+func checkSpecifiedAlertNotRaisedConsistently(oc *exutil.CLI, alertName string) {
+	o.Consistently(func() bool {
+		return isSpecifiedAlertRaised(oc, alertName)
+	}, 720*time.Second, 30*time.Second).ShouldNot(o.BeTrue(), "alert state is firing or pending")
+}
+
+// Check the alert is there (pending or firing)
+func isSpecifiedAlertRaised(oc *exutil.CLI, alertName string) bool {
+	token := getSAToken(oc)
+	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", prometheusK8s, "-n", prometheusNamespace, "-o=jsonpath={.spec.host}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts", token, url)
+	result, err := exec.Command("bash", "-c", alertCMD).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Error retrieving prometheus alert: %s", alertName))
+	if strings.Contains(gjson.Get(string(result), "data.alerts.#.labels.alertname").String(), alertName) {
 		e2e.Logf("Alert %s found with the status firing or pending", alertName)
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, "alert state is not firing or pending")
+		return true
+	}
+	e2e.Logf("Alert %s is not found with the status firing or pending", alertName)
+	return false
 }
 
 // Get metric with metric name
