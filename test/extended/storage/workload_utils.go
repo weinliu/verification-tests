@@ -188,6 +188,38 @@ func (po *pod) createWithMultiPVCAndNodeSelector(oc *exutil.CLI, pvclist []persi
 	o.Expect(applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)).Should(o.ContainSubstring("created"))
 }
 
+// Create new Pod with InlineVolume
+func (po *pod) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume) {
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
+	}
+	var (
+		extraParameters map[string]interface{}
+		jsonPath        = `items.0.spec.volumes.0.`
+	)
+	switch inVol.Kind {
+	case "genericEphemeralVolume", "csiEphemeralVolume":
+		extraParameters = map[string]interface{}{
+			"jsonPath":  jsonPath,
+			"ephemeral": inVol.VolumeDefinition,
+		}
+	case "emptyDir":
+		extraParameters = map[string]interface{}{
+			"emptyDir": map[string]string{},
+		}
+	case "csiSharedresourceInlineVolume":
+		extraParameters = map[string]interface{}{
+			"csi": inVol.VolumeDefinition,
+		}
+	default:
+		extraParameters = map[string]interface{}{
+			inVol.Kind: map[string]string{},
+		}
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
 // Create new pod with extra parameters
 func (po *pod) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
 	if po.namespace == "" {

@@ -1352,6 +1352,55 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("Check the data exist in cloned block volume")
 		podClone.checkDataInRawBlockVolume(oc)
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-64231-[MicroShift] Pod creation with generic ephemeral volume
+	g.It("MicroShiftOnly-Author:rdeore-Critical-64231-[MicroShift] Pod creation with generic ephemeral volume", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID           = "64231"
+			e2eTestNamespace = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			podTemplate      = filepath.Join(storageMicroshiftBaseDir, "pod-with-inline-volume-template.yaml")
+		)
+
+		exutil.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		exutil.By("#. Define storage resources")
+		presetStorageClass := newStorageClass(setStorageClassName("topolvm-provisioner"), setStorageClassProvisioner(topolvmProvisioner))
+		pod := newPod(setPodTemplate(podTemplate), setPodNamespace(e2eTestNamespace))
+		inlineVolume := InlineVolume{
+			Kind:             "genericEphemeralVolume",
+			VolumeDefinition: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(pod.name), setGenericEphemeralVolumeStorageClassName(presetStorageClass.name), setGenericEphemeralVolume("1Gi")),
+		}
+
+		exutil.By("#. Create Pod with generic epehemral volume and wait for the pod ready")
+		pod.createWithInlineVolume(oc, inlineVolume)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		exutil.By("#. Check generic ephemeral pvc and pv are created successfully")
+		pvcName, err := oc.WithoutNamespace().Run("get").Args("-n", pod.namespace, "pvc", "-l", "workloadName="+pod.name, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		//Check generic ephemeral volume naming rule: https://kubernetes.io/docs/concepts/storage/ephemeral-volumes/#persistentvolumeclaim-naming
+		o.Expect(pvcName).Should(o.Equal(pod.name + "-inline-volume"))
+		pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, pod.namespace, pvcName)
+
+		exutil.By("#. Check the generic ephemeral volume pvc's ownerReferences")
+		podOwnerReference, err := oc.WithoutNamespace().Run("get").Args("-n", pod.namespace, "pvc", pvcName, "-o=jsonpath={.metadata.ownerReferences[?(@.kind==\"Pod\")].name}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(podOwnerReference).Should(o.Equal(pod.name))
+
+		exutil.By("#. Check read/write file to ephemeral volume and have execution rights")
+		pod.checkMountedVolumeCouldRW(oc)
+		pod.checkMountedVolumeHaveExecRight(oc)
+
+		exutil.By("#. Delete Pod and check ephemeral pvc and pv are also deleted successfully")
+		pod.deleteAsAdmin(oc)
+		checkResourcesNotExist(oc, "pvc", pvcName, pod.namespace)
+		checkResourcesNotExist(oc, "pv", pvName, "")
+	})
 })
 
 // Delete the logicalVolume created by lvms/topoLVM provisioner
