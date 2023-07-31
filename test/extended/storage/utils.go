@@ -32,10 +32,11 @@ var cloudProvider, provisioner string
 
 // Define test waiting time const
 const (
-	defaultMaxWaitingTime = 300 * time.Second
-	defaultIterationTimes = 20
-	longerMaxWaitingTime  = 15 * time.Minute
-	longestMaxWaitingTime = 1 * time.Hour
+	defaultMaxWaitingTime    = 300 * time.Second
+	defaultIterationTimes    = 20
+	longerMaxWaitingTime     = 15 * time.Minute
+	moreLongerMaxWaitingTime = 30 * time.Minute
+	longestMaxWaitingTime    = 1 * time.Hour
 )
 
 // Kubeadmin user use oc client apply yaml template

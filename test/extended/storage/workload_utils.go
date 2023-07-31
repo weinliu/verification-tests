@@ -100,9 +100,6 @@ func setPodMountPath(mountPath string) podOption {
 // Create a new customized pod object
 func newPod(opts ...podOption) pod {
 	defaultMaxWaitReadyTime := defaultMaxWaitingTime
-	if provisioner == "filestore.csi.storage.gke.io" {
-		defaultMaxWaitReadyTime = longerMaxWaitingTime
-	}
 	defaultPod := pod{
 		name:             "mypod-" + getRandomString(),
 		template:         "pod-template.yaml",
@@ -408,6 +405,14 @@ func (po *pod) checkFsgroup(oc *exutil.CLI, command string, expect string) {
 func (po *pod) longerTime() *pod {
 	newPod := *po
 	newPod.maxWaitReadyTime = longerMaxWaitingTime
+	return &newPod
+}
+
+// longerTime changes po.maxWaitReadyTime to specifiedDuring max wait time
+// Used for some Longduration test
+func (po *pod) specifiedLongerTime(specifiedDuring time.Duration) *pod {
+	newPod := *po
+	newPod.maxWaitReadyTime = specifiedDuring
 	return &newPod
 }
 
@@ -735,9 +740,6 @@ func setDeploymentMaxWaitReadyTime(maxWaitReadyTime time.Duration) deployOption 
 // Create a new customized Deployment object
 func newDeployment(opts ...deployOption) deployment {
 	defaultMaxWaitReadyTime := defaultMaxWaitingTime
-	if provisioner == "filestore.csi.storage.gke.io" {
-		defaultMaxWaitReadyTime = longerMaxWaitingTime
-	}
 	defaultDeployment := deployment{
 		name:             "my-dep-" + getRandomString(),
 		template:         "dep-template.yaml",
@@ -976,6 +978,14 @@ func (dep *deployment) longerTime() *deployment {
 	return &newDep
 }
 
+// longerTime changes dep.maxWaitReadyTime to specifiedDuring max wait time
+// Used for some Longduration test
+func (dep *deployment) specifiedLongerTime(specifiedDuring time.Duration) *deployment {
+	newDep := *dep
+	newDep.maxWaitReadyTime = specifiedDuring
+	return &newDep
+}
+
 // Waiting the deployment become ready
 func (dep *deployment) waitReady(oc *exutil.CLI) {
 	err := wait.Poll(dep.maxWaitReadyTime/defaultIterationTimes, dep.maxWaitReadyTime, func() (bool, error) {
@@ -991,7 +1001,7 @@ func (dep *deployment) waitReady(oc *exutil.CLI) {
 	})
 
 	if err != nil {
-		podsNames := dep.getPodList(oc)
+		podsNames := dep.getPodListWithoutFilterStatus(oc)
 		if len(podsNames) > 0 {
 			for _, podName := range podsNames {
 				e2e.Logf("$ oc describe pod %s:\n%s", podName, describePod(oc, dep.namespace, podName))

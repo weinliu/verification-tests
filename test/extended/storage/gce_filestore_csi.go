@@ -91,7 +91,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("# Create deployment with the created pvc and wait ready")
 		dep.create(oc)
 		defer dep.delete(oc)
-		dep.longerTime().waitReady(oc)
+
+		// TODO: enterprise type filestore volume need almost 15-20 min to be provisioned, try to find the official doc about the max provision time later
+		dep.specifiedLongerTime(moreLongerMaxWaitingTime).waitReady(oc)
 
 		exutil.By("# Check the deployment's pod mounted volume can be read and write")
 		dep.checkPodMountedVolumeCouldRW(oc)
@@ -147,8 +149,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("# Create deployment with the created pvc and wait ready")
 			dep.create(oc)
 			defer dep.delete(oc)
-			dep.longerTime().waitReady(oc)
-
+			// TODO: enterprise type filestore volume need almost 15-20 min to be provisioned, try to find the official doc about the max provision time later
+			if volumeType == "enterprise" {
+				dep.specifiedLongerTime(moreLongerMaxWaitingTime).waitReady(oc)
+			} else {
+				dep.longerTime().waitReady(oc)
+			}
 			exutil.By("# Check the deployment's pod mounted volume can be read and write")
 			dep.checkPodMountedVolumeCouldRW(oc)
 
