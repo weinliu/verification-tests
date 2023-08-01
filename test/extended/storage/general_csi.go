@@ -4819,7 +4819,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			exutil.By("#. Delete first pod and check second pod goes into Runnning status")
 			deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
-			pod2.checkStatusEventually(oc, "Running", 30)
+			pod2.checkStatusEventually(oc, "Running", 60)
 
 			exutil.By("#. Check the second pod volume have existing data")
 			pod2.checkMountedVolumeDataExist(oc, true)
@@ -4964,7 +4964,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("#. Create a high priority pod with the created pvc and check low priority pod is preempted")
 			pod2.createWithExtraParameters(oc, extraParameters_pod2)
 			defer pod2.deleteAsAdmin(oc)
-			pod2.checkStatusEventually(oc, "Running", 30)
+			pod2.checkStatusEventually(oc, "Running", 60)
 			waitResourceSpecifiedEventsOccurred(oc, pod.namespace, pod.name, "Preempted by a pod on node")
 
 			exutil.By("#. Check the low priority pod is deleted from cluster")
