@@ -4767,4 +4767,154 @@ spec:
 		exutil.By("check the claim status on timeline")
 		o.Consistently(checkClaimStatus).WithTimeout(time.Duration(maximumLifetimeMinute+1) * time.Minute).WithPolling(time.Duration(lifetimeMinuteInitials[0]) * time.Minute).Should(o.BeTrue())
 	})
+
+	//author: kcui@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "34148"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-Medium-34148-[AWS]Hive supports spot instances in machine pools[Serial]", func() {
+		testCaseID := "34148"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		exutil.By("Config cd1 Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		exutil.By("Config ClusterDeployment...")
+		clusterImageSetName := cdName + "-imageset"
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName,
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 1,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		exutil.By("Check Aws ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		e2e.Logf("Create tmp directory")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		defer os.RemoveAll(tmpDir)
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create spots instances")
+		replicasCount := 2
+		machinepoolName := cdName + "-spot"
+		spotMachinepoolYaml := `
+apiVersion: hive.openshift.io/v1
+kind: MachinePool
+metadata:
+  name: ` + machinepoolName + `
+  namespace: ` + oc.Namespace() + `
+spec:
+  clusterDeploymentRef:
+    name: ` + cdName + `
+  name: spot
+  platform:
+    aws:
+      rootVolume:
+        iops: 100
+        size: 22
+        type: gp2
+      type: m4.xlarge
+      spotMarketOptions: {}
+  replicas: ` + strconv.Itoa(replicasCount)
+		var filename = tmpDir + "/" + testCaseID + "-machinepool-spot.yaml"
+		err = os.WriteFile(filename, []byte(spotMachinepoolYaml), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), machinepoolName})
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Login to target cluster, check macheine & machineset are created on openshift-machine-api namespace.")
+		e2e.Logf("Extracting kubeconfig ...")
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+
+		e2e.Logf("Checking the spotMachine number equals to replicas number: %v", replicasCount)
+		var instanceIds []string
+		checkSpotMachineCount := func() bool {
+			instanceIds = getMachinePoolInstancesIds(oc, "spot", kubeconfig)
+			e2e.Logf("spotMachineCount: %v", len(instanceIds))
+			return len(instanceIds) == replicasCount
+		}
+		o.Eventually(checkSpotMachineCount).WithTimeout(5 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+		e2e.Logf("SpotMachine Instance IDs have been found")
+
+		e2e.Logf("Checking the spotMachineset ready number equals to replicas number: %v", replicasCount)
+		checkSpotMachinesetReadyCount := func() bool {
+			SpotMachinesetReadyCount := 0
+			stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfig, "machineset", "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.name}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, spotMachinesetName := range strings.Split(stdout, " ") {
+				if strings.Contains(spotMachinesetName, "spot-") {
+					stdout, _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfig, "machineset", spotMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.status.replicas}").Outputs()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					tmpNumber, err := strconv.Atoi(stdout)
+					o.Expect(err).NotTo(o.HaveOccurred())
+					SpotMachinesetReadyCount += tmpNumber
+				}
+			}
+			e2e.Logf("spotMachinesetReadyCount: %v", SpotMachinesetReadyCount)
+			return SpotMachinesetReadyCount == replicasCount
+		}
+		o.Eventually(checkSpotMachinesetReadyCount).WithTimeout(5 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		exutil.By("login to aws console, check there will add 2 Spot Requests in ec2 \"Spot Requests\" list")
+		// Get AWS client
+		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		ec2Client := ec2.NewFromConfig(cfg)
+
+		waitUntilSpotInstanceRequestsCreated := func() bool {
+			var describeSpotInstanceRequestsOutput *ec2.DescribeSpotInstanceRequestsOutput
+			describeSpotInstanceRequestsOutput, err = ec2Client.DescribeSpotInstanceRequests(context.Background(), &ec2.DescribeSpotInstanceRequestsInput{
+				Filters: []types.Filter{
+					{
+						Name:   aws.String("instance-id"),
+						Values: instanceIds,
+					},
+				},
+			})
+			return err == nil && len(describeSpotInstanceRequestsOutput.SpotInstanceRequests) == 2
+		}
+		o.Eventually(waitUntilSpotInstanceRequestsCreated).WithTimeout(5 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		exutil.By("Delete the machinepool")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("machinepool", machinepoolName, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Checking the spotMachines disappear")
+		checkSpotMachineCount = func() bool {
+			stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfig, "machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.name}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return strings.Count(stdout, "-spot-") == 0
+		}
+		o.Eventually(checkSpotMachineCount).WithTimeout(5 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		exutil.By("Checking the spotMachineset ready number is 0")
+		checkSpotMachinesetReadyCount = func() bool {
+			stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfig, "machineset", "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.name}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return strings.Count(stdout, "-spot-") == 0
+		}
+		o.Eventually(checkSpotMachinesetReadyCount).WithTimeout(5 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+	})
+
 })
