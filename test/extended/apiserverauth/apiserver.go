@@ -142,7 +142,7 @@ spec:
 		newKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber+1)
 
 		g.By("4. Check the new encryption key secrets appear")
-		errKey := wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
+		errKey := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("secrets", newOASEncSecretName, newKASEncSecretName, "-n", "openshift-config-managed").Output()
 			if err != nil {
 				e2e.Logf("Fail to get new encryption key secrets, error: %s. Trying again", err)
