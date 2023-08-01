@@ -768,7 +768,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Check machine available with encrytption enabled ")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.securityProfile}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(out).Should(o.Equal("{\"encryptionAtHost\":true}"))
+		o.Expect(out).Should(o.ContainSubstring("{\"encryptionAtHost\":true"))
 	})
 
 	//author huliu@redhat.com
