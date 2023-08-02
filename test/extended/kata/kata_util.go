@@ -159,7 +159,7 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 
 	g.By("(3.4) Wait for kataconfig to finish install")
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
-	msg, err = waitForKataconfig(oc, kataconf.name)
+	msg, err = waitForKataconfig(oc, kataconf.name, sub.namespace)
 	return msg, err
 }
 
@@ -273,28 +273,33 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 }
 
 func checkKataInstalled(oc *exutil.CLI, sub SubscriptionDescription, kcName string) bool {
+	msg := ""
+	// check sub
 	jsonSubStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
 	if err != nil || gjson.Get(jsonSubStatus, "state").String() != "AtLatestKnown" {
 		e2e.Logf("issue with subscription or state isn't expected: %v, actual: %v error: %v", "AtLatestKnown", jsonSubStatus, err)
 	} else {
 		if !strings.Contains(gjson.Get(jsonSubStatus, "installedCSV").String(), sub.subName) {
 			e2e.Logf("Error: get installedCSV for subscription %v %v", jsonSubStatus, err)
-		} else {
+		} else { // check csv
 			csvName := gjson.Get(jsonSubStatus, "installedCSV").String()
 			jsonCsvStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
 			if err != nil ||
 				gjson.Get(jsonCsvStatus, "phase").String() != "Succeeded" ||
 				gjson.Get(jsonCsvStatus, "reason").String() != "InstallSucceeded" {
 				e2e.Logf("Error: CSV in wrong state, expected: %v actual:\n%v %v", "InstallSucceeded", jsonCsvStatus, err)
-			} else {
-				jsonKataStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
-				// DEBUG upper or lowercase the msg so just 1 comparision
-				if err == nil &&
-					strings.ToLower(gjson.Get(jsonKataStatus, "installationStatus.IsInProgress").String()) == "false" &&
-					gjson.Get(jsonKataStatus, "unInstallationStatus.inProgress.status").String() == "" {
-					return true
+			} else { // check kataconfig
+				// find out which status query to use
+				kataconfigStatusQuery, kataconfigStatusQueryChanged, err := kataconfigStatusInUse(oc, sub.namespace, kcName)
+				if err != nil {
+					e2e.Logf("error with kataconfigStatusInUse: %v, changed %v %v", kataconfigStatusQuery, kataconfigStatusQueryChanged, err)
+				} else {
+					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, kataconfigStatusQuery).Output()
+					if err == nil && strings.ToLower(msg) == "false" {
+						return true
+					}
 				}
-				e2e.Logf("Error: Kataconfig in wrong state, expected: false actual: %v error: %v", jsonKataStatus, err)
+				e2e.Logf("Error: Kataconfig in wrong state, expected: false actual: %v error: %v", msg, err)
 			}
 		}
 	}
@@ -541,15 +546,23 @@ func getClusterVersion(oc *exutil.CLI) (clusterVersion, ocpMajorVer, ocpMinorVer
 	return ocpMajorVer, ocpMinorVer, clusterVersion
 }
 
-func waitForKataconfig(oc *exutil.CLI, kcName string) (msg string, err error) {
+func waitForKataconfig(oc *exutil.CLI, kcName, opNamespace string) (msg string, err error) {
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
+	var (
+		kataconfigStatusQuery        string
+		kataconfigStatusQueryChanged bool
+	)
+
 	errCheck := wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-o=jsonpath={.status.installationStatus.IsInProgress}{.status.unInstallationStatus.inProgress.status}").Output()
-		// false || False, "" is done
-		// true || True, "" install is in progress
-		// FalseTrue uninstall (delete) is in progress
-		if strings.ToLower(msg) == "false" {
-			return true, nil
+		// find out which status query to use
+		kataconfigStatusQuery, kataconfigStatusQueryChanged, err = kataconfigStatusInUse(oc, opNamespace, kcName)
+		if err != nil {
+			e2e.Logf("error with kataconfigStatusInUse: %v, changed %v %v", kataconfigStatusQuery, kataconfigStatusQueryChanged, err)
+		} else {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", opNamespace, kataconfigStatusQuery).Output()
+			if strings.ToLower(msg) == "false" {
+				return true, nil
+			}
 		}
 		return false, nil
 	})
@@ -1002,4 +1015,24 @@ func checkControlSvc(oc *exutil.CLI, svcNs, svcName string) (msg string, err err
 
 	g.By("SUCCESS - service check passed")
 	return msg, err
+}
+
+func kataconfigStatusInUse(oc *exutil.CLI, opNamespace, kcName string) (kataconfigStatusQuery string, kataconfigStatusQueryChanged bool, err error) {
+	// author: tbuskey@redhat.com
+	// detect kataconfig status changes in 1.5 and use them
+	var json string
+
+	kataconfigStatusQuery = "-o=jsonpath={.status.installationStatus.IsInProgress}{.status.unInstallationStatus.inProgress.status}"
+	kataconfigStatusQueryChanged = false
+
+	json, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", opNamespace, "-o=jsonpath={.status}").Output()
+	if err != nil || json == "" {
+		kataconfigStatusQuery = fmt.Sprintf("Could not get status of kataconfig %v %v", json, err)
+	} else {
+		if gjson.Get(json, "conditions").Exists() {
+			kataconfigStatusQuery = "-o=jsonpath={.status.conditions[?(@.type=='InProgress')].status}"
+			kataconfigStatusQueryChanged = true
+		}
+	}
+	return kataconfigStatusQuery, kataconfigStatusQueryChanged, err
 }
