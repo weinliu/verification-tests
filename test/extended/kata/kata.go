@@ -48,6 +48,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		workerLabel        = "node-role.kubernetes.io/worker"
 		kataocLabel        = "node-role.kubernetes.io/kata-oc"
 		customLabel        = "custom-label=test"
+		testrunExists      = false
 	)
 
 	subscription := SubscriptionDescription{
@@ -120,6 +121,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		// check if there is a CM override
 		testrunInitial, _, _ = getTestRunConfigmap(oc, testrunDefault, "default", "osc-config")
 		if testrunInitial.exists { // then override
+			testrunExists = true
 			subscription.catalogSourceName = testrunInitial.catalogSourceName
 			subscription.channel = testrunInitial.channel
 			mustGatherImage = testrunInitial.mustgatherImage
@@ -136,6 +138,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		testrun, _ = getTestRunEnvVars("OSCS", testrunDefault)
 		// change subscription to match testrun.  env options override default and CM values
 		if testrun.exists {
+			testrunExists = true
 			testrunInitial = testrun
 			subscription.catalogSourceName = testrunInitial.catalogSourceName
 			subscription.channel = testrunInitial.channel
@@ -250,6 +253,37 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		e2e.Logf("Completed nodes are %v", gjson.Get(jsonKataStatus, "installationStatus.completed.completedNodesList").String())
 
 		g.By("SUCCESSS - kataconfig installed and it's structure is verified")
+
+	})
+
+	g.It("Author:tbuskey-High-66108-Version in operator CSV should match expected version", func() {
+		if !testrunExists {
+			g.Skip("osc-config cm or OSCSOPERATORVER are not set so there is no expected version to compare")
+		}
+
+		var (
+			err        error
+			csvName    string
+			csvVersion string
+		)
+		csvName, err = oc.AsAdmin().Run("get").Args("sub", subscription.subName, "-n", subscription.namespace, "-o=jsonpath={.status.installedCSV}").Output()
+		if err != nil || csvName == "" {
+			e2e.Logf("Error: Not able to get csv from sub %v: %v %v", subscription.subName, csvName, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(csvName).NotTo(o.BeEmpty())
+
+		csvVersion, err = oc.AsAdmin().Run("get").Args("csv", csvName, "-n", subscription.namespace, "-o=jsonpath={.spec.version}").Output()
+		if err != nil || csvVersion == "" {
+			e2e.Logf("Error: Not able to get version from csv %v: %v %v", csvName, csvVersion, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(csvVersion).NotTo(o.BeEmpty())
+		cleanVer := strings.Split(operatorVer, "-")
+		if csvVersion != cleanVer[0] {
+			e2e.Logf("Error: expecting %v but CSV has %v", operatorVer, csvVersion)
+		}
+		o.Expect(csvVersion).To(o.Equal(cleanVer[0]))
 
 	})
 
