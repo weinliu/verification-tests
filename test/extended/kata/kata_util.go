@@ -378,22 +378,14 @@ func subscriptionIsFinished(oc *exutil.CLI, sub SubscriptionDescription) (msg st
 	return msg, err
 }
 
-// author: valiev@redhat.com
-func getNodeListByLabel(oc *exutil.CLI, opNamespace, labelKey string) (nodeNameList []string, msg string, err error) {
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-n", opNamespace, "-l", labelKey, "-o=jsonpath={.items[*].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	nodeNameList = strings.Fields(msg)
-	return nodeNameList, msg, err
-}
-
 // author: tbuskey@redhat.com
-func waitForNodesInDebug(oc *exutil.CLI, opNamespace, nodesLabel string) (msg string, err error) {
+func waitForNodesInDebug(oc *exutil.CLI, opNamespace string) (msg string, err error) {
 	count := 0
-	workerNodeList, msg, err := getNodeListByLabel(oc, opNamespace, nodesLabel)
+	workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	workerNodeCount := len(workerNodeList)
 	if workerNodeCount < 1 {
-		e2e.Logf("Error: no worker nodes: %v, %v %v", workerNodeList, msg, err)
+		e2e.Logf("Error: no worker nodes: %v, %v", workerNodeList, err)
 	}
 	o.Expect(workerNodeList).NotTo(o.BeEmpty())
 	//e2e.Logf("Waiting for %v nodes to enter debug: %v", workerNodeCount, workerNodeList)
@@ -402,7 +394,7 @@ func waitForNodesInDebug(oc *exutil.CLI, opNamespace, nodesLabel string) (msg st
 	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
 		count = 0
 		for index := range workerNodeList {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", opNamespace, "node/"+workerNodeList[index], "--", "chroot", "/host", "crio", "config").Output()
+			msg, err = oc.AsAdmin().Run("debug").Args("-n", opNamespace, "node/"+workerNodeList[index], "--", "chroot", "/host", "crio", "config").Output()
 			if strings.Contains(msg, "log_level = \"debug") {
 				count++
 				o.Expect(msg).To(o.ContainSubstring("log_level = \"debug"))
@@ -703,16 +695,16 @@ func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testr
 	return testrunEnv, msg
 }
 
-func labelSelectedNodes(oc *exutil.CLI, opNamespace, selectorLabel, customLabel string) {
-	nodeList, _, err := getNodeListByLabel(oc, opNamespace, selectorLabel)
-	if err == nil && len(nodeList) > 0 {
+func labelSelectedNodes(oc *exutil.CLI, selectorLabel, customLabel string) {
+	nodeList := exutil.GetNodeListByLabel(oc, selectorLabel)
+	if len(nodeList) > 0 {
 		for _, node := range nodeList {
-			LabelNode(oc, opNamespace, node, customLabel)
+			LabelNode(oc, node, customLabel)
 		}
 	}
 }
 
-func LabelNode(oc *exutil.CLI, opNamespace, node, customLabel string) {
+func LabelNode(oc *exutil.CLI, node, customLabel string) {
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, customLabel).Output()
 	e2e.Logf("%v applied and output was: %v %v", customLabel, msg, err)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -742,13 +734,12 @@ func getTotalInstancesOnNodes(oc *exutil.CLI, opNamespace string, nodeList []str
 	return total
 }
 
-func getAllKataNodes(oc *exutil.CLI, eligibility bool, opNamespace, featureLabel, customLabel string) (nodeNameList []string, msg string, err error) {
+func getAllKataNodes(oc *exutil.CLI, eligibility bool, opNamespace, featureLabel, customLabel string) (nodeNameList []string) {
 	actLabel := customLabel
 	if eligibility {
 		actLabel = featureLabel
 	}
-	nodeList, msg, err := getNodeListByLabel(oc, opNamespace, actLabel)
-	return nodeList, msg, err
+	return exutil.GetNodeListByLabel(oc, actLabel)
 }
 
 func getHttpResponse(url string, expStatusCode int) (resp string, err error) {

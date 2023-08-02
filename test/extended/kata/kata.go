@@ -160,9 +160,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		// ensure og is installed and install if not
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", subscription.namespace, "--no-headers").Output()
+		msg, err = oc.AsAdmin().Run("get").Args("og", "-n", subscription.namespace, "--no-headers").Output()
 		if err != nil || strings.Contains(msg, "No resources found in") {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile, "-n", subscription.namespace).Output()
+			msg, err = oc.AsAdmin().Run("apply").Args("-f", ogFile, "-n", subscription.namespace).Output()
 			if err != nil {
 				e2e.Logf("og issue %v %v", msg, err)
 			} else {
@@ -192,26 +192,25 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		if kataconfig.eligibility {
 			e2e.Logf("Label worker nodes for eligibility feature")
 			if testrunInitial.eligibleSingleNode {
-				workerList, _, _ := getNodeListByLabel(oc, subscription.namespace, workerLabel)
-				o.Expect(len(workerList)).NotTo(o.Equal(0))
-				LabelNode(oc, subscription.namespace, workerList[0], featureLabel)
+				node, err := exutil.GetFirstWorkerNode(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				LabelNode(oc, node, featureLabel)
 			} else {
-				labelSelectedNodes(oc, subscription.namespace, workerLabel, featureLabel)
+				labelSelectedNodes(oc, workerLabel, featureLabel)
 			}
 		}
 
 		e2e.Logf("check and label nodes (or single node for custom label)")
-		nodeCustomList, _, err := getNodeListByLabel(oc, subscription.namespace, customLabel)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeCustomList := exutil.GetNodeListByLabel(oc, customLabel)
 		if len(nodeCustomList) > 0 {
 			e2e.Logf("labeled nodes found %v", nodeCustomList)
 		} else {
 			if testrunInitial.labelSingleNode {
-				workerList, _, _ := getNodeListByLabel(oc, subscription.namespace, workerLabel)
-				o.Expect(len(workerList)).NotTo(o.Equal(0))
-				LabelNode(oc, subscription.namespace, workerList[0], customLabel)
+				node, err := exutil.GetFirstWorkerNode(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				LabelNode(oc, node, customLabel)
 			} else {
-				labelSelectedNodes(oc, subscription.namespace, workerLabel, customLabel)
+				labelSelectedNodes(oc, workerLabel, customLabel)
 			}
 		}
 
@@ -234,8 +233,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		g.By("Install Common kataconfig and verify it")
 		e2e.Logf("common kataconfig %v is installed", kataconfig.name)
 
-		nodeKataList, _, err := getAllKataNodes(oc, testrunInitial.eligibility, subscription.namespace, featureLabel, customLabel)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeKataList := getAllKataNodes(oc, testrunInitial.eligibility, subscription.namespace, featureLabel, customLabel)
+		o.Expect(len(nodeKataList) > 0).To(o.BeTrue())
 		nodeKataCount := fmt.Sprintf("%d", len(nodeKataList))
 
 		jsonKataStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconfig.name, "-o=jsonpath={.status}").Output()
@@ -380,7 +379,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 
 		errCheck := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-			podMetrics, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("podmetrics", newPodName, "-n", podNs).Output()
+			podMetrics, err := oc.AsAdmin().Run("describe").Args("podmetrics", newPodName, "-n", podNs).Output()
 			if err != nil {
 				e2e.Logf("error  %v, please try next round", err)
 				return false, nil
@@ -412,7 +411,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 		errCheck := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-			podlogs, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+newPodName, "-n", podNs).Output()
+			podlogs, err := oc.AsAdmin().Run("logs").Args("pod/"+newPodName, "-n", podNs).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(podlogs).NotTo(o.BeEmpty())
 			if strings.Contains(podlogs, "httpd") {
@@ -495,7 +494,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	g.It("Author:abhbaner-High-43516-operator is available in CatalogSource", func() {
 
 		g.By("Checking catalog source for the operator")
-		opMarketplace, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
+		opMarketplace, err := oc.AsAdmin().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(opMarketplace).NotTo(o.BeEmpty())
 		o.Expect(opMarketplace).To(o.ContainSubstring("sandboxed-containers-operator"))
@@ -578,14 +577,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Applying deployment file " + configFile)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", configFile, "-n", podNs).Output()
 		if err != nil {
 			e2e.Logf("Could not apply configFile %v %v", msg, err)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait for deployment to be ready")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.BeEmpty())
@@ -593,7 +592,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		// If the deployment is ready, pod will be.  Might not need this
 		g.By("Wait for pods to be ready")
 		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+			msg, err = oc.AsAdmin().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
 			if !strings.Contains(msg, "No resources found") {
 				return true, nil
 			}
@@ -602,13 +601,13 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for pods %v %v", msg, err))
 
 		g.By("Get pod name")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+		msg, err = oc.AsAdmin().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
 		podName = strings.Split(msg, " ")[0]
 		e2e.Logf("podname %v %v", msg, err)
 
 		msg = fmt.Sprintf("Deleting pod %v from deployment", podName)
 		g.By(msg)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podName, "-n", podNs).Output()
+		msg, err = oc.AsAdmin().Run("delete").Args("pod", podName, "-n", podNs).Output()
 		e2e.Logf("%v pod deleted: %v %v", podName, msg, err)
 
 		g.By("Wait for deployment to re-replicate")
@@ -617,7 +616,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(msg).NotTo(o.BeEmpty())
 
 		g.By("Get new pod name")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+		msg, err = oc.AsAdmin().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
 		newPodName = strings.Split(msg, " ")[0]
 		e2e.Logf("new podname %v %v", msg, err)
 		if newPodName == podName {
@@ -677,11 +676,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			describeVwebhook: 0,
 		}
 
-		nodeControlList, _, err := getNodeListByLabel(oc, subscription.namespace, "node-role.kubernetes.io/master=")
+		nodeControlList, err := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeControlCount = len(nodeControlList)
 
-		nodeWorkerList, _, err := getNodeListByLabel(oc, subscription.namespace, "node-role.kubernetes.io/worker=")
+		nodeWorkerList, err := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeWorkerCount = len(nodeWorkerList)
 
@@ -706,11 +705,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		g.By("Patch kataconfig to put worker nodes into debug mode")
 		// oc patch kataconfig example-kataconfig --type merge --patch '{"spec":{"logLevel":"debug"}}'
 
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kataconfig", kataconfig.name, "-n", subscription.namespace, "--type", "merge", "--patch", kcLogLevel).Output()
+		msg, err = oc.AsAdmin().Run("patch").Args("kataconfig", kataconfig.name, "-n", subscription.namespace, "--type", "merge", "--patch", kcLogLevel).Output()
 		e2e.Logf("kcLogLevel patched: %v %v", msg, err)
 
 		g.By("Wait for worker nodes to be in crio debug mode")
-		msg, err = waitForNodesInDebug(oc, subscription.namespace, workerLabel)
+		msg, err = waitForNodesInDebug(oc, subscription.namespace)
 		e2e.Logf("%v", msg)
 
 		g.By("Create a deployment file from template")
@@ -732,11 +731,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(deployConfigFile).NotTo(o.BeEmpty())
 
 		g.By("Apply deployment " + deployConfigFile)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", deployConfigFile, "-n", podNs).Output()
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", deployConfigFile, "-n", podNs).Output()
 		e2e.Logf("Applied deployment %v: %v %v", deployName, msg, err)
 
 		g.By("Wait for deployment to be ready")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.BeEmpty())
@@ -894,7 +893,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(fails).To(o.Equal(0))
 
 		g.By("Tear down pod")
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName).Execute()
+		oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName).Execute()
 		os.RemoveAll(mustgatherDir)
 
 		g.By("SUCCESS")
@@ -951,7 +950,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				// catalog should already exist, but verify to ensure it is ready
 				g.By("Check for existence of catalog " + testrunUpgrade.catalogSourceName)
 				errCheck := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", testrunUpgrade.catalogSourceName, "-n", subUpgrade.catalogSourceNamespace, "-o=jsonpath={.status.connectionState.lastObservedState}").Output()
+					msg, err = oc.AsAdmin().Run("get").Args("catsrc", testrunUpgrade.catalogSourceName, "-n", subUpgrade.catalogSourceNamespace, "-o=jsonpath={.status.connectionState.lastObservedState}").Output()
 					if msg == "READY" {
 						return true, nil
 					}
@@ -962,7 +961,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				g.By("Check catalog for " + subUpgrade.subName)
 				label = fmt.Sprintf("catalog=%v", testrunUpgrade.catalogSourceName)
 				errCheck = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
-					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-l", label, "-n", subUpgrade.catalogSourceNamespace).Output()
+					msg, err = oc.AsAdmin().Run("get").Args("packagemanifest", "-l", label, "-n", subUpgrade.catalogSourceNamespace).Output()
 					if strings.Contains(msg, subUpgrade.subName) {
 						return true, nil
 					}
@@ -1002,7 +1001,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 			if testrunUpgrade.katamonitorImage != kcMonitorImageName {
 				g.By("Changing the monitor image & pods")
-				msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
+				msg, err = oc.AsAdmin().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
 				if err != nil || msg == "" {
 					logErrorAndFail(oc, "Error: cannot get the pod info before patching kataconfig monitor images", msg, err)
 				}
@@ -1016,7 +1015,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				g.By("Wait & check for kata monitor image change")
 				// starts changing 40s after
 				errCheck := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
-					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
+					msg, err = oc.AsAdmin().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
 					for _, pod := range oldpods {
 						if strings.Contains(msg, pod) {
 							podsChanged = false
@@ -1057,8 +1056,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			numOfVMs     int
 			msg          string
 		)
-		kataNodes, msg, err := getNodeListByLabel(oc, subscription.namespace, kataocLabel)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		kataNodes := exutil.GetNodeListByLabel(oc, kataocLabel)
 		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
 
 		if !kataconfig.enablePeerPods {
@@ -1075,14 +1073,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Applying deployment file " + configFile)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", configFile, "-n", podNs).Output()
 		if err != nil {
 			e2e.Logf("Could not apply configFile %v %v", msg, err)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait for deployment to be ready")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg == strconv.Itoa(initReplicas)).To(o.BeTrue())
@@ -1090,7 +1088,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		// If the deployment is ready, pod will be.  Might not need this
 		g.By("Wait for pods to be ready")
 		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+			msg, err = oc.AsAdmin().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
 			if !strings.Contains(msg, "No resources found") {
 				return true, nil
 			}
@@ -1129,8 +1127,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			msg          string
 		)
 
-		kataNodes, msg, err := getNodeListByLabel(oc, subscription.namespace, kataocLabel)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		kataNodes := exutil.GetNodeListByLabel(oc, kataocLabel)
 		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
 
 		if !kataconfig.enablePeerPods {
@@ -1147,14 +1144,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Applying deployment file " + configFile)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", configFile, "-n", podNs).Output()
 		if err != nil {
 			e2e.Logf("Could not apply configFile %v %v", msg, err)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait for deployment to be ready")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg == strconv.Itoa(initReplicas)).To(o.BeTrue())
@@ -1162,7 +1159,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		// If the deployment is ready, pod will be.  Might not need this
 		g.By("Wait for pods to be ready")
 		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+			msg, err = oc.AsAdmin().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
 			if !strings.Contains(msg, "No resources found") {
 				return true, nil
 			}
@@ -1212,14 +1209,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Applying deployment file " + configFile)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", configFile, "-n", podNs).Output()
 		if err != nil {
 			e2e.Logf("Could not apply configFile %v %v", msg, err)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait for deployment to be ready")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		if err != nil {
 			e2e.Logf("Deployment didn't reached expected state: %v %v", msg, err)
@@ -1229,7 +1226,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		// If the deployment is ready, pod will be.  Might not need this
 		g.By("Wait for pods to be ready")
 		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+			msg, err = oc.AsAdmin().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
 			if !strings.Contains(msg, "No resources found") {
 				return true, nil
 			}
@@ -1292,7 +1289,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Applying deployment file " + configFile)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", configFile, "-n", podNs).Output()
 		if err != nil {
 			e2e.Logf("Could not apply configFile %v %v", msg, err)
 		}
@@ -1315,7 +1312,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		g.By("Wait for 30sec to check deployment has " + extraPods + " pending pods w/o corresponding podvm, because of the limit")
 		errCheck := wait.Poll(30*time.Second, snooze*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.unavailableReplicas}").Output()
+			msg, err = oc.AsAdmin().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.unavailableReplicas}").Output()
 			if msg == extraPods {
 				return true, nil
 			}
@@ -1323,7 +1320,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		})
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for %v additional pending pods %v %v", extraPods, msg, err))
 
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
+		msg, err = oc.AsAdmin().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
 		o.Expect(msg == podvmLimit).To(o.BeTrue())
 
 		g.By("extend podvm limit")
@@ -1344,5 +1341,24 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(msg == overLimit).To(o.BeTrue())
 
 		g.By("SUCCESSS - deployment peer pods podvm limit - finished successfully")
+	})
+
+	g.It("Author:vvoronko-High-57339-Eligibility", func() {
+
+		if !kataconfig.eligibility {
+			g.Skip("57339-Eligibility test is only for eligibility=true in kataconfig")
+		}
+
+		oc.SetupProject()
+
+		kataNodes := exutil.GetNodeListByLabel(oc, kataocLabel)
+		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
+
+		eligibleNodes := exutil.GetNodeListByLabel(oc, featureLabel)
+		o.Expect(len(eligibleNodes) == len(kataNodes)).To(o.BeTrue())
+
+		for _, node := range kataNodes {
+			o.Expect(exutil.StringsSliceContains(eligibleNodes, node)).To(o.BeTrue())
+		}
 	})
 })
