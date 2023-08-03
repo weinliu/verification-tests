@@ -131,6 +131,16 @@ func (vs *volumeSnapshot) getContentName(oc *exutil.CLI) string {
 	return getVSContentByVSname(oc, vs.namespace, vs.name)
 }
 
+// Get the VolumeSnapshot's volumeSnapshotContent SourceVolumeMode value
+// The SourceVolumeMode field added from 4.14 (kubernetes v1.27)
+func (vs *volumeSnapshot) getContentSourceVolumeMode(oc *exutil.CLI) string {
+	vsContent := getVSContentByVSname(oc.AsAdmin(), vs.namespace, vs.name)
+	vsContentSourceVolumeMode, getVsContentSourceVolumeModeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vsContent, "-o=jsonpath={.spec.sourceVolumeMode}").Output()
+	o.Expect(getVsContentSourceVolumeModeErr).NotTo(o.HaveOccurred(), fmt.Sprintf(`Failed to get volumesnapshotcontent/"%s" SourceVolumeMode value, caused by: %v`, vsContent, getVsContentSourceVolumeModeErr))
+	e2e.Logf(`The volumesnapshotcontent/"%s" SourceVolumeMode is "%s"`, vsContent, vsContentSourceVolumeMode)
+	return vsContentSourceVolumeMode
+}
+
 // Create static volumeSnapshot with specified volumeSnapshotContent
 func createVolumeSnapshotWithSnapshotHandle(oc *exutil.CLI, originVolumeSnapshotExportJSON string, newVolumeSnapshotName string, volumeSnapshotContentName string, volumesnapshotNamespace string) {
 	var (

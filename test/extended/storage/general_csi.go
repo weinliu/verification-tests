@@ -3455,7 +3455,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				csiSnapShotController := newDeployment(setDeploymentName("csi-snapshot-controller"), setDeploymentNamespace("openshift-cluster-storage-operator"), setDeploymentApplabel("app=csi-snapshot-controller"))
 				csiDriverController := newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"))
 
-				// TODO: When 4.14 prevent-volume-mode-conversion enabled by default remove the step
+				// TODO: When prevent-volume-mode-conversion enabled by default remove the step
+				// This feature still TP 4.14, prevent-volume-mode-conversion enabled by default when it is GA (maybe 4.15)
 				exutil.By(`Enable the "prevent-volume-mode-conversion" for csi-provisioner and csi-snapshot-controller`)
 				defer waitCSOhealthy(oc.AsAdmin())
 				defer csiSnapShotController.waitReady(oc.AsAdmin())
@@ -3499,6 +3500,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				volumesnapshot.create(oc)
 				defer volumesnapshot.delete(oc)
 				volumesnapshot.waitReadyToUse(oc)
+
+				// Check the volumesnapshotcontent should have the SourceVolumeMode field from 4.14
+				// https://github.com/kubernetes-csi/external-snapshotter/pull/665
+				// TODO: Check the field is immutable when it is made in the future (Maybe 4.15)
+				// https://github.com/kubernetes-csi/external-snapshotter/pull/670
+				o.Expect(strings.EqualFold(volumesnapshot.getContentSourceVolumeMode(oc), "Block")).Should(o.BeTrue())
 
 				exutil.By(`Create a restored pvc with volumeMode: "Filesystem"`)
 				pvcRestore.capacity = pvcOri.capacity
