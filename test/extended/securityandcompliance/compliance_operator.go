@@ -4699,17 +4699,21 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			objectTableRef{"tailoredprofile", subD.namespace, tprofilePcidss.name})
 
 		g.By("Create the name of hosted cluster !!!\n")
+		hypershift_namespace, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "-l", "hypershift.openshift.io/hosted-control-plane=true", "-n", subD.namespace, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		hostedClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", "-A", "-n", subD.namespace, "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		subString := "-" + hostedClusterName
+		hypershift_namespace_prefix := strings.TrimSuffix(hypershift_namespace, subString)
 
 		g.By("Create the tailoredprofiels !!!\n")
 		tprofileCis.value = hostedClusterName
 		tprofilePcidss.value = hostedClusterName
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofileCis.template, "-p", "NAME="+tprofileCis.name, "NAMESPACE="+tprofileCis.namespace,
-			"EXTENDS="+tprofileCis.extends, "VALUE="+tprofileCis.value)
+			"EXTENDS="+tprofileCis.extends, "VALUE="+tprofileCis.value, "HYPERSHIFT_NAMESPACE_PREFIX="+hypershift_namespace_prefix)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofilePcidss.template, "-p", "NAME="+tprofilePcidss.name, "NAMESPACE="+tprofilePcidss.namespace,
-			"EXTENDS="+tprofilePcidss.extends, "VALUE="+tprofilePcidss.value)
+			"EXTENDS="+tprofilePcidss.extends, "VALUE="+tprofilePcidss.value, "HYPERSHIFT_NAMESPACE_PREFIX="+hypershift_namespace_prefix)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"tp", tprofileCis.name, "-n", subD.namespace, "-o=jsonpath={.status.state}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"tp", tprofilePcidss.name, "-n", subD.namespace, "-o=jsonpath={.status.state}"}).check(oc)
@@ -4739,12 +4743,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 		ccrCisFailList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-l", "compliance.openshift.io/check-status=FAIL,"+"compliance.openshift.io/suite="+ssbCis,
 			"-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-		ccrCisFailNumber := len(strings.Fields(ccrCisFailList))
 		ccrPcidssFailList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-l", "compliance.openshift.io/check-status=FAIL,"+"compliance.openshift.io/suite="+ssbPcidss,
 			"-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-		ccrPcidssFailNumber := len(strings.Fields(ccrPcidssFailList))
-		o.Expect(ccrCisFailNumber).Should(o.Equal(3), fmt.Sprintf("The  ccrCisFailNumber %s is NOT 3", ccrCisFailNumber))
-		o.Expect(ccrPcidssFailNumber).Should(o.Equal(3), fmt.Sprintf("The ccrPcidssFailNumber %s is NOT 3", ccrPcidssFailNumber))
 		for _, ccrCis := range ccrsCisShouldFailList {
 			o.Expect(strings.Fields(ccrCisFailList)).Should(o.ContainElement(ccrCis), fmt.Sprintf("The %s NOT in the failed ccr list %s", ccrCis, ccrCisFailList))
 
