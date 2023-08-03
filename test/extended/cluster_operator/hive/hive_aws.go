@@ -2352,8 +2352,9 @@ spec:
 	})
 
 	// Author: fxie@redhat.com
-	// ./bin/extended-platform-tests run all --dry-run|grep "41212"|./bin/extended-platform-tests run --timeout 75m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-41212-Hive supports to install private cluster[Serial]", func() {
+	// ./bin/extended-platform-tests run all --dry-run|grep "41212"|./bin/extended-platform-tests run --timeout 80m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-41212-Medium-57403-Hive supports to install private cluster[Serial]", func() {
+		// Settings
 		var (
 			testCaseID = "41212"
 			cdName     = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -2361,7 +2362,17 @@ spec:
 			azCount    = 3
 			// Should not overlap with the CIDR of the associate VPC
 			cidr = "10.1.0.0/16"
+		)
 
+		// AWS Clients
+		var (
+			cfg                  = getDefaultAWSConfig(oc, AWSRegion)
+			cloudFormationClient = cloudformation.NewFromConfig(cfg)
+			ec2Client            = ec2.NewFromConfig(cfg)
+		)
+
+		// Functions
+		var (
 			callCmd = func(cmd *exec.Cmd) error {
 				e2e.Logf("Calling command: %v", cmd)
 				out, err := cmd.CombinedOutput()
@@ -2418,6 +2429,25 @@ spec:
 				}
 				return true
 			}
+			compareLocalAndRemoteAllowedPrincipals = func(vpceId string, localAllowedPrincipals []string) bool {
+				describeVpcEndpointServicePermissionsOutput, err := ec2Client.DescribeVpcEndpointServicePermissions(
+					context.Background(),
+					&ec2.DescribeVpcEndpointServicePermissionsInput{
+						ServiceId: aws.String(vpceId),
+					},
+				)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				var remoteAllowedPrincipals []string
+				for _, principal := range describeVpcEndpointServicePermissionsOutput.AllowedPrincipals {
+					remoteAllowedPrincipals = append(remoteAllowedPrincipals, *principal.Principal)
+				}
+				sort.Strings(remoteAllowedPrincipals)
+				sort.Strings(localAllowedPrincipals)
+				e2e.Logf("Local allowed principals = %v; remote allowed principals = %v",
+					localAllowedPrincipals, remoteAllowedPrincipals)
+
+				return reflect.DeepEqual(localAllowedPrincipals, remoteAllowedPrincipals)
+			}
 		)
 
 		exutil.By("Extracting Hiveutil")
@@ -2434,11 +2464,8 @@ spec:
 		endpointVpcTemp, err :=
 			testdata.Asset("test/extended/testdata/cluster_operator/hive/cloudformation-endpointvpc-temp.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cfg := getDefaultAWSConfig(oc, AWSRegion)
-		cloudFormationClient := cloudformation.NewFromConfig(cfg)
-
 		defer func() {
-			// Open question: should we make sure the deletion finishes without error?
+			// No need to wait for stack deletion to finish. This will save us a couple of minutes.
 			e2e.Logf("Deleting CloudFormation stack")
 			_, err := cloudFormationClient.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
 				StackName: aws.String(stackName),
@@ -2556,7 +2583,7 @@ spec:
 			AsAdmin().
 			WithoutNamespace().
 			Run("wait").
-			Args("deploy/hiveadmission", "-n", HiveNamespace, "--for", "condition=available", "--timeout=3m").
+			Args("deploy/hiveadmission", "-n", HiveNamespace, "--for", "condition=available=true", "--timeout=3m").
 			Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -2608,7 +2635,81 @@ spec:
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		clusterDeployment.create(oc)
 
-		exutil.By("Waiting for installation to finish")
+		exutil.By("OCP-57403: Support to add AdditionalAllowedPrincipals for PrivateLink VPCE Services")
+		e2e.Logf("Waiting for awsprivatelink reconcile to be done")
+		err = oc.
+			AsAdmin().
+			Run("wait").
+			Args("ClusterDeployment", cdName, "--for", "condition=AWSPrivateLinkReady=true", "--timeout=20m").
+			Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Getting default allowed principal")
+		defaultAllowedPrincipalJsonPath :=
+			"{.status.platformStatus.aws.privateLink.vpcEndpointService.defaultAllowedPrincipal}"
+		defaultAllowedPrincipal, _, err := oc.
+			AsAdmin().
+			Run("get").
+			Args("ClusterDeployment", cdName, "-o=jsonpath="+defaultAllowedPrincipalJsonPath).
+			Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(defaultAllowedPrincipal).To(o.HavePrefix("arn:aws:iam::"))
+		e2e.Logf("Found defaultAllowedPrincipal = %s", defaultAllowedPrincipal)
+
+		e2e.Logf("Getting vpce ID")
+		vpceIdJsonPath :=
+			"{.status.platformStatus.aws.privateLink.vpcEndpointService.id}"
+		vpceId, _, err := oc.
+			AsAdmin().
+			Run("get").
+			Args("ClusterDeployment", cdName, "-o=jsonpath="+vpceIdJsonPath).
+			Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(vpceId).To(o.HavePrefix("vpce-svc-"))
+		e2e.Logf("Found vpce ID = %s", vpceId)
+
+		e2e.Logf("Adding an additionalAllowedPrincipal")
+		additionalAllowedPrincipal := "arn:aws:iam::301721915996:user/fakefxie"
+		additionalAllowedPrincipalPatch := `
+spec:
+  platform:
+    aws:
+      privateLink:
+        additionalAllowedPrincipals:
+        - ` + additionalAllowedPrincipal
+		err = oc.
+			AsAdmin().
+			Run("patch").
+			Args("ClusterDeployment", cdName, "--type", "merge", "-p", additionalAllowedPrincipalPatch).
+			Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Comparing local & remote allowed principals")
+		localAllowedPrincipals := []string{defaultAllowedPrincipal, additionalAllowedPrincipal}
+		o.Eventually(compareLocalAndRemoteAllowedPrincipals).
+			WithTimeout(5*time.Minute).
+			WithPolling(30*time.Second).
+			WithArguments(vpceId, localAllowedPrincipals).
+			Should(o.BeTrue())
+
+		e2e.Logf("Removing additionalAllowedPrincipals from CD")
+		err = oc.
+			AsAdmin().
+			Run("patch").
+			Args("ClusterDeployment", cdName, "--type=json", "-p",
+				`[{"op":"remove", "path": "/spec/platform/aws/privateLink/additionalAllowedPrincipals"}]`).
+			Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Comparing local & remote allowed principals again")
+		localAllowedPrincipals = []string{defaultAllowedPrincipal}
+		o.Eventually(compareLocalAndRemoteAllowedPrincipals).
+			WithTimeout(5*time.Minute).
+			WithPolling(30*time.Second).
+			WithArguments(vpceId, localAllowedPrincipals).
+			Should(o.BeTrue())
+
+		exutil.By("Back to OCP-41212: Waiting for installation to finish")
 		newCheck("expect", "get", asAdmin, requireNS, compare, "true", ok,
 			ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
 
@@ -2647,7 +2748,7 @@ spec:
 		kubeconfigSingleQuotedStr := "'" + string(kubeconfigByteSlice) + "'"
 		// Take care of the SCC setup
 		output, err := exutil.DebugNode(oc, workerNodeNames[0], "bash", "-c",
-			fmt.Sprintf("set +x; echo %s > kubeconfig; oc get co --kubeconfig kubeconfig", kubeconfigSingleQuotedStr))
+			fmt.Sprintf("echo %s > kubeconfig; oc get co --kubeconfig kubeconfig", kubeconfigSingleQuotedStr))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("cloud-credential"))
 	})
@@ -4287,7 +4388,6 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "JobToResolveImagesFailed", ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"InstallImagesNotResolved\")].reason}'"}).check(oc)
 		exutil.By("Check cd2 conditions with type 'RequirementsMet',return the status 'True'")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName2, "-n", oc.Namespace(), "-o=jsonpath='{.status.conditions[?(@.type == \"InstallImagesNotResolved\")].status}'"}).check(oc)
-
 	})
 
 	//author: kcui@redhat.com
@@ -4483,7 +4583,6 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check cd2 has been deleted.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName2, nok, FakeClusterInstallTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
-
 	})
 
 	//author: kcui@redhat.com
@@ -4570,7 +4669,6 @@ spec:
 			return true
 		}
 		o.Eventually(CheckSameOrNot).WithTimeout(15 * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
-
 	})
 
 	//author: kcui@redhat.com
@@ -4916,5 +5014,4 @@ spec:
 		}
 		o.Eventually(checkSpotMachinesetReadyCount).WithTimeout(5 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
 	})
-
 })
