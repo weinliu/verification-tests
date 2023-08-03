@@ -658,4 +658,28 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 
 	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-11332-Admin can understand/manage image use and prune unreferenced image", func() {
+		g.By("Create imagestream")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", oc.Username()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", oc.Username()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/deployment-example@sha256:9d29ff0fdbbec33bb4eebb0dbe0d0f3860a856987e5481bb0fc39f3aba086184", "deployment-example:latest", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "deployment-example", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "images", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(string(output), oc.Namespace()+"/deployment-example (latest)") {
+			e2e.Failf("Failed to get image")
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--all", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "images", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(string(output2), oc.Namespace()+"/deployment-example (latest)") {
+			e2e.Failf("The project info should be pruned")
+		}
+	})
 })
