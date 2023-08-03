@@ -357,7 +357,7 @@ func getStorageClassName(oc *exutil.CLI) (string, error) {
 	return scs.Items[0].Name, nil
 }
 
-func getSAToken(oc *exutil.CLI, name, ns string) string {
+func getSATokenFromSecret(oc *exutil.CLI, name, ns string) string {
 	secrets, err := oc.AdminKubeClient().CoreV1().Secrets(ns).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return ""

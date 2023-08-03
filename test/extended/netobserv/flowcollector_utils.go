@@ -124,7 +124,7 @@ func (testTemplate *TestClientServerTemplate) getLokiFlowLogs(oc *exutil.CLI, to
 
 // Verify loki records and if it was written in the last 5 minutes
 func verifyLokilogsTime(oc *exutil.CLI, lokiStackNS, flowNS, lokiStackName, serviceAccountName string) error {
-	bearerToken := getSAToken(oc, serviceAccountName, flowNS)
+	bearerToken := getSATokenFromSecret(oc, serviceAccountName, flowNS)
 	route := "https://" + getRouteAddress(oc, lokiStackNS, lokiStackName)
 	lc := newLokiClient(route).withToken(bearerToken).retry(5)
 	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\", FlowDirection=\"0\"}")

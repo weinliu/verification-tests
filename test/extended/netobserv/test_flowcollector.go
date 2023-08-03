@@ -144,12 +144,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.Context("FLP metrics:", func() {
+	g.Context("FLP, Console metrics:", func() {
 		g.When("process.metrics.TLS == DISABLED", func() {
 			g.It("Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
 				var (
 					flpPromSM = "flowlogs-pipeline-monitor"
-					flpPromSA = "flowlogs-pipeline-prom"
 					namespace = oc.Namespace()
 				)
 
@@ -186,14 +185,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				o.Expect(tlsScheme).To(o.Equal("http"))
 
 				g.By("Verify prometheus is able to scrape FLP metrics")
-				expectedServerName := fmt.Sprintf("%s.%s.svc", flpPromSA, namespace)
-				flpMetricsURL := fmt.Sprintf("%s://%s:9102/metrics", tlsScheme, expectedServerName)
-				verifyFLPPromMetrics(oc, flpMetricsURL)
+				verifyFLPMetrics(oc)
 			})
 		})
 
 		g.When("processor metrics.TLS == AUTO", func() {
-			g.It("Author:aramesha-High-54043-Verify flowlogs-pipeline metrics [Serial]", func() {
+			g.It("Author:aramesha-High-54043-High-66031-Verify flowlogs-pipeline, Console metrics [Serial]", func() {
 				var (
 					flpPromSM = "flowlogs-pipeline-monitor"
 					flpPromSA = "flowlogs-pipeline-prom"
@@ -227,9 +224,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				expectedServerName := fmt.Sprintf("%s.%s.svc", flpPromSA, namespace)
 				o.Expect(serverName).To(o.Equal(expectedServerName))
 
-				g.By("Verify prometheus is able to scrape FLP metrics")
-				flpMetricsURL := fmt.Sprintf("%s://%s:9102/metrics", tlsScheme, serverName)
-				verifyFLPPromMetrics(oc, flpMetricsURL)
+				g.By("Verify prometheus is able to scrape FLP and Console metrics")
+				verifyFLPMetrics(oc)
+				query := fmt.Sprintf("process_start_time_seconds{namespace=\"%s\", job=\"netobserv-plugin-metrics\"}", namespace)
+				metrics, err := getMetric(oc, query)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0))
 			})
 		})
 	})
@@ -485,8 +485,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			// verify FLP metrics are being populated with KAFKA
 			g.By("Verify prometheus is able to scrape FLP metrics")
-			flpMetricsURL := fmt.Sprintf("%s://%s:9102/metrics", tlsScheme, serverName)
-			verifyFLPPromMetrics(oc, flpMetricsURL)
+			verifyFLPMetrics(oc)
 
 			// verify logs
 			g.By("Escalate SA to cluster admin")

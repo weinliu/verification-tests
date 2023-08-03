@@ -1,65 +1,112 @@
 package netobserv
 
 import (
-	"os/exec"
+	"encoding/json"
+	"fmt"
+	"math"
+	"net/http"
+	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-// get metrics from Prometheus
-func getPromMetrics(oc *exutil.CLI, metricsUrl string) string {
-	caCert := "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt"
-	command := []string{"exec", "-n", "openshift-monitoring", "prometheus-k8s-0", "--", "curl", "-s", "-w 'HTTP response code: %{http_code}'", "-L", metricsUrl, "--cacert", caCert}
-	var err error
-	var output string
-	attempts := 5
-	for attempts > 0 {
-		output, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().OutputToFile("metrics.txt")
-		if err == nil {
-			break
-		}
-		time.Sleep(3 * time.Second)
-		attempts--
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(output).NotTo(o.BeEmpty(), "No Metrics found")
-	return output
+// prometheusQueryResult the response of querying prometheus APIs
+type prometheusQueryResult struct {
+	Data struct {
+		Result     []metric `json:"result"`
+		ResultType string   `json:"resultType"`
+	} `json:"data"`
+	Status string `json:"status"`
 }
 
-// Verify metrics by doing curl commands
-func verifyFLPPromMetrics(oc *exutil.CLI, flpMetricsURL string) {
-	metricsOutFile := getPromMetrics(oc, flpMetricsURL)
+// metric the prometheus metric
+type metric struct {
+	Metric struct {
+		Name          string `json:"__name__"`
+		Cluster       string `json:"cluster,omitempty"`
+		Container     string `json:"container,omitempty"`
+		ContainerName string `json:"containername,omitempty"`
+		Endpoint      string `json:"endpoint,omitempty"`
+		Instance      string `json:"instance,omitempty"`
+		Job           string `json:"job,omitempty"`
+		Namespace     string `json:"namespace,omitempty"`
+		Path          string `json:"path,omitempty"`
+		Pod           string `json:"pod,omitempty"`
+		PodName       string `json:"podname,omitempty"`
+		Service       string `json:"service,omitempty"`
+	} `json:"metric"`
+	Value []interface{} `json:"value"`
+}
 
-	// grep the HTTP Code
-	metric1, _ := exec.Command("bash", "-c", "cat "+metricsOutFile+" | grep \"HTTP response code\"| awk -F ':' '{print $2}'").Output()
-	httpCode := strings.TrimSpace(string(metric1))
-	httpCode = strings.Trim(httpCode, "'")
-	e2e.Logf("The http code is : %v", httpCode)
-	o.Expect(httpCode).To(o.Equal("200"))
+func getMetric(oc *exutil.CLI, query string) ([]metric, error) {
+	res, err := queryPrometheus(oc, "/api/v1/query", query, "GET")
+	attempts := 10
+	for len(res.Data.Result) == 0 && attempts >= 0 {
+		if err != nil {
+			return []metric{}, err
+		}
+		time.Sleep(5 * time.Second)
+		res, err = queryPrometheus(oc, "/api/v1/query", query, "GET")
+		attempts--
+	}
+	errMsg := fmt.Sprintf("0 results returned for query %s", query)
+	o.Expect(len(res.Data.Result)).Should(o.BeNumerically(">=", 1), errMsg)
+	return res.Data.Result, nil
+}
 
-	// grep the number of flows processed
-	metric2, _ := exec.Command("bash", "-c", "cat "+metricsOutFile+" | grep  -o \"ingest_flows_processed.*\" | tail -1 | awk '{print $2}'").Output()
-	flowLogsProcessed := strings.TrimSpace(string(metric2))
-	e2e.Logf("Number of flowslogs processed are : %v", flowLogsProcessed)
-	o.Expect(flowLogsProcessed).NotTo(o.BeEmpty(), "Number of flowlogs processed is empty")
-	flowsProcessedInt, err := strconv.ParseInt(flowLogsProcessed, 10, 64)
+// queryPrometheus returns the promtheus metrics which match the query string
+// path: the api path, for example: /api/v1/query?
+// query: the metric or alert you want to search
+// action: it can be "GET", "get", "Get", "POST", "post", "Post"
+func queryPrometheus(oc *exutil.CLI, path string, query string, action string) (*prometheusQueryResult, error) {
+	var bearerToken string
+	var err error
+	bearerToken = getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+	address := "https://" + getRouteAddress(oc, "openshift-monitoring", "prometheus-k8s")
+
+	h := make(http.Header)
+	h.Add("Content-Type", "application/json")
+	h.Add("Authorization", "Bearer "+bearerToken)
+
+	params := url.Values{}
+	if len(query) > 0 {
+		params.Add("query", query)
+	}
+
+	var p prometheusQueryResult
+	resp, err := doHTTPRequest(h, address, path, params.Encode(), action, false, 5, nil, 200)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(resp, &p)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// return the first metric value
+func popMetricValue(metrics []metric) int {
+	valInterface := metrics[0].Value[1]
+	val, _ := valInterface.(string)
+	value, err := strconv.ParseFloat(val, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(flowsProcessedInt).Should(o.BeNumerically(">", 0))
+	return int(math.Round(value))
+}
 
-	// grep the number of loki records written
-	metric3, _ := exec.Command("bash", "-c", "cat "+metricsOutFile+" | grep -o \"records_written.*\" | tail -1 | awk '{print $2}'").Output()
-	lokiRecordsWritten := strings.TrimSpace(string(metric3))
-	e2e.Logf("Number of loki records written are : %v", lokiRecordsWritten)
-	o.Expect(lokiRecordsWritten).NotTo(o.BeEmpty(), "Number of loki records written is empty")
-
-	lokiRecordsWrittenInt, err := strconv.ParseInt(lokiRecordsWritten, 10, 64)
+// verify FLP metrics
+func verifyFLPMetrics(oc *exutil.CLI) {
+	metrics, err := getMetric(oc, "sum(netobserv_ingest_flows_processed)")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(lokiRecordsWrittenInt).Should(o.BeNumerically(">", 0))
+	o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0))
+
+	metrics, err = getMetric(oc, "sum(netobserv_loki_sent_entries_total)")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0))
 }
 
 func getMetricsScheme(oc *exutil.CLI, servicemonitor string) (string, error) {
