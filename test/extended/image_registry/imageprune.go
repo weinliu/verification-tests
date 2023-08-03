@@ -682,4 +682,37 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			e2e.Failf("The project info should be pruned")
 		}
 	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-12400-Prune images by command 'oc adm prune images' [Serial]", func() {
+		g.By("Create imagestream")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", oc.Username()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", oc.Username()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "soft-prune:latest", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "soft-prune", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get external registry host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(regRoute)
+
+		manifestList := getManifestList(oc, "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", `""`)
+		o.Expect(manifestList).NotTo(o.BeEmpty())
+		e2e.Logf("print the manifest", manifestList)
+
+		g.By("Could prune images with oc adm prune images")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--all", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		pruneout, pruneerr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--keep-younger-than=0", "--token="+token, "--registry-url="+regRoute, "--confirm").Output()
+		o.Expect(pruneerr).NotTo(o.HaveOccurred())
+		if !strings.Contains(pruneout, "Deleting blob "+manifestList) || !strings.Contains(pruneout, "Deleting image "+manifestList) {
+			e2e.Failf("Failed to prune image")
+		}
+	})
 })
