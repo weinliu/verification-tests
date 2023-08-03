@@ -142,10 +142,6 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(res.Data.Result) == 0).Should(o.BeTrue())
 
-		appLog, err := lc.searchByNamespace("application", appProj)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
-
 		g.By("create a CLF to test forward to default")
 		clf := clusterlogforwarder{
 			name:         "instance",
@@ -159,6 +155,8 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		labels, err := lc.listLabels("audit", "")
 		o.Expect(err).NotTo(o.HaveOccurred(), "got error when checking audit log labels")
 		e2e.Logf("\nthe audit log labels are: %v\n", labels)
+
+		lc.waitForLogsAppearByProject("application", appProj)
 
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		g.By("check metrics exposed by collector")

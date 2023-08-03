@@ -306,6 +306,7 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 			labels = append(labels, k+"="+v)
 		}
 		label := strings.Join(labels, ",")
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label).Execute()
 		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
 		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
 		e2e.Failf("deployment %s is not ready:\nconditions: %s\ncontainer status: %s", name, podStatus, containerStatus)
@@ -338,6 +339,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 			labels = append(labels, k+"="+v)
 		}
 		label := strings.Join(labels, ",")
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label).Execute()
 		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
 		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
 		e2e.Failf("statefulset %s is not ready:\nconditions: %s\ncontainer status: %s", name, podStatus, containerStatus)
@@ -347,6 +349,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 
 // WaitForDaemonsetPodsToBeReady waits for all the pods controlled by the ds to be ready
 func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
+	var selectors map[string]string
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
@@ -356,6 +359,7 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 			}
 			return false, err
 		}
+		selectors = daemonset.Spec.Selector.MatchLabels
 		if daemonset.Status.DesiredNumberScheduled > 0 && daemonset.Status.NumberReady == daemonset.Status.DesiredNumberScheduled && daemonset.Status.UpdatedNumberScheduled == daemonset.Status.DesiredNumberScheduled {
 			e2e.Logf("Daemonset/%s is available (%d/%d)\n", name, daemonset.Status.NumberReady, daemonset.Status.DesiredNumberScheduled)
 			return true, nil
@@ -363,6 +367,17 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 		e2e.Logf("Waiting for full availability of %s daemonset (%d/%d)\n", name, daemonset.Status.NumberReady, daemonset.Status.DesiredNumberScheduled)
 		return false, nil
 	})
+	if err != nil && len(selectors) > 0 {
+		var labels []string
+		for k, v := range selectors {
+			labels = append(labels, k+"="+v)
+		}
+		label := strings.Join(labels, ",")
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Execute()
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
+		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
+		e2e.Failf("daemonset %s is not ready:\nconditions: %s\ncontainer status: %s", name, podStatus, containerStatus)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset %s is not available", name))
 }
 
@@ -397,6 +412,7 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 		return ready, nil
 	})
 	if err != nil && count != 0 {
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Execute()
 		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
 		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
 		e2e.Failf("pod with label %s is not ready:\nconditions: %s\ncontainer status: %s", label, podStatus, containerStatus)
@@ -946,7 +962,7 @@ func getMetric(oc *exutil.CLI, token, query string) ([]metric, error) {
 }
 
 func checkMetric(oc *exutil.CLI, token, query string, timeInMinutes int) {
-	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, time.Duration(timeInMinutes)*time.Minute, true, func(context.Context) (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, time.Duration(timeInMinutes)*time.Minute, true, func(context.Context) (done bool, err error) {
 		metrics, err := getMetric(oc, token, query)
 		if err != nil {
 			return false, err
