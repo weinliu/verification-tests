@@ -61,7 +61,16 @@ var _ = g.Describe("[sig-mco] MCO hypershift", func() {
 			// create hosted cluster w/o node pool
 			ht.CreateClusterOnAws()
 		} else {
-			ht.Put(TestCtxKeyCluster, getFirstHostedCluster(oc))
+			hostedClusterName := getFirstHostedCluster(oc)
+			hostedClusterNs := exutil.GetHyperShiftHostedClusterNameSpace(oc)
+			// OCPQE-16036 check hosted cluster platform type, we only support create nodepool on aws based hostedcluster.
+			hostedClusterPlatform, err := exutil.GetHostedClusterPlatformType(oc, hostedClusterName, hostedClusterNs)
+			o.Expect(err).NotTo(o.HaveOccurred(), "Get hostedcluster platform type failed")
+			logger.Debugf("hostedcluster platform type is %s", hostedClusterPlatform)
+			if hostedClusterPlatform != exutil.AWSPlatform {
+				g.Skip(fmt.Sprintf("hostedcluster platform type [%s] is not aws, skip this test", hostedClusterPlatform))
+			}
+			ht.Put(TestCtxKeyCluster, hostedClusterName)
 		}
 
 	})
