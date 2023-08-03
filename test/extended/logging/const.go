@@ -1,6 +1,15 @@
 package logging
 
 const (
+	// the namespace where legacy clusterlogging and clusterlogforwarder are in
+	loggingNS = "openshift-logging"
+	// the namespace where cluster-logging-operator is in
+	cloNS = "openshift-logging"
+	// the namespace where elasticsearch-operator is in
+	eoNS = "openshift-operators-redhat"
+	// the namespace where loki-operator is in
+	loNS = "openshift-operators-redhat"
+
 	apiPath         = "/api/logs/v1/"
 	queryPath       = "/loki/api/v1/query"
 	queryRangePath  = "/loki/api/v1/query_range"

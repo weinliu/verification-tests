@@ -20,7 +20,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc             = exutil.NewCLI("vector-kafka-namespace", exutil.KubeConfigPath())
-		cloNS          = "openshift-logging"
 		loggingBaseDir string
 	)
 
@@ -29,10 +28,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
-				Namespace:     "openshift-logging",
+				Namespace:     cloNS,
 				PackageName:   "cluster-logging",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			g.By("deploy CLO")
 			CLO.SubscribeOperator(oc)
@@ -46,13 +45,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			kafka := kafka{
-				namespace:      cloNS,
+				namespace:      loggingNS,
 				kafkasvcName:   "kafka",
 				zoosvcName:     "zookeeper",
 				authtype:       "plaintext-ssl",
 				pipelineSecret: "kafka-vector",
 				collectorType:  "vector",
-				loggingNS:      cloNS,
+				loggingNS:      loggingNS,
 			}
 			g.By("Deploy zookeeper")
 			defer kafka.removeZookeeper(oc)
@@ -65,7 +64,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
 				secretName:   kafka.pipelineSecret,
 			}
@@ -75,7 +74,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -105,13 +104,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Deploy zookeeper")
 			kafka := kafka{
-				namespace:      cloNS,
+				namespace:      loggingNS,
 				kafkasvcName:   "kafka",
 				zoosvcName:     "zookeeper",
 				authtype:       "sasl-plaintext",
 				pipelineSecret: "vector-kafka",
 				collectorType:  "vector",
-				loggingNS:      cloNS,
+				loggingNS:      loggingNS,
 			}
 			defer kafka.removeZookeeper(oc)
 			kafka.deployZookeeper(oc)
@@ -123,7 +122,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
 				secretName:   kafka.pipelineSecret,
 			}
@@ -133,7 +132,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -163,13 +162,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Deploy zookeeper")
 			kafka := kafka{
-				namespace:      cloNS,
+				namespace:      loggingNS,
 				kafkasvcName:   "kafka",
 				zoosvcName:     "zookeeper",
 				authtype:       "sasl-ssl",
 				pipelineSecret: "vector-kafka",
 				collectorType:  "vector",
-				loggingNS:      cloNS,
+				loggingNS:      loggingNS,
 			}
 			defer kafka.removeZookeeper(oc)
 			kafka.deployZookeeper(oc)
@@ -181,7 +180,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
 				secretName:   kafka.pipelineSecret,
 			}
@@ -191,7 +190,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -280,7 +279,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("forward logs to Kafkas")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka_multi_topics.yaml"),
 			}
 			defer clf.delete(oc)
@@ -292,7 +291,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -414,7 +413,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("forward logs to Kafkas")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka_multi_brokers.yaml"),
 			}
 			defer clf.delete(oc)
@@ -423,7 +422,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -481,13 +480,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Deploy zookeeper")
 			kafka := kafka{
-				namespace:      cloNS,
+				namespace:      loggingNS,
 				kafkasvcName:   "kafka",
 				zoosvcName:     "zookeeper",
 				authtype:       "sasl-ssl",
 				pipelineSecret: "vector-kafka",
 				collectorType:  "vector",
-				loggingNS:      cloNS,
+				loggingNS:      loggingNS,
 			}
 			defer kafka.removeZookeeper(oc)
 			kafka.deployZookeeper(oc)
@@ -499,7 +498,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
 				secretName:   kafka.pipelineSecret,
 			}
@@ -509,7 +508,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),

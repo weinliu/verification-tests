@@ -17,7 +17,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc             = exutil.NewCLI("vector-syslog-namespace", exutil.KubeConfigPath())
-		cloNS          = "openshift-logging"
 		loggingBaseDir string
 	)
 
@@ -29,7 +28,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				Namespace:     cloNS,
 				PackageName:   "cluster-logging",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			g.By("Deploy CLO")
 			CLO.SubscribeOperator(oc)
@@ -51,7 +50,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serverName: "rsyslog",
 				namespace:  syslogProj,
 				tls:        false,
-				loggingNS:  cloNS,
+				loggingNS:  loggingNS,
 			}
 			defer rsyslog.remove(oc)
 			rsyslog.deploy(oc)
@@ -59,7 +58,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog.yaml"),
 			}
 			defer clf.delete(oc)
@@ -68,7 +67,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -97,7 +96,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serverName: "rsyslog",
 				namespace:  syslogProj,
 				tls:        false,
-				loggingNS:  cloNS,
+				loggingNS:  loggingNS,
 			}
 			defer rsyslog.remove(oc)
 			rsyslog.deploy(oc)
@@ -105,7 +104,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance without rfc value")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-default.yaml"),
 			}
 			defer clf.delete(oc)
@@ -115,7 +114,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -145,7 +144,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:  syslogProj,
 				tls:        true,
 				secretName: "rsyslog-tls",
-				loggingNS:  cloNS,
+				loggingNS:  loggingNS,
 			}
 			defer rsyslog.remove(oc)
 			rsyslog.deploy(oc)
@@ -153,7 +152,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
 				secretName:   rsyslog.secretName,
 			}
@@ -163,7 +162,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -192,7 +191,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serverName:          "rsyslog",
 				namespace:           syslogProj,
 				tls:                 true,
-				loggingNS:           cloNS,
+				loggingNS:           loggingNS,
 				clientKeyPassphrase: "test-rsyslog-mtls",
 				secretName:          "rsyslog-mtls",
 			}
@@ -202,7 +201,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
 				secretName:   rsyslog.secretName,
 			}
@@ -212,7 +211,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -275,7 +274,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:  syslogProj,
 				tls:        true,
 				secretName: "rsyslog-tls",
-				loggingNS:  cloNS,
+				loggingNS:  loggingNS,
 			}
 			defer rsyslog.remove(oc)
 			rsyslog.deploy(oc)
@@ -283,7 +282,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
 				secretName:   rsyslog.secretName,
 			}
@@ -293,7 +292,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),

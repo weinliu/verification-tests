@@ -17,7 +17,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc             = exutil.NewCLI("logfwdhttp-namespace", exutil.KubeConfigPath())
-		cloNS          = "openshift-logging"
 		loggingBaseDir string
 	)
 
@@ -27,10 +26,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
-				Namespace:     "openshift-logging",
+				Namespace:     cloNS,
 				PackageName:   "cluster-logging",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			CLO.SubscribeOperator(oc)
 		})
@@ -53,7 +52,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				clientAuth:                 true,
 				clientPrivateKeyPassphrase: keyPassphase,
 				secretName:                 "to-fluentd-61253",
-				loggingNS:                  cloNS,
+				loggingNS:                  loggingNS,
 				inPluginType:               "http",
 			}
 			defer fluentdS.remove(oc)
@@ -62,7 +61,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-https-template.yaml"),
 				secretName:   fluentdS.secretName,
 			}
@@ -72,7 +71,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -101,7 +100,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serverAuth:   true,
 				clientAuth:   false,
 				secretName:   "to-fluentd-60933",
-				loggingNS:    cloNS,
+				loggingNS:    loggingNS,
 				inPluginType: "http",
 			}
 			defer fluentdS.remove(oc)
@@ -110,7 +109,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-https-template.yaml"),
 				secretName:   fluentdS.secretName,
 			}
@@ -120,7 +119,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -148,7 +147,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:    fluentdProj,
 				serverAuth:   false,
 				clientAuth:   false,
-				loggingNS:    cloNS,
+				loggingNS:    loggingNS,
 				inPluginType: "http",
 			}
 			defer fluentdS.remove(oc)
@@ -157,7 +156,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-http-template.yaml"),
 			}
 			defer clf.delete(oc)
@@ -166,7 +165,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -195,20 +194,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serverAuth:   true,
 				clientAuth:   false,
 				secretName:   "to-fluentd-60936",
-				loggingNS:    cloNS,
+				loggingNS:    loggingNS,
 				inPluginType: "http",
 			}
 			defer fluentdS.remove(oc)
 			fluentdS.deploy(oc)
 
 			//Create a fake secret from root ca which is used for TLSSkipVerify
-			fakeSecret := resource{"secret", "fake-bundle-60936", cloNS}
+			fakeSecret := resource{"secret", "fake-bundle-60936", loggingNS}
 			defer fakeSecret.clear(oc)
 			dirname := "/tmp/60936-keys"
 			defer os.RemoveAll(dirname)
 			err = os.MkdirAll(dirname, 0777)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/kube-root-ca.crt", "-n", cloNS, "--confirm", "--to="+dirname).Output()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/kube-root-ca.crt", "-n", loggingNS, "--confirm", "--to="+dirname).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", fakeSecret.name, "-n", fakeSecret.namespace, "--from-file=ca-bundle.crt="+dirname+"/ca.crt").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -216,7 +215,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-https-skipverify-template.yaml"),
 				secretName:   fakeSecret.name,
 			}
@@ -226,7 +225,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -275,7 +274,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serverAuth:   true,
 				clientAuth:   false,
 				secretName:   "to-fluentd-60933",
-				loggingNS:    cloNS,
+				loggingNS:    loggingNS,
 				inPluginType: "http",
 			}
 			defer fluentdS.remove(oc)
@@ -284,7 +283,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "61567.yaml"),
 				secretName:   fluentdS.secretName,
 			}
@@ -294,7 +293,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),

@@ -19,7 +19,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc             = exutil.NewCLI("loki-stack", exutil.KubeConfigPath())
-		cloNS          = "openshift-logging"
 		loggingBaseDir string
 	)
 
@@ -29,14 +28,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
-				Namespace:     "openshift-logging",
+				Namespace:     cloNS,
 				PackageName:   "cluster-logging",
 				Subscription:  subTemplate,
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			LO := SubscriptionObjects{
 				OperatorName:  "loki-operator-controller-manager",
-				Namespace:     "openshift-operators-redhat",
+				Namespace:     loNS,
 				PackageName:   "loki-operator",
 				Subscription:  subTemplate,
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
@@ -60,7 +59,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-49168",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   "s3",
 				storageSecret: "s3-secret",
@@ -90,7 +89,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-49169",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   "gcs",
 				storageSecret: "gcs-secret",
@@ -120,7 +119,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-49171",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   "azure",
 				storageSecret: "azure-secret",
@@ -149,7 +148,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-49170",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   "swift",
 				storageSecret: "swift-secret",
@@ -182,7 +181,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-53106",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   "minio",
 				storageSecret: "minio-secret",
@@ -212,7 +211,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-53158",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   "odf",
 				storageSecret: "odf-secret",
@@ -246,7 +245,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-48607",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.small",
 				storageType:   objectStorage,
 				storageSecret: "storage-secret-48607",
@@ -326,7 +325,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
 				name:          "loki-48608",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   objectStorage,
 				storageSecret: "storage-secret-48608",
@@ -394,14 +393,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
-				Namespace:     "openshift-logging",
+				Namespace:     cloNS,
 				PackageName:   "cluster-logging",
 				Subscription:  subTemplate,
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			LO := SubscriptionObjects{
 				OperatorName:  "loki-operator-controller-manager",
-				Namespace:     "openshift-operators-redhat",
+				Namespace:     loNS,
 				PackageName:   "loki-operator",
 				Subscription:  subTemplate,
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
@@ -424,7 +423,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack")
 			ls := lokiStack{
 				name:          "loki-49364",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   getStorageType(oc),
 				storageSecret: "storage-49364",
@@ -444,7 +443,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lokiGatewaySVC := ls.name + "-gateway-http." + ls.namespace + ".svc:8080"
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "lokistack_gateway_https_no_secret.yaml"),
 			}
 			defer clf.delete(oc)
@@ -454,7 +453,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "fluentd",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -489,7 +488,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			ls := lokiStack{
 				name:          "loki-53127",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   getStorageType(oc),
 				storageSecret: "storage-53127",
@@ -509,7 +508,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create ClusterLogging instance with Loki as logstore")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "fluentd",
 				logStoreType:  "lokistack",
 				lokistackName: ls.name,
@@ -554,7 +553,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 			}
 
-			for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"openshift-operators-redhat\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
+			for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"" + loNS + "\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
 				checkMetric(oc, token, metric, 3)
 			}
 		})
@@ -571,7 +570,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			ls := lokiStack{
 				name:          "loki-53145",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   getStorageType(oc),
 				storageSecret: "storage-53145",
@@ -591,7 +590,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create ClusterLogForwarder with Loki as default logstore for all tenants")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
 			}
 			defer clf.delete(oc)
@@ -600,7 +599,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create ClusterLogging instance with Loki as logstore")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "fluentd",
 				logStoreType:  "lokistack",
 				lokistackName: ls.name,
@@ -644,7 +643,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			ls := lokiStack{
 				name:          "loki-57016",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   getStorageType(oc),
 				storageSecret: "storage-57016",
@@ -664,7 +663,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create ClusterLogForwarder with Loki as default logstore for all tenants")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_ns_selector_default.yaml"),
 			}
 			defer clf.delete(oc)
@@ -673,7 +672,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create ClusterLogging instance with Loki as logstore")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     "openshift-logging",
+				namespace:     loggingNS,
 				collectorType: "fluentd",
 				logStoreType:  "lokistack",
 				lokistackName: ls.name,
@@ -712,7 +711,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	var (
 		oc             = exutil.NewCLI("fluentd-loki-ext-namespace", exutil.KubeConfigPath())
-		cloNS          = "openshift-logging"
 		loggingBaseDir string
 	)
 
@@ -721,10 +719,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
-				Namespace:     "openshift-logging",
+				Namespace:     loggingNS,
 				PackageName:   "cluster-logging",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
+				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
 			g.By("deploy CLO")
 			CLO.SubscribeOperator(oc)
@@ -748,7 +746,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create secret with external Grafana Loki instance credentials")
-			sct := resource{"secret", "loki-client", cloNS}
+			sct := resource{"secret", "loki-client", loggingNS}
 			defer sct.clear(oc)
 			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -757,7 +755,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
 				secretName:   sct.name,
 			}
@@ -768,7 +766,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "fluentd",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -812,7 +810,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create secret with external Grafana Loki instance credentials")
-			sct := resource{"secret", "loki-client", cloNS}
+			sct := resource{"secret", "loki-client", loggingNS}
 			defer sct.clear(oc)
 			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -821,7 +819,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance with tenantKey kubernetes_labels.test")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
 				secretName:   sct.name,
 			}
@@ -831,7 +829,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "fluentd",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -875,7 +873,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create secret with external Grafana Loki instance credentials")
-			sct := resource{"secret", "loki-client", cloNS}
+			sct := resource{"secret", "loki-client", loggingNS}
 			defer sct.clear(oc)
 			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -884,7 +882,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance with tenantKey kubernetes_labels.test")
 			clf := clusterlogforwarder{
 				name:         "instance",
-				namespace:    cloNS,
+				namespace:    loggingNS,
 				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
 				secretName:   sct.name,
 			}
@@ -894,7 +892,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
 				name:          "instance",
-				namespace:     cloNS,
+				namespace:     loggingNS,
 				collectorType: "fluentd",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),

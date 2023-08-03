@@ -30,10 +30,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 		CLO := SubscriptionObjects{
 			OperatorName:  "cluster-logging-operator",
-			Namespace:     "openshift-logging",
+			Namespace:     cloNS,
 			PackageName:   "cluster-logging",
 			Subscription:  subTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 		}
 		CLO.SubscribeOperator(oc)
 		oc.SetupProject()
@@ -55,14 +55,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer googleCloudLogging{projectID: projectID, logName: logName + "-" + logType}.removeLogs()
 		}
 
-		gcpSecret := resource{"secret", "gcp-secret-53731", "openshift-logging"}
+		gcpSecret := resource{"secret", "gcp-secret-53731", loggingNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
 			name:         "instance",
-			namespace:    "openshift-logging",
+			namespace:    loggingNS,
 			secretName:   gcpSecret.name,
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-multi-logids.yaml"),
 		}
@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.By("Deploy collector pods")
 		cl := clusterlogging{
 			name:          "instance",
-			namespace:     "openshift-logging",
+			namespace:     loggingNS,
 			collectorType: "vector",
 			waitForReady:  true,
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -116,14 +116,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			logName:   getInfrastructureName(oc) + "-53903",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53903", "openshift-logging"}
+		gcpSecret := resource{"secret", "gcp-secret-53903", loggingNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
 			name:         "instance",
-			namespace:    "openshift-logging",
+			namespace:    loggingNS,
 			secretName:   gcpSecret.name,
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
 		}
@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.By("Deploy collector pods")
 		cl := clusterlogging{
 			name:          "instance",
-			namespace:     "openshift-logging",
+			namespace:     loggingNS,
 			collectorType: "vector",
 			waitForReady:  true,
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -178,14 +178,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			logName:   getInfrastructureName(oc) + "-53904",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53904", "openshift-logging"}
+		gcpSecret := resource{"secret", "gcp-secret-53904", loggingNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
 			name:         "instance",
-			namespace:    "openshift-logging",
+			namespace:    loggingNS,
 			secretName:   gcpSecret.name,
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-label-selector.yaml"),
 		}
@@ -195,7 +195,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.By("Deploy collector pods")
 		cl := clusterlogging{
 			name:          "instance",
-			namespace:     "openshift-logging",
+			namespace:     loggingNS,
 			collectorType: "vector",
 			waitForReady:  true,
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -254,14 +254,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			logName:   getInfrastructureName(oc) + "-53903",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53903", "openshift-logging"}
+		gcpSecret := resource{"secret", "gcp-secret-53903", loggingNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
 			name:         "instance",
-			namespace:    "openshift-logging",
+			namespace:    loggingNS,
 			secretName:   gcpSecret.name,
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
 		}
@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.By("Deploy collector pods")
 		cl := clusterlogging{
 			name:          "instance",
-			namespace:     "openshift-logging",
+			namespace:     loggingNS,
 			collectorType: "vector",
 			waitForReady:  true,
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),

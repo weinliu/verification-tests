@@ -592,7 +592,7 @@ func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string) {
 		cl.name = "instance"
 	}
 	if cl.namespace == "" {
-		cl.namespace = "openshift-logging"
+		cl.namespace = loggingNS
 	}
 	// In case of there is a clusterlogging in the namespace, add a step to check&remove the existing CR before creating it.
 	deleteClusterLogging(oc, cl.name, cl.namespace)
@@ -733,7 +733,7 @@ func (clf *clusterlogforwarder) create(oc *exutil.CLI, optionalParameters ...str
 		clf.name = "instance"
 	}
 	if clf.namespace == "" {
-		clf.namespace = "openshift-logging"
+		clf.namespace = loggingNS
 	}
 	clf.delete(oc)
 
@@ -1582,7 +1582,7 @@ func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
 		cw.secretName = "cw-secret-" + getRandomString()
 	}
 	if cw.secretNamespace == "" {
-		cw.secretNamespace = "openshift-logging"
+		cw.secretNamespace = loggingNS
 	}
 	if len(cw.nodes) == 0 {
 		cw.nodes = getNodeNames(oc, "kubernetes.io/os=linux")

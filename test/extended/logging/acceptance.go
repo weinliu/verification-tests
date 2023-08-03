@@ -20,7 +20,6 @@ import (
 var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	defer g.GinkgoRecover()
 	var (
-		cloNS          = "openshift-logging"
 		oc             = exutil.NewCLI("logging-acceptance", exutil.KubeConfigPath())
 		loggingBaseDir string
 	)
@@ -33,10 +32,10 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			Namespace:     cloNS,
 			PackageName:   "cluster-logging",
 			Subscription:  subTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml")}
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml")}
 		LO := SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
-			Namespace:     "openshift-operators-redhat",
+			Namespace:     loNS,
 			PackageName:   "loki-operator",
 			Subscription:  subTemplate,
 			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml")}
@@ -87,7 +86,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
 			name:          "loki-53817",
-			namespace:     cloNS,
+			namespace:     loggingNS,
 			tSize:         "1x.demo",
 			storageType:   s,
 			storageSecret: "storage-secret-53817",
@@ -107,7 +106,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		g.By("deploy cluster logging")
 		cl := clusterlogging{
 			name:          "instance",
-			namespace:     cloNS,
+			namespace:     loggingNS,
 			collectorType: "vector",
 			logStoreType:  "lokistack",
 			lokistackName: ls.name,
@@ -145,7 +144,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		g.By("create a CLF to test forward to default")
 		clf := clusterlogforwarder{
 			name:         "instance",
-			namespace:    cloNS,
+			namespace:    loggingNS,
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
 		}
 		defer clf.delete(oc)
@@ -176,7 +175,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 				checkMetric(oc, token, "{job=\""+svc.Name+"\"}", 3)
 			}
 		}
-		for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"openshift-operators-redhat\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
+		for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"" + loNS + "\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
 			checkMetric(oc, token, metric, 3)
 		}
 
@@ -212,7 +211,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 		clf := clusterlogforwarder{
 			name:         "instance",
-			namespace:    cloNS,
+			namespace:    loggingNS,
 			secretName:   cw.secretName,
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml"),
 		}
@@ -222,7 +221,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		g.By("deploy collector pods")
 		cl := clusterlogging{
 			name:          "instance",
-			namespace:     cloNS,
+			namespace:     loggingNS,
 			collectorType: "fluentd",
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
 			waitForReady:  true,
@@ -264,7 +263,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 		clf := clusterlogforwarder{
 			name:         "instance",
-			namespace:    cloNS,
+			namespace:    loggingNS,
 			secretName:   cw.secretName,
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml"),
 		}
@@ -274,7 +273,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		g.By("Deploy collector pods")
 		cl := clusterlogging{
 			name:          "instance",
-			namespace:     cloNS,
+			namespace:     loggingNS,
 			collectorType: "vector",
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
 			waitForReady:  true,
@@ -306,14 +305,14 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			logName:   getInfrastructureName(oc) + "-53691",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53691", "openshift-logging"}
+		gcpSecret := resource{"secret", "gcp-secret-53691", loggingNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
 			name:         "instance",
-			namespace:    cloNS,
+			namespace:    loggingNS,
 			secretName:   gcpSecret.name,
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
 		}
@@ -323,7 +322,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		g.By("Deploy collector pods")
 		cl := clusterlogging{
 			name:          "instance",
-			namespace:     cloNS,
+			namespace:     loggingNS,
 			collectorType: "vector",
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
 			waitForReady:  true,
