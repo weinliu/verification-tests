@@ -207,15 +207,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
 			ingctrl1            = ingressControllerDescription{
-				name:      "ocp54868cus1",
+				name:      "ocp54868cus11",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
 				template:  customTemp,
 			}
 			ingctrl2 = ingressControllerDescription{
-				name:      "ocp54868cus2",
+				name:      "ocp54868cus22",
 				namespace: "openshift-ingress-operator",
-				domain:    "ocp54868cus2.test.com",
+				domain:    "ocp54868cus22.test.com",
 				template:  customTemp,
 			}
 			ingctrlResource1   = "ingresscontrollers/" + ingctrl1.name
@@ -265,6 +265,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("TrueProviderSuccess"))
 
 		g.By("patch custom ingress-controller1 with dnsManagementPolicy Unmanaged")
+		defer func() {
+			jsonpath := ".status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status"
+			patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":\"Managed\"}}}}")
+			waitForOutput(oc, ingctrl1.namespace, ingctrlResource1, jsonpath, "TrueTrue")
+			jsonpath = ".spec.dnsManagementPolicy"
+			waitForOutput(oc, ingctrl1.namespace, dnsrecordResource1, jsonpath, "Managed")
+		}()
 		patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":\"Unmanaged\"}}}}")
 
 		g.By("check the dnsManagementPolicy value of ingress-controller1, which should be Unmanaged")
@@ -286,7 +293,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// there was a bug OCPBUGS-2247 in the below test step
 		// g.By("check the default dnsManagementPolicy value of ingress-controller2 not matching the base domain, which should be Unmanaged")
 		// output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource2, "-n", ingctrl2.namespace, "-o=jsonpath={.spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy}").Output()
-		//o.Expect(output).To(o.ContainSubstring("Unmanaged"))
+		// o.Expect(output).To(o.ContainSubstring("Unmanaged"))
 
 		g.By("check ingress-controller2's status")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource2, "-n", ingctrl2.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status}").Output()
