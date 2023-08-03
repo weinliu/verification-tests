@@ -296,8 +296,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		g.By("Enable LogEnricher.. !!!\n")
 		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
-		nodeCount := getNodeCount(oc)
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 		g.By("Create namespace and add labels !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
@@ -419,8 +418,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		g.By("Enable LogEnricher.. !!!\n")
 		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
-		nodeCount := getNodeCount(oc)
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 		g.By("Create namespace and add labels !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
@@ -558,13 +556,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
 			// trigger spod daemonset restart manually before bug https://issues.redhat.com/browse/OCPBUGS-14063 fixed
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("daemonsets", "spod", "-n", subD.namespace, "--ignore-not-found").Execute()
-			nodeCount := getNodeCount(oc)
-			checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+			checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 		}()
 		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true,\"enableMemoryOptimization\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
-		nodeCount := getNodeCount(oc)
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 		g.By("Create namespace and add labels !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
@@ -697,8 +693,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		g.By("Enable LogEnricher.. !!!\n")
 		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
-		nodeCount := getNodeCount(oc)
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 		g.By("Update webhookOptions.. !!!")
 		defer func() {
@@ -841,8 +836,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		g.By("Enable LogEnricher.. !!!\n")
 		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
-		nodeCount := getNodeCount(oc)
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 		g.By("Update webhookOptions.. !!!")
 		defer func() {
@@ -1146,13 +1140,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		assertKeywordsExists(oc, 300, "Error", "selinuxprofiles", selinuxProfileName, "-o=jsonpath={.status.status}", "-n", ns)
 
 		g.By("Patch the allowedSystemProfiles and recreate the selinux profile !!!\n")
-		nodeCount := getNodeCount(oc)
 		defer func() {
 			g.By("Recover the default allowedSystemProfiles.. !!!\n")
 			patchRecover := fmt.Sprintf("{\"spec\":{\"selinuxOptions\":{\"allowedSystemProfiles\":[\"container\"]}}}")
 			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patchRecover)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "[\"container\"]", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.selinuxOptions.allowedSystemProfiles}"}).check(oc)
-			checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+			checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 		}()
 		//patch  oc -n openshift-security-profiles patch spod spod --type=merge -p '{"spec":{"selinuxOptions":{"allowedSystemProfiles":["container","net_container"]}}}'
 		patch := fmt.Sprintf("{\"spec\":{\"selinuxOptions\":{\"allowedSystemProfiles\":[\"container\",\"net_container\"]}}}")
@@ -1190,14 +1183,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		assertParameterValueForBulkPods(oc, strconv.Itoa(2000001000), "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
 
 		g.By("Create priorityclass and patch spod!!!\n")
-		nodeCount := getNodeCount(oc)
 		patchRecover := fmt.Sprintf("{\"spec\":{\"priorityClassName\":\"system-node-critical\"}}")
 		defer func() {
 			g.By("Recover the default config of priorityclass.. !!!\n")
 			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patchRecover)
 			cleanupObjects(oc, objectTableRef{"priorityclass", prioritym.name, subD.namespace})
 			newCheck("expect", asAdmin, withoutNamespace, contain, "system-node-critical", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.priorityClassName}"}).check(oc)
-			checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+			checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 		}()
 		prioritym.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, prioritym.name, ok, []string{"priorityclass", "-n", subD.namespace,
@@ -1206,7 +1198,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
 
 		g.By("Check priorityclass in use!!!\n")
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 		newCheck("expect", asAdmin, withoutNamespace, contain, prioritym.name, ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.priorityClassName}"}).check(oc)
 		assertParameterValueForBulkPods(oc, prioritym.name, "pod", "-l", "name=spod", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priorityClassName}")
 		assertParameterValueForBulkPods(oc, strconv.Itoa(prioritym.prirotyValue), "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
@@ -1222,13 +1214,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		assertParameterValueForBulkPods(oc, strconv.Itoa(2000001000), "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
 
 		g.By("Patch a not exist priorityclass to spod!!!\n")
-		nodeCount := getNodeCount(oc)
 		defer func() {
 			g.By("Recover the default config of priorityclass.. !!!\n")
 			patchRecover := fmt.Sprintf("{\"spec\":{\"priorityClassName\":\"system-node-critical\"}}")
 			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patchRecover)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "system-node-critical", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.priorityClassName}"}).check(oc)
-			checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+			checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 		}()
 		patch := fmt.Sprintf("{\"spec\":{\"priorityClassName\":\"") + priorityClassNotExist + fmt.Sprintf("\"}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
@@ -1274,8 +1265,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		g.By("Enable LogEnricher.. !!!\n")
 		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
-		nodeCount := getNodeCount(oc)
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 		g.By("Create namespace and add labels !!!")
 		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"ns", ns1, ns1})
@@ -1409,8 +1399,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		g.By("Enable LogEnricher.. !!!\n")
 		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
-		nodeCount := getNodeCount(oc)
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 		g.By("Create namespace and add labels !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
@@ -1533,8 +1522,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		g.By("Enable LogEnricher.. !!!\n")
 		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
-		nodeCount := getNodeCount(oc)
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 		g.By("Create namespace and add labels !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
@@ -1634,8 +1622,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		g.By("Enable LogEnricher.. !!!\n")
 		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
-		nodeCount := getNodeCount(oc)
-		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 		g.By("Create namespace and add labels !!!")
 		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"ns", ns1, ns1})

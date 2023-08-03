@@ -1,7 +1,6 @@
 package securityandcompliance
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -13,7 +12,6 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 type fileintegrity struct {
@@ -77,10 +75,9 @@ func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription,
 	e2e.Logf("err %v, msg %v", err, msg)
 
 	g.By("Check Security Profile Operator &webhook &spod pods are in running state !!!")
-	nodeCount := getNodeCount(oc)
 	checkReadyPodCountOfDeployment(oc, "security-profiles-operator", subD.namespace, 3)
 	checkReadyPodCountOfDeployment(oc, "security-profiles-operator-webhook", subD.namespace, 3)
-	checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+	checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 
 	g.By("Security Profiles Operator sucessfully installed !!! ")
 }
@@ -123,20 +120,6 @@ func deleteNamespace(oc *exutil.CLI, namespace string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func getWorkerCount(oc *exutil.CLI) int {
-	workerNodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	nodeCount := len(workerNodes)
-	return nodeCount
-}
-
-func getNodeCount(oc *exutil.CLI) int {
-	nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
-	o.Expect(nodeErr).NotTo(o.HaveOccurred())
-	rhcosCount := len(nodeList.Items)
-	return rhcosCount
-}
-
 func checkReadyPodCountOfDeployment(oc *exutil.CLI, name string, namespace string, readyCount int) {
 	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 		rCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", name, "-n", namespace, "-o=jsonpath={.status.availableReplicas}").Output()
@@ -148,15 +131,20 @@ func checkReadyPodCountOfDeployment(oc *exutil.CLI, name string, namespace strin
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check failed: the ready pod count is not expected count [ %d ]", readyCount))
 }
 
-func checkReadyPodCountOfDaemonset(oc *exutil.CLI, name string, namespace string, readyCount int) {
+func checkPodsStautsOfDaemonset(oc *exutil.CLI, name string, namespace string) {
+	var dCount, rCount, misScheduledCount, updatedScheduledCount string
 	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-		rCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", name, "-n", namespace, "-o=jsonpath={.status.numberReady}").Output()
-		if strings.Compare(strconv.Itoa(readyCount), rCount) == 0 {
+		dCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", name, "-n", namespace, "-o=jsonpath={.status.desiredNumberScheduled}").Output()
+		rCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", name, "-n", namespace, "-o=jsonpath={.status.numberReady}").Output()
+		misScheduledCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", name, "-n", namespace, "-o=jsonpath={.status.numberMisscheduled}").Output()
+		updatedScheduledCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", name, "-n", namespace, "-o=jsonpath={.status.updatedNumberScheduled}").Output()
+		if strings.Compare(dCount, "0") != 0 && strings.Compare(dCount, rCount) == 0 && strings.Compare(dCount, updatedScheduledCount) == 0 && strings.Compare(misScheduledCount, "0") == 0 {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check failed: the ready pod count is not expected count [%d] ", readyCount))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check failed: the pods number of desiredNumberScheduled, numberReady, numberMisscheduled, updatedNumberScheduled are: %v, %v, %v, %v",
+		dCount, rCount, misScheduledCount, updatedScheduledCount))
 }
 
 func (secProfile *seccompProfile) create(oc *exutil.CLI) {
