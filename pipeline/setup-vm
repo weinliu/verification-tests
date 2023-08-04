@@ -144,8 +144,15 @@ if echo $INSTALL_TOOLS | grep -i 'opm' > /dev/null; then
 fi
 
 cp -f ~/.docker/auto/config.json ~/.docker
-podman login quay.io 
+podman login quay.io
 cd $CURRENTDIR
+output=`sudo podman ps -a`
+if [[ $output == *"0.0.0.0:5000"* ]]; then
+  echo "registry is up"
+else
+  echo "run /home/cloud-user/jian/auto_run_registry.sh"
+  /home/cloud-user/jian/auto_run_registry.sh
+fi
 
 if [ ! -f "/root/kustomize" ]; then
     echo "install kustomize"
