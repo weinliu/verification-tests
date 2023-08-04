@@ -4091,6 +4091,39 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-10862-Delete spec tags using 'oc tag -d'", func() {
+		g.By("Import an image to create imagestreams")
+		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "mystream:v1", "mystream:latest", "--import-mode=PreserveOriginal", "--source=docker", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "mystream", "v1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "mystream", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the imagestream tag info")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagestream", "mystream", "--template={{range .spec.tags}} name: {{.name}} {{end}};{{range .status.tags}} tag: {{.tag}} {{end}}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "name: latest  name: v1 ; tag: latest  tag: v1") {
+			e2e.Failf("Fail to get the imagestream info")
+		}
+
+		g.By("Delete the spec tags")
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("mystream:v1", "mystream:latest", "--delete=true", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("imagestream", "mystream", "--template={{.spec}};{{range .status.tags}} tag: {{.tag}} {{end}}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "map[lookupPolicy:map[local:false]];") {
+			e2e.Failf("Fail to get the imagestream info")
+		}
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("mystream:nonexist", "--delete=true", "-n", oc.Namespace()).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		e2e.Logf("print the output", output)
+		if !strings.Contains(output, `mystream:nonexist" not found`) {
+			e2e.Failf("Shouldn't delete nonexist spec tag")
+		}
+	})
+
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-65979-Expose registry CAs as one to mco", func() {
 		g.By("Check if there is image-registry-ca cm configured")
 		cmCons, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", "-n", "openshift-config-managed").Output()
