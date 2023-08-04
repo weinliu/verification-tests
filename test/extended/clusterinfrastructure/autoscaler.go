@@ -466,4 +466,42 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Check machine could be created successful")
 		exutil.WaitForMachinesRunning(oc, 1, "machineset-22038")
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-Medium-66157-Cluster Autoscaler Operator should inject unique labels on Nutanix platform", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "Nutanix")
+		exutil.By("Create clusterautoscaler")
+		clusterAutoscaler.createClusterAutoscaler(oc)
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+
+		exutil.By("adding balancedSimilar nodes option for  clusterautoscaler")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterautoscaler", "default", "-n", "openshift-machine-api", "-p", `{"spec":{"balanceSimilarNodeGroups": true}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// after patching waiting 10 seconds as new pod is restarted
+		time.Sleep(10 * time.Second)
+
+		g.By("Check whether the pod has expected flags/options")
+		expectedFlags := `--balancing-ignore-label=nutanix.com/prism-element-name
+		--balancing-ignore-label=nutanix.com/prism-element-uuid
+		--balancing-ignore-label=nutanix.com/prism-host-name
+		--balancing-ignore-label=nutanix.com/prism-host-uuid
+		`
+
+		flagsArray := strings.Split(expectedFlags, "\n")
+
+		for _, flag := range flagsArray {
+			trimmedFlag := strings.TrimSpace(flag)
+
+			output, describeErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-n", "openshift-machine-api", "-l", "cluster-autoscaler=default").Output()
+			o.Expect(describeErr).NotTo(o.HaveOccurred())
+
+			if strings.Contains(output, trimmedFlag) {
+				e2e.Logf("Flag '%s' is present.\n", trimmedFlag)
+			} else {
+				e2e.Failf("Flag %s is not exist", trimmedFlag)
+			}
+		}
+
+	})
+
 })
