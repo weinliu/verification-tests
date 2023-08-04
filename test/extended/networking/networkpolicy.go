@@ -1241,4 +1241,61 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlPod2PodFail(oc, ns, testPod[0], ns, testPod[1])
 
 	})
+
+	// author: asood@redhat.com
+	g.It("Author:asood-Critical-65901-Duplicate transactions should not be executed for network policy for every pod update.", func() {
+		// Customer https://issues.redhat.com/browse/OCPBUGS-4659
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			networkPolicyFile   = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-ingress-red.yaml")
+			testPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		)
+
+		exutil.By("Check cluster network type")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("This case requires OVNKubernetes as network plugin")
+		}
+
+		exutil.By("Obtain the namespace")
+		ns := oc.Namespace()
+
+		exutil.By("Create a pod in namespace")
+		pod := pingPodResource{
+			name:      "test-pod",
+			namespace: ns,
+			template:  testPodTemplate,
+		}
+		pod.createPingPod(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+		_, labelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", pod.namespace, "pod", pod.name, "type=red").Output()
+		o.Expect(labelErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a network policy")
+		createResourceFromFile(oc, ns, networkPolicyFile)
+		output, err := oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allow-ingress-to-red"))
+
+		exutil.By("Obtain the transaction count to be 1")
+		podIP1, _ := getPodIP(oc, ns, pod.name)
+		ovnKMasterPod := getOVNKMasterPod(oc)
+		o.Expect(ovnKMasterPod).ShouldNot(o.BeEmpty())
+
+		filterString := fmt.Sprintf("'%s' | grep '%s' | wc -l", "transacting operations", podIP1)
+		logContents, logErr1 := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-master", ovnKMasterPod, filterString)
+		o.Expect(logErr1).NotTo(o.HaveOccurred())
+		o.Expect(strings.TrimSpace(logContents)).To(o.Equal("1"))
+
+		exutil.By("Label the pods to see transaction count is unchanged")
+		_, reLabelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", pod.namespace, "--overwrite", "pod", pod.name, "type=blue").Output()
+		o.Expect(reLabelErr).NotTo(o.HaveOccurred())
+
+		newLogContents, logErr2 := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-master", ovnKMasterPod, filterString)
+		o.Expect(logErr2).NotTo(o.HaveOccurred())
+		o.Expect(strings.TrimSpace(newLogContents)).To(o.Equal("1"))
+
+	})
+
 })
