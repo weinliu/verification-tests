@@ -977,3 +977,122 @@ type splunkSearchResult struct {
 	Messages   []interface{}     `json:"messages"`
 	Results    []splunkLogRecord `json:"results"`
 }
+
+/* runtime-config.yaml for Loki when overriding spec's in LokiStack CR
+---
+overrides:
+  application:
+    ingestion_rate_mb: 10
+    ingestion_burst_size_mb: 6
+    max_label_name_length: 1024
+    max_label_value_length: 2048
+    max_label_names_per_series: 30
+    max_line_size: 256000
+    per_stream_rate_limit: 3MB
+    per_stream_rate_limit_burst: 15MB
+    max_entries_limit_per_query: 5000
+    max_chunks_per_query: 2000000
+    max_query_series: 500
+    query_timeout: 3m
+    cardinality_limit: 100000
+    retention_period: 1d
+    retention_stream:
+    - selector: '{kubernetes_namespace_name=~"test.+"}'
+      priority: 1
+      period: 1d
+    ruler_alertmanager_config:
+      alertmanager_url: https://_web._tcp.alertmanager-operated.openshift-user-workload-monitoring.svc
+      enable_alertmanager_v2: true
+      enable_alertmanager_discovery: true
+      alertmanager_refresh_interval: 1m
+      alertmanager_client:
+        tls_ca_path: /var/run/ca/alertmanager/service-ca.crt
+        tls_server_name: alertmanager-user-workload.openshift-user-workload-monitoring.svc.cluster.local
+        type: Bearer
+        credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+  audit:
+    ingestion_rate_mb: 20
+    ingestion_burst_size_mb: 6
+    max_label_name_length: 1024
+    max_label_value_length: 2048
+    max_label_names_per_series: 30
+    max_line_size: 256000
+    per_stream_rate_limit: 3MB
+    per_stream_rate_limit_burst: 15MB
+    max_entries_limit_per_query: 5000
+    max_chunks_per_query: 2000000
+    max_query_series: 500
+    query_timeout: 3m
+    cardinality_limit: 100000
+    retention_period: 1d
+    retention_stream:
+    - selector: '{kubernetes_namespace_name=~"openshift-logging.+"}'
+      priority: 1
+      period: 10d
+  infrastructure:
+    ingestion_rate_mb: 15
+    ingestion_burst_size_mb: 6
+    max_label_name_length: 1024
+    max_label_value_length: 2048
+    max_label_names_per_series: 30
+    max_line_size: 256000
+    per_stream_rate_limit: 3MB
+    per_stream_rate_limit_burst: 15MB
+    max_entries_limit_per_query: 5000
+    max_chunks_per_query: 2000000
+    max_query_series: 500
+    query_timeout: 3m
+    cardinality_limit: 100000
+    retention_period: 5d
+    retention_stream:
+    - selector: '{kubernetes_namespace_name=~"openshift-cluster.+"}'
+      priority: 1
+      period: 1d
+*/
+
+type RuntimeConfig struct {
+	Overrides *Overrides `yaml:"overrides,omitempty"`
+}
+
+type Overrides struct {
+	Application    *OverridesConfig `yaml:"application,omitempty"`
+	Audit          *OverridesConfig `yaml:"audit,omitempty"`
+	Infrastructure *OverridesConfig `yaml:"infrastructure,omitempty"`
+}
+type RetentionStream []struct {
+	Selector string `yaml:"selector"`
+	Priority *int   `yaml:"priority,omitempty"`
+	Period   string `yaml:"period"`
+}
+type RulerAlertmanagerConfig struct {
+	AlertmanagerURL             string             `yaml:"alertmanager_url"`
+	EnableAlertmanagerV2        bool               `yaml:"enable_alertmanager_v2"`
+	EnableAlertmanagerDiscovery bool               `yaml:"enable_alertmanager_discovery"`
+	AlertmanagerRefreshInterval string             `yaml:"alertmanager_refresh_interval"`
+	AlertmanagerClient          AlertmanagerClient `yaml:"alertmanager_client"`
+}
+type AlertmanagerClient struct {
+	TLSCaPath       string `yaml:"tls_ca_path"`
+	TLSServerName   string `yaml:"tls_server_name"`
+	Type            string `yaml:"type"`
+	CredentialsFile string `yaml:"credentials_file"`
+}
+type OverridesConfig struct {
+	IngestionRateMb         *int                     `yaml:"ingestion_rate_mb,omitempty"`
+	IngestionBurstSizeMb    *int                     `yaml:"ingestion_burst_size_mb,omitempty"`
+	MaxLabelNameLength      *int                     `yaml:"max_label_name_length,omitempty"`
+	MaxLabelValueLength     *int                     `yaml:"max_label_value_length,omitempty"`
+	MaxLabelNamesPerSeries  *int                     `yaml:"max_label_names_per_series,omitempty"`
+	MaxLineSize             *int                     `yaml:"max_line_size,omitempty"`
+	MaxGlobalStreamsPerUser *int                     `yaml:"max_global_streams_per_user,omitempty"`
+	PerStreamRateLimit      *string                  `yaml:"per_stream_rate_limit,omitempty"`
+	PerStreamRateLimitBurst *string                  `yaml:"per_stream_rate_limit_burst,omitempty"`
+	MaxEntriesLimitPerQuery *int                     `yaml:"max_entries_limit_per_query,omitempty"`
+	MaxChunksPerQuery       *int                     `yaml:"max_chunks_per_query,omitempty"`
+	MaxQuerySeries          *int                     `yaml:"max_query_series,omitempty"`
+	QueryTimeout            *string                  `yaml:"query_timeout,omitempty"`
+	CardinalityLimit        *int                     `yaml:"cardinality_limit,omitempty"`
+	RetentionPeriod         *string                  `yaml:"retention_period,omitempty"`
+	RetentionStream         *RetentionStream         `yaml:"retention_stream,omitempty"`
+	RulerAlertmanagerConfig *RulerAlertmanagerConfig `yaml:"ruler_alertmanager_config,omitempty"`
+}

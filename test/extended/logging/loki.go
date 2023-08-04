@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -376,6 +378,169 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(lokiCMList.Items) == 5).Should(o.BeTrue())
 			e2e.Logf("Loki Configmaps are reconciled \n")
 
+		})
+		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-High-48679-High-48616-Define limits and overrides per tenant for Loki and restart loki components on config change[Serial]", func() {
+
+			objectStorage := getStorageType(oc)
+			if len(objectStorage) == 0 {
+				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
+
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{
+				name:          "loki-48679",
+				namespace:     cloNS,
+				tSize:         "1x.demo",
+				storageType:   objectStorage,
+				storageSecret: "storage-secret-48679",
+				storageClass:  sc,
+				bucketName:    "logging-loki-48679-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			// Get names of some lokistack components before patching
+			querierPodNameBeforePatch, err := getPodNames(oc, ls.namespace, "app.kubernetes.io/component=querier")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			queryFrontendPodNameBeforePatch, err := getPodNames(oc, ls.namespace, "app.kubernetes.io/component=query-frontend")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Patching lokiStack with limits and overrides")
+			patchConfig := `
+spec:
+  limits:
+    tenants:
+      application:
+        ingestion:
+          ingestionRate: 20
+          maxLabelNameLength: 2048
+          maxLabelValueLength: 1024
+      infrastructure:
+        ingestion:
+          ingestionRate: 15
+      audit:
+        ingestion:
+          ingestionRate: 10
+`
+			_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("lokistack", ls.name, "-n", ls.namespace, "--type", "merge", "-p", patchConfig).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check lokistack components are restarted")
+			existingPodNames := []string{querierPodNameBeforePatch[0], queryFrontendPodNameBeforePatch[0]}
+			for _, podName := range existingPodNames {
+				err := resource{"pod", podName, ls.namespace}.WaitUntilResourceIsGone(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+			ls.waitForLokiStackToBeReady(oc)
+
+			g.By("Validate limits and overrides per tenant under runtime-config.yaml")
+			dirname := "/tmp/" + oc.Namespace() + "-comp-restart"
+			defer os.RemoveAll(dirname)
+			err = os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", ls.namespace, "--confirm", "--to="+dirname).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = os.Stat(dirname + "/runtime-config.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackConf, err := os.ReadFile(dirname + "/runtime-config.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			runtimeConfig := RuntimeConfig{}
+			err = yaml.Unmarshal(lokiStackConf, &runtimeConfig)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// validating overrides for application tenant
+			o.Expect(*runtimeConfig.Overrides.Application.IngestionRateMb).Should(o.Equal(20))
+			o.Expect(*runtimeConfig.Overrides.Application.MaxLabelNameLength).Should(o.Equal(2048))
+			o.Expect(*runtimeConfig.Overrides.Application.MaxLabelValueLength).Should(o.Equal(1024))
+			//validating overrides for infra tenant
+			o.Expect(*runtimeConfig.Overrides.Infrastructure.IngestionRateMb).Should(o.Equal(15))
+			o.Expect(runtimeConfig.Overrides.Infrastructure.MaxLabelNameLength).To(o.BeNil())
+			o.Expect(runtimeConfig.Overrides.Infrastructure.MaxLabelValueLength).To(o.BeNil())
+			//validating overrides for audit tenant
+			o.Expect(*runtimeConfig.Overrides.Audit.IngestionRateMb).Should(o.Equal(10))
+			o.Expect(runtimeConfig.Overrides.Audit.MaxLabelNameLength).To(o.BeNil())
+			o.Expect(runtimeConfig.Overrides.Audit.MaxLabelValueLength).To(o.BeNil())
+			e2e.Logf("overrides have been validated!")
+		})
+
+		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-High-66088-Verify production support for 1x.extra-small lokistack bucket size[Serial]", func() {
+
+			objectStorage := getStorageType(oc)
+			if len(objectStorage) == 0 {
+				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
+
+			// resource requirement can be found under https://github.com/grafana/loki/blob/main/operator/internal/manifests/internal/sizes.go#L51
+			if !validateInfraAndResourcesForLoki(oc, "36Gi", "16") {
+				g.Skip("Current platform not supported/resources not available for this test!")
+			}
+
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{
+				name:          "loki-66088",
+				namespace:     cloNS,
+				tSize:         "1x.extra-small",
+				storageType:   objectStorage,
+				storageSecret: "storage-secret-66088",
+				storageClass:  sc,
+				bucketName:    "logging-loki-66088-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Validate component replicas for 1x.extra-small bucket size")
+			lokiStackComponentLabels := []string{"app.kubernetes.io/component=distributor", "app.kubernetes.io/component=lokistack-gateway",
+				"app.kubernetes.io/component=index-gateway", "app.kubernetes.io/component=ingester", "app.kubernetes.io/component=querier", "app.kubernetes.io/component=query-frontend",
+				"app.kubernetes.io/component=ruler"}
+
+			for _, componentLabel := range lokiStackComponentLabels {
+				replicaCount, err := getPodNames(oc, ls.namespace, componentLabel)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(replicaCount) == 2).Should(o.BeTrue())
+			}
+			replicacount, err := getPodNames(oc, ls.namespace, "app.kubernetes.io/component=compactor")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(replicacount) == 1).Should(o.BeTrue())
+
+			e2e.Logf("Component replicas for 1x.extra-small have been verified!")
+
+			g.By("Validate replication Factor for 1x.extra-small bucket size")
+			dirname := "/tmp/" + oc.Namespace() + "-comp-repFactor"
+			defer os.RemoveAll(dirname)
+			err = os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", ls.namespace, "--confirm", "--to="+dirname).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = os.Stat(dirname + "/config.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(string(lokiStackConf), "replication_factor: 2")).Should(o.BeTrue())
+			e2e.Logf("replication Factor has been verified!")
 		})
 
 	})
