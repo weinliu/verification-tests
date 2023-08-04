@@ -52,25 +52,30 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		if featureSet != "" && featureSet != "TechPreviewNoUpgrade" {
 			g.Skip(fmt.Sprintf("featureSet is not TechPreviewNoUpgrade, but %s", featureSet))
 		}
-		annotations, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-platform-operators", "-o=jsonpath={.metadata.annotations}").Output()
-		if err != nil {
-			e2e.Failf("fail to get openshift-platform-operators project's annotations, error:%v", err)
+
+		projectsMap := map[string][]string{
+			"openshift-platform-operators":   {"platform-operators-controller-manager"},
+			"openshift-rukpak":               {"core", "helm-provisioner", "rukpak-webhooks"},
+			"openshift-operator-controller":  {"operator-controller-controller-manager"},
+			"openshift-cluster-olm-operator": {"cluster-olm-operator"},
+			"openshift-catalogd":             {"catalogd-controller-manager"},
 		}
-		if !strings.Contains(annotations, "workload.openshift.io/allowed") {
-			e2e.Failf("The openshift-platform-operators project missing workload.openshift.io/allowed annotation!")
-		}
-		deploys := []string{
-			"platform-operators-controller-manager",
-			"platform-operators-rukpak-core",
-			"platform-operators-rukpak-webhooks",
-		}
-		for _, deploy := range deploys {
-			annotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", deploy, "-n", "openshift-platform-operators", "-o=jsonpath={.spec.template.metadata.annotations}").Output()
+		for project, deploys := range projectsMap {
+			annotations, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.annotations}").Output()
 			if err != nil {
-				e2e.Failf("fail to get %s's annotation, error:%v", deploy, err)
+				e2e.Failf("fail to get %s project's annotations, error:%v", project, err)
 			}
-			if !strings.Contains(annotation, "target.workload.openshift.io") {
-				e2e.Failf("The %s missing target.workload.openshift.io annotation!", deploy)
+			if !strings.Contains(annotations, "workload.openshift.io/allowed") {
+				e2e.Failf("The %s project missing workload.openshift.io/allowed annotation!", project)
+			}
+			for _, deploy := range deploys {
+				annotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", deploy, "-n", project, "-o=jsonpath={.spec.template.metadata.annotations}").Output()
+				if err != nil {
+					e2e.Failf("fail to get %s/%s's annotation, error:%v", project, deploy, err)
+				}
+				if !strings.Contains(annotation, "target.workload.openshift.io") {
+					e2e.Failf("The %s/%s missing target.workload.openshift.io annotation!", project, deploy)
+				}
 			}
 		}
 	})
