@@ -20,6 +20,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcTemplate          string
 		podTemplate          string
 		deploymentTemplate   string
+		supportedProtocols   []string
 	)
 
 	// azure-file-csi test suite cloud provider support check
@@ -33,9 +34,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip for non-supported cloud provider: *" + cloudProvider + "* !!!")
 		}
 
-		if isAzureStackCluster(oc) || checkFips(oc) {
-			g.Skip("Azure-file CSI Driver don't support AzureStackCluster or FIPS enabled env, skip!!!")
+		if isAzureStackCluster(oc) {
+			g.Skip("Azure-file CSI Driver don't support AzureStack cluster, skip!!!")
 		}
+
+		// azure-file-csi support both "smb" and "nfs" protocols for most scenarios, so add it here as default support protocols in 4.14. But "smb" doesn't support in FIPS enabled cluster.
+		supportedProtocols = append(supportedProtocols, "smb", "nfs")
+		if checkFips(oc) {
+			supportedProtocols = deleteElement(supportedProtocols, "smb")
+		}
+
 		storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
 		storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -51,42 +59,45 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc.SetupProject() //create new project
 
 		// Define the supported skuname
-		exutil.By("Get resource group from new created Azure-file volume")
-		scI := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		pvcI := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scI.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
-		defer pvcI.deleteAsAdmin(oc)
-		defer scI.deleteAsAdmin(oc)
-		rg, _, _ := getAzureFileVolumeHandle(oc, scI, pvcI)
+		exutil.By("Get resource group from infrastructures")
+		rg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.platformStatus.azure.resourceGroupName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-		// Set the resource definition for the scenario
-		storageClassParameters := map[string]string{
-			"resourceGroup": rg,
+		for _, protocol := range supportedProtocols {
+			exutil.By("****** Azure-File CSI Driver with \"" + protocol + "\" protocol test phase start" + "******")
+			func() {
+				// Set the resource definition for the scenario
+				storageClassParameters := map[string]string{
+					"resourceGroup": rg,
+					"protocol":      protocol,
+				}
+				extraParameters := map[string]interface{}{
+					"parameters": storageClassParameters,
+				}
+				sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
+				dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+				exutil.By("Create storageclass")
+				sc.createWithExtraParameters(oc, extraParameters)
+				defer sc.deleteAsAdmin(oc)
+
+				exutil.By("Create PVC")
+				pvc.create(oc)
+				defer pvc.deleteAsAdmin(oc)
+
+				exutil.By("Create deployment")
+				dep.create(oc)
+				defer dep.deleteAsAdmin(oc)
+				dep.waitReady(oc)
+
+				exutil.By("Check the deployment's pod mounted volume can be read and write")
+				dep.checkPodMountedVolumeCouldRW(oc)
+
+				exutil.By("Check the deployment's pod mounted volume have the exec right")
+				dep.checkPodMountedVolumeHaveExecRight(oc)
+			}()
 		}
-		extraParameters := map[string]interface{}{
-			"parameters": storageClassParameters,
-		}
-		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
-		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
-
-		exutil.By("Create storageclass")
-		sc.createWithExtraParameters(oc, extraParameters)
-		defer sc.deleteAsAdmin(oc)
-
-		exutil.By("Create PVC")
-		pvc.create(oc)
-		defer pvc.deleteAsAdmin(oc)
-
-		exutil.By("Create deployment")
-		dep.create(oc)
-		defer dep.deleteAsAdmin(oc)
-		dep.waitReady(oc)
-
-		exutil.By("Check the deployment's pod mounted volume can be read and write")
-		dep.checkPodMountedVolumeCouldRW(oc)
-
-		exutil.By("Check the deployment's pod mounted volume have the exec right")
-		dep.checkPodMountedVolumeHaveExecRight(oc)
 	})
 
 	// author: wduan@redhat.com
@@ -97,42 +108,48 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc.SetupProject() //create new project
 
 		// Define the supported skuname
-		exutil.By("Get storageAccount from new created Azure-file volume")
-		scI := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		pvcI := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scI.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
-		defer pvcI.deleteAsAdmin(oc)
-		defer scI.deleteAsAdmin(oc)
-		_, sa, _ := getAzureFileVolumeHandle(oc, scI, pvcI)
+		for _, protocol := range supportedProtocols {
+			exutil.By("****** Azure-File CSI Driver with \"" + protocol + "\" protocol test phase start" + "******")
+			func() {
+				exutil.By("Get storageAccount from new created Azure-file volume")
+				scI := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+				pvcI := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scI.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
+				defer pvcI.deleteAsAdmin(oc)
+				defer scI.deleteAsAdmin(oc)
+				_, sa, _ := getAzureFileVolumeHandle(oc, scI, pvcI, protocol)
 
-		// Set the resource definition for the scenario
-		storageClassParameters := map[string]string{
-			"storageAccount": sa,
+				// Set the resource definition for the scenario
+				storageClassParameters := map[string]string{
+					"storageAccount": sa,
+					"protocol":       protocol,
+				}
+				extraParameters := map[string]interface{}{
+					"parameters": storageClassParameters,
+				}
+				sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
+				dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+				exutil.By("Create storageclass")
+				sc.createWithExtraParameters(oc, extraParameters)
+				defer sc.deleteAsAdmin(oc)
+
+				exutil.By("Create PVC")
+				pvc.create(oc)
+				defer pvc.deleteAsAdmin(oc)
+
+				exutil.By("Create deployment")
+				dep.create(oc)
+				defer dep.deleteAsAdmin(oc)
+				dep.waitReady(oc)
+
+				exutil.By("Check the deployment's pod mounted volume can be read and write")
+				dep.checkPodMountedVolumeCouldRW(oc)
+
+				exutil.By("Check the deployment's pod mounted volume have the exec right")
+				dep.checkPodMountedVolumeHaveExecRight(oc)
+			}()
 		}
-		extraParameters := map[string]interface{}{
-			"parameters": storageClassParameters,
-		}
-		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
-		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
-
-		exutil.By("Create storageclass")
-		sc.createWithExtraParameters(oc, extraParameters)
-		defer sc.deleteAsAdmin(oc)
-
-		exutil.By("Create PVC")
-		pvc.create(oc)
-		defer pvc.deleteAsAdmin(oc)
-
-		exutil.By("Create deployment")
-		dep.create(oc)
-		defer dep.deleteAsAdmin(oc)
-		dep.waitReady(oc)
-
-		exutil.By("Check the deployment's pod mounted volume can be read and write")
-		dep.checkPodMountedVolumeCouldRW(oc)
-
-		exutil.By("Check the deployment's pod mounted volume have the exec right")
-		dep.checkPodMountedVolumeHaveExecRight(oc)
 	})
 
 	// author: wduan@redhat.com
@@ -142,46 +159,51 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		// Define the supported skuname
-		exutil.By("Get resourcegroup, storageAccount,sharename from new created Azure-file volume")
-		scI := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		pvcI := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scI.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
-		defer pvcI.deleteAsAdmin(oc)
-		defer scI.deleteAsAdmin(oc)
-		rg, sa, share := getAzureFileVolumeHandle(oc, scI, pvcI)
+		for _, protocol := range supportedProtocols {
+			exutil.By("****** Azure-File CSI Driver with \"" + protocol + "\" protocol test phase start" + "******")
+			func() {
+				exutil.By("Get resourcegroup, storageAccount,sharename from new created Azure-file volume")
+				scI := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+				pvcI := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scI.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
+				defer pvcI.deleteAsAdmin(oc)
+				defer scI.deleteAsAdmin(oc)
+				rg, sa, share := getAzureFileVolumeHandle(oc, scI, pvcI, protocol)
 
-		// Set the resource definition for the scenario
-		storageClassParameters := map[string]string{
-			"resourceGroup":  rg,
-			"storageAccount": sa,
-			"shareName":      share,
+				// Set the resource definition for the scenario
+				storageClassParameters := map[string]string{
+					"resourceGroup":  rg,
+					"storageAccount": sa,
+					"shareName":      share,
+					"protocol":       protocol,
+				}
+				extraParameters := map[string]interface{}{
+					"parameters": storageClassParameters,
+				}
+				sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+				// Only suport creating pvc with same size as existing share
+				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name), setPersistentVolumeClaimCapacity(pvcI.capacity))
+				dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+				exutil.By("Create storageclass")
+				sc.createWithExtraParameters(oc, extraParameters)
+				defer sc.deleteAsAdmin(oc)
+
+				exutil.By("Create PVC")
+				pvc.create(oc)
+				defer pvc.deleteAsAdmin(oc)
+
+				exutil.By("Create deployment")
+				dep.create(oc)
+				defer dep.deleteAsAdmin(oc)
+				dep.waitReady(oc)
+
+				exutil.By("Check the deployment's pod mounted volume can be read and write")
+				dep.checkPodMountedVolumeCouldRW(oc)
+
+				exutil.By("Check the deployment's pod mounted volume have the exec right")
+				dep.checkPodMountedVolumeHaveExecRight(oc)
+			}()
 		}
-		extraParameters := map[string]interface{}{
-			"parameters": storageClassParameters,
-		}
-		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		// Only suport creating pvc with same size as existing share
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name), setPersistentVolumeClaimCapacity(pvcI.capacity))
-		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
-
-		exutil.By("Create storageclass")
-		sc.createWithExtraParameters(oc, extraParameters)
-		defer sc.deleteAsAdmin(oc)
-
-		exutil.By("Create PVC")
-		pvc.create(oc)
-		defer pvc.deleteAsAdmin(oc)
-
-		exutil.By("Create deployment")
-		dep.create(oc)
-		defer dep.deleteAsAdmin(oc)
-		dep.waitReady(oc)
-
-		exutil.By("Check the deployment's pod mounted volume can be read and write")
-		dep.checkPodMountedVolumeCouldRW(oc)
-
-		exutil.By("Check the deployment's pod mounted volume have the exec right")
-		dep.checkPodMountedVolumeHaveExecRight(oc)
 	})
 
 	// author: rdeore@redhat.com
@@ -205,88 +227,101 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			if strings.Contains(skuName, "ZRS") && !contains(supportRegions, region) {
 				g.Skip("Current region doesn't support zone-redundant storage")
 			}
-
-			// Set the resource template for the scenario
-			var (
-				podTemplate = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-				provisioner = "file.csi.azure.com"
-			)
-
-			// Set up a specified project share for all the phases
-			exutil.By("#. Create new project for the scenario")
-			oc.SetupProject()
-
-			// Set the resource definition for the scenario
-			storageClassParameters := map[string]string{
-				"skuname": skuName,
-			}
-			extraParameters := map[string]interface{}{
-				"parameters": storageClassParameters,
+			// nfs protocol only supports Premium type
+			if strings.Contains(skuName, "Standard_") {
+				supportedProtocols = deleteElement(supportedProtocols, "nfs")
 			}
 
-			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
-			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			// skip case if there is no supported protocol
+			if len(supportedProtocols) == 0 {
+				g.Skip("Azure-file CSI Driver case is not applicable on this cluster, skip!!!")
+			}
 
-			exutil.By("#. Create csi storageclass with skuname: " + skuName)
-			storageClass.createWithExtraParameters(oc, extraParameters)
-			defer storageClass.deleteAsAdmin(oc)
+			for _, protocol := range supportedProtocols {
+				exutil.By("****** Azure-File CSI Driver with \"" + protocol + "\" protocol test phase start" + "******")
+				func() {
+					// Set up a specified project share for all the phases
+					exutil.By("#. Create new project for the scenario")
+					oc.SetupProject()
 
-			exutil.By("#. Create a pvc with the csi storageclass")
-			pvc.create(oc)
-			defer pvc.deleteAsAdmin(oc)
+					// Set the resource definition for the scenario
+					storageClassParameters := map[string]string{
+						"skuname":  skuName,
+						"protocol": protocol,
+					}
+					extraParameters := map[string]interface{}{
+						"parameters": storageClassParameters,
+					}
 
-			exutil.By("#. Create pod with the created pvc and wait for the pod ready")
-			pod.create(oc)
-			defer pod.deleteAsAdmin(oc)
-			pod.waitReady(oc)
+					storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+					pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+					pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
-			exutil.By("#. Check the pod volume can be read and write")
-			pod.checkMountedVolumeCouldRW(oc)
+					exutil.By("#. Create csi storageclass with skuname: " + skuName)
+					storageClass.createWithExtraParameters(oc, extraParameters)
+					defer storageClass.deleteAsAdmin(oc)
 
-			exutil.By("#. Check the pod volume have the exec right")
-			pod.checkMountedVolumeHaveExecRight(oc)
+					exutil.By("#. Create a pvc with the csi storageclass")
+					pvc.create(oc)
+					defer pvc.deleteAsAdmin(oc)
 
-			exutil.By("#. Check the pv.spec.csi.volumeAttributes.skuname")
-			pvName := pvc.getVolumeName(oc)
-			skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("The skuname in PV is: %v.", skunamePv)
-			o.Expect(skunamePv).To(o.Equal(skuName))
+					exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+					pod.create(oc)
+					defer pod.deleteAsAdmin(oc)
+					pod.waitReady(oc)
+
+					exutil.By("#. Check the pod volume can be read and write")
+					pod.checkMountedVolumeCouldRW(oc)
+
+					exutil.By("#. Check the pod volume have the exec right")
+					pod.checkMountedVolumeHaveExecRight(oc)
+
+					exutil.By("#. Check the pv.spec.csi.volumeAttributes.skuname")
+					pvName := pvc.getVolumeName(oc)
+					skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					e2e.Logf("The skuname in PV is: %v.", skunamePv)
+					o.Expect(skunamePv).To(o.Equal(skuName))
+				}()
+			}
 		})
 	}
 
 	// author: rdeore@redhat.com
 	// OCP-50634 -[Azure-File-CSI-Driver] fail to provision Block volumeMode
 	g.It("ARO-Author:rdeore-High-50634-[Azure-File-CSI-Driver] fail to provision Block volumeMode", func() {
-		// Set the resource template for the scenario
-		var (
-			provisioner = "file.csi.azure.com"
-		)
-
 		// Set up a specified project share for all the phases
 		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject() //create new project
+		for _, protocol := range supportedProtocols {
+			exutil.By("****** Azure-File CSI Driver with \"" + protocol + "\" protocol test phase start" + "******")
+			func() {
+				// Set the resource definition for the scenario
+				storageClassParameters := map[string]string{
+					"protocol": protocol,
+				}
+				extraParameters := map[string]interface{}{
+					"parameters": storageClassParameters,
+				}
+				sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
 
-		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+				exutil.By("Create storageclass")
+				sc.createWithExtraParameters(oc, extraParameters)
+				defer sc.deleteAsAdmin(oc)
 
-		exutil.By("#. Create a storageclass")
-		sc.create(oc)
-		defer sc.deleteAsAdmin(oc)
+				exutil.By("#. Create a pvc with the csi storageclass")
+				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name), setPersistentVolumeClaimVolumemode("Block"))
+				e2e.Logf("%s", pvc.scname)
+				pvc.create(oc)
+				defer pvc.deleteAsAdmin(oc)
 
-		exutil.By("#. Create a pvc with the csi storageclass")
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name), setPersistentVolumeClaimVolumemode("Block"))
-		e2e.Logf("%s", pvc.scname)
-		pvc.create(oc)
-		defer pvc.deleteAsAdmin(oc)
+				exutil.By("#. Check pvc: " + pvc.name + " is in pending status")
+				pvc.waitPvcStatusToTimer(oc, "Pending")
 
-		exutil.By("#. Check pvc: " + pvc.name + " is in pending status")
-		pvc.waitPvcStatusToTimer(oc, "Pending")
-
-		exutil.By("#. Check pvc provisioning failure information is clear")
-		info, err := pvc.getDescription(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(info).To(o.ContainSubstring("driver does not support block volume"))
+				exutil.By("#. Check pvc provisioning failure information is clear")
+				waitResourceSpecifiedEventsOccurred(oc, pvc.namespace, pvc.name, "driver does not support block volume")
+			}()
+		}
 	})
 
 	// author: wduan@redhat.com
@@ -296,49 +331,61 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		// Set the resource definition for the scenario
-		prefix := getRandomString()
-		storageClassParameters := map[string]string{
-			"shareNamePrefix": prefix,
+		for _, protocol := range supportedProtocols {
+			exutil.By("****** Azure-File CSI Driver with \"" + protocol + "\" protocol test phase start" + "******")
+			func() {
+				// Set the resource definition for the scenario
+				prefix := getRandomString()
+				storageClassParameters := map[string]string{
+					"shareNamePrefix": prefix,
+					"protocol":        protocol,
+				}
+
+				extraParameters := map[string]interface{}{
+					"parameters": storageClassParameters,
+				}
+
+				sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
+				pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+				exutil.By("Create storageclass")
+				sc.createWithExtraParameters(oc, extraParameters)
+				defer sc.deleteAsAdmin(oc)
+
+				exutil.By("Create PVC")
+				pvc.create(oc)
+				defer pvc.deleteAsAdmin(oc)
+
+				exutil.By("Create pod")
+				pod.create(oc)
+				defer pod.deleteAsAdmin(oc)
+				pod.waitReady(oc)
+
+				exutil.By("Check the pod mounted volume can be read and write")
+				pod.checkMountedVolumeCouldRW(oc)
+
+				exutil.By("Check the pod mounted volume have the exec right")
+				pod.checkMountedVolumeHaveExecRight(oc)
+
+				exutil.By("Check pv has the prefix in the pv.spec.csi.volumeHandle")
+				pvName := pvc.getVolumeName(oc)
+				volumeHandle, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeHandle}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf("The Azure-File volumeHandle is: %v.", volumeHandle)
+				o.Expect(volumeHandle).To(o.ContainSubstring(prefix))
+			}()
 		}
-		extraParameters := map[string]interface{}{
-			"parameters": storageClassParameters,
-		}
-
-		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
-		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-
-		exutil.By("Create storageclass")
-		sc.createWithExtraParameters(oc, extraParameters)
-		defer sc.deleteAsAdmin(oc)
-
-		exutil.By("Create PVC")
-		pvc.create(oc)
-		defer pvc.deleteAsAdmin(oc)
-
-		exutil.By("Create pod")
-		pod.create(oc)
-		defer pod.deleteAsAdmin(oc)
-		pod.waitReady(oc)
-
-		exutil.By("Check the pod mounted volume can be read and write")
-		pod.checkMountedVolumeCouldRW(oc)
-
-		exutil.By("Check the pod mounted volume have the exec right")
-		pod.checkMountedVolumeHaveExecRight(oc)
-
-		exutil.By("Check pv has the prefix in the pv.spec.csi.volumeHandle")
-		pvName := pvc.getVolumeName(oc)
-		volumeHandle, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeHandle}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The Azure-File volumeHandle is: %v.", volumeHandle)
-		o.Expect(volumeHandle).To(o.ContainSubstring(prefix))
 	})
 
 	// author: wduan@redhat.com
 	// OCP-50919 - [Azure-File-CSI-Driver] support smb file share protocol
 	g.It("ARO-Author:wduan-High-50919-[Azure-File-CSI-Driver] support smb file share protocol", func() {
+		// Skip case in FIPS enabled cluster with smb protocol
+		if checkFips(oc) {
+			g.Skip("Azure-file CSI Driver with smb protocol don't support FIPS enabled env, skip!!!")
+		}
+
 		// Set up a specified project share for all the phases
 		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -387,9 +434,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-
-		// Wrt nfs checkPodMountedVolumeHaveExecRight will get affected, so marking provisioner as dummy value
-		provisioner = "file.csi.azure.com-nfs"
 
 		// Set the resource definition for the scenario
 		storageClassParameters := map[string]string{
@@ -442,6 +486,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		protocolType := protocolTestSuite[caseIds_fsgroup[i]]
 
 		g.It("ARO-Author:chaoyang-High-"+caseIds_fsgroup[i]+"-[Azure-File-CSI-Driver]Support fsgroup for "+protocolType[0]+" file share protocol", func() {
+			// Skip case in FIPS enabled cluster with smb protocol
+			if checkFips(oc) && protocolType[0] == "smb" {
+				g.Skip("Azure-file CSI Driver with smb protocol don't support FIPS enabled env, skip!!!")
+			}
 
 			exutil.By("Create new project for the scenario")
 			oc.SetupProject()
@@ -500,78 +548,91 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// Author:wdaun-[Azure-File-CSI-Driver] support different shareAccessTier in storageclass
+	// For general-purpose v2 account, the available tiers are TransactionOptimized(default), Hot, and Cool. For file storage account, the available tier is Premium. (https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/driver-parameters.md)
 	var azureShareAccessTierCaseIDMap = map[string]string{
 		"60195": "Hot",                  // Medium-60195-[Azure-File-CSI-Driver] suport specify shareAccessTier:Hot in storageclass
 		"60196": "Cool",                 // Medium-60196-[Azure-File-CSI-Driver] suport specify shareAccessTier:Cool in storageclass
 		"60197": "TransactionOptimized", // Medium-60197-[Azure-File-CSI-Driver] suport specify shareAccessTier:TransactionOptimized in storageclass
 		"60856": "Premium",              // Medium-60856-[Azure-File-CSI-Driver] suport specify shareAccessTier:Premium in storageclass
+
 	}
 	atCaseIds := []string{"60195", "60196", "60197", "60856"}
 	for i := 0; i < len(atCaseIds); i++ {
 		shareAccessTier := azureShareAccessTierCaseIDMap[atCaseIds[i]]
 
 		g.It("ARO-Author:wduan-Medium-"+atCaseIds[i]+"-[Azure-File-CSI-Driver] support shareAccessTier in storageclass with "+shareAccessTier, func() {
+			// nfs protocol only supports Premium type
+			if shareAccessTier != "Premium" {
+				supportedProtocols = deleteElement(supportedProtocols, "nfs")
+			}
 
-			// Set the resource template for the scenario
-			var (
-				podTemplate = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-				provisioner = "file.csi.azure.com"
-			)
+			// skip case if there is no supported protocol
+			if len(supportedProtocols) == 0 {
+				g.Skip("Azure-file CSI Driver case is not applicable on this cluster, skip!!!")
+			}
 
-			// Set up a specified project share for all the phases
 			exutil.By("#. Create new project for the scenario")
 			oc.SetupProject()
 
-			// Set the resource definition for the scenario
-			storageClassParameters := map[string]string{
-				"shareAccessTier": shareAccessTier,
+			for _, protocol := range supportedProtocols {
+				exutil.By("****** Azure-File CSI Driver with \"" + protocol + "\" protocol test phase start" + "******")
+				func() {
+
+					// Set the resource definition for the scenario
+					storageClassParameters := map[string]string{
+						"shareAccessTier": shareAccessTier,
+						"protocol":        protocol,
+					}
+					if shareAccessTier == "Premium" {
+						storageClassParameters["skuName"] = "Premium_LRS"
+					}
+					extraParameters := map[string]interface{}{
+						"parameters": storageClassParameters,
+					}
+
+					storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+					pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+					pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+					exutil.By("#. Create csi storageclass with shareAccessTier: " + shareAccessTier)
+					storageClass.createWithExtraParameters(oc, extraParameters)
+					defer storageClass.deleteAsAdmin(oc)
+
+					exutil.By("#. Create a pvc with the csi storageclass")
+					pvc.create(oc)
+					defer pvc.deleteAsAdmin(oc)
+
+					exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+					pod.create(oc)
+					defer pod.deleteAsAdmin(oc)
+					pod.waitReady(oc)
+
+					exutil.By("#. Check the pod volume has the read and write access right")
+					pod.checkMountedVolumeCouldRW(oc)
+
+					exutil.By("#. Check the pv.spec.csi.volumeAttributes.shareAccessTier")
+					pvName := pvc.getVolumeName(oc)
+					shareAccessTierPv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.shareAccessTier}").Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					e2e.Logf("The shareAccessTier in PV is: %v.", shareAccessTierPv)
+					o.Expect(shareAccessTierPv).To(o.Equal(shareAccessTier))
+					// Todo: Add check from the back end
+				}()
 			}
-			if shareAccessTier == "Premium" {
-				storageClassParameters = map[string]string{
-					"shareAccessTier": shareAccessTier,
-					"skuName":         "Premium_LRS",
-				}
-			}
-
-			extraParameters := map[string]interface{}{
-				"parameters": storageClassParameters,
-			}
-
-			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
-			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-
-			exutil.By("#. Create csi storageclass with shareAccessTier: " + shareAccessTier)
-			storageClass.createWithExtraParameters(oc, extraParameters)
-			defer storageClass.deleteAsAdmin(oc)
-
-			exutil.By("#. Create a pvc with the csi storageclass")
-			pvc.create(oc)
-			defer pvc.deleteAsAdmin(oc)
-
-			exutil.By("#. Create pod with the created pvc and wait for the pod ready")
-			pod.create(oc)
-			defer pod.deleteAsAdmin(oc)
-			pod.waitReady(oc)
-
-			exutil.By("#. Check the pod volume has the read and write access right")
-			pod.checkMountedVolumeCouldRW(oc)
-
-			exutil.By("#. Check the pv.spec.csi.volumeAttributes.shareAccessTier")
-			pvName := pvc.getVolumeName(oc)
-			shareAccessTierPv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.shareAccessTier}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("The shareAccessTier in PV is: %v.", shareAccessTierPv)
-			o.Expect(shareAccessTierPv).To(o.Equal(shareAccessTier))
-
-			// Todo: Add check from the back end
 		})
 	}
+
 })
 
 // Get resourceGroup/account/share name by creating a new azure-file volume
-func getAzureFileVolumeHandle(oc *exutil.CLI, sc storageClass, pvc persistentVolumeClaim) (resourceGroup string, account string, share string) {
-	sc.create(oc)
+func getAzureFileVolumeHandle(oc *exutil.CLI, sc storageClass, pvc persistentVolumeClaim, protocol string) (resourceGroup string, account string, share string) {
+	storageClassParameters := map[string]string{
+		"protocol": protocol,
+	}
+	extraParameters := map[string]interface{}{
+		"parameters": storageClassParameters,
+	}
+	sc.createWithExtraParameters(oc, extraParameters)
 	pvc.create(oc)
 	pvc.waitStatusAsExpected(oc, "Bound")
 	pvName := pvc.getVolumeName(oc)
