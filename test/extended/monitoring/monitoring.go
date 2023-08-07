@@ -1644,6 +1644,30 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).To(o.ContainSubstring("--collector.netdev.device-exclude=^(.*)$"))
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-64296-disable CORS headers on Thanos querier [Serial]", func() {
+		var (
+			enableCORS = filepath.Join(monitoringBaseDir, "enableCORS.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("check the default enableCORS value is false")
+		// oc -n openshift-monitoring get deployments.apps thanos-querier -o jsonpath='{.spec.template.spec.containers[?(@.name=="thanos-query")].args}' |jq
+		thanosQueryArgs, getArgsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployments/thanos-querier", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"thanos-query\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(getArgsErr).NotTo(o.HaveOccurred(), "Failed to get thanos-query container args definition")
+		o.Expect(thanosQueryArgs).To(o.ContainSubstring("--web.disable-cors"))
+
+		g.By("set enableCORS as true")
+		createResourceFromYaml(oc, "openshift-monitoring", enableCORS)
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+
+		g.By("check the the config again")
+		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"thanos-query\")].args}"
+		checkYamlconfig(oc, "openshift-monitoring", "deployments", "thanos-querier", cmd, `--web.disable-cors`, false)
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
