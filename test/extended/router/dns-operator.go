@@ -27,9 +27,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Patch dns operator with worker as node selector in dns.operator default")
 		dnsNodes, _ := getAllDNSAndMasterNodes(oc)
+		jsonPath := ".status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"
 		defer restoreDNSOperatorDefault(oc)
 		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsWorkerNodeselector)
 		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes)
+		waitForOutput(oc, "default", "co/dns", jsonPath, "TrueFalseFalse")
 		_, newMasterNodes := getAllDNSAndMasterNodes(oc)
 		checkGivenStringPresentOrNot(false, newMasterNodes, "master")
 
@@ -46,9 +48,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Patch dns operator with master as node selector in dns.operator default")
 		dnsNodes1, _ := getAllDNSAndMasterNodes(oc)
-		defer restoreDNSOperatorDefault(oc)
 		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterNodeselector)
 		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes1)
+		waitForOutput(oc, "default", "co/dns", jsonPath, "TrueFalseFalse")
 		_, newMasterNodes1 := getAllDNSAndMasterNodes(oc)
 		checkGivenStringPresentOrNot(true, newMasterNodes1, "master")
 
@@ -80,9 +82,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Patch dns operator config with custom tolerations of dns pod, not to tolerate master node taints")
 		dnsNodes, _ := getAllDNSAndMasterNodes(oc)
+		jsonPath := ".status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"
 		defer restoreDNSOperatorDefault(oc)
 		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterToleration)
 		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes)
+		waitForOutput(oc, "default", "co/dns", jsonPath, "TrueFalseFalse")
 		_, newMasterNodes := getAllDNSAndMasterNodes(oc)
 		checkGivenStringPresentOrNot(false, newMasterNodes, "master")
 

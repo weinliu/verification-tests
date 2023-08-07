@@ -635,10 +635,35 @@ func restoreDNSOperatorDefault(oc *exutil.CLI) {
 	if strings.Contains(output, "no change") {
 		e2e.Logf("skip the Progressing check step.")
 	} else {
-		waitAllCorefilesUpdated(oc, attrList)
-
+		// check if each node has a dns pod
+		allNodes := fetchJSONPathValue(oc, "default", "nodes", ".items[*].metadata.labels.kubernetes\\.io/hostname")
+		landedNodes, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=jsonpath={.items[*].spec.nodeName}").Output()
+		if len(allNodes) == len(landedNodes) {
+			waitAllCorefilesUpdated(oc, attrList)
+		} else {
+			// after reset to default, the number of dns pods will be increased
+			delAllDNSPods(oc)
+			waitAllDNSPodsAppear(oc)
+		}
 	}
 	ensureClusterOperatorNormal(oc, "dns", 5, 300)
+}
+
+func waitAllDNSPodsAppear(oc *exutil.CLI) {
+	allNodes := fetchJSONPathValue(oc, "default", "nodes", ".items[*].metadata.labels.kubernetes\\.io/hostname")
+	landedNodes, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=jsonpath={.items[*].spec.nodeName}").Output()
+	for _, nodeName := range strings.Split(allNodes, " ") {
+		waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			if strings.Contains(landedNodes, nodeName) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the desired dns pod on node "+nodeName+"does not appear"))
+	}
+	for _, podName := range getAllDNSPodsNames(oc) {
+		waitForOutput(oc, "openshift-dns", "pod/"+podName, ".status.phase", "Running")
+	}
 }
 
 // this function is to get all dns pods' names, the return is the string slice of all dns pods' names, together with an error
