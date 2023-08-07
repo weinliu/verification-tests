@@ -344,20 +344,21 @@ const (
 
 // Hive Configurations
 const (
-	HiveNamespace             = "hive" //Hive Namespace
-	PullSecret                = "pull-secret"
-	hiveAdditionalCASecret    = "hive-additional-ca"
-	PrometheusURL             = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
-	thanosQuerierURL          = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query?query="
-	HiveImgRepoOnQuay         = "app-sre"
-	ClusterInstallTimeout     = 3600
-	DefaultTimeout            = 120
-	FakeClusterInstallTimeout = 600
-	ClusterResumeTimeout      = 1200
-	ClusterUninstallTimeout   = 1800
-	HibernateAfterTimer       = 300
-	ClusterSuffixLen          = 4
-	LogsLimitLen              = 1024
+	HiveNamespace                     = "hive" //Hive Namespace
+	PullSecret                        = "pull-secret"
+	hiveAdditionalCASecret            = "hive-additional-ca"
+	PrometheusURL                     = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
+	thanosQuerierURL                  = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query?query="
+	HiveImgRepoOnQuay                 = "app-sre"
+	ClusterInstallTimeout             = 3600
+	DefaultTimeout                    = 120
+	WaitingForClusterOperatorsTimeout = 600
+	FakeClusterInstallTimeout         = 600
+	ClusterResumeTimeout              = 1200
+	ClusterUninstallTimeout           = 1800
+	HibernateAfterTimer               = 300
+	ClusterSuffixLen                  = 4
+	LogsLimitLen                      = 1024
 )
 
 // AWS Configurations
@@ -1534,13 +1535,12 @@ func getHivecontrollersPod(oc *exutil.CLI, namespace string) string {
 	return podArray[0]
 }
 
-// Get OCP Image for Hive testing, default is 4.13-nightly image for now and if not exist, fail the test
 func getTestOCPImage() string {
-	//get the latest 4.13-nightly image for Hive testing
-	testOCPImage, err := exutil.GetLatestNightlyImage("4.13")
+	testImageVersion := "4.14"
+	testOCPImage, err := exutil.GetLatestNightlyImage(testImageVersion)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if testOCPImage == "" {
-		e2e.Fail("Can't get the latest 4.13-nightly image")
+		e2e.Failf("Failed to get image for version %v", testImageVersion)
 	}
 	return testOCPImage
 }
@@ -1551,6 +1551,11 @@ func getCondition(oc *exutil.CLI, kind, resourceName, namespace, conditionType s
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	var condition map[string]string
+	// Avoid Unmarshal failure when stdout is empty
+	if len(stdout) == 0 {
+		e2e.Logf("Condition %v not found on %v/%v in namespace %v", conditionType, kind, resourceName, namespace)
+		return condition
+	}
 	err = json.Unmarshal([]byte(stdout), &condition)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1619,29 +1624,36 @@ func newLegoDNSProvider(
 
 // Extract hiveutil (from the latest Hive image) into dir and return the executable's path
 func extractHiveutil(oc *exutil.CLI, dir string) string {
-	e2e.Logf("Getting tag of the latest Hive image")
-	cmd := exec.Command(
-		"bash",
-		"-c",
-		fmt.Sprintf("curl -sk https://quay.io/api/v1/repository/%s/hive/tag/ "+
-			"| jq '.tags | sort_by(.start_ts) | reverse | .[0].name'", HiveImgRepoOnQuay),
-	)
-	latestImgTag, err := cmd.CombinedOutput()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	latestImgTagStr := strings.Trim(strings.TrimSuffix(string(latestImgTag), "\n"), "\"")
+	// Temporarily swap app-sre image with a self-build one for debugging purposes.
+	// Explanation:
+	// "hiveutil awsprivatelink enable" suffers from the "unknown userid" error
+	// when running as a random user in OCP, see https://github.com/golang/go/issues/38599.
+
+	//e2e.Logf("Getting tag of the latest Hive image")
+	//cmd := exec.Command(
+	//	"bash",
+	//	"-c",
+	//	fmt.Sprintf("curl -sk https://quay.io/api/v1/repository/%s/hive/tag/ "+
+	//		"| jq '.tags | sort_by(.start_ts) | reverse | .[0].name'", HiveImgRepoOnQuay),
+	//)
+	//latestImgTag, err := cmd.CombinedOutput()
+	//o.Expect(err).NotTo(o.HaveOccurred())
+	//latestImgTagStr := strings.Trim(strings.TrimSuffix(string(latestImgTag), "\n"), "\"")
+	latestImgTagStr := "test-hiveutil-awsprivatelink"
 
 	e2e.Logf("Extracting hiveutil from image %v (latest) ...", latestImgTagStr)
-	err = oc.
+	err := oc.
 		AsAdmin().
 		WithoutNamespace().
 		Run("image", "extract").
-		Args(fmt.Sprintf("quay.io/%s/hive:%s", HiveImgRepoOnQuay, latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
+		//Args(fmt.Sprintf("quay.io/%s/hive:%s", HiveImgRepoOnQuay, latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
+		Args(fmt.Sprintf("quay.io/%s/hive:%s", "fxierh", latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
 		Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	hiveutilPath := dir + "/hiveutil"
 
 	e2e.Logf("Making hiveutil executable ...")
-	cmd = exec.Command("chmod", "+x", hiveutilPath)
+	cmd := exec.Command("chmod", "+x", hiveutilPath)
 	_, err = cmd.CombinedOutput()
 	o.Expect(err).NotTo(o.HaveOccurred())
 

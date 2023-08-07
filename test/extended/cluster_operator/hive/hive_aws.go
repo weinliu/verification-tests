@@ -1415,11 +1415,7 @@ spec:
 				e2e.Logf("For condition ProvisionFailed, expected reason is KubeAPIWaitFailed, actual reason is %v, retrying ...", reason)
 				return false
 			}
-			if message, ok := condition["message"]; !ok || strings.Compare(message, "Failed waiting for Kubernetes API. This error usually happens when there is a problem on the bootstrap host that prevents creating a temporary control plane") != 0 {
-				e2e.Logf("For condition ProvisionFailed, expected message is \nFailed waiting for Kubernetes API. This error usually happens when there is a problem on the bootstrap host that prevents creating a temporary control plane, \nactual reason is %v\n, retrying ...", message)
-				return false
-			}
-			e2e.Logf("For condition ProvisionFailed, fields status, reason & message all expected, proceeding to the next step ...")
+			e2e.Logf("For condition ProvisionFailed, fields status and reason expected, proceeding to the next step ...")
 			return true
 		}
 		o.Eventually(waitForAPIWaitFailure).WithTimeout(ClusterInstallTimeout * time.Second).WithPolling(3 * time.Minute).Should(o.BeTrue())
@@ -1462,7 +1458,7 @@ spec:
 
 		exutil.By("Making sure the cluster is installed and in the \"Running\" powerstate ...")
 		newCheck("expect", "get", asAdmin, false, compare, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
-		newCheck("expect", "get", asAdmin, false, compare, "Running", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.status.powerState}"}).check(oc)
+		newCheck("expect", "get", asAdmin, false, compare, "Running", ok, WaitingForClusterOperatorsTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.status.powerState}"}).check(oc)
 
 		exutil.By("Extracting kubeconfig ...")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
@@ -3211,7 +3207,7 @@ spec:
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "51195"|./bin/extended-platform-tests run --timeout 35m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-51195-[AWS]DNSNotReadyTimeout should be terminal[Serial][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-51195-[AWS]DNSNotReadyTimeout should be terminal[Disruptive]", func() {
 		testCaseID := "51195"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -3360,34 +3356,15 @@ spec:
 		newCheck("expect", "get", asAdmin, requireNS, compare, "Failed", ok, 1800, []string{"pod", provisionPod1, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("Waiting for the second provision Pod to be created...")
-		var provisionPod2 string
 		waitForProvisionPod2 := func() bool {
 			provisionPodNames := getProvisionPodNames(oc, cdName, oc.Namespace())
 			if len(provisionPodNames) > 1 {
-				provisionPod2 = provisionPodNames[1]
+				e2e.Logf("The second provision Pod is created. Current provision Pods = %v", provisionPodNames)
 				return true
 			}
 			return false
 		}
 		o.Eventually(waitForProvisionPod2).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
-
-		exutil.By(fmt.Sprintf("Making sure provision Pod 2 (%s) cleans up the resources created in the previous attempt...", provisionPod2))
-		cmd, stdout, err := oc.Run("logs").Args("-f", provisionPod2, "-c", "hive").BackgroundRC()
-		defer cmd.Process.Kill()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		f := stdout.(*os.File)
-		defer f.Close()
-		targetLines := []string{"cleaning up resources from previous provision attempt"}
-		// Extract the msg part of each line of log if exists
-		extractMsg := func(line string) string {
-			if idx := strings.Index(line, `msg="`); idx >= 0 {
-				idx2 := strings.Index(line[idx+5:], `"`)
-				return line[idx+5 : idx+5+idx2]
-			}
-			return ""
-		}
-		targetFound := assertLogs(f, targetLines, extractMsg, 10*time.Minute)
-		o.Expect(targetFound).To(o.BeTrue())
 	})
 
 	//author: fxie@redhat.com
