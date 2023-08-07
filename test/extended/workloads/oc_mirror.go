@@ -791,4 +791,92 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(mirrorErr, "max time reached but the disk to registry still failed")
 		createCSAndISCP(oc, "cs-case65150-oci-multi-index", "openshift-marketplace", "Running", 1)
 	})
+
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-High-65151-mirror2disk and disk2mirror workflow for local oci catalog incremental  and prune testing [Serial]", func() {
+		g.By("Set registry config")
+		homePath := os.Getenv("HOME")
+		dirname := homePath + "/case5151"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		publicRegistry, err := exutil.GetMirrorRegistry(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Registry is %s", publicRegistry)
+		if publicRegistry == "" {
+			g.Skip("There is no public registry, skip.")
+		}
+
+		defer os.RemoveAll("/tmp/redhat-operator-index")
+		g.By("Copy the catalog as OCI FBC")
+		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", "/tmp/redhat-operator-index")
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			_, err := exec.Command("bash", "-c", command).Output()
+			if err != nil {
+				e2e.Logf("copy failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		ociFirstConfig := filepath.Join(ocmirrorBaseDir, "config-oci-65151-1.yaml")
+		ociSecondConfig := filepath.Join(ocmirrorBaseDir, "config-oci-65151-2.yaml")
+		for _, filename := range []string{ociFirstConfig, ociSecondConfig} {
+			sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, publicRegistry, filename)
+			_, err = exec.Command("bash", "-c", sedCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		defer os.RemoveAll("oc-mirror-workspace")
+		defer os.RemoveAll("olm_artifacts")
+		g.By("Start mirror2disk for the first time")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFirstConfig, "file://"+dirname).Execute()
+			if err != nil {
+				e2e.Logf("The first mirror2disk  failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed")
+		g.By("Start disk2mirror for the first time")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("The first disk2mirror  failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror still failed")
+
+		g.By("Start mirror2disk for the second time")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociSecondConfig, "file://"+dirname).Execute()
+			if err != nil {
+				e2e.Logf("The second mirror2disk  failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed")
+		g.By("Start disk2mirror for the second time")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq2_000000.tar", "docker://"+publicRegistry, "--dest-skip-tls").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil {
+				e2e.Logf("The second disk2mirror  failed, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(output, "Deleting manifest") || strings.Contains(output, "secondary-scheduler-operator") {
+				e2e.Failf("Don't find the prune logs and should not see logs about sso for incremental test")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the second disk2mirror still failed")
+	})
+
 })
