@@ -76,9 +76,6 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("quay.io/windupeng/windup-operator-native:0.0.4"))
 		o.Expect(output).To(o.ContainSubstring("\"name\": \"windup-operator.0.0.5\""))
 		o.Expect(output).To(o.ContainSubstring("quay.io/windupeng/windup-operator-native:0.0.5"))
-		o.Expect(output).To(o.ContainSubstring("G9yX2NwdV9saW1pdCI6eyJkZWZhdWx0IjoiNCIsInR5cGUiO"))
-		o.Expect(output).To(o.ContainSubstring("nRJkhFiQuzDX/kIs7oymi/znDqF/u01OSDLakLMhPHjGPLsG"))
-		o.Expect(output).To(o.ContainSubstring("2WHFDbGZFbVkvSkFyQVdDRW5sanh1aTFvZUtzV083WnhteFF"))
 
 		exutil.By("render dc-based index image with one file")
 		output, err = opmCLI.Run("render").Args("quay.io/olmqe/olm-index:OLM-2199-DC-example").Output()
@@ -94,9 +91,6 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("quay.io/windupeng/windup-operator-native:0.0.4"))
 		o.Expect(output).To(o.ContainSubstring("\"name\": \"windup-operator.0.0.5\""))
 		o.Expect(output).To(o.ContainSubstring("quay.io/windupeng/windup-operator-native:0.0.5"))
-		o.Expect(output).To(o.ContainSubstring("G9yX2NwdV9saW1pdCI6eyJkZWZhdWx0IjoiNCIsInR5cGUiO"))
-		o.Expect(output).To(o.ContainSubstring("nRJkhFiQuzDX/kIs7oymi/znDqF/u01OSDLakLMhPHjGPLsG"))
-		o.Expect(output).To(o.ContainSubstring("2WHFDbGZFbVkvSkFyQVdDRW5sanh1aTFvZUtzV083WnhteFF"))
 
 		exutil.By("render dc-based index image with different files")
 		output, err = opmCLI.Run("render").Args("quay.io/olmqe/olm-index:OLM-2199-DC-example-Df").Output()
@@ -112,9 +106,6 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("quay.io/windupeng/windup-operator-native:0.0.4"))
 		o.Expect(output).To(o.ContainSubstring("\"name\": \"windup-operator.0.0.5\""))
 		o.Expect(output).To(o.ContainSubstring("quay.io/windupeng/windup-operator-native:0.0.5"))
-		o.Expect(output).To(o.ContainSubstring("G9yX2NwdV9saW1pdCI6eyJkZWZhdWx0IjoiNCIsInR5cGUiO"))
-		o.Expect(output).To(o.ContainSubstring("nRJkhFiQuzDX/kIs7oymi/znDqF/u01OSDLakLMhPHjGPLsG"))
-		o.Expect(output).To(o.ContainSubstring("2WHFDbGZFbVkvSkFyQVdDRW5sanh1aTFvZUtzV083WnhteFF"))
 
 		exutil.By("render dc-based index image with different directory")
 		output, err = opmCLI.Run("render").Args("quay.io/olmqe/olm-index:OLM-2199-DC-example-Dd").Output()
@@ -130,9 +121,6 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("quay.io/windupeng/windup-operator-native:0.0.4"))
 		o.Expect(output).To(o.ContainSubstring("\"name\": \"windup-operator.0.0.5\""))
 		o.Expect(output).To(o.ContainSubstring("quay.io/windupeng/windup-operator-native:0.0.5"))
-		o.Expect(output).To(o.ContainSubstring("G9yX2NwdV9saW1pdCI6eyJkZWZhdWx0IjoiNCIsInR5cGUiO"))
-		o.Expect(output).To(o.ContainSubstring("nRJkhFiQuzDX/kIs7oymi/znDqF/u01OSDLakLMhPHjGPLsG"))
-		o.Expect(output).To(o.ContainSubstring("2WHFDbGZFbVkvSkFyQVdDRW5sanh1aTFvZUtzV083WnhteFF"))
 
 		exutil.By("render bundle image")
 		output, err = opmCLI.Run("render").Args("quay.io/olmqe/cockroachdb-operator:5.0.4-2199", "quay.io/olmqe/cockroachdb-operator:5.0.3-2199").Output()
@@ -299,10 +287,14 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check output of render bundle image contain olm.constraint which is defined in dependencies.yaml")
-		o.Expect(output).To(o.ContainSubstring("olm.constraint"))
+		if !strings.Contains(output, "olm.constraint") {
+			e2e.Failf("output doesn't contain olm.constraint")
+		}
 
-		exutil.By("check output of render bundle image contain olm.bundle.object")
-		o.Expect(output).To(o.ContainSubstring("olm.bundle.object"))
+		exutil.By("check output of render bundle image contain olm.csv.metadata")
+		if !strings.Contains(output, "olm.csv.metadata") {
+			e2e.Failf("output doesn't contain olm.csv.metadata")
+		}
 	})
 
 	// author: xzha@redhat.com
