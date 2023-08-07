@@ -84,6 +84,8 @@ function config_env_for_cluster {
   source ~/.bash_profile
   echo "configure kubeconfig, azure authentication or client proxy for the cluster"
   source ${PIPELINESCRIPT_DIR}"/occe4c" ${WORKSPACE} "null"${FLEXY_BUILD} "${CONFIG}"
+  echo "opm version: "
+  opm version
 }
 function result_report {
   echo "get result and parse it"
