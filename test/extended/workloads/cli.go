@@ -17,6 +17,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
@@ -1131,6 +1132,91 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		releaseInfoOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "quay.io/openshift-release-dev/ocp-release:4.12.5-x86_64", "--idms-file="+idmsFile63855, "--icsp-file="+icspFile63855).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(strings.Contains(releaseInfoOutput, "error: icsp-file and idms-file are mutually exclusive")).To(o.BeTrue())
+	})
+
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-64920-High-63851-Verify oc adm release info and oc image extract --icsp-file flag still works with deprecated warning message", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		icspFile64920 := filepath.Join(buildPruningBaseDir, "icspFile64920.yaml")
+		var (
+			image         string
+			authContentAR string
+		)
+
+		g.By("Get desired image from ocp cluster")
+		pullSpec, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o", "jsonpath={..desired.image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(pullSpec).NotTo(o.BeEmpty())
+		e2e.Logf("pullspec is %v", pullSpec)
+
+		g.By("Check if imageContentSourcePolicy image-policy-aosqe exists, if not skip the case")
+		existingIcspOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "--ignore-not-found").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !(strings.Contains(existingIcspOutput, "image-policy-aosqe")) {
+			g.Skip("Image-policy-aosqe icsp not found, skipping the case")
+		}
+
+		// Retreive image registry name
+		imageRegistryName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[0].mirrors[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		imageRegistryName = strings.Split(imageRegistryName, ":")[0]
+		e2e.Logf("ImageRegistryName is %s", imageRegistryName)
+
+		// Replace localhost with retreived registry name from the cluster in icsp file
+		sedCmd := fmt.Sprintf(`sed -i 's/localhost/%s/g' %s`, imageRegistryName, icspFile64920)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Extract secret and store it
+		extractTmpDirName := "/tmp/case64920"
+		err = os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Retreive image digest
+		imageDigest := strings.Split(pullSpec, "@")[1]
+		e2e.Logf("imageDigest is %s", imageDigest)
+
+		// Remove auth & run command oc adm release info with out --icsp-flag
+		dockerTmpDirName := "/tmp/case64920/.dockerconfigjson"
+		authContent, readErr := os.ReadFile(dockerTmpDirName)
+		o.Expect(readErr).NotTo(o.HaveOccurred())
+		if !strings.Contains(pullSpec, "registry.ci.openshift.org") {
+			image = "quay.io/openshift-release-dev/ocp-v4.0-art-dev@" + imageDigest
+			authContentAR, err = sjson.Delete(string(authContent), `auths.quay\.io`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			image = "registry.ci.openshift.org/ocp/release@" + imageDigest
+			authContentAR, err = sjson.Delete(string(authContent), `auths.registry\.ci\.openshift\.org`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(os.WriteFile(dockerTmpDirName, []byte(authContentAR), 0640)).NotTo(o.HaveOccurred())
+
+		_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image).Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(outErr).To(o.ContainSubstring("error: unable to read image " + image))
+
+		// Run command oc adm release info with --icsp-flag
+		_, out, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image, "-a", dockerTmpDirName, "--icsp-file="+icspFile64920).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("Flag --icsp-file has been deprecated, support for it will be removed in a future release. Use --idms-file instead"))
+
+		// Run command oc adm release info to get oc-mirror image
+		ocMirrorImage, _, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image, "-a", dockerTmpDirName, "--icsp-file="+icspFile64920, `-ojsonpath={.references.spec.tags[?(@.name=="oc-mirror")].from.name}`).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("extractCmd output is %s", ocMirrorImage)
+
+		// Run command oc image extract with --icsp-flag
+		_, out, err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", "-a", dockerTmpDirName, ocMirrorImage, "--path=/usr/bin/oc-mirror:"+extractTmpDirName, "--icsp-file="+icspFile64920, "--insecure", "--confirm").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("Flag --icsp-file has been deprecated, support for it will be removed in a future release. Use --idms-file instead"))
+
+		// Verify oc-mirror is present
+		output, err := exec.Command("bash", "-c", "stat "+extractTmpDirName+"/oc-mirror").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), "File: /tmp/case64920/oc-mirror")).To(o.BeTrue())
 	})
 
 })
