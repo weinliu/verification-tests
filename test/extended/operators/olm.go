@@ -6164,7 +6164,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			sub.create(oc, itName, dr)
 
 			exutil.By("check csv")
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+			err := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+				status := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}")
+				if strings.Compare(status, "Succeeded") == 0 {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "csv busybox.v2.0.0 is not installed as expected")
 
 			exutil.By("check additional resources")
 			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"VerticalPodAutoscaler", "busybox-vpa", "-n", sub.namespace}).check(oc)
