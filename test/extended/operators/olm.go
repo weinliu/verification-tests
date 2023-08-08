@@ -5648,18 +5648,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 29723 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v4",
+				address:     "quay.io/olmqe/nginx-ok-index:v1399-fbc-multi",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "cockroachdb",
+				subName:                "nginx-ok1-1399",
 				namespace:              "",
-				channel:                "stable-5.x",
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "cockroachdb",
+				operatorPackage:        "nginx-ok1-1399",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "",
-				startingCSV:            "cockroachdb.v5.0.4",
+				startingCSV:            "nginx-ok1-1399.v0.0.4",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
@@ -5684,16 +5684,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("delete catalog source")
 		catsrc.delete(itName, dr)
 		exutil.By("delete sa")
-		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "sa", "default", "-n", sub.namespace)
+		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "sa", "nginx-ok1-1399-controller-manager", "-n", sub.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check abnormal status")
 		output := getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", sub.operatorPackage+"."+sub.namespace, "-o=json")
 		o.Expect(output).NotTo(o.BeEmpty())
 
-		output = getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", sub.operatorPackage+"."+sub.namespace,
-			fmt.Sprintf("-o=jsonpath={.status.components.refs[?(@.name==\"%s\")].conditions[*].type}", sub.subName))
-		o.Expect(output).To(o.ContainSubstring("CatalogSourcesUnhealthy"))
+		newCheck("expect", asAdmin, withoutNamespace, contain, "CatalogSourcesUnhealthy", ok, []string{"operator.operators.coreos.com", sub.operatorPackage + "." + sub.namespace,
+			fmt.Sprintf("-o=jsonpath={.status.components.refs[?(@.name==\"%s\")].conditions[*].type}", sub.subName)}).check(oc)
 
 		newCheck("expect", asAdmin, withoutNamespace, contain, "RequirementsNotMet+2+InstallWaiting", ok, []string{"operator.operators.coreos.com", sub.operatorPackage + "." + sub.namespace,
 			fmt.Sprintf("-o=jsonpath={.status.components.refs[?(@.name==\"%s\")].conditions[*].reason}", sub.installedCSV)}).check(oc)
