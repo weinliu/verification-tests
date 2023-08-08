@@ -6,7 +6,10 @@ type Client struct {
 	Parser *parser
 
 	// services
-	Cluster ClusterService
+	Cluster     ClusterService
+	IDP         IDPService
+	OCMResource OCMResourceService
+	User        UserService
 	// Addon AddonService
 	// IDP IDPService
 	// Network NetworkService
@@ -25,6 +28,9 @@ func NewClient() *Client {
 	}
 
 	client.Cluster = &clusterService{client: client}
+	client.IDP = &idpService{client: client}
+	client.OCMResource = &ocmResourceService{client: client}
+	client.User = &userService{client: client}
 
 	return client
 }

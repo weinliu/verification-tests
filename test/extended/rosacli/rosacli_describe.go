@@ -16,7 +16,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 	})
 
-	g.It("Author:yuwan-Medium-34102-rosacli testing: Check the description of the cluster", func() {
+	g.It("Author:yuwan-Medium-34102-rosacli testing: Check the description of the cluster [Serial]", func() {
 		g.By("Describe cluster in text format")
 		var rosaClient = NewClient()
 		clusterService := rosaClient.Cluster

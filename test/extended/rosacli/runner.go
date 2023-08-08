@@ -11,11 +11,12 @@ import (
 )
 
 type runner struct {
-	cmds    []string
-	cmdArgs []string
-	format  string
-	color   string
-	debug   bool
+	cmds      []string
+	cmdArgs   []string
+	format    string
+	color     string
+	debug     bool
+	sensitive bool
 }
 
 func NewRunner() *runner {
@@ -26,6 +27,10 @@ func NewRunner() *runner {
 	}
 
 	return runner
+}
+func (r *runner) Sensitive(sensitive bool) *runner {
+	r.sensitive = sensitive
+	return r
 }
 
 func (r *runner) Debug(debug bool) *runner {
@@ -129,7 +134,6 @@ func (r *runner) ReplaceFlag(flag string, value string) *runner {
 	r.cmdArgs = cmdArgs
 	return r
 }
-
 func (r *runner) Run() (bytes.Buffer, error) {
 	rosacmd := "rosa"
 	cmdElements := r.cmds
@@ -153,14 +157,37 @@ func (r *runner) Run() (bytes.Buffer, error) {
 		cmd.Stderr = cmd.Stdout
 
 		err = cmd.Run()
-		logger.Infof("Get Combining Stdout and Stder is :\n%s", output.String())
+		if !r.sensitive {
+			logger.Infof("Get Combining Stdout and Stder is :\n%s", output.String())
+		}
+
 		if strings.Contains(output.String(), "Not able to get authentication token") {
 			retry = retry + 1
 			logger.Warnf("[Retry] Not able to get authentication token!! Wait and sleep 5s to do the %d retry", retry)
 			time.Sleep(5 * time.Second)
 			continue
 		}
-
 		return output, err
 	}
+}
+
+func (r *runner) runCMD(command []string) (bytes.Buffer, error) {
+	var output bytes.Buffer
+	var err error
+
+	if !r.sensitive {
+		logger.Infof("Running command: %s", strings.Join(command, " "))
+	} else {
+		logger.Infof("%s command is running", command[0])
+	}
+	output.Reset()
+	cmd := exec.Command(command[0], command[1:]...)
+	cmd.Stdout = &output
+	cmd.Stderr = cmd.Stdout
+
+	err = cmd.Run()
+	logger.Infof("Get Combining Stdout and Stder is :\n%s", output.String())
+
+	return output, err
+
 }
