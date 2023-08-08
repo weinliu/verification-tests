@@ -2027,18 +2027,24 @@ func getOVNK8sNodeMgmtIPv4(oc *exutil.CLI, nodeName string) string {
 	return nodeOVNK8sMgmtIP
 }
 
-// findLogFromOvnMasterPod will search logs we wanted, since sometimes the leader will changed, So here check all ovnkube-master logs.
-func findLogFromOvnMasterPod(oc *exutil.CLI, logs string) bool {
+// findLogFromPod will search logs for a specific string in the specific container of the pod or just the pod
+func findLogFromPod(oc *exutil.CLI, searchString string, namespace string, podLabel string, podContainer ...string) bool {
 	findLog := false
-	ovnMasterPodName := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
-	for _, ovnPod := range ovnMasterPodName {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ovn-kubernetes", ovnPod, "-c", "ovnkube-master").OutputToFile("ovnmasterlog")
+	podNames := getPodName(oc, namespace, podLabel)
+	var cargs []string
+	for _, podName := range podNames {
+		if len(podContainer) > 0 {
+			cargs = []string{podName, "-c", podContainer[0], "-n", namespace}
+		} else {
+			cargs = []string{podName, "-n", namespace}
+		}
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(cargs...).OutputToFile("podlog")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		grepOutput, err := exec.Command("bash", "-c", "cat "+output+" | grep -i '"+logs+"' | wc -l").Output()
+		grepOutput, err := exec.Command("bash", "-c", "cat "+output+" | grep -i '"+searchString+"' | wc -l").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		grepOutputString := strings.TrimSpace(string(grepOutput))
 		if grepOutputString != "0" {
-			e2e.Logf("find the expected logs number of lines %s", grepOutputString)
+			e2e.Logf("Found the '%s' string in %s number of lines.", searchString, grepOutputString)
 			findLog = true
 			break
 		}

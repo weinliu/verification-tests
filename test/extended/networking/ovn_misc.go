@@ -44,7 +44,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	//author: zzhao@redhat.com
 	g.It("NonHyperShiftHOST-Author:zzhao-Medium-54742- Completed pod ip can be released. ", func() {
 		g.By("it's for bug 2091157,Check the ovnkube-master logs to see if completed pod already release ip")
-		result := findLogFromOvnMasterPod(oc, "Releasing IPs for Completed pod")
+		result := findLogFromPod(oc, "Releasing IPs for Completed pod", "openshift-ovn-kubernetes", "app=ovnkube-node", "ovnkube-controller")
 		o.Expect(result).To(o.BeTrue())
 	})
 
