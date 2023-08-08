@@ -1219,6 +1219,87 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		o.Expect(strings.Contains(string(output), "File: /tmp/case64920/oc-mirror")).To(o.BeTrue())
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-64921-Critical-63854-Verify oc adm release info and oc image extract using --idms-file flag", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		idmsFile64921 := filepath.Join(buildPruningBaseDir, "idmsFile64921.yaml")
+		var (
+			image         string
+			authContentAR string
+		)
+
+		g.By("Get desired image from ocp cluster")
+		pullSpec, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o", "jsonpath={..desired.image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(pullSpec).NotTo(o.BeEmpty())
+		e2e.Logf("pullspec is %v", pullSpec)
+
+		g.By("Check if imageContentSourcePolicy image-policy-aosqe exists, if not skip the case")
+		existingIcspOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "--ignore-not-found").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !(strings.Contains(existingIcspOutput, "image-policy-aosqe")) {
+			g.Skip("Image-policy-aosqe icsp not found, skipping the case")
+		}
+
+		// Retreive image registry name
+		imageRegistryName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[0].mirrors[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		imageRegistryName = strings.Split(imageRegistryName, ":")[0]
+		e2e.Logf("ImageRegistryName is %s", imageRegistryName)
+
+		// Replace localhost with retreived registry name from the cluster in idms file
+		sedCmd := fmt.Sprintf(`sed -i 's/localhost/%s/g' %s`, imageRegistryName, idmsFile64921)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Extract secret and store it
+		extractTmpDirName := "/tmp/case64921"
+		err = os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Retreive image digest
+		imageDigest := strings.Split(pullSpec, "@")[1]
+		e2e.Logf("imageDigest is %s", imageDigest)
+
+		// Remove auth & run command oc adm release info with out --idms-flag
+		dockerTmpDirName := "/tmp/case64921/.dockerconfigjson"
+		authContent, readErr := os.ReadFile(dockerTmpDirName)
+		o.Expect(readErr).NotTo(o.HaveOccurred())
+		if !strings.Contains(pullSpec, "registry.ci.openshift.org") {
+			image = "quay.io/openshift-release-dev/ocp-v4.0-art-dev@" + imageDigest
+			authContentAR, err = sjson.Delete(string(authContent), `auths.quay\.io`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			image = "registry.ci.openshift.org/ocp/release@" + imageDigest
+			authContentAR, err = sjson.Delete(string(authContent), `auths.registry\.ci\.openshift\.org`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(os.WriteFile(dockerTmpDirName, []byte(authContentAR), 0640)).NotTo(o.HaveOccurred())
+
+		_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image).Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(outErr).To(o.ContainSubstring("error: unable to read image " + image))
+
+		// Run command oc adm release info with --idms-flag
+		o.Expect(oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image, "-a", dockerTmpDirName, "--idms-file="+idmsFile64921).Execute).NotTo(o.HaveOccurred())
+
+		// Run command oc adm release info to get oc-mirror image
+		ocMirrorImage, _, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image, "-a", dockerTmpDirName, "--idms-file="+idmsFile64921, `-ojsonpath={.references.spec.tags[?(@.name=="oc-mirror")].from.name}`).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ocMirrorImage is %s", ocMirrorImage)
+
+		// Run command oc image extract with --idms-flag
+		o.Expect(oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", "-a", dockerTmpDirName, ocMirrorImage, "--path=/usr/bin/oc-mirror:"+extractTmpDirName, "--idms-file="+idmsFile64921, "--insecure", "--confirm").Execute).NotTo(o.HaveOccurred())
+
+		// Verify oc-mirror is present
+		output, err := exec.Command("bash", "-c", "stat "+extractTmpDirName+"/oc-mirror").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), "File: /tmp/case64921/oc-mirror")).To(o.BeTrue())
+	})
+
 })
 
 // ClientVersion ...
