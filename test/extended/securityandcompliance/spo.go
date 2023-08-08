@@ -1651,4 +1651,32 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		checkPrfolieStatus(oc, "SelinuxProfile", ns1, "Installed")
 		checkPrfolieNumbers(oc, "SelinuxProfile", ns1, 1)
 	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonPreRelease-Author:xiyuan-Medium-61577-Customise the spo daemon resource requirements [Serial]", func() {
+		g.By("Check the default resource requirements for spod !!!\n")
+		assertEventMessageRegexpMatch(oc, "ephemeral-storage.*200Mi.*memory.*128Mi", "pod", "-l", "name=spod", "-n", subD.namespace,
+			`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.limits}`)
+		assertEventMessageRegexpMatch(oc, "cpu.*100m.*ephemeral-storage.*50Mi.*memory.*64Mi", "pod", "-l", "name=spod", "-n", subD.namespace,
+			`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.requests}`)
+
+		g.By("Patch the daemonResourceRequirements !!!\n")
+		defer func() {
+			g.By("Recover the default daemonResourceRequirements.. !!!\n")
+			patchRecover := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/daemonResourceRequirements\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "--type", "json", "--patch", patchRecover, "-n", subD.namespace)
+			checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+			assertEventMessageRegexpMatch(oc, "ephemeral-storage.*200Mi.*memory.*128Mi", "pod", "-l", "name=spod", "-n", subD.namespace,
+				`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.limits}`)
+			assertEventMessageRegexpMatch(oc, "cpu.*100m.*ephemeral-storage.*50Mi.*memory.*64Mi", "pod", "-l", "name=spod", "-n", subD.namespace,
+				`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.requests}`)
+		}()
+		patchDaeResourceReq := fmt.Sprintf("{\"spec\":{\"daemonResourceRequirements\":{\"requests\":{\"memory\":\"256Mi\",\"cpu\":\"250m\"},\"limits\":{\"memory\":\"512Mi\",\"cpu\":\"500m\"}}}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "--type", "merge", "-p", patchDaeResourceReq, "-n", subD.namespace)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+		assertEventMessageRegexpMatch(oc, "cpu.*500m.*memory.*512Mi", "pod", "-l", "name=spod", "-n", subD.namespace,
+			`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.limits}`)
+		assertEventMessageRegexpMatch(oc, "cpu.*250m.*memory.*256Mi", "pod", "-l", "name=spod", "-n", subD.namespace,
+			`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.requests}`)
+	})
 })
