@@ -1186,4 +1186,45 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: jechen@redhat.com
+	g.It("MicroShiftOnly-Author:jechen-High-65838-br-ex interface should be unmanaged by NetworkManager", func() {
+
+		exutil.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Check if br-ex on the node is unmanaged")
+		e2e.Logf("Check br-ex on node %v", nodeList.Items[0].Name)
+		connections, err := exutil.DebugNodeWithChroot(oc, nodeList.Items[0].Name, "bash", "-c", "nmcli conn show")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(connections, "br-ex")).To(o.BeFalse())
+
+	})
+
+	// author: jechen@redhat.com
+	g.It("MicroShiftOnly-Author:jechen-High-65840-Killing openvswitch service should reconcile OVN control plane back to normal [Disruptive]", func() {
+
+		exutil.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Kill openvswitch on the node")
+		e2e.Logf("Kill openvswitch on node %v", nodeList.Items[0].Name)
+		_, err := exutil.DebugNodeWithChroot(oc, nodeList.Items[0].Name, "bash", "-c", "pkill -9 -f openvswitch")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check ovs-vswitchd and ovsdb-server are back into active running state")
+		output, err := exutil.DebugNodeWithChroot(oc, nodeList.Items[0].Name, "bash", "-c", "systemctl status ovs-vswitchd")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("active (running)"))
+		output, err = exutil.DebugNodeWithChroot(oc, nodeList.Items[0].Name, "bash", "-c", "systemctl status ovsdb-server")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("active (running)"))
+
+		exutil.By("Check all pods in openshift-ovn-kubernetes are back to normal in running state")
+		statusErr := waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "component=network")
+		o.Expect(statusErr).NotTo(o.HaveOccurred())
+
+	})
+
 })
