@@ -32,13 +32,12 @@ type SubscriptionDescription struct {
 }
 
 type KataconfigDescription struct {
-	name                 string `json:"name"`
-	kataMonitorImageName string `json:"kataMonitorImage"`
-	logLevel             string `json:"logLevel"`
-	eligibility          bool   `json:"checkNodeEligibility"`
-	runtimeClassName     string `json:"runtimeClassName"`
-	enablePeerPods       bool   `json:"enablePeerPods"`
-	template             string
+	name             string `json:"name"`
+	logLevel         string `json:"logLevel"`
+	eligibility      bool   `json:"checkNodeEligibility"`
+	runtimeClassName string `json:"runtimeClassName"`
+	enablePeerPods   bool   `json:"enablePeerPods"`
+	template         string
 }
 
 // if you change TestrunConfigmap, modify:
@@ -55,7 +54,6 @@ type TestrunConfigmap struct {
 	channel            string
 	icspNeeded         bool
 	mustgatherImage    string
-	katamonitorImage   string
 	operatorVer        string
 	eligibility        bool
 	labelSingleNode    bool
@@ -127,7 +125,7 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 
 	g.By("(3.1) Create kataconfig file")
 	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kataconf.template,
-		"-p", "NAME="+kataconf.name, "MONITOR="+kataconf.kataMonitorImageName, "LOGLEVEL="+kataconf.logLevel, "PEERPODS="+strconv.FormatBool(kataconf.enablePeerPods), "ELIGIBILITY="+strconv.FormatBool(kataconf.eligibility),
+		"-p", "NAME="+kataconf.name, "LOGLEVEL="+kataconf.logLevel, "PEERPODS="+strconv.FormatBool(kataconf.enablePeerPods), "ELIGIBILITY="+strconv.FormatBool(kataconf.eligibility),
 		"-n", sub.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
 	if err != nil || configFile == "" {
 		_, configFileExists := os.Stat(configFile)
@@ -493,13 +491,6 @@ func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, 
 			testrun.icspNeeded = gjson.Get(configmapData, "icspneeded").Bool()
 		}
 
-		if gjson.Get(configmapData, "katamonitormage").Exists() {
-			testrun.katamonitorImage = gjson.Get(configmapData, "katamonitormage").String()
-			if strings.Contains(testrun.katamonitorImage, "brew.registry.redhat.io") {
-				testrun.icspNeeded = true
-			}
-		}
-
 		if gjson.Get(configmapData, "mustgatherimage").Exists() {
 			testrun.mustgatherImage = gjson.Get(configmapData, "mustgatherimage").String()
 			if strings.Contains(testrun.mustgatherImage, "brew.registry.redhat.io") {
@@ -586,12 +577,6 @@ func changeSubscriptionChannel(oc *exutil.CLI, subscription SubscriptionDescript
 	return msg, err
 }
 
-func changeKataMonitorImage(oc *exutil.CLI, subscription SubscriptionDescription, testrun TestrunConfigmap, kcName string) (msg string, err error) {
-	patch := fmt.Sprintf("{\"spec\":{\"kataMonitorImage\":\"%v\"}}", testrun.katamonitorImage)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kataconfig", kcName, "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
-	return msg, err
-}
-
 func logErrorAndFail(oc *exutil.CLI, logMsg, msg string, err error) {
 	e2e.Logf("%v: %v %v", logMsg, msg, err)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -637,15 +622,6 @@ func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testr
 	if val != "" {
 		testrunEnv.catalogSourceName = val
 		testrunEnv.exists = true
-	}
-
-	val = os.Getenv(envPrefix + "KATAMONITORIMAGE")
-	if val != "" {
-		testrunEnv.katamonitorImage = val
-		testrunEnv.exists = true
-		if strings.Contains(val, "brew.registry.redhat.io") {
-			testrunEnv.icspNeeded = true
-		}
 	}
 
 	val = os.Getenv(envPrefix + "MUSTGATHERIMAGE")

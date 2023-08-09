@@ -22,33 +22,32 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                 = exutil.NewCLI("kata", exutil.KubeConfigPath())
-		opNamespace        = "openshift-sandboxed-containers-operator"
-		testDataDir        = exutil.FixturePath("testdata", "kata")
-		iaasPlatform       string
-		kcTemplate         = filepath.Join(testDataDir, "kataconfig.yaml")
-		defaultDeployment  = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
-		defaultPod         = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
-		subTemplate        = filepath.Join(testDataDir, "subscription_template.yaml")
-		nsFile             = filepath.Join(testDataDir, "namespace.yaml")
-		ogFile             = filepath.Join(testDataDir, "operatorgroup.yaml")
-		kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.3.3"
-		mustGatherImage    = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
-		icspName           = "kata-brew-registry"
-		icspFile           = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
-		testrunInitial     TestrunConfigmap
-		testrun            TestrunConfigmap
-		clusterVersion     string
-		ocpMajorVer        string
-		ocpMinorVer        string
-		operatorVer        = "1.3.0"
-		workload           = "have securityContext"
-		podRunState        = "Running"
-		featureLabel       = "feature.node.kubernetes.io/runtime.kata=true"
-		workerLabel        = "node-role.kubernetes.io/worker"
-		kataocLabel        = "node-role.kubernetes.io/kata-oc"
-		customLabel        = "custom-label=test"
-		testrunExists      = false
+		oc                = exutil.NewCLI("kata", exutil.KubeConfigPath())
+		opNamespace       = "openshift-sandboxed-containers-operator"
+		testDataDir       = exutil.FixturePath("testdata", "kata")
+		iaasPlatform      string
+		kcTemplate        = filepath.Join(testDataDir, "kataconfig.yaml")
+		defaultDeployment = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
+		defaultPod        = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
+		subTemplate       = filepath.Join(testDataDir, "subscription_template.yaml")
+		nsFile            = filepath.Join(testDataDir, "namespace.yaml")
+		ogFile            = filepath.Join(testDataDir, "operatorgroup.yaml")
+		mustGatherImage   = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
+		icspName          = "kata-brew-registry"
+		icspFile          = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
+		testrunInitial    TestrunConfigmap
+		testrun           TestrunConfigmap
+		clusterVersion    string
+		ocpMajorVer       string
+		ocpMinorVer       string
+		operatorVer       = "1.3.0"
+		workload          = "have securityContext"
+		podRunState       = "Running"
+		featureLabel      = "feature.node.kubernetes.io/runtime.kata=true"
+		workerLabel       = "node-role.kubernetes.io/worker"
+		kataocLabel       = "node-role.kubernetes.io/kata-oc"
+		customLabel       = "custom-label=test"
+		testrunExists     = false
 	)
 
 	subscription := SubscriptionDescription{
@@ -63,13 +62,12 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	}
 
 	kataconfig := KataconfigDescription{
-		name:                 "example-kataconfig",
-		template:             kcTemplate,
-		kataMonitorImageName: kcMonitorImageName,
-		logLevel:             "info",
-		eligibility:          false,
-		runtimeClassName:     "kata",
-		enablePeerPods:       false,
+		name:             "example-kataconfig",
+		template:         kcTemplate,
+		logLevel:         "info",
+		eligibility:      false,
+		runtimeClassName: "kata",
+		enablePeerPods:   false,
 	}
 	testrunInitial.exists = false // no overrides yet
 
@@ -81,7 +79,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		channel:            subscription.channel,
 		icspNeeded:         false,
 		mustgatherImage:    mustGatherImage,
-		katamonitorImage:   kcMonitorImageName,
 		eligibility:        false,
 		labelSingleNode:    false,
 		eligibleSingleNode: false,
@@ -126,7 +123,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			subscription.channel = testrunInitial.channel
 			mustGatherImage = testrunInitial.mustgatherImage
 			operatorVer = testrunInitial.operatorVer
-			kataconfig.kataMonitorImageName = testrunInitial.katamonitorImage
 			kataconfig.eligibility = testrunInitial.eligibility
 			kataconfig.runtimeClassName = testrunInitial.runtimeClassName
 			kataconfig.enablePeerPods = testrunInitial.enablePeerPods
@@ -144,7 +140,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			subscription.channel = testrunInitial.channel
 			operatorVer = testrunInitial.operatorVer
 			mustGatherImage = testrunInitial.mustgatherImage
-			kataconfig.kataMonitorImageName = testrunInitial.katamonitorImage
 			kataconfig.eligibility = testrunInitial.eligibility
 			kataconfig.runtimeClassName = testrunInitial.runtimeClassName
 			kataconfig.enablePeerPods = testrunInitial.enablePeerPods
@@ -182,7 +177,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		if testrunInitial.icspNeeded {
-			e2e.Logf("An ICSP is being applied to allow %v and %v to work", testrunInitial.katamonitorImage, testrunInitial.mustgatherImage)
+			e2e.Logf("An ICSP is being applied to allow %v to work", testrunInitial.mustgatherImage)
 			msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
 			if err != nil || msg == "" {
 				logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP %v", icspName), msg, err)
@@ -944,7 +939,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			label          string
 			msg            string
 			err            error
-			podsChanged    = false
 		)
 
 		if kataconfig.enablePeerPods {
@@ -971,7 +965,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			g.By(msg)
 
 			if testrunUpgrade.icspNeeded {
-				msg = fmt.Sprintf("Installing ImageContentSourcePolicy to allow %v and %v to work", testrunUpgrade.katamonitorImage, testrunUpgrade.mustgatherImage)
+				msg = fmt.Sprintf("Installing ImageContentSourcePolicy to allow %v to work", testrunUpgrade.mustgatherImage)
 				g.By(msg)
 				// apply icsp.  Do not delete or pods can get ImagePullBackoff
 				msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
@@ -1031,44 +1025,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 					logErrorAndFail(oc, fmt.Sprintf("Error: subscription wait failed for %v", subUpgrade), msg, err)
 				}
 				// check that controller manager pod is running?
-			}
-
-			if testrunUpgrade.katamonitorImage != kcMonitorImageName {
-				g.By("Changing the monitor image & pods")
-				msg, err = oc.AsAdmin().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
-				if err != nil || msg == "" {
-					logErrorAndFail(oc, "Error: cannot get the pod info before patching kataconfig monitor images", msg, err)
-				}
-				oldpods := strings.Fields(msg)
-
-				msg, err = changeKataMonitorImage(oc, subUpgrade, testrunUpgrade, kataconfig.name)
-				if err != nil || msg == "" {
-					logErrorAndFail(oc, "Error: cannot patch kataconfig with monitor image", msg, err)
-				}
-
-				g.By("Wait & check for kata monitor image change")
-				// starts changing 40s after
-				errCheck := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
-					msg, err = oc.AsAdmin().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
-					for _, pod := range oldpods {
-						if strings.Contains(msg, pod) {
-							podsChanged = false
-							break // no use checking the rest
-						} else {
-							podsChanged = true
-						}
-					}
-					if podsChanged {
-						return true, nil
-					}
-					return false, nil
-				})
-				if !podsChanged {
-					e2e.Logf("monitor pods did not upgrade from %v to %v %v", oldpods, msg, err)
-					o.Expect(podsChanged).To(o.BeTrue())
-				}
-				exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("monitor pods did not change %v", msg))
-
 			}
 
 		} else {
