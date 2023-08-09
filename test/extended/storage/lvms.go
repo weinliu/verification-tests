@@ -44,6 +44,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 			volumeGroup        = "vg1"
+			thinPoolName       = "thin-pool-1"
 			storageClassName   = "lvms-" + volumeGroup
 		)
 
@@ -56,7 +57,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentNamespace(oc.Namespace()))
 
 		exutil.By("#. Get thin pool size and over provision limit")
-		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
+		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup, thinPoolName)
 
 		exutil.By("#. Check PVC can re-size beyond thinpool size, but within overprovisioning limit")
 		targetCapactiyInt64 := getRandomNum(int64(thinPoolSize+1), int64(thinPoolSize+10))
@@ -73,6 +74,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 			volumeGroup        = "vg1"
+			thinPoolName       = "thin-pool-1"
 			storageClassName   = "lvms-" + volumeGroup
 		)
 
@@ -87,7 +89,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dep.namespace = pvc.namespace
 
 		exutil.By("#. Get thin pool size and over provision limit")
-		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
+		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup, thinPoolName)
 
 		exutil.By("#. Check PVC can re-size beyond thinpool size, but within overprovisioning rate")
 		targetCapactiyInt64 := getRandomNum(int64(thinPoolSize+1), int64(thinPoolSize+10))
@@ -334,6 +336,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate      = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			volumeGroup      = "vg1"
+			thinPoolName     = "thin-pool-1"
 			storageClassName = "lvms-" + volumeGroup
 		)
 
@@ -343,7 +346,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set the resource definition for the original
 		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
-		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
+		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup, thinPoolName)
 		pvcCapacity := strconv.FormatInt(int64(thinPoolSize)+getRandomNum(2, 10), 10) + "Gi"
 
 		exutil.By("Create a pvc with the lvms csi storageclass and capacity bigger than disk size")
@@ -400,6 +403,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate      = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			volumeGroup      = "vg1"
+			thinPoolName     = "thin-pool-1"
 			storageClassName = "lvms-" + volumeGroup
 		)
 
@@ -409,7 +413,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set the resource definition for the original
 		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
 		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
-		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
+		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup, thinPoolName)
 		pvcCapacity := strconv.FormatInt(int64(thinPoolSize)+getRandomNum(2, 10), 10) + "Gi"
 
 		exutil.By("Create a pvc with the lvms csi storageclass")
@@ -467,6 +471,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podTemplate             = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			volumesnapshotTemplate  = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
 			volumeGroup             = "vg1"
+			thinPoolName            = "thin-pool-1"
 			storageClassName        = "lvms-" + volumeGroup
 			volumeSnapshotClassName = "lvms-" + volumeGroup
 		)
@@ -477,7 +482,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set the resource definition for the original
 		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
-		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
+		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup, thinPoolName)
 		pvcCapacity := strconv.FormatInt(int64(thinPoolSize)+getRandomNum(2, 10), 10) + "Gi"
 
 		exutil.By("Create a pvc with the lvms csi storageclass and capacity bigger than disk size")
@@ -538,6 +543,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podTemplate             = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			volumesnapshotTemplate  = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
 			volumeGroup             = "vg1"
+			thinPoolName            = "thin-pool-1"
 			storageClassName        = "lvms-" + volumeGroup
 			volumeSnapshotClassName = "lvms-" + volumeGroup
 		)
@@ -548,7 +554,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set the resource definition for the original
 		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
 		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
-		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
+		thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup, thinPoolName)
 		pvcCapacity := strconv.FormatInt(int64(thinPoolSize)+getRandomNum(2, 10), 10) + "Gi"
 
 		exutil.By("Create a pvc with the lvms csi storageclass")
@@ -615,8 +621,11 @@ func checkLvmsOperatorInstalled(oc *exutil.CLI) {
 	if err != nil || strings.Contains(csiDriver, "not found") {
 		g.Skip("LVMS Operator is not installed on the running OCP cluster")
 	}
+	lvmClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(lvmClusterName).NotTo(o.BeEmpty())
 	o.Eventually(func() string {
-		lvmClusterState, err := getLvmClusterState(oc.AsAdmin(), "openshift-storage", "test-lvmcluster")
+		lvmClusterState, err := getLvmClusterState(oc.AsAdmin(), "openshift-storage", lvmClusterName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		return lvmClusterState
 	}, 30*time.Second, 5*time.Second).Should(o.Equal("Ready"))
@@ -630,17 +639,17 @@ func getLvmClusterState(oc *exutil.CLI, namespace string, lvmClusterName string)
 	return lvmClusterState, err
 }
 
-func getThinPoolSizeByVolumeGroup(oc *exutil.CLI, volumeGroup string) int {
-	cmd := "lvs | grep " + volumeGroup + " | awk '{print $4}'"
+func getThinPoolSizeByVolumeGroup(oc *exutil.CLI, volumeGroup string, thinPoolName string) int {
+	cmd := "lvs --units G 2> /dev/null | grep " + volumeGroup + " | awk '{if ($1 == \"" + thinPoolName + "\") print $4;}'"
 	nodeName := getAllNodesInfo(oc)[0].name
 	output, err := execCommandInSpecificNode(oc, nodeName, cmd)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	regexForNumbersOnly := regexp.MustCompile("[0-9.]+")
 	sizeVal := regexForNumbersOnly.FindAllString(output, -1)[0]
 	sizeNum := strings.Split(sizeVal, ".")
-	e2e.Logf("Thin Pool size from backend node: %s", sizeNum[0])
 	thinPoolSize, err := strconv.Atoi(sizeNum[0])
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Thin Pool size in Gi from backend node: %d", thinPoolSize)
 	return thinPoolSize
 }
 
@@ -655,8 +664,8 @@ func getOverProvisionRatioByVolumeGroup(oc *exutil.CLI, volumeGroup string) int 
 	return opRatio
 }
 
-func getOverProvisionLimitByVolumeGroup(oc *exutil.CLI, volumeGroup string) int {
-	thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup)
+func getOverProvisionLimitByVolumeGroup(oc *exutil.CLI, volumeGroup string, thinPoolName string) int {
+	thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup, thinPoolName)
 	opRatio := getOverProvisionRatioByVolumeGroup(oc, volumeGroup)
 	limit := thinPoolSize * opRatio
 	e2e.Logf("Over-Provisioning Limit in Gi: %d", limit)
