@@ -413,7 +413,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
 
 		exutil.By("3. Create an egressip object")
-		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 2)
+		freeIPs := findFreeIPs(oc, egressNodes[0], 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
 			name:      "egressip-47030",
@@ -476,7 +476,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
 		exutil.By("5. Create an egressip object\n")
-		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 2)
+		freeIPs := findFreeIPs(oc, egressNode1, 2)
 		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
 			name:      "egressip-47028",
@@ -662,7 +662,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create an egressip object\n")
-		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 4)
+		freeIPs := findFreeIPs(oc, egressNodes[0], 4)
 		o.Expect(len(freeIPs)).Should(o.Equal(4))
 		egressip1 := egressIPResource1{
 			name:      "egressip-47032",
