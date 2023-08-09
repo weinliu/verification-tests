@@ -14,8 +14,10 @@ import (
 // waitForClusterHealthy check if new machineconfig is applied successfully
 func waitForClusterHealthy(oc *exutil.CLI) {
 	e2e.Logf("Waiting for the cluster healthy ...")
+	// sleep for 5 minites to make sure related mcp start to update
+	time.Sleep(5 * time.Minute)
 	timeToWait := time.Duration(getNodeCount(oc)*5) * time.Minute
-	pollErr := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
+	pollErr := wait.Poll(1*time.Minute, timeToWait-5, func() (bool, error) {
 		master, errMaster := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "master", "-o", "jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'").Output()
 		worker, errWorker := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "worker", "-o", "jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'").Output()
 		if errMaster != nil || errWorker != nil {
