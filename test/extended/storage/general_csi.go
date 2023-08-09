@@ -5124,6 +5124,54 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: wduan@redhat.com
+	// OCP-66187 - [CSI Driver] [bug 10816] Pod should be deleted successfully after the volume directory was umount
+	// This case is added for bug https://issues.redhat.com/browse/OCPBUGS-10816
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-High-66187-[CSI Driver] Pod should be deleted successfully after the volume directory was umount", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "filestore.csi.storage.gke.io"}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+			exutil.By("Create a pvc with the preset csi storageclass")
+			// Using the pre-defined storageclass for PVC
+			pvc.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("Create pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			nodeName := getNodeNameByPod(oc, pod.namespace, pod.name)
+			volName := pvc.getVolumeName(oc)
+			command := "dir=`mount | grep \"" + volName + "\" | awk '{print $3}'` && umount $dir && rmdir $dir"
+			_, err := execCommandInSpecificNode(oc, nodeName, command)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkVolumeNotMountOnNode(oc, volName, nodeName)
+			deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
+		}
+	})
 })
 
 // Performing test steps for Online Volume Resizing
