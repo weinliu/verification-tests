@@ -14,8 +14,7 @@ import (
 // Extract pull secrect from cluster
 func GetPullSec(oc *CLI, dirname string) (err error) {
 	if err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute(); err != nil {
-		err = fmt.Errorf("extract pull-secret failed: %v", err)
-		return
+		return fmt.Errorf("extract pull-secret failed: %v", err)
 	}
 	return
 }
@@ -36,13 +35,11 @@ func GetUserCAToFile(oc *CLI, filename string) (err error) {
 	cert, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", "openshift-config",
 		"user-ca-bundle", "-o", "jsonpath={.data.ca-bundle\\.crt}").Output()
 	if err != nil {
-		err = fmt.Errorf("failed to acquire user ca bundle from configmap: %v", err)
-		return
+		return fmt.Errorf("failed to acquire user ca bundle from configmap: %v", err)
 	} else {
 		err = os.WriteFile(filename, []byte(cert), 0644)
 		if err != nil {
-			err = fmt.Errorf("failed to dump cert to file: %v", err)
-			return
+			return fmt.Errorf("failed to dump cert to file: %v", err)
 		}
 		return
 	}

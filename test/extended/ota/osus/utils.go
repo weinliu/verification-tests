@@ -115,10 +115,10 @@ func (us *updateService) create(oc *exutil.CLI) (err error) {
 }
 
 // Check if pod is running
-func waitForPodReady(oc *exutil.CLI, pod string) {
+func waitForPodReady(oc *exutil.CLI, pod string, ns string) {
 	e2e.Logf("Waiting for %s pod creating...", pod)
 	pollErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector="+pod, "-n", oc.Namespace()).Output()
+		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector="+pod, "-n", ns).Output()
 		if err != nil || strings.Contains(cmdOut, "No resources found") {
 			e2e.Logf("error: %v, keep trying!", err)
 			return false, nil
@@ -128,17 +128,29 @@ func waitForPodReady(oc *exutil.CLI, pod string) {
 
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("pod with name=%s is not found", pod))
 
-	e2e.Logf("Waiting for %s pod running...", pod)
-	pollErr = wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
-		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector="+pod, "-n", oc.Namespace(), "-o=jsonpath={.items[*].status.phase}").Output()
+	e2e.Logf("Waiting for %s pod ready and running...", pod)
+	pollErr = wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
+		stateOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector="+pod, "-n", ns, "-o=jsonpath={.items[*].status.phase}").Output()
 		if err != nil {
-			e2e.Logf("pod status: %s, try again", cmdOut)
+			e2e.Logf("pod phase status: %s with error %v, try again", stateOut, err)
 			return false, nil
 		}
-		state := strings.Split(cmdOut, " ")
+		state := strings.Split(stateOut, " ")
 		for _, s := range state {
 			if strings.Compare(s, "Running") != 0 {
 				e2e.Logf("pod status: %s, try again", s)
+				return false, nil
+			}
+		}
+		readyOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector="+pod, "-n", ns, "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
+		if err != nil {
+			e2e.Logf("pod ready condition: %s with error %v, try again", readyOut, err)
+			return false, nil
+		}
+		ready := strings.Split(readyOut, " ")
+		for _, s := range ready {
+			if strings.Compare(s, "True") != 0 {
+				e2e.Logf("pod ready condition: %s, try again", s)
 				return false, nil
 			}
 		}
@@ -270,7 +282,7 @@ func installOSUSAppOCMirror(oc *exutil.CLI, outdir string) (err error) {
 		err = fmt.Errorf("install osus instance failed: %v", err)
 		return
 	}
-	waitForPodReady(oc, "app=update-service-oc-mirror")
+	waitForPodReady(oc, "app=update-service-oc-mirror", oc.Namespace())
 	return nil
 }
 
@@ -308,8 +320,7 @@ func verifyOSUS(oc *exutil.CLI) (err error) {
 	}
 	PEURI, err := oc.AsAdmin().Run("get").Args("-o", "jsonpath={.status.policyEngineURI}", "updateservice", instance).Output()
 	if err != nil {
-		err = fmt.Errorf("get policy engine URI failed: %v", err)
-		return
+		return fmt.Errorf("get policy engine URI failed: %v", err)
 	}
 	graphURI := PEURI + "/api/upgrades_info/v1/graph"
 
@@ -321,24 +332,24 @@ func verifyOSUS(oc *exutil.CLI) (err error) {
 	response, err := client.Get(graphURI + "?channel=stable-4.13")
 
 	if err != nil {
-		err = fmt.Errorf("reach graph URI failed %v", err)
-		return
+		return fmt.Errorf("reach graph URI failed: %v", err)
 	}
-
-	e2e.Logf("The http status code we got is: %v", response.StatusCode)
 
 	if response.StatusCode != 200 {
-		e2e.Logf("Graph URI is not active")
-		return fmt.Errorf("graph URI is not reachable")
+		return fmt.Errorf("graph URI is not active, response code is %v", response.StatusCode)
 	}
-	return nil
+	return
 }
 
-func restoreAddCA(oc *exutil.CLI) {
+func restoreAddCA(oc *exutil.CLI, addCA string) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config", "configmap", "trusted-ca").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var message string
-	err = oc.AsAdmin().Run("patch").Args("image.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": "registry-config"}}}`, "--type=merge").Execute()
+	if addCA == "" {
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=json", "-p", "[{\"op\":\"remove\", \"path\":\"/spec/additionalTrustedCA\"}]").Execute()
+	} else {
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=merge", "--patch", fmt.Sprintf("{\"spec\":{\"additionalTrustedCA\":\"%s\"}}", addCA)).Execute()
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
 		registryHealth := checkCOHealth(oc, "image-registry")
@@ -395,6 +406,6 @@ func installOSUSAppOC(oc *exutil.CLI, us updateService) (err error) {
 		err = fmt.Errorf("install osus instance failed: %v", err)
 		return
 	}
-	waitForPodReady(oc, "app="+us.name)
+	waitForPodReady(oc, "app="+us.name, oc.Namespace())
 	return nil
 }

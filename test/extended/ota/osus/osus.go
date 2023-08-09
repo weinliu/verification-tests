@@ -149,11 +149,11 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 
 		og.create(oc)
 		sub.create(oc)
-		waitForPodReady(oc, operatorPod)
+		waitForPodReady(oc, operatorPod, oc.Namespace())
 	})
 
 	//author: yanyang@redhat.com
-	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:yanyang-High-62641-install/uninstall updateservice instance using oc-mirror [Disruptive][Serial]", func() {
+	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:yanyang-High-62641-install/uninstall updateservice instance using oc-mirror [Disruptive]", func() {
 		g.By("Mirror OCP release and graph data image by oc-mirror")
 		registry, err := exutil.GetMirrorRegistry(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -174,7 +174,9 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		certFile := dirname + "/cert"
 		err = exutil.GetUserCAToFile(oc, certFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer restoreAddCA(oc)
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA)
 		err = trustCert(oc, registry, certFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -189,7 +191,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 	})
 
 	//author: yanyang@redhat.com
-	g.It("NonHyperShiftHOST-DisconnectedOnly-VMonly-Author:yanyang-High-35944-install/uninstall updateservice instance and build graph image as non root [Disruptive][Serial]", func() {
+	g.It("NonHyperShiftHOST-DisconnectedOnly-VMonly-Author:yanyang-High-35944-install/uninstall updateservice instance and build graph image as non root [Disruptive]", func() {
 		g.By("Check if it's a AWS/GCP/Azure cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "gcp, aws, azure")
 
@@ -215,7 +217,9 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		certFile := dirname + "/cert"
 		err = exutil.GetUserCAToFile(oc, certFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer restoreAddCA(oc)
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA)
 		err = trustCert(oc, registry, certFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -227,6 +231,33 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 			template:  usTemp,
 			graphdata: graphdataTag,
 			releases:  registry + "/ocp-release",
+		}
+		defer uninstallOSUSApp(oc)
+		err = installOSUSAppOC(oc, us)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Verify OSUS instance works")
+		err = verifyOSUS(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
+
+	//author: yanyang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yanyang-High-52596-High-59687-install/uninstall updateservice instance on a connected/http/https proxy cluster", func() {
+		dirname := "/tmp/" + oc.Namespace() + "-osus"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Install OSUS instance")
+		//We need to build and push the latest graph-data if there is new feature to the container
+		usTemp := exutil.FixturePath("testdata", "ota", "osus", "updateservice.yaml")
+		us := updateService{
+			name:      "update-service-52596",
+			namespace: oc.Namespace(),
+			template:  usTemp,
+			graphdata: "quay.io/openshifttest/graph-data:latest",
+			releases:  "quay.io/openshift-release-dev/ocp-release",
 		}
 		defer uninstallOSUSApp(oc)
 		err = installOSUSAppOC(oc, us)
