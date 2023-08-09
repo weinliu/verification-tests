@@ -1668,6 +1668,51 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkYamlconfig(oc, "openshift-monitoring", "deployments", "thanos-querier", cmd, `--web.disable-cors`, false)
 	})
 
+	//author: tagao@redhat.com
+	g.It("Author:tagao-Medium-43106-disable Alertmanager deployment[Serial]", func() {
+		var (
+			disableAlertmanager = filepath.Join(monitoringBaseDir, "disableAlertmanager.yaml")
+		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("disable alertmanager in CMO config")
+		createResourceFromYaml(oc, "openshift-monitoring", disableAlertmanager)
+		exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
+
+		// this step is aim to give time let CMO removing alertmanager resources
+		g.By("confirm alertmanager is down")
+		checkPodDeleted(oc, "openshift-monitoring", "alertmanager=main", "alertmanager")
+
+		g.By("check alertmanager resources are removed")
+		resourceNames := []string{"route", "servicemonitor", "serviceaccounts", "statefulset", "services", "endpoints", "alertmanagers", "prometheusrules", "clusterrolebindings", "clusterroles", "roles"}
+		for _, resource := range resourceNames {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-n", "openshift-monitoring").Output()
+			o.Expect(output).NotTo(o.ContainSubstring("alertmanager"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("check on configmaps")
+		checkCM, _ := exec.Command("bash", "-c", `oc -n openshift-monitoring get cm -l app.kubernetes.io/managed-by=cluster-monitoring-operator | grep alertmanager`).Output()
+		e2e.Logf("check result is: %v", checkCM)
+		o.Expect(checkCM).NotTo(o.ContainSubstring("alertmanager-trusted-ca-bundle"))
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmaps", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("alertmanager-trusted-ca-bundle-"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check on rolebindings")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebindings", "-n", "openshift-monitoring").Output()
+		o.Expect(output).NotTo(o.ContainSubstring("alertmanager-prometheusk8s"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("check Watchdog alert exist")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertstate="firing",alertname="Watchdog"}'`, token, `"alertname":"Watchdog"`, uwmLoadTime)
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
