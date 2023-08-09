@@ -1626,6 +1626,15 @@ func (ds *daemonset) getPodsList(oc *exutil.CLI) []string {
 	return strings.Split(output, " ")
 }
 
+// Get daemonset pod's Node list
+func (ds *daemonset) getNodesList(oc *exutil.CLI) []string {
+	var nodeList []string
+	for _, podName := range ds.getPodsList(oc) {
+		nodeList = append(nodeList, getNodeNameByPod(oc, ds.namespace, podName))
+	}
+	return nodeList
+}
+
 // Check the Daemonset ready
 func (ds *daemonset) checkReady(oc *exutil.CLI) (bool, error) {
 	dsAvailableNumber, err1 := oc.WithoutNamespace().Run("get").Args("daemonset", ds.name, "-n", ds.namespace, "-o", "jsonpath={.status.numberAvailable}").Output()

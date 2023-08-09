@@ -68,6 +68,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		ds.create(oc)
 		defer ds.deleteAsAdmin(oc)
 		ds.waitReady(oc)
+		nodeList := ds.getNodesList(oc)
 
 		exutil.By("#. Check the pods can write data inside volume")
 		ds.checkPodMountedVolumeCouldWrite(oc)
@@ -80,7 +81,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("#. Check the volume umount from the node")
 		volName := pvc.getVolumeName(oc)
-		for _, nodeName := range getWorkersList(oc) {
+		for _, nodeName := range nodeList {
 			checkVolumeNotMountOnNode(oc, volName, nodeName)
 		}
 
