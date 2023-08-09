@@ -1272,3 +1272,15 @@ func clientCurl(tokenValue string, url string) string {
 	exutil.AssertWaitPollNoErr(errCurl, fmt.Sprintf("error waiting for curl request output: %v", errCurl))
 	return bodyString
 }
+
+// parse base domain from dns config. format is like $clustername.$basedomain
+func getBaseDomain(oc *exutil.CLI) string {
+	str, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns/cluster", `-ojsonpath={.spec.baseDomain}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return str
+}
+
+// Return  the API server FQDN. format is like api.$clustername.$basedomain
+func getApiServerFQDN(oc *exutil.CLI) string {
+	return fmt.Sprintf("api.%s", getBaseDomain(oc))
+}

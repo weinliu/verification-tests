@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 		}
 
 		for _, checkItem := range checkItems {
-			g.By("Get one pod name of " + checkItem.namespace)
+			exutil.By("Get one pod name of " + checkItem.namespace)
 			e2e.Logf("namespace is :%s", checkItem.namespace)
 			podName, err := oc.AsAdmin().Run("get").Args("-n", checkItem.namespace, "pods", "-l apiserver", "-o=jsonpath={.items[0].metadata.name}").Output()
 			if err != nil {
@@ -72,14 +72,14 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("Get the kube-apiserver pod name: %s", podName)
 
-			g.By("Get privileged value of container " + checkItem.container + " of pod " + podName)
+			exutil.By("Get privileged value of container " + checkItem.container + " of pod " + podName)
 			jsonpath := "-o=jsonpath={range .spec.containers[?(@.name==\"" + checkItem.container + "\")]}{.securityContext.privileged}"
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, jsonpath, "-n", checkItem.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(msg).To(o.ContainSubstring("true"))
 			e2e.Logf("#### privileged value: %s ####", msg)
 
-			g.By("Get privileged value of initcontainer of pod " + podName)
+			exutil.By("Get privileged value of initcontainer of pod " + podName)
 			jsonpath = "-o=jsonpath={.spec.initContainers[].securityContext.privileged}"
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, jsonpath, "-n", checkItem.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-Author:xxia-Medium-25806-Force encryption key rotation for etcd datastore [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
 
-		g.By("1.) Check if cluster is Etcd Encryption On")
+		exutil.By("1.) Check if cluster is Etcd Encryption On")
 		encryptionType, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if encryptionType != "aescbc" && encryptionType != "aesgcm" {
@@ -102,7 +102,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 		}
 		e2e.Logf("Etcd Encryption with type %s is on!", encryptionType)
 
-		g.By("2. Get encryption prefix")
+		exutil.By("2. Get encryption prefix")
 		oasEncValPrefix1, err := GetEncryptionPrefix(oc, "/openshift.io/routes")
 		exutil.AssertWaitPollNoErr(err, "fail to get encryption prefix for key routes ")
 
@@ -133,7 +133,7 @@ spec:
 				err := oc.WithoutNamespace().Run("patch").Args(kind, "cluster", "--type=json", "-p", patchYamlToRestore).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}()
-			g.By(fmt.Sprintf("3.%d) Forcing %s encryption", i+1, kind))
+			exutil.By(fmt.Sprintf("3.%d) Forcing %s encryption", i+1, kind))
 			err := oc.WithoutNamespace().Run("patch").Args(kind, "cluster", "--type=merge", "-p", patchYaml).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
@@ -141,7 +141,7 @@ spec:
 		newOASEncSecretName := "encryption-key-openshift-apiserver-" + strconv.Itoa(oasEncNumber+1)
 		newKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber+1)
 
-		g.By("4. Check the new encryption key secrets appear")
+		exutil.By("4. Check the new encryption key secrets appear")
 		errKey := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("secrets", newOASEncSecretName, newKASEncSecretName, "-n", "openshift-config-managed").Output()
 			if err != nil {
@@ -158,7 +158,7 @@ spec:
 		o.Expect(errKAS).NotTo(o.HaveOccurred())
 		exutil.AssertWaitPollNoErr(errKey, fmt.Sprintf("new encryption key secrets %s, %s not found", newOASEncSecretName, newKASEncSecretName))
 
-		g.By("5. Waiting for the force encryption completion")
+		exutil.By("5. Waiting for the force encryption completion")
 		// Only need to check kubeapiserver because kubeapiserver takes more time.
 		var completed bool
 		completed, err = WaitEncryptionKeyMigration(oc, newKASEncSecretName)
@@ -166,7 +166,7 @@ spec:
 		o.Expect(completed).Should(o.Equal(true))
 
 		var oasEncValPrefix2, kasEncValPrefix2 string
-		g.By("6. Get encryption prefix after force encryption completed")
+		exutil.By("6. Get encryption prefix after force encryption completed")
 		oasEncValPrefix2, err = GetEncryptionPrefix(oc, "/openshift.io/routes")
 		exutil.AssertWaitPollNoErr(err, "fail to get encryption prefix for key routes ")
 		e2e.Logf("openshift-apiserver resource encrypted value prefix after test is %s", oasEncValPrefix2)
@@ -186,7 +186,7 @@ spec:
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:xxia-Medium-25811-Etcd encrypted cluster could self-recover when related encryption configuration is deleted [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
-		g.By("1.) Check if cluster is Etcd Encryption On")
+		exutil.By("1.) Check if cluster is Etcd Encryption On")
 		encryptionType, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if encryptionType != "aescbc" && encryptionType != "aesgcm" {
@@ -196,7 +196,7 @@ spec:
 
 		uidsOld, err := oc.WithoutNamespace().Run("get").Args("secret", "encryption-config-openshift-apiserver", "encryption-config-openshift-kube-apiserver", "-n", "openshift-config-managed", `-o=jsonpath={.items[*].metadata.uid}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("2.) Delete secrets encryption-config-* in openshift-config-managed")
+		exutil.By("2.) Delete secrets encryption-config-* in openshift-config-managed")
 		for _, item := range []string{"encryption-config-openshift-apiserver", "encryption-config-openshift-kube-apiserver"} {
 			e2e.Logf("Remove finalizers from secret %s in openshift-config-managed", item)
 			err := oc.WithoutNamespace().Run("patch").Args("secret", item, "-n", "openshift-config-managed", `-p={"metadata":{"finalizers":null}}`).Execute()
@@ -232,7 +232,7 @@ spec:
 
 		oldOASEncSecretName := "encryption-key-openshift-apiserver-" + strconv.Itoa(oasEncNumber)
 		oldKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber)
-		g.By("3.) Delete secrets encryption-key-* in openshift-config-managed")
+		exutil.By("3.) Delete secrets encryption-key-* in openshift-config-managed")
 		for _, item := range []string{oldOASEncSecretName, oldKASEncSecretName} {
 			e2e.Logf("Remove finalizers from key %s in openshift-config-managed", item)
 			err := oc.WithoutNamespace().Run("patch").Args("secret", item, "-n", "openshift-config-managed", `-p={"metadata":{"finalizers":null}}`).Execute()
@@ -245,7 +245,7 @@ spec:
 
 		newOASEncSecretName := "encryption-key-openshift-apiserver-" + strconv.Itoa(oasEncNumber+1)
 		newKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber+1)
-		g.By("4.) Check the new encryption key secrets appear")
+		exutil.By("4.) Check the new encryption key secrets appear")
 		err = wait.Poll(6*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("secrets", newOASEncSecretName, newKASEncSecretName, "-n", "openshift-config-managed").Output()
 			if err != nil {
@@ -271,7 +271,7 @@ spec:
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:xxia-Medium-36801-Etcd encrypted cluster could self-recover when related encryption namespaces are deleted [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
-		g.By("1.) Check if cluster is Etcd Encryption On")
+		exutil.By("1.) Check if cluster is Etcd Encryption On")
 		encryptionType, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if encryptionType != "aescbc" && encryptionType != "aesgcm" {
@@ -279,7 +279,7 @@ spec:
 		}
 		e2e.Logf("Etcd Encryption with type %s is on!", encryptionType)
 
-		g.By("2.) Remove finalizers from secrets of apiservers")
+		exutil.By("2.) Remove finalizers from secrets of apiservers")
 		jsonPath := `{.items[?(@.metadata.finalizers[0]=="encryption.apiserver.operator.openshift.io/deletion-protection")].metadata.name}`
 		secretNames, err := oc.WithoutNamespace().Run("get").Args("secret", "-n", "openshift-apiserver", "-o=jsonpath="+jsonPath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -304,7 +304,7 @@ spec:
 		e2e.Logf("Check openshift-kube-apiserver pods' revisions before deleting namespace")
 		oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=apiserver", "-L=revision").Execute()
 
-		g.By("3.) Delete namespaces: openshift-kube-apiserver, openshift-apiserver in the background")
+		exutil.By("3.) Delete namespaces: openshift-kube-apiserver, openshift-apiserver in the background")
 		cmdDEL, _, _, errDEL := oc.WithoutNamespace().Run("delete").Args("ns", "openshift-kube-apiserver", "openshift-apiserver").Background()
 		defer cmdDEL.Process.Kill()
 		o.Expect(errDEL).NotTo(o.HaveOccurred())
@@ -424,7 +424,7 @@ spec:
 
 		//Recovering apiserver/cluster's ciphers:
 		defer func() {
-			g.By("Restoring apiserver/cluster's ciphers")
+			exutil.By("Restoring apiserver/cluster's ciphers")
 			output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", cipherToRecover).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, "patched (no change)") {
@@ -434,7 +434,7 @@ spec:
 					err := verifyCiphers(oc, cipherToMatch, s)
 					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Ciphers are not restored : %s", s))
 				}
-				g.By("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout and recovery")
+				exutil.By("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout and recovery")
 				e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
 				expectedStatus := map[string]string{"Progressing": "True"}
 				err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
@@ -458,7 +458,7 @@ spec:
 
 		// Check custom, intermediate, old ciphers for authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io:
 		for _, cipherItem := range cipherItems {
-			g.By("Patching the apiserver cluster with ciphers : " + cipherItem.cipherType)
+			exutil.By("Patching the apiserver cluster with ciphers : " + cipherItem.cipherType)
 			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", cipherItem.patch).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -467,7 +467,7 @@ spec:
 				err := verifyCiphers(oc, cipherItem.cipherToCheck, s)
 				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Ciphers are not matched: %s : %s", s, cipherItem.cipherType))
 			}
-			g.By("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout")
+			exutil.By("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout")
 			// Calling waitCoBecomes function to wait for define waitTime so that KAS, OAS, Authentication operator becomes progressing and available.
 			// WaitTime 100s for KAS becomes Progressing=True and 1500s to become Available=True and Progressing=False and Degraded=False.
 			e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
@@ -509,7 +509,7 @@ spec:
 
 		defer os.RemoveAll(dirname)
 		defer func() {
-			g.By("Restoring cluster")
+			exutil.By("Restoring cluster")
 			output, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("").Output()
 			if strings.Contains(string(output), "Unauthorized") {
 				err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("--kubeconfig", newKubeconfig, "-f", configmapBkp).Execute()
@@ -546,7 +546,7 @@ spec:
 		//Taking backup of configmap "admin-kubeconfig-client-ca" to restore old kubeconfig
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Get the default CA backup")
+		exutil.By("Get the default CA backup")
 		configmapBkp, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "admin-kubeconfig-client-ca", "-n", "openshift-config", "-o", "yaml").OutputToFile("OCP-41899-ca/OCP-41899-bkp.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		sedCmd := fmt.Sprintf(`sed -i '/creationTimestamp:\|resourceVersion:\|uid:/d' %s`, configmapBkp)
@@ -554,7 +554,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Generation of a new self-signed CA, in case a corporate or another CA is already existing can be used.
-		g.By("Generation of a new self-signed CA")
+		exutil.By("Generation of a new self-signed CA")
 		e2e.Logf("Generate the CA private key")
 		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 4096`, name)
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
@@ -566,7 +566,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Generation of a new system:admin certificate. The client certificate must have the user into the x.509 subject CN field and the group into the O field.
-		g.By("Generation of a new system:admin certificate")
+		exutil.By("Generation of a new system:admin certificate")
 		e2e.Logf("Create the user CSR")
 		opensslCmd = fmt.Sprintf(`openssl req -nodes -newkey rsa:2048 -keyout %s.key -subj %s -out %s.csr`, userCert, userSubj, userCert)
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
@@ -579,7 +579,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// In order to have a safe replacement, before removing the default CA the new certificate is added as an additional clientCA.
-		g.By("Create the client-ca ConfigMap")
+		exutil.By("Create the client-ca ConfigMap")
 		caFile := fmt.Sprintf(`--from-file=ca-bundle.crt=%s-ca.crt`, name)
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", "client-ca-custom", "-n", "openshift-config", caFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -596,7 +596,7 @@ spec:
 		err = waitCoBecomes(oc, "openshift-controller-manager", 500, expectedStatus) // Wait it to become Available=True and Progressing=False and Degraded=False
 		exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not becomes available in 300 seconds")
 
-		g.By("Create the new kubeconfig")
+		exutil.By("Create the new kubeconfig")
 		e2e.Logf("Add system:admin credentials, context to the kubeconfig")
 		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("set-credentials", user, "--client-certificate="+userCert+".crt", "--client-key="+userCert+".key", "--embed-certs", "--kubeconfig="+newKubeconfig).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -622,7 +622,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test the new kubeconfig, be aware that the following command may requires some seconds for let the operator reconcile the newly added CA.
-		g.By("Testing the new kubeconfig")
+		exutil.By("Testing the new kubeconfig")
 		err = oc.AsAdmin().WithoutNamespace().Run("login").Args("--kubeconfig", newKubeconfig, "-u", user).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig", newKubeconfig, "node").Execute()
@@ -678,7 +678,7 @@ spec:
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check the log files of KAS operator")
+		exutil.By("Check the log files of KAS operator")
 		podname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", co, "-o", "name").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podlog, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", co, podname).OutputToFile("OCP-43889/kas-o-grep.log")
@@ -688,7 +688,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("%s", kasOLog)
 
-		g.By("Check the log files of KAS")
+		exutil.By("Check the log files of KAS")
 		masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		masterName := strings.Fields(masterNode)
@@ -702,7 +702,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("%s", kasPodlogs)
 
-		g.By("Check the audit log files of KAS")
+		exutil.By("Check the audit log files of KAS")
 		cmd = fmt.Sprintf(`grep -rohiE '%s' /var/log/kube-apiserver/audit*.log |grep -iEv '%s' | sed -E 's/%s/../g'`, regexToGrep2, exceptions, format)
 		for i := 0; i < len(masterName); i++ {
 			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "openshift-kube-apiserver", "node/"+masterName[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_audit.log." + masterName[i])
@@ -713,7 +713,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("%s", kasAuditlogs)
 
-		g.By("Checking pod and audit logs")
+		exutil.By("Checking pod and audit logs")
 		if len(kasOLog) > 0 || len(kasPodlogs) > 0 || len(kasAuditlogs) > 0 {
 			e2e.Failf("Found some non-critical-errors....Check non critical errors, if errors are  potential bug then file a bug.")
 		} else {
@@ -744,7 +744,7 @@ spec:
 			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
 		}
 
-		g.By("Check the configuration of priority level")
+		exutil.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.nominalConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`100`))
@@ -752,15 +752,15 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`20`))
 
-		g.By("Stress the cluster")
-		g.By("Checking cluster worker load before running clusterbuster")
+		exutil.By("Stress the cluster")
+		exutil.By("Checking cluster worker load before running clusterbuster")
 		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", "OCP-40667/nodes.log")
 		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", "OCP-40667/nodes.log")
 		if cpuAvgValMaster < 70 && memAvgValMaster < 70 && cpuAvgValWorker < 60 && memAvgValWorker < 60 {
 			LoadCPUMemWorkload(oc)
 		}
 
-		g.By("Check the abnormal pods")
+		exutil.By("Check the abnormal pods")
 		var podLogs []byte
 		errPod := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
@@ -780,7 +780,7 @@ spec:
 		}
 		exutil.AssertWaitPollNoErr(errPod, "Abnormality found in clusterbuster pods.")
 
-		g.By("Check the abnormal nodes")
+		exutil.By("Check the abnormal nodes")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40667/node.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
@@ -797,7 +797,7 @@ spec:
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("Check the abnormal operators")
+		exutil.By("Check the abnormal operators")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40667/co.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
@@ -812,7 +812,7 @@ spec:
 			e2e.Logf("No abnormality found in cluster operators...")
 		}
 
-		g.By("Checking KAS logs")
+		exutil.By("Checking KAS logs")
 		podList, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-apiserver", "apiserver")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podList).ShouldNot(o.BeEmpty())
@@ -838,7 +838,7 @@ spec:
 			e2e.Logf("No errors found in KAS logs")
 		}
 
-		g.By("Check the all worker nodes workload are normal")
+		exutil.By("Check the all worker nodes workload are normal")
 		var cpuAvgVal int
 		var memAvgVal int
 		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
@@ -857,7 +857,7 @@ spec:
 		}
 		exutil.AssertWaitPollNoErr(errLoad, fmt.Sprintf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal))
 
-		g.By("Summary of resources used")
+		exutil.By("Summary of resources used")
 		resourceDetails := checkResources(oc, "OCP-40667/resources.log")
 		for key, value := range resourceDetails {
 			e2e.Logf("Number of %s is %v\n", key, value)
@@ -894,7 +894,7 @@ spec:
 		architecture.SkipNonAmd64SingleArch(oc)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check the configuration of priority level")
+		exutil.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.nominalConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`100`))
@@ -902,7 +902,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`20`))
 
-		g.By("Check the abnormal nodes")
+		exutil.By("Check the abnormal nodes")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40667/node.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
@@ -919,7 +919,7 @@ spec:
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("Check the abnormal operators")
+		exutil.By("Check the abnormal operators")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40667/co.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
@@ -934,7 +934,7 @@ spec:
 			e2e.Logf("No abnormality found in cluster operators...")
 		}
 
-		g.By("Check the abnormal pods")
+		exutil.By("Check the abnormal pods")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' |grep -ivE 'Running|Completed|namespace|pending' || true`, dirname+"pod.log")
@@ -947,7 +947,7 @@ spec:
 			e2e.Logf("No abnormality found in pods...")
 		}
 
-		g.By("Checking KAS logs")
+		exutil.By("Checking KAS logs")
 		kasPods, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-apiserver", "apiserver")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(kasPods).ShouldNot(o.BeEmpty())
@@ -973,7 +973,7 @@ spec:
 			e2e.Logf("No errors found in KAS logs")
 		}
 
-		g.By("Check the all worker nodes workload are normal")
+		exutil.By("Check the all worker nodes workload are normal")
 		cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
 		if cpuAvgVal > 75 || memAvgVal > 85 {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
@@ -985,7 +985,7 @@ spec:
 			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpuAvgVal, memAvgVal)
 		}
 
-		g.By("Summary of resources used")
+		exutil.By("Summary of resources used")
 		resourceDetails := checkResources(oc, "OCP-40667/resources.log")
 		for key, value := range resourceDetails {
 			e2e.Logf("Number of %s is %v\n", key, value)
@@ -1026,7 +1026,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(dirName)
 
-		g.By("Check the configuration of priority level")
+		exutil.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.nominalConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`100`))
@@ -1034,14 +1034,14 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`20`))
 
-		g.By("Stress the cluster")
+		exutil.By("Stress the cluster")
 		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", nodesLogFile)
 		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", nodesLogFile)
 		if cpuAvgValMaster < 70 && memAvgValMaster < 70 && cpuAvgValWorker < 60 && memAvgValWorker < 60 {
 			LoadCPUMemWorkload(oc)
 		}
 
-		g.By("Check the abnormal pods")
+		exutil.By("Check the abnormal pods")
 		var podLogs []byte
 		errPod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile(podLogFile)
@@ -1061,7 +1061,7 @@ spec:
 		}
 		exutil.AssertWaitPollNoErr(errPod, "Abnormality found in clusterbuster pods.")
 
-		g.By("Check the abnormal nodes")
+		exutil.By("Check the abnormal nodes")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile(nodesLogFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, nodesLogFile)
@@ -1077,7 +1077,7 @@ spec:
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("Check the abnormal operators")
+		exutil.By("Check the abnormal operators")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile(coLogFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, coLogFile)
@@ -1092,7 +1092,7 @@ spec:
 			e2e.Logf("No abnormality found in cluster operators...")
 		}
 
-		g.By("Checking KAS logs")
+		exutil.By("Checking KAS logs")
 		masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		masterName := strings.Fields(masterNode)
@@ -1114,7 +1114,7 @@ spec:
 			e2e.Logf("No errors found in KAS logs")
 		}
 
-		g.By("Check the all worker nodes workload are normal")
+		exutil.By("Check the all worker nodes workload are normal")
 		var cpuAvgVal int
 		var memAvgVal int
 		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
@@ -1133,7 +1133,7 @@ spec:
 		}
 		exutil.AssertWaitPollNoErr(errLoad, fmt.Sprintf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal))
 
-		g.By("Summary of resources used")
+		exutil.By("Summary of resources used")
 		resourceDetails := checkResources(oc, caseID+"/resources.log")
 		for key, value := range resourceDetails {
 			e2e.Logf("Number of %s is %v\n", key, value)
@@ -1166,11 +1166,11 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(dirname)
 
-		g.By("1) Create a bootstrap project template and output it to a file template.yaml")
+		exutil.By("1) Create a bootstrap project template and output it to a file template.yaml")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("create-bootstrap-project-template", "-o", "yaml").OutputToFile(filepath.Join(caseID, templateYaml))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) To customize template.yaml and add ResourceQuota and LimitRange objects.")
+		exutil.By("2) To customize template.yaml and add ResourceQuota and LimitRange objects.")
 		patchYaml := `- apiVersion: v1
   kind: "LimitRange"
   metadata:
@@ -1210,17 +1210,17 @@ spec:
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) Create a project request template from the customized template.yaml file in the openshift-config namespace.")
+		exutil.By("3) Create a project request template from the customized template.yaml file in the openshift-config namespace.")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", templateYamlFile, "-n", "openshift-config").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("templates", "project-request", "-n", "openshift-config").Execute()
 
-		g.By("4) Create new project before applying the customized template of projects.")
+		exutil.By("4) Create new project before applying the customized template of projects.")
 		err = oc.AsAdmin().WithoutNamespace().Run("new-project").Args(project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", project1).Execute()
 
-		g.By("5) Associate the template with projectRequestTemplate in the project resource of the config.openshift.io/v1.")
+		exutil.By("5) Associate the template with projectRequestTemplate in the project resource of the config.openshift.io/v1.")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("project.config.openshift.io/cluster", "--type=json", "-p", patchJSON).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
@@ -1234,7 +1234,7 @@ spec:
 			e2e.Logf("openshift-apiserver pods are all running.")
 		}()
 
-		g.By("5.1) Wait until the openshift-apiserver clusteroperator complete degradation and in the normal status ...")
+		exutil.By("5.1) Wait until the openshift-apiserver clusteroperator complete degradation and in the normal status ...")
 		// It needs a bit more time to wait for all openshift-apiservers getting back to normal.
 		expectedStatus := map[string]string{"Progressing": "True"}
 		err = waitCoBecomes(oc, "openshift-apiserver", 240, expectedStatus)
@@ -1244,7 +1244,7 @@ spec:
 		exutil.AssertWaitPollNoErr(err, `openshift-apiserver operator status has not yet changed to {"Available": "True", "Progressing": "False", "Degraded": "False"} in 360 seconds`)
 		e2e.Logf("openshift-apiserver operator is normal and pods are all running.")
 
-		g.By("6) The resource quotas will be used for a new project after the customized template of projects is applied.")
+		exutil.By("6) The resource quotas will be used for a new project after the customized template of projects is applied.")
 		err = oc.AsAdmin().WithoutNamespace().Run("new-project").Args(project2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", project2).Execute()
@@ -1257,7 +1257,7 @@ spec:
 			o.Expect(string(output)).Should(o.MatchRegexp(regx))
 		}
 
-		g.By("7) To add applications to created project, check if Quota usage of the project is changed.")
+		exutil.By("7) To add applications to created project, check if Quota usage of the project is changed.")
 		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("openshift/hello-openshift").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Waiting for all pods of hello-openshift application to be ready ...")
@@ -1282,14 +1282,14 @@ spec:
 			o.Expect(string(output)).Should(o.MatchRegexp(regx))
 		}
 
-		g.By("8) Check the previously created project, no qutoas setting is applied.")
+		exutil.By("8) Check the previously created project, no qutoas setting is applied.")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", project1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check quotas changes of project %s after new app is created:", project1)
 		o.Expect(string(output)).NotTo(o.ContainSubstring(project1 + "-quota"))
 		o.Expect(string(output)).NotTo(o.ContainSubstring(project1 + "-limits"))
 
-		g.By("9) After deleted all resource objects for created application, the quota usage of the project is released.")
+		exutil.By("9) After deleted all resource objects for created application, the quota usage of the project is released.")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--selector", "app=hello-openshift").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Wait for deletion of application to complete
@@ -1309,12 +1309,12 @@ spec:
 		for _, regx := range initRegExpr {
 			o.Expect(string(output)).Should(o.MatchRegexp(regx))
 		}
-		g.By(fmt.Sprintf("Last) %s SUCCESS", caseID))
+		exutil.By(fmt.Sprintf("Last) %s SUCCESS", caseID))
 	})
 
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-High-24698-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
-		g.By("1) Check if port 6080 is available")
+		exutil.By("1) Check if port 6080 is available")
 		err := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6080").Output()
 			// no need to check error since some system output stderr for valid result
@@ -1326,7 +1326,7 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(err, "Port 6080 is available")
 
-		g.By("2) Get kube-apiserver pods")
+		exutil.By("2) Get kube-apiserver pods")
 		err = oc.AsAdmin().Run("project").Args("openshift-kube-apiserver").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("project").Args("default").Execute() // switch to default project
@@ -1334,7 +1334,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podList).ShouldNot(o.BeEmpty())
 
-		g.By("3) Perform port-forward on the first pod available")
+		exutil.By("3) Perform port-forward on the first pod available")
 		exutil.AssertPodToBeReady(oc, podList[0], "openshift-kube-apiserver")
 		_, _, _, err = oc.AsAdmin().Run("port-forward").Args(podList[0], "6080").Background()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1352,7 +1352,7 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(err1, "#### Port-forward 6081:6443 doesn't work")
 
-		g.By("4) check if port forward succeed")
+		exutil.By("4) check if port forward succeed")
 		checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:6080/readyz --noproxy \"127.0.0.1\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(checkOutput)).To(o.Equal("ok"))
@@ -1376,14 +1376,14 @@ spec:
 			return false
 		}
 
-		g.By("1) Get current cluster version")
+		exutil.By("1) Get current cluster version")
 		clusterVersions, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterVersion, err := strconv.ParseFloat(clusterVersions, 64)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("%v", clusterVersion)
 
-		g.By("2) Get current k8s release & next release")
+		exutil.By("2) Get current k8s release & next release")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/kube-apiserver", "-o", `jsonpath='{.status.versions[?(@.name=="kube-apiserver")].version}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd := fmt.Sprintf(`echo '%v' | awk -F"." '{print $1"."$2}'`, out)
@@ -1394,7 +1394,7 @@ spec:
 		nxtReleases := currRelese + 0.01
 		e2e.Logf("APIRemovedInNextReleaseInUse : %v", nxtReleases)
 
-		g.By("3) Get the removedInRelease of api groups list")
+		exutil.By("3) Get the removedInRelease of api groups list")
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", "-o", `jsonpath='{range .items[?(@.status.removedInRelease != "")]}{.metadata.name}{"\t"}{.status.removedInRelease}{"\n"}{end}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		listOutput := strings.Trim(string(out), "'")
@@ -1403,7 +1403,7 @@ spec:
 		} else {
 			e2e.Logf("List of api Removed in next EUS & Non-EUS releases\n %v", listOutput)
 			apisRmRelList := bufio.NewScanner(strings.NewReader(listOutput))
-			g.By("Step 4 & 5) Checking Alert & Client compenents accessing for APIRemovedInNextReleaseInUse")
+			exutil.By("Step 4 & 5) Checking Alert & Client compenents accessing for APIRemovedInNextReleaseInUse")
 			for apisRmRelList.Scan() {
 				removeReleaseAPI := strings.Fields(apisRmRelList.Text())[0]
 				removeRelease, _ := strconv.ParseFloat(strings.Fields(apisRmRelList.Text())[1], 64)
@@ -1450,7 +1450,7 @@ spec:
 				}
 				// Checking the alert & logs for next APIRemovedInNextEUSReleaseInUse
 				if elemsCheckers(eusReleases[clusterVersion], removeRelease) {
-					g.By("6) Checking the alert for APIRemovedInNextEUSReleaseInUse")
+					exutil.By("6) Checking the alert for APIRemovedInNextEUSReleaseInUse")
 					e2e.Logf("Api %v and release %v", removeReleaseAPI, removeRelease)
 					// Checking alerts, Wait for max 10 min to generate all the alert.
 					err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
@@ -1478,7 +1478,7 @@ spec:
 					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Fail:  Not Get Alert for APIRemovedInNextEUSReleaseInUse, Api %v : release %v", removeReleaseAPI, removeRelease))
 
 					// Checking logs for APIRemovedInNextEUSReleaseInUse apis client components logs.
-					g.By("7) Checking client components access logs for APIRemovedInNextEUSReleaseInUse")
+					exutil.By("7) Checking client components access logs for APIRemovedInNextEUSReleaseInUse")
 					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", removeReleaseAPI, "-o", `jsonpath={range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}`).Output()
 					stdOutput := strings.TrimRight(string(out), "\n")
 					o.Expect(err).NotTo(o.HaveOccurred())
@@ -1500,49 +1500,49 @@ spec:
 	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Low-27665-Check if the kube-storage-version-migrator operator related manifests has been loaded", func() {
 		resource := "customresourcedefinition"
 		resourceNames := []string{"storagestates.migration.k8s.io", "storageversionmigrations.migration.k8s.io", "kubestorageversionmigrators.operator.openshift.io"}
-		g.By("1) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
+		exutil.By("1) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames)
 
 		resource = "clusteroperators"
 		resourceNames = []string{"kube-storage-version-migrator"}
-		g.By("2) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
+		exutil.By("2) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames)
 
 		resource = "lease"
 		resourceNames = []string{"openshift-kube-storage-version-migrator-operator-lock"}
 		namespace := "openshift-kube-storage-version-migrator-operator"
-		g.By("3) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		exutil.By("3) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "configmap"
 		resourceNames = []string{"config"}
-		g.By("4) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		exutil.By("4) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "service"
 		resourceNames = []string{"metrics"}
-		g.By("5) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
+		exutil.By("5) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "serviceaccount"
 		resourceNames = []string{"kube-storage-version-migrator-operator"}
-		g.By("6) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		exutil.By("6) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "deployment"
 		resourceNames = []string{"kube-storage-version-migrator-operator"}
-		g.By("7) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		exutil.By("7) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "serviceaccount"
 		resourceNames = []string{"kube-storage-version-migrator-sa"}
 		namespace = "openshift-kube-storage-version-migrator"
-		g.By("8) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		exutil.By("8) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 
 		resource = "deployment"
 		resourceNames = []string{"migrator"}
-		g.By("9) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		exutil.By("9) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 	})
 
@@ -1559,7 +1559,7 @@ spec:
 			reason                = "AdmissionWebhookMatchesVirtualResource"
 		)
 
-		g.By("Pre-requisities step : Create new namespace for the tests.")
+		exutil.By("Pre-requisities step : Create new namespace for the tests.")
 		oc.SetupProject()
 
 		validatingWebHook := admissionWebhook{
@@ -1588,7 +1588,7 @@ spec:
 			template:         mutatingWebhook,
 		}
 
-		g.By("1) Create a ValidatingWebhookConfiguration with virtual resource reference.")
+		exutil.By("1) Create a ValidatingWebhookConfiguration with virtual resource reference.")
 		defer func() {
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookName, "--ignore-not-found").Execute()
 		}()
@@ -1598,7 +1598,7 @@ spec:
 		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{validatingWebhookName}, "")
 		e2e.Logf("Test step-1 has passed : Creation of ValidatingWebhookConfiguration with virtual resource reference succeeded.")
 
-		g.By("2) Check for kube-apiserver operator status after virtual resource reference for a validating webhook added.")
+		exutil.By("2) Check for kube-apiserver operator status after virtual resource reference for a validating webhook added.")
 		// wait some bit more time and double check, to ensure it is stably healthy
 		time.Sleep(100 * time.Second)
 		postConfigKasStatus := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
@@ -1613,13 +1613,13 @@ spec:
 		}
 		e2e.Logf("Test step-2 has passed : Kube-apiserver operator are in normal after virtual resource reference for a validating webhook added.")
 
-		g.By("3) Check for information message on kube-apiserver cluster w.r.t virtual resource reference for a validating webhook")
+		exutil.By("3) Check for information message on kube-apiserver cluster w.r.t virtual resource reference for a validating webhook")
 		compareAPIServerWebhookConditions(oc, reason, "True", []string{`VirtualResourceAdmissionError`})
 		validatingDelErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookName).Execute()
 		o.Expect(validatingDelErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Test step-3 has passed : Kube-apiserver reports expected informational errors after virtual resource reference for a validating webhook added.")
 
-		g.By("4) Create a MutatingWebhookConfiguration with a virtual resource reference.")
+		exutil.By("4) Create a MutatingWebhookConfiguration with a virtual resource reference.")
 		defer func() {
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookName, "--ignore-not-found").Execute()
 		}()
@@ -1628,17 +1628,17 @@ spec:
 
 		e2e.Logf("Test step-4 has passed : Creation of MutatingWebhookConfiguration with virtual resource reference succeeded.")
 
-		g.By("5) Check for kube-apiserver operator status after virtual resource reference for a Mutating webhook added.")
+		exutil.By("5) Check for kube-apiserver operator status after virtual resource reference for a Mutating webhook added.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		e2e.Logf("Test step-5 has passed : Kube-apiserver operators are in normal after virtual resource reference for a mutating webhook added.")
 
-		g.By("6) Check for information message on kube-apiserver cluster w.r.t virtual resource reference for mutating webhook")
+		exutil.By("6) Check for information message on kube-apiserver cluster w.r.t virtual resource reference for mutating webhook")
 		compareAPIServerWebhookConditions(oc, reason, "True", []string{`VirtualResourceAdmissionError`})
 		mutatingDelErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookName).Execute()
 		o.Expect(mutatingDelErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Test step-6 has passed : Kube-apiserver reports expected informational errors after virtual resource reference for a mutating webhook added.")
 
-		g.By("7) Check for webhook admission error free kube-apiserver cluster after deleting webhooks.")
+		exutil.By("7) Check for webhook admission error free kube-apiserver cluster after deleting webhooks.")
 		compareAPIServerWebhookConditions(oc, "", "False", []string{`VirtualResourceAdmissionError`})
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		e2e.Logf("Test step-7 has passed : No webhook admission error seen after purging webhooks.")
@@ -1647,7 +1647,7 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Low-21246-Check the exposed prometheus metrics of operators", func() {
-		g.By("1) get serviceaccount token")
+		exutil.By("1) get serviceaccount token")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1655,7 +1655,7 @@ spec:
 		patterns := []string{"workqueue_adds", "workqueue_depth", "workqueue_queue_duration", "workqueue_retries", "workqueue_work_duration"}
 		step := 2
 		for _, resource := range resources {
-			g.By(fmt.Sprintf("%v) For resource %s, check the exposed prometheus metrics", step, resource))
+			exutil.By(fmt.Sprintf("%v) For resource %s, check the exposed prometheus metrics", step, resource))
 
 			namespace := resource
 			if strings.Contains(resource, "kube-") {
@@ -1664,19 +1664,19 @@ spec:
 			}
 
 			label := "app=" + resource
-			g.By(fmt.Sprintf("%v.1) wait for a pod with label %s to be ready within 15 mins", step, label))
+			exutil.By(fmt.Sprintf("%v.1) wait for a pod with label %s to be ready within 15 mins", step, label))
 			pods, err := exutil.GetAllPodsWithLabel(oc, namespace, label)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(pods).ShouldNot(o.BeEmpty())
 			pod := pods[0]
 			exutil.AssertPodToBeReady(oc, pod, namespace)
 
-			g.By(fmt.Sprintf("%v.2) request exposed prometheus metrics on pod %s", step, pod))
+			exutil.By(fmt.Sprintf("%v.2) request exposed prometheus metrics on pod %s", step, pod))
 			command := []string{pod, "-n", namespace, "--", "curl", "--connect-timeout", "30", "--retry", "3", "-N", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), "https://localhost:8443/metrics"}
 			output, err := oc.Run("exec").Args(command...).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("%v.3) check the output if it contains the following patterns: %s", step, strings.Join(patterns, ", ")))
+			exutil.By(fmt.Sprintf("%v.3) check the output if it contains the following patterns: %s", step, strings.Join(patterns, ", ")))
 			for _, pattern := range patterns {
 				o.Expect(output).Should(o.ContainSubstring(pattern))
 			}
@@ -1705,12 +1705,12 @@ spec:
 		e2e.Logf("Current revision Count: %v", PreRevision)
 
 		defer func() {
-			g.By("Roll Out Step 1 Changes")
+			exutil.By("Roll Out Step 1 Changes")
 			patch := `[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": null}]`
 			rollOutError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
 			o.Expect(rollOutError).NotTo(o.HaveOccurred())
 
-			g.By("7) Check Kube-apiserver operator Roll Out with new revision count")
+			exutil.By("7) Check Kube-apiserver operator Roll Out with new revision count")
 			rollOutError = wait.Poll(100*time.Second, 900*time.Second, func() (bool, error) {
 				Output, operatorChkError := oc.WithoutNamespace().Run("get").Args("co/kube-apiserver").Output()
 				if operatorChkError == nil {
@@ -1730,12 +1730,12 @@ spec:
 			exutil.AssertWaitPollNoErr(rollOutError, "Step 7, Test Failed: Kube-apiserver operator failed to Roll Out with new revision count")
 		}()
 
-		g.By("1) Add invalid configuration to kube-apiserver to make it failed")
+		exutil.By("1) Add invalid configuration to kube-apiserver to make it failed")
 		patch := `[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": {"apiServerArguments":{"foo":["bar"]}}}]`
 		configError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
 		o.Expect(configError).NotTo(o.HaveOccurred())
 
-		g.By("2) Check new startup-monitor pod created & running under openshift-kube-apiserver project")
+		exutil.By("2) Check new startup-monitor pod created & running under openshift-kube-apiserver project")
 		podChkError := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 			out, runError := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=app=installer", "-o", `jsonpath='{.items[?(@.status.phase=="Running")].status.phase}'`).Output()
 			if runError == nil {
@@ -1748,13 +1748,13 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(podChkError, "Step 2, Test Failed: Failed to Create startup-monitor pod")
 
-		g.By("3) Check kube-apiserver to fall back to previous good revision")
+		exutil.By("3) Check kube-apiserver to fall back to previous good revision")
 		fallbackError := wait.Poll(100*time.Second, 900*time.Second, func() (bool, error) {
 			annotations, fallbackErr := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=apiserver", "-o", `jsonpath={.items[*].metadata.annotations.startup-monitor\.static-pods\.openshift\.io/fallback-for-revision}`).Output()
 			if fallbackErr == nil {
 				failedRevision, _ := strconv.Atoi(annotations)
 				o.Expect(failedRevision - 1).Should(o.BeNumerically("==", PreRevision))
-				g.By("Check created soft-link kube-apiserver-last-known-good to the last good revision")
+				exutil.By("Check created soft-link kube-apiserver-last-known-good to the last good revision")
 				out, fileChkError := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, "bash", "-c", "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good")
 				o.Expect(fileChkError).NotTo(o.HaveOccurred())
 				o.Expect(out).To(o.ContainSubstring("kube-apiserver-pod.yaml"))
@@ -1765,19 +1765,19 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(fallbackError, "Step 3, Test Failed: Failed to start kube-apiserver with previous good revision")
 
-		g.By("4: Check startup-monitor pod was created during fallback and currently in Stopped/Removed state")
+		exutil.By("4: Check startup-monitor pod was created during fallback and currently in Stopped/Removed state")
 		cmd := fmt.Sprintf("journalctl -u crio --since '10min ago'| grep 'startup-monitor' | egrep %v", keyWords)
 		out, journalctlErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, cmd)
 		o.Expect(journalctlErr).NotTo(o.HaveOccurred())
 		o.Expect(out).ShouldNot(o.BeEmpty())
 		e2e.Logf("Step 4, Test Passed : Startup-monitor pod was created and Stopped/Removed state")
 
-		g.By("5) Check kube-apiserver operator status changed to degraded")
+		exutil.By("5) Check kube-apiserver operator status changed to degraded")
 		expectedStatus := map[string]string{"Degraded": "True"}
 		operatorChkErr := waitCoBecomes(oc, "kube-apiserver", 900, expectedStatus)
 		exutil.AssertWaitPollNoErr(operatorChkErr, "Step 5, Test Failed: kube-apiserver operator failed to Degraded")
 
-		g.By("6) Check kubeapiserver operator nodeStatuses show lastFallbackCount info correctly")
+		exutil.By("6) Check kubeapiserver operator nodeStatuses show lastFallbackCount info correctly")
 		out, revisionChkErr := oc.WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", "jsonpath='{.status.nodeStatuses[*].lastFailedRevisionErrors}'").Output()
 		o.Expect(revisionChkErr).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring(fmt.Sprintf("fallback to last-known-good revision %v took place", PreRevision)))
@@ -1841,7 +1841,7 @@ spec:
 			template:         badCrdWebhook,
 		}
 
-		g.By("Pre-requisities, capturing current-context from cluster.")
+		exutil.By("Pre-requisities, capturing current-context from cluster.")
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
 		o.Expect(contxtErr).NotTo(o.HaveOccurred())
 		defer func() {
@@ -1849,28 +1849,28 @@ spec:
 			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
 		}()
 
-		g.By("1) Create a custom namespace for admission hook references.")
+		exutil.By("1) Create a custom namespace for admission hook references.")
 		err := oc.WithoutNamespace().Run("new-project").Args(namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) Create a bad ValidatingWebhookConfiguration with invalid service and namespace references.")
+		exutil.By("2) Create a bad ValidatingWebhookConfiguration with invalid service and namespace references.")
 		validatingWebHook.createAdmissionWebhookFromTemplate(oc)
 		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{badValidatingWebhookName}, "")
 
-		g.By("3) Create a bad MutatingWebhookConfiguration with invalid service and namespace references.")
+		exutil.By("3) Create a bad MutatingWebhookConfiguration with invalid service and namespace references.")
 		mutatingWebHook.createAdmissionWebhookFromTemplate(oc)
 		CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{badMutatingWebhookName}, "")
 
-		g.By("4) Create a bad CRDWebhookConfiguration with invalid service and namespace references.")
+		exutil.By("4) Create a bad CRDWebhookConfiguration with invalid service and namespace references.")
 		crdWebHook.createAdmissionWebhookFromTemplate(oc)
 		CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
 
-		g.By("5) Check for information error message on kube-apiserver cluster w.r.t bad resource reference for admission webhooks")
+		exutil.By("5) Check for information error message on kube-apiserver cluster w.r.t bad resource reference for admission webhooks")
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, status, webHookErrorConditionTypes)
 		compareAPIServerWebhookConditions(oc, "AdmissionWebhookMatchesVirtualResource", status, []string{`VirtualResourceAdmissionError`})
 
 		e2e.Logf("Step 5 has passed")
-		g.By("6) Check for kube-apiserver operator status after bad validating webhook added.")
+		exutil.By("6) Check for kube-apiserver operator status after bad validating webhook added.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		e2e.Logf("Step 6 has passed. Test case has passed.")
 
@@ -1896,7 +1896,7 @@ spec:
 			oc.WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
 		}()
 
-		g.By("1) Check presence of admission webhooks created in pre-upgrade steps.")
+		exutil.By("1) Check presence of admission webhooks created in pre-upgrade steps.")
 		e2e.Logf("Check availability of ValidatingWebhookConfiguration")
 		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{badValidatingWebhookName}, "")
 		e2e.Logf("Check availability of MutatingWebhookConfiguration.")
@@ -1904,23 +1904,23 @@ spec:
 		e2e.Logf("Check availability of CRDWebhookConfiguration.")
 		CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
 
-		g.By("2) Check for information message after upgrade on kube-apiserver cluster when bad admission webhooks are present.")
+		exutil.By("2) Check for information message after upgrade on kube-apiserver cluster when bad admission webhooks are present.")
 		webhookServiceFailureReasons := []string{"WebhookServiceNotFound", "WebhookServiceNotReady", "WebhookServiceConnectionError", "AdmissionWebhookMatchesVirtualResource"}
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, status, webHookErrorConditionTypes)
 
-		g.By("3) Check for kube-apiserver operator status after upgrade when cluster has bad webhooks present.")
+		exutil.By("3) Check for kube-apiserver operator status after upgrade when cluster has bad webhooks present.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		e2e.Logf("Step 3 has passed , as kubeapiserver is in expected status.")
 
-		g.By("4) Delete all bad webhooks from upgraded cluster.")
+		exutil.By("4) Delete all bad webhooks from upgraded cluster.")
 		oc.Run("delete").Args("ValidatingWebhookConfiguration", badValidatingWebhookName, "--ignore-not-found").Execute()
 		oc.Run("delete").Args("MutatingWebhookConfiguration", badMutatingWebhookName, "--ignore-not-found").Execute()
 		oc.Run("delete").Args("crd", badCrdWebhookName, "--ignore-not-found").Execute()
 
-		g.By("5) Check for informational error message presence after deletion of bad webhooks in upgraded cluster.")
+		exutil.By("5) Check for informational error message presence after deletion of bad webhooks in upgraded cluster.")
 		compareAPIServerWebhookConditions(oc, "", "False", webHookErrorConditionTypes)
 		e2e.Logf("Step 5 has passed , as no error related to webhooks are in cluster.")
-		g.By("6) Check for kube-apiserver operator status after deletion of bad webhooks in upgraded cluster.")
+		exutil.By("6) Check for kube-apiserver operator status after deletion of bad webhooks in upgraded cluster.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		e2e.Logf("Step 6 has passed. Test case has passed.")
 	})
@@ -1936,7 +1936,7 @@ spec:
 			alertTimeCritical = "1h"
 			severity          = []string{"warning", "critical"}
 		)
-		g.By("1.Check with cluster installed OCP 4.10 and later release, the following changes for existing alerts " + alert + " have been applied.")
+		exutil.By("1.Check with cluster installed OCP 4.10 and later release, the following changes for existing alerts " + alert + " have been applied.")
 		output, alertSevErr := oc.Run("get").Args("prometheusrule/cpu-utilization", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="control-plane-cpu-utilization")].rules[?(@.alert=="`+alert+`")].labels.severity}'`).Output()
 		o.Expect(alertSevErr).NotTo(o.HaveOccurred())
 		chkStr := fmt.Sprintf("%s %s", severity[0], severity[1])
@@ -1956,13 +1956,13 @@ spec:
 		o.Expect(output).Should(o.ContainSubstring(runbookURL), fmt.Sprintf("%s Runbook url not found :: %s", alert, runbookURL))
 		e2e.Logf("Have a run book url for %s :: %s", alert, runbookURL)
 
-		g.By("2. Provide run book url for " + alertBudget)
+		exutil.By("2. Provide run book url for " + alertBudget)
 		output, alertKubeBudgetErr := oc.Run("get").Args("PrometheusRule", "-n", "openshift-kube-apiserver", "kube-apiserver-slos-basic", "-o", `jsonpath='{.spec.groups[?(@.name=="kube-apiserver-slos-basic")].rules[?(@.alert=="`+alertBudget+`")].annotations.runbook_url}`).Output()
 		o.Expect(alertKubeBudgetErr).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring(runbookBudgetURL), fmt.Sprintf("%s runbookUrl not found :: %s", alertBudget, runbookBudgetURL))
 		e2e.Logf("Run book url for %s :: %s", alertBudget, runbookBudgetURL)
 
-		g.By("3. Test the ExtremelyHighIndividualControlPlaneCPU alerts firing")
+		exutil.By("3. Test the ExtremelyHighIndividualControlPlaneCPU alerts firing")
 		e2e.Logf("Check how many cpus are there in the master node")
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
@@ -2026,7 +2026,7 @@ spec:
 			webhookServiceFailureReasons      = []string{`WebhookServiceNotFound`, `WebhookServiceNotReady`, `WebhookServiceConnectionError`}
 		)
 
-		g.By("1) Create new namespace for the tests.")
+		exutil.By("1) Create new namespace for the tests.")
 		oc.SetupProject()
 
 		validatingWebHook := admissionWebhook{
@@ -2079,13 +2079,13 @@ spec:
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crdWebhookNameNotFound, "--ignore-not-found").Execute()
 
 		}()
-		g.By("2) Create a bad ValidatingWebhookConfiguration with invalid service and namespace references.")
+		exutil.By("2) Create a bad ValidatingWebhookConfiguration with invalid service and namespace references.")
 		validatingWebHook.createAdmissionWebhookFromTemplate(oc)
 
-		g.By("3) Create a bad MutatingWebhookConfiguration with invalid service and namespace references.")
+		exutil.By("3) Create a bad MutatingWebhookConfiguration with invalid service and namespace references.")
 		mutatingWebHook.createAdmissionWebhookFromTemplate(oc)
 
-		g.By("4) Create a bad CRDWebhookConfiguration with invalid service and namespace references.")
+		exutil.By("4) Create a bad CRDWebhookConfiguration with invalid service and namespace references.")
 		crdWebHook.createAdmissionWebhookFromTemplate(oc)
 
 		e2e.Logf("Check availability of ValidatingWebhookConfiguration")
@@ -2095,12 +2095,12 @@ spec:
 		e2e.Logf("Check availability of CRDWebhookConfiguration.")
 		CheckIfResourceAvailable(oc, "crd", []string{crdWebhookNameNotFound}, "")
 
-		g.By("5) Check for information error message 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to invalid service.")
+		exutil.By("5) Check for information error message 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to invalid service.")
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webHookConditionErrors)
-		g.By("6) Check for kubeapiserver operator status when bad admissionwebhooks configured.")
+		exutil.By("6) Check for kubeapiserver operator status when bad admissionwebhooks configured.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 
-		g.By("7) Create services and check service presence for test steps")
+		exutil.By("7) Create services and check service presence for test steps")
 		service := service{
 			name:      serviceName,
 			clusterip: "172.30.1.1",
@@ -2113,11 +2113,11 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring(serviceName), "Service object is not listed as expected")
 
-		g.By("8) Check for error 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to unreachable service.")
+		exutil.By("8) Check for error 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to unreachable service.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webHookConditionErrors)
 
-		g.By("9) Creation of additional webhooks that holds unknown service defintions.")
+		exutil.By("9) Creation of additional webhooks that holds unknown service defintions.")
 		defer func() {
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookNameNotReachable, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookNameNotReachable, "--ignore-not-found").Execute()
@@ -2169,22 +2169,22 @@ spec:
 			template:         crdWebhookTemplate,
 		}
 
-		g.By("9.1) Create a bad ValidatingWebhookConfiguration with unknown service references.")
+		exutil.By("9.1) Create a bad ValidatingWebhookConfiguration with unknown service references.")
 		validatingWebHookUnknown.createAdmissionWebhookFromTemplate(oc)
 
-		g.By("9.2) Create a bad MutatingWebhookConfiguration with unknown service references.")
+		exutil.By("9.2) Create a bad MutatingWebhookConfiguration with unknown service references.")
 		mutatingWebHookUnknown.createAdmissionWebhookFromTemplate(oc)
 
-		g.By("9.3) Create a bad CRDWebhookConfiguration with unknown service and namespace references.")
+		exutil.By("9.3) Create a bad CRDWebhookConfiguration with unknown service and namespace references.")
 		crdWebHookUnknown.createAdmissionWebhookFromTemplate(oc)
 
-		g.By("10) Check for kube-apiserver operator status.")
+		exutil.By("10) Check for kube-apiserver operator status.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 
-		g.By("11) Check for error 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points both unknown and unreachable services.")
+		exutil.By("11) Check for error 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points both unknown and unreachable services.")
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webHookConditionErrors)
 
-		g.By("12) Delete all bad webhooks and check kubeapiserver operators and errors")
+		exutil.By("12) Delete all bad webhooks and check kubeapiserver operators and errors")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookNameNotReachable).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookNameNotReachable).Execute()
@@ -2200,39 +2200,39 @@ spec:
 
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		compareAPIServerWebhookConditions(oc, "", "False", webHookConditionErrors)
-		g.By("Test case steps are passed")
+		exutil.By("Test case steps are passed")
 	})
 
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-PstChkUpgrade-Author:zxiao-High-44597-Upgrade SNO clusters given kube-apiserver implements startup-monitor mechanism", func() {
-		g.By("1) Check if cluster is SNO.")
+		exutil.By("1) Check if cluster is SNO.")
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
 		}
 
-		g.By("2) Get a master node.")
+		exutil.By("2) Get a master node.")
 		masterNode, getFirstMasterNodeErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(getFirstMasterNodeErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNode).NotTo(o.Equal(""))
 
-		g.By("3) Check the kube-apiserver-last-known-good link file exists and is linked to a good version.")
+		exutil.By("3) Check the kube-apiserver-last-known-good link file exists and is linked to a good version.")
 		cmd := "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good"
 		output, debugNodeWithChrootErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(debugNodeWithChrootErr).NotTo(o.HaveOccurred())
 
-		g.By("3.1) Check kube-apiserver-last-known-good file exists.")
+		exutil.By("3.1) Check kube-apiserver-last-known-good file exists.")
 		o.Expect(output).Should(o.ContainSubstring("kube-apiserver-last-known-good"))
-		g.By("3.2) Check file is linked to another file.")
+		exutil.By("3.2) Check file is linked to another file.")
 		o.Expect(output).Should(o.ContainSubstring("->"))
-		g.By("3.3) Check linked file exists.")
+		exutil.By("3.3) Check linked file exists.")
 		o.Expect(output).Should(o.ContainSubstring("kube-apiserver-pod.yaml"))
 
-		g.By("4) Check cluster operator kube-apiserver is normal, not degraded, and does not contain abnormal statuses.")
+		exutil.By("4) Check cluster operator kube-apiserver is normal, not degraded, and does not contain abnormal statuses.")
 		state, checkClusterOperatorConditionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-apiserver", "-o", "jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 		o.Expect(checkClusterOperatorConditionErr).NotTo(o.HaveOccurred())
 		o.Expect(state).To(o.ContainSubstring("TrueFalseFalse"))
 
-		g.By("5) Check kubeapiserver operator is normal, not degraded, and does not contain abnormal statuses.")
+		exutil.By("5) Check kubeapiserver operator is normal, not degraded, and does not contain abnormal statuses.")
 		state, checkKubeapiserverOperatorConditionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver.operator", "cluster", "-o", "jsonpath={.status.nodeStatuses[?(@.lastFailedRevisionErrors)]}").Output()
 		o.Expect(checkKubeapiserverOperatorConditionErr).NotTo(o.HaveOccurred())
 		o.Expect(state).Should(o.BeEmpty())
@@ -2246,33 +2246,33 @@ spec:
 			secretname = "ocp-15870-mysecret"
 		)
 
-		g.By("Check if cluster is SNO.")
+		exutil.By("Check if cluster is SNO.")
 		if isSNOCluster(oc) {
 			g.Skip("This won't run on SNO cluster, skip.")
 		}
 
-		g.By("1) Create new project required for this test execution")
+		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
-		g.By("2) Get cluster worker node list")
+		exutil.By("2) Get cluster worker node list")
 		nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", `node-role.kubernetes.io/worker,!node-role.kubernetes.io/edge`, "-o", "jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		workernodes := strings.Split(nodes, " ")
 
-		g.By("3) Create new hello pod on first worker node")
+		exutil.By("3) Create new hello pod on first worker node")
 		podTemplate := getTestDataFilePath("create-pod.yaml")
 		pod := exutil.Pod{Name: podname, Namespace: namespace, Template: podTemplate, Parameters: []string{"IMAGE=" + image, "HOSTNAME=" + workernodes[0], "PORT=8080"}}
 		defer pod.Delete(oc)
 		pod.Create(oc)
 
-		g.By("4) Acessing non-existint secret with impersonate parameter")
+		exutil.By("4) Acessing non-existint secret with impersonate parameter")
 		impersonate := fmt.Sprintf(`system:node:%v`, workernodes[0])
 		notexitsecretoutput, notexitsecreterror := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "secret", "not-existing-secret", "--as", impersonate, "--as-group", "system:nodes").Output()
 		o.Expect(notexitsecretoutput).Should(o.ContainSubstring("Forbidden"))
 		o.Expect(notexitsecreterror).To(o.HaveOccurred())
 
-		g.By("5) Accessing existing secret that no pod use it")
+		exutil.By("5) Accessing existing secret that no pod use it")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", namespace, "secret", secretname, "--ignore-not-found").Execute()
 		_, secretcreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "secret", "generic", secretname, "--from-literal=user=Bob").Output()
 		o.Expect(secretcreateerror).NotTo(o.HaveOccurred())
@@ -2280,18 +2280,18 @@ spec:
 		o.Expect(exitsecretoutput).Should(o.ContainSubstring("Forbidden"))
 		o.Expect(exitsecreterror).To(o.HaveOccurred())
 
-		g.By("6) Getting secret name used to create above pod")
+		exutil.By("6) Getting secret name used to create above pod")
 		serviceaccount, serviceaccountgeterr := oc.WithoutNamespace().Run("get").Args("po", "-n", namespace, podname, "-o", `jsonpath={.spec.serviceAccountName}`).Output()
 		o.Expect(serviceaccountgeterr).NotTo(o.HaveOccurred())
 		podusedsecret, podusedsecretgeterr := oc.WithoutNamespace().Run("get").Args("sa", "-n", namespace, serviceaccount, "-o", `jsonpath={.secrets[*].name}`).Output()
 		o.Expect(podusedsecretgeterr).NotTo(o.HaveOccurred())
 
-		g.By("7) Accessing secret used to create pod with impersonate parameter")
+		exutil.By("7) Accessing secret used to create pod with impersonate parameter")
 		secretaccess, secretaccesserr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "secret", podusedsecret, "--as", impersonate, "--as-group", "system:nodes").Output()
 		o.Expect(secretaccesserr).NotTo(o.HaveOccurred())
 		o.Expect(secretaccess).Should(o.ContainSubstring(podusedsecret))
 
-		g.By("8) Impersonate one node to operate on other different node, e.g. create/label other node")
+		exutil.By("8) Impersonate one node to operate on other different node, e.g. create/label other node")
 		nodelabeloutput, nodelabelerror := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", namespace, "no", workernodes[1], "testlabel=testvalue", "--as", impersonate, "--as-group", "system:nodes").Output()
 		o.Expect(nodelabeloutput).Should(o.ContainSubstring("Forbidden"))
 		o.Expect(nodelabelerror).To(o.HaveOccurred())
@@ -2300,14 +2300,14 @@ spec:
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-High-39601-Examine critical errors in openshift-kube-apiserver related log files", func() {
 		g.Skip("This test always fails due to non-real critical errors and is not suitable for automated testing and will be tested manually instead, skip.")
-		g.By("1) Create log arrays.")
+		exutil.By("1) Create log arrays.")
 		podAbnormalLogs := make([]string, 0)
 		masterNodeAbnormalLogs := make([]string, 0)
 		externalPanicLogs := make([]string, 0)
 		auditAbnormalLogs := make([]string, 0)
 		totalAbnormalLogCount := 0
 
-		g.By("2) Setup start/end tags for extracting logs from other unrelated stdout like oc debug warning")
+		exutil.By("2) Setup start/end tags for extracting logs from other unrelated stdout like oc debug warning")
 		startTag := "<START_LOG>"
 		endTag := "</END_LOG>"
 		trimStartTag, regexErr := regexp.Compile(fmt.Sprintf("(.|\n|\r)*%s", startTag))
@@ -2315,12 +2315,12 @@ spec:
 		trimEndTag, regexErr := regexp.Compile(fmt.Sprintf("%s(.|\n|\r)*", endTag))
 		o.Expect(regexErr).NotTo(o.HaveOccurred())
 
-		g.By("3) Get all master nodes.")
+		exutil.By("3) Get all master nodes.")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 
-		g.By("4) Check KAS operator pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		exutil.By("4) Check KAS operator pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		clusterOperator := "openshift-kube-apiserver-operator"
 		keywords := "panic|fatal|SHOULD NOT HAPPEN"
 		format := `[0-9TZ.:]{5,30}`
@@ -2339,11 +2339,11 @@ spec:
 		masterNode, err := oc.WithoutNamespace().Run("get").Args("po", "-n", clusterOperator, "-o", `jsonpath={.items[0].spec.nodeName}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
+		exutil.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
 		podLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-		g.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
+		exutil.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
 		podLogs = trimStartTag.ReplaceAllString(podLogs, "")
 		podLogs = trimEndTag.ReplaceAllString(podLogs, "")
 		for _, line := range strings.Split(podLogs, "\n") {
@@ -2354,7 +2354,7 @@ spec:
 		e2e.Logf("KAS-O Pod abnormal Logs -------------------------->\n%s", strings.Join(podAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(podAbnormalLogs)
 
-		g.By("5) On all master nodes, check KAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		exutil.By("5) On all master nodes, check KAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		keywords = "fatal|SHOULD NOT HAPPEN"
 		cmd = fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev "%s" > /tmp/OCP-39601-kas-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-39601-kas-errors.log | sort | uniq -c | sort -h | tee > /tmp/OCP-39601-kas-uniq-errors.log | head -10
@@ -2365,11 +2365,11 @@ spec:
 		echo '%s'`, frontwords, keywords, afterwords, exceptions, format, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
 			masterNodeLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
 			masterNodeLogs = trimStartTag.ReplaceAllString(masterNodeLogs, "")
 			masterNodeLogs = trimEndTag.ReplaceAllString(masterNodeLogs, "")
 			for _, line := range strings.Split(masterNodeLogs, "\n") {
@@ -2381,7 +2381,7 @@ spec:
 		e2e.Logf("KAS pods abnormal Logs ------------------------->\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
 
-		g.By("6) On all master nodes, check KAS log files for panic error.")
+		exutil.By("6) On all master nodes, check KAS log files for panic error.")
 		cmd = fmt.Sprintf(`RETAG="[EW][0-9]{4}\s[0-9]{2}:[0-9]{2}"
 		PANIC="${RETAG}.*panic"
 		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev "%s" | cut -d ':' -f1 | head -10 | uniq)
@@ -2395,11 +2395,11 @@ spec:
 		echo '%s'`, exceptions, startTag, exceptions, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
 			externalLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
 			externalLogs = trimStartTag.ReplaceAllString(externalLogs, "")
 			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
 			for _, line := range strings.Split(externalLogs, "\n") {
@@ -2411,7 +2411,7 @@ spec:
 		e2e.Logf("KAS pod panic Logs -------------------------->\n%s", strings.Join(externalPanicLogs, "\n"))
 		totalAbnormalLogCount += len(externalPanicLogs)
 
-		g.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
+		exutil.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
 		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test-.*|kernel.*-panic|(ocp|OCP)[0-9]{4,}|49167-fatal|LogLevelFatal"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-39601-audit-errors.log
@@ -2422,11 +2422,11 @@ spec:
 		echo '%s'`, keywords, exceptions, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
 			auditLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
 			auditLogs = trimStartTag.ReplaceAllString(auditLogs, "")
 			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
 			for _, line := range strings.Split(auditLogs, "\n") {
@@ -2438,21 +2438,21 @@ spec:
 		e2e.Logf("KAS audit abnormal Logs --------------------->\n%s", strings.Join(auditAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(auditAbnormalLogs)
 
-		g.By("8) Assert if abnormal log exits")
+		exutil.By("8) Assert if abnormal log exits")
 		o.Expect(totalAbnormalLogCount).Should(o.BeZero())
 	})
 
 	// author: zxiao@redhat.com
 	g.It("Author:zxiao-Medium-10592-Cluster-admin could get/edit/delete subresource", func() {
-		g.By("1) Create new project")
+		exutil.By("1) Create new project")
 		oc.SetupProject()
 
-		g.By("2) Create apply resource template")
+		exutil.By("2) Create apply resource template")
 		template := getTestDataFilePath("application-template-stibuild.json")
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "-f", template)
 
 		label := "deployment=database-1"
-		g.By(fmt.Sprintf("3) Get one pod with label %s", label))
+		exutil.By(fmt.Sprintf("3) Get one pod with label %s", label))
 		var pods []string
 		var err error
 		err = wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
@@ -2471,7 +2471,7 @@ spec:
 		pod := pods[0]
 		exutil.AssertPodToBeReady(oc, pod, oc.Namespace())
 
-		g.By("3) Get pod info json as file")
+		exutil.By("3) Get pod info json as file")
 		var podJSON string
 		err = wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
 			podJSON, err = oc.Run("get").Args("pod", pod, "--output=json", "-n", oc.Namespace()).Output()
@@ -2488,23 +2488,23 @@ spec:
 		exutil.AssertWaitPollNoErr(err, "fail to get pod JSON with Running state")
 		podJSON = strings.Replace(podJSON, `"phase": "Running"`, `"phase": "Pending"`, 1)
 
-		g.By("4) Get service url for updating pod status")
+		exutil.By("4) Get service url for updating pod status")
 		baseURL, err := oc.Run("whoami").Args("--show-server").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		url := baseURL + filepath.Join("/api/v1/namespaces", oc.Namespace(), "pods", pod, "status")
 		e2e.Logf("Get update pod status REST API server %s", url)
 
-		g.By("5) Get access token")
+		exutil.By("5) Get access token")
 		token, err := oc.Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("6) Give user admin permission")
+		exutil.By("6) Give user admin permission")
 		username := oc.Username()
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", username).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("7) Update pod, expect 200 HTTP response status")
+		exutil.By("7) Update pod, expect 200 HTTP response status")
 		authHeader := fmt.Sprintf(`Authorization: Bearer %s`, token)
 		command := fmt.Sprintf("curl -X PUT %s -w '%s' -o /dev/null -k -H '%s' -H 'Content-Type: application/json' -d '%s'", url, "%{http_code}", authHeader, podJSON)
 		updatePodStatusRawOutput, err := exec.Command("bash", "-c", command).Output()
@@ -2512,11 +2512,11 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(updatePodStatusOutput).To(o.Equal("200"))
 
-		g.By(fmt.Sprintf("8) Get pod %s", pod))
+		exutil.By(fmt.Sprintf("8) Get pod %s", pod))
 		err = oc.Run("get").Args("pod", pod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("9) Delete pod, expect 405 HTTP response status")
+		exutil.By("9) Delete pod, expect 405 HTTP response status")
 		command = fmt.Sprintf("curl -X DELETE %s -w '%s' -o /dev/null -k -H '%s' -H 'Content-Type: application/json'", url, "%{http_code}", authHeader)
 		deletePodStatusRawOutput, err := exec.Command("bash", "-c", command).Output()
 		deletePodStatusOutput := string(deletePodStatusRawOutput)
@@ -2526,14 +2526,14 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:rgangwar-High-38865-Examine abnormal errors in openshift-apiserver pod logs and audit logs", func() {
-		g.By("1) Create log arrays.")
+		exutil.By("1) Create log arrays.")
 		podAbnormalLogs := make([]string, 0)
 		externalPanicLogs := make([]string, 0)
 		masterNodeAbnormalLogs := make([]string, 0)
 		auditAbnormalLogs := make([]string, 0)
 		totalAbnormalLogCount := 0
 
-		g.By("2) Setup start/end tags for extracting logs from other unrelated stdout like oc debug warning")
+		exutil.By("2) Setup start/end tags for extracting logs from other unrelated stdout like oc debug warning")
 		startTag := "<START_LOG>"
 		endTag := "</END_LOG>"
 		trimStartTag, regexErr := regexp.Compile(fmt.Sprintf("(.|\n|\r)*%s", startTag))
@@ -2541,12 +2541,12 @@ spec:
 		trimEndTag, regexErr := regexp.Compile(fmt.Sprintf("%s(.|\n|\r)*", endTag))
 		o.Expect(regexErr).NotTo(o.HaveOccurred())
 
-		g.By("3) Get all master nodes.")
+		exutil.By("3) Get all master nodes.")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 
-		g.By("4) Check OAS operator pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		exutil.By("4) Check OAS operator pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		clusterOperator := "openshift-apiserver-operator"
 		keywords := "panic|fatal|SHOULD NOT HAPPEN"
 		format := `[0-9TZ.:]{5,30}`
@@ -2563,11 +2563,11 @@ spec:
 		masterNode, err := oc.WithoutNamespace().Run("get").Args("po", "-n", clusterOperator, "-o", `jsonpath={.items[0].spec.nodeName}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
+		exutil.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
 		podLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-		g.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
+		exutil.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
 		podLogs = trimStartTag.ReplaceAllString(podLogs, "")
 		podLogs = trimEndTag.ReplaceAllString(podLogs, "")
 		for _, line := range strings.Split(podLogs, "\n") {
@@ -2578,7 +2578,7 @@ spec:
 		e2e.Logf("OAS-O Pod abnormal Logs -------------------------->\n%s", strings.Join(podAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(podAbnormalLogs)
 
-		g.By("5) On all master nodes, check OAS log files for panic error.")
+		exutil.By("5) On all master nodes, check OAS log files for panic error.")
 		exceptions := "panicked: false|e2e-test-.*|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}"
 		cmd = fmt.Sprintf(`RETAG="[EW][0-9]{4}\s[0-9]{2}:[0-9]{2}"
 		PANIC="${RETAG}.*panic"
@@ -2593,11 +2593,11 @@ spec:
 		echo '%s'`, exceptions, startTag, exceptions, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
 			externalLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
 			externalLogs = trimStartTag.ReplaceAllString(externalLogs, "")
 			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
 			for _, line := range strings.Split(externalLogs, "\n") {
@@ -2608,7 +2608,7 @@ spec:
 		}
 		e2e.Logf("OAS pod panic Logs -------------------------->\n%s", strings.Join(externalPanicLogs, "\n"))
 
-		g.By("6) On all master nodes, check OAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		exutil.By("6) On all master nodes, check OAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		keywords = "fatal|SHOULD NOT HAPPEN"
 		cmd = fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver_apiserver* > /tmp/OCP-38865-oas-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-38865-oas-errors.log | sort | uniq -c | sort -h | tee > /tmp/OCP-38865-oas-uniq-errors.log | head -10
@@ -2619,11 +2619,11 @@ spec:
 		echo '%s'`, frontwords, keywords, afterwords, format, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
 			masterNodeLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
 			masterNodeLogs = trimStartTag.ReplaceAllString(masterNodeLogs, "")
 			masterNodeLogs = trimEndTag.ReplaceAllString(masterNodeLogs, "")
 			for _, line := range strings.Split(masterNodeLogs, "\n") {
@@ -2635,7 +2635,7 @@ spec:
 		e2e.Logf("OAS pods abnormal Logs ------------------------->\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
 
-		g.By("7) On all master nodes, check oas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
+		exutil.By("7) On all master nodes, check oas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/openshift-apiserver/audit*.log > /tmp/OCP-38865-audit-errors.log
 		echo '%s'
@@ -2645,11 +2645,11 @@ spec:
 		echo '%s'`, keywords, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
 			auditLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
 			auditLogs = trimStartTag.ReplaceAllString(auditLogs, "")
 			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
 			for _, line := range strings.Split(auditLogs, "\n") {
@@ -2661,19 +2661,19 @@ spec:
 		e2e.Logf("OAS audit abnormal Logs --------------------->\n%s", strings.Join(auditAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(auditAbnormalLogs)
 
-		g.By("8) Assert if abnormal log exits")
+		exutil.By("8) Assert if abnormal log exits")
 		o.Expect(totalAbnormalLogCount).Should(o.BeZero())
 	})
 
 	// author: kewang@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:kewang-High-42937-Examine critical errors in oauth-apiserver related log files", func() {
-		g.By("1) Create log arrays.")
+		exutil.By("1) Create log arrays.")
 		masterNodeAbnormalLogs := make([]string, 0)
 		externalPanicLogs := make([]string, 0)
 		auditAbnormalLogs := make([]string, 0)
 		totalAbnormalLogCount := 0
 
-		g.By("2) Setup start/end tags for extracting logs from other unrelated stdout like oc debug warning")
+		exutil.By("2) Setup start/end tags for extracting logs from other unrelated stdout like oc debug warning")
 		startTag := "<START_LOG>"
 		endTag := "</END_LOG>"
 		trimStartTag, regexErr := regexp.Compile(fmt.Sprintf("(.|\n|\r)*%s", startTag))
@@ -2681,12 +2681,12 @@ spec:
 		trimEndTag, regexErr := regexp.Compile(fmt.Sprintf("%s(.|\n|\r)*", endTag))
 		o.Expect(regexErr).NotTo(o.HaveOccurred())
 
-		g.By("3) Get all master nodes.")
+		exutil.By("3) Get all master nodes.")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 
-		g.By("4) On all master nodes, check Oauth-apiserver log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		exutil.By("4) On all master nodes, check Oauth-apiserver log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		keywords := "fatal|SHOULD NOT HAPPEN"
 		format := `[0-9TZ.:]{5,30}`
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
@@ -2702,11 +2702,11 @@ spec:
 		echo '%s'`, frontwords, keywords, afterwords, exceptions, format, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("4.%d -> step 1) Get log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("4.%d -> step 1) Get log file from %s", i+1, masterNode))
 			masterNodeLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("4.%d -> step 2) Format log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("4.%d -> step 2) Format log file from %s", i+1, masterNode))
 			masterNodeLogs = trimStartTag.ReplaceAllString(masterNodeLogs, "")
 			masterNodeLogs = trimEndTag.ReplaceAllString(masterNodeLogs, "")
 			for _, line := range strings.Split(masterNodeLogs, "\n") {
@@ -2718,7 +2718,7 @@ spec:
 		e2e.Logf("Oauth-apiserver pods abnormal Logs ------------------------->\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
 
-		g.By("5) On all master nodes, check Oauth-apiserver log files for panic error.")
+		exutil.By("5) On all master nodes, check Oauth-apiserver log files for panic error.")
 		cmd = fmt.Sprintf(`RETAG="[EW][0-9]{4}\s[0-9]{2}:[0-9]{2}"
 		PANIC="${RETAG}.*panic"
 		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-oauth-apiserver_apiserver* | grep -Ev "%s" | cut -d ':' -f1 | head -10 | uniq)
@@ -2732,11 +2732,11 @@ spec:
 		echo '%s'`, exceptions, startTag, exceptions, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
 			externalLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
 			externalLogs = trimStartTag.ReplaceAllString(externalLogs, "")
 			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
 			for _, line := range strings.Split(externalLogs, "\n") {
@@ -2748,7 +2748,7 @@ spec:
 		e2e.Logf("Oauth-apiserver pod panic Logs -------------------------->\n%s", strings.Join(externalPanicLogs, "\n"))
 		totalAbnormalLogCount += len(externalPanicLogs)
 
-		g.By("6) On all master nodes, check oauthas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
+		exutil.By("6) On all master nodes, check oauthas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
 		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|kernel.*-panic|e2e-test-.*|(ocp|OCP)[0-9]{4,}"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/oauth-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-42937-audit-errors.log
@@ -2759,11 +2759,11 @@ spec:
 		echo '%s'`, keywords, exceptions, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
 			auditLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
+			exutil.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
 			auditLogs = trimStartTag.ReplaceAllString(auditLogs, "")
 			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
 			for _, line := range strings.Split(auditLogs, "\n") {
@@ -2775,22 +2775,22 @@ spec:
 		e2e.Logf("Oauth-apiserver audit abnormal Logs --------------------->\n%s", strings.Join(auditAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(auditAbnormalLogs)
 
-		g.By("7) Assert if abnormal log exits")
+		exutil.By("7) Assert if abnormal log exits")
 		o.Expect(totalAbnormalLogCount).Should(o.BeZero())
 	})
 
 	// author: zxiao@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-11476-[origin_infrastructure_392] oadm new-project should fail when invalid node selector is given", func() {
-		g.By("# Create projects with an invalid node-selector(the node selector is neither equality-based nor set-based)")
+		exutil.By("# Create projects with an invalid node-selector(the node selector is neither equality-based nor set-based)")
 		projectName := exutil.RandStrCustomize("abcdefghijklmnopqrstuvwxyz", 5)
 		invalidNodeSelectors := []string{"env:qa", "env,qa", "env [qa]", "env,"}
 
 		for _, invalidNodeSelector := range invalidNodeSelectors {
-			g.By(fmt.Sprintf("## Create project %s with node selector %s, expect failure", projectName, invalidNodeSelector))
+			exutil.By(fmt.Sprintf("## Create project %s with node selector %s, expect failure", projectName, invalidNodeSelector))
 			output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("new-project", projectName, fmt.Sprintf("--node-selector=%s", invalidNodeSelector)).Output()
 			o.Expect(err).To(o.HaveOccurred())
 
-			g.By("## Assert error message is in expected format")
+			exutil.By("## Assert error message is in expected format")
 			invalidOutputRegex := fmt.Sprintf("Invalid value.*%s", regexp.QuoteMeta(invalidNodeSelector))
 			o.Expect(output).To(o.MatchRegexp(invalidOutputRegex))
 		}
@@ -2809,7 +2809,7 @@ spec:
 			serviceIP       net.IP
 		)
 
-		g.By("1. Create one new namespace for the test scenario")
+		exutil.By("1. Create one new namespace for the test scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(namespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(namespace)
 		isNsPrivileged, _ := exutil.IsNamespacePrivileged(oc, namespace)
@@ -2818,7 +2818,7 @@ spec:
 			o.Expect(outputError).NotTo(o.HaveOccurred())
 		}
 
-		g.By("2) Create new Hello OpenShift pod")
+		exutil.By("2) Create new Hello OpenShift pod")
 		appYamlFile := tmpdir + "ocp10969-hello-pod.yaml"
 		appYaml := fmt.Sprintf(`apiVersion: v1
 kind: Pod
@@ -2852,7 +2852,7 @@ spec:
 		o.Expect(saSecretErr).NotTo(o.HaveOccurred())
 		exutil.AssertPodToBeReady(oc, name, namespace)
 
-		g.By("3) Generate random port and service ip used to create service")
+		exutil.By("3) Generate random port and service ip used to create service")
 		randomServicePort := int(getRandomNum(6000, 9000))
 		clusterIP, svcErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "default", "service", "kubernetes", `-o=jsonpath={.spec.clusterIP}`).Output()
 		o.Expect(svcErr).NotTo(o.HaveOccurred())
@@ -2865,12 +2865,12 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(err, "Failed to get one available service IP!")
 
-		g.By("4) Create clusterip service with --clusterip")
+		exutil.By("4) Create clusterip service with --clusterip")
 		servicecreateout, servicecreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--clusterip", fmt.Sprintf("%v", serviceIP.String()), "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
 		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
 		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created", name)))
 
-		g.By("5) Check clusterip service running status")
+		exutil.By("5) Check clusterip service running status")
 		if serviceIP.To4() != nil {
 			serviceEndpoint = fmt.Sprintf("%v:%v", serviceIP.String(), randomServicePort)
 		} else {
@@ -2890,12 +2890,12 @@ spec:
 		servicedelerror := oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
 		o.Expect(servicedelerror).NotTo(o.HaveOccurred())
 
-		g.By("6) Create clusterip service without --clusterip option")
+		exutil.By("6) Create clusterip service without --clusterip option")
 		servicecreateout, servicecreateerror = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
 		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created", name)))
 		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
 
-		g.By("7) Check clusterip service running status with allotted IP")
+		exutil.By("7) Check clusterip service running status with allotted IP")
 		allottedServiceIP, serviceipgetError := oc.WithoutNamespace().Run("get").Args("service", name, "-o=jsonpath={.spec.clusterIP}", "-n", namespace).Output()
 		o.Expect(serviceipgetError).NotTo(o.HaveOccurred())
 		if serviceIP.To4() != nil {
@@ -2917,12 +2917,12 @@ spec:
 		servicedelerror = oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
 		o.Expect(servicedelerror).NotTo(o.HaveOccurred())
 
-		g.By("8) Create clusterip service without '--tcp' option")
+		exutil.By("8) Create clusterip service without '--tcp' option")
 		servicecreateout, servicecreateerror = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name).Output()
 		o.Expect(servicecreateout).Should(o.ContainSubstring("error: at least one tcp port specifier must be provided"))
 		o.Expect(servicecreateerror).To(o.HaveOccurred())
 
-		g.By("9) Create clusterip service with '--dry-run' option.")
+		exutil.By("9) Create clusterip service with '--dry-run' option.")
 		servicecreateout, servicecreateerror = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--tcp", fmt.Sprintf("%v:8080", randomServicePort), "--dry-run=client").Output()
 		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created (dry run)", name)))
 		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
@@ -2930,21 +2930,21 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-16295-[origin_platformexp_329] 3.7 User can expose the environment variables to pods", func() {
-		g.By("1) Create new project required for this test execution")
+		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
 		filename := "ocp16295_pod.yaml"
-		g.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
+		exutil.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
 		template := getTestDataFilePath(filename)
 		err := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		podName := "kubernetes-metadata-volume-example"
-		g.By(fmt.Sprintf("3) Wait for pod with name %s ready", podName))
+		exutil.By(fmt.Sprintf("3) Wait for pod with name %s ready", podName))
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 
-		g.By("4) Check the information in the dump files for pods")
+		exutil.By("4) Check the information in the dump files for pods")
 		execOutput, err := oc.Run("exec").Args(podName, "-i", "--", "ls", "-laR", "/data/podinfo-dir").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(execOutput).To(o.ContainSubstring("annotations ->"))
@@ -2961,7 +2961,7 @@ spec:
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("1) Check Holes in EndpointSlice Validation Enable Host Network Hijack")
+		exutil.By("1) Check Holes in EndpointSlice Validation Enable Host Network Hijack")
 		endpointSliceConfig := getTestDataFilePath("endpointslice.yaml")
 		sliceCreateOut, sliceCreateError := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", endpointSliceConfig).Output()
 		o.Expect(sliceCreateOut).Should(o.ContainSubstring(`Invalid value: "127.0.0.1": may not be in the loopback range`))
@@ -2970,21 +2970,21 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-10933-[platformmanagement_public_768] Check if client use protobuf data transfer scheme to communicate with master", func() {
-		g.By("1) Create new project required for this test execution")
+		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
 		filename := "hello-pod.json"
-		g.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
+		exutil.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
 		template := getTestDataFilePath(filename)
 		err := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		podName := "hello-openshift"
-		g.By(fmt.Sprintf("3) Wait for pod with name %s to be ready", podName))
+		exutil.By(fmt.Sprintf("3) Wait for pod with name %s to be ready", podName))
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 
-		g.By("4) Check get pods resource and check output")
+		exutil.By("4) Check get pods resource and check output")
 		getOutput, err := oc.Run("get").Args("pods", "--loglevel", "8", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(getOutput).NotTo(o.ContainSubstring("protobuf"))
@@ -2992,75 +2992,75 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-9853-patch operation should use patched object to check admission control", func() {
-		g.By("This case is for bug 1297910")
-		g.By("1) Create new project required for this test execution")
+		exutil.By("This case is for bug 1297910")
+		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
-		g.By("2) Use admin user to create quota and limits for project")
+		exutil.By("2) Use admin user to create quota and limits for project")
 
-		g.By("2.1) Create quota")
+		exutil.By("2.1) Create quota")
 		template := getTestDataFilePath("ocp9853-quota.yaml")
 		err := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2.2) Create limits")
+		exutil.By("2.2) Create limits")
 		template = getTestDataFilePath("ocp9853-limits.yaml")
 		err = oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By(`2.3) Create pod and wait for "hello-openshift" pod to be ready`)
+		exutil.By(`2.3) Create pod and wait for "hello-openshift" pod to be ready`)
 		template = getTestDataFilePath("hello-pod.json")
 		err = oc.Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podName := "hello-openshift"
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 
-		g.By("3) Update pod's image using patch command")
+		exutil.By("3) Update pod's image using patch command")
 		patch := `{"spec":{"containers":[{"name":"hello-openshift","image":"quay.io/openshifttest/hello-openshift:1.2.0"}]}}`
 		output, err := oc.Run("patch").Args("pod", podName, "-n", namespace, "-p", patch).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("patched"))
 
-		g.By("4) Check if pod running")
+		exutil.By("4) Check if pod running")
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 	})
 
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
-		g.By("Check if it's a proxy cluster")
+		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
 			g.Skip("Skip for proxy platform")
 		}
 
-		g.By("1) Create a new project required for this test execution")
+		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 
-		g.By("2) Build hello-world from external source")
+		exutil.By("2) Build hello-world from external source")
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		buildName := fmt.Sprintf("ocp11138-test-%s", strings.ToLower(exutil.RandStr(5)))
 		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) Wait for hello-world build to success")
+		exutil.By("3) Wait for hello-world build to success")
 		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), buildName+"-1", nil, nil, nil)
 		if err != nil {
 			exutil.DumpBuildLogs(buildName, oc)
 		}
 		exutil.AssertWaitPollNoErr(err, "build is not complete")
 
-		g.By("4) Get dockerImageRepository value from imagestreams test")
+		exutil.By("4) Get dockerImageRepository value from imagestreams test")
 		dockerImageRepository1, err := oc.Run("get").Args("imagestreams", buildName, "-o=jsonpath={.status.dockerImageRepository}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("5) Create another project")
+		exutil.By("5) Create another project")
 		oc.SetupProject()
 
-		g.By("6) Create new deploymentconfig from the dockerImageRepository fetched in step 4")
+		exutil.By("6) Create new deploymentconfig from the dockerImageRepository fetched in step 4")
 		deploymentConfigYaml, err := oc.Run("create").Args("deploymentconfig", "frontend", "--image="+dockerImageRepository1, "--dry-run=client", "-o=yaml").OutputToFile("ocp11138-dc.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("7) Modify the deploymentconfig and create a new deployment.")
+		exutil.By("7) Modify the deploymentconfig and create a new deployment.")
 		exutil.ModifyYamlFileContent(deploymentConfigYaml, []exutil.YamlReplace{
 			{
 				Path:  "spec.template.spec.containers.0.imagePullPolicy",
@@ -3074,7 +3074,7 @@ spec:
 		err = oc.Run("create").Args("-f", deploymentConfigYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("8) Check if pod is properly running with expected status.")
+		exutil.By("8) Check if pod is properly running with expected status.")
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			podOutput, err := oc.Run("get").Args("pod").Output()
 			if err == nil {
@@ -3088,11 +3088,11 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(err, "pod did not showed up with the expected status")
 
-		g.By("9) Create generic secret from deploymentconfig in step 7.")
+		exutil.By("9) Create generic secret from deploymentconfig in step 7.")
 		err = oc.Run("create").Args("secret", "generic", "notmatch-secret", "--from-file="+deploymentConfigYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("10) Modify the deploymentconfig again and create a new deployment.")
+		exutil.By("10) Modify the deploymentconfig again and create a new deployment.")
 		buildName = fmt.Sprintf("ocp11138-new-test-%s", strings.ToLower(exutil.RandStr(5)))
 		exutil.ModifyYamlFileContent(deploymentConfigYaml, []exutil.YamlReplace{
 			{
@@ -3111,7 +3111,7 @@ spec:
 		err = oc.Run("create").Args("-f", deploymentConfigYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("11) Check if pod is properly running with expected status.")
+		exutil.By("11) Check if pod is properly running with expected status.")
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			podOutput, err := oc.Run("get").Args("pod").Output()
 			if err == nil {
@@ -3133,17 +3133,17 @@ spec:
 		}
 
 		defer func() {
-			g.By("4) Change Step 1 injection by updating unsupportedConfigOverrides to null")
+			exutil.By("4) Change Step 1 injection by updating unsupportedConfigOverrides to null")
 			patch := `[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": null}]`
 			rollOutError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
 			o.Expect(rollOutError).NotTo(o.HaveOccurred())
 
-			g.By("5) Performed apiserver force rollout to test step 4 changes.")
+			exutil.By("5) Performed apiserver force rollout to test step 4 changes.")
 			patch = fmt.Sprintf(`[ {"op": "replace", "path": "/spec/forceRedeploymentReason", "value": "Force Redploy %v" } ]`, time.Now().UnixNano())
 			patchForceRedploymentError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
 			o.Expect(patchForceRedploymentError).NotTo(o.HaveOccurred())
 
-			g.By("6) Check latestAvailableRevision > targetRevision")
+			exutil.By("6) Check latestAvailableRevision > targetRevision")
 			rollOutError = wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
 				targetRevisionOut, revisionGetErr := oc.WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", "jsonpath={.status.nodeStatuses[*].targetRevision}").Output()
 				o.Expect(revisionGetErr).NotTo(o.HaveOccurred())
@@ -3161,7 +3161,7 @@ spec:
 			})
 			exutil.AssertWaitPollNoErr(rollOutError, "Step 6, Test Failed: latestAvailableRevision > targetRevision and rollout is not affected")
 
-			g.By("7) Check Kube-apiserver operator Roll Out Successfully & rollout is not affected")
+			exutil.By("7) Check Kube-apiserver operator Roll Out Successfully & rollout is not affected")
 			rollOutError = wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
 				operatorOutput, operatorChkError := oc.WithoutNamespace().Run("get").Args("co/kube-apiserver").Output()
 				if operatorChkError == nil {
@@ -3177,17 +3177,17 @@ spec:
 			exutil.AssertWaitPollNoErr(rollOutError, "Step 7, Test Failed: Kube-apiserver operator failed to Roll Out")
 		}()
 
-		g.By("1) Set the installer pods to fail and try backoff during rollout by injecting error")
+		exutil.By("1) Set the installer pods to fail and try backoff during rollout by injecting error")
 		patch := `[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": {"installerErrorInjection":{"failPropability":1.0}}}]`
 		patchConfigError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
 		o.Expect(patchConfigError).NotTo(o.HaveOccurred())
 
-		g.By("2) Performed apiserver force rollout to test step 1 changes.")
+		exutil.By("2) Performed apiserver force rollout to test step 1 changes.")
 		patch = fmt.Sprintf(`[ {"op": "replace", "path": "/spec/forceRedeploymentReason", "value": "Force Redploy %v" } ]`, time.Now().UnixNano())
 		patchForceRedploymentError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
 		o.Expect(patchForceRedploymentError).NotTo(o.HaveOccurred())
 
-		g.By("3) Check apiserver created retry installer pods with error and retrying backoff")
+		exutil.By("3) Check apiserver created retry installer pods with error and retrying backoff")
 		fallbackError := wait.Poll(60*time.Second, 600*time.Second, func() (bool, error) {
 			targetRevision, revisionGetErr := oc.WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", "jsonpath={.status.nodeStatuses[*].targetRevision}").Output()
 			o.Expect(revisionGetErr).NotTo(o.HaveOccurred())
@@ -3229,14 +3229,14 @@ spec:
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding.rbac.authorization.k8s.io/opa-viewer", "--ignore-not-found").Execute()
 
 		// Skipped case on arm64 and proxy cluster with techpreview
-		g.By("Check if it's a proxy cluster with techpreview")
+		exutil.By("Check if it's a proxy cluster with techpreview")
 		featureTech := getResource(oc, asAdmin, withoutNamespace, "featuregate", "cluster", "-o=jsonpath={.spec.featureSet}")
 		httpProxy, _, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") && strings.Contains(featureTech, "TechPreview") {
 			g.Skip("Skip for proxy platform with techpreview")
 		}
 		architecture.SkipNonAmd64SingleArch(oc)
-		g.By("1. Create certificates with SAN.")
+		exutil.By("1. Create certificates with SAN.")
 		opensslCMD := fmt.Sprintf("openssl genrsa -out %v 2048", caKeypem)
 		_, caKeyErr := exec.Command("bash", "-c", opensslCMD).Output()
 		o.Expect(caKeyErr).NotTo(o.HaveOccurred())
@@ -3270,7 +3270,7 @@ EOF`, serverconf)
 		o.Expect(serverCertWithSANErr).NotTo(o.HaveOccurred())
 		e2e.Logf("1. Step passed: SAN certificate has been generated")
 
-		g.By("2. Create new secret with SAN cert.")
+		exutil.By("2. Create new secret with SAN cert.")
 		opaOutput, opaerr := oc.Run("create").Args("namespace", "opa").Output()
 		o.Expect(opaerr).NotTo(o.HaveOccurred())
 		o.Expect(opaOutput).Should(o.ContainSubstring("namespace/opa created"), "namespace/opa not created...")
@@ -3279,7 +3279,7 @@ EOF`, serverconf)
 		o.Expect(opasecretOutput).Should(o.ContainSubstring("secret/opa-server created"), "secret/opa-server not created...")
 		e2e.Logf("2. Step passed: %v with SAN certificate", opasecretOutput)
 
-		g.By("3. Create admission webhook")
+		exutil.By("3. Create admission webhook")
 		policyOutput, policyerr := oc.WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default", "-n", "opa").Output()
 		o.Expect(policyerr).NotTo(o.HaveOccurred())
 		o.Expect(policyOutput).Should(o.ContainSubstring(`clusterrole.rbac.authorization.k8s.io/system:openshift:scc:privileged added: "default"`), "Policy scc privileged not default")
@@ -3291,7 +3291,7 @@ EOF`, serverconf)
 		o.Expect(admissionOutput1).Should(o.MatchRegexp(admissionOutput2), "3. Step failed: Admission controller not created as expected")
 		e2e.Logf("3. Step passed: Admission controller webhook ::\n %v", admissionOutput)
 
-		g.By("4. Create webhook with certificates with SAN.")
+		exutil.By("4. Create webhook with certificates with SAN.")
 		csrpemcmd := `cat ` + serverCertWithSAN + ` | base64 | tr -d '\n'`
 		csrpemcert, csrpemErr := exec.Command("bash", "-c", csrpemcmd).Output()
 		o.Expect(csrpemErr).NotTo(o.HaveOccurred())
@@ -3299,7 +3299,7 @@ EOF`, serverconf)
 		exutil.CreateClusterResourceFromTemplate(oc.NotShowInfo(), "--ignore-unknown-parameters=true", "-f", webhookTemplate, "-n", "opa", "-p", `SERVERCERT=`+string(csrpemcert))
 		e2e.Logf("4. Step passed: opa-validating-webhook created with SAN certificate")
 
-		g.By("5. Check rollout latest deploymentconfig.")
+		exutil.By("5. Check rollout latest deploymentconfig.")
 		tmpnsOutput, tmpnserr := oc.Run("create").Args("ns", "test-ns"+randomStr).Output()
 		o.Expect(tmpnserr).NotTo(o.HaveOccurred())
 		o.Expect(tmpnsOutput).Should(o.ContainSubstring(fmt.Sprintf("namespace/test-ns%v created", randomStr)), fmt.Sprintf("namespace/test-ns%v not created", randomStr))
@@ -3333,7 +3333,7 @@ EOF`, serverconf)
 		})
 		exutil.AssertWaitPollNoErr(waiterrRollout, "5. Step failed: deploymentconfig.apps.openshift.io/mydc not rolled out")
 
-		g.By("6. Change configmap policy and rollout and wait for 10-15 mins after applying policy and then rollout.")
+		exutil.By("6. Change configmap policy and rollout and wait for 10-15 mins after applying policy and then rollout.")
 		dcpolicycmd := fmt.Sprintf(`cat > %v << EOF
 package kubernetes.admission
 deny[msg] {
@@ -3368,48 +3368,48 @@ EOF`, dcpolicyrepo)
 			podName           = "hello-openshift"
 		)
 
-		g.By("1) Create new project required for this test execution")
+		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
-		g.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
+		exutil.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
 		template := getTestDataFilePath(filename)
 		err := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By(fmt.Sprintf("3) Wait for pod with name %s to be ready", podName))
+		exutil.By(fmt.Sprintf("3) Wait for pod with name %s to be ready", podName))
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 
-		g.By(fmt.Sprintf("4) Check host ip for pod %s", podName))
+		exutil.By(fmt.Sprintf("4) Check host ip for pod %s", podName))
 		hostIP, err := oc.Run("get").Args("pods", podName, "-o=jsonpath={.status.hostIP}", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(hostIP).NotTo(o.Equal(""))
 		e2e.Logf("Get host ip %s", hostIP)
 
-		g.By("5) Create nodeport service with random service port")
+		exutil.By("5) Create nodeport service with random service port")
 		servicePort1 := rand.Intn(3000) + 6000
 		serviceName := podName
 		err = oc.Run("create").Args("service", "nodeport", serviceName, fmt.Sprintf("--tcp=%d:8080", servicePort1)).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By(fmt.Sprintf("6) Check the service with the node ip and port %s", serviceName))
+		exutil.By(fmt.Sprintf("6) Check the service with the node ip and port %s", serviceName))
 		nodePort, err := oc.Run("get").Args("services", serviceName, fmt.Sprintf("-o=jsonpath={.spec.ports[?(@.port==%d)].nodePort}", servicePort1)).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(nodePort).NotTo(o.Equal(""))
 		e2e.Logf("Get node port %s", nodePort)
 
 		filename = "pod-for-ping.json"
-		g.By(fmt.Sprintf("6.1) Create pod with resource file %s for checking network access", filename))
+		exutil.By(fmt.Sprintf("6.1) Create pod with resource file %s for checking network access", filename))
 		template = getTestDataFilePath(filename)
 		err = oc.Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		podName = "pod-for-ping"
-		g.By(fmt.Sprintf("6.2) Wait for pod with name %s to be ready", podName))
+		exutil.By(fmt.Sprintf("6.2) Wait for pod with name %s to be ready", podName))
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 
 		url := fmt.Sprintf("%s:%s", hostIP, nodePort)
-		g.By(fmt.Sprintf("6.3) Accessing the endpoint %s with curl command line", url))
+		exutil.By(fmt.Sprintf("6.3) Accessing the endpoint %s with curl command line", url))
 		// retry 3 times, sometimes, the endpoint is not ready for accessing.
 		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
 			curlOutput, curlErr = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
@@ -3422,20 +3422,20 @@ EOF`, dcpolicyrepo)
 		o.Expect(curlErr).NotTo(o.HaveOccurred())
 		o.Expect(curlOutput).To(o.ContainSubstring("Hello OpenShift!"))
 
-		g.By(fmt.Sprintf("6.4) Delete service %s", serviceName))
+		exutil.By(fmt.Sprintf("6.4) Delete service %s", serviceName))
 		err = oc.Run("delete").Args("service", serviceName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		servicePort2 := rand.Intn(3000) + 6000
 		npLeftBound, npRightBound := getNodePortRange(oc)
-		g.By(fmt.Sprintf("7) Create another nodeport service with random target port %d and node port [%d-%d]", servicePort2, npLeftBound, npRightBound))
+		exutil.By(fmt.Sprintf("7) Create another nodeport service with random target port %d and node port [%d-%d]", servicePort2, npLeftBound, npRightBound))
 		generatedNodePort = rand.Intn(npRightBound-npLeftBound) + npLeftBound
 		err1 := oc.Run("create").Args("service", "nodeport", serviceName, fmt.Sprintf("--node-port=%d", generatedNodePort), fmt.Sprintf("--tcp=%d:8080", servicePort2)).Execute()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		defer oc.Run("delete").Args("service", serviceName).Execute()
 
 		url = fmt.Sprintf("%s:%d", hostIP, generatedNodePort)
-		g.By(fmt.Sprintf("8) Check network access again to %s", url))
+		exutil.By(fmt.Sprintf("8) Check network access again to %s", url))
 		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
 			curlOutput, curlErr = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
 			if err != nil {
@@ -3450,12 +3450,12 @@ EOF`, dcpolicyrepo)
 
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-12360-[origin_platformexp_403] The number of created API objects can not exceed quota limitation", func() {
-		g.By("1) Create new project required for this test execution")
+		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		limit := 3
 
-		g.By("2) Get quota limits according to used resouce count under namespace")
+		exutil.By("2) Get quota limits according to used resouce count under namespace")
 		type quotaLimits struct {
 			podLimit           int
 			resourcequotaLimit int
@@ -3491,14 +3491,14 @@ EOF`, dcpolicyrepo)
 
 		filename := "ocp12360-quota.yaml"
 		quotaName := "ocp12360-quota"
-		g.By(fmt.Sprintf("3) Create quota with resource file %s", filename))
+		exutil.By(fmt.Sprintf("3) Create quota with resource file %s", filename))
 		template := getTestDataFilePath(filename)
 		params := []string{"-f", template, "-p", fmt.Sprintf("POD_LIMIT=%d", limits.podLimit), fmt.Sprintf("RQ_LIMIT=%d", limits.resourcequotaLimit), fmt.Sprintf("SECRET_LIMIT=%d", limits.secretLimit), fmt.Sprintf("SERVICE_LIMIT=%d", limits.serviceLimit), fmt.Sprintf("CM_LIMIT=%d", limits.configmapLimit), fmt.Sprintf("NAME=%s", quotaName)}
 		configFile := exutil.ProcessTemplate(oc, params...)
 		err = oc.AsAdmin().Run("create").Args("-f", configFile, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4) Wait for quota to show up in command describe")
+		exutil.By("4) Wait for quota to show up in command describe")
 		quotaDescribeErr := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 			describeOutput, err := oc.Run("describe").Args("quota", quotaName, "-n", namespace).Output()
 			if isMatched, matchErr := regexp.Match("secrets.*[0-9]", []byte(describeOutput)); isMatched && matchErr == nil && err == nil {
@@ -3508,54 +3508,54 @@ EOF`, dcpolicyrepo)
 		})
 		exutil.AssertWaitPollNoErr(quotaDescribeErr, "quota did not show up")
 
-		g.By(fmt.Sprintf("5) Create multiple secrets with resource file %s, expect failure for secert creations that exceed quota limit", filename))
+		exutil.By(fmt.Sprintf("5) Create multiple secrets with resource file %s, expect failure for secert creations that exceed quota limit", filename))
 		for i := 1; i <= limit+1; i++ {
 			secretName := fmt.Sprintf("ocp12360-secret-%d", i)
 			output, err := oc.Run("create").Args("secret", "generic", secretName, "--from-literal=testkey=testvalue", "-n", namespace).Output()
 			if i <= limit {
-				g.By(fmt.Sprintf("5.%d) creating secret %s, within quota limit, expect success", i, secretName))
+				exutil.By(fmt.Sprintf("5.%d) creating secret %s, within quota limit, expect success", i, secretName))
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
-				g.By(fmt.Sprintf("5.%d) creating secret %s, exceeds quota limit, expect failure", i, secretName))
+				exutil.By(fmt.Sprintf("5.%d) creating secret %s, exceeds quota limit, expect failure", i, secretName))
 				o.Expect(err).To(o.HaveOccurred())
 				o.Expect(output).To(o.MatchRegexp("secrets.*forbidden: exceeded quota"))
 			}
 		}
 
 		filename = "ocp12360-pod.yaml"
-		g.By(fmt.Sprintf("6) Create multiple pods with resource file %s, expect failure for pod creations that exceed quota limit", filename))
+		exutil.By(fmt.Sprintf("6) Create multiple pods with resource file %s, expect failure for pod creations that exceed quota limit", filename))
 		template = getTestDataFilePath(filename)
 		for i := 1; i <= limit+1; i++ {
 			podName := fmt.Sprintf("ocp12360-pod-%d", i)
 			configFile := exutil.ProcessTemplate(oc, "-f", template, "-p", "NAME="+podName)
 			output, err := oc.Run("create").Args("-f", configFile, "-n", namespace).Output()
 			if i <= limit {
-				g.By(fmt.Sprintf("6.%d) creating pod %s, within quota limit, expect success", i, podName))
+				exutil.By(fmt.Sprintf("6.%d) creating pod %s, within quota limit, expect success", i, podName))
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
-				g.By(fmt.Sprintf("6.%d) creating pod %s, exceeds quota limit, expect failure", i, podName))
+				exutil.By(fmt.Sprintf("6.%d) creating pod %s, exceeds quota limit, expect failure", i, podName))
 				o.Expect(err).To(o.HaveOccurred())
 				o.Expect(output).To(o.MatchRegexp("pods.*forbidden: exceeded quota"))
 			}
 		}
 
-		g.By(fmt.Sprintf("7) Create multiple services with resource file %s, expect failure for resource creations that exceed quota limit", filename))
+		exutil.By(fmt.Sprintf("7) Create multiple services with resource file %s, expect failure for resource creations that exceed quota limit", filename))
 		for i := 1; i <= limit+1; i++ {
 			serviceName := fmt.Sprintf("ocp12360-service-%d", i)
 			externalName := fmt.Sprintf("ocp12360-external-name-%d", i)
 			output, err := oc.Run("create").Args("service", "externalname", serviceName, "-n", namespace, "--external-name", externalName).Output()
 			if i <= limit {
-				g.By(fmt.Sprintf("7.%d) creating service %s, within quota limit, expect success", i, serviceName))
+				exutil.By(fmt.Sprintf("7.%d) creating service %s, within quota limit, expect success", i, serviceName))
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
-				g.By(fmt.Sprintf("7.%d) creating service %s, exceeds quota limit, expect failure", i, serviceName))
+				exutil.By(fmt.Sprintf("7.%d) creating service %s, exceeds quota limit, expect failure", i, serviceName))
 				o.Expect(err).To(o.HaveOccurred())
 				o.Expect(output).To(o.MatchRegexp("services.*forbidden: exceeded quota"))
 			}
 		}
 
 		filename = "ocp12360-quota.yaml"
-		g.By(fmt.Sprintf("8) Create multiple quota with resource file %s, expect failure for quota creations that exceed quota limit", filename))
+		exutil.By(fmt.Sprintf("8) Create multiple quota with resource file %s, expect failure for quota creations that exceed quota limit", filename))
 		template = getTestDataFilePath(filename)
 		for i := 1; i <= limit+1; i++ {
 			quotaName := fmt.Sprintf("ocp12360-quota-%d", i)
@@ -3563,24 +3563,24 @@ EOF`, dcpolicyrepo)
 			configFile := exutil.ProcessTemplate(oc, params...)
 			output, err := oc.AsAdmin().Run("create").Args("-f", configFile, "-n", namespace).Output()
 			if i <= limit {
-				g.By(fmt.Sprintf("8.%d) creating quota %s, within quota limit, expect success", i, quotaName))
+				exutil.By(fmt.Sprintf("8.%d) creating quota %s, within quota limit, expect success", i, quotaName))
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
-				g.By(fmt.Sprintf("8.%d) creating quota %s, exceeds quota limit, expect failure", i, quotaName))
+				exutil.By(fmt.Sprintf("8.%d) creating quota %s, exceeds quota limit, expect failure", i, quotaName))
 				o.Expect(err).To(o.HaveOccurred())
 				o.Expect(output).To(o.MatchRegexp("resourcequotas.*forbidden: exceeded quota"))
 			}
 		}
 
-		g.By(fmt.Sprintf("9) Create multiple configmaps with resource file %s, expect failure for configmap creations that exceed quota limit", filename))
+		exutil.By(fmt.Sprintf("9) Create multiple configmaps with resource file %s, expect failure for configmap creations that exceed quota limit", filename))
 		for i := 1; i <= limit+1; i++ {
 			configmapName := fmt.Sprintf("ocp12360-configmap-%d", i)
 			output, err := oc.Run("create").Args("configmap", configmapName, "-n", namespace).Output()
 			if i <= limit {
-				g.By(fmt.Sprintf("9.%d) creating configmap %s, within quota limit, expect success", i, configmapName))
+				exutil.By(fmt.Sprintf("9.%d) creating configmap %s, within quota limit, expect success", i, configmapName))
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
-				g.By(fmt.Sprintf("9.%d) creating configmap %s, exceeds quota limit, expect failure", i, configmapName))
+				exutil.By(fmt.Sprintf("9.%d) creating configmap %s, exceeds quota limit, expect failure", i, configmapName))
 				o.Expect(err).To(o.HaveOccurred())
 				o.Expect(output).To(o.MatchRegexp("configmaps.*forbidden: exceeded quota"))
 			}
@@ -3589,29 +3589,29 @@ EOF`, dcpolicyrepo)
 
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:zxiao-High-24219-[MSTR-737] Custom resource watchers should terminate instead of hang when its CRD is deleted or modified [Disruptive]", func() {
-		g.By("1) Create a new project required for this test execution")
+		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
 		crdTemplate := getTestDataFilePath("ocp24219-crd.yaml")
-		g.By(fmt.Sprintf("2) Create custom resource definition from file %s", crdTemplate))
+		exutil.By(fmt.Sprintf("2) Create custom resource definition from file %s", crdTemplate))
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", crdTemplate).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crdTemplate).Execute()
 
 		crTemplate := getTestDataFilePath("ocp24219-cr.yaml")
-		g.By(fmt.Sprintf("3) Create custom resource definition from file %s", crTemplate))
+		exutil.By(fmt.Sprintf("3) Create custom resource definition from file %s", crTemplate))
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", crTemplate, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crTemplate, "-n", namespace).Execute()
 
 		resourcePath := fmt.Sprintf("/apis/example.com/v1/namespaces/%s/testcrs", namespace)
-		g.By(fmt.Sprintf("4) Check custom resource under path %s", resourcePath))
+		exutil.By(fmt.Sprintf("4) Check custom resource under path %s", resourcePath))
 		cmd1, backgroundBuf, _, err := oc.AsAdmin().Run("get").Args(fmt.Sprintf("--raw=%s?watch=True", resourcePath), "-n", namespace).Background()
 		defer cmd1.Process.Kill()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By(fmt.Sprintf("5) Change YAML content of file at path %s", crTemplate))
+		exutil.By(fmt.Sprintf("5) Change YAML content of file at path %s", crTemplate))
 		crTemplateCopy := CopyToFile(crTemplate, "ocp24219-cr-copy.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.ModifyYamlFileContent(crTemplateCopy, []exutil.YamlReplace{
@@ -3621,16 +3621,16 @@ EOF`, dcpolicyrepo)
 			},
 		})
 
-		g.By(fmt.Sprintf("6) Apply custom resource from file %s", crTemplateCopy))
+		exutil.By(fmt.Sprintf("6) Apply custom resource from file %s", crTemplateCopy))
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crTemplateCopy, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("7) Check background buffer for modify pattern")
+		exutil.By("7) Check background buffer for modify pattern")
 		o.Eventually(func() bool {
 			return strings.Contains(backgroundBuf.String(), "MODIFIED event")
 		}, 5*60*time.Second, 1*time.Second).Should(o.BeTrue(), "modification is not detected")
 
-		g.By(fmt.Sprintf("8) Change YAML content of file at path %s", crdTemplate))
+		exutil.By(fmt.Sprintf("8) Change YAML content of file at path %s", crdTemplate))
 		crdTemplateCopy := CopyToFile(crdTemplate, "ocp24219-crd-copy.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.ModifyYamlFileContent(crdTemplateCopy, []exutil.YamlReplace{
@@ -3640,21 +3640,21 @@ EOF`, dcpolicyrepo)
 			},
 		})
 
-		g.By(fmt.Sprintf("9) Apply custom resource definition from file %s", crdTemplateCopy))
+		exutil.By(fmt.Sprintf("9) Apply custom resource definition from file %s", crdTemplateCopy))
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crdTemplateCopy).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("10) Create background process for checking custom resource")
+		exutil.By("10) Create background process for checking custom resource")
 		cmd2, backgroundBuf2, _, err := oc.AsAdmin().Run("get").Args(fmt.Sprintf("--raw=%s?watch=True", resourcePath), "-n", namespace).Background()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer cmd2.Process.Kill()
 
 		crdName := "crd/testcrs.example.com"
-		g.By(fmt.Sprintf("11) Delete custom resource named %s", crdName))
+		exutil.By(fmt.Sprintf("11) Delete custom resource named %s", crdName))
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(crdName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("12) checking custom resource")
+		exutil.By("12) checking custom resource")
 		crDeleteMatchRegex, err := regexp.Compile(`type":"DELETED".*"object":.*"kind":"OCP24219TestCR`)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Eventually(func() bool {
@@ -3664,23 +3664,23 @@ EOF`, dcpolicyrepo)
 
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-22565-[origin_platformexp_214][REST] Check if the given user or group have the privilege via SubjectAccessReview", func() {
-		g.By("1) Create new project required for this test execution")
+		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		username := oc.Username()
 
 		// helper function for executing post request to SubjectAccessReview
 		postSubjectAccessReview := func(username string, namespace string, step string, expectStatus string) {
-			g.By(fmt.Sprintf("%s>>) Get base URL for API requests", step))
+			exutil.By(fmt.Sprintf("%s>>) Get base URL for API requests", step))
 			baseURL, err := oc.Run("whoami").Args("--show-server").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("%s>>) Get access token", step))
+			exutil.By(fmt.Sprintf("%s>>) Get access token", step))
 			token, err := oc.Run("whoami").Args("-t").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			authHeader := fmt.Sprintf(`Authorization: Bearer %s`, token)
 
-			g.By(fmt.Sprintf("%s>>) Submit POST request to API SubjectAccessReview", step))
+			exutil.By(fmt.Sprintf("%s>>) Submit POST request to API SubjectAccessReview", step))
 			url := baseURL + filepath.Join("/apis/authorization.openshift.io/v1/namespaces", namespace, "localsubjectaccessreviews")
 			e2e.Logf("Get post SubjectAccessReview REST API server %s", url)
 
@@ -3702,7 +3702,7 @@ EOF`, dcpolicyrepo)
 
 		// setup role for user and post to API
 		testUserAccess := func(role string, step string, expectStatus string) {
-			g.By(fmt.Sprintf("%s>>) Remove default role [admin] from the current user [%s]", step, username))
+			exutil.By(fmt.Sprintf("%s>>) Remove default role [admin] from the current user [%s]", step, username))
 			pattern := `admin\s*ClusterRole/admin`
 			r, err := regexp.Compile(pattern)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -3721,21 +3721,21 @@ EOF`, dcpolicyrepo)
 			e2e.Logf("Rolebinding of user %v :: %v", username, rolebindingOutput)
 			exutil.AssertWaitPollNoErr(errAdmRole, fmt.Sprintf("Not able to delete admin role for user :: %v :: %v", username, errAdmRole))
 
-			g.By(fmt.Sprintf("%s>>) Add new role [%s] to the current user [%s]", step, role, username))
+			exutil.By(fmt.Sprintf("%s>>) Add new role [%s] to the current user [%s]", step, role, username))
 			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", role, username, "-n", namespace).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("%s>>) POST to SubjectAccessReview API for user %s under namespace %s, expect status %s", step, username, namespace, expectStatus))
+			exutil.By(fmt.Sprintf("%s>>) POST to SubjectAccessReview API for user %s under namespace %s, expect status %s", step, username, namespace, expectStatus))
 			postSubjectAccessReview(username, namespace, step, expectStatus)
 		}
 
-		g.By("2) Test user access with role [view], expect failure")
+		exutil.By("2) Test user access with role [view], expect failure")
 		testUserAccess("view", "2", "403")
 
-		g.By("3) Test user access with role [edit], expect failure")
+		exutil.By("3) Test user access with role [edit], expect failure")
 		testUserAccess("edit", "3", "403")
 
-		g.By("4) Test user access with role [admin], expect success")
+		exutil.By("4) Test user access with role [admin], expect success")
 		testUserAccess("admin", "4", "201")
 	})
 
@@ -3747,7 +3747,7 @@ EOF`, dcpolicyrepo)
 			pod       string
 		)
 
-		g.By(fmt.Sprintf("1) Wait for a pod with the label %s to show up", label))
+		exutil.By(fmt.Sprintf("1) Wait for a pod with the label %s to show up", label))
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			pods, err := exutil.GetAllPodsWithLabel(oc, namespace, label)
 			if err != nil || len(pods) == 0 {
@@ -3760,26 +3760,26 @@ EOF`, dcpolicyrepo)
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot find pod with label %s", label))
 
-		g.By(fmt.Sprintf("2) Record number of revisions of apiserver pod with name %s before test", pod))
+		exutil.By(fmt.Sprintf("2) Record number of revisions of apiserver pod with name %s before test", pod))
 		beforeRevision, err := oc.AsAdmin().Run("get").Args("pod", pod, "-o=jsonpath={.metadata.labels.revision}", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		apiserver := "apiserver/cluster"
-		g.By(fmt.Sprintf("3) Set invalid audit profile name to %s, expect failure", apiserver))
+		exutil.By(fmt.Sprintf("3) Set invalid audit profile name to %s, expect failure", apiserver))
 		output, err := oc.AsAdmin().Run("patch").Args(apiserver, "-p", `{"spec": {"audit": {"profile": "myprofile"}}}`, "--type=merge", "-n", namespace).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`Unsupported value: "myprofile"`))
 
-		g.By(fmt.Sprintf("4) Set valid empty patch to %s, expect success", apiserver))
+		exutil.By(fmt.Sprintf("4) Set valid empty patch to %s, expect success", apiserver))
 		output, err = oc.AsAdmin().Run("patch").Args(apiserver, "-p", `{"spec": {}}`, "--type=merge", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`cluster patched (no change)`))
 
-		g.By(fmt.Sprintf("5) Try to delete %s, expect failure", apiserver))
+		exutil.By(fmt.Sprintf("5) Try to delete %s, expect failure", apiserver))
 		err = oc.AsAdmin().Run("delete").Args(apiserver, "-n", namespace).Execute()
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By(fmt.Sprintf("6) Compare number of revisions of apiserver pod with name %s to the one before test, expect unchanged", pod))
+		exutil.By(fmt.Sprintf("6) Compare number of revisions of apiserver pod with name %s to the one before test, expect unchanged", pod))
 		afterRevision, err := oc.AsAdmin().Run("get").Args("pod", pod, "-o=jsonpath={.metadata.labels.revision}", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(afterRevision).To(o.Equal(beforeRevision))
@@ -3806,11 +3806,11 @@ EOF`, dcpolicyrepo)
 			}
 		)
 
-		g.By("1) Create custom project for Pre & Post Upgrade ClusterResourceQuota test.")
+		exutil.By("1) Create custom project for Pre & Post Upgrade ClusterResourceQuota test.")
 		nsError := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", namespace).Execute()
 		o.Expect(nsError).NotTo(o.HaveOccurred())
 
-		g.By("2) Create resource ClusterResourceQuota")
+		exutil.By("2) Create resource ClusterResourceQuota")
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", getTestDataFilePath("clusterresourcequota.yaml")).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		params := []string{"-n", namespace, "clusterresourequotaremplate", "-p",
@@ -3832,7 +3832,7 @@ EOF`, dcpolicyrepo)
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", quotaConfigFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) Create multiple secrets to test created ClusterResourceQuota, expect failure for secrets creations that exceed quota limit")
+		exutil.By("3) Create multiple secrets to test created ClusterResourceQuota, expect failure for secrets creations that exceed quota limit")
 		secretCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.secrets}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		usedCount, _ := strconv.Atoi(secretCount)
@@ -3840,7 +3840,7 @@ EOF`, dcpolicyrepo)
 		steps := 1
 		for i := usedCount; i <= limits; i++ {
 			secretName := fmt.Sprintf("%v-secret-%d", caseID, steps)
-			g.By(fmt.Sprintf("3.%d) creating secret %s", steps, secretName))
+			exutil.By(fmt.Sprintf("3.%d) creating secret %s", steps, secretName))
 			output, err := oc.Run("create").Args("-n", namespace, "secret", "generic", secretName).Output()
 			if i < limits {
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -3850,7 +3850,7 @@ EOF`, dcpolicyrepo)
 			steps += 1
 		}
 
-		g.By("4) Create few pods before upgrade to check ClusterResourceQuota, Remaining Quota pod will create after upgrade.")
+		exutil.By("4) Create few pods before upgrade to check ClusterResourceQuota, Remaining Quota pod will create after upgrade.")
 		podsCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.pods}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		existingPodCount, _ := strconv.Atoi(podsCount)
@@ -3864,7 +3864,7 @@ EOF`, dcpolicyrepo)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		g.By("5) Create new app & Service Monitor to check quota exceeded")
+		exutil.By("5) Create new app & Service Monitor to check quota exceeded")
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", getTestDataFilePath("service-monitor.yaml")).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for count := 1; count < 3; count++ {
@@ -3891,7 +3891,7 @@ EOF`, dcpolicyrepo)
 			}
 		}
 
-		g.By("6) Compare applied ClusterResourceQuota")
+		exutil.By("6) Compare applied ClusterResourceQuota")
 		for resourceName, limit := range crqLimits {
 			resource, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", fmt.Sprintf(`jsonpath={.status.namespaces[*].status.used.%v}`, strings.ReplaceAll(resourceName, ".", "\\."))).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -3927,7 +3927,7 @@ EOF`, dcpolicyrepo)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete", "project").Args(namespace).Execute()
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", namespace, "clusterresourcequota", clusterQuotaName).Execute()
 
-		g.By("6) Create pods after upgrade to check ClusterResourceQuota")
+		exutil.By("6) Create pods after upgrade to check ClusterResourceQuota")
 		podsCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.pods}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		existingPodCount, _ := strconv.Atoi(podsCount)
@@ -3938,7 +3938,7 @@ EOF`, dcpolicyrepo)
 			params := []string{"-n", namespace, "-f", podTemplate, "-p", "NAME=" + podname, "REQUEST_MEMORY=1Gi", "REQUEST_CPU=1", "LIMITS_MEMORY=1Gi", "LIMITS_CPU=1"}
 			podConfigFile := exutil.ProcessTemplate(oc, params...)
 			output, err := oc.AsAdmin().WithoutNamespace().Run("-n", namespace, "create").Args("-f", podConfigFile).Output()
-			g.By(fmt.Sprintf("5.%d) creating pod %s", i, podname))
+			exutil.By(fmt.Sprintf("5.%d) creating pod %s", i, podname))
 			if i < limits {
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
@@ -3946,7 +3946,7 @@ EOF`, dcpolicyrepo)
 			}
 		}
 
-		g.By("7) Create multiple configmap to test created ClusterResourceQuota, expect failure for configmap creations that exceed quota limit")
+		exutil.By("7) Create multiple configmap to test created ClusterResourceQuota, expect failure for configmap creations that exceed quota limit")
 		cmCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.configmaps}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmUsedCount, _ := strconv.Atoi(cmCount)
@@ -3954,7 +3954,7 @@ EOF`, dcpolicyrepo)
 		for i := cmUsedCount; i <= limits; i++ {
 			configmapName := fmt.Sprintf("%v-configmap-%d", caseID, i)
 			output, err := oc.Run("create").Args("-n", namespace, "configmap", configmapName).Output()
-			g.By(fmt.Sprintf("7.%d) creating configmap %s", i, configmapName))
+			exutil.By(fmt.Sprintf("7.%d) creating configmap %s", i, configmapName))
 			if i < limits {
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
@@ -3962,7 +3962,7 @@ EOF`, dcpolicyrepo)
 			}
 		}
 
-		g.By("8) Compare applied ClusterResourceQuota")
+		exutil.By("8) Compare applied ClusterResourceQuota")
 		for _, resourceName := range []string{"pods", "secrets", "cpu", "memory", "configmaps"} {
 			resource, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", fmt.Sprintf(`jsonpath={.status.namespaces[*].status.used.%v}`, resourceName)).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -3980,7 +3980,7 @@ EOF`, dcpolicyrepo)
 	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-Medium-10350-[Apiserver] compensate for raft/cache delay in namespace admission", func() {
 		tmpnamespace := "ocp-10350" + exutil.GetRandomString()
 		defer oc.AsAdmin().Run("delete").Args("ns", tmpnamespace, "--ignore-not-found").Execute()
-		g.By("1.) Create new namespace")
+		exutil.By("1.) Create new namespace")
 		// Description of case: detail see PR https://github.com/openshift/cucushift/pull/9495
 		// We observe how long it takes to delete one Terminating namespace that has Terminating pod when cluster is under some load.
 		// Thus wait up to 200 seconds and also calculate the actual time so that when it FIRST hits > 200 seconds, we fail it IMMEDIATELY.
@@ -4002,7 +4002,7 @@ EOF`, dcpolicyrepo)
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("oc create ns %v failed :: %v", tmpnamespace, namespaceErr))
 
-			g.By("2.) Create new app")
+			exutil.By("2.) Create new app")
 			var apperr error
 			errApp := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 				apperr := oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", tmpnamespace).Execute()
@@ -4025,7 +4025,7 @@ EOF`, dcpolicyrepo)
 			})
 			exutil.AssertWaitPollNoErr(errPod, fmt.Sprintf("Pod not running :: %v", poderr))
 
-			g.By("3.) Delete new namespace")
+			exutil.By("3.) Delete new namespace")
 			var delerr error
 			projectdelerr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 				delerr = oc.Run("delete").Args("namespace", tmpnamespace).Execute()
@@ -4072,14 +4072,14 @@ EOF`, dcpolicyrepo)
 
 		defer os.RemoveAll(dirname)
 		defer func() {
-			g.By("4)Restoring the loglevel to the default setting ...")
+			exutil.By("4)Restoring the loglevel to the default setting ...")
 			output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", restorePatchJSON).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, "patched (no change)") {
 				e2e.Logf("kubeapiserver/cluster logLevel is not changed to the default values")
 			} else {
 				e2e.Logf("kubeapiserver/cluster logLevel is changed to the default values")
-				g.By("4) Checking KAS operator should be in Progressing and Available after rollout and recovery")
+				exutil.By("4) Checking KAS operator should be in Progressing and Available after rollout and recovery")
 				e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
 				err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
 				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
@@ -4097,7 +4097,7 @@ EOF`, dcpolicyrepo)
 		err := os.MkdirAll(dirname, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("1) Checking if oauth and openshift apiserver exempt with API Priority and Fairness feature")
+		exutil.By("1) Checking if oauth and openshift apiserver exempt with API Priority and Fairness feature")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("FlowSchema").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.MatchRegexp("openshift-apiserver-sar.*exempt"))
@@ -4105,7 +4105,7 @@ EOF`, dcpolicyrepo)
 
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patchJSON).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("2) Checking KAS operator should be in Progressing and Available after rollout and recovery")
+		exutil.By("2) Checking KAS operator should be in Progressing and Available after rollout and recovery")
 		e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
 		err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
 		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
@@ -4116,7 +4116,7 @@ EOF`, dcpolicyrepo)
 		o.Expect(logLevelErr).NotTo(o.HaveOccurred())
 		o.Expect(logLevel).Should(o.Equal(`TraceAll`))
 
-		g.By("3) Checking if SAR traffics from flowschema openshift-apiserver and oauth-apiserver found in KAS logs")
+		exutil.By("3) Checking if SAR traffics from flowschema openshift-apiserver and oauth-apiserver found in KAS logs")
 		kasPods, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-apiserver", "app=openshift-kube-apiserver")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(kasPods).ShouldNot(o.BeEmpty())
@@ -4163,13 +4163,13 @@ EOF`, dcpolicyrepo)
 		e2e.Logf("Master node is %v : ", masterNode)
 
 		for i, apiserver := range apiservers {
-			g.By(fmt.Sprintf("%d.1)View the %s audit logs are available for each control plane node:", i+1, apiserver))
+			exutil.By(fmt.Sprintf("%d.1)View the %s audit logs are available for each control plane node:", i+1, apiserver))
 			output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role=master", "--path="+apiserver+"/").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.MatchRegexp(".*audit.log"))
 			e2e.Logf("The OpenShift API server audit logs are available for each control plane node:\n%s", output)
 
-			g.By(fmt.Sprintf("%d.2) View a specific %s audit log by providing the node name and the log name:", i+1, apiserver))
+			exutil.By(fmt.Sprintf("%d.2) View a specific %s audit log by providing the node name and the log name:", i+1, apiserver))
 			auditLogFile := fmt.Sprintf("%s/%s-audit.log", caseID, apiserver)
 			_, err1 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", masterNode, "--path="+apiserver+"/audit.log").OutputToFile(auditLogFile)
 			o.Expect(err1).NotTo(o.HaveOccurred())
@@ -4179,7 +4179,7 @@ EOF`, dcpolicyrepo)
 			e2e.Logf("An example of %s audit log:\n%s", apiserver, cmdOut)
 		}
 
-		g.By("4) Gathering audit logs to run the oc adm must-gather command and view the audit log files:")
+		exutil.By("4) Gathering audit logs to run the oc adm must-gather command and view the audit log files:")
 		_, mgErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir="+mustgatherDir, "--", "/usr/bin/gather_audit_logs").Output()
 		o.Expect(mgErr).NotTo(o.HaveOccurred())
 		cmd := fmt.Sprintf(`du -h %v`, mustgatherDir)
@@ -4192,7 +4192,7 @@ EOF`, dcpolicyrepo)
 
 	// author: rgangwar@redhat.com
 	g.It("MicroShiftOnly-Author:rgangwar-Low-53693-[Apiserver] Identity and disable APIs not required for MVP", func() {
-		g.By("1. Check the MVP/recommended apis and status from below.")
+		exutil.By("1. Check the MVP/recommended apis and status from below.")
 		apiResource, apiErr := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("--loglevel=6").Output()
 		o.Expect(apiErr).NotTo(o.HaveOccurred())
 		if !strings.Contains(apiResource, "security.openshift.io/v1") {
@@ -4202,7 +4202,7 @@ EOF`, dcpolicyrepo)
 			e2e.Failf("route.openshift.io/v1 api is missing")
 		}
 
-		g.By("2. List out disable apis should not present.")
+		exutil.By("2. List out disable apis should not present.")
 		disabledApis := []string{"build", "apps", "image", "imageregistry", "config", "user", "operator", "template"}
 		for _, i := range disabledApis {
 			removedapi := i + ".openshift"
@@ -4210,7 +4210,7 @@ EOF`, dcpolicyrepo)
 				e2e.Failf("disabled %v api is present not removed from microshift", removedapi)
 			}
 		}
-		g.By("3. Check the security context of service-ca component which should be non-root")
+		exutil.By("3. Check the security context of service-ca component which should be non-root")
 		security, securityErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-service-ca", "-o", `jsonpath='{.items[*].spec.containers[0].securityContext}'`).Output()
 		o.Expect(securityErr).NotTo(o.HaveOccurred())
 		o.Expect(security).Should(o.ContainSubstring(`"runAsNonRoot":true,"runAsUser":1000070000`))
@@ -4220,7 +4220,7 @@ EOF`, dcpolicyrepo)
 		o.Expect(execErr).NotTo(o.HaveOccurred())
 		o.Expect(execPod).Should(o.ContainSubstring(`uid=1000070000(1000070000) gid=0(root) groups=0(root),1000070000`))
 
-		g.By("4. check removal for kube-proxy.")
+		exutil.By("4. check removal for kube-proxy.")
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		cmd := `iptables-save | grep -iE 'proxy|kube-proxy' || true`
@@ -4230,7 +4230,7 @@ EOF`, dcpolicyrepo)
 		e2e.Logf("test ::%v::test", proxy)
 		o.Expect(proxy).Should(o.BeEmpty())
 
-		g.By("5. check oauth endpoint Curl oauth server url, it should not present.")
+		exutil.By("5. check oauth endpoint Curl oauth server url, it should not present.")
 		consoleurl, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-console").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(consoleurl).ShouldNot(o.BeEmpty())
@@ -4239,7 +4239,7 @@ EOF`, dcpolicyrepo)
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
 		o.Expect(cmdOut).Should(o.ContainSubstring("404"))
 
-		g.By("Apirequestcount is disabled in microshift.")
+		exutil.By("Apirequestcount is disabled in microshift.")
 		apierr := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount").Execute()
 		if apierr == nil {
 			e2e.Failf("Apirequestcount has not disabled")
@@ -4252,7 +4252,7 @@ EOF`, dcpolicyrepo)
 			dirname = "/tmp/-OCP-56934/"
 		)
 
-		g.By("Check if it's a proxy cluster")
+		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
 			g.Skip("Skip for proxy platform")
@@ -4270,13 +4270,13 @@ EOF`, dcpolicyrepo)
 			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
 		}
 
-		g.By("1. Get openshift-apiserver pods and endpoints ip & port")
+		exutil.By("1. Get openshift-apiserver pods and endpoints ip & port")
 		podName, podGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "pod", "--field-selector=status.phase=Running", "-o", "jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(podGetErr).NotTo(o.HaveOccurred())
 		endpointIP, epGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "endpoints", "api", "-o", fmt.Sprintf(`jsonpath={.subsets[*].addresses[?(@.targetRef.name=="%v")].ip}`, podName)).Output()
 		o.Expect(epGetErr).NotTo(o.HaveOccurred())
 
-		g.By("2. Check openshift-apiserver https api metrics endpoint URL")
+		exutil.By("2. Check openshift-apiserver https api metrics endpoint URL")
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			metricsUrl := fmt.Sprintf(`https://%v:8443/metrics`, string(endpointIP))
 			metricsOut, metricsErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-apiserver", podName, "-c", "openshift-apiserver", "--", "curl", "-k", "--connect-timeout", "5", "--retry", "2", "-N", "-s", metricsUrl).Output()
@@ -4292,19 +4292,19 @@ EOF`, dcpolicyrepo)
 
 	// author: rgangwar@redhat.com
 	g.It("MicroShiftOnly-Author:rgangwar-Medium-54816-[Apiserver] Remove RoleBindingRestrictions API", func() {
-		g.By("1. Roles bindings restrictions should not work in microshift.")
+		exutil.By("1. Roles bindings restrictions should not work in microshift.")
 		roleOutput, roleErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("rolebinding.rbac").Output()
 		o.Expect(roleErr).NotTo(o.HaveOccurred())
 		o.Expect(roleOutput).ShouldNot(o.BeEmpty())
 		roleErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebindingrestriction", "-A").Execute()
 		o.Expect(roleErr).To(o.HaveOccurred())
 
-		g.By("2. Check the removal of the RoleBindingRestrictions API endpoint by checking the OpenShift API endpoint documentation or running:")
+		exutil.By("2. Check the removal of the RoleBindingRestrictions API endpoint by checking the OpenShift API endpoint documentation or running:")
 		roleOutput, roleErr = oc.AsAdmin().WithoutNamespace().Run("api-resources").Args().Output()
 		o.Expect(roleErr).NotTo(o.HaveOccurred())
 		o.Expect(roleOutput).ShouldNot(o.ContainSubstring("RoleBindingRestrictions"))
 
-		g.By("3. Create a ClusterRole")
+		exutil.By("3. Create a ClusterRole")
 		clusterroleyaml := tmpdir + "/clusterroleyaml"
 		clusterroleCMD := fmt.Sprintf(`cat > %v << EOF
 apiVersion: rbac.authorization.k8s.io/v1
@@ -4321,7 +4321,7 @@ rules:
 		clusterroleErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", clusterroleyaml).Args().Execute()
 		o.Expect(clusterroleErr).NotTo(o.HaveOccurred())
 
-		g.By("4. Created a ClusterRoleBinding to bind the ClusterRole to a service account")
+		exutil.By("4. Created a ClusterRoleBinding to bind the ClusterRole to a service account")
 		clusterrolebindingyaml := tmpdir + "/clusterrolebindingyaml"
 		clusterrolebindingCMD := fmt.Sprintf(`cat > %v << EOF
 apiVersion: rbac.authorization.k8s.io/v1
@@ -4342,7 +4342,7 @@ roleRef:
 		clusterrolebindingErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", clusterrolebindingyaml).Args().Execute()
 		o.Expect(clusterrolebindingErr).NotTo(o.HaveOccurred())
 
-		g.By("5. Test the ClusterRole and ClusterRoleBinding by using oc to impersonate the service account and check access to pod")
+		exutil.By("5. Test the ClusterRole and ClusterRoleBinding by using oc to impersonate the service account and check access to pod")
 		saOutput, saErr := oc.AsAdmin().WithoutNamespace().Run("auth").Args("can-i", "get", "pods", "--as=system:serviceaccount:example-namespace-ocp54816:example-service-account-ocp54816").Output()
 		o.Expect(saErr).NotTo(o.HaveOccurred())
 		o.Expect(saOutput).Should(o.ContainSubstring("yes"))
@@ -4355,19 +4355,19 @@ roleRef:
 
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
 
-		g.By("1.Create temporary namespace")
+		exutil.By("1.Create temporary namespace")
 		namespaceOutput, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("namespace", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(namespaceOutput).Should(o.ContainSubstring("namespace/"+namespace+" created"), namespace+" not created..")
 
 		// When a namespace is created, the cluster policy controller is in charge of adding SCC labels.
-		g.By("2.Check the scc annotations should have openshift.io to verify that the namespace added scc annotations Cluster Policy Controller integration")
+		exutil.By("2.Check the scc annotations should have openshift.io to verify that the namespace added scc annotations Cluster Policy Controller integration")
 		namespaceOutput, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("ns", namespace, `-o=jsonpath={.metadata.annotations}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(namespaceOutput).Should(o.ContainSubstring("openshift.io/sa.scc"), "Scc annotations not have openshift.io")
 
 		// There are events in the openshift-kube-controller-manager that show the creation of these SCC labels
-		g.By("3.Check the events in the openshift-kube-controller-manager which show the creation of these SCC labels for e.g tempocp53792")
+		exutil.By("3.Check the events in the openshift-kube-controller-manager which show the creation of these SCC labels for e.g tempocp53792")
 		eventsOutput, eventErr := oc.AsAdmin().Run("get").Args("events", "-n", "openshift-kube-controller-manager").Output()
 		o.Expect(eventErr).NotTo(o.HaveOccurred())
 		if !strings.Contains(eventsOutput, "created SCC ranges for "+namespace+" namespace") {
@@ -4375,12 +4375,12 @@ roleRef:
 		}
 
 		// Cluster policy controller does take care of the resourceQuota, verifying that the quota feature works properly after Cluster Policy Controller integration
-		g.By("4.Create quota to verify that the quota feature works properly after Cluster Policy Controller integration")
+		exutil.By("4.Create quota to verify that the quota feature works properly after Cluster Policy Controller integration")
 		template := getTestDataFilePath("ocp9853-quota.yaml")
 		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(templateErr).NotTo(o.HaveOccurred())
 
-		g.By("5.Create multiple secrets to test created ResourceQuota, expect failure for secrets creations that exceed quota limit")
+		exutil.By("5.Create multiple secrets to test created ResourceQuota, expect failure for secrets creations that exceed quota limit")
 		secretCount, err := oc.Run("get").Args("-n", namespace, "resourcequota", "myquota", "-o", `jsonpath={.status.namespaces[*].status.used.secrets}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		usedCount, _ := strconv.Atoi(secretCount)
@@ -4388,7 +4388,7 @@ roleRef:
 		for i := usedCount; i <= limits; i++ {
 			secretName := fmt.Sprintf("%v-secret-%d", caseID, i)
 			output, err := oc.Run("create").Args("-n", namespace, "secret", "generic", secretName).Output()
-			g.By(fmt.Sprintf("5.%d) creating secret %s", i, secretName))
+			exutil.By(fmt.Sprintf("5.%d) creating secret %s", i, secretName))
 			if i < limits {
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
@@ -4396,7 +4396,7 @@ roleRef:
 			}
 		}
 
-		g.By("6. Create multiple Configmaps to test created ResourceQuota, expect failure for configmap creations that exceed quota limit")
+		exutil.By("6. Create multiple Configmaps to test created ResourceQuota, expect failure for configmap creations that exceed quota limit")
 		configmapCount, cmerr := oc.Run("get").Args("-n", namespace, "resourcequota", "myquota", "-o", `jsonpath={.status.namespaces[*].status.used.configmaps}`).Output()
 		o.Expect(cmerr).NotTo(o.HaveOccurred())
 		usedcmCount, _ := strconv.Atoi(configmapCount)
@@ -4404,7 +4404,7 @@ roleRef:
 		for i := usedcmCount; i <= limits; i++ {
 			cmName := fmt.Sprintf("%v-cm-%d", caseID, i)
 			output, err := oc.Run("create").Args("-n", namespace, "cm", cmName).Output()
-			g.By(fmt.Sprintf("6.%d) creating configmaps %s", i, cmName))
+			exutil.By(fmt.Sprintf("6.%d) creating configmaps %s", i, cmName))
 			if i < limits {
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else {
@@ -4421,23 +4421,23 @@ roleRef:
 
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
 
-		g.By("1.Create temporary namespace")
+		exutil.By("1.Create temporary namespace")
 		namespaceOutput, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("namespace", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(namespaceOutput).Should(o.ContainSubstring("namespace/"+namespace+" created"), namespace+" not created..")
 
 		// Set the security context for a Pod which set the user which is running with uid=1000 gid=3000 groups=200 and processes are running as user 1000, which is the value of runAsUser
-		g.By("2. Create one pod " + testpod + " with the specified security context.")
+		exutil.By("2. Create one pod " + testpod + " with the specified security context.")
 		template := getTestDataFilePath("microshift-pods-security-context.yaml")
 		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", namespace).Execute()
 		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(templateErr).NotTo(o.HaveOccurred())
 
-		g.By("3. Verify that the Pod's " + testpod + " Container is running")
+		exutil.By("3. Verify that the Pod's " + testpod + " Container is running")
 		exutil.AssertPodToBeReady(oc, testpod, namespace)
 
 		// Get a shell to the running Container, check output shows that the processes are running as user 1000, which is the value of runAsUser
-		g.By("4.1 Verify if the processes are running with the specified user ID 1000 in the pod.")
+		exutil.By("4.1 Verify if the processes are running with the specified user ID 1000 in the pod.")
 		execCmdOuptut := ExecCommandOnPod(oc, testpod, namespace, "ps")
 		if match, _ := regexp.MatchString(`1000.*sleep 1h`, execCmdOuptut); match {
 			e2e.Logf("Processes are running on pod %v with user id 1000 :: %v", testpod, execCmdOuptut)
@@ -4446,7 +4446,7 @@ roleRef:
 		}
 
 		// Get a shell to the running Container, check output should shows that user which is running with uid=1000 gid=3000 groups=2000
-		g.By("4.2 Verify that user is running with specified uid=1000 gid=3000 groups=2000")
+		exutil.By("4.2 Verify that user is running with specified uid=1000 gid=3000 groups=2000")
 		execCmdOuptut = ExecCommandOnPod(oc, testpod, namespace, "id")
 		if match, _ := regexp.MatchString(`uid=1000.*gid=3000.*groups=2000`, execCmdOuptut); match {
 			e2e.Logf("On pod %v User running with :: %v", testpod, execCmdOuptut)
@@ -4455,17 +4455,17 @@ roleRef:
 		}
 
 		// Set the security context again for a Pod which override the user value which is running with uid=1000 to 2000, which is the new value of runAsUser
-		g.By("5. Create one pod " + testpod2 + " with the specified security context.")
+		exutil.By("5. Create one pod " + testpod2 + " with the specified security context.")
 		template = getTestDataFilePath("microshift-pods-security-context2.yaml")
 		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", namespace).Execute()
 		templateErr = oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(templateErr).NotTo(o.HaveOccurred())
 
-		g.By("6. Verify that the Pod's " + testpod2 + " Container is running")
+		exutil.By("6. Verify that the Pod's " + testpod2 + " Container is running")
 		exutil.AssertPodToBeReady(oc, testpod2, namespace)
 
 		// Get a shell to the running Container, check output should shows that the processes are running as user 2000, which is the value of runAsUser
-		g.By("7. Verify that processes are running with the specified user ID 2000 in the pod.")
+		exutil.By("7. Verify that processes are running with the specified user ID 2000 in the pod.")
 		execCmdOuptut = ExecCommandOnPod(oc, testpod2, namespace, "ps aux")
 		if match, _ := regexp.MatchString(`2000.*ps aux`, execCmdOuptut); match {
 			e2e.Logf("Processes are running on pod %v with user id 2000 :: %v", testpod2, execCmdOuptut)
@@ -4476,7 +4476,7 @@ roleRef:
 
 	// author: rgangwar@redhat.com
 	g.It("NonHyperShiftHOST-MicroShiftBoth-Author:rgangwar-Medium-55480-[Apiserver] Audit logs must be stored and persisted", func() {
-		g.By("1. Debug node and check the KAS audit log.")
+		exutil.By("1. Debug node and check the KAS audit log.")
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNode).ShouldNot(o.BeEmpty())
@@ -4503,18 +4503,18 @@ roleRef:
 
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
 
-		g.By("1.Create temporary namespace")
+		exutil.By("1.Create temporary namespace")
 		namespaceOutput, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("namespace", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(namespaceOutput).Should(o.ContainSubstring("namespace/"+namespace+" created"), namespace+" not created..")
 
-		g.By("2. Create a CustomResourceDefinition")
+		exutil.By("2. Create a CustomResourceDefinition")
 		template := getTestDataFilePath("ocp55677-crd.yaml")
 		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", namespace).Execute()
 		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(templateErr).NotTo(o.HaveOccurred())
 
-		g.By("3. Create custom crontab " + crontab + " object")
+		exutil.By("3. Create custom crontab " + crontab + " object")
 		mycrontabyaml := tmpdir + "/my-ocp55677-crontab.yaml"
 		mycrontabCMD := fmt.Sprintf(`cat > %v << EOF
 apiVersion: "ms.qe.com/v1"
@@ -4530,12 +4530,12 @@ spec:
 		mycrontabErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", mycrontabyaml).Args().Execute()
 		o.Expect(mycrontabErr).NotTo(o.HaveOccurred())
 
-		g.By("4. Check the created crontab :: " + crontab)
+		exutil.By("4. Check the created crontab :: " + crontab)
 		crontabOutput, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("crontab", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(crontabOutput).Should(o.ContainSubstring(crontab), crontab+" not created..")
 
-		g.By("5. Create new custom " + crontabNew + " object with unknown field.")
+		exutil.By("5. Create new custom " + crontabNew + " object with unknown field.")
 		mycrontabPruneYaml := tmpdir + "/my-ocp55677-prune-crontab.yaml"
 		mycrontabPruneCMD := fmt.Sprintf(`cat > %v << EOF
 apiVersion: "ms.qe.com/v1"
@@ -4552,7 +4552,7 @@ spec:
 		mycrontabNewErr := oc.AsAdmin().WithoutNamespace().Run("create", "--validate=false", "-f", mycrontabPruneYaml).Args().Execute()
 		o.Expect(mycrontabNewErr).NotTo(o.HaveOccurred())
 
-		g.By("5. Check the unknown field pruning in " + crontabNew + " crontab object")
+		exutil.By("5. Check the unknown field pruning in " + crontabNew + " crontab object")
 		crontabOutput, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("crontab", crontabNew, "-n", namespace, "-o", `jsonpath={.spec}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(crontabOutput, "someRandomField") {
@@ -4564,23 +4564,23 @@ spec:
 
 	// author : dpunia@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-High-53229-[Apiserver] Test Arbitrary path injection via type field in CNI configuration", func() {
-		g.By("1) Create new project")
+		exutil.By("1) Create new project")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
-		g.By("2) Create NetworkAttachmentDefinition with name nefarious-conf using nefarious.yaml")
+		exutil.By("2) Create NetworkAttachmentDefinition with name nefarious-conf using nefarious.yaml")
 		nefariousConfTemplate := getTestDataFilePath("ocp53229-nefarious.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", namespace, "-f", nefariousConfTemplate).Execute()
 		nefariousConfErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "-f", nefariousConfTemplate).Execute()
 		o.Expect(nefariousConfErr).NotTo(o.HaveOccurred())
 
-		g.By("3) Create Pod by using created NetworkAttachmentDefinition in annotations")
+		exutil.By("3) Create Pod by using created NetworkAttachmentDefinition in annotations")
 		nefariousPodTemplate := getTestDataFilePath("ocp53229-nefarious-pod.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", namespace, "-f", nefariousPodTemplate).Execute()
 		nefariousPodErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "-f", nefariousPodTemplate).Execute()
 		o.Expect(nefariousPodErr).NotTo(o.HaveOccurred())
 
-		g.By("4) Check pod should be in creating or failed status and event should show error message invalid plugin")
+		exutil.By("4) Check pod should be in creating or failed status and event should show error message invalid plugin")
 		podStatus, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "-f", nefariousPodTemplate, "-o", "jsonpath={.status.phase}").Output()
 		o.Expect(podErr).NotTo(o.HaveOccurred())
 		o.Expect(podStatus).ShouldNot(o.ContainSubstring("Running"))
@@ -4597,7 +4597,7 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(err, "Detected event CNI network invalid plugin")
 
-		g.By("5) Check pod created on node should not be rebooting and appear offline")
+		exutil.By("5) Check pod created on node should not be rebooting and appear offline")
 		nodeName, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "-f", nefariousPodTemplate, "-o", "jsonpath={.spec.nodeName}").Output()
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
 		nodeStatus, nodeStatusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "--no-headers").Output()
@@ -4611,12 +4611,12 @@ spec:
 		routeName := "hello-microshift-ocp56229"
 
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
-		g.By("1.Create temporary namespace")
+		exutil.By("1.Create temporary namespace")
 		namespaceOutput, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("namespace", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(namespaceOutput).Should(o.ContainSubstring("namespace/"+namespace+" created"), "Failed to create namesapce "+namespace)
 
-		g.By("2. Create a Route without spec.host and spec.to.kind")
+		exutil.By("2. Create a Route without spec.host and spec.to.kind")
 		routeYaml := tmpdir + "/hellomicroshift-56229.yaml"
 		routetmpYaml := `apiVersion: route.openshift.io/v1
 kind: Route
@@ -4655,7 +4655,7 @@ spec:
 		o.Expect(routeWeight).Should(o.ContainSubstring("100"), routeName+" weight is not set with default value :: 100")
 		e2e.Logf("Route %v created with default host %v and route kind type :: %v, type :: %v with status :: %v and wildcardpolicy :: %v and weight :: %v", routeName, routeHost, routeKind, routeType, routeStatus, routeWildCardPolicy, routeWeight)
 
-		g.By("3.Check spec.wildcardPolicy can't be change")
+		exutil.By("3.Check spec.wildcardPolicy can't be change")
 		routewildpolicyYaml := tmpdir + "/hellomicroshift-56229-wildcard.yaml"
 		routewildpolicytmpYaml := `apiVersion: route.openshift.io/v1
 kind: Route
@@ -4678,7 +4678,7 @@ spec:
 		routewildpolicyErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", routewildpolicyYaml, "--server-side", "--force-conflicts").Args().Execute()
 		o.Expect(routewildpolicyErr).To(o.HaveOccurred())
 
-		g.By("4.Check weight policy can be changed")
+		exutil.By("4.Check weight policy can be changed")
 		routeWeightYaml := "/tmp/hellomicroshift-56229-weight.yaml"
 		routeWeighttmpYaml := `apiVersion: route.openshift.io/v1
 kind: Route
@@ -4704,7 +4704,7 @@ spec:
 		o.Expect(routeErr).NotTo(o.HaveOccurred())
 		o.Expect(routeWeight).Should(o.ContainSubstring("10"), routeName+" weight is not set with default value :: 10")
 
-		g.By("5. Create ingresss routes")
+		exutil.By("5. Create ingresss routes")
 		template := getTestDataFilePath("ocp-56229-ingress.yaml")
 		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", namespace).Execute()
 		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
@@ -4719,21 +4719,21 @@ spec:
 			e2eTestNamespace = "e2e-ushift-apiserver-" + caseID + "-" + exutil.GetRandomString()
 		)
 
-		g.By("1. Create new namespace for the scenario")
+		exutil.By("1. Create new namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		g.By("2. Get the clustername")
+		exutil.By("2. Get the clustername")
 		clusterName, clusterErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[0].name}`).Output()
 		o.Expect(clusterErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Cluster Name :: %v", clusterName)
 
-		g.By("3. Point to the API server referring the cluster name")
+		exutil.By("3. Point to the API server referring the cluster name")
 		apiserverName, apiErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[?(@.name=="`+clusterName+`")].cluster.server}`).Output()
 		o.Expect(apiErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Server Name :: %v", apiserverName)
 
-		g.By("4. Create a secret to hold a token for the default service account.")
+		exutil.By("4. Create a secret to hold a token for the default service account.")
 		saSecretYaml := tmpdir + "/sa-secret-ocp55728.yaml"
 		saSecrettmpYaml := `apiVersion: v1
 kind: Secret
@@ -4754,14 +4754,14 @@ type: kubernetes.io/service-account-token`
 		saSecretErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", saSecretYaml, "-n", e2eTestNamespace).Args().Execute()
 		o.Expect(saSecretErr).NotTo(o.HaveOccurred())
 
-		g.By("4. Get the token value")
+		exutil.By("4. Get the token value")
 		token, tokenerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/default-token-ocp55728", "-n", e2eTestNamespace, "-o", `jsonpath={.data.token}`).Output()
 		o.Expect(tokenerr).NotTo(o.HaveOccurred())
 		tokenValue, tokenValueErr := base64.StdEncoding.DecodeString(token)
 		o.Expect(tokenValueErr).NotTo(o.HaveOccurred())
 		o.Expect(tokenValue).ShouldNot(o.BeEmpty())
 
-		g.By("5. Restart master node")
+		exutil.By("5. Restart master node")
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNode).ShouldNot(o.BeEmpty())
@@ -4769,7 +4769,7 @@ type: kubernetes.io/service-account-token`
 		_, rebooterr := exutil.DebugNodeWithChroot(oc, masterNode, "shutdown", "-r", "+1", "-t", "30")
 		o.Expect(rebooterr).NotTo(o.HaveOccurred())
 
-		g.By("6. Check apiserver readiness msg")
+		exutil.By("6. Check apiserver readiness msg")
 		apiserverRetrymsg := apiserverReadinessProbe(string(tokenValue), apiserverName)
 		o.Expect(apiserverRetrymsg).ShouldNot(o.BeEmpty())
 		e2e.Logf("Get retry msg from apiserver during master node restart :: %v", apiserverRetrymsg)
@@ -4798,13 +4798,13 @@ type: kubernetes.io/service-account-token`
 		}()
 
 		defer func() {
-			g.By("Restoring apiserver/cluster's profile")
+			exutil.By("Restoring apiserver/cluster's profile")
 			output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patchToRecover).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, "patched (no change)") {
 				e2e.Logf("Apiserver/cluster's audit profile not changed from the default values")
 			} else {
-				g.By("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout and recovery")
+				exutil.By("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout and recovery")
 				e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
 				err = waitCoBecomes(oc, "kube-apiserver", 100, expectedProgCoStatus)
 				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
@@ -4821,22 +4821,22 @@ type: kubernetes.io/service-account-token`
 			}
 		}()
 
-		g.By("1. Set None profile to audit log")
+		exutil.By("1. Set None profile to audit log")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("patched"), "apiserver/cluster not patched")
-		g.By("2. Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout and recovery")
-		g.By("2.1 Checking kube-apiserver operator should be in Progressing in 100 seconds")
+		exutil.By("2. Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout and recovery")
+		exutil.By("2.1 Checking kube-apiserver operator should be in Progressing in 100 seconds")
 		err = waitCoBecomes(oc, "kube-apiserver", 100, expectedProgCoStatus)
 		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
-		g.By("2.2 Checking kube-apiserver operator should be Available in 1500 seconds")
+		exutil.By("2.2 Checking kube-apiserver operator should be Available in 1500 seconds")
 		err = waitCoBecomes(oc, "kube-apiserver", 1500, expectedCoStatus)
 		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
 
 		// Using 60s because KAS takes long time, when KAS finished rotation, OAS and Auth should have already finished.
 		i := 3
 		for _, ops := range coOps {
-			g.By(fmt.Sprintf("2.%d Checking %s should be Available in 60 seconds", i, ops))
+			exutil.By(fmt.Sprintf("2.%d Checking %s should be Available in 60 seconds", i, ops))
 			err = waitCoBecomes(oc, ops, 60, expectedCoStatus)
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%v operator is not becomes available in 60 seconds", ops))
 			i = i + 1
@@ -4846,25 +4846,25 @@ type: kubernetes.io/service-account-token`
 		// Must-gather for audit logs
 		// Related bug 2008223
 		// Due to bug 2040654, exit code is unable to get failure exit code from executed script, so the step will succeed here.
-		g.By("3. Get must-gather audit logs")
+		exutil.By("3. Get must-gather audit logs")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/"+tmpdir+"/audit_must_gather_OCP-43261", "--", "/usr/bin/gather_audit_logs").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(msg, "ERROR: To raise a Red Hat support request")).Should(o.BeTrue())
 		o.Expect(strings.Contains(msg, "spec.audit.profile")).Should(o.BeTrue())
 
-		g.By("4. Check if there is no new audit logs are generated after None profile setting.")
+		exutil.By("4. Check if there is no new audit logs are generated after None profile setting.")
 		errUser := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", "system:admin", "-n", "default").Execute()
 		o.Expect(errUser).NotTo(o.HaveOccurred())
 		// Define the command to run on each node
 		now := time.Now().UTC().Format("2006-01-02 15:04:05")
 		script := fmt.Sprintf(`for logpath in kube-apiserver oauth-apiserver openshift-apiserver; do grep -h system:authenticated:oauth /var/log/${logpath}/audit*.log | jq -c 'select (.requestReceivedTimestamp | .[0:19] + "Z" | fromdateiso8601 > "%s")' >> /tmp/OCP-43261-$logpath.json; done; cat /tmp/OCP-43261-*.json`, now)
-		g.By("4.1 Get all master nodes.")
+		exutil.By("4.1 Get all master nodes.")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 		counter := 0
 		for _, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("4.2 Get audit log file from %s", masterNode))
+			exutil.By(fmt.Sprintf("4.2 Get audit log file from %s", masterNode))
 			masterNodeLogs, checkLogFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", script)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 			errCount := strings.Count(strings.TrimSpace(masterNodeLogs), "\n")
@@ -4890,35 +4890,35 @@ type: kubernetes.io/service-account-token`
 		)
 
 		defer func() {
-			g.By("Restoring apiserver/cluster's profile")
+			exutil.By("Restoring apiserver/cluster's profile")
 			output := setAuditProfile(oc, "apiserver/cluster", patchToRecover)
 			if strings.Contains(output, "patched (no change)") {
 				e2e.Logf("Apiserver/cluster's audit profile not changed from the default values")
 			}
 		}()
 
-		g.By("1. Checking the current default audit policy of cluster")
+		exutil.By("1. Checking the current default audit policy of cluster")
 		checkApiserversAuditPolicies(oc, "Default")
 
-		g.By("2. Get all master nodes.")
+		exutil.By("2. Get all master nodes.")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 
-		g.By("3. Checking verbs in kube-apiserver audit logs")
+		exutil.By("3. Checking verbs in kube-apiserver audit logs")
 		script := fmt.Sprintf(`grep -hE "\"verb\":\"(create|delete|patch|update)\",\"user\":.*(requestObject|responseObject)|\"verb\":\"(get|list|watch)\",\"user\":.*(requestObject|responseObject)" /var/log/kube-apiserver/audit.log | jq -r "select (.requestReceivedTimestamp | .[0:19] + \"Z\" | fromdateiso8601 > %v)" | tail -n 1`, unixTimestamp)
 		masterNodeLogs, errCount := checkAuditLogs(oc, script, masterNodes[0], "openshift-kube-apiserver")
 		if errCount > 0 {
 			e2e.Failf("Verbs in kube-apiserver audit logs on master node %v :: %v", masterNodes[0], masterNodeLogs)
 		}
 		e2e.Logf("No verbs logs in kube-apiserver audit logs on master node %v", masterNodes[0])
-		g.By("4. Set audit profile to WriteRequestBodies")
+		exutil.By("4. Set audit profile to WriteRequestBodies")
 		setAuditProfile(oc, "apiserver/cluster", patchWriteRequestBodies)
 
-		g.By("5. Checking the current WriteRequestBodies audit policy of cluster.")
+		exutil.By("5. Checking the current WriteRequestBodies audit policy of cluster.")
 		checkApiserversAuditPolicies(oc, "WriteRequestBodies")
 
-		g.By("6. Checking verbs and managedFields in kube-apiserver audit logs after audit profile to WriteRequestBodies")
+		exutil.By("6. Checking verbs and managedFields in kube-apiserver audit logs after audit profile to WriteRequestBodies")
 		masterNodeLogs, errCount = checkAuditLogs(oc, script, masterNodes[0], "openshift-kube-apiserver")
 		if errCount == 0 {
 			e2e.Failf("Post audit profile to WriteRequestBodies, No Verbs in kube-apiserver audit logs on master node %v :: %v :: %v", masterNodes[0], masterNodeLogs, errCount)
@@ -4935,13 +4935,13 @@ type: kubernetes.io/service-account-token`
 		}
 		e2e.Logf("Post audit profile to WriteRequestBodies, verbs captured in kube-apiserver audit logs on master node %v", masterNodes[0])
 
-		g.By("7. Set audit profile to AllRequestBodies")
+		exutil.By("7. Set audit profile to AllRequestBodies")
 		setAuditProfile(oc, "apiserver/cluster", patchAllRequestBodies)
 
-		g.By("8. Checking the current AllRequestBodies audit policy of cluster.")
+		exutil.By("8. Checking the current AllRequestBodies audit policy of cluster.")
 		checkApiserversAuditPolicies(oc, "AllRequestBodies")
 
-		g.By("9. Checking verbs and managedFields in kube-apiserver audit logs after audit profile to AllRequestBodies")
+		exutil.By("9. Checking verbs and managedFields in kube-apiserver audit logs after audit profile to AllRequestBodies")
 		masterNodeLogs, errCount = checkAuditLogs(oc, script, masterNodes[0], "openshift-kube-apiserver")
 		if errCount == 0 {
 			e2e.Failf("Post audit profile to AllRequestBodies, No Verbs in kube-apiserver audit logs on master node %v :: %v", masterNodes[0], masterNodeLogs)
@@ -4966,16 +4966,16 @@ type: kubernetes.io/service-account-token`
 			components       = []string{"kube-controller-manager", "kubelet", "kube-apiserver"}
 		)
 
-		g.By("1. Create new namespace for the scenario")
+		exutil.By("1. Create new namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		g.By("2. Get microshift node")
+		exutil.By("2. Get microshift node")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 
-		g.By("3. Checking component name presents in klog headers")
+		exutil.By("3. Checking component name presents in klog headers")
 		for _, comps := range components {
 			script := `journalctl -u microshift.service|grep -i "microshift.*: ` + comps + `"|tail -1`
 			masterNodeLogs, checkLogErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", script)
@@ -4996,11 +4996,11 @@ type: kubernetes.io/service-account-token`
 			dirname                 = "/tmp/-" + caseID
 			ocpObjectCountsYamlFile = dirname + "openshift-object-counts.yaml"
 		)
-		g.By("1) Create a new project required for this test execution")
+		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
-		g.By("2) Create a ResourceQuota count of image stream")
+		exutil.By("2) Create a ResourceQuota count of image stream")
 		ocpObjectCountsYaml := `apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -5021,7 +5021,7 @@ spec:
 		quotaErr := oc.AsAdmin().Run("create").Args("-f", ocpObjectCountsYamlFile, "-n", namespace).Execute()
 		o.Expect(quotaErr).NotTo(o.HaveOccurred())
 
-		g.By("3. Checking the created Resource Quota of the Image Stream")
+		exutil.By("3. Checking the created Resource Quota of the Image Stream")
 		quota := getResource(oc, asAdmin, withoutNamespace, "quota", "openshift-object-counts", `--template={{.status.used}}`, "-n", namespace)
 		o.Expect(quota).Should(o.ContainSubstring("openshift.io/imagestreams:0"), "openshift-object-counts")
 
@@ -5037,12 +5037,12 @@ spec:
 			})
 			exutil.AssertWaitPollNoErr(buildErr, fmt.Sprintf("ERROR: Build status of %s is not complete!", buildName))
 
-			g.By(fmt.Sprintf("%s.1 Checking the created Resource Quota of the Image Stream", step))
+			exutil.By(fmt.Sprintf("%s.1 Checking the created Resource Quota of the Image Stream", step))
 			quota := getResource(oc, asAdmin, withoutNamespace, "quota", "openshift-object-counts", `--template={{.status.used}}`, "-n", namespace)
 			o.Expect(quota).Should(o.ContainSubstring("openshift.io/imagestreams:2"), "openshift-object-counts")
 		}
 
-		g.By("4. Create a source build using source code and check the build info")
+		exutil.By("4. Create a source build using source code and check the build info")
 		imgErr := oc.AsAdmin().WithoutNamespace().Run("new-build").Args(`quay.io/openshifttest/ruby-27:1.2.0~https://github.com/sclorg/ruby-ex.git`, "-n", namespace).Execute()
 		if imgErr != nil {
 			if !isConnectedInternet(oc) {
@@ -5052,7 +5052,7 @@ spec:
 		o.Expect(imgErr).NotTo(o.HaveOccurred())
 		checkImageStreamQuota("ruby-ex-1", "4")
 
-		g.By("5. Starts a new build for the provided build config")
+		exutil.By("5. Starts a new build for the provided build config")
 		sbErr := oc.AsAdmin().WithoutNamespace().Run("start-build").Args("ruby-ex", "-n", namespace).Execute()
 		o.Expect(sbErr).NotTo(o.HaveOccurred())
 		checkImageStreamQuota("ruby-ex-2", "5")
@@ -5101,38 +5101,38 @@ spec:
 		users, usersHTpassFile, htPassSecret := getNewUser(oc, 4)
 		defer userCleanup(oc, users, usersHTpassFile, htPassSecret)
 
-		g.By("1. Configure audit config for customRules system:authenticated:oauth profile as None and audit profile as Default")
+		exutil.By("1. Configure audit config for customRules system:authenticated:oauth profile as None and audit profile as Default")
 		patchCustomRules := `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "None"}],"profile": "Default"}}]`
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
-		g.By("2. Check audit events should be zero after login operation")
+		exutil.By("2. Check audit events should be zero after login operation")
 		auditEventLog, auditEventCount := checkAuditEventCount("system:authenticated:oauth", users[0].Username, users[0].Password)
 		if auditEventCount > 0 {
 			e2e.Logf("Event Logs :: %v", auditEventLog)
 		}
 		o.Expect(auditEventCount).To(o.BeNumerically("==", 0))
 
-		g.By("3. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as Default")
+		exutil.By("3. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as Default")
 		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}],"profile": "Default"}}]`
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
-		g.By("4. Check audit events should be greater than zero after login operation")
+		exutil.By("4. Check audit events should be greater than zero after login operation")
 		_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[1].Username, users[1].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 
-		g.By("5. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as None")
+		exutil.By("5. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as None")
 		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}],"profile": "None"}}]`
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
-		g.By("6. Check audit events should be greater than zero after login operation")
+		exutil.By("6. Check audit events should be greater than zero after login operation")
 		_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[2].Username, users[2].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 
-		g.By("7. Configure audit config for customRules system:authenticated:oauth profile as Default & system:serviceaccounts:openshift-console-operator as WriteRequestBodies and audit profile as None")
+		exutil.By("7. Configure audit config for customRules system:authenticated:oauth profile as Default & system:serviceaccounts:openshift-console-operator as WriteRequestBodies and audit profile as None")
 		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}, {"group": "system:serviceaccounts:openshift-console-operator","profile": "WriteRequestBodies"}],"profile": "None"}}]`
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
-		g.By("8. Check audit events should be greater than zero after login operation")
+		exutil.By("8. Check audit events should be greater than zero after login operation")
 		_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[3].Username, users[3].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 
@@ -5149,11 +5149,11 @@ spec:
 			etcConfigYaml    = "/etc/microshift/config.yaml"
 			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
 		)
-		g.By("1. Create new namespace for the scenario")
+		exutil.By("1. Create new namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		g.By("2. Get microshift node")
+		exutil.By("2. Get microshift node")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
@@ -5178,11 +5178,11 @@ fi`, etcConfigYaml, etcConfigYamlbak)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 		}()
 
-		g.By("3. Check default config values for etcd")
+		exutil.By("3. Check default config values for etcd")
 		mchkConfigdefault, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 
-		g.By("4. Configure the memoryLimitMB field in user config path")
+		exutil.By("4. Configure the memoryLimitMB field in user config path")
 		configDir := "~/.microshift"
 		configFile := "config.yaml"
 		etcdConfigCMD := fmt.Sprintf(`su - redhat -c "mkdir -p %v && touch %v/%v && cat > %v/%v << EOF
@@ -5192,12 +5192,12 @@ EOF"`, configDir, configDir, configFile, configDir, configFile, valCfg)
 		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
-		g.By("5. Check config values for etcd should not change from default values")
+		exutil.By("5. Check config values for etcd should not change from default values")
 		mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 		o.Expect(mchkConfig).Should(o.ContainSubstring(mchkConfigdefault))
 
-		g.By("6. Configure the memoryLimitMB field in default config path")
+		exutil.By("6. Configure the memoryLimitMB field in default config path")
 		etcdConfigCMD = fmt.Sprintf(`
 configfile=%v
 configfilebak=%v
@@ -5211,7 +5211,7 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		_, mchgConfigErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
-		g.By("7. Check config values for etcd should change from default values")
+		exutil.By("7. Check config values for etcd should change from default values")
 		mchkConfig, mchkConfigErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 		o.Expect(mchkConfig).Should(o.ContainSubstring(`memoryLimitMB: ` + valCfg))
@@ -5230,16 +5230,16 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 			userDataDirDelCmd          = `rm -rf ` + userDataDir + `*`
 		)
 
-		g.By("1. Create new namespace for the scenario")
+		exutil.By("1. Create new namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		g.By("2. Get microshift node")
+		exutil.By("2. Get microshift node")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 
-		g.By("3. Check user data dir")
+		exutil.By("3. Check user data dir")
 		// Check if the directory exists
 		chkUserDatadirCmd := fmt.Sprintf(`if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi`, userDataDir)
 		checkDirOutput, checkDirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserDatadirCmd)
@@ -5258,7 +5258,7 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 			o.Expect(mkdirerr).NotTo(o.HaveOccurred())
 		}
 
-		g.By("4. Check global data dir")
+		exutil.By("4. Check global data dir")
 		// Check if the directory exists
 		chkUserGlobalDatadirCmd := fmt.Sprintf(`if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi`, globalDataDir)
 		checkGlobalDirOutput, checkGlobalDirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserGlobalDatadirCmd)
@@ -5275,10 +5275,10 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
 
-		g.By("5. Restart Microshift")
+		exutil.By("5. Restart Microshift")
 		restartMicroshift(oc, masterNodes[0])
 
-		g.By("6. Ensure that userdatadir is empty and globaldatadir is restored after Microshift is restarted")
+		exutil.By("6. Ensure that userdatadir is empty and globaldatadir is restored after Microshift is restarted")
 		chkContentOutput, chkContentErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentUserDatadirCmd)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
@@ -5297,11 +5297,11 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
 		)
 
-		g.By("1. Create new namespace for the scenario")
+		exutil.By("1. Create new namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		g.By("2. Get microshift node")
+		exutil.By("2. Get microshift node")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
@@ -5320,7 +5320,7 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 			restartMicroshift(oc, masterNodes[0])
 		}()
 
-		g.By("3. Take backup of config file")
+		exutil.By("3. Take backup of config file")
 		etcConfigCMD := fmt.Sprintf(`configfile=%v;
 		configfilebak=%v;
 		if [ -f $configfile ]; then 
@@ -5331,7 +5331,7 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 
 		logLevels := []string{"Normal", "normal", "NORMAL", "debug", "DEBUG", "Trace", "trace", "TRACE", "TraceAll", "traceall", "TRACEALL"}
 		for stepn, level := range logLevels {
-			g.By(fmt.Sprintf("%v.1 Configure the logLevel %v in default config path", stepn+4, level))
+			exutil.By(fmt.Sprintf("%v.1 Configure the logLevel %v in default config path", stepn+4, level))
 			etcConfigCMD = fmt.Sprintf(`
 configfile=%v
 cat > $configfile << EOF
@@ -5343,10 +5343,10 @@ EOF`, etcConfigYaml, level)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 			unixTimestamp := time.Now().Unix()
-			g.By(fmt.Sprintf("%v.2 Restart Microshift", stepn+4))
+			exutil.By(fmt.Sprintf("%v.2 Restart Microshift", stepn+4))
 			restartMicroshift(oc, masterNodes[0])
 
-			g.By(fmt.Sprintf("%v.3 Check logLevel should change to %v", stepn+4, level))
+			exutil.By(fmt.Sprintf("%v.3 Check logLevel should change to %v", stepn+4, level))
 			chkConfigCmd := fmt.Sprintf(`journalctl -u microshift -b -S @%vs | grep "logLevel: %v"|grep -iv journalctl|tail -1`, unixTimestamp, level)
 			getlogErr := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
 				mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
@@ -5369,17 +5369,17 @@ EOF`, etcConfigYaml, level)
 			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
 		}()
 
-		g.By("1) Create a project")
+		exutil.By("1) Create a project")
 		projectName := "project-11887"
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", projectName, "--ignore-not-found").Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("new-project").Args(projectName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) Create new app")
+		exutil.By("2) Create new app")
 		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-openshift", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) Build hello-world from external source")
+		exutil.By("3) Build hello-world from external source")
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		imageError := oc.Run("new-build").Args(helloWorldSource, "--name=ocp-11887-test-"+strings.ToLower(exutil.RandStr(5)), "-n", projectName).Execute()
 		if imageError != nil {
@@ -5388,7 +5388,7 @@ EOF`, etcConfigYaml, level)
 			}
 		}
 
-		g.By("4) Get project resource")
+		exutil.By("4) Get project resource")
 		resourceSlice := []string{"pods", "services", "buildConfig", "deployments"}
 		for _, resource := range resourceSlice {
 			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", projectName, resource, "-o", `jsonpath={.items[*].metadata.name}`).Output()
@@ -5397,11 +5397,11 @@ EOF`, etcConfigYaml, level)
 			o.Expect(count).To(o.BeNumerically(">", 0))
 		}
 
-		g.By("5) Delete the project")
+		exutil.By("5) Delete the project")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", projectName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("5.1) Check project is deleted")
+		exutil.By("5.1) Check project is deleted")
 		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", projectName).Output()
 			if matched, _ := regexp.MatchString("namespaces .* not found", out); matched {
@@ -5414,12 +5414,12 @@ EOF`, etcConfigYaml, level)
 		})
 		exutil.AssertWaitPollNoErr(err, "Step 5.1. Test Failed, Project is not deleted")
 
-		g.By("6) Get project resource after project is deleted")
+		exutil.By("6) Get project resource after project is deleted")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", projectName, "all", "--no-headers").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring("No resources found"))
 
-		g.By("7) Create a project with same name, no context for this new one")
+		exutil.By("7) Create a project with same name, no context for this new one")
 		err = oc.AsAdmin().WithoutNamespace().Run("new-project").Args(projectName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		out, err = oc.AsAdmin().WithoutNamespace().Run("status").Args("-n", projectName).Output()
@@ -5437,11 +5437,11 @@ EOF`, etcConfigYaml, level)
 			chkConfigCmd     = `/usr/bin/microshift show-config --mode effective`
 		)
 
-		g.By("1. Create new namespace for the scenario")
+		exutil.By("1. Create new namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		g.By("2. Get microshift node")
+		exutil.By("2. Get microshift node")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
@@ -5480,7 +5480,7 @@ EOF`, etcConfigYaml, level)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 		}()
 
-		g.By("3. Take backup of config file")
+		exutil.By("3. Take backup of config file")
 		etcConfigCMD := fmt.Sprintf(`configfile=%v;
 		configfilebak=%v;
 		if [ -f $configfile ]; then 
@@ -5489,19 +5489,19 @@ EOF`, etcConfigYaml, level)
 		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
-		g.By("4. Create tmp manifest path on node")
+		exutil.By("4. Create tmp manifest path on node")
 		_, dirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo mkdir -p "+tmpManifestPath)
 		o.Expect(dirErr).NotTo(o.HaveOccurred())
 
 		// set the manifest option value to an empty list should disable loading
-		g.By("5.1 :: Scenario-1 :: Set an empty list value to the manifest option in config")
+		exutil.By("5.1 :: Scenario-1 :: Set an empty list value to the manifest option in config")
 		tmpNamespace := "scenario1-ocp63217"
 		etcConfigCMD = fmt.Sprintf(`
 manifests:
     kustomizePaths: []`)
 		changeMicroshiftConfig(oc, etcConfigCMD, masterNodes[0], e2eTestNamespace, etcConfigYaml)
 
-		g.By("5.2 :: Scenario-1 :: Create kustomization and deployemnt files")
+		exutil.By("5.2 :: Scenario-1 :: Create kustomization and deployemnt files")
 		newSrcFiles := map[string][]string{
 			"busybox.yaml": {
 				"microshift-busybox-deployment.yaml",
@@ -5518,20 +5518,20 @@ manifests:
 		}
 		addKustomizationToMicroshift(oc, masterNodes[0], e2eTestNamespace, newSrcFiles)
 		restartMicroshift(oc, masterNodes[0])
-		g.By("5.3 :: Scenario-1 :: Check pods after microshift restart")
+		exutil.By("5.3 :: Scenario-1 :: Check pods after microshift restart")
 		podsOutput := getPodsList(oc, "busybox-"+tmpNamespace)
 		o.Expect(podsOutput[0]).To(o.BeEmpty(), "Scenario-1 :: Failed :: Pods are created, manifests are not disabled")
 		e2e.Logf("Scenario-1 :: Passed :: Pods should not be created, manifests are disabled")
 
 		// Setting the manifest option value to a single value should only load manifests from that location
-		g.By("6.1 :: Scenario-2 :: Set a single value to the manifest option in config")
+		exutil.By("6.1 :: Scenario-2 :: Set a single value to the manifest option in config")
 		tmpNamespace = "scenario2-ocp63217"
 		etcConfigCMD = fmt.Sprintf(`
   kustomizePaths:
   - /etc/microshift/manifests`)
 		changeMicroshiftConfig(oc, etcConfigCMD, masterNodes[0], e2eTestNamespace, etcConfigYaml)
 
-		g.By("6.2 :: Scenario-2 :: Create kustomization and deployemnt files")
+		exutil.By("6.2 :: Scenario-2 :: Create kustomization and deployemnt files")
 		newSrcFiles = map[string][]string{
 			"busybox.yaml": {
 				"microshift-busybox-deployment.yaml",
@@ -5550,13 +5550,13 @@ manifests:
 		addKustomizationToMicroshift(oc, masterNodes[0], e2eTestNamespace, newSrcFiles)
 		restartMicroshift(oc, masterNodes[0])
 
-		g.By("6.3 :: Scenario-2 :: Check pods after microshift restart")
+		exutil.By("6.3 :: Scenario-2 :: Check pods after microshift restart")
 		podsOutput = getPodsList(oc, "busybox-"+tmpNamespace)
 		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-2 :: Failed :: Pods are not created, manifests are not loaded from defined location")
 		e2e.Logf("Scenario-2 :: Passed :: Pods are created, manifests are loaded from defined location :: %s", podsOutput[0])
 
 		//  Setting the option value to multiple values should load manifests from all of them.
-		g.By("7.1 Scenario-3 :: Set multiple values to the manifest option in config")
+		exutil.By("7.1 Scenario-3 :: Set multiple values to the manifest option in config")
 		etcConfigCMD = fmt.Sprintf(`
 manifests:
   kustomizePaths:
@@ -5591,11 +5591,11 @@ manifests:
 				tmpNamespace,
 			},
 		}
-		g.By("7.2 :: Scenario-3 :: Create kustomization and deployemnt files")
+		exutil.By("7.2 :: Scenario-3 :: Create kustomization and deployemnt files")
 		addKustomizationToMicroshift(oc, masterNodes[0], e2eTestNamespace, newSrcFiles)
 		restartMicroshift(oc, masterNodes[0])
 
-		g.By("7.3 Scenario-3 :: Check pods after microshift restart")
+		exutil.By("7.3 Scenario-3 :: Check pods after microshift restart")
 		podsOutput = getPodsList(oc, "hello-openshift-"+tmpNamespace)
 		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-3 :: Failed :: Pods are not created, manifests are not loaded from defined location")
 		podsOutput = getPodsList(oc, "busybox-"+tmpNamespace)
@@ -5603,31 +5603,31 @@ manifests:
 		e2e.Logf("Scenario-3 :: Passed :: Pods are created, manifests are loaded from defined location :: %s", podsOutput[0])
 
 		// If the option includes a manifest path that exists but does not contain a kustomization.yaml file, it should be ignored.
-		g.By("8.1 Scenario-4 :: Set option includes a manifest path that exists but does not contain a kustomization.yaml file")
+		exutil.By("8.1 Scenario-4 :: Set option includes a manifest path that exists but does not contain a kustomization.yaml file")
 		_, delFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo rm "+tmpManifestPath+"kustomization.yaml")
 		o.Expect(delFileErr).NotTo(o.HaveOccurred())
 		delNsErr := oc.WithoutNamespace().Run("delete").Args("ns", "hello-openshift-scenario3-ocp63217", "--ignore-not-found").Execute()
 		o.Expect(delNsErr).NotTo(o.HaveOccurred())
 		restartMicroshift(oc, masterNodes[0])
 
-		g.By("8.2 Scenario-4 :: Check pods after microshift restart")
+		exutil.By("8.2 Scenario-4 :: Check pods after microshift restart")
 		podsOutput = getPodsList(oc, "hello-openshift-"+tmpNamespace)
 		o.Expect(podsOutput[0]).To(o.BeEmpty(), "Scenario-4 :: Failed :: Pods are created, manifests not ignored defined location")
 		e2e.Logf("Scenario-4 :: Passed :: Pods are not created, manifests ignored defined location :: %s", podsOutput[0])
 
 		//  If the option includes a manifest path that does not exist, it should be ignored.
-		g.By("9.1 Scenario-5 :: Set option includes a manifest path that does not exists")
+		exutil.By("9.1 Scenario-5 :: Set option includes a manifest path that does not exists")
 		_, delDirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo rm -rf "+tmpManifestPath)
 		o.Expect(delDirErr).NotTo(o.HaveOccurred())
 		restartMicroshift(oc, masterNodes[0])
 
-		g.By("9.2 Scenario-5 :: Check pods after microshift restart")
+		exutil.By("9.2 Scenario-5 :: Check pods after microshift restart")
 		podsOutput = getPodsList(oc, "hello-openshift-"+tmpNamespace)
 		o.Expect(podsOutput[0]).To(o.BeEmpty(), "Scenario-5 :: Failed :: Pods are created, manifests not ignored defined location")
 		e2e.Logf("Scenario-5 :: Passed :: Pods are not created, manifests ignored defined location :: %s", podsOutput[0])
 
 		// If the option is not specified, the default locations of /etc/microshift/manifests/kustomization.yaml and /usr/lib/microshift/manifests/kustomization.yaml should be loaded
-		g.By("10.1 :: Scenario-6 :: Set the manifest option value to an empty for manifest in config")
+		exutil.By("10.1 :: Scenario-6 :: Set the manifest option value to an empty for manifest in config")
 		etcConfigCMD = fmt.Sprintf(`
 manifests:
     kustomizePaths:`)
@@ -5636,7 +5636,7 @@ manifests:
 		o.Expect(delNsErr).NotTo(o.HaveOccurred())
 		restartMicroshift(oc, masterNodes[0])
 
-		g.By("10.2 :: Scenario-6 :: Check manifest config")
+		exutil.By("10.2 :: Scenario-6 :: Check manifest config")
 		pattern := `kustomizePaths:\s*\n\s*- /usr/lib/microshift/manifests\s*\n\s*- /etc/microshift/manifests`
 		re := regexp.MustCompile(pattern)
 		mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
@@ -5646,7 +5646,7 @@ manifests:
 			e2e.Failf("Manifest config not reset to default :: \n" + mchkConfig)
 		}
 
-		g.By("10.3 :: Scenario-6 :: Check pods after microshift restart")
+		exutil.By("10.3 :: Scenario-6 :: Check pods after microshift restart")
 		podsOutput = getPodsList(oc, "busybox-"+tmpNamespace)
 		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-6 :: Failed :: Pods are not created, manifests are not set to default")
 		e2e.Logf("Scenario-6 :: Passed :: Pods should be created, manifests are loaded from default location")
@@ -5654,7 +5654,7 @@ manifests:
 
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:dpunia-High-63273-Test etcd encryption migration [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
-		g.By("1) Check if cluster is Etcd Encryption On")
+		exutil.By("1) Check if cluster is Etcd Encryption On")
 		encryptionType, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if encryptionType != "aescbc" && encryptionType != "aesgcm" {
@@ -5662,13 +5662,13 @@ manifests:
 		}
 		e2e.Logf("Etcd Encryption with type %s is on!", encryptionType)
 
-		g.By("2) Check encryption-config and key secrets before Migration")
+		exutil.By("2) Check encryption-config and key secrets before Migration")
 		encSecretOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", "openshift-config-managed", "-l", "encryption.apiserver.operator.openshift.io/component", "-o", `jsonpath={.items[*].metadata.name}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		encSecretCount := strings.Count(encSecretOut, "encryption")
 		o.Expect(encSecretCount).To(o.BeNumerically(">", 0))
 
-		g.By("3) Create Secret & Check in etcd database before Migration")
+		exutil.By("3) Create Secret & Check in etcd database before Migration")
 		defer oc.WithoutNamespace().Run("delete").Args("-n", "default", "secret", "secret-63273").Execute()
 		err = oc.WithoutNamespace().Run("create").Args("-n", "default", "secret", "generic", "secret-63273", "--from-literal", "pass=secret123").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -5677,7 +5677,7 @@ manifests:
 		execCmdOutput := ExecCommandOnPod(oc, etcdPods[0], "openshift-etcd", "etcdctl get /kubernetes.io/secrets/default/secret-63273")
 		o.Expect(execCmdOutput).ShouldNot(o.ContainSubstring("secret123"))
 
-		g.By("4) Migrate encryption if current encryption is aescbc to aesgcm or vice versa")
+		exutil.By("4) Migrate encryption if current encryption is aescbc to aesgcm or vice versa")
 		migrateEncTo := "aesgcm"
 		if encryptionType == "aesgcm" {
 			migrateEncTo = "aescbc"
@@ -5693,7 +5693,7 @@ manifests:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(encMigrateOut).Should(o.ContainSubstring("patched"))
 
-		g.By("5.) Check the new encryption key secrets appear")
+		exutil.By("5.) Check the new encryption key secrets appear")
 		newOASEncSecretName := "encryption-key-openshift-apiserver-" + strconv.Itoa(oasEncNumber+1)
 		newKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber+1)
 		err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
@@ -5718,7 +5718,7 @@ manifests:
 		err = waitCoBecomes(oc, "kube-apiserver", 1500, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
 		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available")
 
-		g.By("6) Check secret in etcd after Migration")
+		exutil.By("6) Check secret in etcd after Migration")
 		etcdPods = getPodsListByLabel(oc, "openshift-etcd", "etcd=true")
 		execCmdOutput = ExecCommandOnPod(oc, etcdPods[0], "openshift-etcd", "etcdctl get /kubernetes.io/secrets/default/secret-63273")
 		o.Expect(execCmdOutput).ShouldNot(o.ContainSubstring("secret123"))
@@ -5726,22 +5726,22 @@ manifests:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Low-12036-APIServer User can pull a private image from a registry when a pull secret is defined [Serial]", func() {
-		g.By("Check if it's a proxy cluster")
+		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
 			g.Skip("Skip for proxy platform")
 		}
 
-		g.By("1) Create a new project required for this test execution")
+		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 
-		g.By("2) Build hello-world from external source")
+		exutil.By("2) Build hello-world from external source")
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		buildName := fmt.Sprintf("ocp12036-test-%s", strings.ToLower(exutil.RandStr(5)))
 		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) Wait for hello-world build to success")
+		exutil.By("3) Wait for hello-world build to success")
 		buildClient := oc.BuildClient().BuildV1().Builds(oc.Namespace())
 		err = exutil.WaitForABuild(buildClient, buildName+"-1", nil, nil, nil)
 		if err != nil {
@@ -5749,33 +5749,33 @@ manifests:
 		}
 		exutil.AssertWaitPollNoErr(err, "build is not complete")
 
-		g.By("4) Get dockerImageRepository value from imagestreams test")
+		exutil.By("4) Get dockerImageRepository value from imagestreams test")
 		dockerImageRepository1, err := oc.Run("get").Args("imagestreams", buildName, "-o=jsonpath={.status.dockerImageRepository}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dockerServer := strings.Split(strings.TrimSpace(dockerImageRepository1), "/")
 		o.Expect(dockerServer).NotTo(o.BeEmpty())
 
-		g.By("5) Create another project with the second user")
+		exutil.By("5) Create another project with the second user")
 		oc.SetupProject()
 
-		g.By("6) Get access token")
+		exutil.By("6) Get access token")
 		token, err := oc.Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("7) Give user admin permission")
+		exutil.By("7) Give user admin permission")
 		username := oc.Username()
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", username).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("8) Create secret for private image under project")
+		exutil.By("8) Create secret for private image under project")
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "user1-dockercfg", "--docker-email=any@any.com", "--docker-server="+dockerServer[0], "--docker-username="+username, "--docker-password="+token, "-n", oc.Namespace()).NotShowInfo().Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("9) Create new deploymentconfig from the dockerImageRepository fetched in step 4")
+		exutil.By("9) Create new deploymentconfig from the dockerImageRepository fetched in step 4")
 		deploymentConfigYaml, err := oc.Run("create").Args("deploymentconfig", "frontend", "--image="+dockerImageRepository1, "--dry-run=client", "-o=yaml").OutputToFile("ocp12036-dc.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("10) Modify the deploymentconfig and create a new deployment.")
+		exutil.By("10) Modify the deploymentconfig and create a new deployment.")
 		exutil.ModifyYamlFileContent(deploymentConfigYaml, []exutil.YamlReplace{
 			{
 				Path:  "spec.template.spec.containers.0.imagePullPolicy",
@@ -5789,29 +5789,29 @@ manifests:
 		err = oc.Run("create").Args("-f", deploymentConfigYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("11) Check if pod is properly running with expected status.")
+		exutil.By("11) Check if pod is properly running with expected status.")
 		podsList := getPodsListByLabel(oc.AsAdmin(), oc.Namespace(), "deploymentconfig=frontend")
 		exutil.AssertPodToBeReady(oc, podsList[0], oc.Namespace())
 	})
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-11905-APIServer Use well-formed pull secret with incorrect credentials will fail to build and deploy [Serial]", func() {
-		g.By("Check if it's a proxy cluster")
+		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
 			g.Skip("Skip for proxy platform")
 		}
 
-		g.By("1) Create a new project required for this test execution")
+		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 
-		g.By("2) Build hello-world from external source")
+		exutil.By("2) Build hello-world from external source")
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		buildName := fmt.Sprintf("ocp11905-test-%s", strings.ToLower(exutil.RandStr(5)))
 		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) Wait for hello-world build to success")
+		exutil.By("3) Wait for hello-world build to success")
 		buildClient := oc.BuildClient().BuildV1().Builds(oc.Namespace())
 		err = exutil.WaitForABuild(buildClient, buildName+"-1", nil, nil, nil)
 		if err != nil {
@@ -5819,29 +5819,29 @@ manifests:
 		}
 		exutil.AssertWaitPollNoErr(err, "build is not complete")
 
-		g.By("4) Get dockerImageRepository value from imagestreams test")
+		exutil.By("4) Get dockerImageRepository value from imagestreams test")
 		dockerImageRepository1, err := oc.Run("get").Args("imagestreams", buildName, "-o=jsonpath={.status.dockerImageRepository}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dockerServer := strings.Split(strings.TrimSpace(dockerImageRepository1), "/")
 		o.Expect(dockerServer).NotTo(o.BeEmpty())
 
-		g.By("5) Create another project with the second user")
+		exutil.By("5) Create another project with the second user")
 		oc.SetupProject()
 
-		g.By("6) Give user admin permission")
+		exutil.By("6) Give user admin permission")
 		username := oc.Username()
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", username).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("7) Create secret for private image under project with wrong password")
+		exutil.By("7) Create secret for private image under project with wrong password")
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "user1-dockercfg", "--docker-email=any@any.com", "--docker-server="+dockerServer[0], "--docker-username="+username, "--docker-password=password", "-n", oc.Namespace()).NotShowInfo().Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("8) Create new deploymentconfig from the dockerImageRepository fetched in step 4")
+		exutil.By("8) Create new deploymentconfig from the dockerImageRepository fetched in step 4")
 		deploymentConfigYaml, err := oc.Run("create").Args("deploymentconfig", "frontend", "--image="+dockerImageRepository1, "--dry-run=client", "-o=yaml").OutputToFile("ocp12036-dc.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("9) Modify the deploymentconfig and create a new deployment.")
+		exutil.By("9) Modify the deploymentconfig and create a new deployment.")
 		exutil.ModifyYamlFileContent(deploymentConfigYaml, []exutil.YamlReplace{
 			{
 				Path:  "spec.template.spec.containers.0.imagePullPolicy",
@@ -5855,7 +5855,7 @@ manifests:
 		err = oc.Run("create").Args("-f", deploymentConfigYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("10) Check if pod is running with the expected status.")
+		exutil.By("10) Check if pod is running with the expected status.")
 		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			podOutput, err := oc.Run("get").Args("pod").Output()
 			if err == nil {
@@ -5872,27 +5872,27 @@ manifests:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-11531-APIServer Can access both http and https pods and services via the API proxy [Serial]", func() {
-		g.By("Check if it's a proxy cluster")
+		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
 			g.Skip("Skip for proxy platform")
 		}
 
-		g.By("1) Create a new project required for this test execution")
+		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 		projectNs := oc.Namespace()
 
-		g.By("2. Get the clustername")
+		exutil.By("2. Get the clustername")
 		clusterName, clusterErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[0].name}`).Output()
 		o.Expect(clusterErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Cluster Name :: %v", clusterName)
 
-		g.By("3. Point to the API server referring the cluster name")
+		exutil.By("3. Point to the API server referring the cluster name")
 		apiserverName, apiErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[?(@.name=="`+clusterName+`")].cluster.server}`).Output()
 		o.Expect(apiErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Server Name :: %v", apiserverName)
 
-		g.By("4) Get access token")
+		exutil.By("4) Get access token")
 		token, err := oc.Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -5915,20 +5915,20 @@ manifests:
 		}
 
 		for i, u := range urls {
-			g.By(fmt.Sprintf("%d.1) Build "+u.Target+" from external source", i+5))
+			exutil.By(fmt.Sprintf("%d.1) Build "+u.Target+" from external source", i+5))
 			appErr := oc.AsAdmin().WithoutNamespace().Run("new-app").Args(u.URL, "-n", projectNs).Execute()
 			o.Expect(appErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("%d.2) Check if pod is properly running with expected status.", i+5))
+			exutil.By(fmt.Sprintf("%d.2) Check if pod is properly running with expected status.", i+5))
 			podsList := getPodsListByLabel(oc.AsAdmin(), projectNs, "deployment="+u.Target)
 			exutil.AssertPodToBeReady(oc, podsList[0], projectNs)
 
-			g.By(fmt.Sprintf("%d.4) Perform the proxy GET request to resource REST endpoint with service", i+5))
+			exutil.By(fmt.Sprintf("%d.4) Perform the proxy GET request to resource REST endpoint with service", i+5))
 			curlUrl := fmt.Sprintf(`%s/api/v1/namespaces/%s/services/http:%s:8080-tcp/proxy/`, apiserverName, projectNs, u.Target)
 			output := clientCurl(token, curlUrl)
 			o.Expect(output).Should(o.ContainSubstring(u.ExpectStr))
 
-			g.By(fmt.Sprintf("%d.4) Perform the proxy GET request to resource REST endpoint with pod", i+5))
+			exutil.By(fmt.Sprintf("%d.4) Perform the proxy GET request to resource REST endpoint with pod", i+5))
 			curlUrl = fmt.Sprintf(`%s/api/v1/namespaces/%s/pods/http:%s:8080/proxy`, apiserverName, projectNs, podsList[0])
 			output = clientCurl(token, curlUrl)
 			o.Expect(output).Should(o.ContainSubstring(u.ExpectStr))
@@ -5946,7 +5946,7 @@ manifests:
 		oc.SetupProject()
 		userName := oc.Username()
 
-		g.By("Pre-requisities, capturing current-context from cluster.")
+		exutil.By("Pre-requisities, capturing current-context from cluster.")
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
 		o.Expect(contxtErr).NotTo(o.HaveOccurred())
 		defer func() {
@@ -5954,17 +5954,17 @@ manifests:
 			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
 		}()
 
-		g.By("1) Create a project without node selector")
+		exutil.By("1) Create a project without node selector")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", firstProject).Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("new-project", firstProject, "--admin="+userName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("2) Create a project with node selector")
+		exutil.By("2) Create a project with node selector")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", secondProject).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("new-project", secondProject, "--node-selector=env="+labelValue, "--description=testnodeselector", "--admin="+userName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("3) Check node selector field for above 2 projects")
+		exutil.By("3) Check node selector field for above 2 projects")
 		firstProjectOut, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", firstProject, "--as="+userName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(firstProjectOut).Should(o.MatchRegexp("Node Selector:.*<none>"))
@@ -5972,5 +5972,66 @@ manifests:
 		secondProjectOut, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", secondProject, "--as="+userName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(secondProjectOut).Should(o.MatchRegexp("Node Selector:.*env=" + labelValue))
+	})
+
+	// author: kewang@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:kewang-High-65924-Specifying non-existen secret for API namedCertificates renders inconsistent config [Disruptive]", func() {
+		// Currently, there is one bug OCPBUGS-15853 on 4.13, after the related PRs are merged, consider back-porting the case to 4.13
+		var (
+			apiserver           = "apiserver/cluster"
+			kas                 = "openshift-kube-apiserver"
+			kasOpExpectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			kasOpNewStatus      = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "True"}
+			apiServerFQDN       = getApiServerFQDN(oc)
+			patch               = fmt.Sprintf(`{"spec":{"servingCerts": {"namedCertificates": [{"names": ["%s"], "servingCertificate": {"name": "client-ca-cusom"}}]}}}`, apiServerFQDN)
+			patchToRecover      = `[{ "op": "remove", "path": "/spec/servingCerts" }]`
+		)
+
+		defer func() {
+			exutil.By(" Last) Check the kube-apiserver cluster operator after removed the non-existen secret for API namedCertificates .")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(apiserver, "-p", patchToRecover, "--type=json").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "kube-apiserver", 300, kasOpExpectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available")
+		}()
+
+		exutil.By("1) Get the current revision of openshift-kube-apiserver.")
+		out, revisionChkErr := oc.AsAdmin().Run("get").Args("po", "-n", kas, "-l=apiserver", "-o", "jsonpath={.items[*].metadata.labels.revision}").Output()
+		o.Expect(revisionChkErr).NotTo(o.HaveOccurred())
+		s := strings.Split(out, " ")
+		preRevisionSum := 0
+		for _, valueStr := range s {
+			valueInt, _ := strconv.Atoi(valueStr)
+			preRevisionSum += valueInt
+		}
+		e2e.Logf("Current revisions of kube-apiservers: %v", out)
+
+		exutil.By("2) Apply non-existen secret for API namedCertificates.")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(apiserver, "-p", patch, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3) Wait for a while and check the status of kube-apiserver cluster operator.")
+		errCo := waitCoBecomes(oc, "kube-apiserver", 300, kasOpNewStatus)
+		exutil.AssertWaitPollNoErr(errCo, "kube-apiserver operator is not becomes degraded")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-apiserver").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("ConfigObservationDegraded"))
+
+		exutil.By("4) Check that cluster does nothing and no kube-server pod crash-looping.")
+		out, revisionChkErr = oc.AsAdmin().Run("get").Args("po", "-n", kas, "-l=apiserver", "-o", "jsonpath={.items[*].metadata.labels.revision}").Output()
+		o.Expect(revisionChkErr).NotTo(o.HaveOccurred())
+		s1 := strings.Split(out, " ")
+		postRevisionSum := 0
+		for _, valueStr := range s1 {
+			valueInt, _ := strconv.Atoi(valueStr)
+			postRevisionSum += valueInt
+		}
+		e2e.Logf("Revisions of kube-apiservers after patching: %v", out)
+		o.Expect(postRevisionSum).Should(o.BeNumerically("==", preRevisionSum), "Validation failed as PostRevision value not equal to PreRevision")
+		e2e.Logf("No changes on revisions of kube-apiservers.")
+
+		kasPodsOutput := getResource(oc, asAdmin, withoutNamespace, "pods", "-l apiserver", "--no-headers", "-n", kas)
+		o.Expect(kasPodsOutput).ShouldNot(o.ContainSubstring("CrashLoopBackOff"))
+		e2e.Logf("Kube-apiservers didn't roll out as expected.")
 	})
 })
