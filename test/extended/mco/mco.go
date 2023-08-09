@@ -1947,7 +1947,7 @@ nulla pariatur.`
 			"machine-config Operator should report degraded status")
 
 		o.Eventually(mco.Poll(`{.status.conditions[?(@.type=="Degraded")].message}`),
-			"5m", "30s").Should(o.ContainSubstring(`Required MachineConfigPool 'master' is paused and can not sync until it is unpaused`),
+			"5m", "30s").Should(o.ContainSubstring(`required MachineConfigPool master is paused and cannot sync until it is unpaused`),
 			"machine-config Operator is not reporting the right reason for degraded status")
 
 		exutil.By("Restore original proxy configuration")
