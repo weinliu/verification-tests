@@ -1280,11 +1280,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		exutil.By("Obtain the transaction count to be 1")
 		podIP1, _ := getPodIP(oc, ns, pod.name)
-		ovnKMasterPod := getOVNKMasterPod(oc)
-		o.Expect(ovnKMasterPod).ShouldNot(o.BeEmpty())
+
+		podNodeName, podNodenameErr := exutil.GetPodNodeName(oc, ns, pod.name)
+		o.Expect(podNodenameErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Node on which pod %s is running %s", pod.name, podNodeName)
+		ovnKNodePod, ovnkNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", podNodeName)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		e2e.Logf("ovnkube-node podname %s running on node %s", ovnKNodePod, podNodeName)
 
 		filterString := fmt.Sprintf("'%s' | grep '%s' | wc -l", "transacting operations", podIP1)
-		logContents, logErr1 := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-master", ovnKMasterPod, filterString)
+		logContents, logErr1 := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnKNodePod, filterString)
 		o.Expect(logErr1).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(logContents)).To(o.Equal("1"))
 
@@ -1292,7 +1297,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		_, reLabelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", pod.namespace, "--overwrite", "pod", pod.name, "type=blue").Output()
 		o.Expect(reLabelErr).NotTo(o.HaveOccurred())
 
-		newLogContents, logErr2 := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-master", ovnKMasterPod, filterString)
+		newLogContents, logErr2 := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnKNodePod, filterString)
 		o.Expect(logErr2).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(newLogContents)).To(o.Equal("1"))
 
