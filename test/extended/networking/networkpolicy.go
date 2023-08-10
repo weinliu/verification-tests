@@ -1302,5 +1302,91 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.TrimSpace(newLogContents)).To(o.Equal("1"))
 
 	})
+	g.It("Author:asood-High-66085-Creating egress network policies for allowing to same namespace and openshift dns in namespace prevents the pod from reaching its own service", func() {
+		// https://issues.redhat.com/browse/OCPBUGS-4909
+		var (
+			buildPruningBaseDir        = exutil.FixturePath("testdata", "networking")
+			pingPodTemplate            = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			genericServiceTemplate     = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			allowToNSNetworkPolicyFile = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-to-same-namespace.yaml")
+			allowToDNSNPolicyFile      = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-to-openshift-dns.yaml")
+			podsInProject              = []string{"hello-pod-1", "other-pod"}
+			svcURL                     string
+		)
+
+		exutil.By("Get first namespace and create another")
+		ns := oc.Namespace()
+
+		exutil.By("Create set of pods with different labels")
+		for _, podItem := range podsInProject {
+			pod1 := pingPodResource{
+				name:      podItem,
+				namespace: ns,
+				template:  pingPodTemplate,
+			}
+			pod1.createPingPod(oc)
+			waitPodReady(oc, ns, pod1.name)
+		}
+		exutil.By("Label the pods to ensure the pod does not serve the service")
+		_, reLabelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", ns, "--overwrite", "pod", podsInProject[1], "name=other-pod").Output()
+		o.Expect(reLabelErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a service for one of the pods")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        "SingleStack",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              genericServiceTemplate,
+		}
+		svc.createServiceFromParams(oc)
+		exutil.By("Check service status")
+		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(svcOutput).Should(o.ContainSubstring(svc.servicename))
+
+		exutil.By("Obtain the service URL")
+		svcURL = fmt.Sprintf("http://%s.%s.svc:27017", svc.servicename, svc.namespace)
+		e2e.Logf("Service URL %s", svcURL)
+		exutil.By("Check the connectivity to service from the pods in the namespace")
+		for _, podItem := range podsInProject {
+			output, err := e2eoutput.RunHostCmd(ns, podItem, "curl --connect-timeout 5 -s "+svcURL)
+			o.Expect(strings.Contains(output, "Hello OpenShift!")).To(o.BeTrue())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Create the network policies in the namespace")
+		exutil.By("Create the allow to same namespace policy in the namespace")
+		createResourceFromFile(oc, ns, allowToNSNetworkPolicyFile)
+		output, err := oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allow-to-same-namespace"))
+		exutil.By("Create the allow to DNS policy in the namespace")
+		createResourceFromFile(oc, ns, allowToDNSNPolicyFile)
+		output, err = oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allow-to-openshift-dns"))
+
+		exutil.By("Create another pod to serve the service")
+		anotherPod := pingPodResource{
+			name:      "hello-pod-2",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		anotherPod.createPingPod(oc)
+		waitPodReady(oc, ns, anotherPod.name)
+		podsInProject = append(podsInProject, anotherPod.name)
+
+		exutil.By("Check the connectivity to service again from the pods in the namespace")
+		for _, eachPod := range podsInProject {
+			output, err := e2eoutput.RunHostCmd(ns, eachPod, "curl --connect-timeout 5 -s "+svcURL)
+			o.Expect(strings.Contains(output, "Hello OpenShift!")).To(o.BeTrue())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	})
 
 })
