@@ -1135,7 +1135,7 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-64920-High-63851-Verify oc adm release info and oc image extract --icsp-file flag still works with deprecated warning message", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-64920-High-63851-Verify oc adm release info and oc image extract --icsp-file flag still works with deprecated warning message [Flaky]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		icspFile64920 := filepath.Join(buildPruningBaseDir, "icspFile64920.yaml")
 		var (
@@ -1220,7 +1220,7 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-64921-Critical-63854-Verify oc adm release info and oc image extract using --idms-file flag", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-64921-Critical-63854-Verify oc adm release info and oc image extract using --idms-file flag [Flaky]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		idmsFile64921 := filepath.Join(buildPruningBaseDir, "idmsFile64921.yaml")
 		var (
