@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("This case requires at least one schedulable node")
 		}
 		nodeLogicalRouterName := "GR_" + nodeList.Items[0].Name
-		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 		lrRouteListDelCmd := "ovn-nbctl lr-route-del " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
 		lrRouteListAddCmd := "ovn-nbctl lr-route-add " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
 
@@ -84,7 +84,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switchOVNGatewayMode(oc, desiredMode)
 
 		lrRouteListCmd := "ovn-nbctl lr-route-list " + nodeLogicalRouterName
-		ovnMasterPodName = getOVNLeaderPod(oc, "north")
+		ovnMasterPodName = getOVNKMasterOVNkubeNode(oc)
 		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
 
 		lRlOutput, lrlErr2 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListCmd)
@@ -95,7 +95,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		//reverting back cluster to original mode it was on and deleting fake route
 		switchOVNGatewayMode(oc, origMode)
 
-		ovnMasterPodName = getOVNLeaderPod(oc, "north")
+		ovnMasterPodName = getOVNKMasterOVNkubeNode(oc)
 		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
 
 		_, lrlErr3 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListCmd)

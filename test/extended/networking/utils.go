@@ -1017,6 +1017,7 @@ func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
 	return InternalIP2, InternalIP1
 }
 
+// get CLuster Manager's leader info
 func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType string) string {
 	if networkType == "ovnkubernetes" {
 		leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", namespace, "-o=jsonpath={.spec.holderIdentity}").Output()
@@ -1901,38 +1902,6 @@ func getIPv4Capacity(oc *exutil.CLI, nodeName string) string {
 	return ipv4Capacity
 }
 
-// Return the ovnkube-master northdb or sourthdb leader pod
-// ovndb parameter better to be "south" or "north"
-// getOVNLeaderPod ...
-func getOVNLeaderPod(oc *exutil.CLI, ovndb string) string {
-	var ovsappctlCmd string
-	var ovnMasterPod string
-	if ovndb == "south" {
-		ovsappctlCmd = "ovn-appctl -t /var/run/ovn/ovnsb_db.ctl --timeout=3 cluster/status OVN_Southbound"
-	} else {
-		ovsappctlCmd = "ovn-appctl -t /var/run/ovn/ovnnb_db.ctl --timeout=3 cluster/status OVN_Northbound"
-	}
-
-	e2e.Logf("The ovsappctl_cmd is %s ", ovsappctlCmd)
-	ovnMasterPodName := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
-	for _, ovnPod := range ovnMasterPodName {
-		output, err := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, ovsappctlCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if output == "" {
-			output, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, ovsappctlCmd)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-		if strings.Contains(output, "Leader: self") {
-			ovnMasterPod = ovnPod
-			e2e.Logf("The leader ovn master pod is %s", ovnMasterPod)
-			break
-		}
-
-	}
-
-	return ovnMasterPod
-}
-
 func (aclSettings *aclSettings) getJSONString() string {
 	jsonACLSetting, _ := json.Marshal(aclSettings)
 	annotationString := "k8s.ovn.org/acl-logging=" + string(jsonACLSetting)
@@ -2054,7 +2023,7 @@ func findLogFromPod(oc *exutil.CLI, searchString string, namespace string, podLa
 
 // searchOVNDBForSpecCmd This is used for lr-policy-list and snat rules check in ovn db.
 func searchOVNDBForSpecCmd(oc *exutil.CLI, cmd, searchKeyword string, times int) error {
-	ovnPod := getOVNLeaderPod(oc, "north")
+	ovnPod := getOVNKMasterOVNkubeNode(oc)
 	o.Expect(ovnPod).ShouldNot(o.Equal(""))
 	var cmdOutput string
 	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
@@ -2104,9 +2073,10 @@ func switchOVNGatewayMode(oc *exutil.CLI, mode string) {
 	} else {
 		e2e.Logf("Cluster is already on requested gateway mode")
 	}
-	_, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", "openshift-ovn-kubernetes", "ds", "ovnkube-master").Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", "openshift-ovn-kubernetes", "ds", "ovnkube-node").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	checkNetworkOperatorState(oc, 400, 400)
+	//on OVN IC it takes upto 660 seconds for nodes ds to rollout so lets poll with timeout of 700 seconds
+	checkNetworkOperatorState(oc, 900, 900)
 }
 
 // getOVNGatewayMode will return configured OVN gateway mode, shared or local
@@ -2146,7 +2116,7 @@ func getEgressCIDRsForNode(oc *exutil.CLI, nodeName string) string {
 
 // get routerID by node name
 func getRouterID(oc *exutil.CLI, nodeName string) (string, error) {
-	ovnLeaderPod := getOVNLeaderPod(oc, "north")
+	ovnLeaderPod := getOVNKMasterOVNkubeNode(oc)
 	o.Expect(ovnLeaderPod).ShouldNot(o.Equal(""))
 	var cmdOutput, routerName, routerID string
 	var cmdErr error
@@ -2176,7 +2146,7 @@ func getRouterID(oc *exutil.CLI, nodeName string) (string, error) {
 }
 
 func getSNATofEgressIP(oc *exutil.CLI, routerID, egressIP string) (string, error) {
-	ovnLeaderPod := getOVNLeaderPod(oc, "north")
+	ovnLeaderPod := getOVNKMasterOVNkubeNode(oc)
 	o.Expect(ovnLeaderPod).ShouldNot(o.Equal(""))
 	var cmdOutput, snatIP string
 	var cmdErr error
@@ -2513,23 +2483,22 @@ func getHostsubnetByEIP(oc *exutil.CLI, expectedEIP string) string {
 	return nodeHostsEIP
 }
 
-// find the ovn-K master pod
+// find the ovn-K cluster manager master pod
 func getOVNKMasterPod(oc *exutil.CLI) string {
 	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
 	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
-	var ovnKMasterPod string
-	ovnMasterPods := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
-	for _, ovnPod := range ovnMasterPods {
-		getNodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ovn-kubernetes", "pod", ovnPod, "-o=jsonpath={.spec.nodeName}").Output()
-		o.Expect(podErr).NotTo(o.HaveOccurred())
-		e2e.Logf("nodeName for the pod %v is: %v", ovnPod, getNodeName)
-		if getNodeName == leaderNodeName {
-			ovnKMasterPod = ovnPod
-			e2e.Logf("The leader ovn master pod is %s", ovnKMasterPod)
-			break
-		}
-	}
+	ovnKMasterPod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master", leaderNodeName)
+	o.Expect(podErr).NotTo(o.HaveOccurred())
 	return ovnKMasterPod
+}
+
+// find the cluster-manager's ovnkube-node for accessing master components
+func getOVNKMasterOVNkubeNode(oc *exutil.CLI) string {
+	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
+	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
+	ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", leaderNodeName)
+	o.Expect(podErr).NotTo(o.HaveOccurred())
+	return ovnKubePod
 }
 
 // enable multicast on specific namespace
@@ -2575,7 +2544,7 @@ func getOVNConstruct(oc *exutil.CLI, constructType string, nodeNames []string) [
 	//var cmdOutput string
 
 	getCmd := "ovn-nbctl --no-leader-only " + constructType
-	ovnPod := getOVNLeaderPod(oc, "north")
+	ovnPod := getOVNKMasterOVNkubeNode(oc)
 	o.Expect(ovnPod).ShouldNot(o.Equal(""))
 	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
 		cmdOutput, cmdErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, getCmd)
@@ -2609,7 +2578,7 @@ func getOVNConstruct(oc *exutil.CLI, constructType string, nodeNames []string) [
 // returns load balancer entries created for LB service type on routers and switches
 func getOVNLBContructs(oc *exutil.CLI, constructType string, endPoint string, ovnConstruct []string) bool {
 	var result bool
-	ovnPod := getOVNLeaderPod(oc, "north")
+	ovnPod := getOVNKMasterOVNkubeNode(oc)
 	o.Expect(ovnPod).ShouldNot(o.Equal(""))
 	//only if the count for any of output is less than three the success will be false
 	result = true
@@ -2779,7 +2748,7 @@ func configIPSecAtRuntime(oc *exutil.CLI, targetStatus string) (err error) {
 		e2e.Failf("Failed to configure IPSec at runtime")
 	} else {
 		// need to restart ovnkube-master "north" leader after configuring ipsec to make sure use correct "north" leader
-		ovnLeaderpod := getOVNLeaderPod(oc, "north")
+		ovnLeaderpod := getOVNKMasterOVNkubeNode(oc)
 		removeResource(oc, true, true, "pod", ovnLeaderpod, "-n", "openshift-ovn-kubernetes")
 		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
 		checkErr := checkIPSecInDB(oc, targetConfig)
@@ -2791,7 +2760,7 @@ func configIPSecAtRuntime(oc *exutil.CLI, targetStatus string) (err error) {
 
 // check IPSec configuration in northd, targetConfig should be "true" or "false"
 func checkIPSecInDB(oc *exutil.CLI, targetConfig string) error {
-	ovnLeaderpod := getOVNLeaderPod(oc, "north")
+	ovnLeaderpod := getOVNKMasterOVNkubeNode(oc)
 	return wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 		getIPSec, getErr := execCommandInSpecificPod(oc, "openshift-ovn-kubernetes", ovnLeaderpod, "ovn-nbctl --no-leader-only get nb_global . ipsec | grep "+targetConfig)
 		o.Expect(getErr).NotTo(o.HaveOccurred())
@@ -2836,32 +2805,4 @@ func checkSCTPResultPASS(oc *exutil.CLI, namespace, sctpServerPodName, sctpClien
 	msg1, err4 := e2eoutput.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 	o.Expect(err4).NotTo(o.HaveOccurred())
 	o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
-}
-
-func isOVNIC(oc *exutil.CLI) bool {
-	ovnNamespace := "openshift-ovn-kubernetes"
-	ovnMasterPods, err := exutil.GetAllPodsWithLabel(oc, ovnNamespace, "app=ovnkube-master")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(len(ovnMasterPods) > 0).Should(o.BeTrue())
-
-	containers, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", ovnMasterPods[0], "-n", ovnNamespace, "-o=jsonpath={.spec.containers[*].name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(containers, "ovnkube-control-plane") {
-		return true
-	}
-	return false
-}
-
-func ovnDBpod(oc *exutil.CLI) string {
-	if isOVNIC(oc) {
-		// If OVN-IC cluster, will execute the ovndb command in ovnkube-node pod
-		ovnNodePods, err := exutil.GetAllPodsWithLabel(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(ovnNodePods) > 0).Should(o.BeTrue())
-		return ovnNodePods[0]
-	} else {
-		ovnMasterPodName := getOVNLeaderPod(oc, "north")
-		return ovnMasterPodName
-	}
-
 }

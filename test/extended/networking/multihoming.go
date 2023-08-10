@@ -71,7 +71,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			}
 
 			g.By("Check if the new OVN switch is created")
-			ovnMasterPodName := getOVNLeaderPod(oc, "north")
+			ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 			o.Expect(ovnMasterPodName).ShouldNot(o.Equal(""))
 			o.Eventually(func() bool {
 				return checkOVNSwitch(oc, nadName, ovnMasterPodName)

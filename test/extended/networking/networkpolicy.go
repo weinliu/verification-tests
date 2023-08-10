@@ -1149,7 +1149,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("default-deny"))
 
-		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 		g.By("get ACLs related to ns")
 		//list ACLs only related namespace in test
 		listACLCmd := "ovn-nbctl list ACL | grep -C 5 " + "NP:" + oc.Namespace() + " | grep -C 5 type=arpAllow"
@@ -1203,7 +1203,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("egress-ingress-62524.test"))
 
-		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 		g.By("Verify the address_set exists for the specific acl")
 		//list ACLs related to the networkpolicy name
 		listACLCmd := "ovn-nbctl --data=bare --no-heading --format=table find acl | grep  egress-ingress-62524.test"

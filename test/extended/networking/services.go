@@ -579,7 +579,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		svcIP, _ := getSvcIP(oc, svc.namespace, svc.servicename)
 
 		exutil.By("Check nb loadbalancer entries")
-		ovnPod := getOVNLeaderPod(oc, "north")
+		ovnPod := getOVNKMasterOVNkubeNode(oc)
 		o.Expect(ovnPod != "").Should(o.BeTrue())
 		lbCmd := fmt.Sprintf("ovn-nbctl find load_balancer name=Service_%s/%s_TCP_cluster", ns, svc.servicename)
 		lbOutput, err := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lbCmd)

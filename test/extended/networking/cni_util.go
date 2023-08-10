@@ -246,7 +246,7 @@ func multihomingBeforeCheck(oc *exutil.CLI, topology string) ([]string, []string
 	e2e.Logf("The v4 address of pod1 is: %v", pod3IPv4, "net1", pod3.podenvname)
 	e2e.Logf("The v6 address of pod1 is: %v", pod3IPv6, "net1", pod3.podenvname)
 
-	ovnMasterPodName := getOVNLeaderPod(oc, "north")
+	ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 	o.Expect(ovnMasterPodName).ShouldNot(o.Equal(""))
 	podName := []string{pod1Name[0], pod2Name[0], pod3Name[0]}
 
