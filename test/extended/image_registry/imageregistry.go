@@ -4156,4 +4156,54 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			}
 		}
 	})
+
+	g.It("NonHyperShiftHOST-Author:xiuwang-Medium-24353-Registry operator storage setup - azure [Disruptive]", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Progressing": "True"}
+		expectedStatus2 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
+		g.By("Check image-registry-private-configuration secret if created")
+		output, _ := oc.AsAdmin().Run("get").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry").Output()
+		o.Expect(output).To(o.ContainSubstring("image-registry-private-configuration"))
+		secretData, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("secret/installer-cloud-credentials", "-o=jsonpath={.data}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(secretData, "azure_client_id") || !strings.Contains(secretData, "azure_region") || !strings.Contains(secretData, "azure_subscription_id") {
+			e2e.Failf("The installer-cloud-credentials secret don't contain azure credentials for registry")
+		}
+
+		g.By("Set image registry azure storage parameters")
+		azureStorageInfo, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.azure}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			g.By("Recover image registry change")
+			patchInfo := fmt.Sprintf("{\"spec\":{\"storage\":{\"azure\":%v}}}", azureStorageInfo)
+			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", patchInfo, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		accountName, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.azure.accountName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(accountName) <= 3 || len(accountName) >= 25 {
+			e2e.Fail("The length of accountName should be greater than 3 and litter than 25")
+		}
+		accountName1 := getRandomString()
+		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"azure":{"accountName":"`+accountName1+`"}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Container could be recreated")
+		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"azure":{"container": null}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })

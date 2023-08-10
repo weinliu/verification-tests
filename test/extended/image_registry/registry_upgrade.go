@@ -220,4 +220,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkRegistryFunctionFine(oc, "check-24345", oc.Namespace())
 	})
 
+	g.It("NonPreRelease-PreChkUpgrade-PstChkUpgrade-Author:xiuwang-Medium-22678-Check image-registry operator upgrade", func() {
+		g.By("image-registry operator should be avaliable")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err := waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
