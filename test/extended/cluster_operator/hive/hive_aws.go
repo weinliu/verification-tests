@@ -1561,7 +1561,7 @@ spec:
 	//author: jshu@redhat.com sguo@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "33832"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33832-Low-42251-Medium-43033-[aws]Hive supports ClusterPool [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33832-Low-42251-Medium-43033-[HIVE-SD-R] Hive supports ClusterPool [Serial]", func() {
 		testCaseID := "33832"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -2086,7 +2086,7 @@ spec:
 	//OCP-23040, OCP-42113, OCP-34719, OCP-41250, OCP-25334, OCP-23876
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23040"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-23040-Medium-42113-High-34719-Low-41250-High-25334-High-23876-Hive to create SyncSet resource[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-23040-Medium-42113-High-34719-Low-41250-High-25334-High-23876-[HIVE-SD-R] Hive to create SyncSet resource[Serial]", func() {
 		testCaseID := "23040"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -2407,7 +2407,7 @@ spec:
 
 	// Author: fxie@redhat.com
 	// ./bin/extended-platform-tests run all --dry-run|grep "41212"|./bin/extended-platform-tests run --timeout 80m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-41212-Medium-57403-Hive supports to install private cluster[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-41212-Medium-57403-[HIVE-SD-R] Hive supports to install private cluster[Serial]", func() {
 		// Settings
 		var (
 			testCaseID = "41212"
@@ -2955,7 +2955,7 @@ spec:
 
 	//author: fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "63275"|./bin/extended-platform-tests run --timeout 70m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-63275-[aws]Hive support for AWS IMDSv2 [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-63275-[HIVE-SD-R] Hive support for AWS IMDSv2 [Serial]", func() {
 		var (
 			testCaseID   = "63275"
 			cdName       = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -3098,7 +3098,7 @@ spec:
 
 	//author: mihuang@redhat.com fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "49471"|./bin/extended-platform-tests run --timeout 70m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-49471-High-23677-[aws]Change EC2RootVolume: make IOPS optional [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-49471-High-23677-[HIVE-SD-R] Change EC2RootVolume: make IOPS optional [Serial]", func() {
 		testCaseID := "49471"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -3198,7 +3198,7 @@ spec:
 	//author: mihuang@redhat.com jshu@redhat.com sguo@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "24088"|./bin/extended-platform-tests run --timeout 90m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-24088-Medium-33045-[AWS]Provisioning clusters on AWS with managed dns [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-24088-Medium-33045-[HIVE-SD-R] Provisioning clusters on AWS with managed dns [Serial]", func() {
 		testCaseID := "24088"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -3857,7 +3857,7 @@ spec:
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "28867"|./bin/extended-platform-tests run --timeout 120m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-28867-Medium-41776-[aws]Hive Machinepool test for autoscale [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-28867-Medium-41776-[HIVE-SD-R] Hive Machinepool test for autoscale [Serial]", func() {
 		testCaseID := "28867"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
