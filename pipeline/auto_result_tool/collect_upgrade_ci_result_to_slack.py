@@ -57,7 +57,8 @@ class SummaryClient:
                 "Hypershift":"@hypershift-qe-team",
                 "Network_Observability":"@no-qe-team",
                 "DR_Testing":"@geliu",
-                "Cluster_Operator":"@Jianping"
+                "Cluster_Operator":"@Jianping",
+                "CFE":"@auth-qe-team "
             }
     def __init__(self, args):
         token = args.token

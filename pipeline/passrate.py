@@ -17,7 +17,7 @@ class GetDataFromRP:
                 "SDN","STORAGE","PerfScale","NODE","LOGGING","Logging","Workloads","Cluster_Observability","Cluster_Infrastructure",
                 "Cluster_Operator","Network_Edge","ETCD","OLM","Operator_SDK","Windows_Containers","Security_and_Compliance",
                 "PSAP","OTA","Image_Registry","Container_Engine_Tools","MCO","API_Server","Authentication","Network_Observability",
-                "DR_Testing"
+                "DR_Testing","CFE"
             ]
     teamColor = {
                 "SDN": "#00008B",
@@ -44,7 +44,8 @@ class GetDataFromRP:
                 "API_Server": "#800080",
                 "Authentication": "#D2691E",
                 "Network_Observability": "#FF0000",
-                "DR_Testing": "#000000"
+                "DR_Testing": "#000000",
+                "CFE": "#FF1493",
     }
 
     # col = {'aliceblue': '#F0F8FF', 'antiquewhite': '#FAEBD7', 'aqua': '#00FFFF', 'aquamarine': '#7FFFD4', 

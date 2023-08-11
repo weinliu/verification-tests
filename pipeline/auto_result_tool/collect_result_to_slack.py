@@ -55,7 +55,8 @@ class SummaryClient:
                 "Authentication":"@auth-qe-team ",
                 "Hypershift":"",
                 "Network_Observability":"@no-qe-team ",
-                "DR_Testing":"@geliu"
+                "DR_Testing":"@geliu",
+                "CFE":"@auth-qe-team "
             }
     def __init__(self, args):
         token = args.token
