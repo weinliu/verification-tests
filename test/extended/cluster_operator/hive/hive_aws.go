@@ -79,6 +79,64 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "39180"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Low-39180-[aws]Hive MUST can modify statefulset spec.selector when given value is non-expected value even if this field is immutable [Disruptive]", func() {
+		testCaseID := "39180"
+		resourceName := "test-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+
+		exutil.By("Scale down hive-operator")
+		// this will scale up the hive-operator and do some health check
+		defer newCheck("expect", "get", asAdmin, withoutNamespace, compare, "{\"matchLabels\":{\"control-plane\":\"clustersync\",\"controller-tools.k8s.io\":\"1.0\"}}", ok, DefaultTimeout, []string{"sts", "-n", HiveNamespace, "-o=jsonpath={.items[].spec.selector}"}).check(oc)
+		defer newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pods", "hive-clustersync-0", "-n", HiveNamespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		defer newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1", ok, DefaultTimeout, []string{"deployment/hive-operator", "-n", HiveNamespace, "-o=jsonpath={.status.readyReplicas}"}).check(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployments", "hive-operator", "--replicas=1", "-n", HiveNamespace).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployments", "hive-operator", "--replicas=0", "-n", HiveNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Delete the existing statefulset CR")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("sts", "hive-clustersync", "-n", HiveNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Prepare a wrong statefulset CR")
+		e2e.Logf("Create tmp directory")
+		tmpDir := "/tmp/" + resourceName + "-" + getRandomString()
+		defer os.RemoveAll(tmpDir)
+		err = os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		statefulsetYaml := `
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: hive
+  name: hive-clustersync
+  namespace: hive
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive
+  template:
+    metadata:
+      annotations:
+      labels:
+        app: hive
+    spec:
+      containers:
+      - image: quay.io/openshift-hive/hive:latest`
+		var filename = tmpDir + "/" + testCaseID + "-statefulset-hive.yaml"
+		err = os.WriteFile(filename, []byte(statefulsetYaml), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename, "-n", HiveNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DefaultTimeout, []string{"sts", "-n", HiveNamespace}).check(oc)
+
+		exutil.By("Check sts")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "{\"matchLabels\":{\"app\":\"hive\"}}", ok, DefaultTimeout, []string{"sts", "hive-clustersync", "-n", HiveNamespace, "-o=jsonpath={.spec.selector}"}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41525"|./bin/extended-platform-tests run --timeout 15m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-High-41525-[aws]Log diffs when validation rejects immutable modifications [Serial]", func() {
 		testCaseID := "41525"
