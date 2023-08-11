@@ -1897,14 +1897,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
 
-		exutil.By("7.Scale down CNO to 0 \n")
-		defer oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "network-operator", "--replicas=1", "-n", "openshift-network-operator").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "network-operator", "--replicas=0", "-n", "openshift-network-operator").Execute()
+		exutil.By("6. Restart ovnkube-node pod which is on egress node\n")
+		ovnPod := ovnkubeNodePod(oc, egressNode)
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", ovnPod, "-n", "openshift-ovn-kubernetes").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("8.Delete ovnkube-master pods \n")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-l", "app=ovnkube-master", "-n", "openshift-ovn-kubernetes").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 
 		exutil.By("9. Scale test pods to 1 \n")
 		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=1", "-n", ns1).Execute()
@@ -1921,15 +1918,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.AssertWaitPollNoErr(podsErr, fmt.Sprintf("The pods were not scaled to the expected number!"))
 		testPodName := getPodName(oc, ns1, "name=test-pods")
 		_, testPodIPv4 := getPodIP(oc, ns1, testPodName[0])
-
-		exutil.By("10. Scale up CNO to 1 \n")
-		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "network-operator", "--replicas=1", "-n", "openshift-network-operator").Execute()
+		testPodNode, err := exutil.GetPodNodeName(oc, ns1, testPodName[0])
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
-		exutil.AssertWaitPollNoErr(err, "ovnkube-master pods are not ready")
+		e2e.Logf("test pod %s is on node %s", testPodName, testPodNode)
 
 		exutil.By("11. Check lr-policy-list and snat in northdb. \n")
-		ovnPod := getOVNKMasterOVNkubeNode(oc)
+		ovnPod = ovnkubeNodePod(oc, testPodNode)
 		o.Expect(ovnPod != "").Should(o.BeTrue())
 		lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep -v inport"
 		checkLspErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
@@ -1946,6 +1940,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		})
 		exutil.AssertWaitPollNoErr(checkLspErr, fmt.Sprintf("lr-policy-list was not synced correctly!"))
 
+		ovnPod = ovnkubeNodePod(oc, egressNode)
 		snatCmd := "ovn-nbctl --format=csv --no-heading find nat external_ids:name=" + egressip1.name
 		checkSnatErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 			snatOutput, snatErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, snatCmd)
@@ -2172,11 +2167,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		ns1 := oc.Namespace()
 
 		exutil.By("4. Apply label to namespace\n")
+		worker1 := nodeList.Items[0].Name
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.By("5. Create test pods and scale test pods to 10 \n")
+		exutil.By("5. Create test pods and scale test pods to 5 \n")
 		createResourceFromFile(oc, ns1, testPodFile)
-		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=10", "-n", ns1).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("replicationcontroller/test-rc", "-n", ns1, "-p", "{\"spec\":{\"template\":{\"spec\":{\"nodeName\":\""+worker1+"\"}}}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=0", "-n", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=5", "-n", ns1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
@@ -2184,7 +2184,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.By("6. Create an egressip object\n")
 		ipStackType := checkIPStackType(oc)
 		var freeIPs []string
-		lspExpNum := 10
+		lspExpNum := 5
 		switch ipStackType {
 		case "ipv4single":
 			freeIPs = findFreeIPs(oc, egressNodes[0], 2)
@@ -2197,7 +2197,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			freeIPs = findFreeIPs(oc, egressNodes[0], 1)
 			o.Expect(len(freeIPs)).Should(o.Equal(1))
 			freeIPs = append(freeIPs, freeIPv6s[0])
-			lspExpNum = 20
+			lspExpNum = 10
 		case "ipv6single":
 			freeIPs = findFreeIPv6s(oc, egressNodes[0], 2)
 			o.Expect(len(freeIPs)).Should(o.Equal(2))
@@ -2221,12 +2221,19 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
 		exutil.By("6. Check lr-policy-list and snat in northdb. \n")
+		ovnPod := ovnkubeNodePod(oc, worker1)
+		o.Expect(ovnPod).ShouldNot(o.Equal(""))
 		lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep -v inport"
-		lspErr := searchOVNDBForSpecCmd(oc, lspCmd, "100 ", lspExpNum)
-		exutil.AssertWaitPollNoErr(lspErr, ("The lr-policy-list was not synced correctly! "))
+		o.Eventually(func() bool {
+			output, cmdErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lspCmd)
+			return cmdErr == nil && strings.Count(output, "100 ") == lspExpNum
+		}, "120s", "10s").Should(o.BeTrue(), "The command check result in ovndb is not expected!")
+		ovnPod = ovnkubeNodePod(oc, egressNodes[0])
 		snatCmd := "ovn-nbctl --format=csv --no-heading find nat external_ids:name=" + egressip1.name
-		snatErr := searchOVNDBForSpecCmd(oc, snatCmd, egressip1.name, 20)
-		exutil.AssertWaitPollNoErr(snatErr, ("Snat rules for egressIP was not synced correctly! "))
+		o.Eventually(func() bool {
+			output, cmdErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, snatCmd)
+			return cmdErr == nil && strings.Count(output, egressip1.name) == 5
+		}, "120s", "10s").Should(o.BeTrue(), "The command check result in ovndb is not expected!")
 	})
 
 	// author: huirwang@redhat.com

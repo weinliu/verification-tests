@@ -2806,3 +2806,12 @@ func checkSCTPResultPASS(oc *exutil.CLI, namespace, sctpServerPodName, sctpClien
 	o.Expect(err4).NotTo(o.HaveOccurred())
 	o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 }
+
+func ovnkubeNodePod(oc *exutil.CLI, nodeName string) string {
+	// get OVNkubeNode pod on specific node.
+	ovnNodePod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ovn-kubernetes", "pod", "-l app=ovnkube-node", "--field-selector", "spec.nodeName="+nodeName, "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The ovnkube-node pod on node %s is %s", nodeName, ovnNodePod)
+	o.Expect(ovnNodePod).NotTo(o.BeEmpty())
+	return ovnNodePod
+}
