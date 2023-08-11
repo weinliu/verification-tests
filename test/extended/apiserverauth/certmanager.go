@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var _ = g.Describe("[sig-auth] Authentication", func() {
+var _ = g.Describe("[sig-auth] CFE", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:geliu-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:geliu-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate [Serial]", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Skip test when the cluster is with STS credential")
 		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
@@ -134,7 +134,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:geliu-High-62063-Low-63486-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:geliu-High-62063-Low-63486-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
 		e2e.Logf("Login with normal user and create new ns.")
 		oc.SetupProject()
 		e2e.Logf("Create issuer in ns scope created in last step.")
