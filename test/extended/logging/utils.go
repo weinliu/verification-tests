@@ -553,7 +553,7 @@ func deleteClusterLogging(oc *exutil.CLI, name, namespace string) {
 		cl := ClusterLogging{}
 		json.Unmarshal([]byte(clOutput), &cl)
 		//make sure other resources are removed
-		resources := []resource{{"daemonset", "collector", namespace}, {"daemonset", "logfilesmetricexporter", namespace}}
+		resources := []resource{{"daemonset", "collector", namespace}}
 		if *cl.Spec.LogStoreSpec.Type == "elasticsearch" {
 			resources = append(resources, resource{"elasticsearches.logging.openshift.io", "elasticsearch", namespace})
 			if len(cl.Spec.LogStoreSpec.ElasticsearchSpec.Storage.StorageClassName) > 0 {
@@ -715,9 +715,6 @@ func (cl *clusterlogging) waitForLoggingReady(oc *exutil.CLI) {
 	}
 	// wait for collector
 	WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-	if cl.name == "instance" {
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "logfilesmetricexporter")
-	}
 }
 
 type clusterlogforwarder struct {
@@ -793,6 +790,51 @@ func (clf *clusterlogforwarder) update(oc *exutil.CLI, template string, patches 
 func (clf *clusterlogforwarder) delete(oc *exutil.CLI) {
 	err := resource{"clusterlogforwarder", clf.name, clf.namespace}.clear(oc)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("clusterlogforwarder/%s in project/%s is not deleted", clf.name, clf.namespace))
+}
+
+type logFileMetricExporter struct {
+	name          string
+	namespace     string
+	template      string
+	waitPodsReady bool
+}
+
+func (lfme *logFileMetricExporter) create(oc *exutil.CLI, optionalParameters ...string) {
+	if lfme.name == "" {
+		lfme.name = "instance"
+	}
+	if lfme.namespace == "" {
+		lfme.namespace = loggingNS
+	}
+	if lfme.template == "" {
+		lfme.template = exutil.FixturePath("testdata", "logging", "logfilemetricexporter", "lfme.yaml")
+	}
+
+	parameters := []string{"-f", lfme.template, "-p", "NAME=" + lfme.name, "NAMESPACE=" + lfme.namespace}
+	if len(optionalParameters) > 0 {
+		parameters = append(parameters, optionalParameters...)
+	}
+
+	file, processErr := processTemplate(oc, parameters...)
+	defer os.Remove(file)
+	if processErr != nil {
+		e2e.Failf("error processing file: %v", processErr)
+	}
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file, "-n", lfme.namespace).Execute()
+	if err != nil {
+		e2e.Failf("error creating logfilemetricexporter: %v", err)
+	}
+	resource{"logfilemetricexporter", lfme.name, lfme.namespace}.WaitForResourceToAppear(oc)
+	if lfme.waitPodsReady {
+		WaitForDaemonsetPodsToBeReady(oc, lfme.namespace, "logfilesmetricexporter")
+	}
+}
+
+func (lfme *logFileMetricExporter) delete(oc *exutil.CLI) {
+	err := resource{"logfilemetricexporter", lfme.name, lfme.namespace}.clear(oc)
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("logfilemetricexporter/%s in project/%s is not deleted", lfme.name, lfme.namespace))
+	err = resource{"daemonset", "logfilesmetricexporter", lfme.namespace}.WaitUntilResourceIsGone(oc)
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ds/logfilesmetricexporter in project/%s is not deleted", lfme.namespace))
 }
 
 func deleteNamespace(oc *exutil.CLI, ns string) {

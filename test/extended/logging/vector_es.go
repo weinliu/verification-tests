@@ -393,6 +393,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.delete(oc)
 			cl.create(oc)
 
+			exutil.By("deploy logfilesmetricexporter")
+			lfme := logFileMetricExporter{
+				name:          "instance",
+				namespace:     loggingNS,
+				template:      filepath.Join(loggingBaseDir, "logfilemetricexporter", "lfme.yaml"),
+				waitPodsReady: true,
+			}
+			defer lfme.delete(oc)
+			lfme.create(oc)
+
 			g.By("Make sure the Elasticsearch cluster is healthy")
 			assertResourceStatus(oc, "elasticsearch", "elasticsearch", cl.namespace, "{.status.cluster.status}", "green")
 

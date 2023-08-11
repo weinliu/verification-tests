@@ -102,6 +102,16 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
 
+		exutil.By("deploy logfilesmetricexporter")
+		lfme := logFileMetricExporter{
+			name:          "instance",
+			namespace:     loggingNS,
+			template:      filepath.Join(loggingBaseDir, "logfilemetricexporter", "lfme.yaml"),
+			waitPodsReady: true,
+		}
+		defer lfme.delete(oc)
+		lfme.create(oc)
+
 		// deploy cluster logging
 		g.By("deploy cluster logging")
 		cl := clusterlogging{

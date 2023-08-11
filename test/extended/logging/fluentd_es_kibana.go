@@ -674,6 +674,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 		cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
 		g.By("waiting for the ECK pods to be ready...")
 		WaitForECKPodsToBeReady(oc, cl.namespace)
+
+		exutil.By("deploy logfilesmetricexporter")
+		lfme := logFileMetricExporter{
+			name:          "instance",
+			namespace:     loggingNS,
+			template:      filepath.Join(loggingBaseDir, "logfilemetricexporter", "lfme.yaml"),
+			waitPodsReady: true,
+		}
+		defer lfme.delete(oc)
+		lfme.create(oc)
+
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForIndexAppear(cl.namespace, podList.Items[0].Name, "infra")
