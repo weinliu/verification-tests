@@ -45,10 +45,9 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author:kewang-Medium-62093-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Slow][Disruptive]", func() {
 
 		var (
-			apiserverConfigPatch = `[{"op": "replace", "path": "/spec/configuration/apiServer", "value": {}}]`
-			defaultCipherPatch   = `[{"op": "replace", "path": "/spec/configuration/apiServer/tlsSecurityProfile", "value":}]`
-			defaultCipherSuite   = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
-			cipherItems          = []struct {
+			defaultCipherPatch = `{"spec": {"configuration": {"apiServer": null}}}`
+			defaultCipherSuite = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
+			cipherItems        = []struct {
 				cipherType  string
 				cipherSuite string
 				patch       string
@@ -56,24 +55,24 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 				{
 					cipherType:  "custom",
 					cipherSuite: `["TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"] VersionTLS11`,
-					patch:       `[{"op": "replace", "path":  "/spec/configuration/apiServer/tlsSecurityProfile", "value":{"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS11"},"type":"Custom"}}]`,
+					patch:       `{"spec": {"configuration": {"apiServer": {"tlsSecurityProfile":{"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS11"},"type":"Custom"}}}}}`,
 				},
 				{
 					cipherType:  "Old",
 					cipherSuite: `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_AES_128_GCM_SHA256","TLS_RSA_WITH_AES_256_GCM_SHA384","TLS_RSA_WITH_AES_128_CBC_SHA256","TLS_RSA_WITH_AES_128_CBC_SHA","TLS_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_3DES_EDE_CBC_SHA"] VersionTLS10`,
-					patch:       `[{"op": "replace", "path":  "/spec/configuration/apiServer/tlsSecurityProfile", "value":{"old":{},"type":"Old"}}]`,
+					patch:       `{"spec": {"configuration": {"apiServer": {"tlsSecurityProfile":{"old":{},"type":"Old"}}}}}`,
 				},
 				{
 					cipherType:  "Intermediate",
 					cipherSuite: defaultCipherSuite,
-					patch:       `[{"op": "replace", "path":  "/spec/configuration/apiServer/tlsSecurityProfile", "value":{"intermediate":{},"type":"Intermediate"}}]`,
+					patch:       `{"spec": {"configuration": {"apiServer": {"tlsSecurityProfile":{"intermediate":{},"type":"Intermediate"}}}}}`,
 				},
 			}
 		)
 
 		defer func() {
-			g.By("-->> Restoring cluster's ciphers")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=json", "-p", defaultCipherPatch).Execute()
+			exutil.By("-->> Restoring cluster's ciphers")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", defaultCipherPatch).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// Checking if apiservers are restarted
 			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
@@ -90,21 +89,12 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 		}()
 
-		g.By("-->> 1.) Check the default cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.")
+		exutil.By("-->> 1.) Check the default cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.")
 		errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, guestClusterNS)
 		if errChipher != nil {
 			exutil.AssertWaitPollNoErr(errChipher, fmt.Sprintf("The ciphers are not matched : %s", defaultCipherSuite))
 		}
 		e2e.Logf(`The ciphers type are matched default "Intermediate".`)
-
-		// The Kubernetes API server will not recursively create nested objects for a JSON patch input. This behaviour is consistent with the JSON Patch specification in RFC 6902, section A.12
-		outCfg, errCfg := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.spec.configuration.apiServer}`).Output()
-		o.Expect(errCfg).NotTo(o.HaveOccurred())
-		if len(outCfg) == 0 {
-			e2e.Logf("Creating the parent path of Apiserver configuration if not existed.")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=json", "-p", apiserverConfigPatch).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
 
 		// Apply supported chipher types
 		for i, cipherItem := range cipherItems {
@@ -115,8 +105,8 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			o.Expect(intOldVer).To(o.BeNumerically(">", 0))
 			e2e.Logf("observedGeneration: %v", intOldVer)
 
-			g.By(fmt.Sprintf("-->> %d.1) Patching the apiserver cluster with ciphers:  %s", i, cipherItem.cipherType))
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=json", "-p", cipherItem.patch).Execute()
+			exutil.By(fmt.Sprintf("-->> %d.1) Patching the apiserver cluster with ciphers:  %s", i, cipherItem.cipherType))
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", cipherItem.patch).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// Checking if apiservers are restarted
 			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
@@ -131,7 +121,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			e2e.Logf("observedGeneration: %v", newVer)
 			o.Expect(strconv.Atoi(newVer)).To(o.BeNumerically(">", intOldVer))
 
-			g.By(fmt.Sprintf("-->> %d.2) Check cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.", i))
+			exutil.By(fmt.Sprintf("-->> %d.2) Check cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.", i))
 			errChipher := verifyHypershiftCiphers(oc, cipherItem.cipherSuite, guestClusterNS)
 			if errChipher != nil {
 				exutil.AssertWaitPollNoErr(errChipher, fmt.Sprintf("Ciphers are not matched : %s", cipherItem.cipherType))
@@ -142,7 +132,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 	// author: kewang@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:kewang-High-64000-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
-		g.By("1) Check if port 6081 is available")
+		exutil.By("1) Check if port 6081 is available")
 		err := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6081").Output()
 			// no need to check error since some system output stderr for valid result
@@ -154,7 +144,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "Port 6081 is available")
 
-		g.By("2) Get kube-apiserver pods")
+		exutil.By("2) Get kube-apiserver pods")
 		err = oc.AsAdmin().Run("project").Args(guestClusterNS).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -163,7 +153,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		o.Expect(podList).ShouldNot(o.BeEmpty())
 		defer oc.AsAdmin().Run("project").Args("default").Execute() // switch to default project
 
-		g.By("3) Perform port-forward on the first pod available")
+		exutil.By("3) Perform port-forward on the first pod available")
 		exutil.AssertPodToBeReady(oc, podList[0], guestClusterNS)
 		_, _, _, err = oc.AsAdmin().Run("port-forward").Args("-n", guestClusterNS, podList[0], "6081:6443").Background()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -182,7 +172,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		exutil.AssertWaitPollNoErr(err1, "#### Port-forward 6081:6443 doesn't work")
 
 		// kube-apiserver of hosted clsuter doesn't use insecure port 6081
-		g.By("4) check if port forward succeed")
+		exutil.By("4) check if port forward succeed")
 		out, err := exec.Command("bash", "-c", "curl -ks https://127.0.0.1:6081/readyz --noproxy \"127.0.0.1\"").Output()
 		outStr := string(out)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -214,7 +204,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		)
 
 		for i, apiserverItem := range apiserverItems {
-			g.By(fmt.Sprintf("%v.1 Get one pod name of %s", i+1, apiserverItem.label))
+			exutil.By(fmt.Sprintf("%v.1 Get one pod name of %s", i+1, apiserverItem.label))
 			e2e.Logf("namespace is: %s", guestClusterNS)
 			podList, err := exutil.GetAllPodsWithLabel(oc, guestClusterNS, "app="+apiserverItem.label)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -226,7 +216,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			o.Expect(containerList).ShouldNot(o.BeEmpty())
 			containers := strings.Split(containerList, " ")
 
-			g.By(fmt.Sprintf("%v.2 Checking the securityContext of containers of %s pod %s:", i+1, apiserverItem.apiserver, podList[0]))
+			exutil.By(fmt.Sprintf("%v.2 Checking the securityContext of containers of %s pod %s:", i+1, apiserverItem.apiserver, podList[0]))
 			for _, container := range containers {
 				e2e.Logf("#### Checking the container %s of pod: %s", container, podList[0])
 				jsonpath := fmt.Sprintf(`jsonpath={range .spec.containers[?(@.name=="%s")]}{.securityContext}`, container)
@@ -236,14 +226,14 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 				e2e.Logf("#### The securityContext of container %s matched the expected result.", container)
 			}
 
-			g.By(fmt.Sprintf("%v.3 Checking the securityContext of init-container %s of pod %s", i+1, apiserverItem.apiserver, podList[0]))
+			exutil.By(fmt.Sprintf("%v.3 Checking the securityContext of init-container %s of pod %s", i+1, apiserverItem.apiserver, podList[0]))
 			jsonpath := `jsonpath={.spec.initContainers[].securityContext}`
 			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", jsonpath).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(out).To(o.ContainSubstring(sc))
 			e2e.Logf("#### The securityContext of init-container matched the expected result.")
 
-			g.By(fmt.Sprintf("%v.4 Checking one container %s of %s pod %s is not allowed to access any devices on the host", i+1, containers[0], apiserverItem.apiserver, podList[0]))
+			exutil.By(fmt.Sprintf("%v.4 Checking one container %s of %s pod %s is not allowed to access any devices on the host", i+1, containers[0], apiserverItem.apiserver, podList[0]))
 			cmd := []string{"-n", guestClusterNS, podList[0], "-c", containers[0], "--", "sysctl", "-w", "kernel.msgmax=65536"}
 			cmdOut, errCmd := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
 			o.Expect(errCmd).To(o.HaveOccurred())
