@@ -89,13 +89,18 @@ func verifyImageIDInDebugNode(oc *exutil.CLI, nodeNameList []string, imageID str
 func verifySSLHealth(oc *exutil.CLI, ipOfNode string, node string) bool {
 	healthCheck := false
 	NodeIpAndPort := ipOfNode + ":9979"
-	resultOutput, _ := exutil.DebugNodeWithChroot(oc, node, "openssl", "s_client", "-cipher", "ECDHE-RSA-DES-CBC3-SHA", "-connect", NodeIpAndPort)
-	if strings.Contains(resultOutput, "Verification: OK") {
-		e2e.Logf("SSL health on port 9979 is healthy")
-		healthCheck = true
+	resultOutput, _ := exutil.DebugNodeWithChroot(oc, node, "podman", "run", "--rm", "-ti", "docker.io/drwetter/testssl.sh:latest", NodeIpAndPort)
+	outputLines := strings.Split(resultOutput, "\n")
+	for _, eachLine := range outputLines {
+		if strings.Contains(eachLine, "SWEET32") && strings.Contains(eachLine, "not vulnerable (OK)") {
+			healthCheck = true
+			break
+		}
+	}
+	if healthCheck {
+		e2e.Logf("SWEET32 Vulnerability is secured")
 	} else {
 		e2e.Logf("SSL op %v ", resultOutput)
-		e2e.Failf("SSL health on port 9979 is vulnerable")
 	}
 	return healthCheck
 }

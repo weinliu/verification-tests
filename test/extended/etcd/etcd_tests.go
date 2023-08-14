@@ -98,7 +98,12 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		ipOfNode := getIpOfMasterNode(oc, "node-role.kubernetes.io/master=")
 		e2e.Logf("Node IP %v", ipOfNode)
 		e2e.Logf("Verify the SSL Health of port 9979")
-		verifySSLHealth(oc, ipOfNode, masterNodeList[0])
+		res := verifySSLHealth(oc, ipOfNode, masterNodeList[0])
+		if res {
+			e2e.Logf("SSL health on port 9979 is healthy.")
+		} else {
+			e2e.Failf("SSL health on port 9979 is vulnerable")
+		}
 
 	})
 	// author: geliu@redhat.com
