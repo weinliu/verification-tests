@@ -6090,25 +6090,15 @@ manifests:
 			g.Skip("Skip for featuregate set as TechPreviewNoUpgrade")
 		}
 
-		exutil.By("2. Set featuregate to TechPreviewNoUpgrade")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featureTechPreview).Execute()
+		exutil.By("2. Set featuregate to TechPreviewNoUpgrade again")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featureTechPreview).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(`featuregate.config.openshift.io/cluster patched (no change)`))
+		kasOpExpectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-apiserver", 300, kasOpExpectedStatus)
+		exutil.AssertWaitPollNoErr(err, "changes of status have occurred to the kube-apiserver operator")
 
-		e2e.Logf("3. Checking kube-apiserver operator should be in Progressing in 100 seconds")
-		expectedStatus := map[string]string{"Progressing": "True"}
-		err = waitCoBecomes(oc, "kube-apiserver", 300, expectedStatus)
-		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
-		e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
-		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-		errKASO := waitCoBecomes(oc, "kube-apiserver", 1500, expectedStatus)
-		exutil.AssertWaitPollNoErr(errKASO, "openshift-kube-apiserver pods revisions recovery not completed")
-
-		exutil.By("4. Check featuregate after set to TechPreviewNoUpgrade")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregates", "-o", `jsonpath={.items[0].spec.featureSet}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("TechPreviewNoUpgrade"))
-
-		exutil.By("5. Check featuregate after set to CustomNoUpgrade")
+		exutil.By("3. Check featuregate after set to CustomNoUpgrade")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featureCustomNoUpgrade).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring(`The FeatureGate "cluster" is invalid: spec.featureSet: Forbidden: once enabled, tech preview features may not be disabled`))
