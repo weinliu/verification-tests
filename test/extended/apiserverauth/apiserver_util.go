@@ -2,6 +2,7 @@ package apiserverauth
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -25,8 +26,11 @@ import (
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/openshift-tests-private/test/extended/util"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -1283,4 +1287,17 @@ func getBaseDomain(oc *exutil.CLI) string {
 // Return  the API server FQDN. format is like api.$clustername.$basedomain
 func getApiServerFQDN(oc *exutil.CLI) string {
 	return fmt.Sprintf("api.%s", getBaseDomain(oc))
+}
+
+// isTechPreviewNoUpgrade checks if a cluster is a TechPreviewNoUpgrade cluster
+func isTechPreviewNoUpgrade(oc *exutil.CLI) bool {
+	featureGate, err := oc.AdminConfigClient().ConfigV1().FeatureGates().Get(context.Background(), "cluster", metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false
+		}
+		e2e.Failf("could not retrieve feature-gate: %v", err)
+	}
+
+	return featureGate.Spec.FeatureSet == configv1.TechPreviewNoUpgrade
 }

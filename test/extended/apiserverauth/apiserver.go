@@ -6034,4 +6034,83 @@ manifests:
 		o.Expect(kasPodsOutput).ShouldNot(o.ContainSubstring("CrashLoopBackOff"))
 		e2e.Logf("Kube-apiservers didn't roll out as expected.")
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-66921-1-APIServer LatencySensitive featureset must be removed [Slow][Disruptive]", func() {
+		const (
+			featurePatch       = `[{"op": "replace", "path": "/spec/featureSet", "value": "LatencySensitive"}]`
+			invalidFeatureGate = `[{"op": "replace", "path": "/spec/featureSet", "value": "unknown"}]`
+		)
+
+		exutil.By("Checking feature gate")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregates", "-o", `jsonpath={.items[0].spec.featureSet}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if output != "" {
+			g.Skip("Skipping case as feature gate is already enabled, can't modify or undo feature gate.")
+		}
+
+		exutil.By("1. Set Invalid featuregate")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", invalidFeatureGate).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(`The FeatureGate "cluster" is invalid: spec.featureSet: Unsupported value: "unknown": supported values: "", "CustomNoUpgrade", "LatencySensitive", "TechPreviewNoUpgrade"`))
+
+		exutil.By("2. Set featuregate to LatencySensitive")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featurePatch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Checking kube-apiserver operator should be Available within 1500 seconds")
+		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		errKASO := waitCoBecomes(oc, "kube-apiserver", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(errKASO, "openshift-kube-apiserver pods revisions recovery not completed")
+
+		exutil.By("3. Check featuregate after set to LatencySensitive")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregates", "-o", `jsonpath={.items[0].spec.featureSet}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.BeEmpty())
+
+		exutil.By("4. Check Upgradeable condition of openshift-config and kube-apiserver operators which should be true")
+		conditionsToCheck := []string{"config-operator", "kube-apiserver"}
+		for _, condition := range conditionsToCheck {
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", condition, "-o", `jsonpath='{.status.conditions[?(@.type == "Upgradeable")].status}'`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("True"))
+		}
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-66921-2-APIServer TechPreviewNoUpgrade featureset blocks upgrade [Slow][Disruptive]", func() {
+		const (
+			featureTechPreview     = `[{"op": "replace", "path": "/spec/featureSet", "value": "TechPreviewNoUpgrade"}]`
+			featureCustomNoUpgrade = `[{"op": "replace", "path": "/spec/featureSet", "value": "CustomNoUpgrade"}]`
+		)
+
+		exutil.By("1. Checking feature gate")
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip for featuregate set as TechPreviewNoUpgrade")
+		}
+
+		exutil.By("2. Set featuregate to TechPreviewNoUpgrade")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featureTechPreview).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("3. Checking kube-apiserver operator should be in Progressing in 100 seconds")
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "kube-apiserver", 300, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		errKASO := waitCoBecomes(oc, "kube-apiserver", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(errKASO, "openshift-kube-apiserver pods revisions recovery not completed")
+
+		exutil.By("4. Check featuregate after set to TechPreviewNoUpgrade")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregates", "-o", `jsonpath={.items[0].spec.featureSet}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("TechPreviewNoUpgrade"))
+
+		exutil.By("5. Check featuregate after set to CustomNoUpgrade")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featureCustomNoUpgrade).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(`The FeatureGate "cluster" is invalid: spec.featureSet: Forbidden: once enabled, tech preview features may not be disabled`))
+	})
 })
