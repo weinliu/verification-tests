@@ -8,7 +8,7 @@ print(content)
 sigName = "sig-arch,sig-isc,sig-api-machinery,sig-auth,sig-apps,sig-cli,sig-scheduling,sig-etcd,sig-network,sig-network-edge,sig-storage,sig-openshift-logging,sig-devex, sig-builds,sig-ui,sig-instrumentation,sig-service-catalog,sig-operators,sig-imageregistry,sig-service-catalog,sig-hive,sig-windows,sig-testing,sig-scalability,sig-node,sig-node,sig-cluster-lifecycle,sig-node,sig-netobserv,sig-disasterrecovery"
 sigNameList = sigName.replace(' ', '').split(",")
 
-subTeam = "SDN,STORAGE,Developer_Experience,User_Interface,PerfScale,Service_Development_B,NODE,LOGGING,Logging,Apiserver_and_Auth,Workloads,Metering,Cluster_Observability,Quay/Quay.io,Cluster_Infrastructure,Multi-Cluster,Cluster_Operator,Azure,Network_Edge,ETCD,Installer,Portfolio_Integration,Service_Development_A,OLM,Operator_SDK,App_Migration,Windows_Containers,Security_and_Compliance,KNI,Openshift_Jenkins,RHV,ISV_Operators,PSAP,Multi-Cluster-Networking,OTA,Kata,Build_API,Image_Registry,Container_Engine_Tools,MCO,API_Server,Authentication,Hypershift,Network_Observability,DR_Testing,CFE"
+subTeam = "SDN,STORAGE,Developer_Experience,User_Interface,PerfScale,Service_Development_B,NODE,LOGGING,Logging,Apiserver_and_Auth,Workloads,Metering,Cluster_Observability,Quay/Quay.io,Cluster_Infrastructure,Multi-Cluster,Cluster_Operator,Azure,Network_Edge,ETCD,INSTALLER,Portfolio_Integration,Service_Development_A,OLM,Operator_SDK,App_Migration,Windows_Containers,Security_and_Compliance,KNI,Openshift_Jenkins,RHV,ISV_Operators,PSAP,Multi-Cluster-Networking,OTA,Kata,Build_API,Image_Registry,Container_Engine_Tools,MCO,API_Server,Authentication,Hypershift,Network_Observability,DR_Testing,CFE"
 subTeamList = subTeam.replace(' ', '').split(",")
 
 importance = ["Critical", "High", "Medium", "Low"]

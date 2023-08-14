@@ -32,6 +32,7 @@ class SummaryClient:
                 "Network_Edge":"@ne-qe-team ",
                 "ETCD":"@etcd-qe-team ",
                 "Installer":"",
+                "INSTALLER":"@jad",
                 "Portfolio_Integration":"",
                 "Service_Development_A":"",
                 "OLM":"@olm-qe-team ",
