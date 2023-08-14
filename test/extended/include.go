@@ -12,6 +12,7 @@ import (
 	_ "github.com/openshift/openshift-tests-private/test/extended/etcd"
 	_ "github.com/openshift/openshift-tests-private/test/extended/hypershift"
 	_ "github.com/openshift/openshift-tests-private/test/extended/image_registry"
+	_ "github.com/openshift/openshift-tests-private/test/extended/installer/baremetal"
 	_ "github.com/openshift/openshift-tests-private/test/extended/kata"
 	_ "github.com/openshift/openshift-tests-private/test/extended/logging"
 	_ "github.com/openshift/openshift-tests-private/test/extended/mco"
