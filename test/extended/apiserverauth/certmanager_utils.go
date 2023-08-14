@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/tidwall/gjson"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -157,5 +158,52 @@ func createCertManagerOperator(oc *exutil.CLI) {
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(mStatusErr, fmt.Sprintf("operator pods created failed: %v", mStatusErr))
+	exutil.AssertWaitPollNoErr(mStatusErr, "operator pods created failed.")
+}
+
+// create issuers
+func createIssuers(oc *exutil.CLI) {
+	e2e.Logf("Create issuer in ns scope created in last step.")
+	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+	issuerHttp01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
+	err := oc.Run("create").Args("-f", issuerHttp01File).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		output, err := oc.Run("get").Args("issuer", "letsencrypt-http01").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "True") {
+			e2e.Logf("Get issuer output is: %v", output)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(statusErr, "get issuer is wrong")
+} //end of create issuers
+
+// create certificate
+func createCertificate(oc *exutil.CLI) {
+	e2e.Logf("As the normal user, create certificate.")
+	ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("ingressDomain=%s", ingressDomain)
+	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+	certHttp01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
+	f, err := ioutil.ReadFile(certHttp01File)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	f1 := strings.ReplaceAll(string(f), "DNS_NAME", "http01-test."+ingressDomain)
+	err = ioutil.WriteFile(certHttp01File, []byte(f1), 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.Run("create").Args("-f", certHttp01File).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		output, err := oc.Run("get").Args("certificate", "cert-test-http01").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("certificate status is: %v ", output)
+		if strings.Contains(output, "True") {
+			e2e.Logf("certificate status is normal.")
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
 }

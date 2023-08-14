@@ -9,6 +9,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -204,5 +205,90 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		time.Sleep(60 * time.Second)
 		err = oc.Run("get").Args("secret", "cert-test-http01").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// author: geliu@redhat.com
+	g.It("ConnectedOnly-Author:geliu-Medium-62006-RH cert-manager operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
+		e2e.Logf("Login with normal user and create issuers.\n")
+		oc.SetupProject()
+		createIssuers(oc)
+		e2e.Logf("Create certificate.\n")
+		createCertificate(oc)
+
+		e2e.Logf("Delete subscription and csv")
+		csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator", "-o=jsonpath={.status.installedCSV}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", csvName, "-n", "cert-manager-operator").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("get certmanager operator pods, it should be gone.\n")
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "cert-manager-operator", "pod").Output()
+			if !strings.Contains(output, "No resources found") || err != nil {
+				e2e.Logf("operator pod still exist\n.")
+				return false, nil
+			}
+			e2e.Logf("operator pod deleted as expected.\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "operator pod have not been deleted.")
+
+		e2e.Logf("Check cert-manager CRDs and apiservices still exist as expected.\n")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd").Output()
+		if !strings.Contains(output, "cert-manager") || err != nil {
+			e2e.Failf("crd don't contain cert-manager\n.")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("apiservice").Output()
+		if !strings.Contains(output, "cert-manager") || err != nil {
+			e2e.Failf("apiservice don't contain cert-manager\n.")
+		}
+		e2e.Logf("Clean up cert-manager-operator NS.\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "cert-manager-operator").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Delete operand.\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "cert-manager").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Delete cert-manager CRDs.\n")
+		e2e.Logf("Patching certmanager/cluster with null finalizers is required, otherwise the delete commands can be stuck.\n")
+		patchPath := "{\"metadata\":{\"finalizers\":null}}"
+		err = oc.AsAdmin().Run("patch").Args("certmanagers.operator", "cluster", "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Delete certmanagers.operator cluster.\n")
+		err = oc.AsAdmin().Run("delete").Args("certmanagers.operator", "cluster").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Delete crd.\n")
+		crdList, err := oc.AsAdmin().Run("get").Args("crd").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		regexstr, _ := regexp.Compile(".*" + "cert-?manager" + "[0-9A-Za-z-.]*")
+		crdListArry := regexstr.FindAllString(crdList, -1)
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"crd"}, crdListArry...)...).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("issuer").Output()
+		if !strings.Contains(output, "could not find the requested resource") && !strings.Contains(output, `the server doesn't have a resource type "issuer"`) {
+			e2e.Failf("issuer is still exist out of expected.\n")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole").Output()
+		if !strings.Contains(output, "cert-manager") || err != nil {
+			e2e.Failf("clusterrole is not exist.\n")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding").Output()
+		if !strings.Contains(output, "cert-manager") || err != nil {
+			e2e.Failf("clusterrolebinding is not exist.\n")
+		}
+		clusterroleList, err := oc.AsAdmin().Run("get").Args("clusterrole").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		regexstr, _ = regexp.Compile(".*" + "cert-?manager" + "[0-9A-Za-z-.:]*")
+		clusterroleListArry := regexstr.FindAllString(clusterroleList, -1)
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrole"}, clusterroleListArry...)...).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterrolebindingList, err := oc.AsAdmin().Run("get").Args("clusterrolebinding").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		regexstr, _ = regexp.Compile("(?m)^[^ ]*cert-?manager[^ ]*")
+		clusterrolebindingListArry := regexstr.FindAllString(clusterrolebindingList, -1)
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrolebinding"}, clusterrolebindingListArry...)...).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		createCertManagerOperator(oc)
 	})
 })
