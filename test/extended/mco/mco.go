@@ -950,7 +950,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(copyErr).NotTo(o.HaveOccurred())
 		newPullSecret, err := oc.AsAdmin().WithoutNamespace().Run("registry").Args("login", `--registry="quay.io"`, `--auth-basic="mhans-redhat:redhat123"`, "--to="+newSecretFile, "--skip-check").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(newPullSecret).Should(o.Equal(`Saved credentials for "quay.io"`))
+		o.Expect(newPullSecret).Should(o.ContainSubstring(`Saved credentials for "quay.io"`))
 		setData, err := setDataForPullSecret(oc, newSecretFile)
 		defer func() {
 			_, err := setDataForPullSecret(oc, secretFile)

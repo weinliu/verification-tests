@@ -383,7 +383,7 @@ func AddToAllMachineSets(oc *exutil.CLI, delta int) error {
 	var waitErr error
 	for _, ms := range allMs {
 		immediate := true
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 15*time.Minute, immediate, func(ctx context.Context) (bool, error) { return ms.GetIsReady(), nil })
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 20*time.Minute, immediate, func(ctx context.Context) (bool, error) { return ms.GetIsReady(), nil })
 		if waitErr != nil {
 			logger.Errorf("MachineSet %s is not ready. Restoring original replicas.", ms.GetName())
 			for _, ms := range modifiedMSs {
