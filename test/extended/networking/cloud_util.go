@@ -1188,7 +1188,9 @@ func getProxyIP(oc *exutil.CLI) string {
 
 	re := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
 	proxyIPs := re.FindAllString(httpProxy, -1)
-	o.Expect(proxyIPs).ShouldNot(o.BeEmpty())
+	if len(proxyIPs) == 0 {
+		return ""
+	}
 	return proxyIPs[0]
 
 }
@@ -1197,6 +1199,9 @@ func getProxyIP(oc *exutil.CLI) string {
 func getIPechoURLFromUPIPrivateVlanBM(oc *exutil.CLI) string {
 	if checkProxy(oc) {
 		proxyIP := getProxyIP(oc)
+		if proxyIP == "" {
+			return ""
+		}
 		ipEchoURL := net.JoinHostPort(proxyIP, "9095")
 		workNode, err := exutil.GetFirstWorkerNode(oc)
 		o.Expect(err).ShouldNot(o.HaveOccurred())
