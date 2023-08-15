@@ -33,3 +33,18 @@ func CheckNetworkOperatorStatus(oc *CLI) error {
 	})
 	return err
 }
+
+// GetIPVersionStackType gets IP-version Stack type of the cluster
+func GetIPVersionStackType(oc *CLI) (ipvStackType string) {
+	svcNetwork, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.serviceNetwork}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Count(svcNetwork, ":") >= 2 && strings.Count(svcNetwork, ".") >= 2 {
+		ipvStackType = "dualstack"
+	} else if strings.Count(svcNetwork, ":") >= 2 {
+		ipvStackType = "ipv6single"
+	} else if strings.Count(svcNetwork, ".") >= 2 {
+		ipvStackType = "ipv4single"
+	}
+	e2e.Logf("The test cluster IP-version Stack type is :\"%s\".", ipvStackType)
+	return ipvStackType
+}
