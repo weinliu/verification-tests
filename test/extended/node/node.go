@@ -41,6 +41,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		runtimeTimeoutTemp        = filepath.Join(buildPruningBaseDir, "kubeletconfig-runReqTout.yaml")
 		upgradeMachineConfigTemp1 = filepath.Join(buildPruningBaseDir, "custom-kubelet-test1.yaml")
 		upgradeMachineConfigTemp2 = filepath.Join(buildPruningBaseDir, "custom-kubelet-test2.yaml")
+		systemreserveTemp         = filepath.Join(buildPruningBaseDir, "kubeletconfig-defaultsysres.yaml")
 
 		podWkloadCpu52313 = podNoWkloadCpuDescription{
 			name:      "",
@@ -151,6 +152,12 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		upgradeMachineconfig2 = upgradeMachineconfig2Description{
 			name:     "",
 			template: upgradeMachineConfigTemp2,
+		}
+		systemReserveES = systemReserveESDescription{
+			name:       "",
+			labelkey:   "",
+			labelvalue: "",
+			template:   systemreserveTemp,
 		}
 	)
 	// author: pmali@redhat.com
@@ -906,6 +913,42 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		err = checkImgSignature(oc)
 		exutil.AssertWaitPollNoErr(err, "check signature configuration failed")
 	})
+
+	g.It("NonPreRelease-Longduration-Author:asahay-Medium-62746-A default SYSTEM_RESERVED_ES value is applied if it is empty [Disruptive][Slow]", func() {
+
+		exutil.By("set SYSTEM_RESERVED_ES as empty")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodename := nodeList.Items[0].Name
+		_, err = exutil.DebugNodeWithChroot(oc, nodename, "/bin/bash", "-c", "sed -i 's/SYSTEM_RESERVED_ES=1Gi/SYSTEM_RESERVED_ES=/g' /etc/crio/crio.conf")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		systemReserveES.name = "kubeletconfig-62746"
+		systemReserveES.labelkey = "custom-kubelet"
+		systemReserveES.labelvalue = "reserve-space"
+
+		exutil.By("Label mcp worker custom-kubelet as reserve-space \n")
+		addLabelToNode(oc, "custom-kubelet=reserve-space", "worker", "mcp")
+		defer removeLabelFromNode(oc, "custom-kubelet-", "worker", "mcp")
+
+		exutil.By("Create KubeletConfig \n")
+		defer func() {
+			mcpName := "worker"
+			err := checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer systemReserveES.delete(oc)
+		systemReserveES.create(oc)
+
+		exutil.By("Check mcp finish rolling out")
+		mcpName := "worker"
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("Check Default value")
+		parameterCheck(oc)
+	})
+
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {

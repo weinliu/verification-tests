@@ -229,6 +229,13 @@ type runtimeTimeoutDescription struct {
 	template   string
 }
 
+type systemReserveESDescription struct {
+	name       string
+	labelkey   string
+	labelvalue string
+	template   string
+}
+
 type upgradeMachineconfig1Description struct {
 	name     string
 	template string
@@ -306,6 +313,16 @@ func (runtimeTimeout *runtimeTimeoutDescription) create(oc *exutil.CLI) {
 
 func (runtimeTimeout *runtimeTimeoutDescription) delete(oc *exutil.CLI) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", runtimeTimeout.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (systemReserveES *systemReserveESDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", systemReserveES.template, "-p", "NAME="+systemReserveES.name, "LABELKEY="+systemReserveES.labelkey, "LABELVALUE="+systemReserveES.labelvalue)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (systemReserveES *systemReserveESDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", systemReserveES.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1515,4 +1532,43 @@ func checkImgSignature(oc *exutil.CLI) error {
 		e2e.Logf("Image signature verified failed!")
 		return false, nil
 	})
+}
+
+// this function is for upgrade test to check SYSTEM_RESERVED_ES parameter is not empty
+
+func parameterCheck(oc *exutil.CLI) {
+
+	nodeName, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(nodeErr).NotTo(o.HaveOccurred())
+	e2e.Logf("\nNode Names are %v", nodeName)
+	nodes := strings.Fields(nodeName)
+
+	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+
+		for _, node := range nodes {
+			nodeStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}").Output()
+			o.Expect(statusErr).NotTo(o.HaveOccurred())
+			e2e.Logf("\nNode %s Status is %s\n", node, nodeStatus)
+
+			if nodeStatus == "True" {
+				sysreservedes, _ := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", "cat /etc/node-sizing.env")
+				if strings.Contains(sysreservedes, "SYSTEM_RESERVED_ES=1Gi") {
+					e2e.Logf("SYSTEM_RESERVED_ES default value is set. \n")
+
+				} else {
+					e2e.Logf("SYSTEM_RESERVED_ES default value has not been set. \n")
+					return false, nil
+				}
+			} else {
+				e2e.Logf("\n NODES ARE NOT READY\n")
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	if waitErr != nil {
+		e2e.Logf("check failed")
+	}
+	exutil.AssertWaitPollNoErr(waitErr, "not default value")
+
 }
