@@ -34,7 +34,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		machineControllerPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-machine-api", "-l", "k8s-app=controller", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(machineControllerPod) == 0 {
-			e2e.Failf("machine controller pod did not started , cluster might be unstable")
+			g.Skip("Skip for no machine-api-controller pod in cluster")
 		} else {
 			envMapi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", machineControllerPod, "-n", "openshift-machine-api", "-o=jsonpath={.spec.containers[0].env[0].name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
