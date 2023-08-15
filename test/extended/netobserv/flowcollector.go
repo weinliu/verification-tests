@@ -77,11 +77,23 @@ type Flowlog struct {
 	TimeFlowStartMs  int
 	AgentIP          string
 	IcmpCode         int
+	_HashId          string `json:",omitempty"`
+	_IsFirst         bool   `json:",omitempty"`
+	_RecordType      string `json:",omitempty"`
+	numFlowLogs      int    `json:",omitempty"`
 }
 
 type FlowRecord struct {
 	Timestamp int64
 	Flowlog   Flowlog
+}
+
+type Lokilabels struct {
+	App              string
+	SrcK8S_Namespace string
+	DstK8S_Namespace string
+	RecordType       string
+	FlowDirection    string
 }
 
 // create flowcollector CRD for a given manifest file

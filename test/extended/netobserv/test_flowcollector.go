@@ -240,8 +240,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Deploying test server and client pods")
 		template := filePath.Join(baseDir, "test-client-server_template.yaml")
 		testTemplate := TestClientServerTemplate{
-			ServerNS:   "test-server",
-			ClientNS:   "test-client",
+			ServerNS:   "test-server-54929",
+			ClientNS:   "test-client-54929",
 			ObjectSize: "100K",
 			Template:   template,
 		}
@@ -306,8 +306,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		token, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: testTemplate.ClientNS,
+			DstK8S_Namespace: testTemplate.ServerNS,
+			FlowDirection:    "0",
+		}
+
 		g.By("get flowlogs from loki")
-		flowRecords, err := testTemplate.getLokiFlowLogs(oc, token, ls.Namespace, ls.Name)
+		flowRecords, err := lokilabels.getLokiFlowLogs(oc, token, ls.Namespace, ls.Name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Ensure correctness of flows")
@@ -345,6 +352,107 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// allow only 10% of flows to have Bytes violating minBytes and maxBytes.
 		tolerance := math.Ceil(nflows * 0.10)
 		o.Expect(errFlows).Should(o.BeNumerically("<=", tolerance))
+	})
+
+	g.It("NonPreRelease-Author:aramesha-High-60701-Verify connection tracking [Serial]", func() {
+		namespace := oc.Namespace()
+
+		g.By("Deploying test server and client pods")
+		template := filePath.Join(baseDir, "test-client-server_template.yaml")
+		testTemplate := TestClientServerTemplate{
+			ServerNS:   "test-server-60701",
+			ClientNS:   "test-client-60701",
+			ObjectSize: "100K",
+			Template:   template,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
+		err := testTemplate.createTestClientServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Deploy FlowCollector with EndConversations LogType")
+		flow := Flowcollector{
+			Namespace:       namespace,
+			DeploymentModel: "DIRECT",
+			Template:        flowFixturePath,
+			LogType:         "ENDED_CONVERSATIONS",
+			LokiEnable:      true,
+			LokiURL:         lokiURL,
+			LokiTLSEnable:   true,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+			PluginEnable:    true,
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+
+		g.By("Ensure flows are observed and all pods are running")
+		exutil.AssertAllPodsToBeReady(oc, namespace)
+		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+
+		// verify logs
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			_, err = oc.AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", "flowlogs-pipeline").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "-z", "flowlogs-pipeline").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: testTemplate.ClientNS,
+			DstK8S_Namespace: testTemplate.ServerNS,
+			RecordType:       "endConnection",
+		}
+
+		g.By("Verify EndConnection Records from loki")
+		bearerToken := getSATokenFromSecret(oc, "flowlogs-pipeline", namespace)
+		endConnectionRecords, err := lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Namespace, ls.Name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyConversationRecordTime(endConnectionRecords)
+
+		g.By("Deploy FlowCollector with Conversations LogType")
+		flow.deleteFlowcollector(oc)
+
+		flow.LogType = "CONVERSATIONS"
+		flow.createFlowcollector(oc)
+
+		g.By("Ensure flows are observed and all pods are running")
+		exutil.AssertAllPodsToBeReady(oc, namespace)
+		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+
+		g.By("Escalate SA to cluster admin")
+		_, err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "-z", "flowlogs-pipeline").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		g.By("Verify NewConnection Records from loki")
+		lokilabels.RecordType = "newConnection"
+		bearerToken = getSATokenFromSecret(oc, "flowlogs-pipeline", namespace)
+
+		newConnectionRecords, err := lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Namespace, ls.Name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyConversationRecordTime(newConnectionRecords)
+
+		g.By("Verify HeartbeatConnection Records from loki")
+		lokilabels.RecordType = "heartbeat"
+		heartbeatConnectionRecords, err := lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Namespace, ls.Name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyConversationRecordTime(heartbeatConnectionRecords)
+
+		g.By("Verify EndConnection Records from loki")
+		lokilabels.RecordType = "endConnection"
+		endConnectionRecords, err = lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Namespace, ls.Name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyConversationRecordTime(endConnectionRecords)
 	})
 
 	g.Context("with KAFKA", func() {
@@ -562,6 +670,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			// verify logs
 			g.By("Escalate SA to cluster admin")
+			defer func() {
+				g.By("Remove cluster role")
+				_, err = oc.AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
 			_, err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -569,11 +682,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			time.Sleep(60 * time.Second)
 
 			g.By("Get flowlogs from loki")
-			defer func() {
-				g.By("Remove cluster role")
-				_, err = oc.AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", "flowlogs-pipeline-transformer").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}()
 			err = verifyLokilogsTime(oc, ls.Namespace, ls.Namespace, ls.Name, "flowlogs-pipeline-transformer")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
