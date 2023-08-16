@@ -39,6 +39,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -2403,6 +2404,366 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace()}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "InstallAttemptsLimitReached", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"ProvisionStopped\")].reason}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"pods", "-n", oc.Namespace()}).check(oc)
+	})
+
+	// Author: fxie@redhat.com
+	// ./bin/extended-platform-tests run all --dry-run|grep "63862"|./bin/extended-platform-tests run --timeout 80m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-63862-Medium-31931-MachinePool Supports Public Subnets[Serial]", func() {
+		// Describes a testing scenario
+		// azs: azs to put in the MachinePool's manifest
+		// subnets: subnets to put in the MachinePool's manifest
+		// expectedSubnets: subnets where we expect to find VM(s)
+		// expectedStatus: status of the InvalidSubnets condition
+		type scenario struct {
+			description     string
+			azs             []string
+			subnets         []string
+			expectedSubnets []string
+			expectedStatus  string
+		}
+
+		// Settings
+		var (
+			testCaseID              = "63862"
+			cdName                  = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+			installConfigSecretName = cdName + "-install-config"
+			clusterImageSetName     = cdName + "-imageset"
+			machinePoolNamePrefix   = "infra"
+			machinePoolReplicas     = 2
+			machinePoolCount        = 0
+			stackName               = "endpointvpc-stack-" + testCaseID
+			azCount                 = 3
+			cidr                    = "10.0.0.0/16"
+			azsForTesting           = []string{AWSRegion + "a", AWSRegion + "b"}
+			tmpDir                  = "/tmp/" + testCaseID + "-" + getRandomString()
+		)
+
+		// AWS Clients
+		var (
+			cfg                  = getDefaultAWSConfig(oc, AWSRegion)
+			cloudFormationClient = cloudformation.NewFromConfig(cfg)
+			ec2Client            = ec2.NewFromConfig(cfg)
+		)
+
+		// Functions
+		var (
+			getSubnetByAz = func(subnetIds []string) map[string]string {
+				describeSubnetsOutput, err := ec2Client.DescribeSubnets(context.Background(), &ec2.DescribeSubnetsInput{
+					SubnetIds: subnetIds,
+				})
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				subnetByAz := make(map[string]string)
+				for _, subnet := range describeSubnetsOutput.Subnets {
+					az := aws.ToString(subnet.AvailabilityZone)
+					subnetId := aws.ToString(subnet.SubnetId)
+
+					if existingSubnet, ok := subnetByAz[az]; ok {
+						e2e.Failf("Subnet %v already exists in AZ %v !", existingSubnet, az)
+					}
+					subnetByAz[az] = subnetId
+				}
+				return subnetByAz
+			}
+			// Returns MachinePool.spec.name
+			getMachinePoolSpecName = func() string {
+				return machinePoolNamePrefix + "-" + strconv.Itoa(machinePoolCount)
+			}
+			// Returns MachinePool.metadata.name
+			getMachinePoolFullName = func() string {
+				return cdName + "-" + getMachinePoolSpecName()
+			}
+			createMachinePoolWithSubnetsAndAzs = func(subnets []string, azs []string) {
+				machinePoolName := getMachinePoolSpecName()
+				machinePoolManifest := `
+apiVersion: hive.openshift.io/v1
+kind: MachinePool
+metadata:
+  name: ` + cdName + "-" + machinePoolName + `
+  namespace: ` + oc.Namespace() + `
+  annotations:
+    # OCP-50051: Day 0 MachineSet Security Group Filters workaround
+    # We need this tag here as we will be creating VMs outside of the cluster's VPC
+    hive.openshift.io/extra-worker-security-group: default
+spec:
+  clusterDeploymentRef:
+    name: ` + cdName + `
+  name: ` + machinePoolName + `
+  replicas: ` + strconv.Itoa(machinePoolReplicas) + `
+  platform:
+    aws:
+      rootVolume:
+        size: 22
+        type: gp3
+      type: m5.xlarge`
+				if len(subnets) > 0 {
+					machinePoolManifest += "\n      subnets:\n      - " + strings.Join(subnets, "\n      - ")
+				}
+				if len(azs) > 0 {
+					machinePoolManifest += "\n      zones:\n      - " + strings.Join(azs, "\n      - ")
+				}
+				machinePoolYamlFile := tmpDir + "/" + machinePoolNamePrefix + ".yaml"
+				err := os.WriteFile(machinePoolYamlFile, []byte(machinePoolManifest), 0777)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				// No need to defer a deletion -- MachinePool VMs are deprovisioned along with the cluster
+				err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machinePoolYamlFile).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+			getSubnetsForAzs = func(subnetsByAz map[string]string, azs []string) []string {
+				var subnets []string
+				for _, az := range azs {
+					switch subnet, ok := subnetsByAz[az]; ok {
+					case true:
+						subnets = append(subnets, subnet)
+					default:
+						e2e.Failf("For %v, no subnet found in AZ %v", subnetsByAz, az)
+					}
+				}
+				return subnets
+			}
+			checkMachinePoolStatus = func(target string) bool {
+				InvalidSubnetsCond :=
+					getCondition(oc, "MachinePool", getMachinePoolFullName(), oc.Namespace(), "InvalidSubnets")
+				if status, ok := InvalidSubnetsCond["status"]; !ok || status != target {
+					e2e.Logf("InvalidSubnets condition %v does not match target status %v, keep polling",
+						InvalidSubnetsCond, target)
+					return false
+				}
+				return true
+			}
+			checkMachinePoolVMsSubnets = func(kubeconfig string, expectedSubnets sets.Set[string]) bool {
+				// Make sure all instances are created
+				machinePoolInstancesIds := getMachinePoolInstancesIds(oc, getMachinePoolSpecName(), kubeconfig)
+				if len(machinePoolInstancesIds) != expectedSubnets.Len() {
+					e2e.Logf("%v MachinePool instances found (%v expected), keep polling",
+						len(machinePoolInstancesIds), len(expectedSubnets))
+					return false
+				}
+
+				// Make sure there's an instance in each expected subnet
+				describeInstancesOutput, err := ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
+					InstanceIds: machinePoolInstancesIds,
+				})
+				o.Expect(err).NotTo(o.HaveOccurred())
+				for _, reservation := range describeInstancesOutput.Reservations {
+					instances := reservation.Instances
+					o.Expect(len(instances)).To(o.Equal(1))
+					instance := instances[0]
+					instanceId := aws.ToString(instance.InstanceId)
+					subnet := aws.ToString(instance.SubnetId)
+					o.Expect(expectedSubnets.Has(subnet)).To(o.BeTrue())
+					expectedSubnets.Delete(subnet)
+					e2e.Logf("Instance %v found in subnet %v", instanceId, subnet)
+				}
+				if expectedSubnets.Len() != 0 {
+					e2e.Logf("Expected subnets without VMs: %v", expectedSubnets.UnsortedList())
+				}
+				o.Expect(expectedSubnets.Len()).To(o.Equal(0))
+				return true
+			}
+		)
+
+		exutil.By("Creating Cluster")
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 1,
+		}
+		defer cleanCD(oc, clusterImageSetName, oc.Namespace(), installConfigSecretName, cdName)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		exutil.By("Standing up a VPC and subnets which span multiple AZs")
+		endpointVpcTemp, err :=
+			testdata.Asset("test/extended/testdata/cluster_operator/hive/cloudformation-endpointvpc-temp.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("Deleting CloudFormation stack")
+			_, err := cloudFormationClient.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
+				StackName: aws.String(stackName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		e2e.Logf("Creating CloudFormation stack")
+		_, err = cloudFormationClient.CreateStack(context.Background(), &cloudformation.CreateStackInput{
+			StackName:    aws.String(stackName),
+			TemplateBody: aws.String(string(endpointVpcTemp)),
+			Parameters: []cloudFormationTypes.Parameter{
+				{
+					ParameterKey:   aws.String("AvailabilityZoneCount"),
+					ParameterValue: aws.String(strconv.Itoa(azCount)),
+				},
+				{
+					ParameterKey:   aws.String("VpcCidr"),
+					ParameterValue: aws.String(cidr),
+				},
+			},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Making sure the CloudFormation stack is ready")
+		var vpcId, privateSubnetIds, publicSubnetIds string
+		waitUntilStackIsReady := func() bool {
+			describeStackOutput, err := cloudFormationClient.DescribeStacks(context.Background(),
+				&cloudformation.DescribeStacksInput{
+					StackName: aws.String(stackName),
+				},
+			)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(describeStackOutput.Stacks)).To(o.Equal(1))
+
+			stackStatus := describeStackOutput.Stacks[0].StackStatus
+			if stackStatus != cloudFormationTypes.StackStatusCreateComplete {
+				e2e.Logf("Stack status = %s, keep polling", stackStatus)
+				return false
+			}
+
+			// Get stack info once it is ready
+			for _, output := range describeStackOutput.Stacks[0].Outputs {
+				switch aws.ToString(output.OutputKey) {
+				case "VpcId":
+					vpcId = aws.ToString(output.OutputValue)
+				case "PrivateSubnetIds":
+					privateSubnetIds = aws.ToString(output.OutputValue)
+				case "PublicSubnetIds":
+					publicSubnetIds = aws.ToString(output.OutputValue)
+				}
+			}
+			return true
+		}
+		o.Eventually(waitUntilStackIsReady).WithTimeout(15 * time.Minute).WithPolling(1 * time.Minute).Should(o.BeTrue())
+		e2e.Logf("Found VpcId = %s, PrivateSubnetIds = %s, PublicSubnetIds = %s", vpcId, privateSubnetIds, publicSubnetIds)
+
+		e2e.Logf("Getting private/public subnets by AZ")
+		privateSubnetByAz := getSubnetByAz(strings.Split(privateSubnetIds, ","))
+		publicSubnetByAz := getSubnetByAz(strings.Split(publicSubnetIds, ","))
+		e2e.Logf("Public subnet by AZ = %v\nPrivate subnet by AZ = %v", publicSubnetByAz, privateSubnetByAz)
+
+		// We need to tag the default SG with key=Name since it does not come with a Name tag.
+		// This name will be used later in the hive.openshift.io/extra-worker-security-group: <sg-name>
+		// annotation on our MachinePool.
+		exutil.By("Tagging the default SG of the newly-created VPC")
+		describeSecurityGroupsOutput, err := ec2Client.DescribeSecurityGroups(context.Background(), &ec2.DescribeSecurityGroupsInput{
+			Filters: []types.Filter{
+				{
+					Name:   aws.String("vpc-id"),
+					Values: []string{vpcId},
+				},
+			},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// According to our CloudFormation template, there should be one and only one SG -- the default SG
+		o.Expect(len(describeSecurityGroupsOutput.SecurityGroups)).To(o.Equal(1))
+		defaultSgId := aws.ToString(describeSecurityGroupsOutput.SecurityGroups[0].GroupId)
+		e2e.Logf("Found default SG = %v", defaultSgId)
+
+		_, err = ec2Client.CreateTags(context.Background(), &ec2.CreateTagsInput{
+			Resources: []string{defaultSgId},
+			Tags: []types.Tag{
+				{
+					Key:   aws.String("Name"),
+					Value: aws.String("default"),
+				},
+			},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Default SG tagged")
+
+		exutil.By("Creating temporary directory")
+		defer func() {
+			_ = os.RemoveAll(tmpDir)
+		}()
+		err = os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Waiting for the CD to be installed")
+		newCheck("expect", "get", asAdmin, requireNS, compare, "true", ok,
+			ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		exutil.By("Getting kubeconfig of the target cluster")
+		kubeconfig := getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+
+		// For OCP-63862, we only test a number of allowed scenarios here.
+		exutil.By("Testing the following scenarios: ")
+		publicSubnetsForTesting := getSubnetsForAzs(publicSubnetByAz, azsForTesting)
+		privateSubnetsForTesting := getSubnetsForAzs(privateSubnetByAz, azsForTesting)
+		// Avoid modifying the first argument of append
+		blendedSubnetsForTesting := append([]string{publicSubnetsForTesting[0]}, privateSubnetsForTesting[1:]...)
+		allSubnetsForTesting := append([]string{}, publicSubnetsForTesting...)
+		allSubnetsForTesting = append(allSubnetsForTesting, privateSubnetsForTesting...)
+		scenarios := []scenario{
+			{
+				description: "MachinePool %v is created with some AZs & num-of-az public subnets. " +
+					"There is a one-to-one relationship between the AZs and the subnets.",
+				azs:             azsForTesting,
+				subnets:         publicSubnetsForTesting,
+				expectedSubnets: publicSubnetsForTesting,
+				expectedStatus:  "False",
+			},
+			{
+				description: "MachinePool %v is created with some AZs & num-of-az private subnets. " +
+					"There is a one-to-one relationship between the AZs and the subnets.",
+				azs:             azsForTesting,
+				subnets:         privateSubnetsForTesting,
+				expectedSubnets: privateSubnetsForTesting,
+				expectedStatus:  "False",
+			},
+			{
+				description: "MachinePool %v is created with some AZs & a combination of num-of-az " +
+					"public/private subnets. There is a one-to-one relationship between the AZs and the subnets.",
+				azs:             azsForTesting,
+				subnets:         blendedSubnetsForTesting,
+				expectedSubnets: blendedSubnetsForTesting,
+				expectedStatus:  "False",
+			},
+			{
+				description: "MachinePool %v is created with some AZs and num-of-az public + num-of-az private subnets. " +
+					"There is a one-to-one relationship between the AZs and the public subnets. " +
+					"There is a one-to-one relationship between the AZs and the private subnets.",
+				azs:             azsForTesting,
+				subnets:         allSubnetsForTesting,
+				expectedSubnets: privateSubnetsForTesting,
+				expectedStatus:  "False",
+			},
+		}
+		for _, scenario := range scenarios {
+			machinePoolCount++
+			e2e.Logf(scenario.description, getMachinePoolSpecName())
+			createMachinePoolWithSubnetsAndAzs(scenario.subnets, scenario.azs)
+			// Poll until the status of the InvalidSubnets condition is no longer unknown
+			newCheck("expect", "get", asAdmin, requireNS, compare, "Unknown", nok,
+				DefaultTimeout, []string{"MachinePool", getMachinePoolFullName(),
+					`-o=jsonpath={.status.conditions[?(@.type=="InvalidSubnets")].status}`}).check(oc)
+			// Make sure the status of the InvalidSubnets condition stays expected for a while
+			o.Consistently(checkMachinePoolStatus).
+				WithTimeout(2 * time.Minute).
+				WithPolling(30 * time.Second).
+				WithArguments(scenario.expectedStatus).
+				Should(o.BeTrue())
+			// Make sure VMs are created in expected subnets
+			o.Eventually(checkMachinePoolVMsSubnets).
+				WithTimeout(4*time.Minute).
+				WithPolling(30*time.Second).
+				WithArguments(kubeconfig, sets.New[string](scenario.expectedSubnets...)).
+				Should(o.BeTrue())
+		}
 	})
 
 	// Author: fxie@redhat.com

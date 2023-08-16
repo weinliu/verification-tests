@@ -741,7 +741,7 @@ func expectedResource(oc *exutil.CLI, action string, asAdmin bool, withoutNamesp
 	var interval, inputTimeout time.Duration
 	if timeout >= ClusterInstallTimeout {
 		inputTimeout = time.Duration(timeout/60) * time.Minute
-		interval = 6 * time.Minute
+		interval = 3 * time.Minute
 	} else {
 		inputTimeout = time.Duration(timeout) * time.Second
 		interval = time.Duration(timeout/60) * time.Second
@@ -758,7 +758,7 @@ func expectedResource(oc *exutil.CLI, action string, asAdmin bool, withoutNamesp
 			return true, nil
 		}
 		if isCompare && !expect && !cc(output, content, isCompare) {
-			e2e.Logf("the output %s does not matche the content %s, expected", output, content)
+			e2e.Logf("the output %s does not match the content %s, expected", output, content)
 			return true, nil
 		}
 		if !isCompare && expect && cc(output, content, isCompare) {
@@ -1073,13 +1073,15 @@ func getCDlistfromPool(oc *exutil.CLI, pool string) string {
 	return string(poolCdList)
 }
 
-// Get cluster kubeconfig file
-func getClusterKubeconfig(oc *exutil.CLI, clustername, namespace, dir string) {
+// Extract the kubeconfig for CD/clustername, return its path
+func getClusterKubeconfig(oc *exutil.CLI, clustername, namespace, dir string) string {
 	kubeconfigsecretname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cd", clustername, "-n", namespace, "-o=jsonpath={.spec.clusterMetadata.adminKubeconfigSecretRef.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("Extract cluster %s kubeconfig to %s", clustername, dir)
 	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+kubeconfigsecretname, "-n", namespace, "--to="+dir, "--confirm").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	kubeConfigPath := dir + "/kubeconfig"
+	return kubeConfigPath
 }
 
 // Check resource number after filtering
