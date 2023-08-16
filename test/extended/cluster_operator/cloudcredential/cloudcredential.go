@@ -423,4 +423,19 @@ data:
 		o.Expect(imagePullPolicy).To(o.Equal("IfNotPresent"))
 	})
 
+	g.It("NonHyperShiftHOST-OSD_CCS-ARO-Author:mihuang-Critical-66538-Azure workload identity cluster healthy check.", func() {
+		mode, _ := getCloudCredentialMode(oc)
+		if !(exutil.CheckPlatform(oc) == "azure" && mode == "manualpodidentity") {
+			g.Skip("The cluster is not Azure Workload Identity Cluster - skipping test ...")
+		}
+
+		exutil.By("Check CCO status conditions")
+		checkCCOHealth(oc, mode)
+
+		exutil.By("The Azure workload identity cluster does not have `root` credentials")
+		cmdOut, err := oc.AsAdmin().Run("get").Args("secret", "azure-credentials", "-n", "kube-system").Output()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(cmdOut).To(o.ContainSubstring("Error from server (NotFound)"))
+	})
+
 })

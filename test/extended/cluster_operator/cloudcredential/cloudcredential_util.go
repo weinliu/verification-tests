@@ -103,6 +103,12 @@ func getCloudCredentialMode(oc *exutil.CLI) (string, error) {
 			return mode, nil
 		}
 	}
+	if iaasPlatform == "azure" {
+		if isAzureManualMode(oc) {
+			mode = "manualpodidentity"
+			return mode, nil
+		}
+	}
 	mode = "manual"
 	return mode, nil
 }
@@ -139,6 +145,11 @@ func isSTSMode(oc *exutil.CLI) bool {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "installer-cloud-credentials", "-n=openshift-image-registry", "-o=jsonpath={.data.credentials}").Output()
 	credentials, _ := base64.StdEncoding.DecodeString(output)
 	return strings.Contains(string(credentials), "web_identity_token_file")
+}
+
+func isAzureManualMode(oc *exutil.CLI) bool {
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "installer-cloud-credentials", "-n=openshift-image-registry", "-o=jsonpath={.data}").Output()
+	return strings.Contains(output, "azure_federated_token_file") && strings.Contains(output, "azure_tenant_id")
 }
 
 func getIaasPlatform(oc *exutil.CLI) (string, error) {
