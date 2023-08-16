@@ -66,6 +66,31 @@ func (ms *MachineSetDescription) CreateMachineSet(oc *CLI) {
 	}
 }
 
+// CreateMachineSetByArch create a new machineset by arch
+func (ms *MachineSetDescription) CreateMachineSetByArch(oc *CLI, arch string) {
+	e2e.Logf("Creating a new MachineSets ...")
+	machinesetName := GetRandomMachineSetNameByArch(oc, arch)
+	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	bytes, _ := ioutil.ReadFile(machineSetJSON)
+	machinesetjsonWithName, _ := sjson.Set(string(bytes), "metadata.name", ms.Name)
+	machinesetjsonWithSelector, _ := sjson.Set(machinesetjsonWithName, "spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
+	machinesetjsonWithTemplateLabel, _ := sjson.Set(machinesetjsonWithSelector, "spec.template.metadata.labels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
+	machinesetjsonWithReplicas, _ := sjson.Set(machinesetjsonWithTemplateLabel, "spec.replicas", ms.Replicas)
+	// Adding taints to machineset so that pods without toleration can not schedule to the nodes we provision
+	machinesetjsonWithTaints, _ := sjson.Set(machinesetjsonWithReplicas, "spec.template.spec.taints.0", map[string]interface{}{"effect": "NoSchedule", "key": "mapi", "value": "mapi_test"})
+	err = ioutil.WriteFile(machineSetJSON, []byte(machinesetjsonWithTaints), 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineSetJSON).Execute(); err != nil {
+		ms.DeleteMachineSet(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		WaitForMachinesRunning(oc, ms.Replicas, ms.Name)
+	}
+}
+
 // CreateAwsMachinesetWithDefaultValues create an AWS machineset with default values
 func (ms *MachineSetDescription) CreateAwsMachinesetWithDefaultValues(oc *CLI) {
 	e2e.Logf("Creating a new AWS MachineSets with default values ...")
@@ -106,6 +131,29 @@ func ListAllMachineNames(oc *CLI) []string {
 	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
+}
+
+// ListWorkerMachineSetNamesByArch list all linux worker machineSets by arch
+func ListWorkerMachineSetNamesByArch(oc *CLI, arch string) []string {
+	e2e.Logf("Listing all MachineSets by arch ...")
+	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if machineSetNames == "" {
+		g.Skip("Skip this test scenario because there are no machinesets in this cluster")
+	}
+	workerMachineSetNames := strings.Split(machineSetNames, " ")
+	var linuxWorkerMachineSetNames []string
+	for _, workerMachineSetName := range workerMachineSetNames {
+		machineSetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, workerMachineSetName, "-o=jsonpath={.spec.template.metadata.labels}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		machineSetAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, workerMachineSetName, "-o=jsonpath={.metadata.annotations.capacity\\.cluster-autoscaler\\.kubernetes\\.io/labels}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(machineSetAnnotation, "kubernetes.io/arch="+arch) && !strings.Contains(machineSetLabels, `"machine.openshift.io/os-id":"Windows"`) {
+			linuxWorkerMachineSetNames = append(linuxWorkerMachineSetNames, workerMachineSetName)
+		}
+	}
+	e2e.Logf("linuxWorkerMachineSetNames: %s", linuxWorkerMachineSetNames)
+	return linuxWorkerMachineSetNames
 }
 
 // ListWorkerMachineSetNames list all linux worker machineSets
@@ -163,11 +211,30 @@ func GetNodeNameFromMachine(oc *CLI, machineName string) string {
 // GetRandomMachineSetName get a random MachineSet name
 func GetRandomMachineSetName(oc *CLI) string {
 	e2e.Logf("Getting a random MachineSet ...")
-	machinesetName := ListWorkerMachineSetNames(oc)[0]
-	if machinesetName == "" {
-		g.Skip("Skip this test scenario because there are no machinesets in this cluster")
+	machinesetNames := ListWorkerMachineSetNames(oc)
+	if len(machinesetNames) == 0 {
+		g.Skip("Skip this test scenario because there are no linux machinesets in this cluster")
 	}
-	return machinesetName
+	return machinesetNames[0]
+}
+
+// GetRandomMachineSetNameByArch get a random MachineSet name by arch
+func GetRandomMachineSetNameByArch(oc *CLI, arch string) string {
+	e2e.Logf("Getting a random MachineSet by arch ...")
+	machinesetNames := ListWorkerMachineSetNamesByArch(oc, arch)
+	if len(machinesetNames) == 0 {
+		g.Skip(fmt.Sprintf("Skip this test scenario because there are no linux/%s machinesets in this cluster", arch))
+	}
+	return machinesetNames[0]
+}
+
+// GetMachineSetReplicas get MachineSet replicas
+func GetMachineSetReplicas(oc *CLI, machineSetName string) int {
+	e2e.Logf("Getting MachineSets replicas ...")
+	replicasVal, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	replicas, _ := strconv.Atoi(replicasVal)
+	return replicas
 }
 
 // ScaleMachineSet scale a MachineSet by replicas

@@ -2,10 +2,11 @@ package architecture
 
 import (
 	"fmt"
+	"strings"
+
 	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	"strings"
 )
 
 type Architecture int
@@ -36,6 +37,40 @@ func SkipNonAmd64SingleArch(oc *exutil.CLI) (Architecture Architecture) {
 		g.Skip(fmt.Sprintf("Skip for cluster architecture: %s", architecture.String()))
 	}
 	return
+}
+
+// GetAvailableArchitecturesSet returns multi-arch node cluster's Architectures
+func GetAvailableArchitecturesSet(oc *exutil.CLI) []Architecture {
+	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("nodes", "-o=jsonpath={.items[*].status.nodeInfo.architecture}").Output()
+	if err != nil {
+		e2e.Failf("unable to get the cluster architecture: ", err)
+	}
+	if output == "" {
+		e2e.Failf("the retrieved architecture is empty")
+	}
+	architectureList := strings.Split(output, " ")
+	archMap := make(map[Architecture]bool, 0)
+	var architectures []Architecture
+	for _, nodeArchitecture := range architectureList {
+		if _, ok := archMap[FromString(nodeArchitecture)]; !ok {
+			archMap[FromString(nodeArchitecture)] = true
+			architectures = append(architectures, FromString(nodeArchitecture))
+		}
+	}
+	return architectures
+}
+
+// SkipNonMultiArchCluster skip the test if the cluster is not an multi-arch cluster
+func SkipNonMultiArchCluster(oc *exutil.CLI) {
+	if !IsMultiArchCluster(oc) {
+		g.Skip("This cluster is not multi-arch cluster, skip this case!")
+	}
+}
+
+// IsMultiArchCluster check if the cluster is multi-arch cluster
+func IsMultiArchCluster(oc *exutil.CLI) bool {
+	architectures := GetAvailableArchitecturesSet(oc)
+	return len(architectures) > 1
 }
 
 // FromString returns the Architecture value for the given string

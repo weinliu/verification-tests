@@ -18,6 +18,7 @@ const (
 	mapiMHC                  = "machinehealthchecks.machine.openshift.io"
 	capiMachineset           = "machinesets.cluster.x-k8s.io"
 	capiMachine              = "machines.cluster.x-k8s.io"
+	defaultTimeout           = 300 * time.Second
 )
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {

@@ -444,7 +444,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create machineset")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "openstack", "gcp", "vsphere")
-		architecture.SkipNonAmd64SingleArch(oc)
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 
 		ms := exutil.MachineSetDescription{"machineset-22038", 0}
 		defer exutil.WaitForMachinesDisapper(oc, "machineset-22038")
@@ -466,6 +466,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Check machine could be created successful")
 		exutil.WaitForMachinesRunning(oc, 1, "machineset-22038")
 	})
+
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Medium-66157-Cluster Autoscaler Operator should inject unique labels on Nutanix platform", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "Nutanix")
@@ -504,4 +505,75 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	})
 
+	//author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-64869-[CAO] autoscaler can predict the correct machineset to scale up/down to allocate a particular arch [Serial][Slow][Disruptive]", func() {
+		architecture.SkipNonMultiArchCluster(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipConditionally(oc)
+		architectures := architecture.GetAvailableArchitecturesSet(oc)
+
+		var scaleArch *architecture.Architecture
+		var machineSetNames []string
+		var machineSetToScale string
+		for _, arch := range architectures {
+			machinesetName := "machineset-64869-" + arch.String()
+			machineSetNames = append(machineSetNames, machinesetName)
+			machineAutoscaler := machineAutoscalerDescription{
+				name:           machinesetName,
+				namespace:      "openshift-machine-api",
+				maxReplicas:    1,
+				minReplicas:    0,
+				template:       machineAutoscalerTemplate,
+				machineSetName: machinesetName,
+			}
+			g.By("Create machineset")
+			machineSet := exutil.MachineSetDescription{machinesetName, 0}
+			defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+			defer machineSet.DeleteMachineSet(oc)
+			machineSet.CreateMachineSetByArch(oc, arch.String())
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"metadata":{"labels":{"zero":"zero"}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Create MachineAutoscaler")
+			defer machineAutoscaler.deleteMachineAutoscaler(oc)
+			machineAutoscaler.createMachineAutoscaler(oc)
+			if scaleArch == nil || arch != architecture.AMD64 {
+				// The last non-amd64 arch is chosen to be scaled.
+				// Moreover, regardless of what arch it is, we ensure scaleArch to be non-nil by setting it at least
+				// once to a non-nil value.
+				scaleArch = &arch
+				machineSetToScale = machinesetName
+			}
+		}
+
+		g.By("Create clusterautoscaler")
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+		clusterAutoscaler.createClusterAutoscaler(oc)
+
+		g.By("Create workload")
+		workLoadTemplate = filepath.Join(autoscalerBaseDir, "workload-with-affinity.yaml")
+		workLoad = workLoadDescription{
+			name:      "workload",
+			namespace: "openshift-machine-api",
+			template:  workLoadTemplate,
+			arch:      *scaleArch,
+			cpu:       getWorkLoadCPU(oc, machineSetToScale),
+		}
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+
+		g.By("Check machine could only be scaled on this machineset")
+		o.Eventually(func() int {
+			return exutil.GetMachineSetReplicas(oc, machineSetToScale)
+		}, defaultTimeout, defaultTimeout/10).Should(o.Equal(1), "The "+scaleArch.String()+"machineset replicas should be 1")
+		var replicas int
+		o.Consistently(func() int {
+			replicas = 0
+			for _, machinesetName := range machineSetNames {
+				if machinesetName != machineSetToScale {
+					replicas += exutil.GetMachineSetReplicas(oc, machinesetName)
+				}
+			}
+			return replicas
+		}, defaultTimeout, defaultTimeout/10).Should(o.Equal(0), "The other machineset(s) replicas should be 0")
+	})
 })
