@@ -305,17 +305,17 @@ func (ntoRes *ntoResource) delete(oc *exutil.CLI) {
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoRes.namespace, "tuned", ntoRes.name, "--ignore-not-found").Execute()
 }
 
-func (ntoRes ntoResource) assertTunedProfileApplied(oc *exutil.CLI) {
+func (ntoRes ntoResource) assertTunedProfileApplied(oc *exutil.CLI, workerNodeName string) {
 
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoRes.namespace, "profile").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, ntoRes.name) {
+
+		appliedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoRes.namespace, "profile", workerNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+		if err == nil && strings.Contains(appliedStatus, "True") {
+			e2e.Logf("Tuned custom profile applied to nodes, the status is %s", appliedStatus)
 			//Check if the new profiles name applied on a node
-			e2e.Logf("Current profile for each node: \n%v", output)
 			return true, nil
 		}
-		e2e.Logf("The profile %v is not applied on node, try next around \n", ntoRes.name)
+		e2e.Logf("The profile [ %v ] is not applied on node [ %v ], try next around \n", ntoRes.name, workerNodeName)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "New tuned profile isn't applied correctly, please check")
@@ -568,7 +568,13 @@ func assertDefaultIRQSMPAffinityAffectedBitMask(cpuBitsMask []byte, isolatedCPU 
 		bitsMaskChars = append(bitsMaskChars, byte(cpuBitsMaskRune[i]))
 	}
 	affinityCPUMask = string(bitsMaskChars)
-	e2e.Logf("affinityCPUMask is: -%s-\ndefaultIRQSMPAffinity is -%s-\n", affinityCPUMask, defaultIRQSMPAffinity)
+
+	//If defaultIRQSMPAffinity start with 0, ie, 00020, remove 000 and change to 20
+	if strings.HasPrefix(defaultIRQSMPAffinity, "0") {
+		defaultIRQSMPAffinity = strings.TrimLeft(defaultIRQSMPAffinity, "0")
+	}
+
+	e2e.Logf("affinityCPUMask is: -%s-, defaultIRQSMPAffinity is -%s-\n", affinityCPUMask, defaultIRQSMPAffinity)
 	if affinityCPUMask == defaultIRQSMPAffinity {
 		isMatch = true
 	}

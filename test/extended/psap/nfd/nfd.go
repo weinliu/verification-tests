@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("Author:wabouham-Medium-43461-Add a new worker node on an NFD-enabled OCP cluster [Slow] [Flaky]", func() {
 
 		// currently test is only supported on AWS, GCP, and Azure
-		if iaasPlatform != "aws" && iaasPlatform != "gcp" && iaasPlatform != "azure" && iaasPlatform != "ibmcloud" && iaasPlatform != "alibabacloud" {
+		if iaasPlatform != "aws" && iaasPlatform != "gcp" && iaasPlatform != "azure" && iaasPlatform != "ibmcloud" && iaasPlatform != "alibabacloud" && iaasPlatform != "openstack" {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 

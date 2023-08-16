@@ -13,7 +13,7 @@ objects:
     - data: |
         [main]
         summary=Custom OpenShift profile
-        include=openshift-node
+        include=openshift-node,realtime
         [sysctl]
         kernel.sched_rt_runtime_us = -1
 

@@ -488,7 +488,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check current profile for each node")
-		ntoRes.assertTunedProfileApplied(oc)
+		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 
 		g.By("Compare if the value kernel.pid_max in on node with labeled pod, should be 128888")
 		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "kernel.pid_max", "", "128888")
@@ -545,7 +545,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check current profile for each node")
-		ntoRes.assertTunedProfileApplied(oc)
+		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 
 		g.By("Compare if the value user.max_ipc_namespaces in on node with labeled pod, should be 121112")
 		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "user.max_ipc_namespaces", "", "121112")
@@ -791,7 +791,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.createDebugTunedProfileIfNotExist(oc, false)
 
 		//Verify if the new profile is applied
-		ntoRes.assertTunedProfileApplied(oc)
+		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-net-namespaces"))
@@ -822,7 +822,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.createDebugTunedProfileIfNotExist(oc, true)
 
 		//Verify if the new profile is applied
-		ntoRes.assertTunedProfileApplied(oc)
+		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-net-namespaces"))
@@ -892,7 +892,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes1.createIRQSMPAffinityProfileIfNotExist(oc)
 
 		g.By("Check if new NTO profile was applied")
-		ntoRes1.assertTunedProfileApplied(oc)
+		ntoRes1.assertTunedProfileApplied(oc, tunedNodeName)
 
 		g.By("Check values of /proc/irq/default_smp_affinity on worker nodes after enabling isolated_cores=1")
 		isolatedcoresSMPAffinity, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "cat", "/proc/irq/default_smp_affinity").Output()
@@ -926,7 +926,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes2.createIRQSMPAffinityProfileIfNotExist(oc)
 
 		g.By("Check if new NTO profile was applied")
-		ntoRes2.assertTunedProfileApplied(oc)
+		ntoRes2.assertTunedProfileApplied(oc, tunedNodeName)
 
 		g.By("Check values of /proc/irq/default_smp_affinity on worker nodes")
 		IRQSMPAffinity, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "cat", "/proc/irq/default_smp_affinity").Output()
@@ -968,23 +968,41 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		openshiftTunedConf, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/usr/lib/tuned/openshift/tuned.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(openshiftTunedConf).NotTo(o.BeEmpty())
-		o.Expect(openshiftTunedConf).To(o.And(
-			o.ContainSubstring("avc_cache_threshold=8192"),
-			o.ContainSubstring("nf_conntrack_hashsize=1048576"),
-			o.ContainSubstring("kernel.pid_max=>4194304"),
-			o.ContainSubstring("fs.aio-max-nr=>1048576"),
-			o.ContainSubstring("net.netfilter.nf_conntrack_max=1048576"),
-			o.ContainSubstring("net.ipv4.conf.all.arp_announce=2"),
-			o.ContainSubstring("net.ipv4.neigh.default.gc_thresh1=8192"),
-			o.ContainSubstring("net.ipv4.neigh.default.gc_thresh2=32768"),
-			o.ContainSubstring("net.ipv4.neigh.default.gc_thresh3=65536"),
-			o.ContainSubstring("net.ipv6.neigh.default.gc_thresh1=8192"),
-			o.ContainSubstring("net.ipv6.neigh.default.gc_thresh2=32768"),
-			o.ContainSubstring("net.ipv6.neigh.default.gc_thresh3=65536"),
-			o.ContainSubstring("vm.max_map_count=262144"),
-			o.ContainSubstring("/sys/module/nvme_core/parameters/io_timeout=4294967295"),
-			o.ContainSubstring(`cgroup_ps_blacklist=/kubepods\.slice/`),
-			o.ContainSubstring("runtime=0")))
+		if strings.Contains(kernelVersion, "el8") || strings.Contains(kernelVersion, "el7") {
+			o.Expect(openshiftTunedConf).To(o.And(
+				o.ContainSubstring("avc_cache_threshold=8192"),
+				o.ContainSubstring("kernel.pid_max=>4194304"),
+				o.ContainSubstring("net.netfilter.nf_conntrack_max=1048576"),
+				o.ContainSubstring("net.ipv4.conf.all.arp_announce=2"),
+				o.ContainSubstring("net.ipv4.neigh.default.gc_thresh1=8192"),
+				o.ContainSubstring("net.ipv4.neigh.default.gc_thresh2=32768"),
+				o.ContainSubstring("net.ipv4.neigh.default.gc_thresh3=65536"),
+				o.ContainSubstring("net.ipv6.neigh.default.gc_thresh1=8192"),
+				o.ContainSubstring("net.ipv6.neigh.default.gc_thresh2=32768"),
+				o.ContainSubstring("net.ipv6.neigh.default.gc_thresh3=65536"),
+				o.ContainSubstring("vm.max_map_count=262144"),
+				o.ContainSubstring("/sys/module/nvme_core/parameters/io_timeout=4294967295"),
+				o.ContainSubstring(`cgroup_ps_blacklist=/kubepods\.slice/`),
+				o.ContainSubstring("runtime=0")))
+		} else {
+			o.Expect(openshiftTunedConf).To(o.And(
+				o.ContainSubstring("avc_cache_threshold=8192"),
+				o.ContainSubstring("nf_conntrack_hashsize=1048576"),
+				o.ContainSubstring("kernel.pid_max=>4194304"),
+				o.ContainSubstring("fs.aio-max-nr=>1048576"),
+				o.ContainSubstring("net.netfilter.nf_conntrack_max=1048576"),
+				o.ContainSubstring("net.ipv4.conf.all.arp_announce=2"),
+				o.ContainSubstring("net.ipv4.neigh.default.gc_thresh1=8192"),
+				o.ContainSubstring("net.ipv4.neigh.default.gc_thresh2=32768"),
+				o.ContainSubstring("net.ipv4.neigh.default.gc_thresh3=65536"),
+				o.ContainSubstring("net.ipv6.neigh.default.gc_thresh1=8192"),
+				o.ContainSubstring("net.ipv6.neigh.default.gc_thresh2=32768"),
+				o.ContainSubstring("net.ipv6.neigh.default.gc_thresh3=65536"),
+				o.ContainSubstring("vm.max_map_count=262144"),
+				o.ContainSubstring("/sys/module/nvme_core/parameters/io_timeout=4294967295"),
+				o.ContainSubstring(`cgroup_ps_blacklist=/kubepods\.slice/`),
+				o.ContainSubstring("runtime=0")))
+		}
 
 		g.By("Check content of tuned file /usr/lib/tuned/openshift-control-plane/tuned.conf to match default NTO settings")
 		openshiftControlPlaneTunedConf, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/usr/lib/tuned/openshift-control-plane/tuned.conf")
@@ -992,7 +1010,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(openshiftControlPlaneTunedConf).NotTo(o.BeEmpty())
 		o.Expect(openshiftControlPlaneTunedConf).To(o.ContainSubstring("include=openshift"))
 
-		if strings.Contains(kernelVersion, "el8") {
+		if strings.Contains(kernelVersion, "el8") || strings.Contains(kernelVersion, "el7") {
 			o.Expect(openshiftControlPlaneTunedConf).To(o.And(
 				o.ContainSubstring("sched_wakeup_granularity_ns=4000000"),
 				o.ContainSubstring("sched_migration_cost_ns=5000000")))
@@ -1062,7 +1080,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.createTunedProfileIfNotExist(oc)
 
 		//Verify if the new profile is applied
-		ntoRes.assertTunedProfileApplied(oc)
+		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-pid-namespaces"))
@@ -1125,7 +1143,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Check logs, profiles, and nodes (profile changes SHOULD be applied since tuned is MANAGED)")
 		//Verify if the new profile is applied
-		ntoRes.assertTunedProfileApplied(oc)
+		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-pid-namespaces"))
@@ -2869,6 +2887,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "tuning-pidmax", "-n", ntoNamespace, "--ignore-not-found").Execute()
 
+		ntoRes := ntoResource{
+			name:        "tuning-pidmax",
+			namespace:   ntoNamespace,
+			template:    ntoTunedPidMax,
+			sysctlparm:  "kernel.pid_max",
+			sysctlvalue: "181818",
+		}
+
 		g.By("Label the node with node-role.kubernetes.io/worker-tuning=")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning=", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2880,6 +2906,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
+
+		g.By("Create tuning-pidmax profile tuning-pidmax applied to nodes")
+		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 
 		g.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
