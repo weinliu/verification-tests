@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	var oc = exutil.NewCLIWithoutNamespace("default")
 	var ocpversion = "4.14"
 	var ocppreversion = "4.13"
-	var upstream = true
+	var upstream = false
 
 	// author: jfan@redhat.com
 	g.It("VMonly-Author:jfan-High-37465-SDK olm improve olm related sub commands", func() {
