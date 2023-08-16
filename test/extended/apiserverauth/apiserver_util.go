@@ -1301,3 +1301,15 @@ func isTechPreviewNoUpgrade(oc *exutil.CLI) bool {
 
 	return featureGate.Spec.FeatureSet == configv1.TechPreviewNoUpgrade
 }
+
+// IsIPv4 check if the string is an IPv4 address.
+func isIPv4(str string) bool {
+	ip := net.ParseIP(str)
+	return ip != nil && strings.Contains(str, ".")
+}
+
+// IsIPv6 check if the string is an IPv6 address.
+func isIPv6(str string) bool {
+	ip := net.ParseIP(str)
+	return ip != nil && strings.Contains(str, ":")
+}

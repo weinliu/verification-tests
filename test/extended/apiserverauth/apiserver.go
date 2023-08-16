@@ -3363,6 +3363,7 @@ EOF`, dcpolicyrepo)
 		var (
 			generatedNodePort int
 			curlOutput        string
+			url               string
 			curlErr           error
 			filename          = "hello-pod.json"
 			podName           = "hello-openshift"
@@ -3408,7 +3409,11 @@ EOF`, dcpolicyrepo)
 		exutil.By(fmt.Sprintf("6.2) Wait for pod with name %s to be ready", podName))
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 
-		url := fmt.Sprintf("%s:%s", hostIP, nodePort)
+		if isIPv6(hostIP) {
+			url = fmt.Sprintf("[%v]:%v", hostIP, nodePort)
+		} else {
+			url = fmt.Sprintf("%s:%s", hostIP, nodePort)
+		}
 		exutil.By(fmt.Sprintf("6.3) Accessing the endpoint %s with curl command line", url))
 		// retry 3 times, sometimes, the endpoint is not ready for accessing.
 		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
@@ -3434,7 +3439,11 @@ EOF`, dcpolicyrepo)
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		defer oc.Run("delete").Args("service", serviceName).Execute()
 
-		url = fmt.Sprintf("%s:%d", hostIP, generatedNodePort)
+		if isIPv6(hostIP) {
+			url = fmt.Sprintf("[%v]:%v", hostIP, generatedNodePort)
+		} else {
+			url = fmt.Sprintf("%s:%d", hostIP, generatedNodePort)
+		}
 		exutil.By(fmt.Sprintf("8) Check network access again to %s", url))
 		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
 			curlOutput, curlErr = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
