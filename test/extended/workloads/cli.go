@@ -388,7 +388,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-NonPreRelease-High-45307-Critical-45327-check oc adm prune deployments to prune RS [Slow][Disruptive]", func() {
+	g.It("Author:yinzhou-NonPreRelease-Longduration-High-45307-Critical-45327-check oc adm prune deployments to prune RS [Slow][Disruptive]", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -441,7 +441,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		}
 	})
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-NonPreRelease-High-45308-check oc adm prune deployments command with the orphans options works well [Slow][Disruptive]", func() {
+	g.It("Author:yinzhou-NonPreRelease-Longduration-High-45308-check oc adm prune deployments command with the orphans options works well [Slow][Disruptive]", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 

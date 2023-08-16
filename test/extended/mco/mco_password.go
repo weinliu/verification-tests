@@ -42,7 +42,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		preChecks(oc)
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-59417-MCD create/update password with MachineConfig in CoreOS nodes[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-59417-MCD create/update password with MachineConfig in CoreOS nodes[Disruptive]", func() {
 		var (
 			mcName = "tc-59417-test-core-passwd"
 		)
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-60129-MCD create/update password with MachineConfig in RHEL nodes[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-60129-MCD create/update password with MachineConfig in RHEL nodes[Disruptive]", func() {
 		var (
 			mcName = "tc-60129-test-core-passwd"
 		)
@@ -203,7 +203,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-59900-Create a password for a user different from 'core' user[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-59900-Create a password for a user different from 'core' user[Disruptive]", func() {
 		var (
 			mcName       = "mco-tc-59900-wrong-user-password"
 			wrongUser    = "root"
@@ -228,7 +228,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-59424-ssh keys can be found in new dir on RHCOS9 node [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-59424-ssh keys can be found in new dir on RHCOS9 node [Disruptive]", func() {
 		var (
 			allCoreOsNodes = wMcp.GetCoreOsNodesOrFail()
 			allMasters     = mMcp.GetNodesOrFail()
@@ -270,7 +270,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		}
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-59426-ssh keys can be updated in new dir on RHCOS9 node[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-59426-ssh keys can be updated in new dir on RHCOS9 node[Disruptive]", func() {
 
 		var (
 			mcName = "tc-59426-add-ssh-key"
@@ -347,7 +347,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		logger.Infof("OK!\n")
 
 	})
-	g.It("Author:sregidor-NonPreRelease-Medium-62533-Passwd login must not work with ssh[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-62533-Passwd login must not work with ssh[Disruptive]", func() {
 		var (
 			mcName = "tc-62533-test-passwd-ssh-login"
 		)
@@ -378,7 +378,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "Ssh login should not be allowed in node %s and should report a 'permission denied' error:\n %s", node.GetName(), bresp)
 		logger.Infof("OK!\n")
 	})
-	g.It("Author:sregidor-NonPreRelease-Medium-64986-Remove all ssh keys [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-64986-Remove all ssh keys [Disruptive]", func() {
 		var (
 			sshMCName    = "99-" + mcp.GetName() + "-ssh"
 			backupMCFile = filepath.Join(e2e.TestContext.OutputDir, "tc-64986-"+sshMCName+".backup.json")

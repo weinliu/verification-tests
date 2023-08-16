@@ -166,7 +166,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: liangli@redhat.com
-	g.It("NonPreRelease-Author:liangli-Critical-42952-[HyperShiftINSTALL] create multiple clusters without manifest crash and delete them asynchronously [Serial]", func() {
+	g.It("NonPreRelease-Longduration-Author:liangli-Critical-42952-[HyperShiftINSTALL] create multiple clusters without manifest crash and delete them asynchronously [Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 42952 is for AWS - skipping test ...")
 		}

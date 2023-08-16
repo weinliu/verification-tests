@@ -249,7 +249,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:zhsun-Medium-44051-ClusterAutoscalerUnableToScaleCPULimitReached alert should be filed when cpu resource is not enough[Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-44051-ClusterAutoscalerUnableToScaleCPULimitReached alert should be filed when cpu resource is not enough[Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 
 		g.By("Create a new machineset")
@@ -286,7 +286,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:zhsun-Medium-44211-ClusterAutoscalerUnableToScaleMemoryLimitReached alert should be filed when memory resource is not enough[Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-44211-ClusterAutoscalerUnableToScaleMemoryLimitReached alert should be filed when memory resource is not enough[Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 
 		g.By("Create a new machineset")

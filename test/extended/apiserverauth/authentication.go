@@ -446,7 +446,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change oauth cluster and the case execution duration is greater than 5 min, so adding [Disruptive] and [NonPreRelease]
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:rugong-Medium-22434-RequestHeader IDP consumes header values from requests of auth proxy [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:rugong-Medium-22434-RequestHeader IDP consumes header values from requests of auth proxy [Disruptive]", func() {
 		configMapPath, err := os.MkdirTemp("/tmp/", "tmp_22434")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(configMapPath)

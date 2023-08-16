@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-NonPreRelease-Critical-42183-backup and restore should perform consistency checks on etcd snapshots [Disruptive]", func() {
+	g.It("Author:yinzhou-NonPreRelease-Longduration-Critical-42183-backup and restore should perform consistency checks on etcd snapshots [Disruptive]", func() {
 		g.By("Test for case OCP-42183 backup and restore should perform consistency checks on etcd snapshots")
 
 		g.By("select all the master node")
@@ -199,7 +199,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 	})
 	// author: geliu@redhat.com
-	g.It("Author:geliu-NonPreRelease-Critical-50205-lost master can be replaced by new one with machine config recreation in ocp 4.x [Disruptive][Slow]", func() {
+	g.It("Author:geliu-NonPreRelease-Longduration-Critical-50205-lost master can be replaced by new one with machine config recreation in ocp 4.x [Disruptive][Slow]", func() {
 		g.By("Test for case lost master can be replaced by new one with machine config recreation in ocp 4.x")
 
 		g.By("Get all the master node name & count")

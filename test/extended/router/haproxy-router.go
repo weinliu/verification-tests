@@ -768,7 +768,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("NonPreRelease-Author:shudili-Medium-43292-User can delete configmap and update configmap with new custom error page", func() {
+	g.It("NonPreRelease-Longduration-Author:shudili-Medium-43292-User can delete configmap and update configmap with new custom error page", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")

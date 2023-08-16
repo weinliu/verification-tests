@@ -1593,7 +1593,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Author:knarra-High-53058-Descheduler-Validate exclude namespace filtering	[Slow][Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:knarra-High-53058-Descheduler-Validate exclude namespace filtering	[Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 

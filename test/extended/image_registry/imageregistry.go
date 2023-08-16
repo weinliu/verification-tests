@@ -757,7 +757,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonPreRelease-Author:wewang-Critical-24838-Registry OpenStack Storage test with invalid settings [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:wewang-Critical-24838-Registry OpenStack Storage test with invalid settings [Disruptive]", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "OpenStack")
 
 		g.By("Set status variables")
@@ -839,7 +839,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("NonPreRelease-Author:xiuwang-Medium-47342-Configure image registry works with OSS parameters [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:xiuwang-Medium-47342-Configure image registry works with OSS parameters [Disruptive]", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "AlibabaCloud")
 		g.By("Set status variables")
 		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
@@ -1104,7 +1104,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/" + podsrc.image))
 	})
 
-	g.It("NonPreRelease-Author:xiuwang-VMonly-Critical-43260-Image registry pod could report to processing after openshift-apiserver reports unconnect quickly[Disruptive][Slow]", func() {
+	g.It("NonPreRelease-Longduration-Author:xiuwang-VMonly-Critical-43260-Image registry pod could report to processing after openshift-apiserver reports unconnect quickly[Disruptive][Slow]", func() {
 		firstMaster, err := exutil.GetFirstMasterNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
@@ -1267,7 +1267,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonPreRelease-Author:jitli-Critical-34895-Image registry can work well on Gov Cloud with custom endpoint defined [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:jitli-Critical-34895-Image registry can work well on Gov Cloud with custom endpoint defined [Disruptive]", func() {
 
 		g.By("Check platforms")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
@@ -1498,7 +1498,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: yyou@redhat.com
-	g.It("VMonly-NonPreRelease-Author:yyou-Critical-44037-Could configure swift authentication using application credentials [Disruptive]", func() {
+	g.It("VMonly-NonPreRelease-Longduration-Author:yyou-Critical-44037-Could configure swift authentication using application credentials [Disruptive]", func() {
 		storagetype, _ := getRegistryStorageConfig(oc)
 		if storagetype != "swift" {
 			g.Skip("Skip for non-supported platform")
@@ -1529,7 +1529,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: jitli@redhat.com
 	// Cover test case: OCP-46069 and 49886
-	g.It("NonPreRelease-Author:jitli-Critical-46069-High-49886-Could override the default topology constraints and Topology Constraints works well in non zone cluster [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:jitli-Critical-46069-High-49886-Could override the default topology constraints and Topology Constraints works well in non zone cluster [Disruptive]", func() {
 		g.By("Set status variables")
 		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
@@ -1598,7 +1598,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonPreRelease-Author:jitli-Medium-46082-Increase replicas to match one zone have one pod [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:jitli-Medium-46082-Increase replicas to match one zone have one pod [Disruptive]", func() {
 
 		g.By("Check platforms")
 		if checkRegistryUsingFSVolume(oc) {
@@ -1669,7 +1669,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonPreRelease-Author:jitli-Critical-46083-Topology Constraints works well in SNO environment [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:jitli-Critical-46083-Topology Constraints works well in SNO environment [Disruptive]", func() {
 
 		g.By("Check platforms")
 		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
@@ -1736,7 +1736,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonHyperShiftHOST-Author:jitli-NonPreRelease-Medium-22032-High-50219-Setting nodeSelector and tolerations on nodes with taints registry works well [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:jitli-NonPreRelease-Longduration-Medium-22032-High-50219-Setting nodeSelector and tolerations on nodes with taints registry works well [Disruptive]", func() {
 		g.By("Set status variables")
 		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
@@ -2009,7 +2009,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonPreRelease-Author:jitli-Medium-22031-Config CPU and memory for internal regsistry [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:jitli-Medium-22031-Config CPU and memory for internal regsistry [Disruptive]", func() {
 
 		g.By("Set up registry resources")
 		podNum := getImageRegistryPodNumber(oc)
@@ -2655,7 +2655,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 	// author: yyou@redhat.com
-	g.It("NonPreRelease-Author:yyou-High-34991-Add logLevel to registry config object [Serial]", func() {
+	g.It("NonPreRelease-Longduration-Author:yyou-High-34991-Add logLevel to registry config object [Serial]", func() {
 		g.By("Check image registry config")
 		podNum := getImageRegistryPodNumber(oc)
 		defer checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
@@ -2747,7 +2747,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: yyou@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:yyou-Medium-22230-Can set the Requests values in imageregistry config [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-ConnectedOnly-Author:yyou-Medium-22230-Can set the Requests values in imageregistry config [Disruptive]", func() {
 		// TODO: remove this skip when the builds v1 API will support producing manifest list images
 		architecture.SkipArchitectures(oc, architecture.MULTI)
 		g.By("Check if openshift-sample operator installed")

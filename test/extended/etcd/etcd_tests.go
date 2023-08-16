@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		o.Expect(output).To(o.ContainSubstring("experimental-initial-corrupt-check=true"))
 	})
 	// author: skundu@redhat.com
-	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Critical-52312-cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Longduration-Critical-52312-cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder [Serial]", func() {
 		g.By("Test for case OCP-52312 cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder.")
 		e2e.Logf("select all the master nodes")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
@@ -90,7 +90,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 
 	})
 	// author: skundu@redhat.com
-	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Critical-57119-SSL/TLS: Birthday attack against 64 bit block ciphers (SWEET32) etcd metrics port 9979 [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Longduration-Critical-57119-SSL/TLS: Birthday attack against 64 bit block ciphers (SWEET32) etcd metrics port 9979 [Serial]", func() {
 		g.By("Test for case OCP-57119 SSL/TLS: Birthday attack against 64 bit block ciphers (SWEET32) etcd metrics port 9979 .")
 		e2e.Logf("select all the master nodes")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
@@ -160,7 +160,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	})
 
 	// author: skundu@redhat.com
-	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Critical-64148-Verify etcd-bootstrap member is removed properly [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Longduration-Critical-64148-Verify etcd-bootstrap member is removed properly [Serial]", func() {
 		g.By("Test for case OCP-64148 Verify etcd-bootstrap member is removed properly.")
 
 		g.By("Verifying etcd cluster message and status")
@@ -173,7 +173,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	})
 
 	// author: skundu@redhat.com
-	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Critical-54999-Verify ETCD is not degraded in dual-stack networking cluster.[Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Longduration-Critical-54999-Verify ETCD is not degraded in dual-stack networking cluster.[Serial]", func() {
 		g.By("Test for case OCP-54999 Verify ETCD is not degraded in dual-stack networking cluster.")
 		ipStackType := getIPStackType(oc)
 		g.By("Skip testing on ipv4 or ipv6 single stack cluster")

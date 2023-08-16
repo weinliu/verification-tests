@@ -1290,7 +1290,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "openshift-node")
 	})
 
-	g.It("NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53880-NTO apply one configmap that reference to two separated hosted clusters on hypershift. [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-HyperShiftMGMT-Author:liqcui-Medium-53880-NTO apply one configmap that reference to two separated hosted clusters on hypershift. [Disruptive]", func() {
 
 		//Second Hosted Cluster
 		guestClusterName2, guestClusterKube2, hostedClusterNS2 = exutil.ValidHypershiftAndGetGuestKubeConf4SecondHostedCluster(oc)
@@ -1500,7 +1500,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
 
-	g.It("NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53883-NTO can apply different tunings to two separated hosted clusters on hypershift. [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-HyperShiftMGMT-Author:liqcui-Medium-53883-NTO can apply different tunings to two separated hosted clusters on hypershift. [Disruptive]", func() {
 
 		//Second Hosted Cluster
 		guestClusterName2, guestClusterKube2, hostedClusterNS2 = exutil.ValidHypershiftAndGetGuestKubeConf4SecondHostedCluster(oc)

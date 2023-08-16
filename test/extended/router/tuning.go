@@ -260,7 +260,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-NonPreRelease-High-50662-Make ROUTER_BACKEND_CHECK_INTERVAL Configurable", func() {
+	g.It("Author:shudili-NonPreRelease-Longduration-High-50662-Make ROUTER_BACKEND_CHECK_INTERVAL Configurable", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -377,7 +377,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-NonPreRelease-High-50926-Support a Configurable ROUTER_MAX_CONNECTIONS in HAproxy", func() {
+	g.It("Author:shudili-NonPreRelease-Longduration-High-50926-Support a Configurable ROUTER_MAX_CONNECTIONS in HAproxy", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -507,7 +507,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-NonPreRelease-High-55367-Default HAProxy maxconn value to 50000 for OCP 4.12", func() {
+	g.It("Author:shudili-NonPreRelease-Longduration-High-55367-Default HAProxy maxconn value to 50000 for OCP 4.12", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -573,7 +573,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-NonPreRelease-High-53605-Expose a Configurable Reload Interval in HAproxy", func() {
+	g.It("Author:shudili-NonPreRelease-Longduration-High-53605-Expose a Configurable Reload Interval in HAproxy", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")

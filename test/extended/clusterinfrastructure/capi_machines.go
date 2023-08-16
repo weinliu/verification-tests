@@ -158,7 +158,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:zhsun-High-51071-Create machineset with CAPI on aws [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-51071-Create machineset with CAPI on aws [Disruptive][Slow]", func() {
 		g.By("Check if cluster api on this platform is supported")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
@@ -176,7 +176,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		capiMachineSetAWS.createCapiMachineSet(oc)
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:zhsun-High-53100-Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-53100-Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
 		skipForCAPINotExist(oc)

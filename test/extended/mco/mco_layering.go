@@ -209,7 +209,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		logger.Infof("OK!\n")
 
 	})
-	g.It("Author:sregidor-ConnectedOnly-NonPreRelease-Medium-54052-Not bootable layered osImage provided[Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-NonPreRelease-Longduration-Medium-54052-Not bootable layered osImage provided[Disruptive]", func() {
 		var (
 			nonBootableImage = "quay.io/openshifttest/hello-openshift:1.2.0"
 			layeringMcName   = "not-bootable-image-tc54052"
@@ -221,7 +221,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonBootableImage, layeringMcName, expectedNDMessage, expectedNDReason)
 	})
 
-	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Medium-54054-Not pullable layered osImage provided[Disruptive]", func() {
+	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Longduration-Medium-54054-Not pullable layered osImage provided[Disruptive]", func() {
 		var (
 			nonPullableImage  = "quay.io/openshifttest/tc54054fakeimage:latest"
 			layeringMcName    = "not-pullable-image-tc54054"
@@ -405,7 +405,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-54049-Verify base images in the release image", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-54049-Verify base images in the release image", func() {
 		var (
 			oldMachineConfigOsImage = "machine-os-content"
 			coreExtensions          = "rhel-coreos-extensions"

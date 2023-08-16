@@ -1174,7 +1174,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	//author: tagao@redhat.com
-	g.It("Author:tagao-NonPreRelease-Medium-49191-Enforce body_size_limit [Serial]", func() {
+	g.It("Author:tagao-NonPreRelease-Longduration-Medium-49191-Enforce body_size_limit [Serial]", func() {
 		g.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)

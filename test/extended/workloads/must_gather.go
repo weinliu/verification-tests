@@ -114,7 +114,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		}
 	})
 	// author: yinzhou@redhat.com
-	g.It("NonPreRelease-Author:yinzhou-Medium-60213-oc adm must-gather with node name option should run successfully on hypershift hosted cluster", func() {
+	g.It("NonPreRelease-Longduration-Author:yinzhou-Medium-60213-oc adm must-gather with node name option should run successfully on hypershift hosted cluster", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status.controlPlaneTopology}").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("External", output); !matched {

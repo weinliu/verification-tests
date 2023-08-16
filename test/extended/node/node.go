@@ -377,7 +377,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: pmali@redhat.com
-	g.It("DEPRECATED-NonPreRelease-Author:pmali-High-46306-Node should not becomes NotReady with error creating container storage layer not known[Disruptive][Slow]", func() {
+	g.It("DEPRECATED-NonPreRelease-Longduration-Author:pmali-High-46306-Node should not becomes NotReady with error creating container storage layer not known[Disruptive][Slow]", func() {
 
 		oc.SetupProject()
 		podSleep.namespace = oc.Namespace()

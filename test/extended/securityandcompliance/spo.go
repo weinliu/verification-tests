@@ -239,7 +239,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Medium-50242-High-50174-check Log enricher based seccompprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-50242-High-50174-check Log enricher based seccompprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -361,7 +361,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Medium-50262-High-50263-check Log enricher based selinuxprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-50262-High-50263-check Log enricher based selinuxprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -484,7 +484,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-61609-High-61599-check enable memory optimization in spod could work for seccompprofiles/selinuxprofiles recording for pod [Slow][Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-61609-High-61599-check enable memory optimization in spod could work for seccompprofiles/selinuxprofiles recording for pod [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -628,7 +628,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51391-Log based selinuxprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51391-Log based selinuxprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
 		ns1 := "do-record-" + getRandomString()
 		ns2 := "dont-record1-" + getRandomString()
 		ns3 := "dont-record2-" + getRandomString()
@@ -771,7 +771,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51392-Log based secompprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51392-Log based secompprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
 		ns1 := "do-record-" + getRandomString()
 		ns2 := "dont-record1-" + getRandomString()
 		ns3 := "dont-record2-" + getRandomString()
@@ -914,7 +914,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51405-Check profilebinding could make use of webhookOptions object in webhooks for seccompprofile [Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51405-Check profilebinding could make use of webhookOptions object in webhooks for seccompprofile [Disruptive]", func() {
 		ns1 := "do-binding-" + getRandomString()
 		ns2 := "dont-binding-" + getRandomString()
 		podBusybox := filepath.Join(buildPruningBaseDir, "spo/pod-busybox.yaml")
@@ -1017,7 +1017,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51408-Check profilebinding could make use of webhookOptions object in webhooks for selinuxprofile [Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51408-Check profilebinding could make use of webhookOptions object in webhooks for selinuxprofile [Disruptive]", func() {
 		ns1 := "do-binding-" + getRandomString()
 		ns2 := "dont-binding-" + getRandomString()
 		errorLoggerSelTemplate := filepath.Join(buildPruningBaseDir, "spo/selinux-profile-errorlogger.yaml")
@@ -1126,7 +1126,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Medium-61581-Verify a custom container-selinux policy templates could be used [Serial]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-61581-Verify a custom container-selinux policy templates could be used [Serial]", func() {
 		ns := "net-container-policy-" + getRandomString()
 		selinuxProfileName := "net-container-policy"
 
@@ -1166,7 +1166,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Medium-61579-Set a custom priority class name for spod daemon pod [Serial]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-61579-Set a custom priority class name for spod daemon pod [Serial]", func() {
 		var (
 			priorityClassTemplate = filepath.Join(buildPruningBaseDir, "priorityclass.yaml")
 			prioritym             = priorityClassDescription{
@@ -1205,7 +1205,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Medium-61580-Set a non-exist priority class name for spod daemon pod [Serial]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-61580-Set a non-exist priority class name for spod daemon pod [Serial]", func() {
 		var priorityClassNotExist = "priority-not-exist-" + getRandomString()
 
 		g.By("Check the default piorityClassName.. !!!\n")
@@ -1233,7 +1233,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 
 	// author: bgudi@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:bgudi-Medium-50222-check Log enricher based seccompprofile recording working as expected for job [Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:bgudi-Medium-50222-check Log enricher based seccompprofile recording working as expected for job [Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		var (
 			profileRecordingSeccom = profileRecordingDescription{
@@ -1340,7 +1340,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 
 	// author: jkuriako@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:jkuriako-Medium-50264-Medium-50155-check Log enricher based selinuxrecording/seccompprofiles working as expected for replicaset [Slow][Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:jkuriako-Medium-50264-Medium-50155-check Log enricher based selinuxrecording/seccompprofiles working as expected for replicaset [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -1465,7 +1465,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 
 	// author: bgudi@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:bgudi-Medium-50259-Medium-50244-check Log enricher based selinuxprofile/seccompprofile recording and metrics working as expected for cronjob [Slow][Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:bgudi-Medium-50259-Medium-50244-check Log enricher based selinuxprofile/seccompprofile recording and metrics working as expected for cronjob [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -1595,7 +1595,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 
 	// author: jkuriako@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:jkuriako-Critical-50254-check Log enricher based selinuxprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:jkuriako-Critical-50254-check Log enricher based selinuxprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		var (
 			profileRecordingPod = profileRecordingDescription{
@@ -1653,7 +1653,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-Author:xiyuan-Medium-61577-Customise the spo daemon resource requirements [Serial]", func() {
+	g.It("NonPreRelease-Longduration-Author:xiyuan-Medium-61577-Customise the spo daemon resource requirements [Serial]", func() {
 		g.By("Check the default resource requirements for spod !!!\n")
 		assertEventMessageRegexpMatch(oc, "ephemeral-storage.*200Mi.*memory.*128Mi", "pod", "-l", "name=spod", "-n", subD.namespace,
 			`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.limits}`)

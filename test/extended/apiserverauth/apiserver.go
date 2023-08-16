@@ -491,7 +491,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-High-41899-Replacing the admin kubeconfig generated at install time [Disruptive] [Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-41899-Replacing the admin kubeconfig generated at install time [Disruptive] [Slow]", func() {
 		var (
 			dirname        = "/tmp/-OCP-41899-ca/"
 			name           = dirname + "custom"
@@ -999,7 +999,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			exceptions   = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
 			caseID       = "ocp-40861"
@@ -1926,7 +1926,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-High-47633-[API-1361] [Apiserver] Update existing alert ExtremelyHighIndividualControlPlaneCPU [Slow] [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-47633-[API-1361] [Apiserver] Update existing alert ExtremelyHighIndividualControlPlaneCPU [Slow] [Disruptive]", func() {
 		var (
 			alert             = "ExtremelyHighIndividualControlPlaneCPU"
 			alertBudget       = "KubeAPIErrorBudgetBurn"
@@ -3997,7 +3997,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-Medium-10350-[Apiserver] compensate for raft/cache delay in namespace admission", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-Medium-10350-[Apiserver] compensate for raft/cache delay in namespace admission", func() {
 		tmpnamespace := "ocp-10350" + exutil.GetRandomString()
 		defer oc.AsAdmin().Run("delete").Args("ns", tmpnamespace, "--ignore-not-found").Execute()
 		exutil.By("1.) Create new namespace")
@@ -6056,7 +6056,7 @@ manifests:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-66921-1-APIServer LatencySensitive featureset must be removed [Slow][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-66921-1-APIServer LatencySensitive featureset must be removed [Slow][Disruptive]", func() {
 		const (
 			featurePatch       = `[{"op": "replace", "path": "/spec/featureSet", "value": "LatencySensitive"}]`
 			invalidFeatureGate = `[{"op": "replace", "path": "/spec/featureSet", "value": "unknown"}]`
@@ -6098,7 +6098,7 @@ manifests:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-66921-2-APIServer TechPreviewNoUpgrade featureset blocks upgrade [Slow][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-66921-2-APIServer TechPreviewNoUpgrade featureset blocks upgrade [Slow][Disruptive]", func() {
 		const (
 			featureTechPreview     = `[{"op": "replace", "path": "/spec/featureSet", "value": "TechPreviewNoUpgrade"}]`
 			featureCustomNoUpgrade = `[{"op": "replace", "path": "/spec/featureSet", "value": "CustomNoUpgrade"}]`

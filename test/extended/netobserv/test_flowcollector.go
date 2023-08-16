@@ -234,7 +234,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		})
 	})
 
-	g.It("NonPreRelease-Author:memodi-High-53595-High-49107-High-45304-High-54929-High-54840-Verify flow correctness [Disruptive][Slow]", func() {
+	g.It("NonPreRelease-Longduration-Author:memodi-High-53595-High-49107-High-45304-High-54929-High-54840-Verify flow correctness [Disruptive][Slow]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploying test server and client pods")
@@ -354,7 +354,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(errFlows).Should(o.BeNumerically("<=", tolerance))
 	})
 
-	g.It("NonPreRelease-Author:aramesha-High-60701-Verify connection tracking [Serial]", func() {
+	g.It("NonPreRelease-Longduration-Author:aramesha-High-60701-Verify connection tracking [Serial]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploying test server and client pods")
@@ -546,7 +546,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			}
 		})
 
-		g.It("NonPreRelease-Author:aramesha-High-56362-High-53597-High-56326-Verify network flows are captured with Kafka with TLS [Serial]", func() {
+		g.It("NonPreRelease-Longduration-Author:aramesha-High-56362-High-53597-High-56326-Verify network flows are captured with Kafka with TLS [Serial]", func() {
 			namespace := oc.Namespace()
 
 			g.By("Deploy FlowCollector with KAFKA TLS")
@@ -613,7 +613,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
 
-		g.It("NonPreRelease-Author:aramesha-High-57397-High-65116-Verify network-flows export with Kafka and netobserv installation without Loki [Serial]", func() {
+		g.It("NonPreRelease-Longduration-Author:aramesha-High-57397-High-65116-Verify network-flows export with Kafka and netobserv installation without Loki [Serial]", func() {
 			namespace := oc.Namespace()
 
 			g.By("Deploy kafka Topic for export")
@@ -757,7 +757,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(len(consolePod)).To(o.Equal(0))
 		})
 
-		g.It("NonPreRelease-Author:aramesha-High-64880-Verify secrets copied for Loki and Kafka when deployed in NS other than flowcollector pods [Serial]", func() {
+		g.It("NonPreRelease-Longduration-Author:aramesha-High-64880-Verify secrets copied for Loki and Kafka when deployed in NS other than flowcollector pods [Serial]", func() {
 			namespace := oc.Namespace()
 
 			g.By("Create a new namespace for flowcollector")

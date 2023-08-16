@@ -792,7 +792,7 @@ spec:
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "46729"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-46729-[HIVE]Support overriding installer image [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:lwan-Medium-46729-[HIVE]Support overriding installer image [Serial]", func() {
 		testCaseID := "46729"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
@@ -878,7 +878,7 @@ spec:
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "45279"|./bin/extended-platform-tests run --timeout 15m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-45279-Test Metric for ClusterClaim[Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:lwan-Medium-45279-Test Metric for ClusterClaim[Serial]", func() {
 		// Expose Hive metrics, and neutralize the effect after finishing the test case
 		needRecover, prevConfig := false, ""
 		defer recoverClusterMonitoring(oc, &needRecover, &prevConfig)
@@ -988,7 +988,7 @@ spec:
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "54463"|./bin/extended-platform-tests run --timeout 35m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54463-Add cluster install success/fail metrics[Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:mihuang-Medium-54463-Add cluster install success/fail metrics[Serial]", func() {
 		// Expose Hive metrics, and neutralize the effect after finishing the test case
 		needRecover, prevConfig := false, ""
 		defer recoverClusterMonitoring(oc, &needRecover, &prevConfig)

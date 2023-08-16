@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		checkFixedAlert(oc, coMcp, expectedAlertName)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-62075-MCCPoolAlert. Test support for a node pool hierarchy [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-62075-MCCPoolAlert. Test support for a node pool hierarchy [Disruptive]", func() {
 
 		var (
 			iMcpName              = "infra"

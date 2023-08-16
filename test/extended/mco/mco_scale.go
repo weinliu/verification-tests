@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		preChecks(oc)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-LongDuration-High-63894-Scaleup using 4.1 cloud image[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-LongDuration-High-63894-Scaleup using 4.1 cloud image[Disruptive]", func() {
 		var (
 			newMsName     = "mco-tc-63894-cloned"
 			amiVersion    = "ami-0649fd5d42859bdfc" // OCP4.1 ami for AWS and use-east2 zone: https://github.com/openshift/installer/blob/release-4.1/data/data/rhcos.json
@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
 		var (
 			newMsName  = "copied-machineset-modified-tc-52822"
 			kcName     = "change-maxpods-kubelet-config"

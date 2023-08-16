@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	var oc = exutil.NewCLIWithoutNamespace("default")
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-High-19941-[Apiserver] [failure inject] when 1 master is down the cluster should continue serving well without unavailable more than 30s [Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-19941-[Apiserver] [failure inject] when 1 master is down the cluster should continue serving well without unavailable more than 30s [Disruptive]", func() {
 		var (
 			// Adding wait time here of 90s because sometimes wait poll taking more thans 30s to complete for aws, gcp and vsphere platform.
 			expectedOutageTime = 90

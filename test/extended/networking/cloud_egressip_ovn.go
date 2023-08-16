@@ -1775,7 +1775,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-NonPreRelease-Medium-47029-Low-47024-Any egress IP can only be assigned to one node only. Warning event will be triggered if applying EgressIP object but no EgressIP nodes. [Serial]", func() {
+	g.It("Author:huirwang-NonPreRelease-Longduration-Medium-47029-Low-47024-Any egress IP can only be assigned to one node only. Warning event will be triggered if applying EgressIP object but no EgressIP nodes. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
@@ -2038,7 +2038,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-54045-EgressIP health check through monitoring port over GRPC on OCP OVN cluster. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:jechen-High-54045-EgressIP health check through monitoring port over GRPC on OCP OVN cluster. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
@@ -2801,7 +2801,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		oc.SetGuestKubeconf(hostedClusterKubeconfig)
 
 	})
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-NonPreRelease-ConnectedOnly-Author:jechen-High-54741-EgressIP health check through monitoring port over GRPC on hypershift cluster. [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-NonPreRelease-Longduration-ConnectedOnly-Author:jechen-High-54741-EgressIP health check through monitoring port over GRPC on hypershift cluster. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")

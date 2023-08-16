@@ -46,7 +46,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "42345"|./bin/extended-platform-tests run --timeout 10m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:sguo-Medium-42345-shouldn't create provisioning pod if region mismatch in install config vs Cluster Deployment [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Medium-42345-shouldn't create provisioning pod if region mismatch in install config vs Cluster Deployment [Serial]", func() {
 		testCaseID := "42345"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -181,7 +181,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: lwan@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Critical-29670-install/uninstall hive operator from OperatorHub", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:lwan-Critical-29670-install/uninstall hive operator from OperatorHub", func() {
 		exutil.By("Check Subscription...")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "AllCatalogSourcesHealthy", ok, DefaultTimeout, []string{"sub", sub.name, "-n",
 			sub.namespace, "-o=jsonpath={.status.conditions[0].reason}"}).check(oc)
@@ -218,7 +218,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41932"|./bin/extended-platform-tests run --timeout 15m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-41932-Add metric for hive-operator[Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:lwan-Medium-41932-Add metric for hive-operator[Serial]", func() {
 		// Expose Hive metrics, and neutralize the effect after finishing the test case
 		needRecover, prevConfig := false, ""
 		defer recoverClusterMonitoring(oc, &needRecover, &prevConfig)
@@ -246,7 +246,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "55904"|./bin/extended-platform-tests run --timeout 5m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:mihuang-Low-55904-[aws]Hiveadmission log enhancement[Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:mihuang-Low-55904-[aws]Hiveadmission log enhancement[Serial]", func() {
 		hiveadmissionPod := getHiveadmissionPod(oc, sub.namespace)
 		hiveadmissionPodLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(hiveadmissionPod, "-n", sub.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

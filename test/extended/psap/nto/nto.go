@@ -729,7 +729,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		compareSysctlDifferentFromSpecifiedValueByName(oc, "user.max_mnt_namespaces", "142214")
 	})
 
-	g.It("ROSA-OSD_CCS-NonHyperShiftHOST-NonPreRelease-Author:liqcui-Medium-37125-Turning on debugging for tuned containers.[Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-NonHyperShiftHOST-NonPreRelease-Longduration-Author:liqcui-Medium-37125-Turning on debugging for tuned containers.[Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -1030,7 +1030,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			o.ContainSubstring("fs.inotify.max_user_instances=8192")))
 	})
 
-	g.It("NonPreRelease-Author:liqcui-Medium-33238-Test NTO support for operatorapi Removed state [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:liqcui-Medium-33238-Test NTO support for operatorapi Removed state [Disruptive]", func() {
 
 		// test requires NTO to be installed
 		if !isNTO {
@@ -1652,7 +1652,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			o.ContainSubstring("nto_profile_calculated_total")))
 	})
 
-	g.It("NonPreRelease-Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
 		// test requires NTO to be installed
 		is3CPNoWorker := exutil.Is3MasterNoDedicatedWorkerNode(oc)
 
@@ -1861,7 +1861,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-hp", "worker-hp", 480)
 	})
 
-	g.It("NonPreRelease-Author:liqcui-Medium-49439-NTO can start and stop stalld when relying on Tuned '[service]' plugin.[Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:liqcui-Medium-49439-NTO can start and stop stalld when relying on Tuned '[service]' plugin.[Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -2600,7 +2600,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	})
 
-	g.It("NonPreRelease-Author:liqcui-Medium-59884-NTO Cgroup Blacklist multiple regular expression. [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:liqcui-Medium-59884-NTO Cgroup Blacklist multiple regular expression. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")

@@ -505,7 +505,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("No job has been created"))
 	})
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:yinzhou-Low-60194-Make sure KCM KS operator is rebased onto the latest version of Kubernetes", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Low-60194-Make sure KCM KS operator is rebased onto the latest version of Kubernetes", func() {
 		g.By("Get the latest version of Kubernetes")
 		ocVersion, versionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(versionErr).NotTo(o.HaveOccurred())

@@ -447,7 +447,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author rrasouli@redhat.com
-	g.It("Smokerun-Author:rrasouli-NonPreRelease-High-39451-Access Windows workload through clusterIP [Slow][Disruptive]", func() {
+	g.It("Smokerun-Author:rrasouli-NonPreRelease-Longduration-High-39451-Access Windows workload through clusterIP [Slow][Disruptive]", func() {
 		namespace := "winc-39451"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -699,7 +699,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Smokerun-Author:sgao-NonPreRelease-Critical-33783-Enable must gather on Windows node [Slow][Disruptive]", func() {
+	g.It("Smokerun-Author:sgao-NonPreRelease-Longduration-Critical-33783-Enable must gather on Windows node [Slow][Disruptive]", func() {
 		g.By("Check must-gather on Windows node")
 		// Note: Marked as [Disruptive] in case of /tmp folder full
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-33783").Output()
@@ -729,7 +729,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author: rrasouli@redhat.com
-	g.It("Smokerun-Author:rrasouli-NonPreRelease-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
+	g.It("Smokerun-Author:rrasouli-NonPreRelease-Longduration-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
 		// vSphere contains a builtin private and public key with it's template, currently changing its private key is super challenging
 		// it implies generating a new template with a different key.
 		if iaasPlatform == "vsphere" {
@@ -800,7 +800,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Smokerun-Author:sgao-NonPreRelease-Medium-37472-Idempotent check of service running in Windows node [Slow][Disruptive]", func() {
+	g.It("Smokerun-Author:sgao-NonPreRelease-Longduration-Medium-37472-Idempotent check of service running in Windows node [Slow][Disruptive]", func() {
 		namespace := "winc-37472"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -833,7 +833,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-NonPreRelease-Medium-39030-Re queue on Windows machine's edge cases [Slow][Disruptive]", func() {
+	g.It("Author:sgao-NonPreRelease-Longduration-Medium-39030-Re queue on Windows machine's edge cases [Slow][Disruptive]", func() {
 		g.By("Scale down WMCO")
 		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)

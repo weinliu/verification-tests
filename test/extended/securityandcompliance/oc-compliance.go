@@ -65,7 +65,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:pdhamdhe-High-40681-The oc compliance plugin rerun set of scans on command [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:pdhamdhe-High-40681-The oc compliance plugin rerun set of scans on command [Serial][Slow]", func() {
 
 		var (
 			ss = scanSettingDescription{
@@ -194,7 +194,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:pdhamdhe-High-41190-The view result command of oc compliance plugin exposes more information about a compliance result [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:pdhamdhe-High-41190-The view result command of oc compliance plugin exposes more information about a compliance result [Serial][Slow]", func() {
 
 		var (
 			ss = scanSettingDescription{
@@ -343,7 +343,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:pdhamdhe-High-40714-The oc compliance helps to download the raw compliance results from the Persistent Volume [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:pdhamdhe-High-40714-The oc compliance helps to download the raw compliance results from the Persistent Volume [Serial][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  false,

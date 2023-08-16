@@ -557,7 +557,7 @@ spec:
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "54048"|./bin/extended-platform-tests run --timeout 10m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54048-Hive to supprt cli-domain-from-installer-image annotation [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:mihuang-Medium-54048-Hive to supprt cli-domain-from-installer-image annotation [Serial]", func() {
 		testCaseID := "54048"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"

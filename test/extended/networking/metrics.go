@@ -817,7 +817,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
 	})
 
-	g.It("NonPreRelease-Author:qiowang-Medium-64077-Verify metrics for ipsec enabled/disabled when configure it at runtime [Disruptive] [Slow]", func() {
+	g.It("NonPreRelease-Longduration-Author:qiowang-Medium-64077-Verify metrics for ipsec enabled/disabled when configure it at runtime [Disruptive] [Slow]", func() {
 		var (
 			metricName = "ovnkube_master_ipsec_enabled"
 		)

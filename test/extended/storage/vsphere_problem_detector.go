@@ -225,7 +225,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author:pewang@redhat.com
 	// Since it'll restart deployment/vsphere-problem-detector-operator maybe conflict with the other vsphere-problem-detector cases,so set it as [Serial]
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:pewang-High-48763-[vSphere-Problem-Detector] should report 'vsphere_rwx_volumes_total' metric correctly [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:pewang-High-48763-[vSphere-Problem-Detector] should report 'vsphere_rwx_volumes_total' metric correctly [Serial]", func() {
 		exutil.By("# Get the value of 'vsphere_rwx_volumes_total' metric real init value")
 		// Restart vsphere-problem-detector-operator and get the init value of 'vsphere_rwx_volumes_total' metric
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())

@@ -134,7 +134,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(timecost).Should(o.BeNumerically("<", 10.0))
 	})
 
-	g.It("Author:mhanss-NonPreRelease-Critical-43048-Critical-43064-create/delete custom machine config pool [Disruptive]", func() {
+	g.It("Author:mhanss-NonPreRelease-Longduration-Critical-43048-Critical-43064-create/delete custom machine config pool [Disruptive]", func() {
 		exutil.By("get worker node to change the label")
 		nodeList := NewNodeList(oc)
 		workerNode := nodeList.GetAllLinuxWorkerNodesOrFail()[0]
@@ -496,15 +496,15 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-42390-Critical-45318-add machine config without ignition version. Block the MCO upgrade rollout if any of the pools are Degraded [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-42390-Critical-45318-add machine config without ignition version. Block the MCO upgrade rollout if any of the pools are Degraded [Serial]", func() {
 		createMcAndVerifyIgnitionVersion(oc, "empty ign version", "change-worker-ign-version-to-empty", "")
 	})
 
-	g.It("Author:mhanss-NonPreRelease-High-43124-add machine config with invalid ignition version [Serial]", func() {
+	g.It("Author:mhanss-NonPreRelease-Longduration-High-43124-add machine config with invalid ignition version [Serial]", func() {
 		createMcAndVerifyIgnitionVersion(oc, "invalid ign version", "change-worker-ign-version-to-invalid", "3.9.0")
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-46304-add new ssh authorized keys RHEL. OCP<4.10 [Serial]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-46304-add new ssh authorized keys RHEL. OCP<4.10 [Serial]", func() {
 		skipTestIfClusterVersion(oc, ">=", "4.10")
 		workerNode := skipTestIfOsIsNotRhelOs(oc)
 
@@ -521,7 +521,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(sshKeyOut).Should(o.ContainSubstring("mco_test@redhat.com"))
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-46897-add new ssh authorized keys RHEL. OCP>=4.10 [Serial]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-46897-add new ssh authorized keys RHEL. OCP>=4.10 [Serial]", func() {
 		skipTestIfClusterVersion(oc, "<", "4.10")
 		workerNode := skipTestIfOsIsNotRhelOs(oc)
 
@@ -548,7 +548,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:mhanss-NonPreRelease-Medium-43084-shutdown machine config daemon with SIGTERM [Disruptive]", func() {
+	g.It("Author:mhanss-NonPreRelease-Longduration-Medium-43084-shutdown machine config daemon with SIGTERM [Disruptive]", func() {
 		exutil.By("Create new machine config to add additional ssh key")
 		mcName := "add-additional-ssh-authorized-key"
 		mcTemplate := mcName + ".yaml"
@@ -701,7 +701,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mcp.waitForComplete()
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-42681-rotate kubernetes certificate authority [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-42681-rotate kubernetes certificate authority [Disruptive]", func() {
 		exutil.By("patch secret to trigger CA rotation")
 		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "-p", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`, "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator").Execute()
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
@@ -747,7 +747,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("mcd log on worker node %s contains expected strings: %v", workerNode.name, expectedStringsForWorker)
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-43085-check mcd crash-loop-back-off error in log [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-43085-check mcd crash-loop-back-off error in log [Serial]", func() {
 		exutil.By("get master and worker nodes")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
@@ -850,7 +850,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		// https://bugzilla.redhat.com/show_bug.cgi?id=2092442
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-43278-security fix for unsafe cipher [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-43278-security fix for unsafe cipher [Serial]", func() {
 		exutil.By("check go version >= 1.15")
 		_, clusterVersion, cvErr := exutil.GetClusterVersion(oc)
 		o.Expect(cvErr).NotTo(o.HaveOccurred())
@@ -879,7 +879,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(cipherOutput).Should(o.ContainSubstring("not vulnerable (OK)"))
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-43151-add node label to service monitor [Serial]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-43151-add node label to service monitor [Serial]", func() {
 		exutil.By("Get current mcd_ metrics from machine-config-daemon service")
 
 		svcMCD := NewNamespacedResource(oc.AsAdmin(), "service", MachineConfigNamespace, MachineConfigDaemon)
@@ -916,7 +916,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(stateQuery).Should(o.ContainSubstring(`"node":"` + firstWorkerNode.name + `"`))
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-43726-Azure ControllerConfig Infrastructure does not match cluster Infrastructure resource [Serial]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-43726-Azure ControllerConfig Infrastructure does not match cluster Infrastructure resource [Serial]", func() {
 		exutil.By("Get machine-config-controller platform status.")
 		mccPlatformStatus := NewResource(oc.AsAdmin(), "controllerconfig", "machine-config-controller").GetOrFail("{.spec.infra.status.platformStatus}")
 		logger.Infof("test mccPlatformStatus:\n %s", mccPlatformStatus)
@@ -941,7 +941,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(mccPlatformStatus).To(o.Equal(infraPlatformStatus))
 	})
 
-	g.It("Author:mhanss-NonPreRelease-High-42680-change pull secret in the openshift-config namespace [Serial]", func() {
+	g.It("Author:mhanss-NonPreRelease-Longduration-High-42680-change pull secret in the openshift-config namespace [Serial]", func() {
 		exutil.By("Add a dummy credential in pull secret")
 		secretFile, err := getPullSecret(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -999,7 +999,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("MCD log on worker node %s contains expected strings: %v", workerNode.name, expectedStringsForWorker)
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-45239-KubeletConfig has a limit of 10 per cluster [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-45239-KubeletConfig has a limit of 10 per cluster [Disruptive]", func() {
 		kcsLimit := 10
 
 		exutil.By("Pause mcp worker")
@@ -1073,7 +1073,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-48468-ContainerRuntimeConfig has a limit of 10 per cluster [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-48468-ContainerRuntimeConfig has a limit of 10 per cluster [Disruptive]", func() {
 		crsLimit := 10
 
 		exutil.By("Pause mcp worker")
@@ -1335,7 +1335,7 @@ nulla pariatur.`
 		verifyDriftConfig(mcp, rf, newMode, useForceFile)
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-46965-Avoid workload disruption for GPG Public Key Rotation [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-46965-Avoid workload disruption for GPG Public Key Rotation [Serial]", func() {
 
 		exutil.By("create new machine config with base64 encoded gpg public key")
 		mcName := "add-gpg-pub-key"
@@ -1360,7 +1360,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-47062-change policy.json on worker nodes [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-47062-change policy.json on worker nodes [Serial]", func() {
 
 		exutil.By("create new machine config to change /etc/containers/policy.json")
 		mcName := "change-policy-json"
@@ -1740,7 +1740,7 @@ nulla pariatur.`
 		o.Expect(rf.GetNpermissions()).To(o.Equal(fileMode))
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-51219-Check ClusterRole rules", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-51219-Check ClusterRole rules", func() {
 		expectedServiceAcc := MachineConfigDaemon
 		eventsRoleBinding := MachineConfigDaemonEvents
 		eventsClusterRole := MachineConfigDaemonEvents
@@ -1879,7 +1879,7 @@ nulla pariatur.`
 		}
 
 	})
-	g.It("Author:sregidor-NonPreRelease-Medium-52373-Modify proxy configuration in paused pools [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-52373-Modify proxy configuration in paused pools [Disruptive]", func() {
 
 		proxyValue := "http://user:pass@proxy-fake:1111"
 		noProxyValue := "test.52373.no-proxy.com"
@@ -1969,7 +1969,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-52520-Configure unqualified-search-registries in Image.config resource [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-52520-Configure unqualified-search-registries in Image.config resource [Disruptive]", func() {
 		expectedDropinFilePath := "/etc/containers/registries.conf.d/01-image-searchRegistries.conf"
 		expectedDropinContent := "unqualified-search-registries = [\"quay.io\"]\nshort-name-mode = \"\"\n"
 
@@ -2085,7 +2085,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-53668-when FIPS and realtime kernel are both enabled node should NOT be degraded [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-53668-when FIPS and realtime kernel are both enabled node should NOT be degraded [Disruptive]", func() {
 		// skip if arm64. realtime kernel is not supported.
 		architecture.SkipNonAmd64SingleArch(oc)
 		// skip the test if fips is not enabled
@@ -2129,7 +2129,7 @@ nulla pariatur.`
 		o.Expect(rtEnabled).Should(o.BeTrue(), "RT kernel is not enabled on node %s", masterNode.GetName())
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Critical-53960-No failed units in the bootstrap machine", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Critical-53960-No failed units in the bootstrap machine", func() {
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, AzurePlatform)
 
 		failedUnitsCommand := "sudo systemctl list-units --failed --all"
@@ -2159,7 +2159,7 @@ nulla pariatur.`
 			"There are failed units in the bootstrap machine")
 
 	})
-	g.It("Author:sregidor-NonPreRelease-Medium-55879-Don't allow creating the force file via MachineConfig [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-55879-Don't allow creating the force file via MachineConfig [Disruptive]", func() {
 		var (
 			filePath    = "/run/machine-config-daemon-force"
 			fileContent = ""
@@ -2215,7 +2215,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-54922-daemon: add check before updating kernelArgs [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-54922-daemon: add check before updating kernelArgs [Disruptive]", func() {
 		var (
 			mcNameArg1         = "tc-54922-kernel-args-1"
 			mcNameArg2         = "tc-54922-kernel-args-2"
@@ -2327,7 +2327,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-56123-Invalid extensions should degrade the machine config pool [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-56123-Invalid extensions should degrade the machine config pool [Disruptive]", func() {
 		var (
 			validExtension   = "usbguard"
 			invalidExtension = "zsh"
@@ -2376,7 +2376,7 @@ nulla pariatur.`
 		}
 	})
 
-	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Medium-56706-Move MCD drain alert into the MCC, revisit error mode[Disruptive]", func() {
+	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Longduration-Medium-56706-Move MCD drain alert into the MCC, revisit error mode[Disruptive]", func() {
 		var (
 			mcp               = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcc               = NewController(oc.AsAdmin())
@@ -2509,7 +2509,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-57009-Kubeletconfig custom tlsSecurityProfile [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-57009-Kubeletconfig custom tlsSecurityProfile [Disruptive]", func() {
 		var (
 			kcName     = "tc-57009-set-kubelet-custom-tls-profile"
 			kcTemplate = generateTemplateAbsolutePath("custom-tls-profile-kubelet-config.yaml")
@@ -2555,7 +2555,7 @@ nulla pariatur.`
 			"The configured tlsCipherSuites in /etc/kubernetes/kubelet.conf file are not the expected one")
 		logger.Infof("OK!\n")
 	})
-	g.It("Author:sregidor-NonPreRelease-Medium-56614-Create unit with content and mask=true[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-56614-Create unit with content and mask=true[Disruptive]", func() {
 		var (
 			workerNode     = NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 			maskedString   = "Loaded: masked"
@@ -2600,7 +2600,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-57595-Use empty pull-secret[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-57595-Use empty pull-secret[Disruptive]", func() {
 		var (
 			pullSecret = GetPullSecret(oc.AsAdmin())
 			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
@@ -2646,7 +2646,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-25819-enable FIPS by MCO not supported [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-25819-enable FIPS by MCO not supported [Disruptive]", func() {
 		var (
 			mcTemplate = "change-fips.yaml"
 			mcName     = "mco-tc-25819-master-fips"
@@ -2678,7 +2678,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Low-25822-Refuse to disable FIPS mode by MCO[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Low-25822-Refuse to disable FIPS mode by MCO[Disruptive]", func() {
 		var (
 			mMcName = "99-master-fips"
 			wMcName = "99-worker-fips"
@@ -2712,7 +2712,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-59837-Use wrong user when creating a file [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-59837-Use wrong user when creating a file [Disruptive]", func() {
 		var (
 			mcName              = "mco-tc-59837-create-file-with-wrong-user"
 			wrongUserFileConfig = `{"contents": {"source": "data:text/plain;charset=utf-8;base64,dGVzdA=="},"mode": 420,"path": "/etc/wronguser-test-file.test","user": {"name": "wronguser"}}`
@@ -2732,7 +2732,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-59867-Create files specifying user and group [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-59867-Create files specifying user and group [Disruptive]", func() {
 		var (
 			filesContent = "test"
 			coreUserID   = 1000
@@ -2891,7 +2891,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-61555-ImageDigestMirrorSet test [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-61555-ImageDigestMirrorSet test [Disruptive]", func() {
 		var (
 			idmsName = "tc-61555-digest-mirror"
 			mcp      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
@@ -2978,7 +2978,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-61558-ImageTagMirrorSet test [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-61558-ImageTagMirrorSet test [Disruptive]", func() {
 		var (
 			itmsName = "tc-61558-tag-mirror"
 			mcp      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
@@ -3068,7 +3068,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-62084-Certificate rotation in paused pools[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-62084-Certificate rotation in paused pools[Disruptive]", func() {
 		var (
 			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
@@ -3243,7 +3243,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-63868-ControllerConfig sync after Infrastructure objects are updated[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-63868-ControllerConfig sync after Infrastructure objects are updated[Disruptive]", func() {
 		var (
 			label      = "break.the.mco"
 			labelValue = "yes-tc-63868"

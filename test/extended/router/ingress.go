@@ -320,7 +320,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// bug: 1914127
-	g.It("Author:shudili-NonPreRelease-High-56228-Deletion of default router service under the openshift ingress namespace hangs flag [Disruptive]", func() {
+	g.It("Author:shudili-NonPreRelease-Longduration-High-56228-Deletion of default router service under the openshift ingress namespace hangs flag [Disruptive]", func() {
 		var (
 			svcResource = "service/router-default"
 			namespace   = "openshift-ingress"

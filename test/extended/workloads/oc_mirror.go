@@ -284,7 +284,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "oc-mirror command still falied")
 	})
-	g.It("NonHyperShiftHOST-Author:yinzhou-NonPreRelease-Medium-37372-High-40322-oc adm release extract pull from localregistry when given a localregistry image [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:yinzhou-NonPreRelease-Longduration-Medium-37372-High-40322-oc adm release extract pull from localregistry when given a localregistry image [Disruptive]", func() {
 		var imageDigest string
 		g.By("Set podman registry config")
 		dirname := "/tmp/case37372"
@@ -341,7 +341,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the mirror still failed"))
 	})
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Medium-46518-List ocp release content with different options", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Longduration-Medium-46518-List ocp release content with different options", func() {
 		g.By("Set podman registry config")
 		dirname := "/tmp/case46518"
 		err := os.MkdirAll(dirname, 0755)
@@ -364,7 +364,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Medium-60594-ImageSetConfig containing OCI FBC and release platform and additionalImages works well with --include-local-oci-catalogs flag [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Longduration-Medium-60594-ImageSetConfig containing OCI FBC and release platform and additionalImages works well with --include-local-oci-catalogs flag [Serial]", func() {
 		err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("version").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Set registry config")
@@ -475,7 +475,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		}
 	})
 
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Low-60603-oc-mirror negative test", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Longduration-Low-60603-oc-mirror negative test", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads/config-60603")
 		configOCI := filepath.Join(buildPruningBaseDir, "config-oci.yaml")
 		configNormal := filepath.Join(buildPruningBaseDir, "config-normal.yaml")

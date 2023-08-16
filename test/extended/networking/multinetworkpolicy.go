@@ -105,7 +105,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:weliang-Medium-41169-MultiNetworkPolicy ingress allow diff podSelector with same namespaceSelector. [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:weliang-Medium-41169-MultiNetworkPolicy ingress allow diff podSelector with same namespaceSelector. [Serial]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
 		policyFile := filepath.Join(buildPruningBaseDir, "ingress-allow-diff-podSelector-with-same-namespaceSelector.yaml")
@@ -180,7 +180,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:weliang-Medium-41171-MultiNetworkPolicy egress allow same podSelector with same namespaceSelector. [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:weliang-Medium-41171-MultiNetworkPolicy egress allow same podSelector with same namespaceSelector. [Serial]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
 		policyFile := filepath.Join(buildPruningBaseDir, "egress-allow-same-podSelector-with-same-namespaceSelector.yaml")
@@ -255,7 +255,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:weliang-Medium-41172-MultiNetworkPolicy egress allow diff podSelector with same namespaceSelector. [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:weliang-Medium-41172-MultiNetworkPolicy egress allow diff podSelector with same namespaceSelector. [Serial]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
 		policyFile := filepath.Join(buildPruningBaseDir, "egress-allow-diff-podSelector-with-same-namespaceSelector.yaml")
@@ -329,7 +329,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:weliang-Medium-41170-MultiNetworkPolicy ingress ipblock. [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:weliang-Medium-41170-MultiNetworkPolicy ingress ipblock. [Serial]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
 		patchInfo := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
@@ -503,7 +503,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:weliang-Medium-41173-MultiNetworkPolicy egress ipblock. [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:weliang-Medium-41173-MultiNetworkPolicy egress ipblock. [Serial]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
 		patchInfo := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
@@ -690,7 +690,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:weliang-Medium-41607-Multinetworkpolicy filter-with-tcpport [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:weliang-Medium-41607-Multinetworkpolicy filter-with-tcpport [Serial]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
 		patchInfo := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")

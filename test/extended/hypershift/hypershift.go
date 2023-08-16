@@ -452,7 +452,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-NonPreRelease-Critical-44942-Enable control plane deployment restart on demand[Serial]", func() {
+	g.It("HyperShiftMGMT-Author:heli-NonPreRelease-Longduration-Critical-44942-Enable control plane deployment restart on demand[Serial]", func() {
 		res := doOcpReq(oc, OcpGet, false, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.metadata.annotations}")
 		e2e.Logf("get hostedcluster %s annotation: %s ", hostedcluster.name, res)
 
@@ -1297,7 +1297,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-NonPreRelease-Author:heli-Critical-52318-[AWS]-Enforce machineconfiguration.openshift.io/role worker in machine config[Serial]", func() {
+	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:heli-Critical-52318-[AWS]-Enforce machineconfiguration.openshift.io/role worker in machine config[Serial]", func() {
 
 		if hostedclusterPlatform == AgentPlatform {
 			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")

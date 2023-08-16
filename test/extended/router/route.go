@@ -242,7 +242,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// bugzilla: 1934904
 	// no openshift-machine-api namespace on HyperShift guest cluster so this case is not available
-	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-High-56240-Canary daemonset can schedule pods to both worker and infra nodes [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-Longduration-High-56240-Canary daemonset can schedule pods to both worker and infra nodes [Disruptive]", func() {
 		var (
 			machinSetName = "machineset-56240"
 		)

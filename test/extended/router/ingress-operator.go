@@ -622,7 +622,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Medium-60012-matchExpressions for routeSelector defined in an ingress-controller", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Longduration-Medium-60012-matchExpressions for routeSelector defined in an ingress-controller", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -877,7 +877,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(value).To(o.BeEmpty())
 	})
 
-	g.It("Author:mjoseph-NonPreRelease-High-38674-hard-stop-after annotation can be applied globally on all ingresscontroller [Disruptive]", func() {
+	g.It("Author:mjoseph-NonPreRelease-Longduration-High-38674-hard-stop-after annotation can be applied globally on all ingresscontroller [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (

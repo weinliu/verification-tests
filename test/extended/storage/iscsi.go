@@ -112,7 +112,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-52770 [ISCSI] Check iscsi multipath working
-	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-OSD_CCS-ARO-Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-OSD_CCS-ARO-Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working [Serial]", func() {
 
 		// Deploy iscsi target server
 		exutil.By("#. Deploy iscsi target server for the test scenario")

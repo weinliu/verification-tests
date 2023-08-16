@@ -535,7 +535,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:huirwang-Medium-65796-Recreated service should have correct load_balancer nb entries for same name load_balancer. [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:huirwang-Medium-65796-Recreated service should have correct load_balancer nb entries for same name load_balancer. [Serial]", func() {
 		// From customer bug https://issues.redhat.com/browse/OCPBUGS-11716
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
