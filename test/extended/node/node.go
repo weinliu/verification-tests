@@ -42,6 +42,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		upgradeMachineConfigTemp1 = filepath.Join(buildPruningBaseDir, "custom-kubelet-test1.yaml")
 		upgradeMachineConfigTemp2 = filepath.Join(buildPruningBaseDir, "custom-kubelet-test2.yaml")
 		systemreserveTemp         = filepath.Join(buildPruningBaseDir, "kubeletconfig-defaultsysres.yaml")
+		podLogLinkTemp            = filepath.Join(buildPruningBaseDir, "pod-loglink.yaml")
+
+		podLogLink65404 = podLogLinkDescription{
+			name:      "",
+			namespace: "",
+			template:  podLogLinkTemp,
+		}
 
 		podWkloadCpu52313 = podNoWkloadCpuDescription{
 			name:      "",
@@ -949,6 +956,44 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		parameterCheck(oc)
 	})
 
+	//author: minmli@redhat.com
+	g.It("NonPreRelease-Longduration-Author:minmli-High-65404-log link inside pod via crio works well [Disruptive]", func() {
+		exutil.By("Apply a machine config to enable log link via crio")
+		mcLogLink := filepath.Join(buildPruningBaseDir, "machineconfig-log-link.yaml")
+		mcpName := "worker"
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + mcLogLink).Execute()
+			err := checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + mcLogLink).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the mcp finish updating")
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("Check the crio config as expected")
+		logLinkConfig := []string{"crio.runtime.workloads.linked", "activation_annotation = \"io.kubernetes.cri-o.LinkLogs\"", "allowed_annotations = [ \"io.kubernetes.cri-o.LinkLogs\" ]"}
+		configPath := "/etc/crio/crio.conf.d/99-linked-log.conf"
+		err = crioConfigExist(oc, logLinkConfig, configPath)
+		exutil.AssertWaitPollNoErr(err, "crio config is not set as expected")
+
+		exutil.By("Create a pod with LinkLogs annotation")
+		podLogLink65404.name = "httpd"
+		podLogLink65404.namespace = oc.Namespace()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer podLogLink65404.delete(oc)
+		podLogLink65404.create(oc)
+
+		exutil.By("Check pod status")
+		err = podStatus(oc)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		exutil.By("Check log link successfully")
+		checkLogLink(oc, podLogLink65404.namespace)
+	})
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {

@@ -172,6 +172,22 @@ type ctrcfgOverlayDescription struct {
 	template string
 }
 
+type podLogLinkDescription struct {
+	name      string
+	namespace string
+	template  string
+}
+
+func (podLogLink *podLogLinkDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podLogLink.template, "-p", "NAME="+podLogLink.name, "NAMESPACE="+podLogLink.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podLogLink *podLogLinkDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podLogLink.namespace, "pod", podLogLink.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func (liveProbe *liveProbeTermPeriod) create(oc *exutil.CLI) {
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", liveProbe.template, "-p", "NAME="+liveProbe.name, "NAMESPACE="+liveProbe.namespace, "TERMINATIONGRACE="+strconv.Itoa(liveProbe.terminationgrace), "PROBETERMINATIONGRACE="+strconv.Itoa(liveProbe.probeterminationgrace))
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1570,5 +1586,51 @@ func parameterCheck(oc *exutil.CLI) {
 		e2e.Logf("check failed")
 	}
 	exutil.AssertWaitPollNoErr(waitErr, "not default value")
+}
 
+func checkLogLink(oc *exutil.CLI, namespace string) {
+	waitErr := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		podname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		log1, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", namespace, "--", "cat", "/acme-logs/logs/httpd/0.log").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(log1, "httpd -D FOREGROUND") {
+			e2e.Logf("log link successfully")
+		} else {
+			e2e.Logf("log link failed!")
+			return false, nil
+		}
+		nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", namespace).Output()
+		e2e.Logf("The nodename is %v", nodename)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeReadyBool, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", nodename), "-o=jsonpath={.status.conditions[?(@.reason=='KubeletReady')].status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].status.podIP}", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if nodeReadyBool == "True" {
+			output, err := exutil.DebugNodeWithChroot(oc, nodename, "curl", podIP)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "It works!") {
+				e2e.Logf("curl successfully")
+			} else {
+				e2e.Logf("curl failed!")
+				return false, nil
+			}
+
+		} else {
+			e2e.Logf("NODES ARE NOT READY!")
+		}
+
+		log2, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", namespace, "--", "cat", "/acme-logs/logs/httpd/0.log").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(log2, "\"GET / HTTP/1.1\" 200 45") {
+			e2e.Logf("log link update successfully")
+			return true, nil
+		} else {
+			e2e.Logf("log link update failed!")
+			return false, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "check log link failed!")
 }
