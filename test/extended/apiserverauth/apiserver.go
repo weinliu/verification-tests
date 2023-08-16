@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 	// author: xxia@redhat.com
 	// It is destructive case, will make kube-apiserver roll out, so adding [Disruptive]. One rollout costs about 25mins, so adding [Slow]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-Author:xxia-Medium-25806-Force encryption key rotation for etcd datastore [Slow][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:xxia-Medium-25806-Force encryption key rotation for etcd datastore [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
 
 		exutil.By("1.) Check if cluster is Etcd Encryption On")
@@ -2009,9 +2009,10 @@ spec:
 	// author: jmekkatt@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:jmekkatt-high-50223-Checks on different bad admission webhook errors, status of kube-apiserver [Serial]", func() {
 		var (
-			validatingWebhookNameNotFound     = "test-validating-notfound-cfg"
-			mutatingWebhookNameNotFound       = "test-mutating-notfound-cfg"
-			crdWebhookNameNotFound            = "testcrdwebhooks.tests.com"
+			validatingWebhookNameNotFound = "test-validating-notfound-cfg"
+			mutatingWebhookNameNotFound   = "test-mutating-notfound-cfg"
+			crdWebhookNameNotFound        = "testcrdwebhooks.tests.com"
+
 			validatingWebhookNameNotReachable = "test-validating-notreachable-cfg2"
 			mutatingWebhookNameNotReachable   = "test-mutating-notreachable-cfg2"
 			crdWebhookNameNotReachable        = "testcrdwebhoks.tsts.com"
@@ -2022,8 +2023,10 @@ spec:
 			serviceName                       = "example-service"
 			ServiceNameNotFound               = "service-unknown"
 			kubeApiserverCoStatus             = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-			webHookConditionErrors            = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`}
+			webhookConditionErrors            = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`}
 			webhookServiceFailureReasons      = []string{`WebhookServiceNotFound`, `WebhookServiceNotReady`, `WebhookServiceConnectionError`}
+			webhookClusterip                  string
+			webhookService                    service
 		)
 
 		exutil.By("1) Create new namespace for the tests.")
@@ -2096,26 +2099,34 @@ spec:
 		CheckIfResourceAvailable(oc, "crd", []string{crdWebhookNameNotFound}, "")
 
 		exutil.By("5) Check for information error message 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to invalid service.")
-		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webHookConditionErrors)
+		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webhookConditionErrors)
 		exutil.By("6) Check for kubeapiserver operator status when bad admissionwebhooks configured.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 
 		exutil.By("7) Create services and check service presence for test steps")
-		service := service{
+		clusterIP, err := oc.AsAdmin().Run("get").Args("service", "kubernetes", "-o=jsonpath={.spec.clusterIP}", "-n", "default").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterIP).NotTo(o.Equal(""))
+		if isIPv6(clusterIP) {
+			webhookClusterip = "fd02::010a"
+		} else {
+			webhookClusterip = "172.30.1.1"
+		}
+		webhookService = service{
 			name:      serviceName,
-			clusterip: "172.30.1.1",
+			clusterip: webhookClusterip,
 			namespace: oc.Namespace(),
 			template:  serviceTemplate,
 		}
 		defer oc.AsAdmin().Run("delete").Args("service", serviceName, "-n", oc.Namespace(), "--ignore-not-found").Execute()
-		service.createServiceFromTemplate(oc)
+		webhookService.createServiceFromTemplate(oc)
 		out, err := oc.AsAdmin().Run("get").Args("services", serviceName, "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring(serviceName), "Service object is not listed as expected")
 
 		exutil.By("8) Check for error 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to unreachable service.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
-		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webHookConditionErrors)
+		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webhookConditionErrors)
 
 		exutil.By("9) Creation of additional webhooks that holds unknown service defintions.")
 		defer func() {
@@ -2182,7 +2193,7 @@ spec:
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 
 		exutil.By("11) Check for error 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points both unknown and unreachable services.")
-		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webHookConditionErrors)
+		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webhookConditionErrors)
 
 		exutil.By("12) Delete all bad webhooks and check kubeapiserver operators and errors")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookNameNotReachable).Execute()
@@ -2199,7 +2210,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
-		compareAPIServerWebhookConditions(oc, "", "False", webHookConditionErrors)
+		compareAPIServerWebhookConditions(oc, "", "False", webhookConditionErrors)
 		exutil.By("Test case steps are passed")
 	})
 
