@@ -182,9 +182,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster-version-operator"`, 3*uwmLoadTime)
 
 		g.By("check from thanos-querier logs")
-		for _, pod := range podList {
-			checkLogsInContainer(oc, "openshift-monitoring", pod, "thanos-query", "query=cluster_version")
-		}
+		//oc -n openshift-monitoring logs -l app.kubernetes.io/instance=thanos-querier -c thanos-query --tail=-1
+		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/instance=thanos-querier", "thanos-query", "query=cluster_version", true)
 	})
 
 	// author: juzhao@redhat.com

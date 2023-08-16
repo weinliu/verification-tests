@@ -394,3 +394,24 @@ func checkYamlconfig(oc *exutil.CLI, ns string, components string, componentsNam
 	})
 	exutil.AssertWaitPollNoErr(configCheck, fmt.Sprintf("base on `expectExist=%v`, did (not) find \"%s\" exist", expectExist, checkValue))
 }
+
+// check logs through label
+func checkLogWithLabel(oc *exutil.CLI, namespace string, label string, containerName string, checkValue string, expectExist bool) {
+	err := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, "-l", label, "-c", containerName, "--tail=-1").Output()
+		if expectExist {
+			if err != nil || !strings.Contains(output, checkValue) {
+				return false, nil
+			}
+			return true, nil
+		}
+		if !expectExist {
+			if err != nil || !strings.Contains(output, checkValue) {
+				return true, nil
+			}
+			return false, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to find \"%s\" in the pod logs", checkValue))
+}
