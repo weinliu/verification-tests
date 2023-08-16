@@ -3162,12 +3162,12 @@ nulla pariatur.`
 		)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63477-Deploy files using all available ignition configs. Default 3.2.0[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63477-Deploy files using all available ignition configs. Default 3.4.0[Disruptive]", func() {
 		var (
 			wMcp                   = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcNames                = "mc-tc-63477"
 			allVersions            = []string{"2.2.0", "3.0.0", "3.1.0", "3.2.0", "3.3.0", "3.4.0"}
-			defaultIgnitionVersion = "3.2.0"
+			defaultIgnitionVersion = "3.4.0" // default version is 3.4.0 for OCP > 4.13
 		)
 		defer wMcp.waitForComplete()
 
@@ -3222,7 +3222,7 @@ nulla pariatur.`
 		renderedMC, err := wMcp.GetConfiguredMachineConfig()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config for pool %s", wMcp.GetName())
 		o.Expect(renderedMC.GetIgnitionVersion()).To(o.Equal(defaultIgnitionVersion),
-			"Rendered MC should use %s default ignition version")
+			"Rendered MC should use %s default ignition version", defaultIgnitionVersion)
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify that all files were created")
