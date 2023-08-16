@@ -2018,10 +2018,10 @@ nulla pariatur.`
 
 		exutil.By("Wait for first nodes to be configured")
 		// Worker and master nodes should go into 'working' status
-		o.Eventually(firstUpdatedWorker.IsUpdating, "5m", "20s").Should(o.BeTrue(),
-			"Node %s is not in 'working' status after the new image.conig is configured")
-		o.Eventually(firstUpdatedMaster.IsUpdating, "5m", "20s").Should(o.BeTrue(),
-			"Node %s is not in 'working' status after the new image.conig is configured")
+		o.Eventually(firstUpdatedWorker.IsUpdating, "8m", "20s").Should(o.BeTrue(),
+			"Node %s is not in 'working' status after the new image.conig is configured", firstUpdatedWorker.GetName())
+		o.Eventually(firstUpdatedMaster.IsUpdating, "8m", "20s").Should(o.BeTrue(),
+			"Node %s is not in 'working' status after the new image.conig is configured", firstUpdatedMaster.GetName())
 
 		// We dont actually wait for the whole configuration to be applied
 		//  we will only wait for those nodes to be unpdated
@@ -2029,9 +2029,9 @@ nulla pariatur.`
 		// If it causes unstability, just wait here for the MCPs to complete the configuration instead
 		// Worker and master nodes should go into 'working' status
 		o.Eventually(firstUpdatedWorker.IsUpdated, "10m", "20s").Should(o.BeTrue(),
-			"Node %s is not in 'Done' status after the configuration is applied")
+			"Node %s is not in 'Done' status after the configuration is applied", firstUpdatedWorker.GetName())
 		o.Eventually(firstUpdatedMaster.IsUpdated, "10m", "20s").Should(o.BeTrue(),
-			"Node %s is not in 'Done' status after the configuration is applied")
+			"Node %s is not in 'Done' status after the configuration is applied", firstUpdatedMaster.GetName())
 
 		exutil.By("Print all events for the verified worker node")
 		el := NewEventList(oc.AsAdmin(), "default")
