@@ -274,14 +274,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		if ipStackType == "dualstack" {
 			g.By("create ipBlock Ingress Dual CIDRs Policy in ns1")
-			npIPBlockNS1 := ipBlockIngressDual{
+			npIPBlockNS1 := ipBlockCIDRsDual{
 				name:      "ipblock-dual-cidrs-ingress",
 				template:  ipBlockIngressTemplateDual,
 				cidrIpv4:  helloPod1ns1IPv4WithCidr,
 				cidrIpv6:  helloPod1ns1IPv6WithCidr,
 				namespace: ns1,
 			}
-			npIPBlockNS1.createipBlockIngressObjectDual(oc)
+			npIPBlockNS1.createipBlockCIDRObjectDual(oc)
 
 			output, err := oc.Run("get").Args("networkpolicy").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -295,13 +295,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			} else {
 				helloPod1ns1IPWithCidr = helloPod1ns1IPv6 + "/32"
 			}
-			npIPBlockNS1 := ipBlockIngressSingle{
+
+			npIPBlockNS1 := ipBlockCIDRsSingle{
 				name:      "ipblock-single-cidr-ingress",
 				template:  ipBlockIngressTemplateSingle,
 				cidr:      helloPod1ns1IPWithCidr,
 				namespace: ns1,
 			}
-			npIPBlockNS1.createipBlockIngressObjectSingle(oc)
+			npIPBlockNS1.createipBlockCIDRObjectSingle(oc)
 
 			output, err := oc.Run("get").Args("networkpolicy").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -358,14 +359,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		if ipStackType == "dualstack" {
 			g.By("create ipBlock Ingress Dual CIDRs Policy in ns1 again but with ipblock for pod2 ns2")
-			npIPBlockNS1New := ipBlockIngressDual{
+			npIPBlockNS1New := ipBlockCIDRsDual{
 				name:      "ipblock-dual-cidrs-ingress",
 				template:  ipBlockIngressTemplateDual,
 				cidrIpv4:  helloPod2ns2IPv4WithCidr,
 				cidrIpv6:  helloPod2ns2IPv6WithCidr,
 				namespace: ns1,
 			}
-			npIPBlockNS1New.createipBlockIngressObjectDual(oc)
+			npIPBlockNS1New.createipBlockCIDRObjectDual(oc)
 		} else {
 			// For singlestack getPodIP returns second parameter empty therefore use helloPod2ns2IPv6 variable but append it
 			// with CIDR based on stack.
@@ -375,13 +376,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			} else {
 				helloPod2ns2IPWithCidr = helloPod2ns2IPv6 + "/32"
 			}
-			npIPBlockNS1New := ipBlockIngressSingle{
+
+			npIPBlockNS1New := ipBlockCIDRsSingle{
 				name:      "ipblock-single-cidr-ingress",
 				template:  ipBlockIngressTemplateSingle,
 				cidr:      helloPod2ns2IPWithCidr,
 				namespace: ns1,
 			}
-			npIPBlockNS1New.createipBlockIngressObjectSingle(oc)
+			npIPBlockNS1New.createipBlockCIDRObjectSingle(oc)
 		}
 		g.By("Checking connectivity from pod2 ns2 to pod3 ns1")
 		CurlPod2PodPass(oc, ns2, "hello-pod2", ns1, "hello-pod3")
@@ -599,7 +601,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		if ipStackType == "dualstack" {
 			g.By("create ipBlock Ingress Dual CIDRs Policy in ns1")
-			npIPBlockNS1 := ipBlockIngressDual{
+
+			npIPBlockNS1 := ipBlockCIDRsDual{
 				name:      "ipblock-dual-cidrs-ingress-41879",
 				template:  ipBlockIngressTemplateDual,
 				cidrIpv4:  testPod1IPv4WithCidr,
@@ -610,13 +613,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				cidr3Ipv6: testPod3IPv6WithCidr,
 				namespace: ns1,
 			}
-			npIPBlockNS1.createipBlockMultipleCidrIngressObjectDual(oc)
+			npIPBlockNS1.createIPBlockMultipleCIDRsObjectDual(oc)
 
 			output, err := oc.Run("get").Args("networkpolicy").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("ipblock-dual-cidrs-ingress-41879"))
 		} else {
-			npIPBlockNS1 := ipBlockIngressSingle{
+
+			npIPBlockNS1 := ipBlockCIDRsSingle{
 				name:      "ipblock-single-cidr-ingress-41879",
 				template:  ipBlockIngressTemplateSingle,
 				cidr:      testPod1IPv6WithCidr,
@@ -624,7 +628,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				cidr3:     testPod3IPv6WithCidr,
 				namespace: ns1,
 			}
-			npIPBlockNS1.createipBlockMultipleCidrIngressObjectSingle(oc)
+			npIPBlockNS1.createIPBlockMultipleCIDRsObjectSingle(oc)
 
 			output, err := oc.Run("get").Args("networkpolicy").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -701,14 +705,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			helloPod1ns1IPv6WithCidr := helloPod1ns1IP1 + "/128"
 			helloPod1ns1IPv4WithCidr := helloPod1ns1IP2 + "/32"
 			g.By("create ipBlock Egress Dual CIDRs Policy in ns1")
-			npIPBlockNS1 := ipBlockEgressDual{
+			npIPBlockNS1 := ipBlockCIDRsDual{
 				name:      "ipblock-dual-cidrs-egress",
 				template:  ipBlockEgressTemplateDual,
 				cidrIpv4:  helloPod1ns1IPv4WithCidr,
 				cidrIpv6:  helloPod1ns1IPv6WithCidr,
 				namespace: ns1,
 			}
-			npIPBlockNS1.createipBlockEgressObjectDual(oc, false)
+			npIPBlockNS1.createipBlockCIDRObjectDual(oc)
 
 			output, err := oc.Run("get").Args("networkpolicy").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -717,22 +721,22 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		} else {
 			if ipStackType == "ipv6single" {
 				helloPod1ns1IPv6WithCidr := helloPod1ns1IP1 + "/128"
-				npIPBlockNS1 := ipBlockEgressSingle{
+				npIPBlockNS1 := ipBlockCIDRsSingle{
 					name:      "ipblock-single-cidr-egress",
 					template:  ipBlockEgressTemplateSingle,
 					cidr:      helloPod1ns1IPv6WithCidr,
 					namespace: ns1,
 				}
-				npIPBlockNS1.createipBlockEgressObjectSingle(oc, false)
+				npIPBlockNS1.createipBlockCIDRObjectSingle(oc)
 			} else {
 				helloPod1ns1IPv4WithCidr := helloPod1ns1IP1 + "/32"
-				npIPBlockNS1 := ipBlockEgressSingle{
+				npIPBlockNS1 := ipBlockCIDRsSingle{
 					name:      "ipblock-single-cidr-egress",
 					template:  ipBlockEgressTemplateSingle,
 					cidr:      helloPod1ns1IPv4WithCidr,
 					namespace: ns1,
 				}
-				npIPBlockNS1.createipBlockEgressObjectSingle(oc, false)
+				npIPBlockNS1.createipBlockCIDRObjectSingle(oc)
 			}
 
 			output, err := oc.Run("get").Args("networkpolicy").Output()
@@ -833,7 +837,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			helloPod2ns1IPv6WithCidr := helloPod2ns1IP1 + "/128"
 			helloPod2ns1IPv4WithCidr := helloPod2ns1IP2 + "/32"
 			g.By("create ipBlock Egress CIDRs with except rule Policy in ns1 on dualstack")
-			npIPBlockNS1 := ipBlockEgressDual{
+			npIPBlockNS1 := ipBlockCIDRsExceptDual{
 				name:           "ipblock-dual-cidrs-egress-except",
 				template:       ipBlockEgressTemplateDual,
 				cidrIpv4:       hostSubnetCIDRIPv4,
@@ -842,7 +846,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				cidrIpv6Except: helloPod2ns1IPv6WithCidr,
 				namespace:      ns1,
 			}
-			npIPBlockNS1.createipBlockEgressObjectDual(oc, true)
+			npIPBlockNS1.createipBlockExceptObjectDual(oc)
 			output, err := oc.Run("get").Args("networkpolicy").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("ipblock-dual-cidrs-egress-except"))
@@ -852,27 +856,27 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				o.Expect(hostSubnetCIDRIPv6).NotTo(o.BeEmpty())
 				helloPod2ns1IPv6WithCidr := helloPod2ns1IP1 + "/128"
 				g.By("create ipBlock Egress CIDRs with except rule Policy in ns1 on IPv6 singlestack")
-				npIPBlockNS1 := ipBlockEgressSingle{
+				npIPBlockNS1 := ipBlockCIDRsExceptSingle{
 					name:      "ipblock-single-cidr-egress-except",
 					template:  ipBlockEgressTemplateSingle,
 					cidr:      hostSubnetCIDRIPv6,
 					except:    helloPod2ns1IPv6WithCidr,
 					namespace: ns1,
 				}
-				npIPBlockNS1.createipBlockEgressObjectSingle(oc, true)
+				npIPBlockNS1.createipBlockExceptObjectSingle(oc, true)
 			} else {
 				hostSubnetCIDRIPv4 := getNodeSubnet(oc, nodeList.Items[0].Name)
 				o.Expect(hostSubnetCIDRIPv4).NotTo(o.BeEmpty())
 				helloPod2ns1IPv4WithCidr := helloPod2ns1IP1 + "/32"
 				g.By("create ipBlock Egress CIDRs with except rule Policy in ns1 on IPv4 singlestack")
-				npIPBlockNS1 := ipBlockEgressSingle{
+				npIPBlockNS1 := ipBlockCIDRsExceptSingle{
 					name:      "ipblock-single-cidr-egress-except",
 					template:  ipBlockEgressTemplateSingle,
 					cidr:      hostSubnetCIDRIPv4,
 					except:    helloPod2ns1IPv4WithCidr,
 					namespace: ns1,
 				}
-				npIPBlockNS1.createipBlockEgressObjectSingle(oc, true)
+				npIPBlockNS1.createipBlockExceptObjectSingle(oc, true)
 			}
 			output, err := oc.Run("get").Args("networkpolicy").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1387,6 +1391,116 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(strings.Contains(output, "Hello OpenShift!")).To(o.BeTrue())
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
+	})
+	g.It("Author:asood-Medium-64787-Network policy with duplicate egress rules (same CIDR block) fails to be recreated [Disruptive]", func() {
+		// https://issues.redhat.com/browse/OCPBUGS-5835
+		var (
+			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
+			ipBlockEgressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-egress-dual-multiple-CIDRs-template.yaml")
+			ipBlockEgressTemplateSingle = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-egress-single-multiple-CIDRs-template.yaml")
+			pingPodNodeTemplate         = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+		exutil.By("Check cluster network type")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("This case requires OVNKubernetes as network plugin")
+		}
+
+		ipStackType := checkIPStackType(oc)
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Obtain the namespace")
+		ns := oc.Namespace()
+
+		exutil.By("create a hello pod in namspace")
+		podns := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		podns.createPingPodNode(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		helloPodnsIP1, helloPodnsIP2 := getPodIP(oc, ns, podns.name)
+		var policyName string
+		if ipStackType == "dualstack" {
+			helloPodnsIPv6WithCidr := helloPodnsIP1 + "/128"
+			helloPodnsIPv4WithCidr := helloPodnsIP2 + "/32"
+			exutil.By("Create ipBlock Egress Dual with multiple CIDRs Policy in namespace")
+			npIPBlockNS := ipBlockCIDRsDual{
+				name:      "ipblock-dual-multiple-cidrs-egress",
+				template:  ipBlockEgressTemplateDual,
+				cidrIpv4:  helloPodnsIPv4WithCidr,
+				cidrIpv6:  helloPodnsIPv6WithCidr,
+				cidr2Ipv4: helloPodnsIPv4WithCidr,
+				cidr2Ipv6: helloPodnsIPv6WithCidr,
+				cidr3Ipv4: helloPodnsIPv4WithCidr,
+				cidr3Ipv6: helloPodnsIPv6WithCidr,
+				namespace: ns,
+			}
+			npIPBlockNS.createIPBlockMultipleCIDRsObjectDual(oc)
+			output, err := oc.Run("get").Args("networkpolicy", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring(npIPBlockNS.name))
+			policyName = npIPBlockNS.name
+
+		} else {
+			var npIPBlockNS ipBlockCIDRsSingle
+			if ipStackType == "ipv6single" {
+				helloPodnsIPv6WithCidr := helloPodnsIP1 + "/128"
+				npIPBlockNS = ipBlockCIDRsSingle{
+					name:      "ipblock-single-multiple-cidr-egress",
+					template:  ipBlockEgressTemplateSingle,
+					cidr:      helloPodnsIPv6WithCidr,
+					cidr2:     helloPodnsIPv6WithCidr,
+					cidr3:     helloPodnsIPv6WithCidr,
+					namespace: ns,
+				}
+			} else {
+				helloPodnsIPv4WithCidr := helloPodnsIP1 + "/32"
+				npIPBlockNS = ipBlockCIDRsSingle{
+					name:      "ipblock-single-multiple-cidr-egress",
+					template:  ipBlockEgressTemplateSingle,
+					cidr:      helloPodnsIPv4WithCidr,
+					cidr2:     helloPodnsIPv4WithCidr,
+					cidr3:     helloPodnsIPv4WithCidr,
+					namespace: ns,
+				}
+			}
+			npIPBlockNS.createIPBlockMultipleCIDRsObjectSingle(oc)
+			output, err := oc.Run("get").Args("networkpolicy", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring(npIPBlockNS.name))
+			policyName = npIPBlockNS.name
+		}
+		exutil.By("Delete the ovnkube node pod on the node")
+		ovnKNodePod, ovnkNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeList.Items[0].Name)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+		e2e.Logf("ovnkube-node podname %s running on node %s", ovnKNodePod, nodeList.Items[0].Name)
+		defer waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", ovnKNodePod, "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Wait for new ovnkube-node pod recreated on the node")
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		ovnKNodePod, ovnkNodePodErr = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeList.Items[0].Name)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+
+		exutil.By("Check for error message related network policy")
+		e2e.Logf("ovnkube-node new podname %s running on node %s", ovnKNodePod, nodeList.Items[0].Name)
+		filterString := fmt.Sprintf(" %s/%s ", ns, policyName)
+		e2e.Logf("Filter String %s", filterString)
+		logContents, logErr := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnKNodePod, filterString)
+		o.Expect(logErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Log contents \n%s", logContents)
+		o.Expect(strings.Contains(logContents, "failed")).To(o.BeFalse())
+
 	})
 
 })
