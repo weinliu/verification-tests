@@ -1014,6 +1014,49 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(strings.Contains(string(output), "File: /tmp/case60499/oc")).To(o.BeTrue())
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:knarra-Medium-10220-Workloads oc debug with or without init container for pod", func() {
+		testBaseDir := exutil.FixturePath("testdata", "workloads")
+		initContainerFile := filepath.Join(testBaseDir, "initContainer10220.yaml")
+
+		g.By("Create pod with InitContainer")
+		err := oc.Run("create").Args("-f", initContainerFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Make sure pod with init container running well")
+		checkPodStatus(oc, "name=hello-pod", oc.Namespace(), "Running")
+		g.By("Run debug command with init container")
+		cmd, _, _, err := oc.Run("debug").Args("pod/hello-pod", "--keep-init-containers=true").Background()
+		defer cmd.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
+			debugPodName, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace()).Output()
+			if err != nil {
+				e2e.Logf("debug failed with error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("hello-pod-debug", debugPodName); matched {
+				e2e.Logf("Check the debug pod command succeeded\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get debug with init container"))
+
+		g.By("Check if Init Containers present in debug pod output")
+		debugPodName, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace(), "-o=jsonpath={.items[1].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		Output, err := oc.WithoutNamespace().Run("describe").Args("pods", debugPodName, "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if matched, _ := regexp.MatchString("Init Containers", Output); !matched {
+			e2e.Failf("Init Containers are not seen in the output when run with keep init containers true")
+		}
+		_, err = oc.WithoutNamespace().Run("delete").Args("pods", debugPodName, "-n", oc.Namespace(), "--wait=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
+
 })
 
 var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
