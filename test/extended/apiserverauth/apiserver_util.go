@@ -1205,15 +1205,16 @@ func waitApiserverRestartOfHypershift(oc *exutil.CLI, appLabel string, ns string
 			e2e.Logf("#### %s was restarting ...", appLabel)
 			return false, nil
 		}
+		time.Sleep(20 * time.Second)
 		// Recheck status of pods and confirm twice, avoid false restarts
-		for i := 1; i <= 2; i++ {
+		for i := 1; i <= 4; i++ {
 			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app="+appLabel, "--no-headers", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if matchedAgain := re.MatchString(out); matchedAgain {
 				e2e.Logf("#### %s was restarting ...", appLabel)
 				return false, nil
 			}
-			time.Sleep(30 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 		e2e.Logf("#### %s have been restarted!", appLabel)
 		return true, nil
