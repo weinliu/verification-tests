@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,8 +33,8 @@ var (
 	nutanix_proxy_host = "10.0.77.69"
 	vsphere_bastion    = "10.0.76.163"
 	// Bastion user used for Nutanix and vSphere IBMC
-	sshProxyUser   = "root"
-	defaultWindowsMS   = "windows"
+	sshProxyUser     = "root"
+	defaultWindowsMS = "windows"
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
@@ -233,7 +234,7 @@ func getAdministratorNameByPlatform(iaasPlatform string) (admin string) {
 }
 
 func getBastionSSHUser(iaasPlatform string) (user string) {
-	if iaasPlatform == "nutanix" || iaasPlatform == "vsphere"{
+	if iaasPlatform == "nutanix" || iaasPlatform == "vsphere" {
 		return sshProxyUser
 	}
 	return "core"
@@ -826,21 +827,21 @@ func popItemFromList(oc *exutil.CLI, value string, keywordSearch string, namespa
 	return retValue, err
 }
 
-func waitForServicesCM(oc *exutil.CLI, cmName string) {
+func waitForCM(oc *exutil.CLI, cmName string, cmType string, namespace string) {
 	pollErr := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
-		windowsServicesCM, err := popItemFromList(oc, "configmap", "windows-services", wmcoNamespace)
-		if err != nil || windowsServicesCM == "" {
+		windowsCM, err := popItemFromList(oc, "configmap", cmType, namespace)
+		if err != nil || windowsCM == "" {
 			return false, nil
 		}
-		if windowsServicesCM == cmName {
+		if windowsCM == cmName {
 			return true, nil
 		}
-		e2e.Logf("Windows service configmap %v does not match expected %v", windowsServicesCM, cmName)
+		e2e.Logf("Configmap %v does not match expected %v", windowsCM, cmName)
 		return false, nil
 
 	})
 	if pollErr != nil {
-		e2e.Failf("Expected windows-services configmap %v not found after %v seconds ...", cmName, 180)
+		e2e.Failf("Expected %v configmap %v not found after %v seconds ...", cmType, cmName, 180)
 	}
 }
 
@@ -1077,4 +1078,55 @@ func matchKubeletVersion(oc *exutil.CLI, version1, version2 string) bool {
 	}
 	// otherwise, check only X.Y match
 	return version1Parts[0] == version2Parts[0] && version1Parts[1] == version2Parts[1]
+}
+
+func compileEnvVars(pwshOutput string) string {
+	var valueLines []string
+	var value string
+	lines := strings.Split(pwshOutput, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			valueLine := strings.TrimSpace(strings.TrimPrefix(parts[1], "Value:"))
+			valueLines = []string{valueLine}
+			// case when a long ENV var value like NO_PROXY is split into multiple elements
+		} else if line != "" {
+			valueLines = append(valueLines, line)
+		}
+		if len(valueLines) > 0 {
+			value = strings.Join(valueLines, "")
+		}
+	}
+	return value
+}
+
+func getPayloadMap(payload string) map[string]interface{} {
+	var myMap map[string]any
+	json.Unmarshal([]byte(payload), &myMap)
+
+	return myMap
+}
+
+func compareMaps(map1, map2 map[string]interface{}) bool {
+	if len(map1) != len(map2) {
+		return false
+	}
+	for key := range map1 {
+		val1 := compileEnvVars(fmt.Sprint(map1[key]))
+		val2 := compileEnvVars(fmt.Sprint(map2[key]))
+		// special case for NO_PROXY where PS output is with ;
+		value := strings.ReplaceAll(val2, ";", ",")
+		if val1 != value {
+			e2e.Logf("values are different value: %v map2 value: %v", val1, val2)
+			return false
+		}
+	}
+	return true
+}
+
+func getClusterProxy(oc *exutil.CLI, value string) string {
+	clusterProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxies", "-o=jsonpath={.items[*].status."+value+"}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return clusterProxy
 }

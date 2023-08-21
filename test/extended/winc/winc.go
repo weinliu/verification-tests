@@ -39,6 +39,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		linuxServiceDNS   = "linux-webserver.winc-test.svc.cluster.local:8080"
 		defaultWindowsMS  = "windows"
 		defaultNamespace  = "winc-test"
+		proxyCAConfigMap  = "trusted-ca"
+		wicdConfigMap     = "windows-services"
 		iaasPlatform      string
 		zone              string
 		svcs              = map[int]string{
@@ -1161,7 +1163,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Smokerun-Author:rrasouli-Medium-54711- [WICD] wmco services are running from ConfigMap", func() {
 
 		g.By("Check configmap services running on Windows workers")
-		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", wmcoNamespace)
+		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		payload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1185,7 +1187,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check service configmap exists")
 		wmcoLogVersion := getWMCOVersionFromLogs(oc)
 		cmVersionFromLog := "windows-services-" + wmcoLogVersion
-		windowsServicesCM, err := popItemFromList(oc, "configmap", "windows-services", wmcoNamespace)
+		windowsServicesCM, err := popItemFromList(oc, "configmap", wicdConfigMap, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if cmVersionFromLog != windowsServicesCM {
 			e2e.Failf("Configmap of windows services mismatch with Logs version")
@@ -1207,7 +1209,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Delete windows-services configmap and wait for its recreation")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForServicesCM(oc, windowsServicesCM)
+		waitForCM(oc, windowsServicesCM, wicdConfigMap, wmcoNamespace)
 
 		g.By("Attempt to modify the windows-services configmap")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", windowsServicesCM, "-p", `{"data":{"services":"[]"}}`, "-n", wmcoNamespace).Output()
@@ -1251,7 +1253,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// scaling WMCO pod back to 1
 		scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
-		waitForServicesCM(oc, windowsServicesCM)
+		waitForCM(oc, windowsServicesCM, wicdConfigMap, wmcoNamespace)
 
 	})
 
@@ -1583,6 +1585,50 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			o.Expect(status).Should(o.Equal("Running"))
 
 		}
+	})
+
+	g.It("Smokerun-Author:rrasouli-Critical-65980-[node-proxy]-Cluster-wide proxy acceptance test", func() {
+
+		// here we are checking whether cluster proxy is configured at all, otherwise skip the test
+		clusterPayload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "-o=jsonpath={.items[0].status}").Output()
+
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterProxies := getPayloadMap(clusterPayload)
+		if len(clusterProxies) == 0 {
+			g.Skip("Cluster proxy not detected, skipping")
+
+		}
+		// here we are creating a new cluster proxy map that contains similar keys as in WICD
+		clusterEnvVars := make(map[string]interface{})
+		clusterEnvVars["HTTPS_PROXY"] = getClusterProxy(oc, "httpsProxy")
+		clusterEnvVars["HTTP_PROXY"] = getClusterProxy(oc, "httpProxy")
+		clusterEnvVars["NO_PROXY"] = getClusterProxy(oc, "noProxy")
+
+		// here we retrieve the proxy env vars from WICD CM
+		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		wicdPayload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.environmentVars}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		wicdProxies := getPayloadMap(wicdPayload)
+		// comparing between 2 proxy settings, cluster and WICD
+		if !compareMaps(clusterEnvVars, wicdProxies) {
+			e2e.Failf("Cluster proxy settings are not equal to WICD proxy settings")
+		}
+		// here checking all proxy values exist on worker nodes
+		g.By("Check if proxy exists on all Windows worker")
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+		winInternalIP := getWindowsInternalIPs(oc)
+		for _, winhost := range winInternalIP {
+			for key, proxy := range wicdProxies {
+				e2e.Logf(fmt.Sprintf("Check %v proxy exist on worker %v", key, winhost))
+				msg, _ := runPSCommand(bastionHost, winhost, fmt.Sprintf("get-childitem -Path env: |  Where-Object -Property Name -eq %v | Format-List Value", key), privateKey, iaasPlatform)
+				o.Expect(compileEnvVars(msg)).Should(o.ContainSubstring(fmt.Sprint(proxy)), "Failed to check %v proxy is running on winworker %v", key, winhost)
+			}
+		}
+		// verify that trusted-ca ConfigMap exists in the cluster
+		g.By("Ensure that trusted-ca exists")
+		_, err = popItemFromList(oc, "cm", proxyCAConfigMap, wmcoNamespace)
+		e2e.ExpectNoError(err, "Couldn't find trusted-ca configmap")
 	})
 
 })
