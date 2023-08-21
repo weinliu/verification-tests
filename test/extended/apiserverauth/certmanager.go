@@ -5,6 +5,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"io/ioutil"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"os/exec"
@@ -290,5 +291,130 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrolebinding"}, clusterrolebindingListArry...)...).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		createCertManagerOperator(oc)
+	})
+
+	// author: geliu@redhat.com
+	g.It("Author:geliu-Medium-62582-Need override dns args when the target hosted zone in ACME dns01 solver overlaps with the cluster's default private hosted zone [Disruptive]", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		g.By("Skip test when the cluster is with STS credential")
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			g.Skip("Skipping for the aws cluster without credential in cluster")
+		}
+		e2e.Logf("Create secret generic test-secret.")
+		cloudProvider := getCloudProvider(oc)
+		accessKeyID, secureKey := getCredentialFromCluster(oc, cloudProvider)
+		oc.NotShowInfo()
+		defer func() {
+			e2e.Logf("Remove the secret generic test-secret.")
+			_, errSecret := oc.AsAdmin().Run("delete").Args("-n", "cert-manager", "secret", "test-secret").Output()
+			o.Expect(errSecret).NotTo(o.HaveOccurred())
+		}()
+		_, errSec := oc.AsAdmin().Run("create").Args("-n", "cert-manager", "secret", "generic", "test-secret", "--from-literal=secret-access-key="+secureKey).Output()
+		oc.SetShowInfo()
+		o.Expect(errSec).NotTo(o.HaveOccurred())
+
+		g.By("Prepare a clusterissuer which uses AWS hosted zone qe.devcluster.openshift.com as target hosted zone.")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-overlapped-zone.yaml")
+		f, err := ioutil.ReadFile(clusterIssuerFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		f1 := strings.ReplaceAll(string(f), "AWS_ACCESS_KEY_ID", accessKeyID)
+		err = ioutil.WriteFile(clusterIssuerFile, []byte(f1), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("Delete clusterissuers.")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "hosted-zone-overlapped").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "-o", "wide").Output()
+			if !strings.Contains(output, "True") || err != nil {
+				e2e.Logf("clusterissuer is not ready.")
+				return false, nil
+			}
+			e2e.Logf("clusterissuer is ready.")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer timeout")
+
+		g.By("create certificate which references previous clusterissuer")
+		e2e.Logf("Create ns with normal user.")
+		oc.SetupProject()
+		certClusterissuerFile := filepath.Join(buildPruningBaseDir, "cert-hosted-zone-overlapped.yaml")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ingressDomain=%s", string(output))
+		f, err = ioutil.ReadFile(certClusterissuerFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		randomStr := exutil.GetRandomString()
+		dnsName := randomStr + "." + output
+		f1 = strings.ReplaceAll(string(f), "DNS_NAME", dnsName)
+		err = ioutil.WriteFile(certClusterissuerFile, []byte(f1), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("create").Args("-f", certClusterissuerFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			output, err := oc.Run("get").Args("challenge", "-o", "wide").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "returned REFUSED") {
+				e2e.Logf("challenge output return 'REFUSED' as expected. %v ", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(statusErr, "challenge/certificate is wrong.")
+
+		g.By("Apply dns args by patch.")
+		certManagerPod0, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
+		if len(string(certManagerPod0)) == 0 || err != nil {
+			e2e.Failf("Fail to get name of cert_manager_pod0.")
+		}
+		patchPath := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers=1.1.1.1:53\",\"--dns01-recursive-nameservers-only\"]}}}"
+		var certManagerPod1 string
+		defer func() {
+			e2e.Logf("patch clusterissuers.cert-manager.io back.")
+			patchPath1 := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":null}}}"
+			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			statusErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+				certManagerPod2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}", "--field-selector=status.phase==Running").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if !strings.Contains(certManagerPod2, certManagerPod1) {
+					e2e.Logf("cert-manager pods have been redeployed successfully.")
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed when recovered.")
+		}()
+		err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		statusErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			certManagerPod1, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}", "--field-selector=status.phase==Running").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(certManagerPod1, certManagerPod0) {
+				e2e.Logf("cert-manager pods have been redeployed successfully.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed.")
+
+		g.By("Check the certificate content AGAIN.")
+		statusErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			output, err = oc.Run("get").Args("certificate", "certificate-hosted-zone-overlapped").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("certificate status is: %v ", output)
+			if strings.Contains(output, "True") {
+				e2e.Logf("certificate status is normal.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(statusErr, "certificate status is wrong.")
 	})
 })
