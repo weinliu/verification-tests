@@ -775,36 +775,31 @@ func deleteRouteAndService(oc *exutil.CLI, deployName, podNs string) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", "-n", podNs, deployName, "--ignore-not-found").Execute()
 }
 
-func getPeerPodSecrets(oc *exutil.CLI, opNamespace, platform string, ppSecretName string) (msg string, err error) {
+func checkPeerPodSecrets(oc *exutil.CLI, opNamespace, provider string, ppSecretName string) (msg string, err error) {
 	var (
 		errors       = 0
 		errorList    []string
-		platformVars []string
+		providerVars []string
 	)
 
-	msg, err = oc.AsAdmin().Run("get").Args("secrets", ppSecretName, "-n", opNamespace).Output()
-	if err != nil || strings.Contains(msg, "not found") {
-		msg = fmt.Sprintf("ERROR secret %v is not found %v %v", ppSecretName, msg, err)
-		err = fmt.Errorf("ERROR secret %v is not found %v %v", ppSecretName, msg, err)
-		return msg, err
-	}
-
-	switch platform {
+	switch provider {
 	case "azure":
-		platformVars = append(platformVars, "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_REGION", "AZURE_RESOURCE_GROUP", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID")
+		providerVars = append(providerVars, "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_REGION", "AZURE_RESOURCE_GROUP", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID")
 	case "aws":
-		platformVars = append(platformVars, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_SG_IDS", "AWS_SUBNET_ID", "AWS_VPC_ID")
+		providerVars = append(providerVars, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_SG_IDS", "AWS_SUBNET_ID", "AWS_VPC_ID")
+	case "libvirt":
+		providerVars = append(providerVars, "LIBVIRT_URI")
 	default:
-		msg = fmt.Sprintf("Cloud provider %v is not supported", platform)
+		msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
 		err = fmt.Errorf("%v", msg)
 		return msg, err
 	}
 
-	for index := range platformVars {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", ppSecretName, "-n", opNamespace, "-o=jsonpath={.data."+platformVars[index]+"}").Output()
+	for index := range providerVars {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", ppSecretName, "-n", opNamespace, "-o=jsonpath={.data."+providerVars[index]+"}").Output()
 		if err != nil || msg == "" {
 			errors++
-			errorList = append(errorList, platformVars[index])
+			errorList = append(errorList, providerVars[index])
 		}
 	}
 
@@ -828,36 +823,31 @@ func decodeSecret(input string) (msg string, err error) {
 	return msg, err
 }
 
-func getPeerPodConfigMaps(oc *exutil.CLI, opNamespace, platform, ppConfigMapName string) (msg string, err error) {
+func checkPeerPodConfigMap(oc *exutil.CLI, opNamespace, provider, ppConfigMapName string) (msg string, err error) {
 	var (
 		errors       = 0
 		errorList    []string
-		platformVars []string
+		providerVars []string
 	)
 
-	msg, err = oc.AsAdmin().Run("get").Args("cm", ppConfigMapName, "-n", opNamespace).Output()
-	if err != nil || strings.Contains(msg, "not found") {
-		msg = fmt.Sprintf("ERROR cm %v is not found %v %v", ppConfigMapName, msg, err)
-		err = fmt.Errorf("ERROR cm %v is not found %v %v", ppConfigMapName, msg, err)
-		return msg, err
-	}
-
-	switch platform {
+	switch provider {
 	case "azure":
-		platformVars = append(platformVars, "CLOUD_PROVIDER", "AZURE_IMAGE_ID", "AZURE_INSTANCE_SIZE", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "AZURE_IMAGE_ID", "AZURE_INSTANCE_SIZE", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT")
 	case "aws":
-		platformVars = append(platformVars, "CLOUD_PROVIDER", "PODVM_AMI_ID", "PODVM_INSTANCE_TYPE", "VXLAN_PORT")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "PODVM_AMI_ID", "PODVM_INSTANCE_TYPE", "VXLAN_PORT")
+	case "libvirt":
+		providerVars = append(providerVars, "CLOUD_PROVIDER")
 	default:
-		msg = fmt.Sprintf("Cloud provider %v is not supported", platform)
+		msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
 		err = fmt.Errorf("%v %v", msg)
 		return msg, err
 	}
 
-	for index := range platformVars {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", ppConfigMapName, "-n", opNamespace, "-o=jsonpath={.data."+platformVars[index]+"}").Output()
+	for provider := range providerVars {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", ppConfigMapName, "-n", opNamespace, "-o=jsonpath={.data."+providerVars[provider]+"}").Output()
 		if err != nil || msg == "" {
 			errors++
-			errorList = append(errorList, platformVars[index])
+			errorList = append(errorList, providerVars[provider])
 		}
 	}
 

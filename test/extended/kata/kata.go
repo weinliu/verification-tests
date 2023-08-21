@@ -25,7 +25,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		oc                = exutil.NewCLI("kata", exutil.KubeConfigPath())
 		opNamespace       = "openshift-sandboxed-containers-operator"
 		testDataDir       = exutil.FixturePath("testdata", "kata")
-		iaasPlatform      string
 		kcTemplate        = filepath.Join(testDataDir, "kataconfig.yaml")
 		defaultDeployment = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
 		defaultPod        = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
@@ -101,7 +100,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		// Log where & what we are running every time
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		iaasPlatform = strings.ToLower(msg)
+		cloudPlatform := strings.ToLower(msg)
 		ocpMajorVer, ocpMinorVer, clusterVersion = getClusterVersion(oc)
 		// 4.10 and earlier cannot have security context on pods or deployment
 		// defaultPod and defaultDeployment are global in kata.go
@@ -113,7 +112,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				workload = "do not have securityContext settings"
 			}
 		}
-		g.By(fmt.Sprintf("The current platform is %v. OCP %v.%v: %v\n Workloads %v", iaasPlatform, ocpMajorVer, ocpMinorVer, clusterVersion, workload))
+		g.By(fmt.Sprintf("The current platform is %v. OCP %v.%v: %v\n Workloads %v", cloudPlatform, ocpMajorVer, ocpMinorVer, clusterVersion, workload))
 
 		// check if there is a CM override
 		testrunInitial, _, _ = getTestRunConfigmap(oc, testrunDefault, "default", "osc-config")
@@ -284,23 +283,38 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 	g.It("Author:tbuskey-Medium-63122-Checking if cluster is ready for peer pods", func() {
 		//	can't *VERIFY* all values but we can ensure the cm/secret variables were added by the users
-		if kataconfig.enablePeerPods == false {
+		if !kataconfig.enablePeerPods {
 			g.Skip("STEP Peer pods are not enabled with osc-config or OSCSENABLEPEERPODS")
 		}
 
-		var (
-			err             error
-			msg             string
+		const (
 			ppConfigMapName = "peer-pods-cm"
 			ppSecretName    = "peer-pods-secret"
 			ppRuntimeClass  = "kata-remote-cc"
-			errors          = 0
-			errorList       = []string{""}
 		)
+
+		var (
+			err       error
+			msg       string
+			errors    = 0
+			errorList = []string{""}
+		)
+
+		// set the CLOUD_PROVIDER value from the peerpods configmap
+		cloudProvider, err := oc.AsAdmin().Run("get").Args("cm", ppConfigMapName, "-n", subscription.namespace, "-o=jsonpath={.data.CLOUD_PROVIDER}").Output()
+		if err != nil || strings.Contains(cloudProvider, "not found") {
+			e2e.Logf("STEP ERROR: peerpod configmap issue %v %v", cloudProvider, err)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		if len(cloudProvider) == 0 {
+			e2e.Logf("STEP ERROR: CLOUD_PROVIDER is not set on peerpod config")
+			o.Expect(cloudProvider).ToNot(o.BeZero())
+		}
 
 		msg = fmt.Sprintf("checking %v ", ppSecretName)
 		g.By(msg)
-		msg, err = getPeerPodSecrets(oc, subscription.namespace, iaasPlatform, ppSecretName)
+		msg, err = checkPeerPodSecrets(oc, subscription.namespace, cloudProvider, ppSecretName)
 		if err != nil {
 			e2e.Logf("%v", msg)
 			errors = errors + 1
@@ -309,7 +323,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		msg = fmt.Sprintf("checking %v ", ppConfigMapName)
 		g.By(msg)
-		msg, err = getPeerPodConfigMaps(oc, subscription.namespace, iaasPlatform, ppConfigMapName)
+		msg, err = checkPeerPodConfigMap(oc, subscription.namespace, cloudProvider, ppConfigMapName)
 		if err != nil {
 			e2e.Logf("%v", msg)
 			errors = errors + 1
