@@ -580,7 +580,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		exutil.By("Check nb loadbalancer entries")
 		ovnPod := getOVNKMasterOVNkubeNode(oc)
-		o.Expect(ovnPod != "").Should(o.BeTrue())
+		o.Expect(ovnPod).ShouldNot(o.BeEmpty())
+		e2e.Logf("\n ovnKMasterPod: %v\n", ovnPod)
 		lbCmd := fmt.Sprintf("ovn-nbctl find load_balancer name=Service_%s/%s_TCP_cluster", ns, svc.servicename)
 		lbOutput, err := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lbCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -605,10 +606,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		svcIP, _ = getSvcIP(oc, svc.namespace, svc.servicename)
 
 		exutil.By("No error logs")
-		ovnKMasterPod := getOVNKMasterPod(oc)
-		o.Expect(ovnKMasterPod).ShouldNot(o.BeEmpty())
-		e2e.Logf("\n ovnKMasterPod: %v\n", ovnKMasterPod)
-		podlogs, getLogsErr := oc.AsAdmin().Run("logs").Args(ovnKMasterPod, "-n", "openshift-ovn-kubernetes", "-c", "ovnkube-master", "--since", "90s").Output()
+		podlogs, getLogsErr := oc.AsAdmin().Run("logs").Args(ovnPod, "-n", "openshift-ovn-kubernetes", "-c", "ovnkube-controller", "--since", "90s").Output()
 		o.Expect(getLogsErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(podlogs, "failed to ensure service")).ShouldNot(o.BeTrue())
 

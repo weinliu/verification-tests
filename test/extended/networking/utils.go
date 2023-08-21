@@ -2480,8 +2480,10 @@ func getOVNKMasterPod(oc *exutil.CLI) string {
 
 // find the cluster-manager's ovnkube-node for accessing master components
 func getOVNKMasterOVNkubeNode(oc *exutil.CLI) string {
-	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
+	leaderPod, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
 	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
+	leaderNodeName, getNodeErr := exutil.GetPodNodeName(oc, "openshift-ovn-kubernetes", leaderPod)
+	o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 	ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", leaderNodeName)
 	o.Expect(podErr).NotTo(o.HaveOccurred())
 	return ovnKubePod
