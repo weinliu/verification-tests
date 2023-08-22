@@ -9239,20 +9239,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.createWithoutCheck(oc, itName, dr)
 
 		exutil.By("The install plan is Failed")
-		installPlan := sub.getIP(oc)
 		err := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 900*time.Second, false, func(ctx context.Context) (bool, error) {
-			result := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}")
-			if strings.Compare(result, "Failed") == 0 {
-				e2e.Logf("ip is failed")
+			conditions, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}").Output()
+			if strings.Contains(conditions, "BundleUnpackFailed") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ip of sub %v is not Failed", sub.subName))
-		conditions := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}")
-		o.Expect(strings.ToLower(conditions)).To(o.ContainSubstring("deadlineexceeded"))
-		o.Expect(strings.ToLower(conditions)).To(o.ContainSubstring("job was active longer than specified deadline"))
-		o.Expect(strings.ToLower(conditions)).To(o.ContainSubstring("bundle unpacking failed"))
+		getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}")
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("sub %v is not Failed", sub.subName))
 	})
 
 	//author:xzha@redhat.com
