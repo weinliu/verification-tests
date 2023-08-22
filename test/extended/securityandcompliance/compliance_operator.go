@@ -608,7 +608,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Critical-27705-The ComplianceScan reports the scan result Compliant or Non-Compliant", func() {
+	g.It("StagerunBoth-NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Critical-27705-The ComplianceScan reports the scan result Compliant or Non-Compliant", func() {
 
 		var (
 			cscanD = complianceScanDescription{
@@ -1039,7 +1039,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-28949-The complianceSuite and ComplianeScan perform scan using Platform scan type", func() {
+	g.It("StagerunBoth-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-28949-The complianceSuite and ComplianeScan perform scan using Platform scan type", func() {
 
 		var (
 			csuiteD = complianceSuiteDescription{

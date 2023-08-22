@@ -214,7 +214,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
+	g.It("StagerunBoth-NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
