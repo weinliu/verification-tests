@@ -207,8 +207,8 @@ func DeleteGCSBucket(bucketName string) error {
 }
 
 // GetFilestoreInstanceInfo returns filestore instance detailed info from banckend
-func (gcloud *Gcloud) GetFilestoreInstanceInfo(pvName string, region string) ([]byte, error) {
-	filestoreInfo, err := exec.Command("bash", "-c", fmt.Sprintf(`gcloud filestore instances describe %s --region %s --format=json`, pvName, region)).Output()
+func (gcloud *Gcloud) GetFilestoreInstanceInfo(pvName string, filterArgs ...string) ([]byte, error) {
+	filestoreInfo, err := exec.Command("bash", "-c", fmt.Sprintf(`gcloud filestore instances describe %s %s --format=json`, pvName, strings.Join(filterArgs, " "))).Output()
 	if len(filestoreInfo) == 0 {
 		return filestoreInfo, errors.New("gcloud filestore instance not found")
 	}

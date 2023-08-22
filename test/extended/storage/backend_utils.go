@@ -949,8 +949,8 @@ func getgcloudClient(oc *exutil.CLI) *exutil.Gcloud {
 	return gcloud.Login()
 }
 
-func getFilestoreInstanceFromGCP(oc *exutil.CLI, pvID string, region string) map[string]interface{} {
-	filestoreInfo, err := getgcloudClient(oc).GetFilestoreInstanceInfo(pvID, region)
+func getFilestoreInstanceFromGCP(oc *exutil.CLI, pvID string, filterArgs ...string) map[string]interface{} {
+	filestoreInfo, err := getgcloudClient(oc).GetFilestoreInstanceInfo(pvID, filterArgs...)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	debugLogf("Check filestore info %s", string(filestoreInfo))
 	var filestoreJSONMap map[string]interface{}

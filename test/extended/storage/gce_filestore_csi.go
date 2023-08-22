@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		getCredentialFromCluster(oc)
 		var filestoreJSONMap map[string]interface{}
-		filestoreJSONMap = getFilestoreInstanceFromGCP(oc, pvName, region)
+		filestoreJSONMap = getFilestoreInstanceFromGCP(oc, pvName, "region", region)
 
 		o.Expect(fmt.Sprint(filestoreJSONMap["kmsKeyName"])).Should(o.ContainSubstring("projects/openshift-qe/locations/us-central1/keyRings/chaoyang/cryptoKeys/chaoyang"))
 
@@ -217,6 +217,51 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By(" Check original data in the volume")
 		dep.checkPodMountedVolumeDataExist(oc, true)
+
+	})
+
+	g.It("OSD_CCS-Author:chaoyang-Medium-65166-[GCP-Filestore-CSI-Driver][Dynamic PV]Provision filestore volume with labels", func() {
+		zones := getZonesFromWorker(oc)
+		labelString := getRandomString()
+
+		var (
+			storageClassParameters = map[string]string{
+				"network": network,
+				"tier":    "standard",
+				"labels":  "test=qe" + labelString,
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("filestore.csi.storage.gke.io"))
+
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Ti"))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+		exutil.By("Create new storageClass with volumeBindingMode == Immediate")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc)
+
+		exutil.By("# Create a pvc with the csi storageclass")
+		pvc.scname = storageClass.name
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("# Create deployment with the created pvc and wait ready")
+		dep.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", zones[0])
+		defer dep.delete(oc)
+		dep.longerTime().waitReady(oc)
+
+		exutil.By("# Check filestore info from backend")
+		pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, dep.namespace, pvc.name)
+
+		getCredentialFromCluster(oc)
+		var filestoreJSONMap map[string]interface{}
+		filestoreJSONMap = getFilestoreInstanceFromGCP(oc, pvName, "--zone="+zones[0])
+
+		o.Expect(fmt.Sprint(filestoreJSONMap["labels"])).Should(o.ContainSubstring("test:qe" + labelString))
 
 	})
 
