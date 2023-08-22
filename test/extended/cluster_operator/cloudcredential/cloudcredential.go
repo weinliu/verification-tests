@@ -401,7 +401,6 @@ data:
 		newProgressingTimestamp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Progressing")].lastTransitionTime}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(newProgressingTimestamp).To(o.Equal(oldProgressingTimestamp))
-
 	})
 
 	//For bug https://bugzilla.redhat.com/show_bug.cgi?id=1977319
@@ -438,4 +437,98 @@ data:
 		o.Expect(cmdOut).To(o.ContainSubstring("Error from server (NotFound)"))
 	})
 
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:fxie-Critical-64885-CCO-based flow for olm managed operators and AWS STS", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "aws")
+		if !exutil.IsSTSCluster(oc) {
+			g.Skip("This test case is AWS STS only, skipping")
+		}
+
+		var (
+			testDataDir      = exutil.FixturePath("testdata", "cluster_operator/cloudcredential")
+			testCaseID       = "64885"
+			crName           = "cr-" + testCaseID
+			targetSecretName = crName
+			targetNs         = oc.Namespace()
+			stsIAMRoleARN    = "whatever"
+			cloudTokenPath   = "anything"
+		)
+
+		var (
+			targetSecretCreated = func() bool {
+				stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Secret", "-n", targetNs).Outputs()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return strings.Contains(stdout, targetSecretName)
+			}
+		)
+
+		exutil.By("Creating dummy CR")
+		cr := credentialsRequest{
+			name:      crName,
+			namespace: targetNs,
+			provider:  "AWSProviderSpec",
+			template:  filepath.Join(testDataDir, "credentials_request.yaml"),
+		}
+		defer func() {
+			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("CredentialsRequest", crName, "-n", CCONs).Execute()
+		}()
+		cr.create(oc)
+
+		exutil.By("Making sure the target Secret is not created")
+		o.Consistently(targetSecretCreated).WithTimeout(DefaultTimeout * time.Second).WithPolling(30 * time.Second).Should(o.BeFalse())
+
+		exutil.By("Inserting an stsIAMRoleARN to the CR")
+		stsIAMRoleARNPatch := `
+spec:
+  providerSpec:
+    stsIAMRoleARN: ` + stsIAMRoleARN
+		err := oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("patch").
+			Args("CredentialsRequest", crName, "-n", CCONs, "--type", "merge", "-p", stsIAMRoleARNPatch).
+			Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Making sure the target Secret is created correctly")
+		o.Eventually(targetSecretCreated).WithTimeout(DefaultTimeout * time.Second).WithPolling(30 * time.Second).Should(o.BeTrue())
+		stdout, _, err := oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("extract").
+			Args("Secret/"+targetSecretName, "-n", targetNs, "--keys", "credentials", "--to", "-").
+			Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// The Secret does not contain any sensitive info
+		e2e.Logf("Secret extracted = %v", stdout)
+		o.Expect(stdout).To(o.ContainSubstring("[default]"))
+		o.Expect(stdout).To(o.ContainSubstring("sts_regional_endpoints = regional"))
+		o.Expect(stdout).To(o.ContainSubstring("role_arn = " + stsIAMRoleARN))
+		o.Expect(stdout).To(o.ContainSubstring("web_identity_token_file = " + defaultSTSCloudTokenPath))
+
+		exutil.By("Inserting a cloudTokenPath to the CR")
+		cloudTokenPathPatch := `
+spec:
+  cloudTokenPath: ` + cloudTokenPath
+		err = oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("patch").
+			Args("CredentialsRequest", crName, "-n", CCONs, "--type", "merge", "-p", cloudTokenPathPatch).
+			Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Making sure the target Secret is updated in the correct way")
+		o.Eventually(func() bool {
+			stdout, _, err := oc.
+				AsAdmin().
+				WithoutNamespace().
+				Run("extract").
+				Args("Secret/"+targetSecretName, "-n", targetNs, "--keys", "credentials", "--to", "-").
+				Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// The Secret does not contain any sensitive info
+			e2e.Logf("Secret extracted = %v", stdout)
+			return strings.Contains(stdout, "web_identity_token_file = "+cloudTokenPath)
+		}).WithTimeout(DefaultTimeout * time.Second).WithPolling(30 * time.Second).Should(o.BeTrue())
+	})
 })

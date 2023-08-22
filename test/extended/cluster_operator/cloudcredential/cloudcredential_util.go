@@ -14,6 +14,12 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+const (
+	CCONs                    = "openshift-cloud-credential-operator"
+	defaultSTSCloudTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	DefaultTimeout           = 120
+)
+
 type prometheusQueryResult struct {
 	Data struct {
 		Result []struct {
