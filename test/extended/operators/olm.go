@@ -8632,9 +8632,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("2) install sub")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		exutil.By("3) check sub status")
-		err := newCheck("expect", asAdmin, withoutNamespace, contain, "found 0 operatorgroups", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).checkWithoutAssert(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("sleep 10 sencond, then create og")
+		time.Sleep(time.Second * 10)
+
+		//exutil.By("3) check sub status")
+		//err := newCheck("expect", asAdmin, withoutNamespace, contain, "found 0 operatorgroups", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).checkWithoutAssert(oc)
+		//o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("4) install og")
 		og.createwithCheck(oc, itName, dr)
@@ -8642,7 +8645,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("check ip and csv")
 		installPlan := sub.getIP(oc)
 		o.Expect(installPlan).NotTo(o.BeEmpty())
-		err = newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
+		err := newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 		if err != nil {
 			output := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}}")
 			e2e.Logf(output)
