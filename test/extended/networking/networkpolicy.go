@@ -1154,6 +1154,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(output).To(o.ContainSubstring("default-deny"))
 
 		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
+		o.Expect(ovnMasterPodName).NotTo(o.BeEmpty())
 		g.By("get ACLs related to ns")
 		//list ACLs only related namespace in test
 		listACLCmd := "ovn-nbctl list ACL | grep -C 5 " + "NP:" + oc.Namespace() + " | grep -C 5 type=arpAllow"
@@ -1208,6 +1209,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(output).To(o.ContainSubstring("egress-ingress-62524.test"))
 
 		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
+		o.Expect(ovnMasterPodName).NotTo(o.BeEmpty())
 		g.By("Verify the address_set exists for the specific acl")
 		//list ACLs related to the networkpolicy name
 		listACLCmd := "ovn-nbctl --data=bare --no-heading --format=table find acl | grep  egress-ingress-62524.test"
@@ -1286,9 +1288,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		podIP1, _ := getPodIP(oc, ns, pod.name)
 
 		podNodeName, podNodenameErr := exutil.GetPodNodeName(oc, ns, pod.name)
+		o.Expect(podNodeName).NotTo(o.BeEmpty())
 		o.Expect(podNodenameErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Node on which pod %s is running %s", pod.name, podNodeName)
 		ovnKNodePod, ovnkNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", podNodeName)
+		o.Expect(ovnKNodePod).NotTo(o.BeEmpty())
 		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
 		e2e.Logf("ovnkube-node podname %s running on node %s", ovnKNodePod, podNodeName)
 
