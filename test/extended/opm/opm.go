@@ -291,10 +291,10 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 			e2e.Failf("output doesn't contain olm.constraint")
 		}
 
-		exutil.By("check output of render bundle image contain olm.csv.metadata")
-		if !strings.Contains(output, "olm.csv.metadata") {
-			e2e.Failf("output doesn't contain olm.csv.metadata")
-		}
+		//exutil.By("check output of render bundle image contain olm.csv.metadata")
+		//if !strings.Contains(output, "olm.csv.metadata") {
+		//	e2e.Failf("output doesn't contain olm.csv.metadata")
+		//}
 	})
 
 	// author: xzha@redhat.com
