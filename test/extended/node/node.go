@@ -15,6 +15,7 @@ import (
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
+
 	//e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
@@ -1003,19 +1004,17 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		oc = exutil.NewCLI("keda-operator", exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-		if strings.Contains(output, "NotFound") {
-			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
-		}
+		g.By("Skip test when precondition not meet !!!")
+		exutil.SkipMissingQECatalogsource(oc)
 		createKedaOperator(oc)
 	})
 	// author: weinliu@redhat.com
-	g.It("StagerunOnly-Author:weinliu-High-52383-Keda Install", func() {
+	g.It("StagerunBoth-Author:weinliu-High-52383-Keda Install", func() {
 		g.By("CMA (Keda) operator has been installed successfully")
 	})
 
 	// author: weinliu@redhat.com
-	g.It("StagerunOnly-Author:weinliu-High-62570-Verify must-gather tool works with CMA", func() {
+	g.It("StagerunBoth-Author:weinliu-High-62570-Verify must-gather tool works with CMA", func() {
 		var (
 			mustgatherName = "mustgather" + getRandomString()
 			mustgatherDir  = "/tmp/" + mustgatherName
@@ -1042,14 +1041,12 @@ var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
 		oc = exutil.NewCLI("vpa-operator", exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-		if strings.Contains(output, "NotFound") {
-			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
-		}
+		g.By("Skip test when precondition not meet !!!")
+		exutil.SkipMissingQECatalogsource(oc)
 		createVpaOperator(oc)
 	})
 	// author: weinliu@redhat.com
-	g.It("StagerunOnly-Author:weinliu-High-60991-VPA Install", func() {
+	g.It("StagerunBoth-Author:weinliu-High-60991-VPA Install", func() {
 		g.By("VPA operator is installed successfully")
 	})
 })
