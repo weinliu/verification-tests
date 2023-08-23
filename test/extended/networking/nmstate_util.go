@@ -112,7 +112,12 @@ func createNMStateCR(oc *exutil.CLI, nmstatecr nmstateCRResource, namespace stri
 		e2e.Logf("nmstate-cert-manager pod did not transition to ready state %v", err)
 		return false, err
 	}
-	e2e.Logf("nmstate-handler, nmstate-webhook and nmstate-cert-manager pods created successfully")
+	err = waitForPodWithLabelReady(oc, namespace, "app=nmstate-console-plugin")
+	if err != nil {
+		e2e.Logf("nmstate-console-plugin pod did not transition to ready state %v", err)
+		return false, err
+	}
+	e2e.Logf("nmstate-handler, nmstate-webhook, nmstate-cert-manager and nmstate-console-plugin pods created successfully")
 	return true, nil
 }
 
