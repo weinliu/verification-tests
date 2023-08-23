@@ -351,6 +351,32 @@ func WaitForMachinesRunningByLabel(oc *CLI, machineNumber int, labels string) []
 	return strings.Split(msg, " ")
 }
 
+// WaitForMachineRunningByField check if the machine is Running by field
+func WaitForMachineRunningByField(oc *CLI, field string, fieldValue string, labels string) string {
+	e2e.Logf("Waiting for the machine Running ...")
+	var newMachineName string
+	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
+		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		if err2 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ...")
+			return false, nil
+		}
+		for _, machineName := range strings.Split(msg, " ") {
+			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.phase}", "-n", machineAPINamespace).Output()
+			machineFieldValue, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, field, "-n", machineAPINamespace).Output()
+			if phase == "Running" && machineFieldValue == fieldValue {
+				e2e.Logf("The machine with field %s = %s is Running %s", field, fieldValue, machineName)
+				newMachineName = machineName
+				return true, nil
+			}
+		}
+		e2e.Logf("The machine with field %s = %s is not Running and waiting up to 1 minutes ...", field, fieldValue)
+		return false, nil
+	})
+	AssertWaitPollNoErr(err, "Wait machine Running failed.")
+	return newMachineName
+}
+
 // WaitForMachineRunningBySuffix check if the machine is Running by suffix
 func WaitForMachineRunningBySuffix(oc *CLI, machineNameSuffix string, labels string) string {
 	e2e.Logf("Waiting for the machine Running ...")
@@ -410,6 +436,28 @@ func WaitForMachineDisappearBySuffix(oc *CLI, machineNameSuffix string, labels s
 		return true, nil
 	})
 	AssertWaitPollNoErr(err, "Wait machine disappear by suffix failed.")
+}
+
+// WaitForMachineDisappearBySuffixAndField check if the machine is disappear by machine suffix and field
+func WaitForMachineDisappearBySuffixAndField(oc *CLI, machineNameSuffix string, field string, fieldValue string, labels string) {
+	e2e.Logf("Waiting for the machine disappear by suffix and field...")
+	err := wait.Poll(60*time.Second, 1800*time.Second, func() (bool, error) {
+		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		if err2 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ...")
+			return false, nil
+		}
+		for _, machineName := range strings.Split(msg, " ") {
+			machineFieldValue, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, field, "-n", machineAPINamespace).Output()
+			if strings.HasSuffix(machineName, machineNameSuffix) && machineFieldValue == fieldValue {
+				e2e.Logf("The machine %s is not disappear and waiting up to 1 minutes ...", machineName)
+				return false, nil
+			}
+		}
+		e2e.Logf("The machine with suffix %s and %s = %s is disappear", machineNameSuffix, field, fieldValue)
+		return true, nil
+	})
+	AssertWaitPollNoErr(err, "Wait machine disappear by suffix and field failed.")
 }
 
 // WaitForMachineDisappearByName check if the machine is disappear by machine name

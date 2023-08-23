@@ -170,6 +170,50 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy update some field [Disruptive]", func() {
+		//For the providers which don't have instance type, we will update some other field to trigger update
+		//For nutanix, we choose vcpusPerSocket
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "nutanix")
+		skipForCPMSNotStable(oc)
+		skipForClusterNotStable(oc)
+		var changeFieldValue, backupFieldValue, getFieldValueJSON string
+		var patchstrPrefix, patchstrSuffix string
+		changeFieldValue = "2"
+		backupFieldValue = "1"
+		getFieldValueJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vcpusPerSocket}"
+		patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vcpusPerSocket":`
+		patchstrSuffix = `}}}}}}}`
+
+		g.By("Get current field value")
+		currentFieldValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getFieldValueJSON, "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("currentFieldValue:%s", currentFieldValue)
+		if currentFieldValue == changeFieldValue {
+			changeFieldValue = backupFieldValue
+		}
+
+		getMachineFieldValueJSON := "-o=jsonpath={.spec.providerSpec.value.vcpusPerSocket}"
+		patchstrChange := patchstrPrefix + changeFieldValue + patchstrSuffix
+		patchstrRecover := patchstrPrefix + currentFieldValue + patchstrSuffix
+
+		g.By("Change field value to trigger RollingUpdate")
+		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
+		defer waitForClusterStable(oc)
+		defer waitForCPMSUpdateCompleted(oc, 1)
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrChange, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		labelMaster := "machine.openshift.io/cluster-api-machine-type=master"
+		updatedMachineName := exutil.WaitForMachineRunningByField(oc, getMachineFieldValueJSON, changeFieldValue, labelMaster)
+		e2e.Logf("updatedMachineName:%s", updatedMachineName)
+		suffix := getMachineSuffix(oc, updatedMachineName)
+		e2e.Logf("suffix:%s", suffix)
+		exutil.WaitForMachineDisappearBySuffixAndField(oc, suffix, getMachineFieldValueJSON, currentFieldValue, labelMaster)
+	})
+
+	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-55631-[CPMS] Implement update logic for RollingUpdate CPMS strategy - Delete a master machine [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "nutanix")
@@ -279,6 +323,60 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Check new master will be created and old master will be deleted")
 		newCreatedMachineName := exutil.WaitForMachinesRunningByLabel(oc, 1, labelsAfter)[0]
+		e2e.Logf("newCreatedMachineName:%s", newCreatedMachineName)
+		exutil.WaitForMachineDisappearByName(oc, toDeletedMachineName)
+		waitForClusterStable(oc)
+		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
+	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-54005-[CPMS] Control plane machine set OnDelete update strategies - update some field [Disruptive]", func() {
+		//For the providers which don't have instance type, we will update some other field to trigger update
+		//For nutanix, we choose vcpusPerSocket
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "nutanix")
+		skipForCPMSNotStable(oc)
+		skipForClusterNotStable(oc)
+		var changeFieldValue, backupFieldValue, getFieldValueJSON string
+		var patchstrPrefix, patchstrSuffix string
+		changeFieldValue = "2"
+		backupFieldValue = "1"
+		getFieldValueJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vcpusPerSocket}"
+		patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vcpusPerSocket":`
+		patchstrSuffix = `}}}}}}}`
+
+		g.By("Get current field value")
+		currentFieldValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getFieldValueJSON, "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("currentFieldValue:%s", currentFieldValue)
+		if currentFieldValue == changeFieldValue {
+			changeFieldValue = backupFieldValue
+		}
+		getMachineFieldValueJSON := "-o=jsonpath={.spec.providerSpec.value.vcpusPerSocket}"
+		patchstrChange := patchstrPrefix + changeFieldValue + patchstrSuffix
+		patchstrRecover := patchstrPrefix + currentFieldValue + patchstrSuffix
+
+		g.By("Update strategy to OnDelete, change field value to trigger OnDelete update")
+		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
+		defer waitForClusterStable(oc)
+		defer waitForCPMSUpdateCompleted(oc, 1)
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
+		defer waitForClusterStable(oc)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"OnDelete"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrChange, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Delete one master manually")
+		toDeletedMachineName := exutil.ListMasterMachineNames(oc)[rand.Int31n(int32(len(exutil.ListMasterMachineNames(oc))))]
+		exutil.DeleteMachine(oc, toDeletedMachineName)
+
+		g.By("Check new master will be created and old master will be deleted")
+		labelMaster := "machine.openshift.io/cluster-api-machine-type=master"
+		newCreatedMachineName := exutil.WaitForMachineRunningByField(oc, getMachineFieldValueJSON, changeFieldValue, labelMaster)
 		e2e.Logf("newCreatedMachineName:%s", newCreatedMachineName)
 		exutil.WaitForMachineDisappearByName(oc, toDeletedMachineName)
 		waitForClusterStable(oc)
