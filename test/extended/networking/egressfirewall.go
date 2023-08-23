@@ -25,6 +25,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-egressfirewall", exutil.KubeConfigPath())
+	var aclLogPath = "--path=ovn/acl-audit-log.log"
 	g.BeforeEach(func() {
 		networkType := exutil.CheckNetworkType(oc)
 		o.Expect(networkType).NotTo(o.BeEmpty())
@@ -82,7 +83,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("7. Verify acl logs for egressfirewall generated. \n")
 		egressFwRegex := fmt.Sprintf("EF:%s:.*", ns1)
-		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn-ic/acl-audit-log.log").Output()
+		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		r := regexp.MustCompile(egressFwRegex)
 		matches := r.FindAllString(aclLogs, -1)
@@ -139,7 +140,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("6. Verify acl logs for egressfirewall generated. \n")
 		egressFwRegex := fmt.Sprintf("EF:%s:.*", ns1)
-		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn-ic/acl-audit-log.log").Output()
+		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		r := regexp.MustCompile(egressFwRegex)
 		matches := r.FindAllString(aclLogs, -1)
@@ -154,7 +155,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("9. Verify no incremental acl logs. \n")
-		aclLogs2, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn-ic/acl-audit-log.log").Output()
+		aclLogs2, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		matches2 := r.FindAllString(aclLogs2, -1)
 		aclLogNum2 := len(matches2)
@@ -168,7 +169,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("12. Verify new acl logs for egressfirewall generated. \n")
-		aclLogs3, err3 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn-ic/acl-audit-log.log").Output()
+		aclLogs3, err3 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		matches3 := r.FindAllString(aclLogs3, -1)
 		aclLogNum3 := len(matches3)
@@ -220,7 +221,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("6. Verify acl logs for egressfirewall generated. \n")
 		egressFwRegex := fmt.Sprintf("EF:%s:.*", ns1)
-		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn-ic/acl-audit-log.log").Output()
+		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		r := regexp.MustCompile(egressFwRegex)
 		matches := r.FindAllString(aclLogs, -1)
@@ -249,7 +250,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		g.By("10. Verify no acl logs for egressfirewall generated in ns2. \n")
 		egressFwRegexNs2 := fmt.Sprintf("egressFirewall_%s_.*", ns2)
 		o.Consistently(func() int {
-			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn-ic/acl-audit-log.log").Output()
+			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			r2 := regexp.MustCompile(egressFwRegexNs2)
 			matches2 := r2.FindAllString(aclLogs2, -1)
@@ -273,7 +274,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		g.By("13. Verify no acl logs for egressfirewall generated in ns2. \n")
 		o.Consistently(func() int {
-			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn-ic/acl-audit-log.log").Output()
+			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			r2 := regexp.MustCompile(egressFwRegexNs2)
 			matches2 := r2.FindAllString(aclLogs2, -1)
