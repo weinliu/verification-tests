@@ -2034,7 +2034,7 @@ nulla pariatur.`
 			"Node %s is not in 'Done' status after the configuration is applied", firstUpdatedMaster.GetName())
 
 		exutil.By("Print all events for the verified worker node")
-		el := NewEventList(oc.AsAdmin(), "default")
+		el := NewEventList(oc.AsAdmin(), MachineConfigNamespace)
 		el.ByFieldSelector(`involvedObject.name=` + firstUpdatedWorker.GetName())
 		events, _ := el.GetAll()
 		printString := ""

@@ -416,7 +416,7 @@ func (n Node) GetUptime() (time.Time, error) {
 
 // GetEventsByReasonSince returns a list of all the events with the given reason that are related to this node since the provided date
 func (n Node) GetEventsByReasonSince(since time.Time, reason string) ([]Event, error) {
-	eventList := NewEventList(n.oc, "default")
+	eventList := NewEventList(n.oc, MachineConfigNamespace)
 	eventList.ByFieldSelector(`reason=` + reason + `,involvedObject.name=` + n.GetName())
 
 	return eventList.GetAllSince(since)
@@ -424,7 +424,7 @@ func (n Node) GetEventsByReasonSince(since time.Time, reason string) ([]Event, e
 
 // GetAllEventsSince returns a list of all the events related to this node since the provided date
 func (n Node) GetAllEventsSince(since time.Time) ([]Event, error) {
-	eventList := NewEventList(n.oc, "default")
+	eventList := NewEventList(n.oc, MachineConfigNamespace)
 	eventList.ByFieldSelector(`involvedObject.name=` + n.GetName())
 
 	return eventList.GetAllSince(since)
@@ -432,7 +432,7 @@ func (n Node) GetAllEventsSince(since time.Time) ([]Event, error) {
 
 // GetAllEventsSinceEvent returns a list of all the events related to this node that occurred after the provided event
 func (n Node) GetAllEventsSinceEvent(since *Event) ([]Event, error) {
-	eventList := NewEventList(n.oc, "default")
+	eventList := NewEventList(n.oc, MachineConfigNamespace)
 	eventList.ByFieldSelector(`involvedObject.name=` + n.GetName())
 
 	return eventList.GetAllEventsSinceEvent(since)
@@ -440,7 +440,7 @@ func (n Node) GetAllEventsSinceEvent(since *Event) ([]Event, error) {
 
 // GetLatestEvent returns the latest event occurred in the node
 func (n Node) GetLatestEvent() (*Event, error) {
-	eventList := NewEventList(n.oc, "default")
+	eventList := NewEventList(n.oc, MachineConfigNamespace)
 	eventList.ByFieldSelector(`involvedObject.name=` + n.GetName())
 
 	return eventList.GetLatest()
