@@ -1362,7 +1362,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(len(eligibleNodes) == len(kataNodes)).To(o.BeTrue())
 
 		for _, node := range kataNodes {
-			o.Expect(exutil.StringsSliceContains(eligibleNodes, node)).To(o.BeTrue())
+			found, _ := exutil.StringsSliceContains(eligibleNodes, node)
+			o.Expect(found).To(o.BeTrue())
 		}
 	})
 })
