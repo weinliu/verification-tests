@@ -26,19 +26,6 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		// Skip if no machineset
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
 
-		// Skip if not AWS
-		platform := exutil.CheckPlatform(oc)
-		if platform != AWSPlatform {
-			g.Skip(fmt.Sprintf("Current platform is %s. AWS platform is required to execute this test case!.", platform))
-		}
-
-		// Skip if not east-2 zone
-		infra := NewResource(oc.AsAdmin(), "infrastructure", "cluster")
-		zone := infra.GetOrFail(`{.status.platformStatus.aws.region}`)
-		if zone != "us-east-2" {
-			g.Skip(fmt.Sprintf(`Current AWS zone is '%s'. AWS 'us-east-2' zone is required to execute this test case!.`, zone))
-		}
-
 		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		preChecks(oc)
 	})
@@ -50,6 +37,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			useIgnitionV2 = true                    // 4.1 version uses ignition V2
 			numNewNodes   = 1                       // the number of nodes scaled up in the new Machineset
 		)
+		skipTestIfCloudImagesCannotBeModified(oc.AsAdmin())
 
 		initialNumWorkers := len(wMcp.GetNodesOrFail())
 
@@ -109,6 +97,8 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			useIgnitionV2 = true // 4.5 version uses ignition V2
 			numNewNodes   = 1    // the number of nodes scaled up in the new Machineset
 		)
+
+		skipTestIfCloudImagesCannotBeModified(oc.AsAdmin())
 
 		initialNumWorkers := len(wMcp.GetNodesOrFail())
 
@@ -236,6 +226,62 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 		exutil.By("Scale down and remove the cloned Machineset")
 		removeClonedMachineSet(newMs, wMcp, initialNumWorkers)
+		logger.Infof("OK!\n")
+
+	})
+
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-65923-SSH key in scaled clusters [Disruptive]", func() {
+
+		// It is a safe assumpion that all the tested clusters will have a sshkey deployed in it.
+		// If at any moment this assumption is not safe anymore, we need to check for the sshkey to exist
+		// and create a MC to deploy a sskey in case of no sshkey deployed
+		var (
+			initialNumWorkers = len(wMcp.GetNodesOrFail())
+			numNewNodes       = 1
+		)
+
+		defer wMcp.waitForComplete()
+
+		exutil.By("Scale up a machineset")
+		allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
+		ms := allMs[0]
+
+		initialMsNodes, err := ms.GetNodes()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of nodes that belong to machineset %s", ms.GetName())
+
+		initialNumMsNodes := len(initialMsNodes)
+
+		logger.Infof("Scaling up machineset %s by 1", ms.GetName())
+		defer func() { _ = ms.ScaleTo(initialNumMsNodes) }()
+		o.Expect(ms.ScaleTo(initialNumMsNodes+numNewNodes)).NotTo(
+			o.HaveOccurred(),
+			"Error scaling up MachineSet %s", ms.GetName())
+
+		logger.Infof("OK!\n")
+
+		logger.Infof("Waiting %s machineset for being ready", ms)
+		o.Eventually(ms.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", ms.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that worker pool is increased and updated")
+		o.Eventually(wMcp.GetNodesOrFail, "5m", "30s").Should(o.HaveLen(initialNumWorkers+numNewNodes),
+			"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the sshkey exists in all nodes")
+		currentWorkers := wMcp.GetNodesOrFail()
+		for _, node := range currentWorkers {
+			logger.Infof("Checking sshkey in node %s", node.GetName())
+			remoteSSHKey := NewRemoteFile(node, "/home/core/.ssh/authorized_keys.d/ignition")
+			o.Expect(remoteSSHKey.Fetch()).To(o.Succeed(),
+				"Error getting the content of the sshkey file in node %s", node.GetName())
+
+			o.Expect(remoteSSHKey.GetTextContent()).NotTo(o.BeEmpty(),
+				"The sshkey file has no content in node %s", node.GetName())
+			logger.Infof("Sshkey is OK in node %s", node.GetName())
+		}
 		logger.Infof("OK!\n")
 
 	})

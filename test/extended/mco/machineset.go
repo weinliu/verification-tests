@@ -115,6 +115,7 @@ func (ms MachineSet) GetIsReady() bool {
 func (ms MachineSet) GetMachines() ([]Machine, error) {
 	ml := NewMachineList(ms.oc, ms.GetNamespace())
 	ml.ByLabel("machine.openshift.io/cluster-api-machineset=" + ms.GetName())
+	ml.SortByTimestamp()
 	return ml.GetAll()
 }
 
