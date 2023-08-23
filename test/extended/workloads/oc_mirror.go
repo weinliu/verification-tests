@@ -1,8 +1,10 @@
 package workloads
 
 import (
+	"context"
 	"fmt"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,12 +12,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+
+	"github.com/containers/image/v5/docker"
+	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/types"
 )
 
 var _ = g.Describe("[sig-cli] Workloads", func() {
@@ -879,4 +887,90 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the second disk2mirror still failed")
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-NonPreRelease-Longduration-Critical-65202-Verify user is able to mirror multi payload via oc-mirror [Serial]", func() {
+		g.By("Check if imageContentSourcePolicy image-policy-aosqe exists, if not skip the case")
+		existingIcspOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "--ignore-not-found").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !(strings.Contains(existingIcspOutput, "image-policy-aosqe")) {
+			g.Skip("Image-policy-aosqe icsp not found, skipping the case")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetConfig65202 := filepath.Join(buildPruningBaseDir, "imageSetConfig65202.yaml")
+
+		dirname, err := os.MkdirTemp("", "case65202-*")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Retreive image registry name
+		imageRegistryName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[0].mirrors[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		imageRegistryName = strings.Split(imageRegistryName, ":")[0]
+		e2e.Logf("ImageRegistryName is %s", imageRegistryName)
+
+		// Replace localhost with retreived registry name from the cluster in imageSetConfigFile
+		f, err := os.Open(imageSetConfig65202)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+
+		content, err := io.ReadAll(f)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		yamlData := make(map[string]interface{})
+		err = yaml.Unmarshal(content, &yamlData)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		sc := yamlData["storageConfig"].(map[string]interface{})
+		registry := sc["registry"].(map[string]interface{})
+		registry["imageURL"] = fmt.Sprintf("%s:5000/oc-mirror-%s", imageRegistryName, uuid.NewString()[:8])
+		modifiedYAML, err := yaml.Marshal(yamlData)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		imageSetConfigFile65202, err := os.CreateTemp("", "case65202-imagesetconfig-*.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer imageSetConfigFile65202.Close()
+
+		imageSetConfigFilePath65202 := imageSetConfigFile65202.Name()
+		defer os.Remove(imageSetConfigFilePath65202)
+
+		_, err = imageSetConfigFile65202.Write(modifiedYAML)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = imageSetConfigFile65202.Close()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer os.RemoveAll("oc-mirror-workspace")
+		// Start mirroring the payload
+		g.By("Start mirroring the multi payload")
+		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", imageSetConfigFilePath65202, "docker://"+imageRegistryName+":5000", "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("The first multi payload mirroring failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the multipayload mirror still failed")
+
+		// Validate if multi arch payload has been mirrored
+		g.By("Validate if multi arch payload has been mirrored")
+		ref, err := docker.ParseReference("//" + imageRegistryName + ":5000/openshift/release-images:4.13.6-multi")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sys := &types.SystemContext{
+			AuthFilePath:                dirname + "/.dockerconfigjson",
+			OCIInsecureSkipTLSVerify:    true,
+			DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
+		}
+		ctx := context.Background()
+		src, err := ref.NewImageSource(ctx, sys)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func(src types.ImageSource) {
+			err := src.Close()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}(src)
+		rawManifest, _, err := src.GetManifest(ctx, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest))).To(o.BeTrue())
+	})
 })

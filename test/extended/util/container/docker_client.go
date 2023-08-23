@@ -194,7 +194,7 @@ func (c *DockerCLI) ContainerCreate(imageName string, containerName string, entr
 func (c *DockerCLI) ContainerStop(id string) error {
 	cli := c.CLI
 	ctx := context.Background()
-	err := cli.ContainerStop(ctx, id, nil)
+	err := cli.ContainerStop(ctx, id, container.StopOptions{})
 	return err
 }
 
