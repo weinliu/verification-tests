@@ -1683,6 +1683,7 @@ func getNodeNames(oc *exutil.CLI, labels map[string]string) []string {
 	return nodeNames
 }
 
+// machinePoolName is MachinePool.spec.name
 func getMachinePoolInstancesIds(oc *exutil.CLI, machinePoolName string, kubeconfigPath string) []string {
 	// The command below does not error out if the selector does not have a match
 	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").

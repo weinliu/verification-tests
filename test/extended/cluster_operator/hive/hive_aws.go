@@ -5410,4 +5410,89 @@ spec:
 		}
 		o.Eventually(checkSpotMachinesetReadyCount).WithTimeout(5 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
 	})
+
+	//author: kcui@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "62158"|./bin/extended-platform-tests run --timeout 30m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-High-62158-ClusterPool deletion should wait until all unclaimed clusters are destroyed - Case 1[Serial]", func() {
+		testCaseID := "62158"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		exutil.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		e2e.Logf("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+
+		exutil.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		exutil.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		exutil.By("Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
+		pool := clusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "true",
+			baseDomain:     AWSBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "aws",
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
+			size:           2,
+			maxSize:        2,
+			runningCount:   0,
+			maxConcurrent:  2,
+			hibernateAfter: "360m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+		e2e.Logf("Check if ClusterPool created successfully and become ready")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, FakeClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+
+		exutil.By("Delete 1 CD, then one CD should be provisioning and another one CD should be provisioned")
+		cdNames := strings.Split(strings.Trim(getCDlistfromPool(oc, poolName), "\n"), "\n")
+		cmd, _, _, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdNames[0], "-n", cdNames[0]).Background()
+		defer cmd.Process.Kill()
+
+		e2e.Logf("Checking the two CDs status...")
+		checkCDStatus := func() bool {
+			isProvisioned := 0
+			isProvisioning := 0
+			for _, cdName := range strings.Split(strings.Trim(getCDlistfromPool(oc, poolName), "\n"), "\n") {
+				stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", "-n", cdName).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if strings.Contains(stdout, "Provisioned") {
+					isProvisioned++
+				}
+				if strings.Contains(stdout, "Provisioning") {
+					isProvisioning++
+				}
+			}
+			e2e.Logf("%v CD is Provisioned and %v CD is Provisioning", isProvisioned, isProvisioning)
+			return isProvisioned == 1 && isProvisioning == 1
+		}
+		o.Eventually(checkCDStatus).WithTimeout(300 * time.Second).WithPolling(5 * time.Second).Should(o.BeTrue())
+
+		exutil.By("Delete the ClusterPool, ClusterPool will be not deleted until both CDs are deleted")
+		stdout, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterPool", poolName, "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stdout).To(o.ContainSubstring("deleted"))
+
+		e2e.Logf("Check if all ClusterDeployments have been deleted")
+		o.Expect(getCDlistfromPool(oc, poolName)).To(o.Equal(""))
+	})
 })
