@@ -80,6 +80,113 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "41809"|./bin/extended-platform-tests run --timeout 20m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-High-41809-Formalize ClusterInstall Deletion Process [Disruptive]", func() {
+		testCaseID := "41809"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+
+		exutil.By("Configure hiveconfig to enable feature gate")
+		patch := `
+spec:
+  featureGates:
+    custom:
+      enabled:
+      - AlphaAgentInstallStrategy
+    featureSet: Custom`
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/featureGates"}]`).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Create tmp directory")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		defer os.RemoveAll(tmpDir)
+		err = os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a fake cluster")
+		/*
+			make sure:
+			1. no need an install-config secret, remove it from file
+			2. no need .spec.provisioning field in ClusterDeployment CR, remove it
+			3. add .spec.clusterInstallRef field in ClusterDeployment CR
+			4. add a new FakeClusterInstall CR in the file
+		*/
+		clusterImageSetName := cdName + "-imageset"
+		imageSet := clusterImageSet{
+			name:         clusterImageSetName,
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		exutil.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
+		imageSet.create(oc)
+		exutil.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, oc.Namespace())
+		exutil.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		fakeClusterYaml := `
+apiVersion: v1
+items:
+- apiVersion: hive.openshift.io/v1
+  kind: ClusterDeployment
+  metadata:
+    name: ` + cdName + `
+  spec:
+    baseDomain: ` + AWSBaseDomain + `
+    clusterName: ` + cdName + `
+    controlPlaneConfig:
+      servingCertificates: {}
+    installed: false
+    platform:
+      aws:
+        credentialsSecretRef:
+          name: ` + AWSCreds + `
+        privateLink:
+          enabled: false
+        region: ` + AWSRegion + `
+    pullSecretRef:
+      name: ` + PullSecret + `
+    clusterInstallRef:
+      group: hiveinternal.openshift.io
+      version: v1alpha1
+      kind: FakeClusterInstall
+      name: ` + cdName + `
+  status: {}
+- apiVersion: hiveinternal.openshift.io/v1alpha1
+  kind: FakeClusterInstall
+  metadata:
+    name: ` + cdName + `
+  spec:
+    imageSetRef:
+      name: ` + clusterImageSetName + `
+    clusterDeploymentRef:
+      name: ` + cdName + `
+kind: List
+metadata: {}`
+		var filename = tmpDir + "/" + testCaseID + "-fakecluster.yaml"
+		defer os.Remove(filename)
+		err = os.WriteFile(filename, []byte(fakeClusterYaml), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cleanupObjects(oc, objectTableRef{"FakeClusterInstall", oc.Namespace(), cdName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check Aws ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, requireNS, contain, "true", ok, FakeClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		exutil.By("Check FakeClusterInstall CR, it has an ownerReferences related to the ClusterDeployment")
+		newCheck("expect", "get", asAdmin, requireNS, compare, cdName, ok, DefaultTimeout, []string{"FakeClusterInstall", cdName, "-o=jsonpath={.metadata.ownerReferences[0].name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, requireNS, compare, "ClusterDeployment", ok, DefaultTimeout, []string{"FakeClusterInstall", cdName, "-o=jsonpath={.metadata.ownerReferences[0].kind}"}).check(oc)
+
+		exutil.By("Delete the clusterDeployment, check the FakeClusterInstall will be deleted too")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, requireNS, contain, cdName, nok, DefaultTimeout, []string{"FakeClusterInstall"}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "39180"|./bin/extended-platform-tests run --timeout 15m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Low-39180-[aws]Hive MUST can modify statefulset spec.selector when given value is non-expected value even if this field is immutable [Disruptive]", func() {
 		testCaseID := "39180"
