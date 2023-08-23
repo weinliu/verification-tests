@@ -111,8 +111,17 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "--no-headers", "-n", sub.namespace).Output()
 	if err == nil {
-		g.By("(3) kataconfig is previously installed")
-		return msg, err // no need to go through the rest
+		// kataconfig exists. Is it finished?
+		kataconfigStatusQuery, kataconfigStatusQueryChanged, err := kataconfigStatusInUse(oc, sub.namespace, kataconf.name)
+		if err != nil {
+			e2e.Logf("error with kataconfigStatusInUse: %v, changed %v %v", kataconfigStatusQuery, kataconfigStatusQueryChanged, err)
+		} else {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "-n", sub.namespace, kataconfigStatusQuery).Output()
+			if strings.ToLower(msg) == "false" {
+				g.By("(3) kataconfig is previously installed")
+				return msg, err // no need to go through the rest
+			}
+		}
 	}
 
 	g.By("(3) Make sure subscription has finished before kataconfig")
