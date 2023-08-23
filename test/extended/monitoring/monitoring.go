@@ -1662,7 +1662,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		createResourceFromYaml(oc, "openshift-monitoring", enableCORS)
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 
-		g.By("check the the config again")
+		g.By("check the config again")
 		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"thanos-query\")].args}"
 		checkYamlconfig(oc, "openshift-monitoring", "deployments", "thanos-querier", cmd, `--web.disable-cors`, false)
 	})
@@ -1710,6 +1710,107 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check Watchdog alert exist")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertstate="firing",alertname="Watchdog"}'`, token, `"alertname":"Watchdog"`, uwmLoadTime)
+	})
+
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-66736-add option to specify resource requests and limits for components [Serial]", func() {
+		var (
+			clusterResources = filepath.Join(monitoringBaseDir, "cluster_resources.yaml")
+			uwmResources     = filepath.Join(monitoringBaseDir, "uwm_resources.yaml")
+		)
+		g.By("delete user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		createResourceFromYaml(oc, "openshift-monitoring", clusterResources)
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+
+		g.By("by default there is not resources.limits setting for the components, check the result for kube_pod_container_resource_limits of node-exporter pod to see if the setting loaded to components, same for other components")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="node-exporter",namespace="openshift-monitoring"}'`, token, `"pod":"node-exporter-`, 3*uwmLoadTime)
+
+		g.By("check the resources.requests and resources.limits setting loaded to node-exporter daemonset")
+		// oc -n openshift-monitoring get daemonset node-exporter -o jsonpath='{.spec.template.spec.containers[?(@.name=="node-exporter")].resources.requests}'
+		result, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].resources.requests}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get node-exporter container resources.requests setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"40Mi"`))
+
+		// oc -n openshift-monitoring get daemonset node-exporter -o jsonpath='{.spec.template.spec.containers[?(@.name=="node-exporter")].resources.limits}'
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].resources.limits}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get node-exporter container resources.limits setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"100Mi"`))
+
+		g.By("check the resources.requests and resources.limits take effect for kube-state-metrics")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="kube-state-metrics",namespace="openshift-monitoring"}'`, token, `"pod":"kube-state-metrics-`, 3*uwmLoadTime)
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/kube-state-metrics", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-state-metrics\")].resources.requests}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get kube-state-metrics container resources.requests setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"3m","memory":"100Mi"`))
+
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/kube-state-metrics", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-state-metrics\")].resources.limits}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get kube-state-metrics container resources.limits setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"200Mi"`))
+
+		g.By("check the resources.requests and resources.limits take effect for openshift-state-metrics")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="openshift-state-metrics",namespace="openshift-monitoring"}'`, token, `"pod":"openshift-state-metrics-`, 3*uwmLoadTime)
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/openshift-state-metrics", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"openshift-state-metrics\")].resources.requests}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get openshift-state-metrics container resources.requests setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"2m","memory":"40Mi"`))
+
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/openshift-state-metrics", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"openshift-state-metrics\")].resources.limits}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get openshift-state-metrics container resources.limits setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"100Mi"`))
+
+		g.By("check the resources.requests and resources.limits take effect for prometheus-adapter")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="prometheus-adapter",namespace="openshift-monitoring"}'`, token, `"pod":"prometheus-adapter-`, 3*uwmLoadTime)
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].resources.requests}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-adapter container resources.requests setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"2m","memory":"80Mi"`))
+
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].resources.limits}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-adapter container resources.limits setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"100Mi"`))
+
+		g.By("check the resources.requests and resources.limits take effect for prometheus-operator")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="prometheus-operator",namespace="openshift-monitoring"}'`, token, `"pod":"prometheus-operator-`, 3*uwmLoadTime)
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-operator", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator\")].resources.requests}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-operator container resources.requests setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"200Mi"`))
+
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-operator", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator\")].resources.limits}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-operator container resources.limits setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"300Mi"`))
+
+		g.By("check the resources.requests and resources.limits take effect for prometheus-operator-admission-webhook")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="prometheus-operator-admission-webhook",namespace="openshift-monitoring"}'`, token, `"pod":"prometheus-operator-admission-webhook-`, 3*uwmLoadTime)
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-operator-admission-webhook", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator-admission-webhook\")].resources.requests}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-operator-admission-webhook container resources.requests setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"50Mi"`))
+
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-operator-admission-webhook", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator-admission-webhook\")].resources.limits}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-operator-admission-webhook container resources.limits setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"100Mi"`))
+
+		g.By("check the resources.requests and resources.limits take effect for telemeter-client")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="telemeter-client",namespace="openshift-monitoring"}'`, token, `"pod":"telemeter-client-`, 3*uwmLoadTime)
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/telemeter-client", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"telemeter-client\")].resources.requests}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get telemeter-client container resources.requests setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"2m","memory":"50Mi"`))
+
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/telemeter-client", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"telemeter-client\")].resources.limits}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get telemeter-client container resources.limits setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"100Mi"`))
+
+		createResourceFromYaml(oc, "openshift-user-workload-monitoring", uwmResources)
+		exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
+
+		g.By("check the resources.requests and resources.limits for uwm prometheus-operator")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="prometheus-operator",namespace="openshift-user-workload-monitoring"}'`, token, `"pod":"prometheus-operator-`, 3*uwmLoadTime)
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-operator", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator\")].resources.requests}", "-n", "openshift-user-workload-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get UWM prometheus-operator container resources.requests setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"2m","memory":"20Mi"`))
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-operator", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator\")].resources.limits}", "-n", "openshift-user-workload-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get UWM prometheus-operator container resources.limits setting")
+		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"100Mi"`))
 	})
 
 	// author: hongyli@redhat.com
