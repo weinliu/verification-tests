@@ -450,12 +450,12 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		if matched, _ := regexp.MatchString(serInfo.serviceName+"/abc/redhat-operator-index:v4.13", output); !matched {
 			e2e.Failf("Can't find the expect target catalog\n")
 		}
-		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName, "--include-local-oci-catalogs", "--dest-skip-tls").Output()
+		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("/mno/redhat-operator-index:v5", output); !matched {
 			e2e.Failf("Can't find the expect target catalog\n")
 		}
-		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName+"/ocit", "--include-local-oci-catalogs", "--dest-skip-tls").Output()
+		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName+"/ocit", "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("/ocit/mno/redhat-operator-index:v5", output); !matched {
 			e2e.Failf("Can't find the expect target catalog\n")
@@ -474,38 +474,13 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		ocmirrorDir := exutil.FixturePath("testdata", "workloads")
 		ociFirstConfig := filepath.Join(ocmirrorDir, "config-oci-f.yaml")
 		ociSecondConfig := filepath.Join(ocmirrorDir, "config-oci-s.yaml")
-		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFirstConfig, "docker://"+serInfo.serviceName, "--include-local-oci-catalogs", "--dest-skip-tls").Output()
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFirstConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociSecondConfig, "docker://"+serInfo.serviceName, "--include-local-oci-catalogs", "--dest-skip-tls").Output()
+		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociSecondConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("Deleting manifest", output); !matched {
 			e2e.Failf("Can't find the prune log\n")
 		}
-	})
-
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Longduration-Low-60603-oc-mirror negative test", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads/config-60603")
-		configOCI := filepath.Join(buildPruningBaseDir, "config-oci.yaml")
-		configNormal := filepath.Join(buildPruningBaseDir, "config-normal.yaml")
-
-		g.By("Set registry app")
-		registry := registry{
-			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
-			namespace:   oc.Namespace(),
-		}
-		g.By("Trying to launch a registry app")
-		defer registry.deleteregistry(oc)
-		serInfo := registry.createregistry(oc)
-
-		output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configOCI, "--include-local-oci-catalogs", "file://").Output()
-		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("oci feature cannot be used when mirroring to local archive"))
-		output, err1 := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configOCI, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
-		o.Expect(err1).Should(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("configuration file is authorized only with flag --include-local-oci-catalogs"))
-		output, err2 := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configNormal, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--include-local-oci-catalogs").Output()
-		o.Expect(err2).Should(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("please execute without the --include-local-oci-catalogs flag"))
 	})
 
 	g.It("NonHyperShiftHOST-ConnectedOnly-Longduration-Author:yinzhou-NonPreRelease-Medium-60607-oc mirror purne for mirror2disk and mirror2mirror with and without skip-pruning[Serial]", func() {
@@ -643,12 +618,14 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		publicRegistry, err := exutil.GetMirrorRegistry(oc)
+		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", publicRegistry)
-		if publicRegistry == "" {
+		e2e.Logf("Registry is %s", registry)
+		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
 			g.Skip("There is no public registry, skip.")
 		}
+
+		publicRegistry, _, _ := strings.Cut(registry, "/")
 
 		g.By("Copy the registry as OCI FBC")
 		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
@@ -670,7 +647,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 		defer os.RemoveAll("oc-mirror-workspace")
 		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
-			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "docker://"+publicRegistry, "--include-local-oci-catalogs", "--dest-skip-tls", "--ignore-history").Execute()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "docker://"+publicRegistry, "--dest-skip-tls", "--ignore-history").Execute()
 			if err != nil {
 				e2e.Logf("mirror failed, retrying...")
 				return false, nil
@@ -680,7 +657,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Checkpoint for 60602")
-		createCSAndISCP(oc, "case60601-redhat-operator-index", "openshift-marketplace", "Running", 1)
+		createCSAndISCP(oc, "cs-case60601-redhat-operator-index", "openshift-marketplace", "Running", 1)
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Hign-65149-mirror2disk and disk2mirror workflow for local oci catalog [Serial]", func() {
@@ -692,12 +669,14 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		publicRegistry, err := exutil.GetMirrorRegistry(oc)
+		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", publicRegistry)
-		if publicRegistry == "" {
+		e2e.Logf("Registry is %s", registry)
+		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
 			g.Skip("There is no public registry, skip.")
 		}
+
+		publicRegistry, _, _ := strings.Cut(registry, "/")
 
 		g.By("Copy the catalog as OCI FBC")
 		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-index")
@@ -748,12 +727,14 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		publicRegistry, err := exutil.GetMirrorRegistry(oc)
+		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", publicRegistry)
-		if publicRegistry == "" {
+		e2e.Logf("Registry is %s", registry)
+		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
 			g.Skip("There is no public registry, skip.")
 		}
+
+		publicRegistry, _, _ := strings.Cut(registry, "/")
 
 		g.By("Copy the multi-arch catalog as OCI FBC")
 		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-multi-index")
@@ -810,12 +791,14 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		publicRegistry, err := exutil.GetMirrorRegistry(oc)
+		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", publicRegistry)
-		if publicRegistry == "" {
+		e2e.Logf("Registry is %s", registry)
+		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
 			g.Skip("There is no public registry, skip.")
 		}
+
+		publicRegistry, _, _ := strings.Cut(registry, "/")
 
 		defer os.RemoveAll("/tmp/redhat-operator-index")
 		g.By("Copy the catalog as OCI FBC")

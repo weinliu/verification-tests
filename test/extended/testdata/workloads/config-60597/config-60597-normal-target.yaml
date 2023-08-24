@@ -5,7 +5,7 @@ storageConfig:
     path: /tmp/case60597
 mirror:
   operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.12
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.13
     targetCatalog: abc/redhat-operator-index
     packages:
     - name: servicemeshoperator
