@@ -97,7 +97,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Vector logs should not be collected")
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-49390-Vector Collecting Kubernetes events using event router[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Critical-49390-Vector Collecting Kubernetes events using event router[Serial][Slow]", func() {
 			eventrouterTemplate := filepath.Join(loggingBaseDir, "eventrouter", "eventrouter.yaml")
 
 			g.By("Create ClusterLogging instance with Vector as collector")
