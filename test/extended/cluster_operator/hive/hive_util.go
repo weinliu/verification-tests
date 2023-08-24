@@ -17,11 +17,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+
 	legoroute53 "github.com/go-acme/lego/v4/providers/dns/route53"
 	"github.com/go-acme/lego/v4/registration"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -1626,36 +1631,30 @@ func newLegoDNSProvider(
 
 // Extract hiveutil (from the latest Hive image) into dir and return the executable's path
 func extractHiveutil(oc *exutil.CLI, dir string) string {
-	// Temporarily swap app-sre image with a self-build one for debugging purposes.
-	// Explanation:
-	// "hiveutil awsprivatelink enable" suffers from the "unknown userid" error
-	// when running as a random user in OCP, see https://github.com/golang/go/issues/38599.
-
-	//e2e.Logf("Getting tag of the latest Hive image")
-	//cmd := exec.Command(
-	//	"bash",
-	//	"-c",
-	//	fmt.Sprintf("curl -sk https://quay.io/api/v1/repository/%s/hive/tag/ "+
-	//		"| jq '.tags | sort_by(.start_ts) | reverse | .[0].name'", HiveImgRepoOnQuay),
-	//)
-	//latestImgTag, err := cmd.CombinedOutput()
-	//o.Expect(err).NotTo(o.HaveOccurred())
-	//latestImgTagStr := strings.Trim(strings.TrimSuffix(string(latestImgTag), "\n"), "\"")
-	latestImgTagStr := "test-hiveutil-awsprivatelink"
+	e2e.Logf("Getting tag of the latest Hive image")
+	cmd := exec.Command(
+		"bash",
+		"-c",
+		fmt.Sprintf("curl -sk https://quay.io/api/v1/repository/%s/hive/tag/ "+
+			"| jq '.tags | sort_by(.start_ts) | reverse | .[0].name'", HiveImgRepoOnQuay),
+	)
+	latestImgTag, err := cmd.CombinedOutput()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	latestImgTagStr := strings.Trim(strings.TrimSuffix(string(latestImgTag), "\n"), "\"")
 
 	e2e.Logf("Extracting hiveutil from image %v (latest) ...", latestImgTagStr)
-	err := oc.
+	err = oc.
 		AsAdmin().
 		WithoutNamespace().
 		Run("image", "extract").
-		//Args(fmt.Sprintf("quay.io/%s/hive:%s", HiveImgRepoOnQuay, latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
-		Args(fmt.Sprintf("quay.io/%s/hive:%s", "fxierh", latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
+		Args(fmt.Sprintf("quay.io/%s/hive:%s", HiveImgRepoOnQuay, latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
+		// Args(fmt.Sprintf("quay.io/%s/hive:%s", "fxierh", latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
 		Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	hiveutilPath := dir + "/hiveutil"
 
 	e2e.Logf("Making hiveutil executable ...")
-	cmd := exec.Command("chmod", "+x", hiveutilPath)
+	cmd = exec.Command("chmod", "+x", hiveutilPath)
 	_, err = cmd.CombinedOutput()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1702,4 +1701,44 @@ func getMachinePoolInstancesIds(oc *exutil.CLI, machinePoolName string, kubeconf
 
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(stdout, " ")
+}
+
+func getBasedomain(oc *exutil.CLI) string {
+	stdout, _, err := oc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("get").
+		Args("dns/cluster", "-o=jsonpath={.spec.baseDomain}").
+		Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(stdout).To(o.ContainSubstring("."))
+
+	basedomain := stdout[strings.Index(stdout, ".")+1:]
+	e2e.Logf("Found base domain = %v", basedomain)
+	return basedomain
+}
+
+func getRegion(oc *exutil.CLI) string {
+	infrastructure, err := oc.
+		AdminConfigClient().
+		ConfigV1().
+		Infrastructures().
+		Get(context.Background(), "cluster", metav1.GetOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var region string
+	switch platform := strings.ToLower(string(infrastructure.Status.PlatformStatus.Type)); platform {
+	case "aws":
+		region = infrastructure.Status.PlatformStatus.AWS.Region
+	case "azure":
+		// TODO: get region from labels on a Node
+		g.Fail("getRegion is not yet implemented for Azure")
+	case "gcp":
+		region = infrastructure.Status.PlatformStatus.GCP.Region
+	default:
+		g.Fail("Unknown platform: " + platform)
+	}
+
+	e2e.Logf("Found region = %v", region)
+	return region
 }

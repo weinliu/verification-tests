@@ -60,23 +60,33 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		testDataDir  string
 		iaasPlatform string
 		testOCPImage string
+		region       string
+		basedomain   string
 	)
+
+	// Under the hood, "extended-platform-tests run" calls "extended-platform-tests run-test" on each test case separately.
+	// This means that all necessary initializations need to be done before every single test case,
+	// either globally or in a Ginkgo node similar to BeforeEach.
 	g.BeforeEach(func() {
-		// skip ARM64 arch
+		// Skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
 
-		//Install Hive operator if not
+		// Install Hive operator if not
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
 		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
 
-		// get IaaS platform
+		// Get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while the case is for AWS - skipping test ...")
 		}
 
-		//Get OCP Image for Hive testing
+		// Get OCP Image for Hive testing
 		testOCPImage = getTestOCPImage()
+
+		// Get region and basedomain dynamically
+		region = getRegion(oc)
+		basedomain = getBasedomain(oc)
 	})
 
 	//author: sguo@redhat.com
@@ -2064,7 +2074,7 @@ spec:
 
 	//author: jshu@redhat.com
 	//OCP-44945, OCP-37528, OCP-37527
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "44945"|./bin/extended-platform-tests run --timeout 90m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "44945"|./bin/extended-platform-tests run --timeout 45m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-44945-Low-37528-Low-37527-[HiveSpec] Hive supports ClusterPool runningCount and hibernateAfter[Serial]", func() {
 		testCaseID := "44945"
 		poolName := "pool-" + testCaseID
@@ -2083,7 +2093,6 @@ spec:
 		e2e.Logf("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
-		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
 		exutil.By("Copy AWS platform credentials...")
 		createAWSCreds(oc, oc.Namespace())
@@ -2096,7 +2105,7 @@ spec:
 		pool := clusterPool{
 			name:           poolName,
 			namespace:      oc.Namespace(),
-			fake:           "false",
+			fake:           "true",
 			baseDomain:     AWSBaseDomain,
 			imageSetRef:    imageSetName,
 			platformType:   "aws",
@@ -2114,7 +2123,7 @@ spec:
 		pool.create(oc)
 		e2e.Logf("Check if ClusterPool created successfully and become ready")
 		//runningCount is 0 so pool status should be standby: 2, ready: 0
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, FakeClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
 		e2e.Logf("OCP-44945, step 2: check all cluster are in Hibernating status")
 		cdListStr := getCDlistfromPool(oc, poolName)
@@ -2515,7 +2524,7 @@ spec:
 
 	// Author: fxie@redhat.com
 	// ./bin/extended-platform-tests run all --dry-run|grep "63862"|./bin/extended-platform-tests run --timeout 80m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-63862-Medium-31931-MachinePool Supports Public Subnets[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-63862-Medium-31931-[HiveSpec] MachinePool Supports Public Subnets[Serial]", func() {
 		// Describes a testing scenario
 		// azs: azs to put in the MachinePool's manifest
 		// subnets: subnets to put in the MachinePool's manifest
@@ -2538,7 +2547,7 @@ spec:
 			machinePoolNamePrefix   = "infra"
 			machinePoolReplicas     = 2
 			machinePoolCount        = 0
-			stackName               = "endpointvpc-stack-" + testCaseID
+			stackName               = "vpc-stack-" + testCaseID
 			azCount                 = 3
 			cidr                    = "10.0.0.0/16"
 			azsForTesting           = []string{AWSRegion + "a", AWSRegion + "b"}
@@ -2888,7 +2897,7 @@ spec:
 
 		// AWS Clients
 		var (
-			cfg                  = getDefaultAWSConfig(oc, AWSRegion)
+			cfg                  = getDefaultAWSConfig(oc, region)
 			cloudFormationClient = cloudformation.NewFromConfig(cfg)
 			ec2Client            = ec2.NewFromConfig(cfg)
 		)
@@ -3086,7 +3095,7 @@ spec:
 		cmd = exec.Command(
 			hiveutilPath, "awsprivatelink",
 			"endpointvpc", "add", vpcId,
-			"--region", "us-east-2",
+			"--region", region,
 			"--creds-secret", "kube-system/aws-creds",
 			"--subnet-ids", privateSubnetIds,
 			"-d",
@@ -3124,9 +3133,9 @@ spec:
 		installConfigSecret := installConfig{
 			name1:      installConfigSecretName,
 			namespace:  oc.Namespace(),
-			baseDomain: AWSBaseDomain,
+			baseDomain: basedomain,
 			name2:      cdName,
-			region:     AWSRegion,
+			region:     region,
 			publish:    PublishInternal,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
@@ -3144,10 +3153,10 @@ spec:
 			fake:                 "false",
 			name:                 cdName,
 			namespace:            oc.Namespace(),
-			baseDomain:           AWSBaseDomain,
+			baseDomain:           basedomain,
 			clusterName:          cdName,
 			credRef:              AWSCreds,
-			region:               AWSRegion,
+			region:               region,
 			imageSetRef:          clusterImageSetName,
 			installConfigSecret:  installConfigSecretName,
 			pullSecretRef:        PullSecret,
