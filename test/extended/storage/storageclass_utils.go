@@ -148,6 +148,30 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 	return err
 }
 
+// Use storage class resource JSON file to create a new storage class
+func (sc *storageClass) createWithExportJSON(oc *exutil.CLI, originScExportJSON string, newScName string) {
+	var (
+		err            error
+		outputJSONFile string
+	)
+	scNameParameter := map[string]interface{}{
+		"jsonPath": `metadata.`,
+		"name":     newScName,
+	}
+	for _, extraParameter := range []map[string]interface{}{scNameParameter} {
+		outputJSONFile, err = jsonAddExtraParametersToFile(originScExportJSON, extraParameter)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tempJSONByte, _ := ioutil.ReadFile(outputJSONFile)
+		originScExportJSON = string(tempJSONByte)
+	}
+	e2e.Logf("The new SC jsonfile of resource is %s", outputJSONFile)
+	jsonOutput, _ := ioutil.ReadFile(outputJSONFile)
+	debugLogf("The file content is: \n%s", jsonOutput)
+	_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", outputJSONFile).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The new storage class:\"%s\" created", newScName)
+}
+
 // GetFieldByJSONPath gets its field value by JSONPath
 func (sc *storageClass) getFieldByJSONPath(oc *exutil.CLI, JSONPath string) string {
 	fieldValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass/"+sc.name, "-o", "jsonpath="+JSONPath).Output()

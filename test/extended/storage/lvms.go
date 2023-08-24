@@ -603,6 +603,98 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("Check the file exist in restored volume")
 		podRestore.checkDataInRawBlockVolume(oc)
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-66321-[LVMS] [Filesystem] [ext4] provision a PVC with fsType:'ext4'
+	g.It("NonHyperShiftHOST-Author:rdeore-High-66321-[LVMS] [Filesystem] [ext4] provision a PVC with fsType:'ext4'", func() {
+		//Set the resource template for the scenario
+		var (
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			storageClass           = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("topolvm.io"))
+			volumeGroup            = "vg1"
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "ext4",
+				"topolvm.io/device-class":   volumeGroup,
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		exutil.By("#. Create a new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("#. Create a new lvms storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc)
+
+		exutil.By("#. Define storage resources")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name),
+			setPersistentVolumeClaimCapacity("2Gi"))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+		exutil.By("#. Create a pvc with the lvms storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("#. Create deployment with the created pvc and wait for the pod ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+
+		exutil.By("#. Wait for the deployment ready")
+		dep.waitReady(oc)
+
+		exutil.By("#. Check the deployment's pod mounted volume fstype is ext4 by exec mount cmd in the pod")
+		dep.checkPodMountedVolumeContain(oc, "ext4")
+
+		exutil.By("#. Check the deployment's pod mounted volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		exutil.By("#. Check the deployment's pod mounted volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		exutil.By("#. Check the fsType of volume mounted on the pod located node")
+		volName := pvc.getVolumeName(oc)
+		nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+		checkVolumeMountCmdContain(oc, volName, nodeName, "ext4")
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-66320-[LVMS] Pre-defined CSI Storageclass should get re-created automatically after deleting
+	g.It("NonHyperShiftHOST-Author:rdeore-High-66320-[LVMS] Pre-defined CSI Storageclass should get re-created automatically after deleting [Disruptive]", func() {
+		//Set the resource template for the scenario
+		var (
+			volumeGroup      = "vg1"
+			storageClassName = "lvms-" + volumeGroup
+			storageClass     = newStorageClass()
+		)
+
+		exutil.By("#. Check lvms storageclass exists on cluster")
+		if !isSpecifiedResourceExist(oc, "sc/"+storageClassName, "") {
+			g.Skip("Skipped: the cluster does not have storage-class: " + storageClassName)
+		}
+
+		exutil.By("#. Copy pre-defined lvms CSI storageclass configuration in JSON format")
+		originSC, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", storageClassName, "-o", "json").Output()
+		debugLogf(originSC)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		exutil.By("#. Delete existing lvms storageClass")
+		o.Expect(oc.WithoutNamespace().AsAdmin().Run("delete").Args("sc", storageClassName).Execute()).ShouldNot(o.HaveOccurred())
+		defer func() {
+			if !isSpecifiedResourceExist(oc, "sc/"+storageClassName, "") {
+				storageClass.createWithExportJSON(oc, originSC, storageClassName)
+			}
+		}()
+
+		exutil.By("#. Check deleted lvms storageClass is re-created automatically")
+		o.Eventually(func() bool {
+			return isSpecifiedResourceExist(oc, "sc/"+storageClassName, "")
+		}, 30*time.Second, 5*time.Second).Should(o.BeTrue())
+	})
 })
 
 func checkVolumeBiggerThanDisk(oc *exutil.CLI, pvcName string, pvcNamespace string, thinPoolSize int) {
