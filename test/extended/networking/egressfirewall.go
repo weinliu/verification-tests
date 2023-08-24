@@ -48,13 +48,13 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("1. Obtain the namespace \n")
+		exutil.By("1. Obtain the namespace \n")
 		ns1 := oc.Namespace()
 
-		g.By("2. Enable ACL looging on the namespace ns1 \n")
+		exutil.By("2. Enable ACL looging on the namespace ns1 \n")
 		enableACLOnNamespace(oc, ns1, "info", "info")
 
-		g.By("3. create hello pod in ns1 \n")
+		exutil.By("3. create hello pod in ns1 \n")
 
 		pod1 := pingPodResourceNode{
 			name:      "hello-pod1",
@@ -65,7 +65,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pod1.createPingPodNode(oc)
 		waitPodReady(oc, ns1, pod1.name)
 
-		g.By("4. Create an EgressFirewall \n")
+		exutil.By("4. Create an EgressFirewall \n")
 		egressFW1 := egressFirewall1{
 			name:      "default",
 			namespace: ns1,
@@ -73,15 +73,15 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		}
 		egressFW1.createEgressFWObject1(oc)
 
-		g.By("5. Check www.test.com is blocked \n")
+		exutil.By("5. Check www.test.com is blocked \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.test.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("6. Check www.redhat.com is allowed \n")
+		exutil.By("6. Check www.redhat.com is allowed \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		g.By("7. Verify acl logs for egressfirewall generated. \n")
+		exutil.By("7. Verify acl logs for egressfirewall generated. \n")
 		egressFwRegex := fmt.Sprintf("EF:%s:.*", ns1)
 		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
@@ -107,13 +107,13 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("1. Obtain the namespace \n")
+		exutil.By("1. Obtain the namespace \n")
 		ns1 := oc.Namespace()
 
-		g.By("2. Enable ACL looging on the namespace ns1 \n")
+		exutil.By("2. Enable ACL looging on the namespace ns1 \n")
 		enableACLOnNamespace(oc, ns1, "info", "info")
 
-		g.By("3. create hello pod in ns1 \n")
+		exutil.By("3. create hello pod in ns1 \n")
 
 		pod1 := pingPodResourceNode{
 			name:      "hello-pod1",
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pod1.createPingPodNode(oc)
 		waitPodReady(oc, ns1, pod1.name)
 
-		g.By("4. Create an EgressFirewall \n")
+		exutil.By("4. Create an EgressFirewall \n")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns1,
@@ -134,11 +134,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		}
 		egressFW2.createEgressFW2Object(oc)
 
-		g.By("5. Generate egress traffic which will hit the egressfirewall. \n")
+		exutil.By("5. Generate egress traffic which will hit the egressfirewall. \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("6. Verify acl logs for egressfirewall generated. \n")
+		exutil.By("6. Verify acl logs for egressfirewall generated. \n")
 		egressFwRegex := fmt.Sprintf("EF:%s:.*", ns1)
 		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
@@ -147,10 +147,10 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		aclLogNum := len(matches)
 		o.Expect(aclLogNum > 0).To(o.BeTrue(), fmt.Sprintf("No matched acl logs numbers for namespace %s, and actual matched logs are: \n %v ", ns1, matches))
 
-		g.By("7. Disable  acl logs. \n")
+		exutil.By("7. Disable  acl logs. \n")
 		disableACLOnNamespace(oc, ns1)
 
-		g.By("8. Generate egress traffic which will hit the egressfirewall. \n")
+		exutil.By("8. Generate egress traffic which will hit the egressfirewall. \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
@@ -161,10 +161,10 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		aclLogNum2 := len(matches2)
 		o.Expect(aclLogNum2 == aclLogNum).To(o.BeTrue(), fmt.Sprintf("Before disable,actual matched logs are: \n %v ,after disable,actual matched logs are: \n %v", matches, matches2))
 
-		g.By("10. Enable acl logs. \n")
+		exutil.By("10. Enable acl logs. \n")
 		enableACLOnNamespace(oc, ns1, "alert", "alert")
 
-		g.By("11. Generate egress traffic which will hit the egressfirewall. \n")
+		exutil.By("11. Generate egress traffic which will hit the egressfirewall. \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
@@ -187,13 +187,13 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("1. Obtain the namespace \n")
+		exutil.By("1. Obtain the namespace \n")
 		ns1 := oc.Namespace()
 
-		g.By("2. Enable ACL looging on the namespace ns1 \n")
+		exutil.By("2. Enable ACL looging on the namespace ns1 \n")
 		enableACLOnNamespace(oc, ns1, "info", "info")
 
-		g.By("3. create hello pod in ns1 \n")
+		exutil.By("3. create hello pod in ns1 \n")
 
 		pod1 := pingPodResourceNode{
 			name:      "hello-pod1",
@@ -204,7 +204,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pod1.createPingPodNode(oc)
 		waitPodReady(oc, ns1, pod1.name)
 
-		g.By("4. Create an EgressFirewall \n")
+		exutil.By("4. Create an EgressFirewall \n")
 		egressFW1 := egressFirewall2{
 			name:      "default",
 			namespace: ns1,
@@ -215,11 +215,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		egressFW1.createEgressFW2Object(oc)
 		defer egressFW1.deleteEgressFW2Object(oc)
 
-		g.By("5. Generate egress traffic which will hit the egressfirewall. \n")
+		exutil.By("5. Generate egress traffic which will hit the egressfirewall. \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("6. Verify acl logs for egressfirewall generated. \n")
+		exutil.By("6. Verify acl logs for egressfirewall generated. \n")
 		egressFwRegex := fmt.Sprintf("EF:%s:.*", ns1)
 		aclLogs, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
@@ -228,11 +228,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		aclLogNum := len(matches)
 		o.Expect(aclLogNum > 0).To(o.BeTrue())
 
-		g.By("7. Create a new namespace. \n")
+		exutil.By("7. Create a new namespace. \n")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
-		g.By("8. create hello pod in ns2 \n")
+		exutil.By("8. create hello pod in ns2 \n")
 
 		pod2 := pingPodResourceNode{
 			name:      "hello-pod1",
@@ -243,11 +243,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pod2.createPingPodNode(oc)
 		waitPodReady(oc, ns2, pod2.name)
 
-		g.By("9. Generate egress traffic in ns2. \n")
+		exutil.By("9. Generate egress traffic in ns2. \n")
 		_, err = e2eoutput.RunHostCmd(pod2.namespace, pod2.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("10. Verify no acl logs for egressfirewall generated in ns2. \n")
+		exutil.By("10. Verify no acl logs for egressfirewall generated in ns2. \n")
 		egressFwRegexNs2 := fmt.Sprintf("egressFirewall_%s_.*", ns2)
 		o.Consistently(func() int {
 			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
@@ -257,7 +257,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			return len(matches2)
 		}, 10*time.Second, 5*time.Second).Should(o.Equal(0))
 
-		g.By("11. Create an EgressFirewall in ns2 \n")
+		exutil.By("11. Create an EgressFirewall in ns2 \n")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns2,
@@ -268,11 +268,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		egressFW2.createEgressFW2Object(oc)
 		defer egressFW2.deleteEgressFW2Object(oc)
 
-		g.By("12. Generate egress traffic which will hit the egressfirewall in ns2. \n")
+		exutil.By("12. Generate egress traffic which will hit the egressfirewall in ns2. \n")
 		_, err = e2eoutput.RunHostCmd(pod2.namespace, pod2.name, "curl -s www.redhat.com --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("13. Verify no acl logs for egressfirewall generated in ns2. \n")
+		exutil.By("13. Verify no acl logs for egressfirewall generated in ns2. \n")
 		o.Consistently(func() int {
 			aclLogs2, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, aclLogPath).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -291,10 +291,10 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			egressFWTemplate1   = filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
 		)
 
-		g.By("Obtain the namespace \n")
+		exutil.By("Obtain the namespace \n")
 		ns1 := oc.Namespace()
 
-		g.By("create hello pod in ns1 \n")
+		exutil.By("create hello pod in ns1 \n")
 		pod1 := pingPodResourceNode{
 			name:      "hello-pod1",
 			namespace: ns1,
@@ -303,7 +303,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pod1.createPingPodNode(oc)
 		waitPodReady(oc, ns1, pod1.name)
 
-		g.By("Create an EgressFirewall \n")
+		exutil.By("Create an EgressFirewall \n")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns1,
@@ -315,7 +315,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns1)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		g.By("Apply another EgressFirewall with allow rules under same namespace \n")
+		exutil.By("Apply another EgressFirewall with allow rules under same namespace \n")
 		egressFW := egressFirewall1{
 			name:      "default",
 			namespace: ns1,
@@ -327,7 +327,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr = waitEgressFirewallApplied(oc, egressFW.name, ns1)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		g.By("Check the result, default deny rules should have lower priority than allow rules\n")
+		exutil.By("Check the result, default deny rules should have lower priority than allow rules\n")
 		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:k8s.ovn.org/name=%s", ns1)
 		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
@@ -362,10 +362,10 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			egressFWTemplate1   = filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
 		)
 
-		g.By("Obtain the namespace \n")
+		exutil.By("Obtain the namespace \n")
 		ns1 := oc.Namespace()
 
-		g.By("Create egressfirewall rules under same namespace \n")
+		exutil.By("Create egressfirewall rules under same namespace \n")
 		egressFW := egressFirewall1{
 			name:      "default",
 			namespace: ns1,
@@ -376,7 +376,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr := waitEgressFirewallApplied(oc, egressFW.name, ns1)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		g.By("Get the base number of egressfirewall rules\n")
+		exutil.By("Get the base number of egressfirewall rules\n")
 		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:k8s.ovn.org/name=%s", ns1)
 		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
@@ -384,12 +384,12 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		e2e.Logf("The egressfirewall rules before restart ovn master pod: \n %s", listOutput)
 		baseCount := len(strings.Split(listOutput, "\n"))
 
-		g.By("Restart ovn master pod\n")
+		exutil.By("Restart cluster-manager's ovnkube-node pod\n")
 		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", ovnMasterPodName, "-n", "openshift-ovn-kubernetes").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 
-		g.By("Check the result, the number of egressfirewal rules should be same as before.")
+		exutil.By("Check the result, the number of egressfirewal rules should be same as before.")
 		ovnMasterPodName = getOVNKMasterOVNkubeNode(oc)
 		listOutput, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
@@ -413,11 +413,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
 
-		g.By("create new namespace")
+		exutil.By("create new namespace")
 		oc.SetupProject()
 		ns := oc.Namespace()
 
-		g.By("Create an EgressFirewall object with rule deny.")
+		exutil.By("Create an EgressFirewall object with rule deny.")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns,
@@ -432,7 +432,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		g.By("Create a pod ")
+		exutil.By("Create a pod ")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns,
@@ -442,16 +442,16 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		waitPodReady(oc, pod1.namespace, pod1.name)
 		defer pod1.deletePingPod(oc)
 
-		g.By("Check both ipv6 and ipv4 are blocked")
+		exutil.By("Check both ipv6 and ipv4 are blocked")
 		_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -6 www.google.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -4 www.google.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("Remove egressfirewall object")
+		exutil.By("Remove egressfirewall object")
 		egressFW2.deleteEgressFW2Object(oc)
 
-		g.By("Create an EgressFirewall object with rule allow.")
+		exutil.By("Create an EgressFirewall object with rule allow.")
 		egressFW2 = egressFirewall2{
 			name:      "default",
 			namespace: ns,
@@ -465,7 +465,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr = waitEgressFirewallApplied(oc, egressFW2.name, ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		g.By("Check both ipv4 and ipv6 destination can be accessed")
+		exutil.By("Check both ipv4 and ipv6 destination can be accessed")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -6 www.google.com --connect-timeout 5 -I")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -4 www.google.com --connect-timeout 5 -I")
@@ -478,7 +478,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
 
-		g.By("1. Create a new namespace, create an EgressFirewall object with references a DNS name in the namespace.")
+		exutil.By("1. Create a new namespace, create an EgressFirewall object with references a DNS name in the namespace.")
 		ns := oc.Namespace()
 
 		egressFW1 := egressFirewall1{
@@ -492,7 +492,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr := waitEgressFirewallApplied(oc, egressFW1.name, ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		g.By("2. Delete the EgressFirewall, check logs of ovnkube-master pod for error, there should be no segementation error, no DNS value not found in dnsMap error message.")
+		exutil.By("2. Delete the EgressFirewall, check logs of ovnkube-master pod for error, there should be no segementation error, no DNS value not found in dnsMap error message.")
 		removeResource(oc, true, true, "egressfirewall", egressFW1.name, "-n", egressFW1.namespace)
 
 		ovnKMasterPod := getOVNKMasterPod(oc)
@@ -512,11 +512,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			egressFWTemplate1   = filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
 		)
 
-		g.By("Obtain the namespace \n")
+		exutil.By("Obtain the namespace \n")
 		oc.SetupProject()
 		ns1 := oc.Namespace()
 
-		g.By("Create egressfirewall rules under same namespace \n")
+		exutil.By("Create egressfirewall rules under same namespace \n")
 		egressFW := egressFirewall1{
 			name:      "default",
 			namespace: ns1,
@@ -526,16 +526,16 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		defer egressFW.deleteEgressFWObject1(oc)
 		exutil.AssertWaitPollNoErr(waitEgressFirewallApplied(oc, egressFW.name, ns1), fmt.Sprintf("Wait for the  egressFW/%s applied successfully timeout", egressFW.name))
 
-		g.By("Delete namespace .\n")
+		exutil.By("Delete namespace .\n")
 		errNs := oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns1).Execute()
 		o.Expect(errNs).NotTo(o.HaveOccurred())
 
-		g.By("Verify no egressfirewall object  ")
+		exutil.By("Verify no egressfirewall object  ")
 		outPut, errFW := oc.AsAdmin().Run("get").Args("egressfirewall", egressFW.name, "-n", ns1).Output()
 		o.Expect(errFW).To(o.HaveOccurred())
 		o.Expect(outPut).NotTo(o.ContainSubstring(egressFW.name))
 
-		g.By("Check ovn db, corresponding egressfirewall acls were deleted.")
+		exutil.By("Check ovn db, corresponding egressfirewall acls were deleted.")
 		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:k8s.ovn.org/name=%s", ns1)
 		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
@@ -547,7 +547,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 	// author: huirwang@redhat.com
 	g.It("ROSA-OSD_CCS-ConnectedOnly-Author:huirwang-High-60488-EgressFirewall works for a nodeSelector for matchLabels.", func() {
-		g.By("Label one node to match egressfirewall rule")
+		exutil.By("Label one node to match egressfirewall rule")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
@@ -565,7 +565,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall3-template.yaml")
 
-		g.By("Get new namespace")
+		exutil.By("Get new namespace")
 		ns := oc.Namespace()
 
 		var cidrValue string
@@ -575,7 +575,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			cidrValue = "0.0.0.0/0"
 		}
 
-		g.By("Create a pod ")
+		exutil.By("Create a pod ")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns,
@@ -584,7 +584,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pod1.createPingPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("Check the nodes can be acccessed or not")
+		exutil.By("Check the nodes can be acccessed or not")
 		// Will skip the test if the nodes IP cannot be pinged even without egressfirewall
 		node1IP1, node1IP2 := getNodeIP(oc, node1)
 		node2IP1, node2IP2 := getNodeIP(oc, node2)
@@ -593,7 +593,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			g.Skip("Ping node IP failed, skip the test in this environment.")
 		}
 
-		g.By("Create an EgressFirewall object with rule nodeSelector.")
+		exutil.By("Create an EgressFirewall object with rule nodeSelector.")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns,
@@ -604,7 +604,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		defer egressFW2.deleteEgressFW2Object(oc)
 		egressFW2.createEgressFW2Object(oc)
 
-		g.By("Verify the node matched egressfirewall will be allowed.")
+		exutil.By("Verify the node matched egressfirewall will be allowed.")
 		o.Eventually(func() error {
 			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP2)
 			return err
@@ -633,7 +633,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 	// author: huirwang@redhat.com
 	g.It("ROSA-OSD_CCS-ConnectedOnly-Author:huirwang-High-60812-EgressFirewall works for a nodeSelector for matchExpressions.", func() {
-		g.By("Label one node to match egressfirewall rule")
+		exutil.By("Label one node to match egressfirewall rule")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
@@ -651,7 +651,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall4-template.yaml")
 
-		g.By("Get new namespace")
+		exutil.By("Get new namespace")
 		ns := oc.Namespace()
 
 		var cidrValue string
@@ -661,7 +661,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			cidrValue = "0.0.0.0/0"
 		}
 
-		g.By("Create a pod ")
+		exutil.By("Create a pod ")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns,
@@ -670,7 +670,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pod1.createPingPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("Check the nodes can be acccessed or not")
+		exutil.By("Check the nodes can be acccessed or not")
 		// Will skip the test if the nodes IP cannot be pinged even without egressfirewall
 		node1IP1, node1IP2 := getNodeIP(oc, node1)
 		node2IP1, node2IP2 := getNodeIP(oc, node2)
@@ -679,7 +679,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			g.Skip("Ping node IP failed, skip the test in this environment.")
 		}
 
-		g.By("Create an EgressFirewall object with rule nodeSelector.")
+		exutil.By("Create an EgressFirewall object with rule nodeSelector.")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns,
@@ -690,7 +690,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		defer egressFW2.deleteEgressFW2Object(oc)
 		egressFW2.createEgressFW2Object(oc)
 
-		g.By("Verify the node matched egressfirewall will be allowed, unmatched will be blocked!!")
+		exutil.By("Verify the node matched egressfirewall will be allowed, unmatched will be blocked!!")
 		o.Eventually(func() error {
 			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP2)
 			return err
@@ -725,7 +725,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			g.Skip("Skip for non-supported auto scaling machineset platforms!!")
 		}
 		exutil.SkipConditionally(oc)
-		g.By("Create a new machineset with 2 nodes")
+		exutil.By("Create a new machineset with 2 nodes")
 		machinesetName := "machineset-61213"
 		ms := exutil.MachineSetDescription{machinesetName, 2}
 		defer ms.DeleteMachineSet(oc)
@@ -735,23 +735,23 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
 		nodeName1 := exutil.GetNodeNameFromMachine(oc, machineName[1])
 
-		g.By("Obtain the namespace \n")
+		exutil.By("Obtain the namespace \n")
 		ns := oc.Namespace()
 
-		g.By("Enable multicast on namespace  \n")
+		exutil.By("Enable multicast on namespace  \n")
 		enableMulticast(oc, ns)
 
-		g.By("Delete ovnkuber-master pods and two nodes \n")
+		exutil.By("Delete ovnkuber-master pods and two nodes \n")
 		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-l", "app=ovnkube-master", "-n", "openshift-ovn-kubernetes").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = ms.DeleteMachineSet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Wait ovnkuber-master pods ready\n")
+		exutil.By("Wait ovnkuber-master pods ready\n")
 		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
 		exutil.AssertWaitPollNoErr(err, "ovnkube-master pods are not ready")
 
-		g.By("Check ovn db, the stale chassis for deleted node should be deleted")
+		exutil.By("Check ovn db, the stale chassis for deleted node should be deleted")
 		for _, machine := range []string{nodeName0, nodeName1} {
 			ovnACLCmd := fmt.Sprintf("ovn-sbctl --columns _uuid,hostname list chassis")
 			ovnMasterSourthDBLeaderPod := getOVNKMasterOVNkubeNode(oc)
@@ -762,7 +762,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			}, "120s", "10s").ShouldNot(o.ContainSubstring(machine), "The stale chassis still existed!")
 		}
 
-		g.By("Check ovnkuber master logs, no IGMP_Group logs")
+		exutil.By("Check ovnkuber master logs, no IGMP_Group logs")
 		ovnMasterPodName := getOVNKMasterPod(oc)
 		searchString := "Transaction causes multiple rows in \"IGMP_Group\" table to have identical values"
 		logContents, logErr := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-control-plane", ovnMasterPodName, "")
@@ -779,11 +779,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			ns                  = "62056-upgrade-ns"
 		)
 
-		g.By("create new namespace")
+		exutil.By("create new namespace")
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create an EgressFirewall object with rule deny.")
+		exutil.By("Create an EgressFirewall object with rule deny.")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns,
@@ -803,16 +803,16 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		g.By("Create a pod in the namespace")
+		exutil.By("Create a pod in the namespace")
 		createResourceFromFile(oc, ns, statefulSetHelloPod)
 		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
 		helloPodname := getPodName(oc, ns, "app=hello")[0]
 
-		g.By("Check the allowed website can be accessed!")
+		exutil.By("Check the allowed website can be accessed!")
 		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check the other website can be blocked!")
+		exutil.By("Check the other website can be blocked!")
 		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
 	})
@@ -827,19 +827,19 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
 
-		g.By("Verify if EgressFirewall was applied correctly")
+		exutil.By("Verify if EgressFirewall was applied correctly")
 		efErr := waitEgressFirewallApplied(oc, "default", ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		g.By("Get the pod in the namespace")
+		exutil.By("Get the pod in the namespace")
 		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
 		helloPodname := getPodName(oc, ns, "app=hello")[0]
 
-		g.By("Check the allowed website can be accessed!")
+		exutil.By("Check the allowed website can be accessed!")
 		_, err := e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check the other website can be blocked!")
+		exutil.By("Check the other website can be blocked!")
 		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
 	})
@@ -852,7 +852,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		ns := "test-egressfirewall-with-a-very-long-namespace-61176-61177"
 
-		g.By("1. Create a long namespace over 43 characters, create an EgressFirewall object with mixed of Allow and Deny rules.")
+		exutil.By("1. Create a long namespace over 43 characters, create an EgressFirewall object with mixed of Allow and Deny rules.")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
 		nsErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
 		o.Expect(nsErr).NotTo(o.HaveOccurred())
@@ -880,7 +880,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 		e2e.Logf("\n egressfirewall is applied\n")
 
-		g.By("2. Create a test pod in the namespace")
+		exutil.By("2. Create a test pod in the namespace")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
 			namespace: ns,
@@ -890,30 +890,34 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("3. Check www.facebook.com is blocked \n")
+		exutil.By("3. Check www.facebook.com is blocked \n")
 		o.Eventually(func() bool {
 			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.facebook.com --connect-timeout 5")
 			return err != nil
 		}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work as expected!!")
 
-		g.By("4. Check www.google.com is allowed \n")
+		exutil.By("4. Check www.google.com is allowed \n")
 		o.Eventually(func() bool {
 			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.google.com --connect-timeout 5")
 			return err == nil
 		}, "120s", "10s").Should(o.BeTrue(), "Allow rule did not work as expected!!")
 
-		g.By("5. Check ACLs in northdb. \n")
-		ovnMeasterLeaderPod := getOVNKMasterPod(oc)
-		o.Expect(ovnMeasterLeaderPod != "").Should(o.BeTrue())
-		aclCmd := "ovn-nbctl --no-leader-only find acl | grep external_ids | grep test-egressfirewall-with-a-very-long-namespace"
+		testPodNodeName, _ := exutil.GetPodNodeName(oc, pod1.namespace, pod1.name)
+		o.Expect(testPodNodeName != "").Should(o.BeTrue())
+		e2e.Logf("node name for the test pod is: %v", testPodNodeName)
+
+		exutil.By("5. Check ACLs in northdb. \n")
+		masterOVNKubeNodePod := getOVNKMasterOVNkubeNode(oc)
+		o.Expect(masterOVNKubeNodePod != "").Should(o.BeTrue())
+		aclCmd := "ovn-nbctl --no-leader-only find acl|grep external_ids|grep test-egressfirewall-with-a-very-long-namespace ||true"
 		checkAclErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-			aclOutput, aclErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMeasterLeaderPod, aclCmd)
+			aclOutput, aclErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", masterOVNKubeNodePod, aclCmd)
 			if aclErr != nil {
 				e2e.Logf("%v,Waiting for ACLs to be synced, try next ...,", aclErr)
 				return false, nil
 			}
 			// check ACLs rules for the long namespace
-			if strings.Contains(aclOutput, "test-egressfirewall-with-a-very-long-namespace") && strings.Count(aclOutput, "test-egressfirewall-with-a-very-long-namespace") == 2 {
+			if strings.Contains(aclOutput, "test-egressfirewall-with-a-very-long-namespace") && strings.Count(aclOutput, "test-egressfirewall-with-a-very-long-namespace") == 4 {
 				e2e.Logf("The ACLs for egressfirewall in northbd are as expected!")
 				return true, nil
 			}
@@ -921,23 +925,25 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		})
 		exutil.AssertWaitPollNoErr(checkAclErr, fmt.Sprintf("ACLs were not synced correctly!"))
 
-		g.By("6. Restart OVN masters\n")
-		delPodErr := oc.AsAdmin().Run("delete").Args("pod", "-l", "app=ovnkube-master", "-n", "openshift-ovn-kubernetes").Execute()
+		exutil.By("6. Restart OVNK nodes\n")
+		defer waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		delPodErr := oc.AsAdmin().Run("delete").Args("pod", "-l", "app=ovnkube-node", "-n", "openshift-ovn-kubernetes").Execute()
 		o.Expect(delPodErr).NotTo(o.HaveOccurred())
 
-		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 
-		g.By("7. Check ACL again in northdb after restart. \n")
-		ovnMeasterLeaderPod = getOVNKMasterPod(oc)
-		o.Expect(ovnMeasterLeaderPod != "").Should(o.BeTrue())
+		exutil.By("7. Check ACL again in northdb after restart. \n")
+		// since ovnkube-node pods are re-created during restart, obtain ovnMasterOVNkubeNodePod again
+		masterOVNKubeNodePod = getOVNKMasterOVNkubeNode(oc)
+		o.Expect(masterOVNKubeNodePod != "").Should(o.BeTrue())
 		checkAclErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-			aclOutput, aclErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMeasterLeaderPod, aclCmd)
+			aclOutput, aclErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", masterOVNKubeNodePod, aclCmd)
 			if aclErr != nil {
 				e2e.Logf("%v,Waiting for ACLs to be synced, try next ...,", aclErr)
 				return false, nil
 			}
 			// check ACLs rules for the long namespace after restart
-			if strings.Contains(aclOutput, "test-egressfirewall-with-a-very-long-namespace") && strings.Count(aclOutput, "test-egressfirewall-with-a-very-long-namespace") == 2 {
+			if strings.Contains(aclOutput, "test-egressfirewall-with-a-very-long-namespace") && strings.Count(aclOutput, "test-egressfirewall-with-a-very-long-namespace") == 4 {
 				e2e.Logf("The ACLs for egressfirewall in northbd are as expected!")
 				return true, nil
 			}
@@ -945,7 +951,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		})
 		exutil.AssertWaitPollNoErr(checkAclErr, fmt.Sprintf("ACLs were not synced correctly!"))
 
-		g.By("8. Check egressfirewall rules still work correctly after restart \n")
+		exutil.By("8. Check egressfirewall rules still work correctly after restart \n")
 		o.Eventually(func() bool {
 			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.facebook.com --connect-timeout 5")
 			return err != nil
@@ -967,7 +973,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		url2 := "www.ericsson.com" // used as Deny rule for second namespace
 		url3 := "www.google.com"   // is not used as Deny rule in either namespace
 
-		g.By("1. nslookup obtain dns server ip for url1 and url2\n")
+		exutil.By("1. nslookup obtain dns server ip for url1 and url2\n")
 		ips1, err := net.LookupIP(url1)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("ip address from nslookup for %v: %v", url1, ips1)
@@ -1070,7 +1076,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		e2e.Logf("\n cidrValue3: %v,  cidrValue4: %v\n", cidrValue3, cidrValue4)
 		e2e.Logf("\n IP4: %v,  IP5: %v, IP6: %v\n", ip4, ip5, ip6)
 
-		g.By("2. Obtain first namespace, create egressfirewall1 in it\n")
+		exutil.By("2. Obtain first namespace, create egressfirewall1 in it\n")
 		ns1 := oc.Namespace()
 
 		egressFW1 := egressFirewall5{
@@ -1095,7 +1101,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 		e2e.Logf("\n egressfirewall is applied\n")
 
-		g.By("3. Create a test pod in first namespace")
+		exutil.By("3. Create a test pod in first namespace")
 		pod1ns1 := pingPodResource{
 			name:      "hello-pod1",
 			namespace: ns1,
@@ -1105,7 +1111,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1ns1.name, "-n", pod1ns1.namespace).Execute()
 		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
 
-		g.By("4. Create a second namespace, and create egressfirewall2 in it\n")
+		exutil.By("4. Create a second namespace, and create egressfirewall2 in it\n")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
@@ -1131,7 +1137,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 		e2e.Logf("\n egressfirewall is applied\n")
 
-		g.By("5. Create a test pod in second namespace")
+		exutil.By("5. Create a test pod in second namespace")
 		pod2ns2 := pingPodResource{
 			name:      "hello-pod2",
 			namespace: ns2,
@@ -1171,31 +1177,31 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			newCurlCmd3 = "curl -I -6 -k https://" + url3 + " --resolve " + url3 + ":443:[" + ip6 + "] --connect-timeout 5"
 		}
 
-		g.By("\n6.1. Check deny rule of first namespace is blocked from test pod of first namespace because of the deny rule in first namespace\n")
+		exutil.By("\n6.1. Check deny rule of first namespace is blocked from test pod of first namespace because of the deny rule in first namespace\n")
 		_, err1 := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, curlCmd1)
 		o.Expect(err1).To(o.HaveOccurred(), "curl the deny rule of first namespace from first namespace failed")
 
-		g.By("\n6.2. Check deny rule of second namespce is allowed from test pod of first namespace, it is not affected by deny rile in second namespace\n")
+		exutil.By("\n6.2. Check deny rule of second namespce is allowed from test pod of first namespace, it is not affected by deny rile in second namespace\n")
 		_, err2 := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, curlCmd2)
 		o.Expect(err2).NotTo(o.HaveOccurred(), "curl the deny rule of second namespace from first namespace failed")
 
-		g.By("\n6.3. Check url3 is allowed from test pod of first namespace, it is not affected by either deny rule of two namespaces\n")
+		exutil.By("\n6.3. Check url3 is allowed from test pod of first namespace, it is not affected by either deny rule of two namespaces\n")
 		_, err3 := e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, curlCmd3)
 		o.Expect(err3).NotTo(o.HaveOccurred(), "curl url3 from first namesapce failed")
 
-		g.By("\n7.1. Check deny rule of first namespace is allowed from test pod of second namespace, it is not affected by deny rule in first namespace\n")
+		exutil.By("\n7.1. Check deny rule of first namespace is allowed from test pod of second namespace, it is not affected by deny rule in first namespace\n")
 		_, err1 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, curlCmd1)
 		o.Expect(err1).NotTo(o.HaveOccurred(), "curl the deny rule of second namespace from first namespace failed")
 
-		g.By("\n7.2. Check deny rule in second namespace is blocked from test pod of second namespace because of the deny rule in second namespace\n")
+		exutil.By("\n7.2. Check deny rule in second namespace is blocked from test pod of second namespace because of the deny rule in second namespace\n")
 		_, err2 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, curlCmd2)
 		o.Expect(err2).To(o.HaveOccurred(), "curl the deny rule of second namespace from second namespace failed")
 
-		g.By("\n7.3. Check url3 is allowed from test pod of second namespace, it is not affected by either deny rule of two namespaces\n")
+		exutil.By("\n7.3. Check url3 is allowed from test pod of second namespace, it is not affected by either deny rule of two namespaces\n")
 		_, err3 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, curlCmd3)
 		o.Expect(err3).NotTo(o.HaveOccurred(), "curl url3 from first namesapce failed")
 
-		g.By("\n\n8. Replace CIDR of first rule of each egressfirewall with another CIDR \n\n")
+		exutil.By("\n\n8. Replace CIDR of first rule of each egressfirewall with another CIDR \n\n")
 		change1 := "[{\"op\":\"replace\",\"path\":\"/spec/egress/0/to/cidrSelector\", \"value\":\"" + cidrValue3 + "\"}]"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns1, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", change1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1214,32 +1220,32 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		o.Expect(newCidr == cidrValue4).Should(o.BeTrue())
 		e2e.Logf("\n\nnew CIDR for first rule in second namespace %v is %v\n\n", ns2, newCidr)
 
-		g.By("\n\n Repeat curl tests with after CIDR update \n\n")
-		g.By("\n8.1 Curl deny rule of first namespace from first namespace\n")
+		exutil.By("\n\n Repeat curl tests with after CIDR update \n\n")
+		exutil.By("\n8.1 Curl deny rule of first namespace from first namespace\n")
 		_, err1 = e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, newCurlCmd1)
 		o.Expect(err1).To(o.HaveOccurred(), "curl the deny rule of first namespace from first namespace failed after CIDR update")
 
-		g.By("\n8.2 Curl deny rule of second namespace from first namespace\n")
+		exutil.By("\n8.2 Curl deny rule of second namespace from first namespace\n")
 		_, err2 = e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, newCurlCmd2)
 		o.Expect(err2).NotTo(o.HaveOccurred(), "curl the deny rule of second namespace from first namespace failed after CIDR update")
 
-		g.By("\n8.3 Curl url with no rule from first namespace\n")
+		exutil.By("\n8.3 Curl url with no rule from first namespace\n")
 		_, err3 = e2eoutput.RunHostCmd(pod1ns1.namespace, pod1ns1.name, newCurlCmd3)
 		o.Expect(err3).NotTo(o.HaveOccurred(), "curl url3 from first namesapce failed after CIDR update")
 
-		g.By("\n8.4 Curl deny rule of first namespace from second namespace\n")
+		exutil.By("\n8.4 Curl deny rule of first namespace from second namespace\n")
 		_, err1 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, newCurlCmd1)
 		o.Expect(err1).NotTo(o.HaveOccurred(), "curl the deny rule of first namespace from second namespace failed after CIDR update")
 
-		g.By("\n8.5 Curl deny rule of second namespace from second namespace\n")
+		exutil.By("\n8.5 Curl deny rule of second namespace from second namespace\n")
 		_, err2 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, newCurlCmd2)
 		o.Expect(err2).To(o.HaveOccurred(), "curl the deny rule of second namespace from second namespace failed after CIDR update")
 
-		g.By("\n8.6 Curl url with no rule from second namespace\n")
+		exutil.By("\n8.6 Curl url with no rule from second namespace\n")
 		_, err3 = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, newCurlCmd3)
 		o.Expect(err3).NotTo(o.HaveOccurred(), "curl url3 from second namesapce failed after CIDR update")
 
-		g.By("\n9. Change the Allow rule of egressfirewall of first namespace to be denied\n")
+		exutil.By("\n9. Change the Allow rule of egressfirewall of first namespace to be denied\n")
 		change := "[{\"op\":\"replace\",\"path\":\"/spec/egress/1/type\", \"value\":\"Deny\"}]"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns1, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", change).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1267,7 +1273,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work as expected in second namespace for IPv6!!")
 		}
 
-		g.By("\n10. Change the second Deny rule of egressfirewall of second namespace to be allowed\n")
+		exutil.By("\n10. Change the second Deny rule of egressfirewall of second namespace to be allowed\n")
 		change = "[{\"op\":\"replace\",\"path\":\"/spec/egress/1/type\", \"value\":\"Allow\"}]"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns2, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", change).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1367,10 +1373,10 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 			egressNPTemplate    = filepath.Join(buildPruningBaseDir, "egressnetworkpolicy-template.yaml")
 		)
 
-		g.By("Get namespace")
+		exutil.By("Get namespace")
 		ns := oc.Namespace()
 
-		g.By("Create an EgressNetworkpolicy object with a dnsName")
+		exutil.By("Create an EgressNetworkpolicy object with a dnsName")
 		egressNetworkpolicy := egressNetworkpolicy{
 			name:      "egressnetworkpolicy-63742",
 			namespace: ns,
@@ -1382,7 +1388,7 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 		defer removeResource(oc, true, true, "egressnetworkpolicy", egressNetworkpolicy.name, "-n", egressNetworkpolicy.namespace)
 		egressNetworkpolicy.createEgressNetworkPolicyObj(oc)
 
-		g.By("Checking SDN logs, should no trancted message for dns")
+		exutil.By("Checking SDN logs, should no trancted message for dns")
 		sdnPod := getPodName(oc, "openshift-sdn", "app=sdn")
 		o.Consistently(func() bool {
 			podlogs, _ := oc.AsAdmin().Run("logs").Args(sdnPod[0], "-n", "openshift-sdn", "-c", "sdn", "--since", "60s").Output()
@@ -1393,13 +1399,13 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 			return result
 		}, 30*time.Second, 10*time.Second).ShouldNot(o.BeTrue())
 
-		g.By("Update egressnetworkpolicy")
+		exutil.By("Update egressnetworkpolicy")
 		errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressnetworkpolicy.network.openshift.io/"+egressNetworkpolicy.name+"", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.cnn.com\"}},{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.facebook.com\"}}]}}", "--type=merge").Execute()
 		o.Expect(errPatch).NotTo(o.HaveOccurred())
 		errPatch = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressnetworkpolicy.network.openshift.io/"+egressNetworkpolicy.name+"", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.yahoo.com\"}},{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.redhat.com\"}}]}}", "--type=merge").Execute()
 		o.Expect(errPatch).NotTo(o.HaveOccurred())
 
-		g.By("Checking SDN logs, should no cannot find netid message for egressnetworkpolicy.")
+		exutil.By("Checking SDN logs, should no cannot find netid message for egressnetworkpolicy.")
 		o.Consistently(func() bool {
 			podlogs, _ := oc.AsAdmin().Run("logs").Args(sdnPod[0], "-n", "openshift-sdn", "-c", "sdn", "--since", "60s").Output()
 			result := strings.Contains(podlogs, "Could not find netid for namespace \"\": failed to find netid for namespace: , resource name may not be empty")
@@ -1419,11 +1425,11 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 			ns                  = "64761-upgrade-ns"
 		)
 
-		g.By("create new namespace")
+		exutil.By("create new namespace")
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create an egressnetworkpolicy object with rule deny.")
+		exutil.By("Create an egressnetworkpolicy object with rule deny.")
 		egressNP := egressNetworkpolicy{
 			name:      "egressnetworkpolicy-64761",
 			namespace: ns,
@@ -1436,16 +1442,16 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 		errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressnetworkpolicy.network.openshift.io/"+egressNP.name, "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"www.redhat.com\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
 		o.Expect(errPatch).NotTo(o.HaveOccurred())
 
-		g.By("Create a pod in the namespace")
+		exutil.By("Create a pod in the namespace")
 		createResourceFromFile(oc, ns, statefulSetHelloPod)
 		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
 		helloPodname := getPodName(oc, ns, "app=hello")[0]
 
-		g.By("Check the allowed website can be accessed!")
+		exutil.By("Check the allowed website can be accessed!")
 		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check the other website can be blocked!")
+		exutil.By("Check the other website can be blocked!")
 		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
 	})
@@ -1460,20 +1466,20 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
 
-		g.By("Verify if egressnetworkpolicy existed")
+		exutil.By("Verify if egressnetworkpolicy existed")
 		output, efErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressnetworkpolicy", "-n", ns).Output()
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("egressnetworkpolicy-64761"))
 
-		g.By("Get the pod in the namespace")
+		exutil.By("Get the pod in the namespace")
 		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
 		helloPodname := getPodName(oc, ns, "app=hello")[0]
 
-		g.By("Check the allowed website can be accessed!")
+		exutil.By("Check the allowed website can be accessed!")
 		_, err := e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check the other website can be blocked!")
+		exutil.By("Check the other website can be blocked!")
 		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
 	})
