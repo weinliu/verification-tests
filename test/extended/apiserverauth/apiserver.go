@@ -5898,6 +5898,14 @@ manifests:
 			g.Skip("Skip for proxy platform")
 		}
 
+		// Case is failing on which cluster dns is not resolvable ...
+		apiServerFQDN := getApiServerFQDN(oc)
+		cmd := fmt.Sprintf(`nslookup %s`, apiServerFQDN)
+		nsOutput, nsErr := exec.Command("bash", "-c", cmd).Output()
+		if nsErr != nil {
+			g.Skip(fmt.Sprintf("DNS resolution failed, case is not suitable for environment %s :: %s", nsOutput, nsErr))
+		}
+
 		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 		projectNs := oc.Namespace()
@@ -5943,7 +5951,7 @@ manifests:
 			podsList := getPodsListByLabel(oc.AsAdmin(), projectNs, "deployment="+u.Target)
 			exutil.AssertPodToBeReady(oc, podsList[0], projectNs)
 
-			exutil.By(fmt.Sprintf("%d.4) Perform the proxy GET request to resource REST endpoint with service", i+5))
+			exutil.By(fmt.Sprintf("%d.3) Perform the proxy GET request to resource REST endpoint with service", i+5))
 			curlUrl := fmt.Sprintf(`%s/api/v1/namespaces/%s/services/http:%s:8080-tcp/proxy/`, apiserverName, projectNs, u.Target)
 			output := clientCurl(token, curlUrl)
 			o.Expect(output).Should(o.ContainSubstring(u.ExpectStr))
