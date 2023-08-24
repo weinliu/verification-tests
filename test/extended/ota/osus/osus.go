@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 			name:      "update-service-52596",
 			namespace: oc.Namespace(),
 			template:  usTemp,
-			graphdata: "quay.io/openshifttest/graph-data:latest",
+			graphdata: "quay.io/openshift-qe-optional-operators/graph-data:latest",
 			releases:  "quay.io/openshift-release-dev/ocp-release",
 		}
 		defer uninstallOSUSApp(oc)
