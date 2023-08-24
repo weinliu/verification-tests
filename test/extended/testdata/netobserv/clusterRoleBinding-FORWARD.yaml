@@ -6,7 +6,7 @@ objects:
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
-    name: "${NAME}"
+    name: netobserv-reader
   rules:
   - apiGroups:
     - 'loki.grafana.com'
@@ -16,22 +16,47 @@ objects:
     - logs
     verbs:
     - 'get'
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    name: netobserv-writer
+  rules:
+  - apiGroups:
+    - 'loki.grafana.com'
+    resources:
+    - network
+    resourceNames:
+    - logs
+    verbs:
     - 'create'
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
-    name: "${NAME}"
+    name: netobserv-writer-flp
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
-    name: "${NAME}"
+    name: netobserv-writer
   subjects:
   - kind: ServiceAccount
     name: "${SERVICE_ACCOUNT_NAME}"
     namespace: "${NAMESPACE}"
+  - kind: ServiceAccount
+    name: "${SERVICE_ACCOUNT_NAME}-transformer"
+    namespace: "${NAMESPACE}"
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  metadata:
+    name: netobserv-reader
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: netobserv-reader
+  subjects:
+  - kind: ServiceAccount
+    name: netobserv-plugin
+    namespace: "${NAMESPACE}"
 parameters:
-- name: NAME
-  value: "lokistack-netobserv-tenant-logs"
 - name: NAMESPACE
   value: "netobserv"
 - name: SERVICE_ACCOUNT_NAME

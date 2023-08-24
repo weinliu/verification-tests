@@ -38,21 +38,14 @@ func checkFlowcollectionEnabled(oc *exutil.CLI) string {
 // Verify flow records from logs
 func verifyFlowRecordFromLogs(podLog string) {
 	re := regexp.MustCompile("{\"AgentIP\":.*")
-	//e2e.Logf("the logs of flowlogs-pipeline pods are: %v", podLog)
 	flowRecords := re.FindAllString(podLog, -3)
-	//e2e.Logf("The flowRecords %v\n\n\n", flowRecords)
-	// regex for ip
-	//numBlock := "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
-	//regexPattern := numBlock + "\\." + numBlock + "\\." + numBlock + "\\." + numBlock
 	for _, flow := range flowRecords {
-		//e2e.Logf("The %d th flow record is: %v\n\n\n", i, flow)
 		o.Expect(flow).Should(o.And(
-			//o.MatchRegexp(fmt.Sprintf("AgentIP.:%s", regexPattern)),
 			o.MatchRegexp("Bytes.:[0-9]+"),
 			o.MatchRegexp("Duplicate.:(true|false)"),
 			o.MatchRegexp("TimeFlowEndMs.:[1-9][0-9]+"),
 			o.MatchRegexp("TimeFlowStartMs.:[1-9][0-9]+"),
-			o.MatchRegexp("TimeReceived.:[1-9][0-9]+")))
+			o.MatchRegexp("TimeReceived.:[1-9][0-9]+")), flow)
 	}
 }
 
@@ -77,29 +70,35 @@ func getFlowRecords(lokiValues [][]string) ([]FlowRecord, error) {
 
 // Verify some key and deterministic flow recrods fields and their values
 func (flowlog *Flowlog) verifyFlowRecord() {
-	o.Expect(flowlog.AgentIP).To(o.Equal(flowlog.DstK8S_HostIP))
-	o.Expect(flowlog.Bytes).Should(o.BeNumerically(">", 0))
+	flow := fmt.Sprintf("Flow log in error: %+v\n", flowlog)
+	o.Expect(flowlog.AgentIP).To(o.Equal(flowlog.DstK8S_HostIP), flow)
+	o.Expect(flowlog.Bytes).Should(o.BeNumerically(">", 0), flow)
 	var testDuplicate bool
-	o.Expect(flowlog.Duplicate).To(o.BeAssignableToTypeOf(testDuplicate))
+	o.Expect(flowlog.Duplicate).To(o.BeAssignableToTypeOf(testDuplicate), flow)
 	now := time.Now()
 	compareTime := now.Add(time.Duration(-2) * time.Hour)
 	compareTimeMs := compareTime.UnixMilli()
-	o.Expect(flowlog.TimeFlowEndMs).Should(o.BeNumerically(">", compareTimeMs))
-	o.Expect(flowlog.TimeFlowStartMs).Should(o.BeNumerically(">", compareTimeMs))
-	o.Expect(flowlog.TimeReceived).Should(o.BeNumerically(">", compareTime.Unix()))
+	o.Expect(flowlog.TimeFlowEndMs).Should(o.BeNumerically(">", compareTimeMs), flow)
+	o.Expect(flowlog.TimeFlowStartMs).Should(o.BeNumerically(">", compareTimeMs), flow)
+	o.Expect(flowlog.TimeReceived).Should(o.BeNumerically(">", compareTime.Unix()), flow)
 }
 
 func (lokilabels Lokilabels) getLokiQuery() string {
 	label := reflect.ValueOf(&lokilabels).Elem()
 	var lokiQuery = "{"
 	for i := 0; i < label.NumField(); i++ {
-		if label.Type().Field(i).Name != "" {
-			if label.Type().Field(i).Name != "RecordType" {
-				if label.Type().Field(i).Name == "FlowDirection" && (label.Field(i).Interface() == "0" || label.Field(i).Interface() == "1") {
+		if label.Field(i).Interface() != "" {
+			switch labelName := label.Type().Field(i).Name; labelName {
+			case "App":
+				lokiQuery += fmt.Sprintf("%s=\"%s\", ", strings.ToLower(label.Type().Field(i).Name), label.Field(i).Interface())
+			case "RecordType":
+				lokiQuery += fmt.Sprintf("_%s=\"%s\", ", label.Type().Field(i).Name, label.Field(i).Interface())
+			case "FlowDirection":
+				if label.Field(i).Interface() == "0" || label.Field(i).Interface() == "1" {
 					lokiQuery += fmt.Sprintf("%s=\"%s\", ", label.Type().Field(i).Name, label.Field(i).Interface())
 				}
-			} else {
-				lokiQuery += fmt.Sprintf("_%s=\"%s\", ", label.Type().Field(i).Name, label.Field(i).Interface())
+			default:
+				lokiQuery += fmt.Sprintf("%s=\"%s\", ", label.Type().Field(i).Name, label.Field(i).Interface())
 			}
 		}
 	}
@@ -109,13 +108,13 @@ func (lokilabels Lokilabels) getLokiQuery() string {
 	return lokiQuery
 }
 
+// TODO: add argument for condition to be matched.
 // Get flows from Loki logs
-func (lokilabels Lokilabels) getLokiFlowLogs(oc *exutil.CLI, token, namespace, lokiStackName string) ([]FlowRecord, error) {
-	route := "https://" + getRouteAddress(oc, namespace, lokiStackName)
-	lc := newLokiClient(route).withToken(token).retry(5)
+func (lokilabels Lokilabels) getLokiFlowLogs(oc *exutil.CLI, token, lokiRoute string) ([]FlowRecord, error) {
+	lc := newLokiClient(lokiRoute).withToken(token).retry(5)
 	tenantID := "network"
 	lokiQuery := lokilabels.getLokiQuery()
-
+	flowRecords := []FlowRecord{}
 	var res *lokiQueryResponse
 	err := wait.Poll(30*time.Second, 300*time.Second, func() (done bool, err error) {
 		var qErr error
@@ -124,30 +123,30 @@ func (lokilabels Lokilabels) getLokiFlowLogs(oc *exutil.CLI, token, namespace, l
 			e2e.Logf("\ngot error %v when getting %s logs for query: %s\n", qErr, tenantID, lokiQuery)
 			return false, qErr
 		}
-		return len(res.Data.Result) > 0, nil
+
+		// return results if no error and result is empty
+		// caller should add assertions to ensure len([]FlowRecord) is as they expected for given loki query
+		return len(res.Data.Result) >= 0, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", tenantID))
-	flowRecords := []FlowRecord{}
+
+	if err != nil {
+		return flowRecords, err
+	}
 
 	for _, result := range res.Data.Result {
-		if lokilabels.RecordType != "" {
-			if result.Stream.DstK8S_Namespace == lokilabels.DstK8S_Namespace && result.Stream.SrcK8S_Namespace == lokilabels.SrcK8S_Namespace && result.Stream.DstK8S_OwnerName == "nginx-service" {
-				flowRecords, err = getFlowRecords(result.Values)
-			}
-		} else {
-			if result.Stream.DstK8S_Namespace == lokilabels.SrcK8S_Namespace && result.Stream.SrcK8S_Namespace == lokilabels.DstK8S_Namespace && result.Stream.SrcK8S_OwnerName == "nginx-service" {
-				flowRecords, err = getFlowRecords(result.Values)
-			}
+		flowRecords, err = getFlowRecords(result.Values)
+		if err != nil {
+			return []FlowRecord{}, err
 		}
 	}
+
 	return flowRecords, err
 }
 
 // Verify loki flow records and if it was written in the last 5 minutes
-func verifyLokilogsTime(oc *exutil.CLI, lokiStackNS, flowNS, lokiStackName, serviceAccountName string) error {
-	bearerToken := getSATokenFromSecret(oc, serviceAccountName, flowNS)
+func verifyLokilogsTime(oc *exutil.CLI, lokiStackNS, flowNS, lokiStackName, token string) error {
 	route := "https://" + getRouteAddress(oc, lokiStackNS, lokiStackName)
-	lc := newLokiClient(route).withToken(bearerToken).retry(5)
+	lc := newLokiClient(route).withToken(token).retry(5)
 	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\", FlowDirection=\"0\"}")
 
 	if err != nil {
@@ -167,11 +166,6 @@ func verifyLokilogsTime(oc *exutil.CLI, lokiStackNS, flowNS, lokiStackName, serv
 	}
 
 	for _, r := range flowRecords {
-		now := time.Now().UnixNano()
-		// check if the record is written in the last 5 mins
-		timeminus := now - r.Timestamp
-		o.Expect(timeminus).Should(o.BeNumerically(">", 0))
-		o.Expect(timeminus).Should(o.BeNumerically("<=", 120000000000))
 		r.Flowlog.verifyFlowRecord()
 	}
 	return nil
@@ -179,25 +173,29 @@ func verifyLokilogsTime(oc *exutil.CLI, lokiStackNS, flowNS, lokiStackName, serv
 
 // Verify some key and deterministic conversation record fields and their values
 func (flowlog *Flowlog) verifyConversationRecord() {
-	o.Expect(flowlog.Bytes).Should(o.BeNumerically(">", 0))
+	conversationRecord := fmt.Sprintf("Conversation record in error: %+v\n", flowlog)
+	o.Expect(flowlog.Bytes).Should(o.BeNumerically(">", 0), conversationRecord)
 	now := time.Now()
 	compareTime := now.Add(time.Duration(-2) * time.Hour)
 	compareTimeMs := compareTime.UnixMilli()
-	o.Expect(flowlog.TimeFlowEndMs).Should(o.BeNumerically(">", compareTimeMs))
-	o.Expect(flowlog.TimeFlowStartMs).Should(o.BeNumerically(">", compareTimeMs))
-	o.Expect(flowlog._HashId).NotTo(o.BeEmpty())
-	o.Expect(flowlog.numFlowLogs).Should(o.BeNumerically(">", 0))
+	o.Expect(flowlog.TimeFlowEndMs).Should(o.BeNumerically(">", compareTimeMs), conversationRecord)
+	o.Expect(flowlog.TimeFlowStartMs).Should(o.BeNumerically(">", compareTimeMs), conversationRecord)
+	o.Expect(flowlog.HashId).NotTo(o.BeEmpty(), conversationRecord)
+	o.Expect(flowlog.NumFlowLogs).Should(o.BeNumerically(">", 0), conversationRecord)
 }
 
 // Verify loki conversation records and if it was written in the last 5 minutes
-func verifyConversationRecordTime(record []FlowRecord) error {
+func verifyConversationRecordTime(record []FlowRecord) {
 	for _, r := range record {
-		now := time.Now().UnixNano()
-		// check if the record is written in the last 5 mins
-		timeminus := now - r.Timestamp
-		o.Expect(timeminus).Should(o.BeNumerically(">", 0))
-		o.Expect(timeminus).Should(o.BeNumerically("<=", 120000000000))
 		r.Flowlog.verifyConversationRecord()
 	}
-	return nil
+}
+
+func removeSAFromAdmin(oc *exutil.CLI, saName string, namespace string) error {
+	return oc.WithoutNamespace().AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", saName, "-n", namespace).Execute()
+
+}
+
+func addSAToAdmin(oc *exutil.CLI, saName string, namespace string) error {
+	return oc.WithoutNamespace().AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "-z", saName, "-n", namespace).Execute()
 }

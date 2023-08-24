@@ -131,7 +131,7 @@ func newLokiClient(routeAddress string) *lokiClient {
 	client := &lokiClient{}
 	client.address = routeAddress
 	client.retries = 5
-	client.quiet = true
+	client.quiet = false
 	return client
 }
 

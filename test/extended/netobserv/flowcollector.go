@@ -3,9 +3,11 @@ package netobserv
 import (
 	filePath "path/filepath"
 	"strconv"
+	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -77,10 +79,10 @@ type Flowlog struct {
 	TimeFlowStartMs  int
 	AgentIP          string
 	IcmpCode         int
-	_HashId          string `json:",omitempty"`
-	_IsFirst         bool   `json:",omitempty"`
-	_RecordType      string `json:",omitempty"`
-	numFlowLogs      int    `json:",omitempty"`
+	HashId           string `json:"_HashId,omitempty"`
+	IsFirst          bool   `json:"_IsFirst,omitempty"`
+	RecordType       string `json:"_RecordType,omitempty"`
+	NumFlowLogs      int    `json:"numFlowLogs,omitempty"`
 }
 
 type FlowRecord struct {
@@ -94,6 +96,8 @@ type Lokilabels struct {
 	DstK8S_Namespace string
 	RecordType       string
 	FlowDirection    string
+	SrcK8S_OwnerName string
+	DstK8S_OwnerName string
 }
 
 // create flowcollector CRD for a given manifest file
@@ -204,7 +208,7 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 	baseDir := exutil.FixturePath("testdata", "netobserv")
 	forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
 	forwardCRB := ForwardClusterRoleBinding{
-		Namespace:          oc.Namespace(),
+		Namespace:          flow.Namespace,
 		Template:           forwardCRBPath,
 		ServiceAccountName: flpSA,
 	}
@@ -232,4 +236,22 @@ func (crb *ForwardClusterRoleBinding) deployForwardCRB(oc *exutil.CLI) {
 	}
 
 	exutil.ApplyNsResourceFromTemplate(oc, crb.Namespace, parameters...)
+}
+
+func (flow *Flowcollector) waitForFlowcollectorReady(oc *exutil.CLI) {
+	exutil.AssertAllPodsToBeReady(oc, flow.Namespace)
+	exutil.AssertAllPodsToBeReady(oc, flow.Namespace+"-privileged")
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+		status, err := oc.AsAdmin().Run("get").Args("flowcollector", "-o", "jsonpath='{.items[*].status.conditions[*].reason}'").Output()
+
+		if err != nil {
+			return false, err
+		}
+		if status == "'Ready'" {
+			return true, nil
+		}
+		e2e.Logf("flowcollector status is %s", status)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Flowcollector did not become Ready")
 }

@@ -42,14 +42,16 @@ type metric struct {
 }
 
 func getMetric(oc *exutil.CLI, query string) ([]metric, error) {
-	res, err := queryPrometheus(oc, "/api/v1/query", query, "GET")
+	bearerToken := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+	promRoute := "https://" + getRouteAddress(oc, "openshift-monitoring", "prometheus-k8s")
+	res, err := queryPrometheus(oc, promRoute, query, bearerToken)
 	attempts := 10
 	for len(res.Data.Result) == 0 && attempts >= 0 {
 		if err != nil {
 			return []metric{}, err
 		}
 		time.Sleep(5 * time.Second)
-		res, err = queryPrometheus(oc, "/api/v1/query", query, "GET")
+		res, err = queryPrometheus(oc, promRoute, query, bearerToken)
 		attempts--
 	}
 	errMsg := fmt.Sprintf("0 results returned for query %s", query)
@@ -61,12 +63,9 @@ func getMetric(oc *exutil.CLI, query string) ([]metric, error) {
 // path: the api path, for example: /api/v1/query?
 // query: the metric or alert you want to search
 // action: it can be "GET", "get", "Get", "POST", "post", "Post"
-func queryPrometheus(oc *exutil.CLI, path string, query string, action string) (*prometheusQueryResult, error) {
-	var bearerToken string
-	var err error
-	bearerToken = getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-
-	address := "https://" + getRouteAddress(oc, "openshift-monitoring", "prometheus-k8s")
+func queryPrometheus(oc *exutil.CLI, promRoute string, query string, bearerToken string) (*prometheusQueryResult, error) {
+	path := "/api/v1/query"
+	action := "GET"
 
 	h := make(http.Header)
 	h.Add("Content-Type", "application/json")
@@ -78,7 +77,7 @@ func queryPrometheus(oc *exutil.CLI, path string, query string, action string) (
 	}
 
 	var p prometheusQueryResult
-	resp, err := doHTTPRequest(h, address, path, params.Encode(), action, false, 5, nil, 200)
+	resp, err := doHTTPRequest(h, promRoute, path, params.Encode(), action, false, 5, nil, 200)
 	if err != nil {
 		return nil, err
 	}
@@ -100,23 +99,27 @@ func popMetricValue(metrics []metric) int {
 
 // verify FLP metrics
 func verifyFLPMetrics(oc *exutil.CLI) {
-	metrics, err := getMetric(oc, "sum(netobserv_ingest_flows_processed)")
+	query := "sum(netobserv_ingest_flows_processed)"
+	metrics, err := getMetric(oc, query)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0))
+	o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0), fmt.Sprintf("%s did not return metrics value > 0\n", query))
 
-	metrics, err = getMetric(oc, "sum(netobserv_loki_sent_entries_total)")
+	// if above metric succeeded give some time before checking netobserv_loki_sent_entries_total
+	time.Sleep(60 * time.Second)
+	query = "sum(netobserv_loki_sent_entries_total)"
+	metrics, err = getMetric(oc, query)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0))
+	o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0), fmt.Sprintf("%s did not return metrics value > 0\n", query))
 }
 
-func getMetricsScheme(oc *exutil.CLI, servicemonitor string) (string, error) {
-	out, err := oc.AsAdmin().Run("get").Args("servicemonitor", servicemonitor, "-n", oc.Namespace(), "-o", "jsonpath='{.spec.endpoints[].scheme}'").Output()
+func getMetricsScheme(oc *exutil.CLI, servicemonitor string, namespace string) (string, error) {
+	out, err := oc.AsAdmin().Run("get").Args("servicemonitor", servicemonitor, "-n", namespace, "-o", "jsonpath='{.spec.endpoints[].scheme}'").Output()
 
 	return out, err
 }
 
-func getMetricsServerName(oc *exutil.CLI, servicemonitor string) (string, error) {
-	out, err := oc.AsAdmin().Run("get").Args("servicemonitor", servicemonitor, "-n", oc.Namespace(), "-o", "jsonpath='{.spec.endpoints[].tlsConfig.serverName}'").Output()
+func getMetricsServerName(oc *exutil.CLI, servicemonitor string, namespace string) (string, error) {
+	out, err := oc.AsAdmin().Run("get").Args("servicemonitor", servicemonitor, "-n", namespace, "-o", "jsonpath='{.spec.endpoints[].tlsConfig.serverName}'").Output()
 
 	return out, err
 }

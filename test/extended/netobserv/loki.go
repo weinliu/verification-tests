@@ -20,6 +20,7 @@ type lokiStack struct {
 	BucketName    string // the butcket or the container name where loki stores it's data in
 	Tenant        string // Loki tenant name
 	Template      string // the file used to create the loki stack
+	Route         string // lokistack-gateway-http route to be initialized after lokistack is up.
 }
 
 // LokiPersistentVolumeClaim struct to handle Loki PVC resources
