@@ -1006,12 +1006,13 @@ func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
 // get CLuster Manager's leader info
 func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType string) string {
 	if networkType == "ovnkubernetes" {
-		leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", namespace, "-o=jsonpath={.spec.holderIdentity}").Output()
-		o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
-		o.Expect(leaderNodeName).NotTo(o.BeEmpty())
-		_, leaderNodeIP := getNodeIP(oc, leaderNodeName)
-		e2e.Logf("The leader node's IP is: %v", leaderNodeIP)
-		return leaderNodeIP
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		o.Expect(nodeName).NotTo(o.BeEmpty())
+		podName, getPodNameErr := exutil.GetPodName(oc, namespace, cmName, nodeName)
+		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+		return podName
 	}
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "openshift-network-controller", "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io\\/leader}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1043,7 +1044,7 @@ func checkSDNMetrics(oc *exutil.CLI, url string, metrics string) {
 		}
 		metricsLog, _ = exec.Command("bash", "-c", "cat "+output+" ").Output()
 		metricsString := string(metricsLog)
-		if strings.Contains(metricsString, "ovnkube_master_pod") {
+		if strings.Contains(metricsString, "ovnkube_controller_pod") {
 			metricsOutput, _ = exec.Command("bash", "-c", "cat "+output+" | grep "+metrics+" | awk 'NR==1{print $2}'").Output()
 		} else {
 			metricsOutput, _ = exec.Command("bash", "-c", "cat "+output+" | grep "+metrics+" | awk 'NR==3{print $2}'").Output()
@@ -2614,11 +2615,20 @@ func getOVNMetricsInSpecificContainer(oc *exutil.CLI, containerName string, podN
 			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
 			return false, nil
 		}
-		metricOutput, getMetricErr := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-		o.Expect(getMetricErr).NotTo(o.HaveOccurred())
-		metricValue = strings.TrimSpace(string(metricOutput))
-		e2e.Logf("The output of the %s is : %v", metricName, metricValue)
-		return true, nil
+		if strings.Contains(metricName, "ovnkube_controller_pod") {
+			metricOutput, getMetricErr := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==1{print $2}'").Output()
+			o.Expect(getMetricErr).NotTo(o.HaveOccurred())
+			metricValue = strings.TrimSpace(string(metricOutput))
+			e2e.Logf("The output of the %s is : %v", metricName, metricValue)
+			return true, nil
+		} else {
+			metricOutput, getMetricErr := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+			o.Expect(getMetricErr).NotTo(o.HaveOccurred())
+			metricValue = strings.TrimSpace(string(metricOutput))
+			e2e.Logf("The output of the %s is : %v", metricName, metricValue)
+			return true, nil
+		}
+
 	})
 	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
 	return metricValue
