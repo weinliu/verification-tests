@@ -775,3 +775,43 @@ func RemoveAllMCOPods(oc *exutil.CLI) error {
 func OCCreate(oc *exutil.CLI, fileName string) error {
 	return oc.WithoutNamespace().Run("create").Args("-f", fileName).Execute()
 }
+
+// GetMCSPodNames returns a list of string containing the names of the MCS pods
+func GetMCSPodNames(oc *exutil.CLI) ([]string, error) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", MachineConfigNamespace,
+		"-l", "k8s-app=machine-config-server", "-o", "jsonpath={.items[*].metadata.name }").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.Trim(output, " \n") == "" {
+		return []string{}, nil
+	}
+
+	return strings.Split(output, " "), nil
+}
+
+// RotateMCSCertificates it executes the "oc adm ocp-certificates regenerate-machine-config-server-serving-cert" command in a master node
+// When we execute the command in the master node we make sure that in FIPS clusters we are running the command from a FIPS enabled machine.
+func RotateMCSCertificates(oc *exutil.CLI) error {
+	wMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+	master := wMcp.GetNodesOrFail()[0]
+
+	remoteAdminKubeConfig := "/tmp/remoteKubeConfig"
+	adminKubeConfig := exutil.KubeConfigPath()
+	err := master.CopyFromLocal(adminKubeConfig, remoteAdminKubeConfig)
+
+	if err != nil {
+		return err
+	}
+
+	command := fmt.Sprintf("oc --kubeconfig=%s --insecure-skip-tls-verify adm ocp-certificates regenerate-machine-config-server-serving-cert",
+		remoteAdminKubeConfig)
+
+	logger.Infof("RUN: %s", command)
+	stdout, err := master.DebugNodeWithChroot(strings.Split(command, " ")...)
+
+	logger.Infof(stdout)
+
+	return err
+}

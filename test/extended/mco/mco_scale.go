@@ -285,6 +285,99 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-64623-Machine Config Server CA rotation. IPI. [Disruptive]", func() {
+		var (
+			initialNumWorkers = len(wMcp.GetNodesOrFail())
+			numNewNodes       = 1
+		)
+
+		// skip the test if fips is not enabled
+		skipTestIfFIPSIsNotEnabled(oc)
+
+		defer wMcp.waitForComplete()
+
+		exutil.By("Rotate MCS certificate")
+		initialMCSPods, err := GetMCSPodNames(oc.AsAdmin())
+
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting MCS pod names")
+
+		logger.Infof("Current MCS pod names: %s", initialMCSPods)
+
+		o.Expect(
+			RotateMCSCertificates(oc.AsAdmin()),
+		//	oc.AsAdmin().WithoutNamespace().Run("adm").Args("ocp-certificates", "regenerate-machine-config-server-serving-cert").Execute(),
+		).To(o.Succeed(),
+			"Error rotating MCS certificates")
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that MCS pods were restarted")
+		o.Eventually(func(gm o.Gomega) {
+
+			// for debugging purposes
+			logger.Infof("Waiting for MCS pods to be restarted")
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", MachineConfigNamespace).Execute()
+
+			currentMCSPods, err := GetMCSPodNames(oc.AsAdmin())
+
+			gm.Expect(err).NotTo(o.HaveOccurred(),
+				"Error getting MCS pod names")
+
+			for _, initialMCSPod := range initialMCSPods {
+				gm.Expect(currentMCSPods).NotTo(o.ContainElement(initialMCSPod),
+					"MCS pod %s was not restarted after certs rotation", initialMCSPod)
+			}
+
+		}, "5m", "20s",
+		).Should(o.Succeed(),
+			"The MCS pods were not restarted after the MCS certificates were rotated")
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that new machine-config-server-tls and machine-config-server-ca secrets are created")
+		tlsSecret := NewSecret(oc.AsAdmin(), MachineConfigNamespace, "machine-config-server-tls")
+		caSecret := NewSecret(oc.AsAdmin(), MachineConfigNamespace, "machine-config-server-ca")
+
+		o.Eventually(tlsSecret, "30s", "5s").Should(Exist(),
+			"%s secret does not exist in the MCO namespace after MCS cert rotations", tlsSecret.GetName())
+
+		o.Eventually(caSecret, "30s", "5s").Should(Exist(),
+			"%s secret does not exist in the MCO namespace after MCS cert rotations", tlsSecret.GetName())
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Scale up a machineset")
+		allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
+		ms := allMs[0]
+
+		initialMsNodes, err := ms.GetNodes()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of nodes that belong to machineset %s", ms.GetName())
+
+		initialNumMsNodes := len(initialMsNodes)
+
+		logger.Infof("Scaling up machineset %s by 1", ms.GetName())
+		defer func() { _ = ms.ScaleTo(initialNumMsNodes) }()
+		o.Expect(ms.ScaleTo(initialNumMsNodes+numNewNodes)).NotTo(
+			o.HaveOccurred(),
+			"Error scaling up MachineSet %s", ms.GetName())
+
+		logger.Infof("OK!\n")
+
+		logger.Infof("Waiting %s machineset for being ready", ms)
+		o.Eventually(ms.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", ms.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that worker pool is increased and updated")
+		o.Eventually(wMcp.GetNodesOrFail, "5m", "30s").Should(o.HaveLen(initialNumWorkers+numNewNodes),
+			"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
+		wMcp.waitForComplete()
+		logger.Infof("All nodes are up and ready!")
+		logger.Infof("OK!\n")
+
+	})
 })
 
 func cloneMachineSet(oc *exutil.CLI, newMsName, amiVersion string, useIgnitionV2 bool) *MachineSet {
