@@ -3294,6 +3294,53 @@ nulla pariatur.`
 		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
 
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-66436-disable weak SSH cipher suites [Serial]", func() {
+
+		var (
+			// the list of weak cipher suites can be found here:  https://issues.redhat.com/browse/OCPBUGS-15202
+			weakSuites = []string{"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+				"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+				"TLS_RSA_WITH_AES_128_CBC_SHA",
+				"TLS_RSA_WITH_AES_256_CBC_SHA",
+				"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"}
+		)
+
+		exutil.By("Verify that the controller pod is not using weakSuites")
+		ccRbacProxyArgs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", MachineConfigNamespace, "-l", ControllerLabel+"="+ControllerLabelValue,
+			"-o", `jsonpath={.items[0].spec.containers[?(@.name=="kube-rbac-proxy")].args}`).Output()
+
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the arguments used in kube-rbac-proxy container in the controller pod")
+
+		o.Expect(ccRbacProxyArgs).To(o.ContainSubstring("--tls-cipher-suites"),
+			"Controller's kube-rbac-proxy container is not declaring the list of allowed cipher suites")
+
+		for _, weakSuite := range weakSuites {
+			logger.Infof("Verifying that %s is not used", weakSuite)
+			o.Expect(ccRbacProxyArgs).NotTo(o.ContainSubstring(weakSuite),
+				"Controller's kube-rbac-proxy container is using the weak cipher suite %s, and it should not", weakSuite)
+			logger.Infof("Suite ok")
+		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Connect to the rbac-proxy service to verify the cipher")
+		mMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+		masterNode := mMcp.GetNodesOrFail()[0]
+		cipherOutput, cipherErr := masterNode.DebugNodeWithOptions([]string{"--image=quay.io/openshifttest/testssl@sha256:ad6fb8002cb9cfce3ddc8829fd6e7e0d997aeb1faf972650f3e5d7603f90c6ef", "-n", MachineConfigNamespace}, "testssl.sh", "--color", "0", "localhost:9001")
+		logger.Infof("test ssh script output:\n %s", cipherOutput)
+		o.Expect(cipherErr).NotTo(o.HaveOccurred())
+		o.Expect(cipherOutput).Should(o.MatchRegexp(`Obsoleted CBC ciphers \(AES, ARIA etc.\) +not offered`))
+
+		for _, weakSuite := range weakSuites {
+			logger.Infof("Verifying that %s is not used", weakSuite)
+			o.Expect(cipherOutput).NotTo(o.ContainSubstring(weakSuite),
+				"The rbac-proxy service cipher test is reporting weak cipher suite: %s", weakSuite)
+			logger.Infof("Suite ok")
+		}
+		logger.Infof("OK!\n")
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason
