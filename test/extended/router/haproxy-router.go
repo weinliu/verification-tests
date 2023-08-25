@@ -1933,4 +1933,64 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			e2e.Failf("Router reloaded after removing service selector")
 		}
 	})
+
+	// author: shudili@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-66560-basic route adding/deleting http headers function work well", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
+			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
+			unsecsvcName        = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+		)
+
+		g.By("Deploy a project with a client pod, a backend pod and its service resources")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		createResourceFromFile(oc, project1, clientPod)
+		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, testPod)
+		err = waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, unsecsvc)
+
+		g.By("Expose a route with the unsecure service inside the project")
+		baseDomain := getBaseDomain(oc)
+		routehost := "service-unsecure" + "." + "apps." + baseDomain
+		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routehost).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		routeOutput := getRoutes(oc, project1)
+		o.Expect(routeOutput).To(o.ContainSubstring(unsecsvcName))
+
+		g.By("Patch the route with added/deleted http request/response headers under the spec")
+		patchHeaders := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"Content-Location\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"/my-first-blog-post\"}}}, {\"name\": \"Referer\", \"action\": {\"type\": \"Delete\"}}], \"response\": [{\"name\": \"X-Frame-Options\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"DENY\"}}}, {\"name\": \"server\", \"action\": {\"type\": \"Delete\"}}]}}}}"
+		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", patchHeaders, "--type=merge", "-n", project1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("patched"))
+
+		g.By("check in haproxy that headers should be set or deleted")
+		routerpod := getRouterPod(oc, "default")
+		routeBackend := "be_http:" + project1 + ":" + unsecsvcName
+		reqAddHeader := readHaproxyConfig(oc, routerpod, routeBackend, "-A18", "Content-Location")
+		reqDelHeader := readHaproxyConfig(oc, routerpod, routeBackend, "-A18", "Referer")
+		resAddHeader := readHaproxyConfig(oc, routerpod, routeBackend, "-A18", "X-Frame-Options")
+		resDelHeader := readHaproxyConfig(oc, routerpod, routeBackend, "-A18", "server")
+		o.Expect(reqAddHeader).To(o.ContainSubstring("http-request set-header 'Content-Location' '/my-first-blog-post'"))
+		o.Expect(reqDelHeader).To(o.ContainSubstring("http-request del-header 'Referer'"))
+		o.Expect(resAddHeader).To(o.ContainSubstring("http-response set-header 'X-Frame-Options' 'DENY'"))
+		o.Expect(resDelHeader).To(o.ContainSubstring("http-response del-header 'server'"))
+
+		g.By("curl the route from the client pod, and then check http headers in the request or response message")
+		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers"}
+		repeatCmd(oc, cmdOnPod, "200", 5)
+		reqHeaders, _ := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "-e", "www.qe-test.com").Output()
+		o.Expect(reqHeaders).To(o.ContainSubstring("\"Content-Location\": \"/my-first-blog-post\""))
+		o.Expect(strings.Contains(reqHeaders, "Referer")).NotTo(o.BeTrue())
+		resHeaders, _ := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "-I").Output()
+		o.Expect(resHeaders).To(o.ContainSubstring("x-frame-options: DENY"))
+		o.Expect(strings.Contains(resHeaders, "server")).NotTo(o.BeTrue())
+	})
 })
