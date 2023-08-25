@@ -570,21 +570,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.AssertWaitPollNoErr(err, "controlplanemachineset is not in Inactive state")
 
 		g.By("Check controlplanemachineset do not reconcile master machines if state is Inactive")
-		var instanceTypeName string
+		var fieldName string
+		var fieldValue = "invalid"
 		switch iaasPlatform {
 		case "aws":
-			instanceTypeName = "instanceType"
+			fieldName = "instanceType"
 		case "azure":
-			instanceTypeName = "vmSize"
+			fieldName = "vmSize"
 		case "gcp":
-			instanceTypeName = "machineType"
+			fieldName = "machineType"
 		case "nutanix":
-			//There is no instanceType for Nutanix, so use bootType instead.
-			instanceTypeName = "bootType"
+			fieldName = "bootType"
+			fieldValue = "Legacy"
 		default:
 			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
 		}
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"`+instanceTypeName+`":"invalid"}}}}}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"`+fieldName+`":"`+fieldValue+`"}}}}}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		activeControlPlaneMachineSet(oc)
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
