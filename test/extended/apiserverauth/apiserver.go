@@ -2195,7 +2195,7 @@ spec:
 		exutil.By("11) Check for error 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points both unknown and unreachable services.")
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webhookConditionErrors)
 
-		exutil.By("12) Delete all bad webhooks and check kubeapiserver operators and errors")
+		exutil.By("12) Delete all bad webhooks, service and check kubeapiserver operators and errors")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookNameNotReachable).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookNameNotReachable).Execute()
@@ -2208,6 +2208,9 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crdWebhookNameNotFound).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Before checking APIServer WebhookConditions, need to delete service to avoid bug https://issues.redhat.com/browse/OCPBUGS-15587 in ENV that ingressnodefirewall CRD and config are installed.
+		oc.AsAdmin().Run("delete").Args("service", serviceName, "-n", oc.Namespace(), "--ignore-not-found").Execute()
 
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		compareAPIServerWebhookConditions(oc, "", "False", webhookConditionErrors)
