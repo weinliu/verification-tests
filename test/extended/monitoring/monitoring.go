@@ -458,6 +458,21 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?&filter={alertname="Watchdog"}`, token, `"severity":"critical"`, 2*platformLoadTime)
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-66860-add startup probe for prometheus-adapter", func() {
+		g.By("check startupProbe config in prometheus-adapter deployment")
+		// % oc -n openshift-monitoring get deploy prometheus-adapter -ojsonpath='{.spec.template.spec.containers[?(@.name=="prometheus-adapter")].startupProbe}'
+		output, deployErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].startupProbe}", "-n", "openshift-monitoring").Output()
+		o.Expect(deployErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`{"failureThreshold":18,"httpGet":{"path":"/livez","port":"https","scheme":"HTTPS"},"periodSeconds":10,"successThreshold":1,"timeoutSeconds":1}`))
+
+		g.By("check prometheus-adapter pod logs, should not see crashlooping logs")
+		// % oc -n openshift-monitoring logs -l app.kubernetes.io/name=prometheus-adapter -c prometheus-adapter --tail=-1
+		output, logsErr := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=prometheus-adapter", "-c", "prometheus-adapter", "--tail=-1", "-n", "openshift-monitoring").Output()
+		o.Expect(logsErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "Shutting down controller")).NotTo(o.BeTrue())
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
