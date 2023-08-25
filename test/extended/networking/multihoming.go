@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1090,6 +1091,246 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.By("Checking net1 connectivity from pod3 to pod2")
 			CurlMultusPod2PodPass(oc, ns1, pod3Name[0], pod2Net1IPv4, "net1", pod2.podenvname)
 			CurlMultusPod2PodPass(oc, ns1, pod3Name[0], pod2Net1IPv6, "net1", pod2.podenvname)
+			e2e.Logf("End testing the network topology: %v ----------------------------", value)
+		}
+	})
+
+	// author: weliang@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:weliang-Medium-64810-Multihoming verify ingress-ipblock policy. [Disruptive]", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking/multihoming")
+			multihomingNADTemplate = filepath.Join(buildPruningBaseDir, "multihoming-NAD-template.yaml")
+			multihomingPodTemplate = filepath.Join(buildPruningBaseDir, "multihoming-pod-template.yaml")
+			ipBlockIngressTemplate = filepath.Join(buildPruningBaseDir, "ipBlock-ingress-template.yaml")
+			ipv4Cidr               = "192.168.100.0/30"
+			patchSResource         = "networks.operator.openshift.io/cluster"
+		)
+
+		exutil.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		exutil.By("Enable useMultiNetworkPolicy in the cluster")
+		patchInfoTrue := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
+		patchInfoFalse := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":false}}")
+		defer func() {
+			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
+			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
+			reloadState := "True.*True.*False"
+			waitForNetworkOperatorState(oc, 10, 15, reloadState)
+			normalState := "True.*False.*False"
+			waitForNetworkOperatorState(oc, 10, 15, normalState)
+		}()
+		patchResourceAsAdmin(oc, patchSResource, patchInfoTrue)
+
+		exutil.By("NetworkOperatorStatus should back to normal after enable useMultiNetworkPolicy")
+		reloadState := "True.*True.*False"
+		waitForNetworkOperatorState(oc, 10, 15, reloadState)
+		normalState := "True.*False.*False"
+		waitForNetworkOperatorState(oc, 10, 15, normalState)
+
+		exutil.By("Create a test namespace")
+		ns1 := oc.Namespace()
+		nadName := "ipblockingress64810"
+		nsWithnad := ns1 + "/" + nadName
+		topology := []string{"layer2"}
+
+		for _, value := range topology {
+			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
+			exutil.By("Create a custom resource network-attach-defintion in tested namespace")
+			nad1ns1 := multihomingNAD{
+				namespace:      ns1,
+				nadname:        nadName,
+				subnets:        "192.168.100.0/29",
+				nswithnadname:  nsWithnad,
+				excludeSubnets: "",
+				topology:       value,
+				template:       multihomingNADTemplate,
+			}
+			nad1ns1.createMultihomingNAD(oc)
+
+			exutil.By("Create six testing pods consuming above network-attach-defintion in ns1")
+			var podName, podLabel, podenvName, nodeLocation string
+			pod := []testMultihomingPod{}
+			for i := 1; i < 7; i++ {
+				podName = "multihoming-pod-" + strconv.Itoa(i)
+				podLabel = "multihoming-pod" + strconv.Itoa(i)
+				podenvName = "Hello multihoming-pod-" + strconv.Itoa(i)
+				//Create the pods in different nodes.
+				if i < 4 {
+					nodeLocation = nodeList.Items[0].Name
+				} else {
+					nodeLocation = nodeList.Items[1].Name
+				}
+				p := testMultihomingPod{
+					name:       podName,
+					namespace:  ns1,
+					podlabel:   podLabel,
+					nadname:    nadName,
+					nodename:   nodeLocation,
+					podenvname: podenvName,
+					template:   multihomingPodTemplate,
+				}
+				pod = append(pod, p)
+				p.createTestMultihomingPod(oc)
+				o.Expect(waitForPodWithLabelReady(oc, ns1, "name="+podLabel)).NotTo(o.HaveOccurred())
+			}
+
+			exutil.By("Get IPs from the pod1's secondary interface")
+			pod1Name := getPodName(oc, ns1, "name=multihoming-pod1")
+			pod1IPv4, _ := getPodMultiNetwork(oc, ns1, pod1Name[0])
+			e2e.Logf("The v4 address of pod1 is: %v", pod1IPv4)
+
+			exutil.By("Get IPs from the pod2's secondary interface")
+			pod2Name := getPodName(oc, ns1, "name=multihoming-pod2")
+			pod2IPv4, _ := getPodMultiNetwork(oc, ns1, pod2Name[0])
+			e2e.Logf("The v4 address of pod2 is: %v", pod2IPv4)
+
+			exutil.By("Get IPs from the pod3's secondary interface")
+			pod3Name := getPodName(oc, ns1, "name=multihoming-pod3")
+			pod3IPv4, _ := getPodMultiNetwork(oc, ns1, pod3Name[0])
+			e2e.Logf("The v4 address of pod3 is: %v", pod3IPv4)
+
+			exutil.By("Get IPs from the pod4's secondary interface")
+			pod4Name := getPodName(oc, ns1, "name=multihoming-pod4")
+			pod4IPv4, _ := getPodMultiNetwork(oc, ns1, pod4Name[0])
+			e2e.Logf("The v4 address of pod4 is: %v", pod4IPv4)
+
+			exutil.By("Get IPs from the pod5's secondary interface")
+			pod5Name := getPodName(oc, ns1, "name=multihoming-pod5")
+			pod5IPv4, _ := getPodMultiNetwork(oc, ns1, pod5Name[0])
+			e2e.Logf("The v4 address of pod5 is: %v", pod5IPv4)
+
+			exutil.By("Get IPs from the pod6's secondary interface")
+			pod6Name := getPodName(oc, ns1, "name=multihoming-pod6")
+			pod6IPv4, _ := getPodMultiNetwork(oc, ns1, pod6Name[0])
+			e2e.Logf("The v4 address of pod6 is: %v", pod6IPv4)
+
+			// Not like multus/whereabouts, six pods will not always get ip addresses in the order of IP's address, need to reroder the
+			// existing pods' name to the new testpods names by the order of IP's addresses
+			type podInfor struct {
+				podName    string
+				podenvName string
+			}
+
+			podData := map[string]podInfor{
+				pod1IPv4: {podName: pod1Name[0], podenvName: pod[0].podenvname},
+				pod2IPv4: {podName: pod2Name[0], podenvName: pod[1].podenvname},
+				pod3IPv4: {podName: pod3Name[0], podenvName: pod[2].podenvname},
+				pod4IPv4: {podName: pod4Name[0], podenvName: pod[3].podenvname},
+				pod5IPv4: {podName: pod5Name[0], podenvName: pod[4].podenvname},
+				pod6IPv4: {podName: pod6Name[0], podenvName: pod[5].podenvname},
+			}
+
+			testpod1IP := "192.168.100.1"
+			testpod1Name := podData[testpod1IP].podName
+			testpod1envName := podData[testpod1IP].podenvName
+			e2e.Logf("The podIP, podName and podenvName of testpod1 are: %v, %v, %v", testpod1IP, testpod1Name, testpod1envName)
+
+			testpod2IP := "192.168.100.2"
+			testpod2Name := podData[testpod2IP].podName
+			testpod2envName := podData[testpod2IP].podenvName
+			e2e.Logf("The podIP, podName and podenvName of testpod2 are: %v, %v, %v", testpod2IP, testpod2Name, testpod2envName)
+
+			testpod3IP := "192.168.100.3"
+			testpod3Name := podData[testpod3IP].podName
+			testpod3envName := podData[testpod3IP].podenvName
+			e2e.Logf("The podIP, podName and podenvName of testpod3 are: %v, %v, %v", testpod3IP, testpod3Name, testpod3envName)
+
+			testpod4IP := "192.168.100.4"
+			testpod4Name := podData[testpod4IP].podName
+			testpod4envName := podData[testpod4IP].podenvName
+			e2e.Logf("The podIP, podName and podenvName of testpod4 are: %v, %v, %v", testpod4IP, testpod4Name, testpod4envName)
+
+			testpod5IP := "192.168.100.5"
+			testpod5Name := podData[testpod5IP].podName
+			testpod5envName := podData[testpod5IP].podenvName
+			e2e.Logf("The podIP, podName and podenvName of testpod5 are: %v, %v, %v", testpod5IP, testpod5Name, testpod5envName)
+
+			testpod6IP := "192.168.100.6"
+			testpod6Name := podData[testpod6IP].podName
+			testpod6envName := podData[testpod6IP].podenvName
+			e2e.Logf("The podIP, podName and podenvName of testpod6 are: %v, %v, %v", testpod6IP, testpod6Name, testpod6envName)
+
+			exutil.By("All curls should pass before applying policy")
+			CurlMultusPod2PodPass(oc, ns1, testpod1Name, testpod2IP, "net1", testpod2envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod1Name, testpod3IP, "net1", testpod3envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod2Name, testpod4IP, "net1", testpod4envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod2Name, testpod5IP, "net1", testpod5envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod3Name, testpod6IP, "net1", testpod6envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod4Name, testpod1IP, "net1", testpod1envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod4Name, testpod2IP, "net1", testpod2envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod5Name, testpod3IP, "net1", testpod3envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod5Name, testpod4IP, "net1", testpod4envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod6Name, testpod5IP, "net1", testpod5envName)
+
+			exutil.By("Create ingress ipblock to block the traffic from the pods in the range of 192.168.100.4 to 192.168.100.6")
+			ipIngressBlock := multihomingIPBlock{
+				name:      "ipblock-ingress",
+				template:  ipBlockIngressTemplate,
+				cidr:      ipv4Cidr,
+				namespace: ns1,
+				policyfor: nsWithnad,
+			}
+			ipIngressBlock.createMultihomingipBlockIngressObject(oc)
+			policyoutput, policyerr := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns1).Output()
+			o.Expect(policyerr).NotTo(o.HaveOccurred())
+			o.Expect(policyoutput).To(o.ContainSubstring("ipblock-ingress"))
+
+			exutil.By("Check a ACL rule is created for 192.168.100.0/30")
+			ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
+			listACLCmd := "ovn-nbctl --format=table --no-heading --columns=action,priority,match find acl"
+			o.Eventually(func() string {
+				listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listACLCmd)
+				if listErr != nil {
+					e2e.Logf("Wait for policy ACL applied, %v", listErr)
+				}
+				return listOutput
+			}, "60s", "10s").Should(o.ContainSubstring("ip4.src == 192.168.100.0/30"), fmt.Sprintf("Failed to apply policy on the cluster"))
+
+			exutil.By("Check only the pods which get 192.168.100.4 to 192.168.100.6 can not communicate to others after applying policy")
+			CurlMultusPod2PodPass(oc, ns1, testpod1Name, testpod2IP, "net1", testpod2envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod1Name, testpod3IP, "net1", testpod3envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod2Name, testpod4IP, "net1", testpod4envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod2Name, testpod5IP, "net1", testpod5envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod3Name, testpod6IP, "net1", testpod6envName)
+			CurlMultusPod2PodFail(oc, ns1, testpod4Name, testpod1IP, "net1", testpod1envName)
+			CurlMultusPod2PodFail(oc, ns1, testpod4Name, testpod2IP, "net1", testpod2envName)
+			CurlMultusPod2PodFail(oc, ns1, testpod5Name, testpod3IP, "net1", testpod3envName)
+			CurlMultusPod2PodFail(oc, ns1, testpod5Name, testpod4IP, "net1", testpod4envName)
+			CurlMultusPod2PodFail(oc, ns1, testpod6Name, testpod5IP, "net1", testpod5envName)
+
+			exutil.By("All curl should pass again after deleting policy")
+			_, policydelerr := oc.AsAdmin().Run("delete").Args("multi-networkpolicy", "ipblock-ingress", "-n", ns1).Output()
+			o.Expect(policydelerr).NotTo(o.HaveOccurred())
+
+			ovnMasterPodNewName := getOVNKMasterOVNkubeNode(oc)
+			o.Eventually(func() string {
+				listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodNewName, listACLCmd)
+				if listErr != nil {
+					e2e.Logf("Wait for policy ACL deleted, %v", listErr)
+				}
+				return listOutput
+			}, "60s", "10s").ShouldNot(o.ContainSubstring("ip4.src == 192.168.100.0/30"), fmt.Sprintf("Failed to delete policy on the cluster"))
+
+			CurlMultusPod2PodPass(oc, ns1, testpod1Name, testpod2IP, "net1", testpod2envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod1Name, testpod3IP, "net1", testpod3envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod2Name, testpod4IP, "net1", testpod4envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod2Name, testpod5IP, "net1", testpod5envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod3Name, testpod6IP, "net1", testpod6envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod4Name, testpod1IP, "net1", testpod1envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod4Name, testpod2IP, "net1", testpod2envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod5Name, testpod3IP, "net1", testpod3envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod5Name, testpod4IP, "net1", testpod4envName)
+			CurlMultusPod2PodPass(oc, ns1, testpod6Name, testpod5IP, "net1", testpod5envName)
+			e2e.Logf("Delete all the pods and NAD for topology: %v ----------------------------", value)
+			_, delPodErr := oc.AsAdmin().Run("delete").Args("pod", "--all", "-n", ns1).Output()
+			o.Expect(delPodErr).NotTo(o.HaveOccurred())
+			_, delNADErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nadName, "-n", ns1).Output()
+			o.Expect(delNADErr).NotTo(o.HaveOccurred())
 			e2e.Logf("End testing the network topology: %v ----------------------------", value)
 		}
 	})

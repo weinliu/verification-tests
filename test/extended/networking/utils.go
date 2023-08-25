@@ -2803,3 +2803,19 @@ func ovnkubeNodePod(oc *exutil.CLI, nodeName string) string {
 	o.Expect(ovnNodePod).NotTo(o.BeEmpty())
 	return ovnNodePod
 }
+
+func waitForNetworkOperatorState(oc *exutil.CLI, interval int, timeout int, expectedStatus string) {
+	errCheck := wait.Poll(time.Duration(interval)*time.Second, time.Duration(timeout)*time.Minute, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "network").Output()
+		if err != nil {
+			e2e.Logf("Fail to get clusteroperator network, error:%s. Trying again", err)
+			return false, nil
+		}
+		if matched, _ := regexp.MatchString(expectedStatus, output); !matched {
+			e2e.Logf("Network operator state is:%s", output)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for the expected condition"))
+}

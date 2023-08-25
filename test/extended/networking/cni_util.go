@@ -60,6 +60,14 @@ type testMultihomingStaticPod struct {
 	template   string
 }
 
+type multihomingIPBlock struct {
+	name      string
+	namespace string
+	cidr      string
+	policyfor string
+	template  string
+}
+
 func (nad *multihomingNAD) createMultihomingNAD(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NAMESPACE="+nad.namespace, "NADNAME="+nad.nadname, "SUBNETS="+nad.subnets, "NSWITHNADNAME="+nad.nswithnadname, "EXCLUDESUBNETS="+nad.excludeSubnets, "TOPOLOGY="+nad.topology)
@@ -106,6 +114,18 @@ func (pod *testMultihomingStaticPod) createTestMultihomingStaticPod(oc *exutil.C
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
+func (ipBlock_ingress_policy *multihomingIPBlock) createMultihomingipBlockIngressObject(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_ingress_policy.template, "-p", "NAME="+ipBlock_ingress_policy.name, "NAMESPACE="+ipBlock_ingress_policy.namespace, "CIDR="+ipBlock_ingress_policy.cidr, "POLICYFOR="+ipBlock_ingress_policy.policyfor)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
 }
 
 func checkOVNSwitch(oc *exutil.CLI, nad string, leaderPod string) bool {
