@@ -1001,10 +1001,12 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 
 	defer g.GinkgoRecover()
 	var (
-		oc = exutil.NewCLI("keda-operator", exutil.KubeConfigPath())
+		oc                        = exutil.NewCLI("keda-operator", exutil.KubeConfigPath())
+		cmaKedaControllerTemplate string
 	)
 	g.BeforeEach(func() {
-		g.By("Skip test when precondition not meet !!!")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "node")
+		cmaKedaControllerTemplate = filepath.Join(buildPruningBaseDir, "cma-keda-controller-template.yaml")
 		exutil.SkipMissingQECatalogsource(oc)
 		createKedaOperator(oc)
 	})
@@ -1032,6 +1034,25 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
+	// author: weinliu@redhat.com
+	g.It("Author:weinliu-High-60961-Audit logging test - stdout Metadata[Serial]", func() {
+		g.By("Create KedaController with log level Metadata")
+		g.By("Create CMA Keda Controller ")
+		cmaKedaController := cmaKedaControllerDescription{
+			level:     "Metadata",
+			template:  cmaKedaControllerTemplate,
+			name:      "keda",
+			namespace: "openshift-keda",
+		}
+		defer cmaKedaController.delete(oc)
+		cmaKedaController.create(oc)
+		metricsApiserverPodName := getPodNameByLabel(oc, "openshift-keda", "app=keda-metrics-apiserver")
+		waitPodReady(oc, "openshift-keda", "app=keda-metrics-apiserver")
+		g.By("Check the Audit Logged as configed")
+		log, err := exutil.GetSpecificPodLogs(oc, "openshift-keda", "", metricsApiserverPodName[0], "")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(log, "\"level\":\"Metadata\"")).Should(o.BeTrue())
+	})
 })
 
 var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
@@ -1041,7 +1062,6 @@ var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
 		oc = exutil.NewCLI("vpa-operator", exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
-		g.By("Skip test when precondition not meet !!!")
 		exutil.SkipMissingQECatalogsource(oc)
 		createVpaOperator(oc)
 	})

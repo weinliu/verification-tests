@@ -13,6 +13,8 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
@@ -238,6 +240,12 @@ func (podNoWkloadCpu *podNoWkloadCpuDescription) delete(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+type cmaKedaControllerDescription struct {
+	level     string
+	template  string
+	name      string
+	namespace string
+}
 type runtimeTimeoutDescription struct {
 	name       string
 	labelkey   string
@@ -1098,9 +1106,10 @@ func createKedaOperator(oc *exutil.CLI) {
 
 	// checking subscription status
 	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-custom-metrics-autoscaler-operator", "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		subState, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-custom-metrics-autoscaler-operator", "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
+		//o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(subState, "AtLatestKnown") == 0 {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-custom-metrics-autoscaler-operator", "-n", operatorNamespace, "--no-headers").Output()
 			return true, nil
 		}
 		return false, nil
@@ -1633,4 +1642,64 @@ func checkLogLink(oc *exutil.CLI, namespace string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, "check log link failed!")
+}
+
+// this function create KedaController from template for CMA
+func (cmaKedaController *cmaKedaControllerDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cmaKedaController.template, "-p", "LEVEL="+cmaKedaController.level, "NAMESPACE="+cmaKedaController.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitForDeploymentPodsToBeReady(oc, "openshift-keda", "keda-metrics-apiserver")
+}
+
+// this function delete KedaController for CMA
+func (cmaKedaController *cmaKedaControllerDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", cmaKedaController.namespace, "KedaController", cmaKedaController.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func waitPodReady(oc *exutil.CLI, ns string, label string) {
+	podNameList := getPodNameByLabel(oc, ns, label)
+	exutil.AssertPodToBeReady(oc, podNameList[0], ns)
+}
+
+func getPodNameByLabel(oc *exutil.CLI, namespace string, label string) []string {
+	var podName []string
+	podNameAll, err := oc.AsAdmin().Run("get").Args("-n", namespace, "pod", "-l", label, "-ojsonpath={.items..metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podName = strings.Split(podNameAll, " ")
+	e2e.Logf("The pod(s) are  %v ", podName)
+	return podName
+}
+
+// WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
+func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
+	var selectors map[string]string
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				e2e.Logf("Waiting for availability of deployment/%s\n", name)
+				return false, nil
+			}
+			return false, err
+		}
+		selectors = deployment.Spec.Selector.MatchLabels
+		if deployment.Status.AvailableReplicas == *deployment.Spec.Replicas && deployment.Status.UpdatedReplicas == *deployment.Spec.Replicas {
+			e2e.Logf("Deployment %s available (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
+			return true, nil
+		}
+		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
+		return false, nil
+	})
+	if err != nil && len(selectors) > 0 {
+		var labels []string
+		for k, v := range selectors {
+			labels = append(labels, k+"="+v)
+		}
+		label := strings.Join(labels, ",")
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
+		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
+		e2e.Failf("deployment %s is not ready:\nconditions: %s\ncontainer status: %s", name, podStatus, containerStatus)
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not available", name))
 }
