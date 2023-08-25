@@ -117,7 +117,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-PstChkUpgrade-Author:huliu-Medium-62265-Ensure controlplanemachineset is generated automatically after upgrade", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "nutanix", "openstack")
 		cpmsOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
 		e2e.Logf("cpmsOut:%s", cpmsOut)
 		o.Expect(err).NotTo(o.HaveOccurred())
