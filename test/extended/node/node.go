@@ -1077,16 +1077,15 @@ var _ = g.Describe("[sig-node] NODE Install and verify Cluster Resource Override
 		oc = exutil.NewCLI("clusterresourceoverride-operator", exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-		if strings.Contains(output, "NotFound") {
-			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
-		}
+
+		g.By("Skip test when precondition not meet !!!")
+		exutil.SkipMissingQECatalogsource(oc)
 		installOperatorClusterresourceoverride(oc)
 
 	})
 	// author: asahay@redhat.com
 
-	g.It("StagerunOnly-Author:asahay-High-27070-Cluster Resource Override Operator. [Serial]", func() {
+	g.It("StagerunBoth-Author:asahay-High-27070-Cluster Resource Override Operator. [Serial]", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterResourceOverride", "cluster", "-n", "clusterresourceoverride-operator").Execute()
 		createCRClusterresourceoverride(oc)
 		var err error
