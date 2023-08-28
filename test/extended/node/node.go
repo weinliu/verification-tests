@@ -14,6 +14,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	//e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -1005,6 +1006,8 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		cmaKedaControllerTemplate string
 	)
 	g.BeforeEach(func() {
+		// skip ARM64 arch
+		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "node")
 		cmaKedaControllerTemplate = filepath.Join(buildPruningBaseDir, "cma-keda-controller-template.yaml")
 		exutil.SkipMissingQECatalogsource(oc)
