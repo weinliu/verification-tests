@@ -686,7 +686,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "Command: \"%s\" returned error: %s", cmd, string(out))
 		o.Expect(string(out)).NotTo(o.BeEmpty())
 		file := strings.TrimSpace(string(out))
-		cmd = fmt.Sprintf("grep -A5 'name: hello-openshift' %s | grep 'release.openshift.io/delete: \"true\"'", file)
+		cmd = fmt.Sprintf("grep -C5 'name: hello-openshift' %s | grep 'release.openshift.io/delete: \"true\"'", file)
 		out, err = exec.Command("bash", "-c", cmd).CombinedOutput()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Command: \"%s\" returned error: %s", cmd, string(out))
 		o.Expect(string(out)).NotTo(o.BeEmpty())
