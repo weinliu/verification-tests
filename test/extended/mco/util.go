@@ -797,8 +797,10 @@ func RotateMCSCertificates(oc *exutil.CLI) error {
 	wMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 	master := wMcp.GetNodesOrFail()[0]
 
-	remoteAdminKubeConfig := "/tmp/remoteKubeConfig"
+	remoteAdminKubeConfig := fmt.Sprintf("/root/remoteKubeConfig-%s", exutil.GetRandomString())
 	adminKubeConfig := exutil.KubeConfigPath()
+
+	defer master.RemoveFile(remoteAdminKubeConfig)
 	err := master.CopyFromLocal(adminKubeConfig, remoteAdminKubeConfig)
 
 	if err != nil {

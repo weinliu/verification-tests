@@ -3,7 +3,6 @@ package mco
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -590,12 +589,16 @@ func (n *Node) CancelRpmOsTreeTransactions() (string, error) {
 
 // CopyFromLocal Copy a local file or directory to the node
 func (n *Node) CopyFromLocal(from, to string) error {
-	logger.Infof("Copying local file %s to node %s in path %s",
-		from, n.GetName(), to)
-	mcDaemonName := n.GetMachineConfigDaemon()
-	toDaemon := filepath.Join("/rootfs", to)
+	return n.oc.Run("adm").Args("copy-to-node", "node/"+n.GetName(), fmt.Sprintf("--copy=%s=%s", from, to)).Execute()
+}
 
-	return n.oc.Run("cp").Args("-n", MachineConfigNamespace, from, mcDaemonName+":"+toDaemon, "-c", MachineConfigDaemon).Execute()
+// RemoveFile removes a file from the node
+func (n *Node) RemoveFile(filePathToRemove string) error {
+	logger.Infof("Removing file %s from node %s", filePathToRemove, n.GetName())
+	output, err := n.DebugNodeWithChroot("rm", "-f", filePathToRemove)
+	logger.Infof(output)
+
+	return err
 }
 
 // RpmIsInstalled returns true if the package is installed
