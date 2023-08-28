@@ -2472,9 +2472,7 @@ func getHostsubnetByEIP(oc *exutil.CLI, expectedEIP string) string {
 
 // find the ovn-K cluster manager master pod
 func getOVNKMasterPod(oc *exutil.CLI) string {
-	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
-	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
-	ovnKMasterPod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master", leaderNodeName)
+	ovnKMasterPod, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
 	o.Expect(podErr).NotTo(o.HaveOccurred())
 	return ovnKMasterPod
 }
@@ -2745,10 +2743,10 @@ func configIPSecAtRuntime(oc *exutil.CLI, targetStatus string) (err error) {
 	if err != nil {
 		e2e.Failf("Failed to configure IPSec at runtime")
 	} else {
-		// need to restart ovnkube-master "north" leader after configuring ipsec to make sure use correct "north" leader
+		// need to restart "north" leader after configuring ipsec to make sure use correct "north" leader
 		ovnLeaderpod := getOVNKMasterOVNkubeNode(oc)
 		removeResource(oc, true, true, "pod", ovnLeaderpod, "-n", "openshift-ovn-kubernetes")
-		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 		checkErr := checkIPSecInDB(oc, targetConfig)
 		exutil.AssertWaitPollNoErr(checkErr, "check IPSec configuration failed")
 		e2e.Logf("The IPSec is %v in the cluster.", targetStatus)

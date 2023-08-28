@@ -651,7 +651,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		)
 
 		exutil.By("1. Get the metrics of " + metricName + " before resource retry failure occur")
-		prometheusURL := "localhost:29102/metrics"
+		prometheusURL := "localhost:29106/metrics"
 		ovnMasterPodName := getOVNKMasterPod(oc)
 		containerName := "kube-rbac-proxy"
 		metricValue1 := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName)
@@ -683,7 +683,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.By("3. Waiting for ovn resource retry failure")
 		targetLog := egressipName + ": exceeded number of failed attempts"
 		checkErr := wait.Poll(2*time.Minute, 16*time.Minute, func() (bool, error) {
-			podLogs, logErr := exutil.GetSpecificPodLogs(oc, namespace, "ovnkube-master", ovnMasterPodName, "'"+targetLog+"'")
+			podLogs, logErr := exutil.GetSpecificPodLogs(oc, namespace, "ovnkube-cluster-manager", ovnMasterPodName, "'"+targetLog+"'")
 			if len(podLogs) == 0 || logErr != nil {
 				e2e.Logf("did not get expected podLogs, or have err: %v, try again", logErr)
 				return false, nil
@@ -714,8 +714,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		var (
-			metricName1         = "ovnkube_master_egress_ips_node_unreachable_total"
-			metricName2         = "ovnkube_master_egress_ips_rebalance_total"
+			metricName1         = "ovnkube_clustermanager_egress_ips_node_unreachable_total"
+			metricName2         = "ovnkube_clustermanager_egress_ips_rebalance_total"
 			egressNodeLabel     = "k8s.ovn.org/egress-assignable"
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
@@ -769,7 +769,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(egressipAssignedNode1).To(o.ContainSubstring(egressNodes[0]))
 
 		exutil.By("3. Get the metrics before egressip re-balance")
-		prometheusURL := "localhost:29102/metrics"
+		prometheusURL := "localhost:29106/metrics"
 		ovnMasterPodName := getOVNKMasterPod(oc)
 		containerName := "kube-rbac-proxy"
 		metric1BeforeReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName1)
@@ -866,7 +866,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	g.It("NonPreRelease-Longduration-Author:qiowang-Medium-64077-Verify metrics for ipsec enabled/disabled when configure it at runtime [Disruptive] [Slow]", func() {
 		var (
-			metricName = "ovnkube_master_ipsec_enabled"
+			metricName = "ovnkube_controller_ipsec_enabled"
 		)
 		networkType := checkNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
@@ -883,9 +883,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(enableErr).NotTo(o.HaveOccurred())
 
 		e2e.Logf("2. Check metrics for IPsec enabled/disabled after enabling at runtime")
-		prometheusURL := "localhost:29102/metrics"
-		containerName := "kube-rbac-proxy"
-		ovnMasterPodName := getOVNKMasterPod(oc)
+		prometheusURL := "localhost:29113/metrics"
+		containerName := "kube-rbac-proxy-controller"
+		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 		e2e.Logf("The expected value of the %s is 1", metricName)
 		ipsecEnabled := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 			metricValueAfterEnabled := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName)
@@ -902,7 +902,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(disableErr).NotTo(o.HaveOccurred())
 
 		e2e.Logf("4. Check metrics for IPsec enabled/disabled after disabling at runtime")
-		ovnMasterPodName = getOVNKMasterPod(oc)
+		ovnMasterPodName = getOVNKMasterOVNkubeNode(oc)
 		e2e.Logf("The expected value of the %s is 0", metricName)
 		ipsecDisabled := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 			metricValueAfterDisabled := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName)
