@@ -2305,23 +2305,12 @@ func checkClusterStatus(oc *exutil.CLI, expectedStatus string) {
 	}
 }
 
-func getLeaderOVNMasterPodOnMgmtCluster(oc *exutil.CLI, namespace, cmName, hyperShiftMgmtNS string) string {
-	// get leader node on hypershift hosted cluster
-	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
-	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
-	e2e.Logf("The leader node name is %s", leaderNodeName)
-
-	// get OVNkube-master pod on this leader node
-	ovnMasterPod, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", hyperShiftMgmtNS, "pod", "-l app=ovnkube-master", "--field-selector", "spec.nodeName="+leaderNodeName, "-o=jsonpath='{.items[0].metadata.name}'").Output()
-	o.Expect(err3).NotTo(o.HaveOccurred())
-	leaderOVNMasterPodName := ""
-	masterPodList := strings.Split(ovnMasterPod, "'")
-	if len(masterPodList) >= 2 {
-		leaderOVNMasterPodName = masterPodList[1]
-	}
-	o.Expect(leaderOVNMasterPodName).NotTo(o.BeEmpty(), "cannot get leaderOVNMasterPodName")
-	e2e.Logf("The leader Pod's name: %s", leaderOVNMasterPodName)
-	return leaderOVNMasterPodName
+func getOVNKCtrlPlanePodOnHostedCluster(oc *exutil.CLI, namespace, cmName, hyperShiftMgmtNS string) string {
+	// get leader ovnkube-control-plane pod on hypershift hosted cluster
+	ovnkCtrlPlanePodLead, leaderErr := oc.AsGuestKubeconf().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
+	o.Expect(leaderErr).NotTo(o.HaveOccurred())
+	e2e.Logf("ovnkube-control-plane pod of the hosted cluster is %s", ovnkCtrlPlanePodLead)
+	return ovnkCtrlPlanePodLead
 }
 
 func waitForPodWithLabelReadyOnHostedCluster(oc *exutil.CLI, ns, label string) error {
@@ -2394,6 +2383,8 @@ func checkLogMessageInPodOnHostedCluster(oc *exutil.CLI, namespace string, conta
 func getOVNK8sNodeMgmtIPv4OnHostedCluster(oc *exutil.CLI, nodeName string) string {
 	var output string
 	var outputErr error
+	defer exutil.RecoverNamespaceRestricted(oc.AsGuestKubeconf(), "default")
+	exutil.SetNamespacePrivileged(oc.AsGuestKubeconf(), "default")
 	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 		output, outputErr = oc.AsGuestKubeconf().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "/usr/sbin/ip -4 -brief address show | grep ovn-k8s-mp0").Output()
 		if output == "" || outputErr != nil {
@@ -2472,9 +2463,9 @@ func getHostsubnetByEIP(oc *exutil.CLI, expectedEIP string) string {
 
 // find the ovn-K cluster manager master pod
 func getOVNKMasterPod(oc *exutil.CLI) string {
-	ovnKMasterPod, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
-	o.Expect(podErr).NotTo(o.HaveOccurred())
-	return ovnKMasterPod
+	leaderCtrlPlanePod, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "ovn-kubernetes-master", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.spec.holderIdentity}").Output()
+	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
+	return leaderCtrlPlanePod
 }
 
 // find the cluster-manager's ovnkube-node for accessing master components

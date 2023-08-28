@@ -473,7 +473,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-44940-No segmentation error in ovnkube-master or syntax error in ovn-controller after egressfirewall resource that referencing a DNS name is deleted.", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-44940-No segmentation error in ovnkube-control-plane or syntax error in ovn-controller after egressfirewall resource that referencing a DNS name is deleted.", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
@@ -492,17 +492,17 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr := waitEgressFirewallApplied(oc, egressFW1.name, ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		exutil.By("2. Delete the EgressFirewall, check logs of ovnkube-master pod for error, there should be no segementation error, no DNS value not found in dnsMap error message.")
+		exutil.By("2. Delete the EgressFirewall, check logs of ovnkube-control-plane pod for error, there should be no segementation error, no DNS value not found in dnsMap error message.")
 		removeResource(oc, true, true, "egressfirewall", egressFW1.name, "-n", egressFW1.namespace)
 
-		ovnKMasterPod := getOVNKMasterPod(oc)
-		o.Expect(ovnKMasterPod).ShouldNot(o.BeEmpty())
-		e2e.Logf("\n ovnKMasterPod: %v\n", ovnKMasterPod)
+		leaderCtrlPlanePod := getOVNKMasterPod(oc)
+		o.Expect(leaderCtrlPlanePod).ShouldNot(o.BeEmpty())
+		e2e.Logf("\n leaderCtrlPlanePod: %v\n", leaderCtrlPlanePod)
 
 		o.Consistently(func() bool {
-			podlogs, _ := oc.AsAdmin().Run("logs").Args(ovnKMasterPod, "-n", "openshift-ovn-kubernetes", "-c", "ovnkube-control-plane").Output()
+			podlogs, _ := oc.AsAdmin().Run("logs").Args(leaderCtrlPlanePod, "-n", "openshift-ovn-kubernetes", "-c", "ovnkube-cluster-manager").Output()
 			return strings.Count(podlogs, `SIGSEGV: segmentation violation`) == 0 && strings.Count(podlogs, `DNS value not found in dnsMap for domain`) == 0
-		}, 60*time.Second, 10*time.Second).Should(o.BeTrue(), "Segementation error or no DNS value in dnsMap error message found in ovnkube-master pod log!!")
+		}, 60*time.Second, 10*time.Second).Should(o.BeTrue(), "Segementation error or no DNS value in dnsMap error message found in ovnkube-control-plane pod log!!")
 	})
 
 	// author: huirwang@redhat.com
@@ -742,14 +742,15 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		enableMulticast(oc, ns)
 
 		exutil.By("Delete ovnkuber-master pods and two nodes \n")
-		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-l", "app=ovnkube-master", "-n", "openshift-ovn-kubernetes").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-l", "app=ovnkube-control-plane", "-n", "openshift-ovn-kubernetes").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
 		err = ms.DeleteMachineSet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Wait ovnkuber-master pods ready\n")
-		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
-		exutil.AssertWaitPollNoErr(err, "ovnkube-master pods are not ready")
+		exutil.By("Wait ovnkuber-control-plane pods ready\n")
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
+		exutil.AssertWaitPollNoErr(err, "ovnkube-control-plane pods are not ready")
 
 		exutil.By("Check ovn db, the stale chassis for deleted node should be deleted")
 		for _, machine := range []string{nodeName0, nodeName1} {
@@ -762,10 +763,10 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			}, "120s", "10s").ShouldNot(o.ContainSubstring(machine), "The stale chassis still existed!")
 		}
 
-		exutil.By("Check ovnkuber master logs, no IGMP_Group logs")
+		exutil.By("Check ovnkuber control plane logs, no IGMP_Group logs")
 		ovnMasterPodName := getOVNKMasterPod(oc)
 		searchString := "Transaction causes multiple rows in \"IGMP_Group\" table to have identical values"
-		logContents, logErr := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-control-plane", ovnMasterPodName, "")
+		logContents, logErr := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-cluster-manager", ovnMasterPodName, "")
 		o.Expect(logErr).ShouldNot(o.HaveOccurred())
 		o.Expect(strings.Contains(logContents, searchString)).Should(o.BeFalse())
 	})
