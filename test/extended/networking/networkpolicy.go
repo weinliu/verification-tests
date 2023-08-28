@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
@@ -1499,6 +1501,88 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.By("Check for error message related network policy")
 		e2e.Logf("ovnkube-node new podname %s running on node %s", ovnKNodePod, nodeList.Items[0].Name)
 		filterString := fmt.Sprintf(" %s/%s ", ns, policyName)
+		e2e.Logf("Filter String %s", filterString)
+		logContents, logErr := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnKNodePod, filterString)
+		o.Expect(logErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Log contents \n%s", logContents)
+		o.Expect(strings.Contains(logContents, "failed")).To(o.BeFalse())
+
+	})
+	g.It("Author:asood-Critical-64786-Network policy in namespace that has long name fails to be recreated as the ACLs are considered duplicate [Disruptive]", func() {
+		// https://issues.redhat.com/browse/OCPBUGS-15371
+		var (
+			testNs                     = "test-the-networkpolicy-with-a-62chars-62chars-long-namespace62"
+			buildPruningBaseDir        = exutil.FixturePath("testdata", "networking")
+			allowToNSNetworkPolicyFile = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-to-same-namespace.yaml")
+			pingPodTemplate            = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		)
+		exutil.By("Check cluster network type")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("This case requires OVNKubernetes as network plugin")
+		}
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeList.Items) == 0).NotTo(o.BeTrue())
+
+		exutil.By("Create a namespace with a long name")
+		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
+		o.Expect(contxtErr).NotTo(o.HaveOccurred())
+		defer func() {
+			useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
+			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
+		}()
+
+		defer oc.AsAdmin().Run("delete").Args("project", testNs, "--ignore-not-found").Execute()
+		nsCreateErr := oc.WithoutNamespace().Run("new-project").Args(testNs).Execute()
+		o.Expect(nsCreateErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a hello pod in namspace")
+		podns := pingPodResource{
+			name:      "hello-pod",
+			namespace: testNs,
+			template:  pingPodTemplate,
+		}
+		podns.createPingPod(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		exutil.By("Create a network policy in namespace")
+		createResourceFromFile(oc, testNs, allowToNSNetworkPolicyFile)
+		checkErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			output, err := oc.WithoutNamespace().Run("get").Args("networkpolicy", "-n", testNs).Output()
+			if err != nil {
+				e2e.Logf("%v,Waiting for policy to be created, try again ...,", err)
+				return false, nil
+			}
+			// Check network policy
+			if strings.Contains(output, "allow-to-same-namespace") {
+				e2e.Logf("Network policy created")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkErr, "Network policy could not be created")
+
+		exutil.By("Delete the ovnkube node pod on the node")
+		ovnKNodePod, ovnkNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeList.Items[0].Name)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+		e2e.Logf("ovnkube-node podname %s running on node %s", ovnKNodePod, nodeList.Items[0].Name)
+		defer waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", ovnKNodePod, "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Wait for new ovnkube-node pod recreated on the node")
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		ovnKNodePod, ovnkNodePodErr = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeList.Items[0].Name)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+
+		exutil.By("Check for error message related network policy")
+		e2e.Logf("ovnkube-node new podname %s running on node %s", ovnKNodePod, nodeList.Items[0].Name)
+		filterString := fmt.Sprintf(" %s/%s ", testNs, "allow-to-same-namespace")
 		e2e.Logf("Filter String %s", filterString)
 		logContents, logErr := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnKNodePod, filterString)
 		o.Expect(logErr).NotTo(o.HaveOccurred())
