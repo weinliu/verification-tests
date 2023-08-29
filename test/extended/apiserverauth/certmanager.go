@@ -176,7 +176,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(statusErr, fmt.Sprintf("certificate is wrong: %v", statusErr))
+		exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
 		g.By("Check certificate secret.")
 		output, err = oc.Run("get").Args("secret", "cert-test-http01").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -416,5 +416,142 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "certificate status is wrong.")
+	})
+	g.It("Author:geliu-Medium-63555-ACME dns01 solver should work in OpenShift proxy env [Serial]", func() {
+		g.By("Check proxy env.")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "httpsProxy") {
+			g.Skip("Fail to check httpsProxy, ocp-63555 skipped.")
+		}
+
+		g.By("Skip test when the cluster is with STS credential")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			g.Skip("Skipping for the aws cluster without credential in cluster")
+		}
+		e2e.Logf("Create secret generic test-secret.")
+		cloudProvider := getCloudProvider(oc)
+		accessKeyID, secureKey := getCredentialFromCluster(oc, cloudProvider)
+		oc.NotShowInfo()
+		defer func() {
+			e2e.Logf("Remove the secret generic test-secret.")
+			_, errSecret := oc.AsAdmin().Run("delete").Args("-n", "cert-manager", "secret", "test-secret").Output()
+			o.Expect(errSecret).NotTo(o.HaveOccurred())
+		}()
+		_, errSec := oc.AsAdmin().Run("create").Args("-n", "cert-manager", "secret", "generic", "test-secret", "--from-literal=secret-access-key="+secureKey).Output()
+		oc.SetShowInfo()
+		o.Expect(errSec).NotTo(o.HaveOccurred())
+
+		g.By("Login with normal user and create issuers.\n")
+		oc.SetupProject()
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "cluster-issuer-acme-dns01-route53.yaml")
+		f, err := ioutil.ReadFile(clusterIssuerFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		f1 := strings.ReplaceAll(string(f), "AWS_ACCESS_KEY_ID", accessKeyID)
+		err = ioutil.WriteFile(clusterIssuerFile, []byte(f1), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("Delete clusterissuers.cert-manager.io letsencrypt-dns01")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "letsencrypt-dns01").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "-o", "wide").Output()
+			if !strings.Contains(output, "True") || err != nil {
+				e2e.Logf("clusterissuer is not ready.")
+				return false, nil
+			}
+			e2e.Logf("clusterissuer is ready.")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Waiting for clusterissuer ready timeout.")
+
+		g.By("Create the certificate.")
+		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ingressDomain=%s", string(ingressDomain))
+		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth")
+		certDns01File := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+		f, err = ioutil.ReadFile(certDns01File)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		randomStr := exutil.GetRandomString()
+		dns_name := randomStr + "." + string(ingressDomain)
+		e2e.Logf("dns_name=%s", dns_name)
+		f1 = strings.ReplaceAll(string(f), "DNS_NAME", dns_name)
+		err = ioutil.WriteFile(certDns01File, []byte(f1), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("create").Args("-f", certDns01File).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the certificate and its challenge")
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.Run("get").Args("challenge").Output()
+			if !strings.Contains(output, "pending") || err != nil {
+				e2e.Logf("challenge is not become pending.%v", output)
+				return false, nil
+			}
+			e2e.Logf("challenge is become pending status.")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Fail to wait challenge become pending status.")
+		err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+			challenge, err := oc.Run("get").Args("challenge", "-o", "wide").Output()
+			if !strings.Contains(challenge, "i/o timeout") || err != nil {
+				e2e.Logf("challenge has not output as expected.")
+				return false, nil
+			}
+			e2e.Logf("challenge have output as expected.")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Failure: challenge has not output as expected.")
+		g.By("patch certmanager/cluster.")
+		certManagerPod1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
+		patchPath := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers-only\"]}}}"
+		defer func() {
+			e2e.Logf("patch certmanager/cluster back.")
+			certManagerPod1, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
+			patchPath1 := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":null}}}"
+			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			statusErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+				certManagerPod2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}", "--field-selector=status.phase==Running").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if !strings.Contains(certManagerPod2, certManagerPod1) {
+					e2e.Logf("cert-manager pods have been redeployed successfully.")
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed after recovery.")
+		}()
+		err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		statusErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			certManagerPod2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}", "--field-selector=status.phase==Running").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(certManagerPod2, certManagerPod1) {
+				e2e.Logf("cert-manager pods have been redeployed successfully.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed after patch.")
+		g.By("Checke challenge and certificate again.")
+		statusErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			output, err = oc.Run("get").Args("certificate", "certificate-from-dns01").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("certificate status is: %v ", output)
+			if strings.Contains(output, "True") {
+				e2e.Logf("certificate status is normal.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
 	})
 })
