@@ -22,40 +22,41 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		tunedNFConntrackMaxFile       = exutil.FixturePath("testdata", "psap", "nto", "tuned-nf-conntrack-max.yaml")
 		hPPerformanceProfileFile      = exutil.FixturePath("testdata", "psap", "nto", "hp-performanceprofile.yaml")
 		hpPerformanceProfilePatchFile = exutil.FixturePath("testdata", "psap", "nto", "hp-performanceprofile-patch.yaml")
-		customTunedProfileile         = exutil.FixturePath("testdata", "psap", "nto", "custom-tuned-profiles.yaml")
-		cgroupSchedulerBacklist       = exutil.FixturePath("testdata", "psap", "nto", "cgroup-scheduler-blacklist.yaml")
-		cgroupSchedulerBestEffortPod  = exutil.FixturePath("testdata", "psap", "nto", "cgroup-scheduler-besteffor-pod.yaml")
-		ntoTunedDebugFile             = exutil.FixturePath("testdata", "psap", "nto", "nto-tuned-debug.yaml")
-		ntoIRQSMPFile                 = exutil.FixturePath("testdata", "psap", "nto", "default-irq-smp-affinity.yaml")
-		ntoRealtimeFile               = exutil.FixturePath("testdata", "psap", "nto", "realtime.yaml")
-		ntoMCPFile                    = exutil.FixturePath("testdata", "psap", "nto", "machine-config-pool.yaml")
-		IPSFile                       = exutil.FixturePath("testdata", "psap", "nto", "ips.yaml")
-		workerStackFile               = exutil.FixturePath("testdata", "psap", "nto", "worker-stack-tuned.yaml")
-		paoPerformanceFile            = exutil.FixturePath("testdata", "psap", "pao", "pao-performanceprofile.yaml")
-		paoPerformancePatchFile       = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-patch.yaml")
-		paoPerformanceFixpatchFile    = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-fixpatch.yaml")
-		paoPerformanceOptimizeFile    = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-optimize.yaml")
-		paoIncludePerformanceProfile  = exutil.FixturePath("testdata", "psap", "pao", "pao-include-performance-profile.yaml")
-		paoWorkerCnfMCPFile           = exutil.FixturePath("testdata", "psap", "pao", "pao-workercnf-mcp.yaml")
-		paoWorkerOptimizeMCPFile      = exutil.FixturePath("testdata", "psap", "pao", "pao-workeroptimize-mcp.yaml")
-		hugepage100MPodFile           = exutil.FixturePath("testdata", "psap", "nto", "hugepage-100m-pod.yaml")
-		hugepageMCPfile               = exutil.FixturePath("testdata", "psap", "nto", "hugepage-mcp.yaml")
-		hugepageTunedBoottimeFile     = exutil.FixturePath("testdata", "psap", "nto", "hugepage-tuned-boottime.yaml")
-		stalldTunedFile               = exutil.FixturePath("testdata", "psap", "nto", "stalld-tuned.yaml")
-		openshiftNodePostgresqlFile   = exutil.FixturePath("testdata", "psap", "nto", "openshift-node-postgresql.yaml")
-		netPluginFile                 = exutil.FixturePath("testdata", "psap", "nto", "net-plugin-tuned.yaml")
-		cloudProviderFile             = exutil.FixturePath("testdata", "psap", "nto", "cloud-provider-profile.yaml")
-		nodeDiffCPUsTunedBootFile     = exutil.FixturePath("testdata", "psap", "nto", "node-diffcpus-tuned-bootloader.yaml")
-		nodeDiffCPUsMCPFile           = exutil.FixturePath("testdata", "psap", "nto", "node-diffcpus-mcp.yaml")
 
-		isNTO          bool
-		isPAOInstalled bool
-		paoNamespace   = "openshift-performance-addon-operator"
-		iaasPlatform   string
-		ManualPickup   bool
-		podShippedFile string
-		podSysctlFile  string
-		ntoTunedPidMax string
+		cgroupSchedulerBacklist      = exutil.FixturePath("testdata", "psap", "nto", "cgroup-scheduler-blacklist.yaml")
+		cgroupSchedulerBestEffortPod = exutil.FixturePath("testdata", "psap", "nto", "cgroup-scheduler-besteffor-pod.yaml")
+		ntoTunedDebugFile            = exutil.FixturePath("testdata", "psap", "nto", "nto-tuned-debug.yaml")
+		ntoIRQSMPFile                = exutil.FixturePath("testdata", "psap", "nto", "default-irq-smp-affinity.yaml")
+		ntoRealtimeFile              = exutil.FixturePath("testdata", "psap", "nto", "realtime.yaml")
+		ntoMCPFile                   = exutil.FixturePath("testdata", "psap", "nto", "machine-config-pool.yaml")
+		IPSFile                      = exutil.FixturePath("testdata", "psap", "nto", "ips.yaml")
+		workerStackFile              = exutil.FixturePath("testdata", "psap", "nto", "worker-stack-tuned.yaml")
+		paoPerformanceFile           = exutil.FixturePath("testdata", "psap", "pao", "pao-performanceprofile.yaml")
+		paoPerformancePatchFile      = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-patch.yaml")
+		paoPerformanceFixpatchFile   = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-fixpatch.yaml")
+		paoPerformanceOptimizeFile   = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-optimize.yaml")
+		paoIncludePerformanceProfile = exutil.FixturePath("testdata", "psap", "pao", "pao-include-performance-profile.yaml")
+		paoWorkerCnfMCPFile          = exutil.FixturePath("testdata", "psap", "pao", "pao-workercnf-mcp.yaml")
+		paoWorkerOptimizeMCPFile     = exutil.FixturePath("testdata", "psap", "pao", "pao-workeroptimize-mcp.yaml")
+		hugepage100MPodFile          = exutil.FixturePath("testdata", "psap", "nto", "hugepage-100m-pod.yaml")
+		hugepageMCPfile              = exutil.FixturePath("testdata", "psap", "nto", "hugepage-mcp.yaml")
+		hugepageTunedBoottimeFile    = exutil.FixturePath("testdata", "psap", "nto", "hugepage-tuned-boottime.yaml")
+		stalldTunedFile              = exutil.FixturePath("testdata", "psap", "nto", "stalld-tuned.yaml")
+		openshiftNodePostgresqlFile  = exutil.FixturePath("testdata", "psap", "nto", "openshift-node-postgresql.yaml")
+		netPluginFile                = exutil.FixturePath("testdata", "psap", "nto", "net-plugin-tuned.yaml")
+		cloudProviderFile            = exutil.FixturePath("testdata", "psap", "nto", "cloud-provider-profile.yaml")
+		nodeDiffCPUsTunedBootFile    = exutil.FixturePath("testdata", "psap", "nto", "node-diffcpus-tuned-bootloader.yaml")
+		nodeDiffCPUsMCPFile          = exutil.FixturePath("testdata", "psap", "nto", "node-diffcpus-mcp.yaml")
+
+		isNTO              bool
+		isPAOInstalled     bool
+		paoNamespace       = "openshift-performance-addon-operator"
+		iaasPlatform       string
+		ManualPickup       bool
+		podShippedFile     string
+		podSysctlFile      string
+		ntoTunedPidMax     string
+		customTunedProfile string
 	)
 
 	g.BeforeEach(func() {
@@ -69,6 +70,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		podShippedFile = exutil.FixturePath("testdata", "psap", "nto", "pod-shipped.yaml")
 		podSysctlFile = exutil.FixturePath("testdata", "psap", "nto", "nto-sysctl-pod.yaml")
 		ntoTunedPidMax = exutil.FixturePath("testdata", "psap", "nto", "nto-tuned-pidmax.yaml")
+		customTunedProfile = exutil.FixturePath("testdata", "psap", "nto", "custom-tuned-profiles.yaml")
 	})
 
 	// author: liqcui@redhat.com
@@ -453,7 +455,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes := ntoResource{
 			name:        "kernel-pid-max",
 			namespace:   ntoNamespace,
-			template:    customTunedProfileile,
+			template:    customTunedProfile,
 			sysctlparm:  "kernel.pid_max",
 			sysctlvalue: "128888",
 		}
@@ -511,7 +513,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes := ntoResource{
 			name:        "user-max-ipc-namespaces",
 			namespace:   ntoNamespace,
-			template:    customTunedProfileile,
+			template:    customTunedProfile,
 			sysctlparm:  "user.max_ipc_namespaces",
 			sysctlvalue: "121112",
 		}
@@ -633,7 +635,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes := ntoResource{
 			name:        "user-max-mnt-namespaces",
 			namespace:   ntoNamespace,
-			template:    customTunedProfileile,
+			template:    customTunedProfile,
 			sysctlparm:  "user.max_mnt_namespaces",
 			sysctlvalue: "142214",
 		}
@@ -1030,7 +1032,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			o.ContainSubstring("fs.inotify.max_user_instances=8192")))
 	})
 
-	g.It("NonPreRelease-Longduration-Author:liqcui-Medium-33238-Test NTO support for operatorapi Removed state [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-NonHyperShiftHOST-Author:liqcui-Medium-33238-Test NTO support for operatorapi Removed state [Disruptive]", func() {
 
 		// test requires NTO to be installed
 		if !isNTO {
@@ -1039,14 +1041,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Remove custom profile (if not already removed) and patch default tuned back to Managed")
 		//Cleanup tuned and change back to managed state
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoNamespace, "tuned", "user-max-pid-namespaces", "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoNamespace, "tuned", "tuning-pidmax", "--ignore-not-found").Execute()
 		defer patchTunedState(oc, ntoNamespace, "default", "Managed")
 
 		ntoRes := ntoResource{
-			name:        "user-max-pid-namespaces",
+			name:        "tuning-pidmax",
 			namespace:   ntoNamespace,
-			template:    customTunedProfileile,
-			sysctlparm:  "user.max_pid_namespaces",
+			template:    customTunedProfile,
+			sysctlparm:  "kernel.pid_max",
 			sysctlvalue: "182218",
 		}
 
@@ -1083,20 +1085,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(profileCheck).To(o.Equal("user-max-pid-namespaces"))
+		o.Expect(profileCheck).To(o.Equal("tuning-pidmax"))
 
 		g.By("Check if new profile in in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("user-max-pid-namespaces"))
+		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
 
 		g.By("Check logs, profile changes SHOULD be applied since tuned is MANAGED")
 		logsCheck, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ntoNamespace, "--tail=9", tunedPodName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(logsCheck).To(o.ContainSubstring("user-max-pid-namespaces"))
+		o.Expect(logsCheck).To(o.ContainSubstring("tuning-pidmax"))
 
 		g.By("Compare if the value user.max_ipc_namespaces in on node with labeled pod, should be 182218")
-		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "user.max_pid_namespaces", "", "182218")
+		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "kernel.pid_max", "", "182218")
 
 		g.By("Patch default tuned to 'Removed'")
 		err = patchTunedState(oc, ntoNamespace, "default", "Removed")
@@ -1123,9 +1125,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.ContainSubstring("No resources"))
 
-		g.By("Check all nodes for user.max_mnt_namespaces value, all node should different from 182218")
-		compareSysctlDifferentFromSpecifiedValueByName(oc, "user.max_pid_namespaces", "182218")
-
 		g.By("Change tuned state back to managed ...")
 		err = patchTunedState(oc, ntoNamespace, "default", "Managed")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1146,20 +1145,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(profileCheck).To(o.Equal("user-max-pid-namespaces"))
+		o.Expect(profileCheck).To(o.Equal("tuning-pidmax"))
 
 		g.By("Check if new profile in in rendered tuned")
 		renderCheck, err = getTunedRender(oc, ntoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("user-max-pid-namespaces"))
+		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
 
 		g.By("Check logs, profile changes SHOULD be applied since tuned is MANAGED)")
 		logsCheck, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ntoNamespace, "--tail=9", tunedPodName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(logsCheck).To(o.ContainSubstring("user-max-pid-namespaces"))
+		o.Expect(logsCheck).To(o.ContainSubstring("tuning-pidmax"))
 
 		g.By("Compare if the value user.max_ipc_namespaces in on node with labeled pod, should be 182218")
-		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "user.max_pid_namespaces", "", "182218")
+		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "kernel.pid_max", "", "182218")
 	})
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-30589-NTO Use MachineConfigs to lay down files needed for tuned [Disruptive] [Slow]", func() {

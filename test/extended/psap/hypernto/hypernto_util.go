@@ -346,3 +346,16 @@ func AssertIfNodeIsReadyByNodeNameInHostedCluster(oc *exutil.CLI, tunedNodeName 
 	exutil.AssertWaitPollNoErr(err, "Worker node checks were not successful within timeout limit")
 
 }
+
+// AssertIfTunedIsReadyByNameInHostedCluster checks if the worker node is ready
+func AssertIfTunedIsReadyByNameInHostedCluster(oc *exutil.CLI, tunedeName string, ntoNamespace string) {
+	// Assert if profile applied to label node with re-try
+	o.Eventually(func() bool {
+		tunedStatus, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		if err != nil || !strings.Contains(tunedStatus, tunedeName) {
+			e2e.Logf("The tuned %s isn't generated, check again, err is %v", tunedeName, err)
+		}
+		e2e.Logf("The list of tuned in namespace %v is: \n%v", ntoNamespace, tunedStatus)
+		return strings.Contains(tunedStatus, tunedeName)
+	}, 5*time.Second, time.Second).Should(o.BeTrue())
+}

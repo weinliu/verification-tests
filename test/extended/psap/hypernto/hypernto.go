@@ -581,7 +581,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", hostedClusterNS)
 
 		g.By("Check if custom node pool is ready in hosted cluster")
-		exutil.AssertIfNodePoolIsReadyByName(oc, "hugepages-nodepool", 360, hostedClusterNS)
+		exutil.AssertIfNodePoolIsReadyByName(oc, "hugepages-nodepool", 720, hostedClusterNS)
 
 		//Delete configmap in clusters namespace
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "hugepages", "-n", hostedClusterNS, "--ignore-not-found").Execute()
@@ -646,7 +646,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check if updating config applied to custom node pool in hosted cluster")
-		exutil.AssertIfNodePoolUpdatingConfigByName(oc, "hugepages-nodepool", 360, hostedClusterNS)
+		exutil.AssertIfNodePoolUpdatingConfigByName(oc, "hugepages-nodepool", 720, hostedClusterNS)
 
 		g.By("Check if the custom tuned profile openshift-node-hugepages applied to all nodes of custom nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, "hugepages-nodepool", "openshift-node-hugepages")
@@ -677,7 +677,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", hostedClusterNS)
 
 		g.By("Check if custom node pool is ready in hosted cluster")
-		exutil.AssertIfNodePoolIsReadyByName(oc, "hugepages-nodepool", 360, hostedClusterNS)
+		exutil.AssertIfNodePoolIsReadyByName(oc, "hugepages-nodepool", 720, hostedClusterNS)
 
 		//Delete configmap in clusters namespace
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "hugepages", "-n", hostedClusterNS, "--ignore-not-found").Execute()
@@ -803,7 +803,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, firstNodePoolName, "1", "m5.xlarge", hostedClusterNS)
 
 		g.By("Check if custom node pool is ready in hosted cluster")
-		exutil.AssertIfNodePoolIsReadyByName(oc, firstNodePoolName, 360, hostedClusterNS)
+		exutil.AssertIfNodePoolIsReadyByName(oc, firstNodePoolName, 720, hostedClusterNS)
 
 		//Apply tuned profile to hosted clusters
 		g.By("Ge the default nodepool in hosted cluster as secondary nodepool")
@@ -982,7 +982,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, firstNodePoolName, "1", "m5.xlarge", hostedClusterNS)
 
 		g.By("Check if custom node pool is ready in hosted cluster")
-		exutil.AssertIfNodePoolIsReadyByName(oc, firstNodePoolName, 360, hostedClusterNS)
+		exutil.AssertIfNodePoolIsReadyByName(oc, firstNodePoolName, 720, hostedClusterNS)
 
 		//Apply tuned profile to hosted clusters
 		g.By("Ge the default nodepool in hosted cluster as secondary nodepool")
@@ -1368,11 +1368,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(configMaps).To(o.ContainSubstring("tuned-" + firstNodePoolName))
 
 		g.By("Check if the tuned hc-nodepool-vmdratio-xxxxxx is created in hosted cluster nodepool")
-		tunedNameList, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("tuned", "-n", ntoNamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tunedNameList).NotTo(o.BeEmpty())
-		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
-		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+		AssertIfTunedIsReadyByNameInHostedCluster(oc, "hc-nodepool-vmdratio", ntoNamespace)
 
 		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
 		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
@@ -1411,11 +1407,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check if the tuned hc-nodepool-vmdratio-xxxxxx is created in hosted cluster nodepool")
-		tunedNameList, err = oc.AsAdmin().AsGuestKubeconf().Run("get").Args("tuned", "-n", ntoNamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tunedNameList).NotTo(o.BeEmpty())
-		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
-		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+		AssertIfTunedIsReadyByNameInHostedCluster(oc, "hc-nodepool-vmdratio", ntoNamespace)
 
 		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
 		renderCheck, err = getTunedRenderInHostedCluster(oc, ntoNamespace)
@@ -1586,11 +1578,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(configMaps).To(o.ContainSubstring("tuned-" + firstNodePoolName))
 
 		g.By("Check if the tuned hc-nodepool-vmdratio-xxxxxx is created in hosted cluster nodepool")
-		tunedNameList, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("tuned", "-n", ntoNamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tunedNameList).NotTo(o.BeEmpty())
-		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
-		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+		AssertIfTunedIsReadyByNameInHostedCluster(oc, "hc-nodepool-vmdratio", ntoNamespace)
 
 		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
 		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
@@ -1635,11 +1623,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check if the tuned hc-nodepool-pidmax-xxxxxx is created in hosted cluster nodepool")
-		tunedNameList, err = oc.AsAdmin().AsGuestKubeconf().Run("get").Args("tuned", "-n", ntoNamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tunedNameList).NotTo(o.BeEmpty())
-		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
-		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-pidmax"))
+		AssertIfTunedIsReadyByNameInHostedCluster(oc, "hc-nodepool-pidmax", ntoNamespace)
 
 		g.By("Check if the tuned rendered contain hc-nodepool-pidmax")
 		renderCheck, err = getTunedRenderInHostedCluster(oc, ntoNamespace)

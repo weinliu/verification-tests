@@ -570,8 +570,9 @@ func assertDefaultIRQSMPAffinityAffectedBitMask(cpuBitsMask []byte, isolatedCPU 
 	affinityCPUMask = string(bitsMaskChars)
 
 	//If defaultIRQSMPAffinity start with 0, ie, 00020, remove 000 and change to 20
-	if strings.HasPrefix(defaultIRQSMPAffinity, "0") {
+	if strings.HasPrefix(defaultIRQSMPAffinity, "0") || strings.HasPrefix(affinityCPUMask, "0") {
 		defaultIRQSMPAffinity = strings.TrimLeft(defaultIRQSMPAffinity, "0")
+		affinityCPUMask = strings.TrimLeft(affinityCPUMask, "0")
 	}
 
 	e2e.Logf("affinityCPUMask is: -%s-, defaultIRQSMPAffinity is -%s-\n", affinityCPUMask, defaultIRQSMPAffinity)
