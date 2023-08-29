@@ -58,10 +58,11 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		sub          subscription
 		hc           hiveconfig
 		testDataDir  string
-		iaasPlatform string
 		testOCPImage string
 		region       string
 		basedomain   string
+		awsPartition string
+		isGovCloud   bool
 	)
 
 	// Under the hood, "extended-platform-tests run" calls "extended-platform-tests run-test" on each test case separately.
@@ -71,22 +72,25 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		// Skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
 
-		// Install Hive operator if not
+		// Skip if running on a non-AWS platform
+		exutil.SkipIfPlatformTypeNot(oc, "aws")
+
+		// Install Hive operator if non-existent
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
 		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
-
-		// Get IaaS platform
-		iaasPlatform = exutil.CheckPlatform(oc)
-		if iaasPlatform != "aws" {
-			g.Skip("IAAS platform is " + iaasPlatform + " while the case is for AWS - skipping test ...")
-		}
 
 		// Get OCP Image for Hive testing
 		testOCPImage = getTestOCPImage()
 
-		// Get region and basedomain dynamically
+		// Get platform configurations
 		region = getRegion(oc)
 		basedomain = getBasedomain(oc)
+		isGovCloud = strings.Contains(region, "us-gov")
+		awsPartition = "aws"
+		if isGovCloud {
+			e2e.Logf("Running on AWS Gov cloud")
+			awsPartition = "aws-us-gov"
+		}
 	})
 
 	//author: sguo@redhat.com
@@ -2884,16 +2888,22 @@ spec:
 
 	// Author: fxie@redhat.com
 	// ./bin/extended-platform-tests run all --dry-run|grep "41212"|./bin/extended-platform-tests run --timeout 80m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-41212-Medium-57403-[HiveSDRosa] [HiveSpec] Hive supports to install private cluster[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-41212-High-43751-Medium-57403-[HiveSDRosa] [HiveSpec] [AWSGov] Hive supports to install private cluster [Disruptive]", func() {
 		// Settings
 		var (
 			testCaseID = "41212"
 			cdName     = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 			stackName  = "endpointvpc-stack-" + testCaseID
-			azCount    = 3
 			// Should not overlap with the CIDR of the associate VPC
 			cidr = "10.1.0.0/16"
+			// Number of AZs for the endpoint VPC. Can be different from the equivalent for the associated VPC.
+			azCount       = 3
+			dnsRecordType = "Alias"
 		)
+		// For OCP-43751
+		if isGovCloud {
+			dnsRecordType = "ARecord"
+		}
 
 		// AWS Clients
 		var (
@@ -3051,6 +3061,85 @@ spec:
 		o.Eventually(waitUntilStackIsReady).WithTimeout(15 * time.Minute).WithPolling(1 * time.Minute).Should(o.BeTrue())
 		e2e.Logf("VpcId = %s, PrivateSubnetIds = %s", vpcId, privateSubnetIds)
 
+		// For OCP-43751:
+		// The hiveutil awsprivatelink add/remove commands filter out the private route tables through the Name tag.
+		// On AWS Gov cloud openshift clusters are installed into a BYO VPC,
+		// which is often created as part of a CloudFormation stack.
+		// There is no guarantee that the private route tables,
+		// which belong to the same CloudFormation stack,
+		// has a Name (or whatever pre-defined) tag.
+		// Consequently, we need to tag these route tables ourselves.
+		// This makes the test cases disruptive.
+		if isGovCloud {
+			infraId, err := exutil.GetInfraID(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("Found infraID = %v", infraId)
+
+			// Get resources to tag
+			describeVpcsOutput, err := ec2Client.DescribeVpcs(context.Background(), &ec2.DescribeVpcsInput{
+				Filters: []types.Filter{
+					{
+						Name:   aws.String("tag-key"),
+						Values: []string{fmt.Sprintf("kubernetes.io/cluster/%v", infraId)},
+					},
+				},
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(describeVpcsOutput.Vpcs)).To(o.Equal(1))
+			associatedVpcId := aws.ToString(describeVpcsOutput.Vpcs[0].VpcId)
+			e2e.Logf("Found associated VPC ID = %v", associatedVpcId)
+
+			describeRouteTableOutput, err := ec2Client.DescribeRouteTables(context.Background(), &ec2.DescribeRouteTablesInput{
+				Filters: []types.Filter{
+					{
+						Name:   aws.String("vpc-id"),
+						Values: []string{associatedVpcId},
+					},
+				},
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			associatedRouteTables := describeRouteTableOutput.RouteTables
+			o.Expect(len(associatedRouteTables)).NotTo(o.BeZero())
+			var privateAssociatedRouteTableIds []string
+			for _, associatedRouteTable := range associatedRouteTables {
+				associatedRouteTableId := aws.ToString(associatedRouteTable.RouteTableId)
+				e2e.Logf("Found associated route table %v", associatedRouteTableId)
+				for _, route := range associatedRouteTable.Routes {
+					if natGatewayId := aws.ToString(route.NatGatewayId); natGatewayId != "" {
+						e2e.Logf("Found a route targeting a NAT gateway, route table %v is private", associatedRouteTableId)
+						privateAssociatedRouteTableIds = append(privateAssociatedRouteTableIds, associatedRouteTableId)
+						break
+					}
+				}
+			}
+			o.Expect(len(privateAssociatedRouteTableIds)).NotTo(o.BeZero())
+
+			// Tagging
+			e2e.Logf("Tagging %v with Name = private", privateAssociatedRouteTableIds)
+			defer func() {
+				_, err := ec2Client.DeleteTags(context.Background(), &ec2.DeleteTagsInput{
+					Resources: privateAssociatedRouteTableIds,
+					Tags: []types.Tag{
+						{
+							Key:   aws.String("Name"),
+							Value: aws.String("private"),
+						},
+					},
+				})
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
+			_, err = ec2Client.CreateTags(context.Background(), &ec2.CreateTagsInput{
+				Resources: privateAssociatedRouteTableIds,
+				Tags: []types.Tag{
+					{
+						Key:   aws.String("Name"),
+						Value: aws.String("private"),
+					},
+				},
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
 		// Some (idempotent) awsprivatelink subcommands below are polled until succeed.
 		// Rationale:
 		// Calling an awsprivatelink subcommand immediately after another might fail
@@ -3065,7 +3154,12 @@ spec:
 			o.Eventually(callCmd).WithTimeout(3 * time.Minute).WithPolling(1 * time.Minute).WithArguments(cmd).Should(o.BeNil())
 		}()
 		// This is the first awsprivatelink subcommand, so no need to poll
-		cmd := exec.Command(hiveutilPath, "awsprivatelink", "enable", "--creds-secret", "kube-system/aws-creds", "-d")
+		cmd := exec.Command(
+			hiveutilPath, "awsprivatelink",
+			"enable",
+			"--creds-secret", "kube-system/aws-creds",
+			"--dns-record-type", dnsRecordType,
+			"-d")
 		err = callCmd(cmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -3184,7 +3278,7 @@ spec:
 			Args("ClusterDeployment", cdName, "-o=jsonpath="+defaultAllowedPrincipalJsonPath).
 			Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(defaultAllowedPrincipal).To(o.HavePrefix("arn:aws:iam::"))
+		o.Expect(defaultAllowedPrincipal).To(o.HavePrefix(fmt.Sprintf("arn:%v:iam::", awsPartition)))
 		e2e.Logf("Found defaultAllowedPrincipal = %s", defaultAllowedPrincipal)
 
 		e2e.Logf("Getting vpce ID")
@@ -3200,7 +3294,7 @@ spec:
 		e2e.Logf("Found vpce ID = %s", vpceId)
 
 		e2e.Logf("Adding an additionalAllowedPrincipal")
-		additionalAllowedPrincipal := "arn:aws:iam::301721915996:user/fakefxie"
+		additionalAllowedPrincipal := fmt.Sprintf("arn:%v:iam::301721915996:user/fakefxie", awsPartition)
 		additionalAllowedPrincipalPatch := `
 spec:
   platform:

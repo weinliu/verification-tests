@@ -28,24 +28,20 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		sub          subscription
 		hc           hiveconfig
 		testDataDir  string
-		iaasPlatform string
 		testOCPImage string
 	)
 	g.BeforeEach(func() {
-		// skip ARM64 arch
+		// Skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
 
-		//Install Hive operator if not
+		// Skip if running on a non-GCP platform
+		exutil.SkipIfPlatformTypeNot(oc, "gcp")
+
+		// Install Hive operator if not
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
 		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
 
-		//Get IaaS platform
-		iaasPlatform = exutil.CheckPlatform(oc)
-		if iaasPlatform != "gcp" {
-			g.Skip("IAAS platform is " + iaasPlatform + " while the case is for GCP - skipping test ...")
-		}
-
-		//Get OCP Image for Hive testing
+		// Get OCP Image for Hive testing
 		testOCPImage = getTestOCPImage()
 	})
 
