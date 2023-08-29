@@ -1015,9 +1015,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:knarra-Medium-10220-Workloads oc debug with or without init container for pod", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:knarra-Medium-66989-Workloads oc debug with or without init container for pod", func() {
 		testBaseDir := exutil.FixturePath("testdata", "workloads")
-		initContainerFile := filepath.Join(testBaseDir, "initContainer10220.yaml")
+		initContainerFile := filepath.Join(testBaseDir, "initContainer66989.yaml")
 
 		g.By("Create pod with InitContainer")
 		err := oc.Run("create").Args("-f", initContainerFile).Execute()
