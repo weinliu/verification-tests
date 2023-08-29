@@ -415,7 +415,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Check the different DNS records")
 		// To find the PTR record
-		ingressContPod := getPodName(oc, "openshift-ingress-operator", " ")
+		ingressContPod := getPodName(oc, "openshift-ingress-operator", "name=ingress-operator")
 		digOutput3, err3 := oc.AsAdmin().Run("exec").Args("-n", "openshift-ingress-operator", ingressContPod[0],
 			"--", "dig", "+short", "10.0.30.172.in-addr.arpa", "PTR").Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
