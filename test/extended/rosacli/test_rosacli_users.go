@@ -6,6 +6,8 @@ import (
 )
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
+	defer g.GinkgoRecover()
+
 	var (
 		clusterID string
 		err       error

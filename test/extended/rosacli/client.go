@@ -10,6 +10,7 @@ type Client struct {
 	IDP         IDPService
 	OCMResource OCMResourceService
 	User        UserService
+	MachinePool MachinePoolService
 	// Addon AddonService
 	// IDP IDPService
 	// Network NetworkService
@@ -31,6 +32,7 @@ func NewClient() *Client {
 	client.IDP = &idpService{client: client}
 	client.OCMResource = &ocmResourceService{client: client}
 	client.User = &userService{client: client}
+	client.MachinePool = &machinepoolService{client: client}
 
 	return client
 }

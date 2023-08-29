@@ -6,6 +6,8 @@ import (
 )
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A region testing", func() {
+	defer g.GinkgoRecover()
+
 	var (
 		rosaClient         = NewClient()
 		ocmResourceService = rosaClient.OCMResource

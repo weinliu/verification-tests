@@ -8,6 +8,8 @@ import (
 )
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func() {
+	defer g.GinkgoRecover()
+
 	var clusterID string
 
 	g.BeforeEach(func() {

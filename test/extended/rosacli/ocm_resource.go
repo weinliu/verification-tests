@@ -2,11 +2,23 @@ package rosacli
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
+
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 type OCMResourceService interface {
 	listRegion(flags ...string) (bytes.Buffer, error)
 	reflectRegionList(result bytes.Buffer) (regions []*CloudRegion, err error)
+	listUserRole() (bytes.Buffer, error)
+	deleteUserRole(flags ...string) (bytes.Buffer, error)
+	linkUserRole(flags ...string) (bytes.Buffer, error)
+	unlinkUserRole(flags ...string) (bytes.Buffer, error)
+	createUserRole(flags ...string) (bytes.Buffer, error)
+	whoami() (bytes.Buffer, error)
+	reflectAccountsInfo(result bytes.Buffer) *AccountsInfo
+	reflectUserRoleList(result bytes.Buffer) (url UserRoleList, err error)
 }
 
 var _ OCMResourceService = &ocmResourceService{}
@@ -21,16 +33,40 @@ type CloudRegion struct {
 	HypershiftSupported string `json:"HOSTED-CP SUPPORT,omitempty"`
 }
 
+// Struct for the 'rosa list user-role' output
+type UserRole struct {
+	RoleName string `json:"ROLE NAME,omitempty"`
+	RoleArn  string `json:"ROLE ARN,omitempty"`
+	Linded   string `json:"LINKED,omitempty"`
+}
+
+type UserRoleList struct {
+	UserRoleList []UserRole `json:"UserRoleList,omitempty"`
+}
+type AccountsInfo struct {
+	AWSArn                    string `json:"AWS ARN,omitempty"`
+	AWSAccountID              int    `json:"AWS Account ID,omitempty"`
+	AWSDefaultRegion          string `json:"AWS Default Region,omitempty"`
+	OCMApi                    string `json:"OCM API,omitempty"`
+	OCMAccountEmail           string `json:"OCM Account Email,omitempty"`
+	OCMAccountID              string `json:"OCM Account ID,omitempty"`
+	OCMAccountName            string `json:"OCM Account Name,omitempty"`
+	OCMAccountUsername        string `json:"OCM Account Username,omitempty"`
+	OCMOrganizationExternalID int    `json:"OCM Organization External ID,omitempty"`
+	OCMOrganizationID         string `json:"OCM Organization ID,omitempty"`
+	OCMOrganizationName       string `json:"OCM Organization Name,omitempty"`
+}
+
 // List region
-func (c *ocmResourceService) listRegion(flags ...string) (bytes.Buffer, error) {
-	listRegion := c.client.Runner
+func (ors *ocmResourceService) listRegion(flags ...string) (bytes.Buffer, error) {
+	listRegion := ors.client.Runner
 	listRegion = listRegion.Cmd("list", "regions").CmdFlags(flags...)
 	return listRegion.Run()
 }
 
 // Pasrse the result of 'rosa regions' to the RegionInfo struct
-func (c *ocmResourceService) reflectRegionList(result bytes.Buffer) (regions []*CloudRegion, err error) {
-	theMap := c.client.Parser.tableData.Input(result).Parse().output
+func (ors *ocmResourceService) reflectRegionList(result bytes.Buffer) (regions []*CloudRegion, err error) {
+	theMap := ors.client.Parser.tableData.Input(result).Parse().output
 	for _, regionItem := range theMap {
 		region := &CloudRegion{}
 		err = mapStructure(regionItem, region)
@@ -38,6 +74,91 @@ func (c *ocmResourceService) reflectRegionList(result bytes.Buffer) (regions []*
 			return
 		}
 		regions = append(regions, region)
+	}
+	return
+}
+
+// Pasrse the result of 'rosa whoami' to the AccountsInfo struct
+func (ors *ocmResourceService) reflectAccountsInfo(result bytes.Buffer) *AccountsInfo {
+	res := new(AccountsInfo)
+	theMap, _ := ors.client.Parser.textData.Input(result).Parse().jsonToMap()
+	data, _ := json.Marshal(&theMap)
+	json.Unmarshal(data, res)
+	return res
+}
+
+// Pasrse the result of 'rosa list user-roles' to NodePoolList struct
+func (ors *ocmResourceService) reflectUserRoleList(result bytes.Buffer) (url UserRoleList, err error) {
+	url = UserRoleList{}
+	theMap := ors.client.Parser.tableData.Input(result).Parse().output
+	for _, userroleItem := range theMap {
+		ur := &UserRole{}
+		err = mapStructure(userroleItem, ur)
+		if err != nil {
+			return
+		}
+		url.UserRoleList = append(url.UserRoleList, *ur)
+	}
+	return
+}
+
+// run `rosa list user-role` command
+func (ors *ocmResourceService) listUserRole() (bytes.Buffer, error) {
+	ors.client.Runner.cmdArgs = []string{}
+	listUserRole := ors.client.Runner.
+		Cmd("list", "user-role")
+	return listUserRole.Run()
+
+}
+
+// run `rosa delete user-role` command
+func (ors *ocmResourceService) deleteUserRole(flags ...string) (bytes.Buffer, error) {
+	deleteUserRole := ors.client.Runner
+	deleteUserRole = deleteUserRole.Cmd("delete", "user-role").CmdFlags(flags...)
+	return deleteUserRole.Run()
+}
+
+// run `rosa link user-role` command
+func (ors *ocmResourceService) linkUserRole(flags ...string) (bytes.Buffer, error) {
+	linkUserRole := ors.client.Runner
+	linkUserRole = linkUserRole.Cmd("link", "user-role").CmdFlags(flags...)
+	return linkUserRole.Run()
+}
+
+// run `rosa unlink user-role` command
+func (ors *ocmResourceService) unlinkUserRole(flags ...string) (bytes.Buffer, error) {
+	unlinkUserRole := ors.client.Runner
+	unlinkUserRole = unlinkUserRole.Cmd("unlink", "user-role").CmdFlags(flags...)
+	return unlinkUserRole.Run()
+}
+
+// run `rosa create user-role` command
+func (ors *ocmResourceService) createUserRole(flags ...string) (bytes.Buffer, error) {
+	createUserRole := ors.client.Runner
+	createUserRole = createUserRole.Cmd("create", "user-role").CmdFlags(flags...)
+	return createUserRole.Run()
+}
+
+// run `rosa whoami` command
+func (ors *ocmResourceService) whoami() (bytes.Buffer, error) {
+	ors.client.Runner.cmdArgs = []string{}
+	whoami := ors.client.Runner.
+		Cmd("whoami").OutputFormat()
+	return whoami.Run()
+}
+
+// Get specified user-role by user-role prefix and ocmAccountUsername
+func (url UserRoleList) userRole(prefix string, ocmAccountUsername string) (userRoles UserRole) {
+	userRoleName := fmt.Sprintf("%s-User-%s-Role", prefix, ocmAccountUsername)
+	fmt.Println(prefix)
+	fmt.Println(ocmAccountUsername)
+	fmt.Println(userRoleName)
+	for _, roleItme := range url.UserRoleList {
+		fmt.Println(roleItme.RoleName)
+		if roleItme.RoleName == userRoleName {
+			logger.Infof("Find the userRole %s ~", userRoleName)
+			return roleItme
+		}
 	}
 	return
 }

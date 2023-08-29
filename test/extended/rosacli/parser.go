@@ -97,6 +97,12 @@ func (td *textData) yamlToMap() (map[string]interface{}, error) {
 	return res, err
 }
 
+func (td *textData) jsonToMap() (map[string]interface{}, error) {
+	res := make(map[string]interface{})
+	err := json.Unmarshal([]byte(td.output), &res)
+	return res, err
+}
+
 func (tab *tableData) Input(input bytes.Buffer) *tableData {
 	tab.input = input
 	return tab
