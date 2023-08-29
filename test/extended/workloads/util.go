@@ -1394,3 +1394,35 @@ func checkProxy(oc *exutil.CLI) bool {
 	}
 	return false
 }
+
+func restartMicroshiftService(oc *exutil.CLI, nodeName string) {
+	// As restart the microshift service, the debug node pod will quit with error
+	exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "systemctl restart microshift")
+	exec.Command("bash", "-c", "sleep 60").Output()
+	checkNodeStatus(oc, nodeName, "Ready")
+}
+
+func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
+	var expectedStatus1 string
+	if expectedStatus == "Ready" {
+		expectedStatus1 = "True"
+	} else if expectedStatus == "NotReady" {
+		expectedStatus1 = "Unknown"
+	} else {
+		err1 := fmt.Errorf("TBD supported node status")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+	}
+	err := wait.Poll(5*time.Second, 15*time.Minute, func() (bool, error) {
+		statusOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[-1].status}").Output()
+		if err != nil {
+			e2e.Logf("\nGet node status with error : %v", err)
+			return false, nil
+		}
+		e2e.Logf("Expect Node %s in state %v, kubelet status is %s", nodeName, expectedStatus, statusOutput)
+		if statusOutput != expectedStatus1 {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Node %s is not in expected status %s", nodeName, expectedStatus))
+}

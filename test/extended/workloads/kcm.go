@@ -629,3 +629,55 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 })
+
+var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc = exutil.NewCLIWithoutNamespace("default")
+	)
+
+	// author: knarra@redhat.com
+	g.It("MicroShiftOnly-Author:knarra-Medium-56673-Enable the Openshift flavor of the kube-controller-manager [Disruptive]", func() {
+		g.By("Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		defer func() {
+			_, removalStatusErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo rm -rf /etc/microshift/config.yaml")
+			o.Expect(removalStatusErr).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, masterNodes[0])
+		}()
+
+		g.By("Copy config.yaml.default to config.yaml and modify loglevel")
+		mConfigCmd := fmt.Sprintf(`
+sudo cp /etc/microshift/config.yaml.default /etc/microshift/config.yaml
+cat > /etc/microshift/config.yaml << EOF
+debugging:
+  logVLevel: 2
+EOF`)
+
+		_, contentCreationStatusErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", mConfigCmd)
+		o.Expect(contentCreationStatusErr).NotTo(o.HaveOccurred())
+
+		g.By("Restart microshift service")
+		restartMicroshiftService(oc, masterNodes[0])
+
+		g.By("check if openshift context is nil")
+		openshiftContextStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo journalctl -u microshift | grep kube-controller-manager | grep openshift-config")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(openshiftContextStatus, "--openshift-config=\"\"")).To(o.BeTrue())
+
+		g.By("Verify if all the flags listed below are present")
+		kcmFlags, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo journalctl -u microshift | grep kube-controller-manager | grep FLAG")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		kcmFlagDetails := []string{"--enable-dynamic-provisioning=\"true\"", "--allocate-node-cidrs=\"true\"", "--configure-cloud-routes=\"false\"", "--use-service-account-credentials=\"true\"", "--leader-elect=\"false\"", "--leader-elect-retry-period=\"3s\"", "--leader-elect-resource-lock=\"leases\"", "--controllers=\"[*,-bootstrapsigner,-tokencleaner,-ttl]\"", "--cluster-signing-duration=\"720h0m0s\"", "--secure-port=\"10257\"", "--cert-dir=\"/var/run/kubernetes\"", "--root-ca-file=\"/var/lib/microshift/certs/ca-bundle/service-account-token-ca.crt\"", "--service-account-private-key-file=\"/var/lib/microshift/resources/kube-apiserver/secrets/service-account-key/service-account.key\"", "--cluster-signing-cert-file=\"/var/lib/microshift/certs/kubelet-csr-signer-signer/csr-signer/ca.crt\"", "--cluster-signing-key-file=\"/var/lib/microshift/certs/kubelet-csr-signer-signer/csr-signer/ca.key\"", "--kube-api-qps=\"150\"", "--kube-api-burst=\"300\""}
+		for _, kcmFlag := range kcmFlagDetails {
+			o.Expect(strings.Contains(kcmFlags, kcmFlag)).To(o.BeTrue())
+		}
+
+	})
+
+})
