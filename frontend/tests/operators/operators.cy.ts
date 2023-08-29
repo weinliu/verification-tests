@@ -21,7 +21,7 @@ describe('Operators related features', () => {
     cy.visit(`/k8s/ns/test-ocp40457/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
     operatorHubPage.checkOperatorStatus('etcd', 'Succeed');
     operatorHubPage.checkOperatorStatus('Argo CD', 'Succeed');
-    operatorHubPage.removeOperator('Argo CD', 'test-ocp40457');
+    operatorHubPage.removeOperator('Argo CD');
     operatorHubPage.installOperator('cockroachdb', 'community-operators', 'test-ocp40457');
     cy.visit(`/k8s/ns/test-ocp40457/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
     operatorHubPage.checkOperatorStatus('CockroachDB Helm Operator', 'Succeed');
