@@ -757,6 +757,7 @@ func waitResourceSpecifiedEventsOccurred(oc *exutil.CLI, namespace string, resou
 				return false
 			}
 		}
+		debugLogf("The events of %s are %s", resourceName, Info)
 		return true
 	}, 60*time.Second, 10*time.Second).Should(o.BeTrue())
 }

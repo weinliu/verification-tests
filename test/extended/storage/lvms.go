@@ -695,6 +695,90 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			return isSpecifiedResourceExist(oc, "sc/"+storageClassName, "")
 		}, 30*time.Second, 5*time.Second).Should(o.BeTrue())
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-66322-[LVMS] Show status column for lvmCluster and show warning event for 'Not Enough Storage capacity' directly from PVC
+	g.It("NonHyperShiftHOST-Author:rdeore-High-66322-[LVMS] Show status column for lvmCluster and show warning event for 'Not Enough Storage capacity' directly from PVC", func() {
+		// Set the resource template for the scenario
+		var (
+			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate      = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			volumeGroup      = "vg1"
+			storageClassName = "lvms-" + volumeGroup
+			thinPoolName     = "thin-pool-1"
+		)
+
+		exutil.By("Check lvmCluster status is shown in 'oc get' output")
+		lvmClusterStatus, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("lvmcluster", "-n", "openshift-storage").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(lvmClusterStatus).To(o.ContainSubstring("Ready"))
+
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject()
+
+		// Set the resource definitions
+		pvcCapacity := strconv.FormatInt(int64(getOverProvisionLimitByVolumeGroup(oc, volumeGroup, thinPoolName))+getRandomNum(10, 20), 10) + "Gi"
+		e2e.Logf("PVC capacity in Gi: %s", pvcCapacity)
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvcCapacity))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		exutil.By("Create a pvc with the pre-defined lvms csi storageclass")
+		pvc.scname = storageClassName
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("Create pod with the created pvc and check status is Pending")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.checkStatusConsistently(oc, "Pending", 30)
+
+		exutil.By("Check warning event is generated for a pvc resource")
+		waitResourceSpecifiedEventsOccurred(oc, pvc.namespace, pvc.name, "NotEnoughCapacity", "Requested storage ("+pvc.capacity+") is greater than available capacity on any node")
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-66764-[LVMS] Show warning event for 'Removed Claim Reference' directly from PV
+	g.It("NonHyperShiftHOST-Author:rdeore-High-66764-[LVMS] Show warning event for 'Removed Claim Reference' directly from PV", func() {
+		// Set the resource template for the scenario
+		var (
+			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate      = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			volumeGroup      = "vg1"
+			storageClassName = "lvms-" + volumeGroup
+		)
+
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject()
+
+		// Set the resource definitions
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		exutil.By("Create a pvc with the pre-defined lvms csi storageclass")
+		pvc.scname = storageClassName
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("Create pod with the pvc and wait for pod to be ready")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		exutil.By("Remove claim reference from pv bound to pvc")
+		pvName := pvc.getVolumeName(oc)
+		pvPatch := `{"spec":{"claimRef": null}}`
+		patchResourceAsAdmin(oc, "", "pv/"+pvName, pvPatch, "merge")
+		defer deleteSpecifiedResource(oc.AsAdmin(), "logicalvolume", pvName, "")
+		defer deleteSpecifiedResource(oc.AsAdmin(), "pv", pvName, "")
+
+		exutil.By("Check warning event is generated for a pv resource")
+		waitResourceSpecifiedEventsOccurred(oc, "default", pvName, "ClaimReferenceRemoved",
+			"Claim reference has been removed. This PV is no longer dynamically managed by LVM Storage and will need to be cleaned up manually")
+
+		exutil.By("Delete Pod and Pvc to clean-up the pv automatically by lvms operator")
+		deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
+		deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
+	})
 })
 
 func checkVolumeBiggerThanDisk(oc *exutil.CLI, pvcName string, pvcNamespace string, thinPoolSize int) {
@@ -732,8 +816,8 @@ func getLvmClusterState(oc *exutil.CLI, namespace string, lvmClusterName string)
 }
 
 func getThinPoolSizeByVolumeGroup(oc *exutil.CLI, volumeGroup string, thinPoolName string) int {
-	cmd := "lvs --units G 2> /dev/null | grep " + volumeGroup + " | awk '{if ($1 == \"" + thinPoolName + "\") print $4;}'"
-	nodeName := getAllNodesInfo(oc)[0].name
+	cmd := "lvs --units g 2> /dev/null | grep " + volumeGroup + " | awk '{if ($1 == \"" + thinPoolName + "\") print $4;}'"
+	nodeName := getWorkersList(oc)[0]
 	output, err := execCommandInSpecificNode(oc, nodeName, cmd)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	regexForNumbersOnly := regexp.MustCompile("[0-9.]+")
@@ -748,10 +832,13 @@ func getThinPoolSizeByVolumeGroup(oc *exutil.CLI, volumeGroup string, thinPoolNa
 func getOverProvisionRatioByVolumeGroup(oc *exutil.CLI, volumeGroup string) int {
 	lvmCluster, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	overProvisionRatio := gjson.Get(lvmCluster, "items.#(metadata.name=test-lvmcluster).spec.storage.deviceClasses.#(name="+volumeGroup+").thinPoolConfig.overprovisionRatio")
-	o.Expect(overProvisionRatio).NotTo(o.BeEmpty())
-	e2e.Logf("Over-Provision Ratio: %s", overProvisionRatio.String())
-	opRatio, err := strconv.Atoi(strings.TrimSpace(overProvisionRatio.String()))
+	lvmClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	overProvisionRatio := gjson.Get(lvmCluster, "items.#(metadata.name="+lvmClusterName+").spec.storage.deviceClasses.#(name="+volumeGroup+").thinPoolConfig.overprovisionRatio")
+	overProvisionRatioStr := overProvisionRatio.String()
+	o.Expect(overProvisionRatioStr).NotTo(o.BeEmpty())
+	e2e.Logf("Over-Provision Ratio: %s", overProvisionRatioStr)
+	opRatio, err := strconv.Atoi(strings.TrimSpace(overProvisionRatioStr))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return opRatio
 }
