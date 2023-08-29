@@ -473,6 +473,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(strings.Contains(output, "Shutting down controller")).NotTo(o.BeTrue())
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Low-67008-node-exporter: disable btrfs collector", func() {
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("should not see btrfs collector related metrics")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="btrfs"}'`, token, "\"result\":[]", uwmLoadTime)
+
+		g.By("check btrfs collector is disabled by default")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("no-collector.btrfs"))
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
