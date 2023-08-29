@@ -94,6 +94,102 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "59376"|./bin/extended-platform-tests run --timeout 10m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Medium-59376-Configure resources on the hive deployment pods [Disruptive]", func() {
+		exutil.By("Check the default spec.resources.requests.memory value of hive controller pod")
+		hiveControllersPod := getHivecontrollersPod(oc, HiveNamespace)
+		e2e.Logf("old hivecontrollers Pod is " + hiveControllersPod)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "512Mi", ok, DefaultTimeout, []string{"pods", hiveControllersPod, "-o=jsonpath={.spec.containers[0].resources.requests.memory}", "-n", HiveNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "50m", ok, DefaultTimeout, []string{"pods", hiveControllersPod, "-o=jsonpath={.spec.containers[0].resources.requests.cpu}", "-n", HiveNamespace}).check(oc)
+
+		exutil.By("Edit hiveconfig, add deploymentConfig sections to HiveConfig's spec")
+		patch := `
+spec:
+  deploymentConfig:
+  - deploymentName: hive-controllers
+    resources:
+      requests:
+        cpu: 50m
+        memory: 1024Mi`
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/deploymentConfig"}]`).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Hive controller pod will restart")
+		var newHiveControllersPod string
+		checkNewcontrollersPod := func() bool {
+			newHiveControllersPod = getHivecontrollersPod(oc, HiveNamespace)
+			return strings.Compare(hiveControllersPod, newHiveControllersPod) != 0
+		}
+		o.Eventually(checkNewcontrollersPod).WithTimeout(120 * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+		e2e.Logf("new hivecontrollers Pod is " + newHiveControllersPod)
+
+		exutil.By("Check if the new deploymentConfig applied")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1Gi", ok, DefaultTimeout, []string{"pods", newHiveControllersPod, "-o=jsonpath={.spec.containers[0].resources.requests.memory}", "-n", HiveNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "50m", ok, DefaultTimeout, []string{"pods", newHiveControllersPod, "-o=jsonpath={.spec.containers[0].resources.requests.cpu}", "-n", HiveNamespace}).check(oc)
+
+		exutil.By("Configure deploymentConfig sections with empty resources.")
+		patch = `
+spec:
+  deploymentConfig:
+  - deploymentName: hive-controllers
+  - deploymentName: hive-clustersync
+  - deploymentName: hiveadmission`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify hive-clustersync and hiveadmission pods, using the same method as hive-controllers")
+		hiveAdmissionPod := getHiveadmissionPod(oc, HiveNamespace)
+		e2e.Logf("old hiveadmission Pod is " + hiveAdmissionPod)
+		patch = `
+spec:
+  deploymentConfig:
+  - deploymentName: hive-controllers
+    resources:
+      requests:
+        cpu: 50m
+        memory: 1024Mi
+  - deploymentName: hive-clustersync
+    resources:
+      requests:
+        cpu: 30m
+        memory: 600Mi
+  - deploymentName: hiveadmission
+    resources:
+      requests:
+        cpu: 50m
+        memory: 1024Mi`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		hiveClustersyncPod := "hive-clustersync-0"
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "600Mi", ok, DefaultTimeout, []string{"pods", hiveClustersyncPod, "-o=jsonpath={.spec.containers[0].resources.requests.memory}", "-n", HiveNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "30m", ok, DefaultTimeout, []string{"pods", hiveClustersyncPod, "-o=jsonpath={.spec.containers[0].resources.requests.cpu}", "-n", HiveNamespace}).check(oc)
+
+		var newHiveAdmissionPod string
+		checkNewadmissionPod := func() bool {
+			newHiveAdmissionPod = getHiveadmissionPod(oc, HiveNamespace)
+			return strings.Compare(hiveAdmissionPod, newHiveAdmissionPod) != 0
+		}
+		o.Eventually(checkNewadmissionPod).WithTimeout(120 * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+		e2e.Logf("new hiveadmission Pod is " + newHiveAdmissionPod)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1Gi", ok, DefaultTimeout, []string{"pods", newHiveAdmissionPod, "-o=jsonpath={.spec.containers[0].resources.requests.memory}", "-n", HiveNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "50m", ok, DefaultTimeout, []string{"pods", newHiveAdmissionPod, "-o=jsonpath={.spec.containers[0].resources.requests.cpu}", "-n", HiveNamespace}).check(oc)
+
+		exutil.By("Edit hiveconfig, add deploymentConfig sections to HiveConfig's spec with a bogus deploymentName, hiveconfig should not edit successfully and bounce immediately on schema validation")
+		patch = `
+spec:
+  deploymentConfig:
+  - deploymentName: hive
+    resources:
+      requests:
+        cpu: 50m
+        memory: 1024Mi`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).To(o.HaveOccurred())
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41809"|./bin/extended-platform-tests run --timeout 20m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-High-41809-Formalize ClusterInstall Deletion Process [Disruptive]", func() {
 		testCaseID := "41809"
