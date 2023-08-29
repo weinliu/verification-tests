@@ -79,7 +79,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			o.Expect(errKas).NotTo(o.HaveOccurred())
 			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", guestClusterNS, 180)
 			o.Expect(errOas).NotTo(o.HaveOccurred())
-			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 180)
+			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 120)
 			o.Expect(errOauth).NotTo(o.HaveOccurred())
 			e2e.Logf("#### Check cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.")
 			errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, guestClusterNS)
@@ -113,7 +113,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			o.Expect(errKas).NotTo(o.HaveOccurred())
 			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", guestClusterNS, 180)
 			o.Expect(errOas).NotTo(o.HaveOccurred())
-			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 180)
+			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 120)
 			o.Expect(errOauth).NotTo(o.HaveOccurred())
 
 			newVer, errNewVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
