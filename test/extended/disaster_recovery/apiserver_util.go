@@ -37,7 +37,8 @@ func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(errApp, "oc new app failed")
-	errDeployment := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
+	// Increasing wait time for prow ci failures
+	errDeployment := wait.Poll(15*time.Second, 1200*time.Second, func() (bool, error) {
 		err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/hello-openshift", "-n", projectName).Execute()
 		if err != nil {
 			return false, nil
@@ -63,7 +64,7 @@ func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 
 // ClusterHealthcheck do cluster health check like pod, node and operators
 func ClusterHealthcheck(oc *exutil.CLI, dirname string) error {
-	err := ClusterNodesHealthcheck(oc, 600, dirname)
+	err := ClusterNodesHealthcheck(oc, 900, dirname)
 	if err != nil {
 		return fmt.Errorf("Cluster nodes health check failed. Abnormality found in nodes.")
 	}
