@@ -653,7 +653,7 @@ func execCommandInNetworkingPod(oc *exutil.CLI, command string) (string, error) 
 			e2e.Logf("Cannot get onv-kubernetes pods, errors: %v", err)
 			return "", err
 		}
-		cmd = []string{"-n", "openshift-ovn-kubernetes", "-c", "ovnkube-node", podName, "--", "/bin/sh", "-c", command}
+		cmd = []string{"-n", "openshift-ovn-kubernetes", "-c", "ovnkube-controller", podName, "--", "/bin/sh", "-c", command}
 	} else if strings.Contains(networkType, "sdn") {
 		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-sdn", "-l", "app=sdn", "-o=jsonpath={.items[0].metadata.name}").Output()
 		if err != nil {
