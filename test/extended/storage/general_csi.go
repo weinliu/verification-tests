@@ -3855,7 +3855,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-50398 - [CSI-Driver] [Daemonset] [Filesystem default] could provide RWX access mode volume
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:ropatil-High-50398-[CSI-Driver] [Daemonset] [Filesystem default] could provide RWX access mode volume", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"efs.csi.aws.com", "csi.vsphere.vmware.com"}
+		scenarioSupportProvisioners := []string{"efs.csi.aws.com", "csi.vsphere.vmware.com", "file.csi.azure.com", "filestore.csi.storage.gke.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
 
 		// Set the resource template for the scenario
@@ -3888,12 +3888,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner = range supportProvisioners {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
-			// Get the present scName and check it is installed or no
+			// Get the present scName
 			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
-			// This condition added only for EFS platform as per earlier merged codes
-			if provisioner == "efs.csi.aws.com" {
-				checkStorageclassExists(oc, scName)
-			}
 
 			// Set the resource definition for the scenario
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
