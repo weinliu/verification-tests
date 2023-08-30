@@ -264,8 +264,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-45685-Metrics for Metrics for egressIP. [Disruptive]", func() {
 		var (
-			ovnnamespace        = "openshift-ovn-kubernetes"
-			ovncmName           = "ovn-kubernetes-master"
+			ovncmName           = "kube-rbac-proxy"
 			sdnnamespace        = "openshift-sdn"
 			sdncmName           = "openshift-network-controller"
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -283,14 +282,20 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			oc.SetupProject()
 			ns := oc.Namespace()
 
-			exutil.By("get the metrics of ovnkube_master_num_egress_ips before egress_ips configurations")
-			leaderNodeIP := getLeaderInfo(oc, ovnnamespace, ovncmName, networkType)
-			prometheusURL := "https://" + leaderNodeIP + ":9102/metrics"
-			output := getOVNMetrics(oc, prometheusURL)
-			metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep ovnkube_master_num_egress_ips | awk 'NR==3{print $2}'").Output()
-			metricValue := strings.TrimSpace(string(metricOutput))
-			e2e.Logf("The output of the ovnkube_master_num_egress_ips is : %v", metricValue)
-			o.Expect(metricValue).To(o.ContainSubstring("0"))
+			podName := getOVNKMasterPod(oc)
+			metricName := "ovnkube_clustermanager_num_egress_ips"
+			prometheusURL := "localhost:29106/metrics"
+
+			exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules before configuration")
+			metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+				metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
+				if metricValue == "0" {
+					return true, nil
+				}
+				e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
 
 			exutil.By("Label EgressIP node")
 			var EgressNodeLabel = "k8s.ovn.org/egress-assignable"
@@ -299,13 +304,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				e2e.Logf("Unexpected error occurred: %v", err)
 			}
 			exutil.By("Apply EgressLabel Key on one node.")
-			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel, "true")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel)
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel, "true")
 
 			exutil.By("Apply label to namespace")
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name-").Output()
 			_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name=test").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name-").Output()
 
 			exutil.By("Create an egressip object")
 			sub1, _ := getDefaultSubnet(oc)
@@ -316,15 +321,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				egressIP1: ips[0],
 				egressIP2: ips[1],
 			}
-			egressip1.createEgressIPObject1(oc)
 			defer egressip1.deleteEgressIPObject1(oc)
+			egressip1.createEgressIPObject1(oc)
 
-			exutil.By("get the metrics of ovnkube_master_num_egress_ips after egress_ips configurations")
-			output1 := getOVNMetrics(oc, prometheusURL)
-			metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep ovnkube_master_num_egress_ips | awk 'NR==3{print $2}'").Output()
-			metricValue1 := strings.TrimSpace(string(metricOutput1))
-			e2e.Logf("The output of the ovnkube_master_num_egress_ips is : %v", metricValue1)
-			o.Expect(metricValue1).To(o.ContainSubstring("1"))
+			exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules after configuration")
+			metricsOutputAfter := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+				metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
+				if metricValue == "1" {
+					return true, nil
+				}
+				e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(metricsOutputAfter, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutputAfter))
 		}
 
 		if networkType == "openshiftsdn" {
