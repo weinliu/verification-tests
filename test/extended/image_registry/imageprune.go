@@ -119,7 +119,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc.SetupProject()
 		for i := 0; i < 3; i++ {
 			bcName := getRandomString()
-			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("registry.redhat.io/rhel8/httpd-24:latest~https://github.com/openshift/httpd-ex.git", fmt.Sprintf("--name=%s", bcName), "-n", oc.Namespace()).Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("registry.redhat.io/rhel8/httpd-24:latest~https://github.com/openshift/httpd-ex.git", fmt.Sprintf("--name=%s", bcName), "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), fmt.Sprintf("%s-1", bcName), nil, nil, nil)
 			if err != nil {
