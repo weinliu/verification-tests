@@ -8,8 +8,8 @@ objects:
     metadata:
       name: cluster
     spec:
-      namespace: "${NAMESPACE}"
-      deploymentModel: "${DEPLOYMENT_MODEL}"
+      namespace: "${Namespace}"
+      deploymentModel: "${DeploymentModel}"
       agent:
         type: EBPF
         ipfix:
@@ -25,14 +25,14 @@ objects:
         ebpf:
           imagePullPolicy: IfNotPresent
           sampling: 1
-          cacheActiveTimeout: ${EBPF_CACHEACTIVETIMEOUT}
+          cacheActiveTimeout: ${EBPFCacheActiveTimeout}
           cacheMaxFlows: 100000
           interfaces: [ ]
           excludeInterfaces: ["lo"]
           logLevel: info
-          privileged: "${{EBPF_PRIVILEGED}}"
-          enablePktDrop: "${{PACKET_DROP_ENABLE}}"
-          enableDNSTracking: "${{DNS_TRACKING_ENABLE}}"
+          privileged: "${{EBPFPrivileged}}"
+          enablePktDrop: "${{PacketDropEnable}}"
+          enableDNSTracking: "${{DNSTrackingEnable}}"
           resources:
             requests:
               memory: 50Mi
@@ -49,7 +49,7 @@ objects:
           server:
             port: 9102
             tls:
-              type: "${METRIC_SERVER_TLS_TYPE}"
+              type: "${MetricServerTLSType}"
           ignoreTags:
             - egress
             - packets
@@ -65,60 +65,60 @@ objects:
         kafkaConsumerAutoscaler: null
         kafkaConsumerQueueCapacity: 1000
         kafkaConsumerBatchSize: 10485760
-        logTypes: "${LOG_TYPE}"
+        logTypes: "${LogType}"
         conversationTerminatingTimeout: 5s
         conversationHeartbeatInterval: 5s
         conversationEndTimeout: 20s
       kafka:
-        address: "${KAFKA_ADDRESS}"
-        topic: "${KAFKA_TOPIC}"
+        address: "${KafkaAddress}"
+        topic: "${KafkaTopic}"
         tls:
-          enable: "${{KAFKA_TLS_ENABLE}}"
+          enable: "${{KafkaTLSEnable}}"
           caCert:
             type: secret
-            name: "${KAFKA_CLUSTER_NAME}-cluster-ca-cert"
+            name: "${KafkaClusterName}-cluster-ca-cert"
             certFile: ca.crt
-            namespace: "${KAFKA_NAMESPACE}"
+            namespace: "${KafkaNamespace}"
           userCert:
             type: secret
-            name: "${KAFKA_USER}"
+            name: "${KafkaUser}"
             certFile: user.crt
             certKey: user.key
-            namespace: "${KAFKA_NAMESPACE}"
+            namespace: "${KafkaNamespace}"
       loki:
-        enable: "${{LOKI_ENABLE}}"
+        enable: "${{LokiEnable}}"
         authToken: FORWARD
-        url: "${LOKI_URL}"
-        statusUrl: "${LOKI_STATUS_URL}"
+        url: "${LokiURL}"
+        statusUrl: "${LokiStatusURL}"
         tls:
-          enable: "${{LOKI_TLS_ENABLE}}"
+          enable: true
           caCert:
             type: configmap
-            name: "${LOKI_TLS_CERT_NAME}"
+            name: "${LokiTLSCertName}"
             certFile: service-ca.crt
-            namespace: "${LOKI_NAMESPACE}"
+            namespace: "${LokiNamespace}"
           insecureSkipVerify: false
         statusTls:
-          enable: "${{LOKI_STATUS_TLS_ENABLE}}"
+          enable: "${{LokiStatusTLSEnable}}"
           caCert:
             certFile: service-ca.crt
-            name: "${LOKI_STATUS_TLS_CERT_NAME}"
+            name: "${LokiStatusTLSCertName}"
             type: configmap
-            namespace: "${LOKI_NAMESPACE}"
+            namespace: "${LokiNamespace}"
           insecureSkipVerify: false
           userCert:
             certFile: tls.crt
             certKey: tls.key
-            name: "${LOKI_STATUS_TLS_USER_CERT_NAME}"
+            name: "${LokiStatusTLSUserCertName}"
             type: secret
-            namespace: "${LOKI_NAMESPACE}"
+            namespace: "${LokiNamespace}"
         batchWait: 1s
         batchSize: 10485760
         minBackoff: 1s
         maxBackoff: 5s
         maxRetries: 2
       consolePlugin:
-        enable: "${{PLUGIN_ENABLE}}"
+        enable: "${{PluginEnable}}"
         register: true
         imagePullPolicy: IfNotPresent
         port: 9001
@@ -158,52 +158,50 @@ objects:
             dst_kind: 'Service'
       exporters: []
 parameters:
-  - name: NAMESPACE
+  - name: Namespace
     description: "namespace where you want flowlogsPipeline and consoleplugin pods to be deployed"
     value: "netobserv"
-  - name: DEPLOYMENT_MODEL
+  - name: DeploymentModel
     value: "DIRECT"
-  - name: EBPF_CACHEACTIVETIMEOUT
+  - name: EBPFCacheActiveTimeout
     value: 15s
-  - name: EBPF_PRIVILEGED
+  - name: EBPFPrivileged
     value: "false"
-  - name: PACKET_DROP_ENABLE
+  - name: PacketDropEnable
     value: "false"
-  - name: DNS_TRACKING_ENABLE
+  - name: DNSTrackingEnable
     value: "false"
-  - name: METRIC_SERVER_TLS_TYPE
-    value: "DISABLED"
-  - name: LOG_TYPE
+  - name: MetricServerTLSType
+    value: "AUTO"
+  - name: LogType
     value: "FLOWS"
-  - name: LOKI_ENABLE
+  - name: LokiEnable
     value: "true"
-  - name: LOKI_URL
+  - name: LokiURL
     value: "https://lokistack-gateway-http.netobserv.svc.cluster.local:8080/api/logs/v1/network/"
-  - name: LOKI_TLS_ENABLE
-    value: "false"
-  - name: LOKI_TLS_CERT_NAME
+  - name: LokiTLSCertName
     value: "lokistack-gateway-ca-bundle"
-  - name: LOKI_STATUS_URL
+  - name: LokiStatusURL
     value: ""
-  - name: LOKI_STATUS_TLS_ENABLE
+  - name: LokiStatusTLSEnable
     value: "false"
-  - name: LOKI_STATUS_TLS_CERT_NAME
+  - name: LokiStatusTLSCertName
     value: "lokistack-ca-bundle"
-  - name: LOKI_STATUS_TLS_USER_CERT_NAME
+  - name: LokiStatusTLSUserCertName
     value: "lokistack-query-frontend-http"
-  - name: "LOKI_NAMESPACE"
+  - name: LokiNamespace
     value: "netobserv"
-  - name: KAFKA_ADDRESS
+  - name: KafkaAddress
     value: "kafka-cluster-kafka-bootstrap.netobserv"
-  - name: KAFKA_TLS_ENABLE
+  - name: KafkaTLSEnable
     value: "false"
-  - name: KAFKA_CLUSTER_NAME
+  - name: KafkaClusterName
     value: "kafka-cluster"
-  - name: KAFKA_TOPIC
+  - name: KafkaTopic
     value: "network-flows"
-  - name: KAFKA_USER
+  - name: KafkaUser
     value: "flp-kafka"
-  - name: KAFKA_NAMESPACE
+  - name: KafkaNamespace
     value: "netobserv"
-  - name: PLUGIN_ENABLE
+  - name: PluginEnable
     value: "true"

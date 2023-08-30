@@ -11,6 +11,8 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // prometheusQueryResult the response of querying prometheus APIs
@@ -46,7 +48,7 @@ func getMetric(oc *exutil.CLI, query string) ([]metric, error) {
 	promRoute := "https://" + getRouteAddress(oc, "openshift-monitoring", "prometheus-k8s")
 	res, err := queryPrometheus(oc, promRoute, query, bearerToken)
 	attempts := 10
-	for len(res.Data.Result) == 0 && attempts >= 0 {
+	for len(res.Data.Result) == 0 && attempts > 0 {
 		if err != nil {
 			return []metric{}, err
 		}
@@ -97,19 +99,30 @@ func popMetricValue(metrics []metric) int {
 	return int(math.Round(value))
 }
 
+// polls any prometheus metrics
+func pollMetrics(oc *exutil.CLI, promQuery string) {
+	err := wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+		metrics, err := getMetric(oc, promQuery)
+		if err != nil {
+			return false, err
+		}
+		metricsVal := popMetricValue(metrics)
+		if metricsVal < 0 {
+			e2e.Logf("%s did not return metrics value > 0, will try again", promQuery)
+		}
+		return metricsVal > 0, nil
+	})
+
+	msg := fmt.Sprintf("%s did not return valid metrics in 300 seconds", promQuery)
+	exutil.AssertWaitPollNoErr(err, msg)
+}
+
 // verify FLP metrics
 func verifyFLPMetrics(oc *exutil.CLI) {
 	query := "sum(netobserv_ingest_flows_processed)"
-	metrics, err := getMetric(oc, query)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0), fmt.Sprintf("%s did not return metrics value > 0\n", query))
-
-	// if above metric succeeded give some time before checking netobserv_loki_sent_entries_total
-	time.Sleep(60 * time.Second)
+	pollMetrics(oc, query)
 	query = "sum(netobserv_loki_sent_entries_total)"
-	metrics, err = getMetric(oc, query)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0), fmt.Sprintf("%s did not return metrics value > 0\n", query))
+	pollMetrics(oc, query)
 }
 
 func getMetricsScheme(oc *exutil.CLI, servicemonitor string, namespace string) (string, error) {

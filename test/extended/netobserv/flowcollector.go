@@ -1,8 +1,9 @@
 package netobserv
 
 import (
+	"fmt"
 	filePath "path/filepath"
-	"strconv"
+	"reflect"
 	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -17,28 +18,26 @@ type Flowcollector struct {
 	ProcessorKind             string
 	LogType                   string
 	DeploymentModel           string
-	LokiEnable                bool
+	LokiEnable                string
 	LokiURL                   string
-	LokiAuthToken             string
-	LokiTLSEnable             bool
 	LokiTLSCertName           string
-	LokiStatusTLSEnable       bool
+	LokiStatusTLSEnable       string
 	LokiStatusURL             string
 	LokiStatusTLSCertName     string
 	LokiStatusTLSUserCertName string
 	LokiNamespace             string
 	KafkaAddress              string
-	KafkaTLSEnable            bool
+	KafkaTLSEnable            string
 	KafkaClusterName          string
 	KafkaTopic                string
 	KafkaUser                 string
 	KafkaNamespace            string
 	MetricServerTLSType       string
-	EbpfCacheActiveTimeout    string
-	EbpfPrivileged            bool
-	PacketDropEnable          bool
-	DNSTrackingEnable         bool
-	PluginEnable              bool
+	EBPFCacheActiveTimeout    string
+	EBPFPrivileged            string
+	PacketDropEnable          string
+	DNStrackingEnable         string
+	PluginEnable              string
 	Template                  string
 }
 
@@ -101,105 +100,22 @@ type Lokilabels struct {
 }
 
 // create flowcollector CRD for a given manifest file
-func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
-	parameters := []string{"--ignore-unknown-parameters=true", "-f", flow.Template, "-p", "NAMESPACE=" + flow.Namespace}
+func (flow Flowcollector) createFlowcollector(oc *exutil.CLI) {
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", flow.Template, "-p"}
 
 	flpSA := "flowlogs-pipeline"
 	if flow.DeploymentModel == "KAFKA" {
-		parameters = append(parameters, "DEPLOYMENT_MODEL="+flow.DeploymentModel)
 		flpSA = "flowlogs-pipeline-transformer"
 	}
 
-	if flow.ProcessorKind != "" {
-		parameters = append(parameters, "KIND="+flow.ProcessorKind)
-	}
+	flowCollector := reflect.ValueOf(&flow).Elem()
 
-	if flow.MetricServerTLSType != "" {
-		parameters = append(parameters, "METRIC_SERVER_TLS_TYPE="+flow.MetricServerTLSType)
-	}
-
-	if !flow.LokiEnable {
-		parameters = append(parameters, "LOKI_ENABLE="+strconv.FormatBool(flow.LokiEnable))
-	}
-
-	if flow.LokiEnable && flow.LokiURL != "" {
-		parameters = append(parameters, "LOKI_URL="+flow.LokiURL)
-	}
-
-	if flow.LokiEnable && flow.LokiTLSEnable {
-		parameters = append(parameters, "LOKI_TLS_ENABLE="+strconv.FormatBool(flow.LokiTLSEnable))
-	}
-
-	if flow.LokiEnable && flow.LokiTLSCertName != "" {
-		parameters = append(parameters, "LOKI_TLS_CERT_NAME="+flow.LokiTLSCertName)
-	}
-
-	if flow.LokiEnable && flow.LokiStatusURL != "" {
-		parameters = append(parameters, "LOKI_STATUS_URL="+flow.LokiStatusURL)
-	}
-
-	if flow.LokiEnable && flow.LokiStatusTLSEnable {
-		parameters = append(parameters, "LOKI_STATUS_TLS_ENABLE="+strconv.FormatBool(flow.LokiStatusTLSEnable))
-	}
-
-	if flow.LokiEnable && flow.LokiStatusTLSCertName != "" {
-		parameters = append(parameters, "LOKI_STATUS_TLS_USER_CERT_NAME="+flow.LokiStatusTLSCertName)
-	}
-
-	if flow.LokiEnable && flow.LokiStatusTLSUserCertName != "" {
-		parameters = append(parameters, "LOKI_STATUS_TLS_USER_CERT_NAME="+flow.LokiStatusTLSUserCertName)
-	}
-
-	if flow.LokiEnable && flow.LokiNamespace != "" {
-		parameters = append(parameters, "LOKI_NAMESPACE="+flow.LokiNamespace)
-	}
-
-	if flow.LogType != "" {
-		parameters = append(parameters, "LOG_TYPE="+flow.LogType)
-	}
-
-	if flow.KafkaAddress != "" {
-		parameters = append(parameters, "KAFKA_ADDRESS="+flow.KafkaAddress)
-	}
-
-	if flow.KafkaTLSEnable {
-		parameters = append(parameters, "KAFKA_TLS_ENABLE="+strconv.FormatBool(flow.KafkaTLSEnable))
-	}
-
-	if flow.KafkaClusterName != "" {
-		parameters = append(parameters, "KAFKA_CLUSTER_NAME="+flow.KafkaClusterName)
-	}
-
-	if flow.KafkaTopic != "" {
-		parameters = append(parameters, "KAFKA_TOPIC="+flow.KafkaTopic)
-	}
-
-	if flow.KafkaUser != "" {
-		parameters = append(parameters, "KAFKA_USER="+flow.KafkaUser)
-	}
-
-	if flow.KafkaNamespace != "" {
-		parameters = append(parameters, "KAFKA_NAMESPACE="+flow.KafkaNamespace)
-	}
-
-	if flow.EbpfCacheActiveTimeout != "" {
-		parameters = append(parameters, "EBPF_CACHEACTIVETIMEOUT="+flow.EbpfCacheActiveTimeout)
-	}
-
-	if !flow.PluginEnable {
-		parameters = append(parameters, "PLUGIN_ENABLE="+strconv.FormatBool(flow.PluginEnable))
-	}
-
-	if flow.EbpfPrivileged {
-		parameters = append(parameters, "EBPF_PRIVILEGED="+strconv.FormatBool(flow.EbpfPrivileged))
-	}
-
-	if flow.PacketDropEnable {
-		parameters = append(parameters, "PACKET_DROP_ENABLE="+strconv.FormatBool(flow.PacketDropEnable))
-	}
-
-	if flow.DNSTrackingEnable {
-		parameters = append(parameters, "DNS_TRACKING_ENABLE="+strconv.FormatBool(flow.DNSTrackingEnable))
+	for i := 0; i < flowCollector.NumField(); i++ {
+		if flowCollector.Field(i).Interface() != "" {
+			if flowCollector.Type().Field(i).Name != "Namespace" || flowCollector.Type().Field(i).Name != "Template" {
+				parameters = append(parameters, fmt.Sprintf("%s=%s", flowCollector.Type().Field(i).Name, flowCollector.Field(i).Interface()))
+			}
+		}
 	}
 
 	exutil.ApplyNsResourceFromTemplate(oc, flow.Namespace, parameters...)
@@ -212,7 +128,7 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		Template:           forwardCRBPath,
 		ServiceAccountName: flpSA,
 	}
-	if flow.LokiEnable && flow.PluginEnable {
+	if flow.LokiEnable != "false" && flow.PluginEnable != "false" {
 		forwardCRB.deployForwardCRB(oc)
 	}
 }

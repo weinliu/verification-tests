@@ -131,10 +131,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		err = ls.deployLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
-		ls.Route = "https://" + getRouteAddress(oc, namespace, ls.Name)
+		ls.Route = "https://" + getRouteAddress(oc, ls.Namespace, ls.Name)
 
 		// loki URL
 		lokiURL = fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, ls.Namespace)
+
 	})
 
 	g.AfterEach(func() {
@@ -153,16 +154,16 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 					namespace = oc.Namespace()
 				)
 
+				g.By("Deploy flowcollector")
 				flow := Flowcollector{
-					Namespace:       namespace,
-					Template:        flowFixturePath,
-					LokiEnable:      true,
-					LokiURL:         lokiURL,
-					LokiTLSEnable:   true,
-					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-					LokiNamespace:   namespace,
-					PluginEnable:    true,
+					Namespace:           namespace,
+					Template:            flowFixturePath,
+					LokiURL:             lokiURL,
+					LokiNamespace:       namespace,
+					LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					MetricServerTLSType: "DISABLED",
 				}
+
 				defer flow.deleteFlowcollector(oc)
 				flow.createFlowcollector(oc)
 				flow.waitForFlowcollectorReady(oc)
@@ -184,9 +185,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				tlsScheme = strings.Trim(tlsScheme, "'")
 				o.Expect(tlsScheme).To(o.Equal("http"))
 
-				g.By("Verify prometheus is able to scrape FLP metrics")
-				// Sleep before making any metrics request
+				g.By("Wait for a min before scraping metrics")
 				time.Sleep(30 * time.Second)
+
+				g.By("Verify prometheus is able to scrape FLP metrics")
 				verifyFLPMetrics(oc)
 			})
 		})
@@ -198,17 +200,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 					flpPromSA = "flowlogs-pipeline-prom"
 					namespace = oc.Namespace()
 				)
+
 				flow := Flowcollector{
-					Namespace:           namespace,
-					Template:            flowFixturePath,
-					LokiEnable:          true,
-					LokiURL:             lokiURL,
-					LokiTLSEnable:       true,
-					MetricServerTLSType: "AUTO",
-					LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-					LokiNamespace:       namespace,
-					PluginEnable:        true,
+					Namespace:       namespace,
+					Template:        flowFixturePath,
+					LokiURL:         lokiURL,
+					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					LokiNamespace:   namespace,
 				}
+
 				defer flow.deleteFlowcollector(oc)
 				flow.createFlowcollector(oc)
 				g.By("Ensure flowcollector pods are ready")
@@ -225,8 +225,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				expectedServerName := fmt.Sprintf("%s.%s.svc", flpPromSA, namespace)
 				o.Expect(serverName).To(o.Equal(expectedServerName))
 
-				// Sleep before making any metrics request
+				g.By("Wait for a min before scraping metrics")
 				time.Sleep(30 * time.Second)
+
 				g.By("Verify prometheus is able to scrape FLP and Console metrics")
 				verifyFLPMetrics(oc)
 				query := fmt.Sprintf("process_start_time_seconds{namespace=\"%s\", job=\"netobserv-plugin-metrics\"}", namespace)
@@ -256,14 +257,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
 			Namespace:       namespace,
-			DeploymentModel: "DIRECT",
 			Template:        flowFixturePath,
-			LokiEnable:      true,
 			LokiURL:         lokiURL,
-			LokiTLSEnable:   true,
 			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 			LokiNamespace:   namespace,
-			PluginEnable:    true,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -271,9 +268,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Ensure flows are observed and all pods are running")
 		flow.waitForFlowcollectorReady(oc)
-
-		g.By("Wait for 2 mins before logs gets collected and written to loki")
-		time.Sleep(120 * time.Second)
 
 		g.By("get flowlogs from loki")
 		token := getSAToken(oc, "netobserv-plugin", namespace)
@@ -284,6 +278,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			SrcK8S_OwnerName: "nginx-service",
 			FlowDirection:    "0",
 		}
+
 		g.By("Escalate SA to cluster admin")
 		defer func() {
 			g.By("Remove cluster role")
@@ -292,6 +287,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}()
 		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for 2 mins before logs gets collected and written to loki")
+		time.Sleep(120 * time.Second)
 
 		flowRecords, err := lokilabels.getLokiFlowLogs(oc, token, ls.Route)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -353,15 +351,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Deploy FlowCollector with EndConversations LogType")
 		flow := Flowcollector{
 			Namespace:       namespace,
-			DeploymentModel: "DIRECT",
 			Template:        flowFixturePath,
 			LogType:         "ENDED_CONVERSATIONS",
-			LokiEnable:      true,
 			LokiURL:         lokiURL,
-			LokiTLSEnable:   true,
 			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 			LokiNamespace:   namespace,
-			PluginEnable:    true,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -438,6 +432,224 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		verifyConversationRecordTime(endConnectionRecords)
 	})
 
+	g.It("NonPreRelease-Longduration-Author:memodi-High-63839-Verify-multi-tenancy [Disruptive][Slow]", func() {
+		namespace := oc.Namespace()
+		users, usersHTpassFile, htPassSecret := getNewUser(oc, 2)
+		defer userCleanup(oc, users, usersHTpassFile, htPassSecret)
+
+		g.By("Creating client server template and template CRBs for testusers")
+		// create templates for testuser to be used later
+		testUserstemplate := filePath.Join(baseDir, "testuser-client-server_template.yaml")
+		stdout, stderr, err := oc.AsAdmin().Run("apply").Args("-f", testUserstemplate).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stderr).To(o.BeEmpty())
+		templateResource := strings.Split(stdout, " ")[0]
+		templateName := strings.Split(templateResource, "/")[1]
+		defer removeTemplatePermissions(oc, users[0].Username)
+		addTemplatePermissions(oc, users[0].Username)
+
+		g.By("Deploy FlowCollector")
+		flow := Flowcollector{
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+		flow.waitForFlowcollectorReady(oc)
+
+		g.By("Deploying test server and client pods")
+		template := filePath.Join(baseDir, "test-client-server_template.yaml")
+		testTemplate := TestClientServerTemplate{
+			ServerNS:   "test-server-63839",
+			ClientNS:   "test-client-63839",
+			ObjectSize: "100K",
+			Template:   template,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
+		err = testTemplate.createTestClientServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// save original context
+		origContxt, contxtErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("current-context").Output()
+		o.Expect(contxtErr).NotTo(o.HaveOccurred())
+		e2e.Logf("orginal context is %v", origContxt)
+		defer removeUserAsReader(oc, users[0].Username)
+		addUserAsReader(oc, users[0].Username)
+		origUser := oc.Username()
+
+		e2e.Logf("current user is %s", origUser)
+		defer oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", origContxt).Execute()
+		defer oc.ChangeUser(origUser)
+		oc.ChangeUser(users[0].Username)
+
+		curUser := oc.Username()
+		e2e.Logf("current user is %s", curUser)
+
+		o.Expect(err).NotTo(o.HaveOccurred())
+		user0Contxt, contxtErr := oc.WithoutNamespace().Run("config").Args("current-context").Output()
+		o.Expect(contxtErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("user0 context is %v", user0Contxt)
+
+		g.By("Deploying test server and client pods as user0")
+		var (
+			testUserServerNS = fmt.Sprintf("%s-server", users[0].Username)
+			testUserClientNS = fmt.Sprintf("%s-client", users[0].Username)
+		)
+
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testUserClientNS)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testUserServerNS)
+		configFile := exutil.ProcessTemplate(oc, "--ignore-unknown-parameters=true", templateName, "-p", "SERVER_NS="+testUserServerNS, "-p", "CLIENT_NS="+testUserClientNS)
+		err = oc.WithoutNamespace().Run("create").Args("-f", configFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// only required to getFlowLogs
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: testUserServerNS,
+			DstK8S_Namespace: testUserClientNS,
+			SrcK8S_OwnerName: "nginx-service",
+			FlowDirection:    "0",
+		}
+
+		user0token, err := oc.WithoutNamespace().Run("whoami").Args("-t").Output()
+		e2e.Logf("token is %s", user0token)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		g.By("get flowlogs from loki")
+		flowRecords, err := lokilabels.getLokiFlowLogs(oc, user0token, ls.Route)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords > 0")
+
+		g.By("verify no logs are fetched from an NS that user is not admin for")
+		lokilabels = Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: testTemplate.ServerNS,
+			DstK8S_Namespace: testTemplate.ClientNS,
+			SrcK8S_OwnerName: "nginx-service",
+			FlowDirection:    "0",
+		}
+		flowRecords, err = lokilabels.getLokiFlowLogs(oc, user0token, ls.Route)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).NotTo(o.BeNumerically(">", 0), "expected number of flowRecords to be equal to 0")
+	})
+
+	g.It("NonPreRelease-Author:aramesha-High-59746-NetObserv upgrade testing [Serial]", func() {
+		namespace := oc.Namespace()
+
+		g.By("Uninstall operator deployed by BeforeEach and delete operator NS")
+		NO.uninstallOperator(oc)
+		oc.DeleteSpecifiedNamespaceAsAdmin(netobservNS)
+
+		g.By("Deploy older version of netobserv operator")
+		catsrc = resource{"catsrc", "redhat-operators", "openshift-marketplace"}
+		NOSource = CatalogSourceObjects{"stable", catsrc.name, catsrc.namespace}
+
+		NO.CatalogSource = NOSource
+
+		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
+		OperatorNS.deployOperatorNamespace(oc)
+		NO.SubscribeOperator(oc)
+		// check if NO operator is deployed
+		waitForPodReadyWithLabel(oc, netobservNS, "app="+NO.OperatorName)
+		NOStatus := checkOperatorStatus(oc, netobservNS, NOPackageName)
+		o.Expect((NOStatus)).To(o.BeTrue())
+
+		// check if flowcollector API exists
+		flowcollectorAPIExists, err := isFlowCollectorAPIExists(oc)
+		o.Expect((flowcollectorAPIExists)).To(o.BeTrue())
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Deploy FlowCollector")
+		flow := Flowcollector{
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+
+		g.By("Ensure flows are observed and all pods are running")
+		exutil.AssertAllPodsToBeReady(oc, namespace)
+		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+
+		g.By("Get NetObserv and components versions")
+		NOCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[1].env[0].value}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		preUpgradeNOVersion := strings.Split(NOCSV, ".v")[1]
+		preUpgradeEBPFVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[0].env[0].value}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		preUpgradeEBPFVersion = strings.Split(preUpgradeEBPFVersion, ":")[1]
+		preUpgradeFLPVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[0].env[1].value}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		preUpgradeFLPVersion = strings.Split(preUpgradeFLPVersion, ":")[1]
+		preUpgradePluginVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[0].env[2].value}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		preUpgradePluginVersion = strings.Split(preUpgradePluginVersion, ":")[1]
+
+		g.By("Upgrade NetObserv to latest version")
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args("subscription", "netobserv-operator", "-n", netobservNS, "-p", `[{"op": "replace", "path": "/spec/source", "value": "qe-app-registry"}]`, "--type=json").Output()
+
+		g.By("Wait for a min for operator upgrade")
+		time.Sleep(60 * time.Second)
+
+		waitForPodReadyWithLabel(oc, netobservNS, "app=netobserv-operator")
+		NOStatus = checkOperatorStatus(oc, netobservNS, NOPackageName)
+		o.Expect((NOStatus)).To(o.BeTrue())
+
+		g.By("Get NetObserv operator and components versions")
+		NOCSV, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[1].env[0].value}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		postUpgradeNOVersion := strings.Split(NOCSV, ".v")[1]
+		postUpgradeEBPFVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[0].env[0].value}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		postUpgradeEBPFVersion = strings.Split(postUpgradeEBPFVersion, ":")[1]
+		postUpgradeFLPVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[0].env[1].value}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		postUpgradeFLPVersion = strings.Split(postUpgradeFLPVersion, ":")[1]
+		postUpgradePluginVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[0].env[2].value}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		postUpgradePluginVersion = strings.Split(postUpgradePluginVersion, ":")[1]
+
+		g.By("Verify versions are updated")
+		o.Expect(preUpgradeNOVersion).NotTo(o.Equal(postUpgradeNOVersion))
+		o.Expect(preUpgradeEBPFVersion).NotTo(o.Equal(postUpgradeEBPFVersion))
+		o.Expect(preUpgradeFLPVersion).NotTo(o.Equal(postUpgradeFLPVersion))
+		o.Expect(preUpgradePluginVersion).NotTo(o.Equal(postUpgradePluginVersion))
+
+		// verify logs
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err = removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		g.By("Get flowlogs from loki")
+		token := getSAToken(oc, "netobserv-plugin", namespace)
+		err = verifyLokilogsTime(oc, token, ls.Route)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	//Add future NetObserv + Loki test-cases here
 	g.Context("with KAFKA", func() {
 		var (
 			kafkaDir, kafkaTopicPath string
@@ -534,19 +746,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Deploy FlowCollector with KAFKA TLS")
 			flow := Flowcollector{
-				Namespace:           namespace,
-				DeploymentModel:     "KAFKA",
-				Template:            flowFixturePath,
-				MetricServerTLSType: "AUTO",
-				LokiEnable:          true,
-				LokiURL:             lokiURL,
-				LokiTLSEnable:       true,
-				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-				LokiNamespace:       namespace,
-				PluginEnable:        true,
-				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
-				KafkaTLSEnable:      true,
-				KafkaNamespace:      namespace,
+				Namespace:       namespace,
+				DeploymentModel: "KAFKA",
+				Template:        flowFixturePath,
+				LokiURL:         lokiURL,
+				LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				LokiNamespace:   namespace,
+				KafkaAddress:    fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
+				KafkaTLSEnable:  "true",
+				KafkaNamespace:  namespace,
 			}
 
 			defer flow.deleteFlowcollector(oc)
@@ -594,7 +802,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Get flowlogs from loki")
 			token := getSAToken(oc, "netobserv-plugin", namespace)
-			err = verifyLokilogsTime(oc, ls.Namespace, ls.Namespace, ls.Name, token)
+			err = verifyLokilogsTime(oc, token, ls.Route)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
 
@@ -616,26 +824,23 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Deploy FlowCollector with KAFKA TLS")
 			flow := Flowcollector{
-				Namespace:           namespace,
-				DeploymentModel:     "KAFKA",
-				Template:            flowFixturePath,
-				MetricServerTLSType: "AUTO",
-				LokiEnable:          true,
-				LokiURL:             lokiURL,
-				LokiTLSEnable:       true,
-				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-				LokiNamespace:       namespace,
-				PluginEnable:        true,
-				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
-				KafkaTLSEnable:      true,
-				KafkaNamespace:      namespace,
+				Namespace:       namespace,
+				DeploymentModel: "KAFKA",
+				Template:        flowFixturePath,
+				LokiURL:         lokiURL,
+				LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				LokiNamespace:   namespace,
+				KafkaAddress:    fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
+				KafkaTLSEnable:  "true",
+				KafkaNamespace:  namespace,
 			}
 
 			defer flow.deleteFlowcollector(oc)
 			flow.createFlowcollector(oc)
 
-			// patch flowcollector exporters value
-			patchValue := fmt.Sprintf(`[{"kafka":{"address": "` + flow.KafkaAddress + `", "tls":{"caCert":{"certFile": "ca.crt", "name": "kafka-cluster-cluster-ca-cert", "namespace": "` + namespace + `", "type": "secret"},"enable": true, "insecureSkipVerify": false, "userCert":{"certFile": "user.crt", "certKey": "user.key", "name": "` + kafkaUser.UserName + `", "namespace": "` + namespace + `", "type": "secret"}},"topic": "network-flows-export"},"type": "KAFKA"}]`)
+			// Scenario1: Verify flows are exported with KAFKA deploymentModel and with Loki enabled
+			g.By("Patch exporter to flowcollector with KAFKA deployment model")
+			patchValue := fmt.Sprintf(`[{"kafka":{"address": "` + flow.KafkaAddress + `", "tls":{"caCert":{"certFile": "ca.crt", "name": "kafka-cluster-cluster-ca-cert", "namespace": "` + flow.KafkaNamespace + `", "type": "secret"},"enable": true, "insecureSkipVerify": false, "userCert":{"certFile": "user.crt", "certKey": "user.key", "name": "` + kafkaUser.UserName + `", "namespace": "` + flow.KafkaNamespace + `", "type": "secret"}},"topic": "` + kafkaTopic2.TopicName + `"},"type": "KAFKA"}]`)
 			oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/exporters", "value": `+patchValue+`}]`, "--type=json").Output()
 			// check if patch is successful
 			flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.exporters[0].type}'").Output()
@@ -667,7 +872,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Get flowlogs from loki")
 			token := getSAToken(oc, "netobserv-plugin", namespace)
-			err = verifyLokilogsTime(oc, ls.Namespace, ls.Namespace, ls.Name, token)
+			err = verifyLokilogsTime(oc, token, ls.Route)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy KAFKA consumer pod")
@@ -694,8 +899,17 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
 
 			flow.DeploymentModel = "DIRECT"
-			flow.LokiEnable = false
+			flow.LokiEnable = "false"
 			flow.createFlowcollector(oc)
+
+			// Scenario2: Verify flows are exported with DIRECT deploymentModel and with Loki disabled
+			g.By("Patch exporter to flowcollector with DIRECT deployment model")
+			patchValue = fmt.Sprintf(`[{"kafka":{"address": "` + flow.KafkaAddress + `", "tls":{"caCert":{"certFile": "ca.crt", "name": "kafka-cluster-cluster-ca-cert", "namespace": "` + flow.KafkaNamespace + `", "type": "secret"},"enable": true, "insecureSkipVerify": false, "userCert":{"certFile": "user.crt", "certKey": "user.key", "name": "` + kafkaUser.UserName + `", "namespace": "` + flow.KafkaNamespace + `", "type": "secret"}},"topic": "` + kafkaTopic2.TopicName + `"},"type": "KAFKA"}]`)
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/exporters", "value": `+patchValue+`}]`, "--type=json").Output()
+			// check if patch is succesfull
+			flowPatch, err = oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.exporters[0].type}'").Output()
+			o.Expect(err).ToNot(o.HaveOccurred())
+			o.Expect(flowPatch).To(o.Equal(`'KAFKA'`))
 
 			g.By("Ensure all pods are running and consolePlugin pod is not deployed")
 			flow.waitForFlowcollectorReady(oc)
@@ -714,9 +928,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			checkPodDeleted(oc, namespace, "app=flowlogs-pipeline", "flowlogs-pipeline")
 			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
 
-			flow.PluginEnable = false
+			flow.PluginEnable = "false"
 			flow.createFlowcollector(oc)
 
+			// Scenario3: Verify all pods except plugin pod are present with Plugin and Loki disabled in flowcollector
 			g.By("Ensure all pods are running and consolePlugin pod is not deployed")
 			flow.waitForFlowcollectorReady(oc)
 			consolePod, err = exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
@@ -729,9 +944,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			checkPodDeleted(oc, namespace, "app=flowlogs-pipeline", "flowlogs-pipeline")
 			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
 
-			flow.LokiEnable = true
 			flow.createFlowcollector(oc)
 
+			// Scenario4: Verify all pods except plugin pod are present with only Plugin disabled in flowcollector
 			g.By("Ensure all pods are running and consolePlugin pod is not observed")
 			flow.waitForFlowcollectorReady(oc)
 			consolePod, err = exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
@@ -741,7 +956,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.It("NonPreRelease-Longduration-Author:aramesha-High-64880-Verify secrets copied for Loki and Kafka when deployed in NS other than flowcollector pods [Serial]", func() {
 			namespace := oc.Namespace()
-
 			g.By("Create a new namespace for flowcollector")
 			flowNS := "netobserv-test"
 			defer oc.DeleteSpecifiedNamespaceAsAdmin(flowNS)
@@ -749,21 +963,18 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Deploy FlowCollector with KAFKA TLS")
 			flow := Flowcollector{
-				Namespace:           flowNS,
-				DeploymentModel:     "KAFKA",
-				Template:            flowFixturePath,
-				MetricServerTLSType: "AUTO",
-				LokiEnable:          true,
-				LokiURL:             lokiURL,
-				LokiTLSEnable:       true,
-				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-				LokiNamespace:       namespace,
-				PluginEnable:        true,
-				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
-				KafkaTLSEnable:      true,
-				KafkaNamespace:      namespace,
+				Namespace:       flowNS,
+				DeploymentModel: "KAFKA",
+				Template:        flowFixturePath,
+				LokiURL:         lokiURL,
+				LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				LokiNamespace:   namespace,
+				KafkaAddress:    fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
+				KafkaTLSEnable:  "true",
+				KafkaNamespace:  namespace,
 			}
 
+			flow.Namespace = flowNS
 			defer flow.deleteFlowcollector(oc)
 			flow.createFlowcollector(oc)
 
@@ -784,125 +995,16 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			}()
 			err = addSAToAdmin(oc, "netobserv-plugin", flowNS)
 			o.Expect(err).NotTo(o.HaveOccurred())
+
 			g.By("Wait for a min before logs gets collected and written to loki")
 			time.Sleep(60 * time.Second)
 
 			g.By("Get flowlogs from loki")
 			token := getSAToken(oc, "netobserv-plugin", flowNS)
-			err = verifyLokilogsTime(oc, namespace, flowNS, ls.Name, token)
+			err = verifyLokilogsTime(oc, token, ls.Route)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
-	})
 
-	g.It("NonPreRelease-Longduration-Author:memodi-High-63839-Verify-multi-tenancy [Disruptive][Slow]", func() {
-		namespace := oc.Namespace()
-		users, usersHTpassFile, htPassSecret := getNewUser(oc, 2)
-		defer userCleanup(oc, users, usersHTpassFile, htPassSecret)
-
-		g.By("Creating client server template and template CRBs for testusers")
-		// create templates for testuser to be used later
-		testUserstemplate := filePath.Join(baseDir, "testuser-client-server_template.yaml")
-		stdout, stderr, err := oc.AsAdmin().Run("apply").Args("-f", testUserstemplate).Outputs()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(stderr).To(o.BeEmpty())
-		templateResource := strings.Split(stdout, " ")[0]
-		templateName := strings.Split(templateResource, "/")[1]
-		defer removeTemplatePermissions(oc, users[0].Username)
-		addTemplatePermissions(oc, users[0].Username)
-
-		g.By("Deploy FlowCollector")
-		flow := Flowcollector{
-			Namespace:       namespace,
-			DeploymentModel: "DIRECT",
-			Template:        flowFixturePath,
-			LokiEnable:      true,
-			LokiURL:         lokiURL,
-			LokiTLSEnable:   true,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
-			PluginEnable:    true,
-		}
-		defer flow.deleteFlowcollector(oc)
-		flow.createFlowcollector(oc)
-		flow.waitForFlowcollectorReady(oc)
-
-		g.By("Deploying test server and client pods")
-		template := filePath.Join(baseDir, "test-client-server_template.yaml")
-		testTemplate := TestClientServerTemplate{
-			ServerNS:   "test-server-63839",
-			ClientNS:   "test-client-63839",
-			ObjectSize: "100K",
-			Template:   template,
-		}
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
-		err = testTemplate.createTestClientServer(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		// save original context
-		origContxt, contxtErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("current-context").Output()
-		o.Expect(contxtErr).NotTo(o.HaveOccurred())
-		e2e.Logf("orginal context is %v", origContxt)
-		defer removeUserAsReader(oc, users[0].Username)
-		addUserAsReader(oc, users[0].Username)
-		origUser := oc.Username()
-
-		e2e.Logf("current user is %s", origUser)
-		defer oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", origContxt).Execute()
-		defer oc.ChangeUser(origUser)
-		oc.ChangeUser(users[0].Username)
-
-		curUser := oc.Username()
-		e2e.Logf("current user is %s", curUser)
-
-		o.Expect(err).NotTo(o.HaveOccurred())
-		user0Contxt, contxtErr := oc.WithoutNamespace().Run("config").Args("current-context").Output()
-		o.Expect(contxtErr).NotTo(o.HaveOccurred())
-
-		e2e.Logf("user0 context is %v", user0Contxt)
-
-		g.By("Deploying test server and client pods as user0")
-		var (
-			testUserServerNS = fmt.Sprintf("%s-server", users[0].Username)
-			testUserClientNS = fmt.Sprintf("%s-client", users[0].Username)
-		)
-
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testUserClientNS)
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testUserServerNS)
-		configFile := exutil.ProcessTemplate(oc, "--ignore-unknown-parameters=true", templateName, "-p", "SERVER_NS="+testUserServerNS, "-p", "CLIENT_NS="+testUserClientNS)
-		err = oc.WithoutNamespace().Run("create").Args("-f", configFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		// only required to getFlowLogs
-		lokilabels := Lokilabels{
-			App:              "netobserv-flowcollector",
-			SrcK8S_Namespace: testUserServerNS,
-			DstK8S_Namespace: testUserClientNS,
-			SrcK8S_OwnerName: "nginx-service",
-			FlowDirection:    "0",
-		}
-
-		user0token, err := oc.WithoutNamespace().Run("whoami").Args("-t").Output()
-		e2e.Logf("token is %s", user0token)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		// give sometime before checking logs in loki
-		time.Sleep(60 * time.Second)
-		g.By("get flowlogs from loki")
-		flowRecords, err := lokilabels.getLokiFlowLogs(oc, user0token, ls.Route)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords > 0")
-
-		g.By("verify no logs are fetched from an NS that user is not admin for")
-		lokilabels = Lokilabels{
-			App:              "netobserv-flowcollector",
-			SrcK8S_Namespace: testTemplate.ServerNS,
-			DstK8S_Namespace: testTemplate.ClientNS,
-			SrcK8S_OwnerName: "nginx-service",
-			FlowDirection:    "0",
-		}
-		flowRecords, err = lokilabels.getLokiFlowLogs(oc, user0token, ls.Route)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(flowRecords)).NotTo(o.BeNumerically(">", 0), "expected number of flowRecords to be equal to 0")
+		//Add future NetObserv + Loki + KAFKA test-cases here
 	})
 })

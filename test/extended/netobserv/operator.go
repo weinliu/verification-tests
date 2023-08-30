@@ -310,7 +310,7 @@ func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", "-l", "operators.coreos.com/"+so.PackageName+"."+so.Namespace+"=").Execute()
 	// do not remove namespace openshift-logging and openshift-operators-redhat, and preserve the operatorgroup as there may have several operators deployed in one namespace
 	// for example: loki-operator and elasticsearch-operator
-	if so.Namespace != "openshift-logging" && so.Namespace != "openshift-operators-redhat" && so.Namespace != "openshift-operators" && !strings.HasPrefix(so.Namespace, "e2e-test-") {
+	if so.Namespace != "openshift-logging" && so.Namespace != "openshift-operators-redhat" && so.Namespace != "openshift-operators" && so.Namespace != "openshift-netobserv-operator" && !strings.HasPrefix(so.Namespace, "e2e-test-") {
 		deleteNamespace(oc, so.Namespace)
 	}
 }
@@ -323,13 +323,14 @@ func checkOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName 
 			csvName, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 			o.Expect(err2).NotTo(o.HaveOccurred())
 			o.Expect(csvName).NotTo(o.BeEmpty())
-			csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Compare(csvState, "Succeeded") == 0 {
-				e2e.Logf("CSV check complete!!!")
-				e2e.Logf("%s operator already present in the cluster", operatorName)
-				return true
-			}
+			err = wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
+				csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
+				if err != nil {
+					return false, err
+				}
+				return csvState == "Succeeded", nil
+			})
+			return err == nil
 		}
 	}
 	e2e.Logf("%s operator will be created by tests", operatorName)

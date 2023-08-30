@@ -144,9 +144,8 @@ func (lokilabels Lokilabels) getLokiFlowLogs(oc *exutil.CLI, token, lokiRoute st
 }
 
 // Verify loki flow records and if it was written in the last 5 minutes
-func verifyLokilogsTime(oc *exutil.CLI, lokiStackNS, flowNS, lokiStackName, token string) error {
-	route := "https://" + getRouteAddress(oc, lokiStackNS, lokiStackName)
-	lc := newLokiClient(route).withToken(token).retry(5)
+func verifyLokilogsTime(oc *exutil.CLI, token, lokiRoute string) error {
+	lc := newLokiClient(lokiRoute).withToken(token).retry(5)
 	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\", FlowDirection=\"0\"}")
 
 	if err != nil {

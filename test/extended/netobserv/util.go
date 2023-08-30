@@ -257,7 +257,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 
 func getSecrets(oc *exutil.CLI, namespace string) (string, error) {
 	var secrets string
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.Poll(10*time.Second, 360*time.Second, func() (done bool, err error) {
 		secrets, err = oc.AsAdmin().Run("get").Args("secrets", "-n", namespace, "-o", "jsonpath='{range .items[*]}{.metadata.name}{\" \"}'").Output()
 
 		if err != nil {
