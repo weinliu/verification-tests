@@ -3020,6 +3020,66 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(string(curlOutput)).To(o.ContainSubstring("test18984"))
 	})
 
+	g.It("Author:xiuwang-Low-18559-Use SAR request to access registry metrics [Serial]", func() {
+		g.By("Set an registry route")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(regRoute)
+
+		g.By("Create prometheus-scraper cluster role")
+		template := filepath.Join(imageRegistryBaseDir, "prometheus-role-18559.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", oc.Namespace()).Execute()
+		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", oc.Namespace()).Execute()
+		o.Expect(templateErr).NotTo(o.HaveOccurred())
+		token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Without prometheus-scraper cluster role, can't get to registry metrics")
+		getURL := "curl -vs -u \"" + oc.Username() + ":" + token + "\"  https://" + regRoute + "/extensions/v2/metrics -k"
+		curlOutput, err := exec.Command("bash", "-c", getURL).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(curlOutput)).To(o.ContainSubstring("UNAUTHORIZED"))
+
+		g.By("With prometheus-scraper cluster role, could get to registry metrics")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "prometheus-scraper", oc.Username()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "prometheus-scraper", oc.Username()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		curlOutput, err = exec.Command("bash", "-c", getURL).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(curlOutput)).NotTo(o.ContainSubstring("UNAUTHORIZED"))
+		o.Expect(string(curlOutput)).To(o.ContainSubstring("registry"))
+	})
+
+	g.It("Author:xiuwang-Critical-24878-Mount trusted CA for cluster proxies to Image Registry Operator", func() {
+		g.By("Check if it's a https_proxy cluster")
+		trustCAName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.trustedCA.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if trustCAName == "" {
+			g.Skip("Skip for non https_proxy platform")
+		}
+
+		g.By("Check the cluster trusted ca")
+		trustCA, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", trustCAName, `-o=jsonpath={.data.ca-bundle\.crt}`, "-n", "openshift-config").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(trustCA).NotTo(o.BeEmpty())
+
+		certs, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", "trusted-ca", `-o=jsonpath={.data.ca-bundle\.crt}`, "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(certs, trustCA) {
+			e2e.Failf("trusted-ca doesn't contain the content of proxy ca")
+		}
+
+		g.By("Check the ca mount into registry pods")
+		trustCAPath, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("deploy/image-registry", `-o=jsonpath={..volumeMounts[?(@.name=="trusted-ca")].mountPath}`, "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podCerts, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deploy/image-registry", "cat", trustCAPath+"/anchors/ca-bundle.crt").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(podCerts, trustCA) {
+			e2e.Failf("trusted-ca doesn't mount into registry pods")
+		}
+	})
+
 	// author: wewang@redhat.com
 	g.It("Author:wewang-Medium-24879-Mount trusted CA for cluster proxies to Image Registry Operator with invalid setting [Disruptive]", func() {
 		g.By("Check if it's a https_proxy cluster")
@@ -4166,7 +4226,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Check image-registry-private-configuration secret if created")
 		output, _ := oc.AsAdmin().Run("get").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry").Output()
 		o.Expect(output).To(o.ContainSubstring("image-registry-private-configuration"))
-		secretData, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("secret/installer-cloud-credentials", "-o=jsonpath={.data}").Output()
+		secretData, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("secret/installer-cloud-credentials", "-o=jsonpath={.data}", "-n", "openshift-image-registry").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(secretData, "azure_client_id") || !strings.Contains(secretData, "azure_region") || !strings.Contains(secretData, "azure_subscription_id") {
 			e2e.Failf("The installer-cloud-credentials secret don't contain azure credentials for registry")
