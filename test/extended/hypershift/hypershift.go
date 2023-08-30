@@ -301,20 +301,14 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 46711 is for AWS - skipping test ...")
 		}
 		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
-		//get capi-provider secret
-		apiPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="credentials")].secret.secretName}`
-		apiSecret := doOcpReq(oc, OcpGet, true, "deploy", "capi-provider", "-n", controlplaneNS, apiPattern)
-
-		//get control plane operator secret
-		cpoPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="provider-creds")].secret.secretName}`
-		cpoSecret := doOcpReq(oc, OcpGet, true, "deploy", "control-plane-operator", "-n", controlplaneNS, cpoPattern)
-
-		//get kube-apiserver secret
-		kubeAPIPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="cloud-creds")].secret.secretName}`
-		kubeAPISecret := doOcpReq(oc, OcpGet, true, "deploy", "kube-apiserver", "-n", controlplaneNS, kubeAPIPattern)
-
-		secrets := []string{apiSecret, cpoSecret, kubeAPISecret}
-		for _, sec := range secrets {
+		secretsWithCreds := []string{
+			"cloud-controller-creds",
+			"cloud-network-config-controller-creds",
+			"control-plane-operator-creds",
+			"ebs-cloud-credentials",
+			"node-management-creds",
+		}
+		for _, sec := range secretsWithCreds {
 			cre := doOcpReq(oc, OcpGet, true, "secret", sec, "-n", controlplaneNS, "-ojsonpath={.data.credentials}")
 			roleInfo, err := base64.StdEncoding.DecodeString(cre)
 			o.Expect(err).ShouldNot(o.HaveOccurred())
@@ -385,6 +379,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				"openshift-oauth-apiserver",
 				"openshift-apiserver",
 				"packageserver",
+				"ovnkube-control-plane",
 			},
 			//oc get deploy -n clusters-demo-02 -o jsonpath='{range .items[*]}{@.metadata.name}{" "}{@.spec.template.
 			//spec.priorityClassName}{"\n"}{end}'  | grep hypershift-control-plane | awk '{print "\""$1"\""","}'
@@ -443,12 +438,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		etcdPriorityClass := "hypershift-etcd"
 		res := doOcpReq(oc, OcpGet, true, "statefulset", etcdSts, "-n", controlplaneNS, "-ojsonpath={.spec.template.spec.priorityClassName}")
 		o.Expect(res).To(o.Equal(etcdPriorityClass))
-
-		//check statefulset for ovnkube-master
-		ovnSts := "ovnkube-master"
-		ovnPriorityClass := "hypershift-api-critical"
-		res = doOcpReq(oc, OcpGet, true, "statefulset", ovnSts, "-n", controlplaneNS, "-ojsonpath={.spec.template.spec.priorityClassName}")
-		o.Expect(res).To(o.Equal(ovnPriorityClass))
 	})
 
 	// author: heli@redhat.com
