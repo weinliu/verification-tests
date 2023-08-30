@@ -1051,7 +1051,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 	// author: asood@redhat.com
-	g.It("Author:asood-Medium-41080-Check network policy ACL audit messages are logged to journald", func() {
+	g.It("NonPreRelease-Longduration-Author:asood-Medium-41080-Check network policy ACL audit messages are logged to journald", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			allowFromSameNS     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
@@ -1074,12 +1074,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		patchSResource := "networks.operator.openshift.io/cluster"
 		patchInfo := `{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"policyAuditConfig": {"destination": "libc"}}}}}`
 		undoPatchInfo := `{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"policyAuditConfig": {"destination": ""}}}}}`
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", undoPatchInfo, "--type=merge").Output()
+		defer func() {
+			_, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", undoPatchInfo, "--type=merge").Output()
+			o.Expect(patchErr).NotTo(o.HaveOccurred())
+			waitForNetworkOperatorState(oc, 100, 15, "True.*False.*False")
+		}()
 		_, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", patchInfo, "--type=merge").Output()
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
 		//Network operator needs to recreate the pods on a merge request, therefore give it enough time.
-		checkNetworkOperatorState(oc, 400, 400)
+		waitForNetworkOperatorState(oc, 100, 15, "True.*False.*False")
 
 		g.By("Obtain the namespace")
 		ns1 := oc.Namespace()
