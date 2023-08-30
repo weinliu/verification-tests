@@ -131,3 +131,21 @@ func ClusterArchitecture(oc *exutil.CLI) (architecture Architecture) {
 	}
 	return
 }
+
+func (a Architecture) GNUString() string {
+	switch a {
+	case AMD64:
+		return "x86_64"
+	case ARM64:
+		return "aarch64"
+	case PPC64LE:
+		return "ppc64le"
+	case S390X:
+		return "s390x"
+	case MULTI:
+		return "multi"
+	default:
+		e2e.Failf("Unknown architecture %d", a)
+	}
+	return ""
+}
