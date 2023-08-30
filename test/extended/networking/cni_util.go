@@ -184,20 +184,20 @@ func multihomingBeforeCheck(oc *exutil.CLI, topology string) ([]string, []string
 		multihomingPodTemplate = filepath.Join(buildPruningBaseDir, "multihoming-pod-template.yaml")
 	)
 
-	g.By("Get the ready-schedulable worker nodes")
+	exutil.By("Get the ready-schedulable worker nodes")
 	nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 	o.Expect(nodeErr).NotTo(o.HaveOccurred())
 	if len(nodeList.Items) < 2 {
 		g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 	}
 
-	g.By("Create a test namespace")
+	exutil.By("Create a test namespace")
 	ns1 := oc.Namespace()
 
 	nadName := "layer2dualstacknetwork"
 	nsWithnad := ns1 + "/" + nadName
 
-	g.By("Create a custom resource network-attach-defintion in tested namespace")
+	exutil.By("Create a custom resource network-attach-defintion in tested namespace")
 	nad1ns1 := multihomingNAD{
 		namespace:      ns1,
 		nadname:        nadName,
@@ -209,7 +209,7 @@ func multihomingBeforeCheck(oc *exutil.CLI, topology string) ([]string, []string
 	}
 	nad1ns1.createMultihomingNAD(oc)
 
-	g.By("Create 1st pod consuming above network-attach-defintion in ns1")
+	exutil.By("Create 1st pod consuming above network-attach-defintion in ns1")
 	pod1 := testMultihomingPod{
 		name:       "multihoming-pod-1",
 		namespace:  ns1,
@@ -222,7 +222,7 @@ func multihomingBeforeCheck(oc *exutil.CLI, topology string) ([]string, []string
 	pod1.createTestMultihomingPod(oc)
 	o.Expect(waitForPodWithLabelReady(oc, ns1, "name=multihoming-pod1")).NotTo(o.HaveOccurred())
 
-	g.By("Create 2nd pod consuming above network-attach-defintion in ns1")
+	exutil.By("Create 2nd pod consuming above network-attach-defintion in ns1")
 	pod2 := testMultihomingPod{
 		name:       "multihoming-pod-2",
 		namespace:  ns1,
@@ -235,7 +235,7 @@ func multihomingBeforeCheck(oc *exutil.CLI, topology string) ([]string, []string
 	pod2.createTestMultihomingPod(oc)
 	o.Expect(waitForPodWithLabelReady(oc, ns1, "name=multihoming-pod2")).NotTo(o.HaveOccurred())
 
-	g.By("Create 3rd pod consuming above network-attach-defintion in ns1")
+	exutil.By("Create 3rd pod consuming above network-attach-defintion in ns1")
 	pod3 := testMultihomingPod{
 		name:       "multihoming-pod-3",
 		namespace:  ns1,
@@ -248,49 +248,49 @@ func multihomingBeforeCheck(oc *exutil.CLI, topology string) ([]string, []string
 	pod3.createTestMultihomingPod(oc)
 	o.Expect(waitForPodWithLabelReady(oc, ns1, "name=multihoming-pod3")).NotTo(o.HaveOccurred())
 
-	g.By("Get IPs from the pod1's secondary interface")
+	exutil.By("Get IPs from the pod1's secondary interface")
 	pod1Name := getPodName(oc, ns1, "name=multihoming-pod1")
 	pod1IPv4, pod1IPv6 := getPodMultiNetwork(oc, ns1, pod1Name[0])
 	e2e.Logf("The v4 address of pod1 is: %v", pod1IPv4, "net1", pod1.podenvname)
 	e2e.Logf("The v6 address of pod1 is: %v", pod1IPv6, "net1", pod1.podenvname)
 
-	g.By("Get IPs from the pod2's secondary interface")
+	exutil.By("Get IPs from the pod2's secondary interface")
 	pod2Name := getPodName(oc, ns1, "name=multihoming-pod2")
 	pod2IPv4, pod2IPv6 := getPodMultiNetwork(oc, ns1, pod2Name[0])
-	e2e.Logf("The v4 address of pod1 is: %v", pod2IPv4, "net1", pod2.podenvname)
-	e2e.Logf("The v6 address of pod1 is: %v", pod2IPv6, "net1", pod2.podenvname)
+	e2e.Logf("The v4 address of pod2 is: %v", pod2IPv4, "net1", pod2.podenvname)
+	e2e.Logf("The v6 address of pod2 is: %v", pod2IPv6, "net1", pod2.podenvname)
 
-	g.By("Get IPs from the pod3's secondary interface")
+	exutil.By("Get IPs from the pod3's secondary interface")
 	pod3Name := getPodName(oc, ns1, "name=multihoming-pod3")
 	pod3IPv4, pod3IPv6 := getPodMultiNetwork(oc, ns1, pod3Name[0])
-	e2e.Logf("The v4 address of pod1 is: %v", pod3IPv4, "net1", pod3.podenvname)
-	e2e.Logf("The v6 address of pod1 is: %v", pod3IPv6, "net1", pod3.podenvname)
+	e2e.Logf("The v4 address of pod3 is: %v", pod3IPv4, "net1", pod3.podenvname)
+	e2e.Logf("The v6 address of pod3 is: %v", pod3IPv6, "net1", pod3.podenvname)
 
 	ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 	o.Expect(ovnMasterPodName).ShouldNot(o.Equal(""))
 	podName := []string{pod1Name[0], pod2Name[0], pod3Name[0]}
 
-	g.By("Checking connectivity from pod1 to pod2")
+	exutil.By("Checking connectivity from pod1 to pod2")
 	CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod2IPv4, "net1", pod2.podenvname)
 	CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod2IPv6, "net1", pod2.podenvname)
 
-	g.By("Checking connectivity from pod1 to pod3")
+	exutil.By("Checking connectivity from pod1 to pod3")
 	CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod3IPv4, "net1", pod3.podenvname)
 	CurlMultusPod2PodPass(oc, ns1, pod1Name[0], pod3IPv6, "net1", pod3.podenvname)
 
-	g.By("Checking connectivity from pod2 to pod1")
+	exutil.By("Checking connectivity from pod2 to pod1")
 	CurlMultusPod2PodPass(oc, ns1, pod2Name[0], pod1IPv4, "net1", pod1.podenvname)
 	CurlMultusPod2PodPass(oc, ns1, pod2Name[0], pod1IPv6, "net1", pod1.podenvname)
 
-	g.By("Checking connectivity from pod2 to pod3")
+	exutil.By("Checking connectivity from pod2 to pod3")
 	CurlMultusPod2PodPass(oc, ns1, pod2Name[0], pod3IPv4, "net1", pod3.podenvname)
 	CurlMultusPod2PodPass(oc, ns1, pod2Name[0], pod3IPv6, "net1", pod3.podenvname)
 
-	g.By("Checking connectivity from pod3 to pod1")
+	exutil.By("Checking connectivity from pod3 to pod1")
 	CurlMultusPod2PodPass(oc, ns1, pod3Name[0], pod1IPv4, "net1", pod1.podenvname)
 	CurlMultusPod2PodPass(oc, ns1, pod3Name[0], pod1IPv6, "net1", pod1.podenvname)
 
-	g.By("Checking connectivity from pod3 to pod2")
+	exutil.By("Checking connectivity from pod3 to pod2")
 	CurlMultusPod2PodPass(oc, ns1, pod3Name[0], pod2IPv4, "net1", pod2.podenvname)
 	CurlMultusPod2PodPass(oc, ns1, pod3Name[0], pod2IPv6, "net1", pod2.podenvname)
 
@@ -314,7 +314,7 @@ func multihomingAfterCheck(oc *exutil.CLI, podName []string, podEnvName []string
 	pod2IPv6 := podIPv6[1]
 	pod3IPv6 := podIPv6[2]
 
-	g.By("Checking connectivity from pod to pod after deleting")
+	exutil.By("Checking connectivity from pod to pod after deleting")
 	CurlMultusPod2PodPass(oc, ns, pod1Name, pod2IPv4, "net1", pod2envname)
 	CurlMultusPod2PodPass(oc, ns, pod1Name, pod2IPv6, "net1", pod2envname)
 	CurlMultusPod2PodPass(oc, ns, pod1Name, pod3IPv4, "net1", pod3envname)

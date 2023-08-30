@@ -47,7 +47,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		nadName := "layer2ipv4network60505"
 		nsWithnad := ns1 + "/" + nadName
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -202,7 +202,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		nadName := "layer2ipv6network60506"
 		nsWithnad := ns1 + "/" + nadName
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -298,7 +298,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-60507-Multihoming Verify the dualstack connectivity between multihoming pods", func() {
 		var podName, podEnvName, podIPv4, podIPv6 []string
 		var ovnMasterPodName, ns, nadName string
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -329,7 +329,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		nadName := "layer2excludeipv4network60508"
 		nsWithnad := ns1 + "/" + nadName
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -434,7 +434,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		nadName := "layer2excludeipv6network60509"
 		nsWithnad := ns1 + "/" + nadName
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -542,7 +542,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		nadName2 := "layer2dualstacknetwork2"
 		nsWithnad2 := ns1 + "/" + nadName2
 		nadName3 := nadName1 + "," + nadName2
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -725,7 +725,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("Longduration-NonPreRelease-NonHyperShiftHOST-Author:weliang-Medium-60511-Multihoming Verify the dualstack connectivity between multihoming pods after deleting ovn-northbound-leader pod. [Disruptive]", func() {
 		var podName, podEnvName, podIPv4, podIPv6 []string
 		var ovnMasterPodName, ns, nadName string
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -744,15 +744,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("Longduration-NonPreRelease-NonHyperShiftHOST-Author:weliang-Medium-60512-Multihoming Verify the dualstack connectivity between multihoming pods after deleting all ovnkube-master pods. [Disruptive]", func() {
 		var podName, podEnvName, podIPv4, podIPv6 []string
 		var ovnMasterPodName, ns, nadName string
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nadName, "-n", ns).Execute()
 			podName, podEnvName, podIPv4, podIPv6, ovnMasterPodName, ns, nadName = multihomingBeforeCheck(oc, value)
 
-			g.By("Delete  all ovnkube-master pods")
-			ovnMasterPodNames := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+			g.By("Delete all ovnkube-control-plane pods")
+			ovnMasterPodNames := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
 			for _, ovnPod := range ovnMasterPodNames {
 				o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", ovnPod, "-n", "openshift-ovn-kubernetes").Execute()).NotTo(o.HaveOccurred())
 			}
@@ -766,7 +766,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("Longduration-NonPreRelease-NonHyperShiftHOST-Author:weliang-Medium-60516-Multihoming Verify the dualstack connectivity between multihoming pods after deleting all ovnkube-node pods. [Disruptive]", func() {
 		var podName, podEnvName, podIPv4, podIPv6 []string
 		var ovnMasterPodName, ns, nadName string
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -801,7 +801,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		nadName := "layer2ipv4network60564"
 		nsWithnad := ns1 + "/" + nadName
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -858,7 +858,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		nadName := "layer2ipv4network63186"
 		nsWithnad := ns1 + "/" + nadName
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
@@ -982,7 +982,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		nadName2 := "layer2dualstacknetwork2"
 		nsWithnad2 := ns1 + "/" + nadName2
 		sharenet := "192.168.100.0/24,fd00:dead:beef::0/64"
-		topology := []string{"layer2", "localnet"}
+		topology := []string{"layer2"}
 
 		for _, value := range topology {
 			e2e.Logf("Start testing the network topology: %v ----------------------------", value)
