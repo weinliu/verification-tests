@@ -134,17 +134,38 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			orgAddCapstr, err := getCVObyJP(oc, ".spec.capabilities.additionalEnabledCapabilities[*]")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("original baseline: %s, original additional: %s", orgBaseCap, orgAddCapstr)
+			e2e.Logf("original baseline: '%s', original additional: '%s'", orgBaseCap, orgAddCapstr)
 
 			orgAddCap := strings.Split(orgAddCapstr, " ")
 
 			defer func() {
-				out, err := changeCap(oc, true, orgBaseCap)
-				o.Expect(err).NotTo(o.HaveOccurred(), out)
+				if newBaseCap, _ := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet"); orgBaseCap != newBaseCap {
+					var out string
+					var err error
+					if orgBaseCap == "" {
+						out, err = changeCap(oc, true, nil)
+					} else {
+						out, err = changeCap(oc, true, orgBaseCap)
+					}
+					o.Expect(err).NotTo(o.HaveOccurred(), out)
+				} else {
+					e2e.Logf("defer baselineCapabilitySet skipped for original value already matching '%v'", newBaseCap)
+				}
 			}()
 			defer func() {
-				out, err := changeCap(oc, false, orgAddCap)
-				o.Expect(err).NotTo(o.HaveOccurred(), out)
+				if newAddCap, _ := getCVObyJP(oc, ".spec.capabilities.additionalEnabledCapabilities[*]"); !reflect.DeepEqual(orgAddCap, strings.Split(newAddCap, " ")) {
+					var out string
+					var err error
+					if reflect.DeepEqual(orgAddCap, make([]string, 1)) {
+						// need this cause strings.Split of an empty string creates len(1) slice which isn't nil
+						out, err = changeCap(oc, false, nil)
+					} else {
+						out, err = changeCap(oc, false, orgAddCap)
+					}
+					o.Expect(err).NotTo(o.HaveOccurred(), out)
+				} else {
+					e2e.Logf("defer additionalEnabledCapabilities skipped for original value already matching '%v'", strings.Split(newAddCap, " "))
+				}
 			}()
 		}
 
