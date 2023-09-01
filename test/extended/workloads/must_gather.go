@@ -24,39 +24,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	)
 
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-45694-Support to collect olm data in must-gather [Slow]", func() {
-		g.By("create new namespace")
-		oc.SetupProject()
-
-		g.By("Check if operator installed or not")
-		out, err := oc.AsAdmin().Run("get").Args("operators").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Now installed operator is %v", out)
-		subOut, err := oc.AsAdmin().Run("get").Args("sub", "-A").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Installed sub is %v", subOut)
-		if matched, _ := regexp.MatchString("No resources found", out); matched {
-			g.Skip("Skip for no operator installed")
-		}
-
-		g.By("run the must-gather")
-		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-45694").Output()
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", oc.Namespace(), "must-gather", "--dest-dir=/tmp/must-gather-45694").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		mustGather := string(msg)
-		checkMessage := []string{
-			"operators.coreos.com/installplans",
-			"operators.coreos.com/operatorconditions",
-			"operators.coreos.com/operatorgroups",
-			"operators.coreos.com/subscriptions",
-		}
-		for _, v := range checkMessage {
-			if !strings.Contains(mustGather, v) {
-				e2e.Failf("Failed to check the olm data: " + v)
-			}
-		}
-	})
-	// author: yinzhou@redhat.com
 	g.It("NonHyperShiftHOST-ARO-Author:yinzhou-Medium-56929-run the must-gather command with own name space [Slow]", func() {
 		g.By("Set namespace as privileged namespace")
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())

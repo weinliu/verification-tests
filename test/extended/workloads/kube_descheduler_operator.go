@@ -3,6 +3,7 @@ package workloads
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 
@@ -2007,5 +2008,70 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		// Collect PodLifetime metrics from prometheus
 		g.By("Checking PodLifetime metrics from prometheus")
 		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:yinzhou-Medium-45694-Support to collect olm data in must-gather [Slow][Disruptive]", func() {
+		// Skip the test if no qe-app-registry catalog is present
+		skipMissingCatalogsource(oc)
+
+		g.By("Create the descheduler namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the operatorgroup")
+		defer og.deleteOperatorGroup(oc)
+		og.createOperatorGroup(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the subscription")
+		defer sub.deleteSubscription(oc)
+		sub.createSubscription(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for the descheduler operator pod running")
+		if ok := waitForAvailableRsRunning(oc, "deploy", "descheduler-operator", kubeNamespace, "1"); ok {
+			e2e.Logf("Kubedescheduler operator runnnig now\n")
+		}
+
+		g.By("Create descheduler cluster")
+		deschu.createKubeDescheduler(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
+
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("2", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
+
+		g.By("create new namespace")
+		oc.SetupProject()
+
+		g.By("run the must-gather")
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-45694").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", oc.Namespace(), "must-gather", "--dest-dir=/tmp/must-gather-45694").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		mustGather := string(msg)
+		checkMessage := []string{
+			"operators.coreos.com/installplans",
+			"operators.coreos.com/operatorconditions",
+			"operators.coreos.com/operatorgroups",
+			"operators.coreos.com/subscriptions",
+		}
+		for _, v := range checkMessage {
+			if !strings.Contains(mustGather, v) {
+				e2e.Failf("Failed to check the olm data: " + v)
+			}
+		}
 	})
 })
