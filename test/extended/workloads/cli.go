@@ -1342,6 +1342,58 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(string(output), "File: /tmp/case64921/oc-mirror")).To(o.BeTrue())
 	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-67013-oc image mirror with multi-arch images and --filter-by-os", func() {
+		g.By("create new namespace")
+		oc.SetupProject()
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		err := oc.WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c"+"="+serInfo.serviceName+"/testimage:ppc64", "--filter-by-os=linux/ppc64le", "--insecure").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		out, err := oc.WithoutNamespace().Run("image").Args("info", serInfo.serviceName+"/testimage:ppc64", "--insecure").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "ppc64le")).To(o.BeTrue())
+		err = oc.WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c"+"="+serInfo.serviceName+"/testimage:default", "--insecure").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		imageInfo, err := oc.WithoutNamespace().Run("image").Args("info", serInfo.serviceName+"/testimage:default", "--insecure").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		architecture, err := exec.Command("bash", "-c", "uname -a").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		architectureStr := string(architecture)
+		if o.Expect(strings.Contains(architectureStr, "x86_64")).To(o.BeTrue()) {
+			if o.Expect(strings.Contains(imageInfo, "amd64")).To(o.BeTrue()) {
+				e2e.Logf("Found the expected Arch amd64")
+			} else {
+				e2e.Failf("Failed to find the expected Arch for mirrored image")
+			}
+		} else if o.Expect(strings.Contains(architectureStr, "aarch64")).To(o.BeTrue()) {
+			if o.Expect(strings.Contains(imageInfo, "arm64")).To(o.BeTrue()) {
+				e2e.Logf("Found the expected Arch aarch64")
+			} else {
+				e2e.Failf("Failed to find the expected Arch for mirrored image")
+			}
+		} else if o.Expect(strings.Contains(architectureStr, "ppc64le")).To(o.BeTrue()) {
+			if o.Expect(strings.Contains(imageInfo, "ppc64le")).To(o.BeTrue()) {
+				e2e.Logf("Found the expected Arch ppc64le")
+			} else {
+				e2e.Failf("Failed to find the expected Arch for mirrored image")
+			}
+		} else {
+			if o.Expect(strings.Contains(imageInfo, "s390x")).To(o.BeTrue()) {
+				e2e.Logf("Found the expected Arch s390x")
+			} else {
+				e2e.Failf("Failed to find the expected Arch for mirrored image")
+			}
+		}
+
+	})
 
 })
 
