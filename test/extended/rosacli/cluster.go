@@ -10,6 +10,7 @@ type ClusterService interface {
 	describeCluster(clusterID string) (bytes.Buffer, error)
 	reflectClusterDescription(result bytes.Buffer) *ClusterDescription
 	list() (bytes.Buffer, error)
+	createDryRun(clusterID string, flags ...string) (bytes.Buffer, error)
 }
 
 var _ ClusterService = &clusterService{}
@@ -66,4 +67,12 @@ func (c *clusterService) reflectClusterDescription(result bytes.Buffer) *Cluster
 func (c *clusterService) list() (bytes.Buffer, error) {
 	list := c.client.Runner.Cmd("list", "cluster")
 	return list.Run()
+}
+
+func (c *clusterService) createDryRun(clusterID string, flags ...string) (bytes.Buffer, error) {
+	combflags := append([]string{"-c", clusterID, "--dry-run"}, flags...)
+	createDryRun := c.client.Runner.
+		Cmd("create", "cluster").
+		CmdFlags(combflags...)
+	return createDryRun.Run()
 }
