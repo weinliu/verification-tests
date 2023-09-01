@@ -469,8 +469,26 @@ func extractManifest(oc *exutil.CLI) (tempDataDir string, err error) {
 
 	manifestDir := filepath.Join(tempDataDir, "manifest")
 	if err = oc.AsAdmin().Run("adm").Args("release", "extract", "--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson").Execute(); err != nil {
-		//Workaround c2s/cs2s clusters that only have token to the mirror in pull secret
 		e2e.Logf("warning: release extract failed once with:\n\"%v\"", err)
+
+		//Workaround disconnected baremental clusters that don't have cert for the registry
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
+			var mirror_registry string
+			mirror_registry, err = exutil.GetMirrorRegistry(oc)
+			if mirror_registry != "" {
+				if err != nil {
+					err = fmt.Errorf("error out getting mirror registry: %v", err)
+					return
+				}
+				if err = oc.AsAdmin().Run("adm").Args("release", "extract", "--insecure", "--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson").Execute(); err != nil {
+					err = fmt.Errorf("warning: insecure release extract for disconnected baremetal failed with:\n\"%v\"", err)
+				}
+				return
+			}
+		}
+
+		//Workaround c2s/cs2s clusters that only have token to the mirror in pull secret
 		var region, image, mirror string
 		if region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure",
 			"cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output(); err != nil {
@@ -734,8 +752,26 @@ func getReleaseInfo(oc *exutil.CLI) (output string, err error) {
 	}
 
 	if output, err = oc.AsAdmin().Run("adm").Args("release", "info", "-a", tempDataDir+"/.dockerconfigjson", "-ojson").Output(); err != nil {
-		//Workaround c2s/cs2s clusters that only have token to the mirror in pull secret
 		e2e.Logf("warning: release info failed once with:\n\"%v\"", err)
+
+		//Workaround disconnected baremental clusters that don't have cert for the registry
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
+			var mirror_registry string
+			mirror_registry, err = exutil.GetMirrorRegistry(oc)
+			if mirror_registry != "" {
+				if err != nil {
+					err = fmt.Errorf("error out getting mirror registry: %v", err)
+					return
+				}
+				if err = oc.AsAdmin().Run("adm").Args("release", "info", "--insecure", "-a", tempDataDir+"/.dockerconfigjson", "-ojson").Execute(); err != nil {
+					err = fmt.Errorf("warning: insecure release info for disconnected baremetal failed with:\n\"%v\"", err)
+				}
+				return
+			}
+		}
+
+		//Workaround c2s/cs2s clusters that only have token to the mirror in pull secret
 		var region, image, mirror string
 		if region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure",
 			"cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output(); err != nil {
