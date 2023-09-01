@@ -87,7 +87,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		metricName2 := "ovnkube_controller_pod_lsp_created_port_binding_duration_seconds_count"
 		metricName3 := "ovnkube_controller_pod_port_binding_port_binding_chassis_duration_seconds_count"
 		metricName4 := "ovnkube_controller_pod_port_binding_chassis_port_binding_up_duration_seconds_count"
-		prometheusURL := "localhost:29113/metrics"
+		prometheusURL := "localhost:29103/metrics"
 
 		metricName := []string{metricName1, metricName2, metricName3, metricName4}
 		for _, value := range metricName {
@@ -148,7 +148,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		if networkType == "ovnkubernetes" {
 			podName := getLeaderInfo(oc, namespace, podLabel, networkType)
 			metricName := "ovnkube_controller_num_egress_firewall_rules"
-			prometheusURL := "localhost:29113/metrics"
+			prometheusURL := "localhost:29103/metrics"
 
 			exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules before configuration")
 			metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
@@ -218,7 +218,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ipsecState := checkIPsec(oc)
 		e2e.Logf("The ipsec state is : %v", ipsecState)
 		podName := getLeaderInfo(oc, namespace, podLabel, networkType)
-		prometheusURL := "localhost:29113/metrics"
+		prometheusURL := "localhost:29103/metrics"
 
 		metricName := "ovnkube_controller_ipsec_enabled"
 		metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
@@ -461,7 +461,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		podName := getLeaderInfo(oc, namespace, podLabel, networkType)
-		prometheusURL := "localhost:29113/metrics"
+		prometheusURL := "localhost:29103/metrics"
 
 		metricName1 := "ovnkube_controller_network_programming_ovn_duration_seconds_bucket"
 		metricName2 := "ovnkube_controller_network_programming_duration_seconds_bucket"
