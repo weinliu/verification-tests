@@ -861,4 +861,21 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		e2e.Logf("placementGroupName:%s", placementGroupName)
 		o.Expect(placementGroupName).Should(o.Equal("pgcluster"))
 	})
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:zhsun-Critical-25436-Scale up/scale down the cluster by changing the replicas of the machineSet [Disruptive][Slow]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "ibmcloud", "alibabacloud", "nutanix", "openstack", "oVirt")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-25436"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Scale up machineset")
+		exutil.ScaleMachineSet(oc, machinesetName, 1)
+
+		g.By("Scale down machineset")
+		exutil.ScaleMachineSet(oc, machinesetName, 0)
+	})
 })
