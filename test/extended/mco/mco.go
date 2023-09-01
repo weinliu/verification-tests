@@ -3280,7 +3280,7 @@ nulla pariatur.`
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Low-66376-Reject MCs with ignition containing kernelArguments [Disruptive]", func() {
 		var (
 			mcName = "mco-tc-66376-reject-ignition-kernel-arguments"
-			mcp    = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mcp    = GetCompactCompatiblePool(oc.AsAdmin())
 			// quotemeta to scape regex characters in the file path
 			expectedNDMessage = regexp.QuoteMeta(`ignition kargs section contains changes`)
 			expectedNDReason  = "1 nodes are reporting degraded status on sync"
@@ -3288,7 +3288,7 @@ nulla pariatur.`
 
 		exutil.By("Create a MC with an ignition section that declares kernel arguments")
 
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate("add-ignition-kernel-arguments.yaml")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate("add-ignition-kernel-arguments.yaml")
 		mc.skipWaitForMcp = true
 
 		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
