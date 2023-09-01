@@ -92,7 +92,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.get(querySumSelectors.flowsCount).should('exist').then(flowsCnt => {
                 let nflows = 0
                 if (warningExists) {
-                    nflows = Number(flowsCnt.text().split('+ flows')[0])
+                    nflows = Number(flowsCnt.text().split('+ Flows')[0])
                 }
                 else {
                     nflows = Number(flowsCnt.text().split(' ')[0])
@@ -130,17 +130,16 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.contains('Configuration').should('exist')
             cy.contains('Sampling').should('exist')
         })
-        // Disable for bug NETOBSERV-967
-        it.skip("should validate columns", { tags: ['e2e', 'admin'] }, function () {
+
+        it("should validate columns", { tags: ['e2e', 'admin'] }, function () {
             cy.byTestID("show-view-options-button").should('exist').click()
             netflowPage.stopAutoRefresh()
             cy.byTestID('view-options-button').click()
             cy.get(colSelectors.mColumns).click().then(col => {
                 cy.get(colSelectors.columnsModal).should('be.visible')
             })
-            // group columns: Disable for bug NETOBSERV-967
-            // cy.get('#K8S_OwnerObject').check()
-            // cy.get('#AddrPort').check()
+            cy.get('#K8S_OwnerObject').check()
+            cy.get('#AddrPort').check()
 
             cy.get('#Mac').should('exist').check()
             cy.get('#Proto').should('exist').check()
@@ -160,9 +159,8 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                 cy.get(colSelectors.srcNS).should('not.exist')
                 cy.get(colSelectors.dstNodeIP).should('exist')
                 cy.get(colSelectors.Mac).should('exist')
-                // group columns: Disable for bug NETOBSERV-967
-                // cy.get(colSelectors.gK8sOwner).should('exist')
-                // cy.get(colSelectors.gIPPort).should('exist')
+                cy.get(colSelectors.gK8sOwner).should('exist')
+                cy.get(colSelectors.gIPPort).should('exist')
                 cy.get(colSelectors.Protocol).should('exist')
 
                 cy.get(colSelectors.srcNodeIP).should('exist')

@@ -34,17 +34,27 @@ describe('NetObserv dashboards tests', { tags: ['NETOBSERV'] }, function () {
     it('OCP-61893, should have health dashboards', function () {
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-health")
-        cy.byTestID('rates-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        var panels: string[] = ['rates-chart', 'percentage-of-flows-generated-by-netobserv-own-traffic-chart', '-chart']
+        cy.checkDashboards(panels)
+
+        var appsInfra: string[] = ["applications-chart", "infrastructure-chart"]
+        cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-namespaces-1-min-rates').should('exist').within(topflow => {
+            cy.checkDashboards(appsInfra)
+        })
+
+        cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-workloads-1-min-rates').should('exist').within(topflow => {
+            cy.checkDashboards(appsInfra)
+        })
+
+        var cpuMemory: string[] = ['cpu-usage-chart', 'memory-usage-chart']
 
         cy.byLegacyTestID('panel-agents').should('exist').within(agent => {
-
-            cy.byTestID('cpu-usage-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-            cy.byTestID('memory-usage-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+            cy.checkDashboards(cpuMemory)
         })
 
         cy.byLegacyTestID('panel-processor').should('exist').within(processor => {
-            cy.byTestID('cpu-usage-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-            cy.byTestID('memory-usage-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+            cy.checkDashboards(cpuMemory)
         })
 
         cy.get('[data-test="operator-reconciliation-rate-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
@@ -52,10 +62,16 @@ describe('NetObserv dashboards tests', { tags: ['NETOBSERV'] }, function () {
 
     it("OCP-63790, should have flow based dashboards", function () {
         dashboard.visit()
-        dashboard.visitDashboard("grafana-dashboard-netobserv")
-        cy.byTestID("top-flow-rates-per-source-and-destination-namespaces-(1-min-rates)-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-        cy.byTestID("top-byte-rates-received-per-source-and-destination-nodes-(1-min-rates)-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-        cy.byTestID("top-byte-rates-received-per-source-and-destination-workloads-(1-min-rates)-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
+        cy.byTestID("-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        var appsInfra: string[] = ["applications-chart", "infrastructure-chart"]
+        cy.byLegacyTestID('panel-top-byte-rates-received-per-source-and-destination-namespaces').should('exist').within(topBytes => {
+            cy.checkDashboards(appsInfra)
+        })
+        cy.byLegacyTestID('panel-top-byte-rates-received-per-source-and-destination-workloads').should('exist').within(topBytes => {
+            cy.checkDashboards(appsInfra)
+        })
     })
 
     after("delete flowcollector and NetObs Operator", function () {

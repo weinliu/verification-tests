@@ -54,6 +54,8 @@ data:
             max_size_bytes: 500MB
             validity: 24h
       parallelise_shardable_queries: true
+    query_scheduler:
+      max_outstanding_requests_per_tenant: 2048
     schema_config:
       configs:
         - from: 2022-01-01
@@ -132,7 +134,7 @@ spec:
         capabilities:
           drop: ["ALL"]
           privileged: false
-      image: grafana/loki:2.5.0
+      image: grafana/loki:2.8.0
       volumeMounts:
         - mountPath: "/loki-store"
           name: loki-store

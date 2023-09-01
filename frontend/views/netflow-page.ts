@@ -40,6 +40,9 @@ export const netflowPage = {
         cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
             cy.contains("Clear all").should('exist').click()
         })
+    },
+    waitForLokiQuery: () => {
+        cy.get("#refresh-button > span > svg").invoke('attr', 'style').should('contain', '0s linear 0s')
     }
 }
 

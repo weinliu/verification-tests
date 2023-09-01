@@ -35,6 +35,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
     describe("overview page features", function () {
         beforeEach('overview page test', function () {
             netflowPage.visit()
+            netflowPage.waitForLokiQuery()
             cy.get('.overviewTabButton').should('exist')
 
             cy.checkPanel(overviewSelectors.defaultPanels)
@@ -118,10 +119,11 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             //select all panels
             cy.get(overviewSelectors.panelsModal).contains('Select all').click();
             cy.get(overviewSelectors.panelsModal).contains('Save').click();
-            cy.wait(5000)
+            netflowPage.waitForLokiQuery()
             cy.checkPanelsNum(6);
 
             //check if all panels are rendered
+            netflowPage.waitForLokiQuery()
             cy.checkPanel(overviewSelectors.allPanels)
 
             //unselect all panels and check if save is disabled
@@ -132,6 +134,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             //select 1 panel and check if its visible on console
             cy.selectPopupItems(overviewSelectors.panelsModal, ['Total rate (line)']);
             cy.get(overviewSelectors.panelsModal).contains('Save').click();
+            netflowPage.waitForLokiQuery()
             cy.checkPanel([overviewSelectors.allPanels[3]])
             cy.checkPanelsNum(1);
 
@@ -139,6 +142,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             cy.openPanelsModal();
             cy.get(overviewSelectors.panelsModal).contains('Restore default panels').click();
             cy.get(overviewSelectors.panelsModal).contains('Save').click();
+            netflowPage.waitForLokiQuery()
             cy.checkPanel(overviewSelectors.defaultPanels)
             cy.checkPanelsNum();
         })

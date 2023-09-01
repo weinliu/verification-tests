@@ -22,3 +22,20 @@ export const dashboard = {
 export const graphSelector = {
     graphBody: '.co-dashboard-card__body--dashboard > div > div'
 }
+
+
+Cypress.Commands.add('checkDashboards', (names) => {
+    for (let i = 0; i < names.length; i++) {
+        cy.byTestID(names[i]).should('exist')
+            .find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+    }
+})
+
+declare global {
+    namespace Cypress {
+        interface Chainable {
+            checkDashboards(names: string[]): Chainable<Element>
+
+        }
+    }
+}
