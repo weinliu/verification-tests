@@ -2,6 +2,7 @@ package util
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 
 	"github.com/tidwall/gjson"
@@ -40,5 +41,49 @@ func GetLatestNightlyImage(release string) (string, error) {
 	}
 	latestImage := gjson.Get(string(outputCmd), `pullSpec`).String()
 	e2e.Logf("The latest nightly OCP image for %s is: %s", release, latestImage)
+	return latestImage, nil
+}
+
+// GetLatestImage retrieves the pull spec of the latest image satisfying the arch - product - stream combination.
+// arch = "amd64", "arm64", "ppc64le", "s390x", "multi"
+// product = "ocp", "origin" (i.e. okd, which only supports the amd64 architecture)
+// Possible values for the stream parameter depend on arch and product.
+// See https://docs.ci.openshift.org/docs/getting-started/useful-links/#services for relevant release status pages.
+//
+// Examples:
+// GetLatestImage("amd64", "ocp", "4.14.0-0.nightly")
+// GetLatestImage("arm64", "ocp", "4.14.0-0.nightly-arm64")
+// GetLatestImage("amd64", "origin", "4.14.0-0.okd")
+func GetLatestImage(arch, product, stream string) (string, error) {
+	switch arch {
+	case "amd64", "arm64", "ppc64le", "s390x", "multi":
+	default:
+		return "", fmt.Errorf("unsupported architecture %v", arch)
+	}
+
+	switch product {
+	case "ocp", "origin":
+	default:
+		return "", fmt.Errorf("unsupported product %v", product)
+	}
+
+	switch {
+	case product == "ocp":
+	case product == "origin" && arch == "amd64":
+	default:
+		return "", fmt.Errorf("the product - architecture combination: %v - %v is not supported", product, arch)
+	}
+
+	url := fmt.Sprintf("https://%v.%v.releases.ci.openshift.org/api/v1/releasestream/%v/latest",
+		arch, product, stream)
+	stdout, err := exec.Command("bash", "-c", "curl -s -k "+url).Output()
+	if err != nil {
+		return "", err
+	}
+	if !gjson.ValidBytes(stdout) {
+		return "", errors.New("curl does not return a valid json")
+	}
+	latestImage := gjson.GetBytes(stdout, "pullSpec").String()
+	e2e.Logf("Found latest image %v for architecture %v, product %v and stream %v", latestImage, arch, product, stream)
 	return latestImage, nil
 }

@@ -107,6 +107,8 @@ type installConfig struct {
 	region     string
 	template   string
 	publish    string
+	vmType     string
+	arch       string
 }
 
 type clusterDeployment struct {
@@ -345,6 +347,10 @@ type legoUser struct {
 const (
 	PublishExternal = "External"
 	PublishInternal = "Internal"
+	AWSVmTypeARM64  = "m6g.xlarge"
+	AWSVmTypeAMD64  = "m6i.xlarge"
+	archARM64       = "arm64"
+	archAMD64       = "amd64"
 )
 
 // Hive Configurations
@@ -543,11 +549,17 @@ func (claim *clusterClaim) create(oc *exutil.CLI) {
 }
 
 func (config *installConfig) create(oc *exutil.CLI) {
-	// Set default value
+	// Set default values
 	if config.publish == "" {
 		config.publish = "External"
 	}
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PUBLISH="+config.publish)
+	if config.vmType == "" {
+		config.vmType = "m6i.xlarge"
+	}
+	if config.arch == "" {
+		config.arch = "amd64"
+	}
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PUBLISH="+config.publish, "VMTYPE="+config.vmType, "ARCH="+config.arch)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

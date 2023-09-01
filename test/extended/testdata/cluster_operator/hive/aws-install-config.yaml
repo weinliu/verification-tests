@@ -15,23 +15,25 @@ objects:
       baseDomain: "${BASEDOMAIN}"
       compute:
       - name: worker
+        architecture: "${ARCH}"
         platform:
           aws:
             rootVolume:
               iops: 0
               size: 120
               type: gp3
-            type: m6i.xlarge
+            type: "${VMTYPE}"
         replicas: 3
       controlPlane:
         name: master
+        architecture: "${ARCH}"
         platform:
           aws:
             rootVolume:
               iops: 0
               size: 120
               type: gp3
-            type: m6i.xlarge
+            type: "${VMTYPE}"
         replicas: 3
       metadata:
         creationTimestamp: null
@@ -57,3 +59,5 @@ parameters:
 - name: NAME2
 - name: REGION
 - name: PUBLISH
+- name: VMTYPE
+- name: ARCH
