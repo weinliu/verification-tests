@@ -4792,6 +4792,38 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.status.phase}"}).check(oc)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonPreRelease-Author:xiyuan-Medium-55355-Check the operator's resources limit is configurable [Serial]", func() {
+		g.By("Check the default resource requirements for compliance operator pod !!!\n")
+		assertEventMessageRegexpMatch(oc, "cpu.*200m.*memory.*500Mi", "pod", "-l", "name=compliance-operator", "-n", subD.namespace,
+			`-o=jsonpath={.items[*].spec.containers[?(@.name=="compliance-operator")].resources.limits}`)
+		assertEventMessageRegexpMatch(oc, "cpu.*10m.*memory.*20Mi", "pod", "-l", "name=compliance-operator", "-n", subD.namespace,
+			`-o=jsonpath={.items[*].spec.containers[?(@.name=="compliance-operator")].resources.requests}`)
+
+		g.By("Patch the daemonResourceRequirements !!!\n")
+		defer func() {
+			g.By("Recover the default daemonResourceRequirements.. !!!\n")
+			patchRecover := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/config/resources\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "sub", subD.subName, "--type", "json", "--patch", patchRecover, "-n", subD.namespace)
+			newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=name=compliance-operator", "-n",
+				subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+			assertEventMessageRegexpMatch(oc, "cpu.*200m.*memory.*500Mi", "pod", "-l", "name=compliance-operator", "-n", subD.namespace,
+				`-o=jsonpath={.items[*].spec.containers[?(@.name=="compliance-operator")].resources.limits}`)
+			assertEventMessageRegexpMatch(oc, "cpu.*10m.*memory.*20Mi", "pod", "-l", "name=compliance-operator", "-n", subD.namespace,
+				`-o=jsonpath={.items[*].spec.containers[?(@.name=="compliance-operator")].resources.requests}`)
+		}()
+		patchResourceReq := fmt.Sprintf("{\"spec\":{\"config\":{\"resources\":{\"limits\":{\"memory\":\"512Mi\",\"cpu\":\"256m\"},\"requests\":{\"memory\":\"52Mi\",\"cpu\":\"25m\"}}}}}")
+		patchResource(oc, asAdmin, withoutNamespace, "sub", subD.subName, "--type", "merge", "-p", patchResourceReq, "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=name=compliance-operator", "-n",
+			subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+		assertEventMessageRegexpMatch(oc, "cpu.*256m.*memory.*512Mi", "pod", "-l", "name=compliance-operator", "-n", subD.namespace,
+			`-o=jsonpath={.items[*].spec.containers[?(@.name=="compliance-operator")].resources.limits}`)
+		assertEventMessageRegexpMatch(oc, "cpu.*25m.*memory.*52Mi", "pod", "-l", "name=compliance-operator", "-n", subD.namespace,
+			`-o=jsonpath={.items[*].spec.containers[?(@.name=="compliance-operator")].resources.requests}`)
+
+		g.By("ocp-55355 Check the operator's memory or CPU limits is configurable... !!!\n")
+	})
 })
 
 var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on hypershift hosted cluster", func() {
