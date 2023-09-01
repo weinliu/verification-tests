@@ -363,4 +363,41 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 
 	})
+
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-60691-Validate DynamicResourceAllocation feature gate is enabled with TPNoUpgrade", func() {
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip for featuregate set as TechPreviewNoUpgrade")
+		}
+		// Get kubecontrollermanager pod name & check if the feature gate is enabled
+		kcmPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-kube-controller-manager", "-l", "app=kube-controller-manager", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		kcmPodOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", kcmPodName, "-n", "openshift-kube-controller-manager", "-o=jsonpath={.spec.containers[0].args}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(kcmPodOut, "--feature-gates=DynamicResourceAllocation=true")).To(o.BeTrue())
+
+		// Get kubescheduler pod name & check if the feature gate is enabled
+		ksPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-kube-scheduler", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ksPodOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", ksPodName, "-n", "openshift-kube-scheduler", "-o=jsonpath={.spec.containers[0].args}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ksPodOut, "DynamicResourceAllocation=true")).To(o.BeTrue())
+
+		// Get kubeapiserver pod name & check if the feature gate is enabled
+		kaPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-kube-apiserver", "-l", "app=openshift-kube-apiserver", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		kaPodOut, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+kaPodName, "-n", "openshift-kube-apiserver").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(kaPodOut, "DynamicResourceAllocation=true")).To(o.BeTrue())
+
+		// Verify if featuregate is enabled for kubelet
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+		kubeletOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+masterNodes[0], "-n", "openshift-kube-scheduler", "--", "chroot", "/host", "cat", "/etc/kubernetes/kubelet.conf").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(kubeletOutput, `"DynamicResourceAllocation": true`)).To(o.BeTrue())
+
+	})
 })
