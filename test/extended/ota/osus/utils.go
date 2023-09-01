@@ -348,7 +348,7 @@ func restoreAddCA(oc *exutil.CLI, addCA string) {
 	if addCA == "" {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=json", "-p", "[{\"op\":\"remove\", \"path\":\"/spec/additionalTrustedCA\"}]").Execute()
 	} else {
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=merge", "--patch", fmt.Sprintf("{\"spec\":{\"additionalTrustedCA\":\"%s\"}}", addCA)).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=merge", "--patch", fmt.Sprintf("{\"spec\":{\"additionalTrustedCA\":%s}}", addCA)).Execute()
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
