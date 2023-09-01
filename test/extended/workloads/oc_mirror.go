@@ -1060,4 +1060,93 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		}
 
 	})
+
+	//author yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-Medium-66194-High-66195-oc-mirror support multi-arch catalog for docker format [Serial]", func() {
+		g.By("Set podman registry config")
+		dirname := "/tmp/case66194"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Set registry app")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		g.By("Starting mirror2mirror")
+		defer os.RemoveAll("oc-mirror-workspace")
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		operatorConfigS := filepath.Join(ocmirrorBaseDir, "config-66194.yaml")
+		err = wait.Poll(30*time.Second, 150*time.Second, func() (bool, error) {
+			err1 := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", operatorConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "oc-mirror command still falied")
+		g.By("Check the mirrored image should still with multi-arch")
+		ref, err := docker.ParseReference("//" + serInfo.serviceName + "/cpopen/ibm-zcon-zosconnect-catalog:6f02ec")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sys := &types.SystemContext{
+			AuthFilePath:                dirname + "/.dockerconfigjson",
+			OCIInsecureSkipTLSVerify:    true,
+			DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
+		}
+		ctx := context.Background()
+		src, err := ref.NewImageSource(ctx, sys)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func(src types.ImageSource) {
+			err := src.Close()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}(src)
+		rawManifest, _, err := src.GetManifest(ctx, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest))).To(o.BeTrue())
+
+		g.By("Starting mirror2disk")
+		defer os.RemoveAll("66195out")
+		err = wait.Poll(30*time.Second, 150*time.Second, func() (bool, error) {
+			err1 := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", operatorConfigS, "file://66195out").Execute()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "mirror2disk command still falied")
+
+		g.By("Starting disk2mirror")
+		err = wait.Poll(30*time.Second, 150*time.Second, func() (bool, error) {
+			err1 := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "66195out/mirror_seq1_000000.tar", "docker://"+serInfo.serviceName+"/disktomirror", "--dest-skip-tls").Execute()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "disk2mirror command still falied")
+
+		g.By("Check the mirrored image should still with multi-arch")
+		ref2, err2 := docker.ParseReference("//" + serInfo.serviceName + "/disktomirror/cpopen/ibm-zcon-zosconnect-catalog:6f02ec")
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		ctx2 := context.Background()
+		src2, err2 := ref2.NewImageSource(ctx2, sys)
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		defer func(src types.ImageSource) {
+			err := src.Close()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}(src2)
+		rawManifest2, _, err := src2.GetManifest(ctx2, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest2))).To(o.BeTrue())
+	})
 })
