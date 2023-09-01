@@ -142,16 +142,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		defer containerCLI.RemoveImage(imageInfo)
 
 		g.By("Mark down the config/layer info of oci image")
-		output, err = containerCLI.Run("run").Args("--rm", "quay.io/rh-obulatov/boater", "boater", "get-manifest", "-a", ociImage).Output()
+		output, err = oc.WithoutNamespace().AsAdmin().Run("image").Args("info", ociImage, "--filter-by-os=linux/amd64").Output()
 
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if err != nil {
 			e2e.Logf(output)
 		}
-		defer containerCLI.RemoveImage("quay.io/rh-obulatov/boater")
-		o.Expect(output).To(o.ContainSubstring("schemaVersion\":2"))
 		o.Expect(output).To(o.ContainSubstring("application/vnd.oci.image.manifest.v1+json"))
-		o.Expect(output).To(o.ContainSubstring("layers"))
+		o.Expect(output).To(o.ContainSubstring("Layers"))
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", oc.Namespace(), "all", "--all").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
