@@ -892,8 +892,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(enableErr).NotTo(o.HaveOccurred())
 
 		e2e.Logf("2. Check metrics for IPsec enabled/disabled after enabling at runtime")
-		prometheusURL := "localhost:29113/metrics"
-		containerName := "kube-rbac-proxy-controller"
+		prometheusURL := "localhost:29103/metrics"
+		containerName := "kube-rbac-proxy-node"
 		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
 		e2e.Logf("The expected value of the %s is 1", metricName)
 		ipsecEnabled := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
