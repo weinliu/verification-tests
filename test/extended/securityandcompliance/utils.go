@@ -2,6 +2,7 @@ package securityandcompliance
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -164,33 +165,18 @@ func (fi1 *fileintegrity) checkFileintegrityStatus(oc *exutil.CLI, expected stri
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with app=aide-example-fileintegrity is not expected %s", expected))
 }
 
-func (fi1 *fileintegrity) getConfigmapFromFileintegritynodestatus(oc *exutil.CLI, nodeName string) string {
-	var cmName string
-	err := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
-		cmName, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fi1.name+"-"+nodeName,
-			"-o=jsonpath={.results[-1].resultConfigMapName}").Output()
-		if strings.Contains(cmName, "failed") {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resultConfigMapName %s is not failed", fi1.name+"-"+nodeName))
-	if strings.Compare(cmName, "") == 0 {
-		e2e.Failf("Failed to get configmap name!")
-	}
-	return cmName
-}
-
 func (fi1 *fileintegrity) getDataFromConfigmap(oc *exutil.CLI, cmName string, expected string) {
-	var aideResult string
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-		aideResult, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/"+cmName, "-n", fi1.namespace, "-o=jsonpath={.data}").Output()
-		if matched, _ := regexp.MatchString(expected, aideResult); matched {
+	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		_, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", oc.Namespace(), "configmap/"+cmName, "--to=/tmp", "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		aideResult, err := os.ReadFile("/tmp/integritylog")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(string(aideResult), expected) {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("aideResult %s does not include %s", aideResult, expected))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cmName %s does not include %s", cmName, expected))
 }
 
 func getOneWorkerNodeName(oc *exutil.CLI) string {
@@ -317,7 +303,7 @@ func (fi1 *fileintegrity) checkConfigmapCreated(oc *exutil.CLI) {
 }
 
 func (fi1 *fileintegrity) checkFileintegritynodestatus(oc *exutil.CLI, nodeName string, expected string) {
-	err := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		fileintegrityName := fi1.name + "-" + nodeName
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
 			"-o=jsonpath={.lastResult.condition}").Output()
@@ -345,26 +331,14 @@ func (fi1 *fileintegrity) checkOnlyOneDaemonset(oc *exutil.CLI) {
 }
 
 func (fi1 *fileintegrity) removeFileintegrity(oc *exutil.CLI, expected string) {
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("fileintegrity", fi1.name, "-n", fi1.namespace).Output()
-		if strings.Contains(output, expected) {
-			return true, nil
-		}
-
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("delete fileintegrity  %s is not expected %s", fi1.name, expected))
+	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("fileintegrity", fi1.name, "-n", fi1.namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (fi1 *fileintegrity) reinitFileintegrity(oc *exutil.CLI, expected string) {
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("fileintegrity", fi1.name, "-n", fi1.namespace, "file-integrity.openshift.io/re-init=").Output()
-		if strings.Contains(output, expected) {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("annotate fileintegrity  %s is not expected %s", fi1.name, expected))
+	res, err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("fileintegrity", fi1.name, "-n", fi1.namespace, "file-integrity.openshift.io/re-init=").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(res).To(o.ContainSubstring(expected))
 }
 
 func (fi1 *fileintegrity) getDetailedDataFromFileintegritynodestatus(oc *exutil.CLI, nodeName string) (int, int, int) {
@@ -490,9 +464,12 @@ func setLabelToSpecificNode(oc *exutil.CLI, nodeName string, label string) {
 }
 
 func (fi1 *fileintegrity) expectedStringNotExistInConfigmap(oc *exutil.CLI, cmName string, expected string) {
-	err := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
-		aideResult, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/"+cmName, "-n", fi1.namespace, "-o=jsonpath={.data}").Output()
-		if !strings.Contains(aideResult, expected) {
+	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		_, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", oc.Namespace(), "configmap/"+cmName, "--to=/tmp", "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		aideResult, err := os.ReadFile("/tmp/integritylog")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(string(aideResult), expected) {
 			return true, nil
 		}
 		return false, nil

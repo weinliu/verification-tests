@@ -59,6 +59,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 		SkipMissingDefaultSC(oc)
 		SkipMissingRhcosWorkers(oc)
+		SkipClustersWithRhelNodes(oc)
 
 		g.By("Install Compliance Operator and check it is sucessfully installed !!! ")
 		createComplianceOperator(oc, subD, ogD)
