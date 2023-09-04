@@ -212,14 +212,22 @@ func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
 	mcp.oc.NotShowInfo()
 	defer mcp.oc.SetShowInfo()
 
-	// A node can belong to several pools
-	// In the case of "worker" pool, if a node belongs to both "worker" and "master" pool
-	// then the node is considered to belong to "master" node and not to "worker" pool.
-	if mcp.GetName() == MachineConfigPoolWorker {
-		nodes, err := mcp.getNodesWithLabels("")
-		if err != nil {
-			return nil, err
-		}
+	nodes, err := mcp.getNodesWithLabels("")
+	if err != nil {
+		return nil, err
+	}
+	return mcp.fixMultiPoolConflicts(nodes)
+}
+
+// fixMultiPoolConflicts filter the provided list of nodes and remove the nodes that do not belong to this MCP because they already belong to other MCP
+func (mcp *MachineConfigPool) fixMultiPoolConflicts(nodes []Node) ([]Node, error) {
+	mcp.oc.NotShowInfo()
+	defer mcp.oc.SetShowInfo()
+
+	// A node can be labeled with more than one node-role.kubernetes.io labels
+	// If a node is labeled with both "worker" (or custom) and "master" node-roles
+	// then the node is considered to belong to the "master" pool and not to the "worker" (or custom) pool.
+	if mcp.GetName() != MachineConfigPoolMaster {
 		nodesNotMaster := []Node{}
 
 		masterPool := NewMachineConfigPool(mcp.oc, MachineConfigPoolMaster)
@@ -235,7 +243,7 @@ func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
 
 		return nodesNotMaster, nil
 	}
-	return mcp.getNodesWithLabels("")
+	return nodes, nil
 }
 
 // GetNodesOrFail returns a list with the nodes that belong to the machine config pool and fail the test if any error happened
@@ -247,7 +255,11 @@ func (mcp *MachineConfigPool) GetNodesOrFail() []Node {
 
 // GetCoreOsNodes returns a list with the CoreOs nodes that belong to the machine config pool
 func (mcp *MachineConfigPool) GetCoreOsNodes() ([]Node, error) {
-	return mcp.getNodesWithLabels("node.openshift.io/os_id=rhcos")
+	nodes, err := mcp.getNodesWithLabels("node.openshift.io/os_id=rhcos")
+	if err != nil {
+		return nil, err
+	}
+	return mcp.fixMultiPoolConflicts(nodes)
 }
 
 // GetCoreOsNodesOrFail returns a list with the nodes that belong to the machine config pool and fail the test if any error happened
@@ -584,6 +596,7 @@ func GetCoreOsCompatiblePool(oc *exutil.CLI) *MachineConfigPool {
 		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 	)
+
 	if len(wMcp.GetCoreOsNodesOrFail()) == 0 {
 		logger.Infof("No CoreOs nodes in the worker pool. Using master pool for testing")
 		return mMcp
