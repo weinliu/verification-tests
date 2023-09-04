@@ -170,22 +170,22 @@ func (c *QuayCLI) GetTagNameList(imageIndex string) ([]string, error) {
 func (c *QuayCLI) GetTags(imageIndex string) ([]TagInfo, error) {
 
 	var result []TagInfo
-	var specificTag, indexRepository string
+	var specificTag, indexRepository, endpoint string
 
 	if strings.Contains(imageIndex, ":") {
 		indexRepository = strings.Split(imageIndex, ":")[0] + "/tag"
 		specificTag = strings.Split(imageIndex, ":")[1]
-	}
-	if strings.Contains(imageIndex, "/tag/") {
+		// GET /api/v1/repository/{repository}/tag?specificTag={tag} #Filters the tags to the specific tag.
+		endpoint = c.EndPointPre + indexRepository + "?specificTag=" + specificTag
+		if specificTag == "" {
+			// GET /api/v1/repository/{repository}/tag?onlyActiveTags=true #Filter to all active tags.
+			endpoint = c.EndPointPre + indexRepository + "?onlyActiveTags=true"
+		}
+	} else if strings.Contains(imageIndex, "/tag/") {
 		imageIndex = strings.Split(imageIndex, "tag/")[0] + "tag/"
+		endpoint = c.EndPointPre + imageIndex
 	}
 
-	// GET /api/v1/repository/{repository}/tag?specificTag={tag} #Filters the tags to the specific tag.
-	endpoint := c.EndPointPre + indexRepository + "?specificTag=" + specificTag
-	if specificTag == "" {
-		// GET /api/v1/repository/{repository}/tag?onlyActiveTags=true #Filter to all active tags.
-		endpoint = c.EndPointPre + indexRepository + "?onlyActiveTags=true"
-	}
 	e2e.Logf("endpoint is %s", endpoint)
 
 	client := &http.Client{}
