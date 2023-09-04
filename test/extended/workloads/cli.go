@@ -1364,6 +1364,7 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(string(output), "File: /tmp/case64921/oc-mirror")).To(o.BeTrue())
 	})
+
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-67013-oc image mirror with multi-arch images and --filter-by-os", func() {
 		g.By("create new namespace")
@@ -1417,6 +1418,46 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-66672-Disable build & DeploymentConfig capabilities during installation", func() {
+		g.By("Verify if baseLineCapabilities is set to None, enabledCapabilities on the cluster")
+		if !isBaselineCapsSet(oc, "None") {
+			g.Skip("Skipping the test as baselinecaps have not been set to None")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		build66672yaml := filepath.Join(buildPruningBaseDir, "build_66672.yaml")
+		dc66672yaml := filepath.Join(buildPruningBaseDir, "dc_66672.yaml")
+
+		if !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.By("Try to reterive build resources and validate an error is shown")
+			buildOutput, err := oc.WithoutNamespace().Run("get").Args("build.build.openshift.io", "-A").Output()
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(strings.Contains(buildOutput, "error: the server doesn't have a resource type \"build\"")).To(o.BeTrue())
+
+			g.By("Try to retreive dc resource and validate an error is shown")
+			dcOutput, err := oc.WithoutNamespace().Run("get").Args("dc", "-A").Output()
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(strings.Contains(dcOutput, "error: the server doesn't have a resource type \"dc\"")).To(o.BeTrue())
+
+			g.By("create new namespace")
+			oc.SetupProject()
+
+			g.By("Create deploymentconfig and validate that it fails")
+			dcCreation, err := oc.WithoutNamespace().Run("create").Args("-f", dc66672yaml, "-n", oc.Namespace()).Output()
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(strings.Contains(dcCreation, "no matches for kind \"DeploymentConfig\" in version \"apps.openshift.io/v1\"")).To(o.BeTrue())
+			o.Expect(strings.Contains(dcCreation, "ensure CRDs are installed first")).To(o.BeTrue())
+
+			g.By("Create build and validate that it fails")
+			buildCreation, err := oc.WithoutNamespace().Run("create").Args("-f", build66672yaml, "-n", oc.Namespace()).Output()
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(strings.Contains(buildCreation, "no matches for kind \"Build\" in version \"build.openshift.io/v1\"")).To(o.BeTrue())
+		} else {
+			e2e.Failf("Build and DeploymentConfig are already enabled which is not expected")
+		}
+	})
+
 })
 
 var _ = g.Describe("[sig-cli] Workloads client test", func() {
@@ -1436,6 +1477,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
+
 })
 
 // ClientVersion ...
