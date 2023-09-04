@@ -166,16 +166,26 @@ func (c *QuayCLI) GetTagNameList(imageIndex string) ([]string, error) {
 	return TagNameList, nil
 }
 
-// GetTags list all tags in repository
+// GetTags list the specificTag in repository
 func (c *QuayCLI) GetTags(imageIndex string) ([]TagInfo, error) {
+
 	var result []TagInfo
+	var specificTag, indexRepository string
+
 	if strings.Contains(imageIndex, ":") {
-		imageIndex = strings.Split(imageIndex, ":")[0] + "/tag/"
+		indexRepository = strings.Split(imageIndex, ":")[0] + "/tag"
+		specificTag = strings.Split(imageIndex, ":")[1]
 	}
 	if strings.Contains(imageIndex, "/tag/") {
 		imageIndex = strings.Split(imageIndex, "tag/")[0] + "tag/"
 	}
-	endpoint := c.EndPointPre + imageIndex
+
+	// GET /api/v1/repository/{repository}/tag?specificTag={tag} #Filters the tags to the specific tag.
+	endpoint := c.EndPointPre + indexRepository + "?specificTag=" + specificTag
+	if specificTag == "" {
+		// GET /api/v1/repository/{repository}/tag?onlyActiveTags=true #Filter to all active tags.
+		endpoint = c.EndPointPre + indexRepository + "?onlyActiveTags=true"
+	}
 	e2e.Logf("endpoint is %s", endpoint)
 
 	client := &http.Client{}
@@ -215,7 +225,7 @@ func (c *QuayCLI) GetImageDigest(imageIndex string) (string, error) {
 	var result string
 	tags, err := c.GetTags(imageIndex)
 	if err != nil {
-		e2e.Logf("Can't get the digest, GetTags list failed.")
+		e2e.Logf("Can't get the digest, GetTags failed.")
 		return result, err
 	}
 	imageTag := strings.Split(imageIndex, ":")[1]

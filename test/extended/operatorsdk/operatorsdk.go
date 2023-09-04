@@ -3569,6 +3569,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(bundleImageDigest).NotTo(o.BeEmpty())
 
+		indexImage := "quay.io/olmqe/nginxolm-operator-index:v1"
+		indexImageDigest, err := quayCLI.GetImageDigest(strings.Replace(indexImage, "quay.io/", "", 1))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(indexImageDigest).NotTo(o.BeEmpty())
+
 		exutil.By("step: run bundle")
 		defer func() {
 			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-operator-52571").Output()
@@ -3578,7 +3583,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 		}()
 
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@sha256:99333a6b6f32eb04d80f83fe63560e5f5d1c0c228eecb788d09ad23f0f8e9de9", "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@"+indexImageDigest, "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
@@ -3765,6 +3770,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(bundleImageDigest).NotTo(o.BeEmpty())
 
+		indexImage := "quay.io/olmqe/nginxolm-operator-index:v1"
+		indexImageDigest, err := quayCLI.GetImageDigest(strings.Replace(indexImage, "quay.io/", "", 1))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(indexImageDigest).NotTo(o.BeEmpty())
+
 		exutil.By("step: run bundle")
 
 		defer func() {
@@ -3775,7 +3785,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 		}()
 
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@sha256:99333a6b6f32eb04d80f83fe63560e5f5d1c0c228eecb788d09ad23f0f8e9de9", "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@"+indexImageDigest, "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
@@ -3969,6 +3979,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(bundleImageDigest).NotTo(o.BeEmpty())
 
+		indexImage := "quay.io/olmqe/nginxolm-operator-index:v1"
+		indexImageDigest, err := quayCLI.GetImageDigest(strings.Replace(indexImage, "quay.io/", "", 1))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(indexImageDigest).NotTo(o.BeEmpty())
+
 		exutil.By("step: run bundle")
 		defer func() {
 			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-operator-52814").Output()
@@ -3978,7 +3993,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 		}()
 
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@sha256:99333a6b6f32eb04d80f83fe63560e5f5d1c0c228eecb788d09ad23f0f8e9de9", "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@"+indexImageDigest, "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
