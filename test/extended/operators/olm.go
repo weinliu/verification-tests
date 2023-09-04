@@ -350,29 +350,30 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		poTemplate := filepath.Join(buildPruningBaseDir, "platform_operator.yaml")
-		// install an invalid platform operator: cluster-logging, it should be failed as expected
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", poTemplate, "-p", "NAME=cluster-logging", "PACKAGE=cluster-logging")
+		// install an invalid platform operator: external-dns-operator, it should be failed as expected
+		invalid_po := "external-dns-operator"
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", poTemplate, "-p", fmt.Sprintf("NAME=%s", invalid_po), fmt.Sprintf("PACKAGE=%s", invalid_po))
 		if err != nil {
-			e2e.Failf("Failed to create PO cluster logging: %s", err)
+			e2e.Failf("Failed to create PO %s: %s", invalid_po, err)
 		}
 		// delete it once case done
 		defer func() {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("platformoperator", "cluster-logging").Output()
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("platformoperator", invalid_po).Output()
 			if err != nil {
-				e2e.Failf("! fail to delete PO cluster logging: %s", err)
+				e2e.Failf("! fail to delete PO %s: %s", invalid_po, err)
 			}
 		}()
 		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("platformoperator", "cluster-logging", "-o=jsonpath={.status.conditions[0].message}").Output()
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("platformoperator", invalid_po, "-o=jsonpath={.status.conditions[0].message}").Output()
 			if err != nil {
-				e2e.Failf("! fail to get PO cluster logging message: %s", err)
+				e2e.Failf("! fail to get PO %s message: %s", invalid_po, err)
 			}
 			if !strings.Contains(msg, "AllNamespace install mode must be enabled") {
 				return false, nil
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "PO cluster logging not failed as expected!")
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("PO %s not failed as expected!", invalid_po))
 		// install an valid platform operator: quay-operator, it should be created success
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", poTemplate, "-p", "NAME=quay-operator", "PACKAGE=quay-operator")
 		if err != nil {
