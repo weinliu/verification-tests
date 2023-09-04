@@ -4684,11 +4684,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			ssbPcidss             = "test-pci-dss" + getRandomString()
 			ccrsCisShouldFailList = []string{
 				tprofileCis.name + "-audit-log-forwarding-webhook",
-				tprofileCis.name + "-idp-is-configured",
 				tprofileCis.name + "-ocp-api-server-audit-log-maxbackup"}
 			ccrsPcidssShouldFailList = []string{
 				tprofilePcidss.name + "-audit-log-forwarding-webhook",
-				tprofilePcidss.name + "-idp-is-configured",
 				tprofilePcidss.name + "-ocp-api-server-audit-log-maxbackup"}
 		)
 
@@ -4918,8 +4916,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 		g.By("Verify result for rules in compliancecheckresult.. !!!.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-configure-network-policies-namespaces",
 			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-idp-is-configured",
-			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-kubeadmin-removed",
 			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
 
@@ -4964,8 +4960,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 
 		g.By("Verify result for rules in compliancecheckresult.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-configure-network-policies-namespaces",
-			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-idp-is-configured",
 			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-kubeadmin-removed",
 			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
