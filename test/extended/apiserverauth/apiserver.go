@@ -6135,4 +6135,63 @@ manifests:
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring(`The FeatureGate "cluster" is invalid: spec.featureSet: Forbidden: once enabled, tech preview features may not be disabled`))
 	})
+
+	// author: kewang@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11797-[Apiserver] Image with single or multiple layer(s) sumed up size slightly exceed the openshift.io/image-size will push failed", func() {
+		exutil.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
+		var (
+			imageLimitRangeYamlFile = tmpdir + "image-limit-range.yaml"
+			imageLimitRangeYaml     = fmt.Sprintf(`apiVersion: v1
+kind: LimitRange
+metadata:
+  name: openshift-resource-limits
+spec:
+  limits:
+    - type: openshift.io/Image
+      max:
+        storage: %s
+    - type: openshift.io/ImageStream
+      max:
+        openshift.io/image-tags: 20
+        openshift.io/images: 30
+`, "100Mi")
+		)
+
+		exutil.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		exutil.By("2) Create a resource quota limit of the image")
+		f, err := os.Create(imageLimitRangeYamlFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		_, err = w.WriteString(imageLimitRangeYaml)
+		w.Flush()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().Run("delete").Args("-f", imageLimitRangeYamlFile, "-n", namespace).Execute()
+		quotaErr := oc.AsAdmin().Run("create").Args("-f", imageLimitRangeYamlFile, "-n", namespace).Execute()
+		o.Expect(quotaErr).NotTo(o.HaveOccurred())
+
+		exutil.By(`3) Using "skopeo" tool to copy image from quay registry to the default internal registry of the cluster`)
+		destRegistry := "docker://" + defaultRegistryServiceURL + "/" + namespace + "/mystream:latest"
+
+		exutil.By(`3.1) Try copying multiple layers image to the default internal registry of the cluster`)
+		publicImageUrl := "docker://" + "quay.io/openshifttest/mysql:1.2.0"
+		output, err := copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+
+		exutil.By(`3.2) Try copying  single layer image to the default internal registry of the cluster`)
+		publicImageUrl = "docker://" + "quay.io/openshifttest/singlelayer:latest"
+		output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+	})
 })
