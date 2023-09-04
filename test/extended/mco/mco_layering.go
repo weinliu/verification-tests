@@ -1081,6 +1081,81 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Medium-54056-Update osImage using the internal registry to store the image [Disruptive]", func() {
+		var (
+			osImageNewFilePath = "/etc/hello-tc-54056"
+			dockerFileCommands = fmt.Sprintf(`
+RUN touch %s
+`, osImageNewFilePath)
+			mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+		)
+
+		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
+
+		// Select the nodes
+		builderNode := mMcp.GetNodesOrFail()[0] // We always build the image in a master node to make sure it is CoreOs
+
+		// We test the image in a compact/sno compatible pool
+		mcp := GetCompactCompatiblePool(oc.AsAdmin())
+		if len(mcp.GetCoreOsNodesOrFail()) == 0 {
+			logger.Infof("The worker pool has no CoreOs nodes, we will use master pool for testing the osImage")
+			mcp = mMcp
+		}
+
+		node := mcp.GetCoreOsNodesOrFail()[0]
+
+		logger.Infof("Using pool %s and node %s for testing", mcp.GetName(), node.GetName())
+
+		// Build the new osImage
+		osImageBuilder := OsImageBuilderInNode{node: builderNode, dockerFileCommands: dockerFileCommands}
+		osImageBuilder.UseInternalRegistry = true
+		defer func() { _ = osImageBuilder.CleanUp() }()
+		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error creating the new osImage")
+		logger.Infof("Digested Image: %s", digestedImage)
+		logger.Infof("OK\n")
+
+		// Create MC and wait for MCP
+		exutil.By("Create a MC to deploy the new osImage")
+		layeringMcName := "layering-mc"
+		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, mcp.GetName())
+		layeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+
+		defer layeringMC.delete()
+		layeringMC.create()
+
+		mcp.waitForComplete()
+		logger.Infof("The new osImage was deployed successfully\n")
+		logger.Infof("OK\n")
+
+		// Check image content
+		exutil.By("Load remote resources to verify that the osImage content has been deployed properly")
+
+		tc54056File := NewRemoteFile(node, osImageNewFilePath)
+		o.Expect(tc54056File.Exists()).To(o.BeTrue(),
+			"The file %s included in the osImage should exist in the node %s, but it does not", osImageNewFilePath, node.GetName())
+
+		o.Expect(tc54056File.Fetch()).To(o.Succeed(),
+			"The content of file %s could not be retreived from node %s", osImageNewFilePath, node.GetName())
+
+		o.Expect(tc54056File.GetTextContent()).To(o.BeEmpty(),
+			"The file %s should be empty, but it is not. Current content: %s", osImageNewFilePath, tc54056File.GetTextContent())
+		logger.Infof("OK\n")
+
+		// Delete the MC and wait for MCP
+		exutil.By("Delete the MC so that the original osImage is restored")
+		layeringMC.delete()
+		mcp.waitForComplete()
+		logger.Infof("MC was successfully deleted\n")
+		logger.Infof("OK\n")
+
+		exutil.By("Check that the included new content is not present anymore")
+		o.Expect(tc54056File.Exists()).To(o.BeFalse(),
+			"The file %s included in the osImage should exist in the node %s, but it does not", osImageNewFilePath, node.GetName())
+		logger.Infof("OK\n")
+	})
 })
 
 // oc: the CLI

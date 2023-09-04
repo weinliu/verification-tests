@@ -224,3 +224,17 @@ func (rf RemoteFile) GetFilteredTextContent(regex string) ([]string, error) {
 func (rf RemoteFile) GetFullPath() string {
 	return rf.fullPath
 }
+
+func (rf RemoteFile) Exists() (bool, error) {
+	output, err := rf.node.DebugNodeWithChroot("stat", statFormat, rf.fullPath)
+
+	if strings.Contains(output, "No such file or directory") {
+		return false, nil
+	}
+
+	if err == nil {
+		return true, nil
+	}
+
+	return false, err
+}

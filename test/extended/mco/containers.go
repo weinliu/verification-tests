@@ -77,36 +77,36 @@ func (b *OsImageBuilder) preparePushToInternalRegistry() error {
 		}
 	}
 
-	logger.Infof("Create namespace to store the imagestream")
-	nsExistsErr := b.oc.Run("get").Args("namespace", layeringImagestreamNamespace).Execute()
+	logger.Infof("Create namespace to store the service account to access the internal registry")
+	nsExistsErr := b.oc.Run("get").Args("namespace", layeringTestsTmpNamespace).Execute()
 	if nsExistsErr != nil {
-		err := b.oc.Run("create").Args("namespace", layeringImagestreamNamespace).Execute()
+		err := b.oc.Run("create").Args("namespace", layeringTestsTmpNamespace).Execute()
 		if err != nil {
 			return fmt.Errorf("Error creating namespace %s to store the layering imagestreams. Error: %s",
-				layeringImagestreamNamespace, err)
+				layeringTestsTmpNamespace, err)
 		}
 	} else {
-		logger.Infof("Namespace %s already exists. Skip namespace creation", layeringImagestreamNamespace)
+		logger.Infof("Namespace %s already exists. Skip namespace creation", layeringTestsTmpNamespace)
 	}
 
-	logger.Infof("Create registry admin service account to store the imagestream")
-	saExistsErr := b.oc.Run("get").Args("-n", layeringImagestreamNamespace, "serviceaccount", layeringRegistryAdminSAName).Execute()
+	logger.Infof("Create service account with registry admin permissions to store the imagestream")
+	saExistsErr := b.oc.Run("get").Args("-n", layeringTestsTmpNamespace, "serviceaccount", layeringRegistryAdminSAName).Execute()
 	if saExistsErr != nil {
-		cErr := b.oc.Run("create").Args("-n", layeringImagestreamNamespace, "serviceaccount", layeringRegistryAdminSAName).Execute()
+		cErr := b.oc.Run("create").Args("-n", layeringTestsTmpNamespace, "serviceaccount", layeringRegistryAdminSAName).Execute()
 		if cErr != nil {
-			return fmt.Errorf("Error creating ServiceAccount %s/%s: %s", layeringImagestreamNamespace, layeringRegistryAdminSAName, cErr)
+			return fmt.Errorf("Error creating ServiceAccount %s/%s: %s", layeringTestsTmpNamespace, layeringRegistryAdminSAName, cErr)
 		}
 	} else {
-		logger.Infof("SA %s/%s already exists. Skip SA creation", layeringImagestreamNamespace, layeringRegistryAdminSAName)
+		logger.Infof("SA %s/%s already exists. Skip SA creation", layeringTestsTmpNamespace, layeringRegistryAdminSAName)
 	}
 
-	admErr := b.oc.Run("adm").Args("-n", layeringImagestreamNamespace, "policy", "add-cluster-role-to-user", "registry-admin", "-z", layeringRegistryAdminSAName).Execute()
+	admErr := b.oc.Run("adm").Args("-n", layeringTestsTmpNamespace, "policy", "add-cluster-role-to-user", "registry-admin", "-z", layeringRegistryAdminSAName).Execute()
 	if admErr != nil {
 		return fmt.Errorf("Error creating ServiceAccount %s: %s", layeringRegistryAdminSAName, admErr)
 	}
 
 	logger.Infof("Get SA token")
-	saToken, err := b.oc.Run("create").Args("-n", layeringImagestreamNamespace, "token", layeringRegistryAdminSAName).Output()
+	saToken, err := b.oc.Run("create").Args("-n", layeringTestsTmpNamespace, "token", layeringRegistryAdminSAName).Output()
 	if err != nil {
 		logger.Errorf("Error getting token for SA %s", layeringRegistryAdminSAName)
 		return err
@@ -121,7 +121,7 @@ func (b *OsImageBuilder) preparePushToInternalRegistry() error {
 	}
 	logger.Infof("Current internal registry route: %s", internalRegistryURL)
 
-	b.osImage = fmt.Sprintf("%s/%s/%s", internalRegistryURL, layeringImagestreamNamespace, "layering")
+	b.osImage = fmt.Sprintf("%s/%s/%s", internalRegistryURL, layeringTestsTmpNamespace, "layering")
 	logger.Infof("Using image: %s", b.osImage)
 
 	logger.Infof("Loging as registry admin to internal registry")
@@ -139,11 +139,11 @@ func (b *OsImageBuilder) preparePushToInternalRegistry() error {
 func (b *OsImageBuilder) CleanUp() error {
 	logger.Infof("Cleanup image builder resources")
 	if b.UseInternalRegistry {
-		logger.Infof("Removing namespace %s", layeringImagestreamNamespace)
-		err := b.oc.Run("delete").Args("namespace", layeringImagestreamNamespace, "--ignore-not-found").Execute()
+		logger.Infof("Removing namespace %s", layeringTestsTmpNamespace)
+		err := b.oc.Run("delete").Args("namespace", layeringTestsTmpNamespace, "--ignore-not-found").Execute()
 		if err != nil {
-			return fmt.Errorf("Error creating namespace %s to store the layering imagestreams. Error: %s",
-				layeringImagestreamNamespace, err)
+			return fmt.Errorf("Error deleting namespace %s. Error: %s",
+				layeringTestsTmpNamespace, err)
 		}
 
 		if b.cleanupRegistryRoute {

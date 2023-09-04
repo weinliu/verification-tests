@@ -96,8 +96,8 @@ const (
 	// ExpirationDokerfileLabel Expiration label in Dockerfile
 	ExpirationDokerfileLabel = `LABEL maintainer="mco-qe-team" quay.expires-after=2h`
 
-	layeringImagestreamNamespace = "layering-tests-imagestreams"
-	layeringRegistryAdminSAName  = "test-registry-sa"
+	layeringTestsTmpNamespace   = "layering-tests-imagestreams"
+	layeringRegistryAdminSAName = "test-registry-sa"
 
 	// DefaultExpectTimeout is the default tiemout for expect commands
 	DefaultExpectTimeout = 10 * time.Second
