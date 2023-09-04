@@ -9188,7 +9188,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-Medium-41035-Fail InstallPlan on bundle unpack timeout [Slow]", func() {
+	g.It("ConnectedOnly-Longduration-NonPreRelease-Author:xzha-Medium-41035-Fail InstallPlan on bundle unpack timeout [Slow]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
