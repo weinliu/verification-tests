@@ -452,6 +452,18 @@ func (lvs *localVolumeSet) createWithExtraParameters(oc *exutil.CLI, extraParame
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create localVolumeSet CR with extra parameters
+func (lvs *localVolumeSet) createWithSpecifiedDeviceTypes(oc *exutil.CLI, specifiedDeviceTypes []string) {
+	if lvs.namespace == "" {
+		lvs.namespace = oc.Namespace()
+	}
+	specifiedDeviceTypesExtraParameters := map[string]interface{}{
+		"jsonPath":    `items.0.spec.deviceInclusionSpec.`,
+		"deviceTypes": specifiedDeviceTypes,
+	}
+	lvs.createWithExtraParameters(oc, specifiedDeviceTypesExtraParameters)
+}
+
 // Delete localVolumeSet CR
 func (lvs *localVolumeSet) deleteAsAdmin(oc *exutil.CLI) {
 	lvsPvs, _ := getPvNamesOfSpecifiedSc(oc, lvs.scname)

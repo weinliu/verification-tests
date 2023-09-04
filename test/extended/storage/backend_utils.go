@@ -337,6 +337,7 @@ type ebsVolume struct {
 	Size             int64  // The size of the volume, in GiBs
 	VolumeType       string // Valid Values: standard | io1 | io2 | gp2 | sc1 | st1 | gp3
 	Device           string
+	ActualDevice     string
 	volumeID         string
 	attachedNode     string
 	State            string // Valid Values: creating | available | in-use | deleting | deleted | error
@@ -563,29 +564,30 @@ func (vol *ebsVolume) attachToInstanceSucceed(ac *ec2.EC2, oc *exutil.CLI, insta
 	vol.waitAttachSucceed(ac)
 	vol.attachedNode = instance.instanceID
 	deviceByID := "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol" + strings.TrimPrefix(vol.volumeID, "vol-")
-	if statInfo, _ := execCommandInSpecificNode(oc, instance.name, "stat "+deviceByID); strings.Contains(statInfo, "symbolic link") {
-		vol.DeviceByID = deviceByID
+	deviceInfo, err := execCommandInSpecificNode(oc, instance.name, "lsblk -J")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	sameSizeDevices := gjson.Get(deviceInfo, `blockdevices.#(size=`+strconv.FormatInt(vol.Size, 10)+`G)#.name`).Array()
+	sameTypeDevices := gjson.Get(deviceInfo, `blockdevices.#(type="disk")#.name`).Array()
+	devices := sliceIntersect(strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameSizeDevices), "["), "]"), " "),
+		strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameTypeDevices), "["), "]"), " "))
+	o.Expect(devices).NotTo(o.BeEmpty())
+	e2e.Logf(`The same type and size filtered Devices are: "%v"`, devices)
+	if len(devices) == 1 {
+		vol.ActualDevice = "/dev/" + devices[0]
 	} else {
-		deviceInfo, err := execCommandInSpecificNode(oc, instance.name, "lsblk -J")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		sameSizeDevices := gjson.Get(deviceInfo, `blockdevices.#(size=`+strconv.FormatInt(vol.Size, 10)+`G)#.name`).Array()
-		sameTypeDevices := gjson.Get(deviceInfo, `blockdevices.#(type="disk")#.name`).Array()
-		devices := sliceIntersect(strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameSizeDevices), "["), "]"), " "),
-			strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameTypeDevices), "["), "]"), " "))
-		o.Expect(devices).NotTo(o.BeEmpty())
-		e2e.Logf(`The same type and size filtered Devices are: "%v"`, devices)
-		if len(devices) == 1 {
-			vol.DeviceByID = "/dev/" + devices[0]
-		} else {
-			for _, device := range devices {
-				if strings.Split(device, "")[len(device)-1] == strings.Split(vol.Device, "")[len(vol.Device)-1] {
-					vol.DeviceByID = "/dev/" + device
-					break
-				}
+		for _, device := range devices {
+			if strings.Split(device, "")[len(device)-1] == strings.Split(vol.Device, "")[len(vol.Device)-1] {
+				vol.ActualDevice = "/dev/" + device
+				break
 			}
 		}
 	}
-	e2e.Logf("Volume : \"%s\" attach to instance \"%s\" [Device:\"%s\", ById:\"%s\"]", vol.volumeID, vol.attachedNode, vol.Device, vol.DeviceByID)
+	if statInfo, _ := execCommandInSpecificNode(oc, instance.name, "stat "+deviceByID); strings.Contains(statInfo, "symbolic link") {
+		vol.DeviceByID = deviceByID
+	} else {
+		vol.DeviceByID = vol.ActualDevice
+	}
+	e2e.Logf("Volume : \"%s\" attach to instance \"%s\" [Device:\"%s\", ById:\"%s\", ActualDevice:\"%s\"]", vol.volumeID, vol.attachedNode, vol.Device, vol.DeviceByID, vol.ActualDevice)
 }
 
 // Request detach the ebs volume from instance

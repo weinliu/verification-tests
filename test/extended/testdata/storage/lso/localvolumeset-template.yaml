@@ -12,7 +12,7 @@ objects:
   spec:
     storageClassName: ${SCNAME} 
     volumeMode: ${VOLUMEMODE}
-    fstype: ${FSTYPE}
+    fsType: ${FSTYPE}
     maxDeviceCount: ${{MAXDEVICECOUNT}}
     deviceInclusionSpec:
       deviceTypes: 

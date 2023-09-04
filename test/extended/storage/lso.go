@@ -684,6 +684,61 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-High-67070-[LSO] [mpath] LocalVolumeSet CR should provision matched device and could be used by Pod [Serial]", func() {
+		// Set the resource definition for the scenario
+		var (
+			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
+			podTemplate = filepath.Join(lsoBaseDir, "pod-template.yaml")
+			lvsTemplate = filepath.Join(lsoBaseDir, "/lso/localvolumeset-template.yaml")
+			mylvs       = newLocalVolumeSet(setLvsNamespace(myLso.namespace), setLvsTemplate(lvsTemplate), setLvsFstype("xfs"))
+			pvc         = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylvs.scname))
+			pod         = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+		)
+
+		exutil.By("# Create a new project for the scenario")
+		oc.SetupProject() //create new project
+
+		exutil.By("# Create 1 aws ebs volume and attach the volume to a schedulable worker node")
+		myWorker := getOneSchedulableWorker(allNodes)
+		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey), setVolSize(getRandomNum(5, 15)))
+		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
+		myVolume.create(ac)
+		myVolume.waitStateAsExpected(ac, "available")
+
+		// Attach the volumes to a schedulable linux worker node
+		defer myVolume.detachSucceed(ac)
+		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
+
+		exutil.By("# Create multipath config for the attached volume")
+		mpathConfigCmd := `/sbin/mpathconf --enable && systemctl restart multipathd && multipath -a ` + myVolume.ActualDevice + " && systemctl reload multipathd && multipath -l"
+		defer execCommandInSpecificNode(oc, myWorker.name, "multipath -w "+myVolume.ActualDevice+" && multipath -F && systemctl stop multipathd")
+		o.Expect(execCommandInSpecificNode(oc, myWorker.name, mpathConfigCmd)).Should(o.And(
+			o.ContainSubstring("status=enabled"),
+			o.ContainSubstring("dm-"),
+		))
+
+		exutil.By("# Create a localvolumeSet cr and wait for device provisioned")
+		mylvs.createWithSpecifiedDeviceTypes(oc, []string{"mpath"})
+		defer mylvs.deleteAsAdmin(oc)
+		mylvs.waitDeviceProvisioned(oc)
+
+		exutil.By("# Create a pvc use the localVolumeSet storageClass and create a pod consume the pvc")
+		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		exutil.By("# Check the pod volume can be read and write and have the exec right")
+		pod.checkMountedVolumeCouldRW(oc)
+		pod.checkMountedVolumeHaveExecRight(oc)
+
+		exutil.By("# Check the volume fsType as expected")
+		o.Expect(pod.execCommand(oc, "df -Th| grep "+pod.mountPath)).Should(o.ContainSubstring("xfs"))
+	})
+
+	// author: pewang@redhat.com
 	// Customer Scenario for Telco:
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2023614
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2014083#c18
