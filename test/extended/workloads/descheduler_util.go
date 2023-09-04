@@ -84,6 +84,16 @@ type deploypodtopologyspread struct {
 	template  string
 }
 
+type customsub struct {
+	name        string
+	namespace   string
+	channelName string
+	opsrcName   string
+	sourceName  string
+	startingCSV string
+	template    string
+}
+
 func (sub *subscription) createSubscription(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "NAME="+sub.name, "NAMESPACE="+sub.namespace,
@@ -353,4 +363,29 @@ func skipMissingCatalogsource(oc *exutil.CLI) {
 	if strings.Contains(output, "NotFound") {
 		g.Skip("Skip since catalogsource/qe-app-registry not available")
 	}
+}
+
+func (sub *customsub) createCustomSub(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "NAME="+sub.name, "NAMESPACE="+sub.namespace,
+			"CHANNELNAME="+sub.channelName, "OPSRCNAME="+sub.opsrcName, "SOURCENAME="+sub.sourceName, "CSVNAME="+sub.startingCSV)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("sub %s is not created successfully", sub.name))
+}
+
+func (sub *customsub) deleteCustomSubscription(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("subscription", sub.name, "-n", sub.namespace).Execute()
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("sub %s is not deleted successfully", sub.name))
 }

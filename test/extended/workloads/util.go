@@ -1321,56 +1321,6 @@ func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.D
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
 }
 
-func createCSAndISCP(oc *exutil.CLI, podLabel string, namespace string, expectedStatus string, packageNum int) {
-	var files []string
-	var yamlFiles []string
-
-	root := "oc-mirror-workspace"
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		files = append(files, path)
-		return nil
-	})
-	if err != nil {
-		e2e.Failf("Can't walk the oc-mirror-workspace directory")
-	}
-
-	for _, file := range files {
-		if matched, _ := regexp.MatchString("yaml", file); matched {
-			fmt.Println("file name is %v \n", file)
-			yamlFiles = append(yamlFiles, file)
-		}
-	}
-
-	defer func() {
-		for _, deleteFileName := range yamlFiles {
-			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", deleteFileName).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-	}()
-
-	for _, yamlFileName := range yamlFiles {
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", yamlFileName).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	}
-
-	e2e.Logf("Check the version and item from catalogsource")
-	//oc get pod -n openshift-marketplace -l olm.catalogSource=redhat-operator-index
-	assertPodOutput(oc, "olm.catalogSource="+podLabel, namespace, expectedStatus)
-
-	//oc get packagemanifests --selector=catalog=redhat-operator-index -o=jsonpath='{.items[*].metadata.name}'
-	waitErr := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
-		out, err := oc.AsAdmin().Run("get").Args("packagemanifests", "--selector=catalog="+podLabel, "-o=jsonpath={.items[*].metadata.name}", "-n", namespace).Output()
-		mirrorItemList := strings.Fields(out)
-		if len(mirrorItemList) != packageNum || err != nil {
-			e2e.Logf("the err:%v and mirrorItemList: %v, and try next round", err, mirrorItemList)
-			return false, nil
-		}
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(waitErr, "max time reached but still can't find  packagemanifest")
-
-}
-
 func assertPodOutput(oc *exutil.CLI, podLabel string, namespace string, expected string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		podStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", podLabel).Output()
@@ -1442,4 +1392,138 @@ func getClusterResourceName(fileName string) ([]string, error) {
 		clusterResourceNameList = append(clusterResourceNameList, strings.Split(scanner.Text(), " ")[0])
 	}
 	return clusterResourceNameList, scanner.Err()
+}
+
+func createCSAndISCP(oc *exutil.CLI, podLabel string, namespace string, expectedStatus string, packageNum int) {
+	var files []string
+	var yamlFiles []string
+
+	root := "oc-mirror-workspace"
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		e2e.Failf("Can't walk the oc-mirror-workspace directory")
+	}
+
+	for _, file := range files {
+		if matched, _ := regexp.MatchString("yaml", file); matched {
+			fmt.Println("file name is %v \n", file)
+			yamlFiles = append(yamlFiles, file)
+		}
+	}
+
+	for _, yamlFileName := range yamlFiles {
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", yamlFileName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+
+	e2e.Logf("Check the version and item from catalogsource")
+	//oc get pod -n openshift-marketplace -l olm.catalogSource=redhat-operator-index
+	assertPodOutput(oc, "olm.catalogSource="+podLabel, namespace, expectedStatus)
+
+	//oc get packagemanifests --selector=catalog=redhat-operator-index -o=jsonpath='{.items[*].metadata.name}'
+	waitErr := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+		out, err := oc.AsAdmin().Run("get").Args("packagemanifests", "--selector=catalog="+podLabel, "-o=jsonpath={.items[*].metadata.name}", "-n", namespace).Output()
+		mirrorItemList := strings.Fields(out)
+		if len(mirrorItemList) != packageNum || err != nil {
+			e2e.Logf("the err:%v and mirrorItemList: %v, and try next round", err, mirrorItemList)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "max time reached but still can't find  packagemanifest")
+
+}
+
+func getOperatorInfo(oc *exutil.CLI, operatorName string, operatorNamespace string, catalogName string, catalogSourceName string) (*customsub, *operatorgroup) {
+	getOperatorChannelCMD := fmt.Sprintf("oc-mirror list operators --catalog %s  |grep %s |awk '{print $NF}'", catalogName, operatorName)
+	channel, err := exec.Command("bash", "-c", getOperatorChannelCMD).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	channelName := strings.ReplaceAll(string(channel), "\n", "")
+	e2e.Logf("the default name%v", channelName)
+
+	getstartingCSVCMD := fmt.Sprintf("oc-mirror list operators --catalog %s --package %s  |grep %s | awk '{print $3}' |awk 'END {print}'", catalogName, operatorName, channelName)
+	e2e.Logf("the csv name%v", getstartingCSVCMD)
+	startingCsv, err := exec.Command("bash", "-c", getstartingCSVCMD).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	startingCsvName := strings.ReplaceAll(string(startingCsv), "\n", "")
+	e2e.Logf("the csv name%v", startingCsvName)
+
+	buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+	subscriptionT := filepath.Join(buildPruningBaseDir, "customsub.yaml")
+	operatorGroupT := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+
+	sub := customsub{
+		name:        operatorName,
+		namespace:   operatorNamespace,
+		channelName: channelName,
+		opsrcName:   catalogSourceName,
+		sourceName:  "openshift-marketplace",
+		startingCSV: startingCsvName,
+		template:    subscriptionT,
+	}
+
+	og := operatorgroup{
+		name:      operatorName,
+		namespace: operatorNamespace,
+		template:  operatorGroupT,
+	}
+
+	return &sub, &og
+}
+
+func installOperatorFromCustomCS(oc *exutil.CLI, operatorSub *customsub, operatorOG *operatorgroup, operatorNamespace string, operatorDeoloy string) {
+	e2e.Logf("Create the operator namespace")
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", operatorNamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("Create the subscription")
+	operatorSub.createCustomSub(oc)
+
+	e2e.Logf("Create the operatorgroup")
+	operatorOG.createOperatorGroup(oc)
+
+	e2e.Logf("Wait for the operator pod running")
+	if ok := waitForAvailableRsRunning(oc, "deploy", operatorDeoloy, operatorNamespace, "1"); ok {
+		e2e.Logf("installed operator runnnig now\n")
+	}
+}
+
+func removeOperatorFromCustomCS(oc *exutil.CLI, operatorSub *customsub, operatorOG *operatorgroup, operatorNamespace string) {
+	e2e.Logf("Remove the subscription")
+	operatorSub.deleteCustomSubscription(oc)
+
+	e2e.Logf("Remove the operatorgroup")
+	operatorOG.deleteOperatorGroup(oc)
+
+	e2e.Logf("Remove the operatornamespace")
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", operatorNamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func removeCSAndISCP(oc *exutil.CLI) {
+	var files []string
+	var yamlFiles []string
+	root := "oc-mirror-workspace"
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		e2e.Failf("Can't walk the oc-mirror-workspace directory")
+	}
+
+	for _, file := range files {
+		if matched, _ := regexp.MatchString("yaml", file); matched {
+			fmt.Println("file name is %v \n", file)
+			yamlFiles = append(yamlFiles, file)
+		}
+	}
+
+	for _, deleteFileName := range yamlFiles {
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", deleteFileName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }
