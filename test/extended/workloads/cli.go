@@ -1397,6 +1397,25 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 
 })
 
+var _ = g.Describe("[sig-cli] Workloads client test", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc = exutil.NewCLIWithoutNamespace("default")
+	)
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-66724-oc explain should be work for all the clusterresource", func() {
+		clusterResourceFile, err := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("--no-headers").OutputToFile("apiresourceout.txt")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterResourceList, err := getClusterResourceName(clusterResourceFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, resource := range clusterResourceList {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("explain").Args(resource).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	})
+})
+
 // ClientVersion ...
 type ClientVersion struct {
 	BuildDate    string `json:"buildDate"`

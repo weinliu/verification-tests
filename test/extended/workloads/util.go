@@ -1,6 +1,7 @@
 package workloads
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	o "github.com/onsi/gomega"
@@ -1425,4 +1426,20 @@ func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Node %s is not in expected status %s", nodeName, expectedStatus))
+}
+
+// get cluster resource name list
+func getClusterResourceName(fileName string) ([]string, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var clusterResourceNameList []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		clusterResourceNameList = append(clusterResourceNameList, strings.Split(scanner.Text(), " ")[0])
+	}
+	return clusterResourceNameList, scanner.Err()
 }
