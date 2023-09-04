@@ -1,0 +1,10 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: uitestcs
+  namespace: openshift-marketplace
+spec:
+  displayName: UI-Test-CS
+  image: 'quay.io/yanpzhan/apicast-single-index:latest'
+  publisher: ''
+  sourceType: grpc

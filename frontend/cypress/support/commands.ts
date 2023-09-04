@@ -9,6 +9,7 @@ declare global {
             adminCLI(command: string);
             hasWindowsNode();
             isEdgeCluster();
+            isAWSSTSCluster();
         }
     }
 }
@@ -73,4 +74,12 @@ Cypress.Commands.add("isEdgeCluster", () => {
       }
     });
 });
-
+Cypress.Commands.add("isAWSSTSCluster", (credentialMOde: string, infraPlatform: string, authIssuer: string) => {
+  if(credentialMOde == 'Manual' && infraPlatform == 'AWS' && authIssuer != ''){
+    cy.log('Testing on STS cluster!');
+    return cy.wrap(true);
+  }else{
+    cy.log('Not STS cluster, skip!');
+    return cy.wrap(false);
+  }
+});
