@@ -516,7 +516,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: minmli@redhat.com
-	g.It("NonPreRelease-Longduration-Author:minmli-High-52328-set workload resource usage from pod level : pod should not take effect if not defaulted or specified in workload [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-52328-set workload resource usage from pod level : pod should not take effect if not defaulted or specified in workload [Disruptive][Slow]", func() {
 		oc.SetupProject()
 		g.By("Test for case OCP-52328")
 
@@ -560,7 +560,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: minmli@redhat.com
-	g.It("NonPreRelease-Longduration-Author:minmli-High-52313-High-52326-High-52329-set workload resource usage from pod level : pod can get configured to defaults and override defaults and pod should not be set if annotation not specified [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-52313-High-52326-High-52329-set workload resource usage from pod level : pod can get configured to defaults and override defaults and pod should not be set if annotation not specified [Disruptive][Slow]", func() {
 		oc.SetupProject()
 		g.By("Test for case OCP-52313, OCP-52326 and OCP-52329")
 
@@ -638,7 +638,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: minmli@redhat.com
-	g.It("NonPreRelease-Longduration-Author:minmli-High-46313-set overlaySize in containerRuntimeConfig should take effect in container [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-46313-set overlaySize in containerRuntimeConfig should take effect in container [Disruptive][Slow]", func() {
 		oc.SetupProject()
 		g.By("Test for case OCP-46313")
 		ctrcfgOverlay.name = "ctrcfg-46313"
@@ -721,7 +721,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: asahay@redhat.com
-	g.It("NonPreRelease-Longduration-Author:asahay-High-52472-update runtimeRequestTimeout parameter using KubeletConfig CR [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:asahay-High-52472-update runtimeRequestTimeout parameter using KubeletConfig CR [Disruptive][Slow]", func() {
 
 		oc.SetupProject()
 		runtimeTimeout.name = "kubeletconfig-52472"
@@ -752,7 +752,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 	//author :asahay@redhat.com
 
-	g.It("NonPreRelease-PreChkUpgrade-Author:asahay-High-45436-Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:asahay-High-45436-Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
 
 		upgradeMachineconfig1.name = "max-pod"
 		upgradeMachineconfig2.name = "max-pod-1"
@@ -774,7 +774,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 	})
 
-	g.It("NonPreRelease-PstChkUpgrade-Author:asahay-High-45436-post check Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:asahay-High-45436-post check Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
 		upgradeMachineconfig1.name = "max-pod"
 		defer func() {
 			g.By("Delete the KubeletConfig")
@@ -798,7 +798,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: minmli@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:minmli-High-45351-prepare to check crioConfig[Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:minmli-High-45351-prepare to check crioConfig[Disruptive][Slow]", func() {
 		g.By("1) oc debug one worker and edit /etc/crio/crio.conf")
 		// we update log_level = "debug" in /etc/crio/crio.conf
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -823,7 +823,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: minmli@redhat.com
-	g.It("NonPreRelease-PstChkUpgrade-Author:minmli-High-45351-post check crioConfig[Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:minmli-High-45351-post check crioConfig[Disruptive][Slow]", func() {
 		g.By("1) check overlaySize don't change after upgrade")
 		ctrcfgOverlay.name = "ctrcfg-45351"
 		ctrcfgOverlay.overlay = "35G"
@@ -867,7 +867,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 	})
 
-	g.It("NonPreRelease-Longduration-Author:minmli-High-57401-Create ImageDigestMirrorSet successfully [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-57401-Create ImageDigestMirrorSet successfully [Disruptive][Slow]", func() {
 		//If a cluster contains any ICSP or IDMS, it will skip the case
 		if checkICSP(oc) || checkIDMS(oc) {
 			g.Skip("This cluster contain ICSP or IDMS, skip the test.")
@@ -902,7 +902,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: minmli@redhat.com
-	g.It("Author:minmli-Medium-59552-Enable image signature verification for Red Hat Container Registries [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:minmli-Medium-59552-Enable image signature verification for Red Hat Container Registries [Serial]", func() {
 		exutil.By("Apply a machine config to set image signature policy for worker nodes")
 		mcImgSig := filepath.Join(buildPruningBaseDir, "machineconfig-image-signature-59552.yaml")
 		mcpName := "worker"
@@ -923,7 +923,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.AssertWaitPollNoErr(err, "check signature configuration failed")
 	})
 
-	g.It("NonPreRelease-Longduration-Author:asahay-Medium-62746-A default SYSTEM_RESERVED_ES value is applied if it is empty [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:asahay-Medium-62746-A default SYSTEM_RESERVED_ES value is applied if it is empty [Disruptive][Slow]", func() {
 
 		exutil.By("set SYSTEM_RESERVED_ES as empty")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -959,7 +959,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: minmli@redhat.com
-	g.It("NonPreRelease-Longduration-Author:minmli-High-65404-log link inside pod via crio works well [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-65404-log link inside pod via crio works well [Disruptive]", func() {
 		exutil.By("Apply a machine config to enable log link via crio")
 		mcLogLink := filepath.Join(buildPruningBaseDir, "machineconfig-log-link.yaml")
 		mcpName := "worker"
