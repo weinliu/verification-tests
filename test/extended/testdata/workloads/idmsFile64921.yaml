@@ -12,3 +12,7 @@ spec:
             - localhost:5000/ocp/release
           source: registry.ci.openshift.org/ocp/release
           mirrorSourcePolicy: AllowContactingSource
+        - mirrors:
+            - localhost:5000/target/release
+          source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+          mirrorSourcePolicy: AllowContactingSource

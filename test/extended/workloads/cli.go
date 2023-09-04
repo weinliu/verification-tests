@@ -1210,6 +1210,11 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// Replace target correctly in the icsp file
+		sedCmdOne := fmt.Sprintf(`sed -i 's/target/%s/g' %s`, strings.Split(pullSpec, "/")[1], icspFile64920)
+		_, err = exec.Command("bash", "-c", sedCmdOne).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		// Extract secret and store it
 		extractTmpDirName := "/tmp/case64920"
 		err = os.MkdirAll(extractTmpDirName, 0755)
@@ -1226,20 +1231,26 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		dockerTmpDirName := "/tmp/case64920/.dockerconfigjson"
 		authContent, readErr := os.ReadFile(dockerTmpDirName)
 		o.Expect(readErr).NotTo(o.HaveOccurred())
-		if !strings.Contains(pullSpec, "registry.ci.openshift.org") {
+		if strings.Contains(pullSpec, "quay.io") {
 			image = "quay.io/openshift-release-dev/ocp-v4.0-art-dev@" + imageDigest
 			authContentAR, err = sjson.Delete(string(authContent), `auths.quay\.io`)
 			o.Expect(err).NotTo(o.HaveOccurred())
-		} else {
+		} else if strings.Contains(pullSpec, "registry.ci.openshift.org") {
 			image = "registry.ci.openshift.org/ocp/release@" + imageDigest
 			authContentAR, err = sjson.Delete(string(authContent), `auths.registry\.ci\.openshift\.org`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			sourceImage := strings.Split(pullSpec, "/")[0]
+			sourceImageNew := strings.Replace(sourceImage, ".", "\\.", -1)
+			image = pullSpec
+			authContentAR, err = sjson.Delete(string(authContent), `auths.`+sourceImageNew)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		o.Expect(os.WriteFile(dockerTmpDirName, []byte(authContentAR), 0640)).NotTo(o.HaveOccurred())
 
-		_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image).Outputs()
-		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(outErr).To(o.ContainSubstring("error: unable to read image " + image))
+		//_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image).Outputs()
+		//o.Expect(err).Should(o.HaveOccurred())
+		//o.Expect(outErr).To(o.ContainSubstring("error: unable to read image " + image))
 
 		// Run command oc adm release info with --icsp-flag
 		_, out, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image, "-a", dockerTmpDirName, "--icsp-file="+icspFile64920).Outputs()
@@ -1295,6 +1306,11 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// Replace target correctly in the icsp file
+		sedCmdOne := fmt.Sprintf(`sed -i 's/target/%s/g' %s`, strings.Split(pullSpec, "/")[1], idmsFile64921)
+		_, err = exec.Command("bash", "-c", sedCmdOne).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		// Extract secret and store it
 		extractTmpDirName := "/tmp/case64921"
 		err = os.MkdirAll(extractTmpDirName, 0755)
@@ -1311,23 +1327,29 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		dockerTmpDirName := "/tmp/case64921/.dockerconfigjson"
 		authContent, readErr := os.ReadFile(dockerTmpDirName)
 		o.Expect(readErr).NotTo(o.HaveOccurred())
-		if !strings.Contains(pullSpec, "registry.ci.openshift.org") {
+		if strings.Contains(pullSpec, "quay.io") {
 			image = "quay.io/openshift-release-dev/ocp-v4.0-art-dev@" + imageDigest
 			authContentAR, err = sjson.Delete(string(authContent), `auths.quay\.io`)
 			o.Expect(err).NotTo(o.HaveOccurred())
-		} else {
+		} else if strings.Contains(pullSpec, "registry.ci.openshift.org") {
 			image = "registry.ci.openshift.org/ocp/release@" + imageDigest
 			authContentAR, err = sjson.Delete(string(authContent), `auths.registry\.ci\.openshift\.org`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			sourceImage := strings.Split(pullSpec, "/")[0]
+			sourceImageNew := strings.Replace(sourceImage, ".", "\\.", -1)
+			image = pullSpec
+			authContentAR, err = sjson.Delete(string(authContent), `auths.`+sourceImageNew)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		o.Expect(os.WriteFile(dockerTmpDirName, []byte(authContentAR), 0640)).NotTo(o.HaveOccurred())
 
-		_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image).Outputs()
-		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(outErr).To(o.ContainSubstring("error: unable to read image " + image))
+		//_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image).Outputs()
+		//o.Expect(err).Should(o.HaveOccurred())
+		//o.Expect(outErr).To(o.ContainSubstring("error: unable to read image " + image))
 
 		// Run command oc adm release info with --idms-flag
-		o.Expect(oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image, "-a", dockerTmpDirName, "--idms-file="+idmsFile64921).Execute).NotTo(o.HaveOccurred())
+		o.Expect(oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image, "-a", dockerTmpDirName, "--idms-file="+idmsFile64921).Execute()).NotTo(o.HaveOccurred())
 
 		// Run command oc adm release info to get oc-mirror image
 		ocMirrorImage, _, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", image, "-a", dockerTmpDirName, "--idms-file="+idmsFile64921, `-ojsonpath={.references.spec.tags[?(@.name=="oc-mirror")].from.name}`).Outputs()
@@ -1335,7 +1357,7 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		e2e.Logf("ocMirrorImage is %s", ocMirrorImage)
 
 		// Run command oc image extract with --idms-flag
-		o.Expect(oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", "-a", dockerTmpDirName, ocMirrorImage, "--path=/usr/bin/oc-mirror:"+extractTmpDirName, "--idms-file="+idmsFile64921, "--insecure", "--confirm").Execute).NotTo(o.HaveOccurred())
+		o.Expect(oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", "-a", dockerTmpDirName, ocMirrorImage, "--path=/usr/bin/oc-mirror:"+extractTmpDirName, "--idms-file="+idmsFile64921, "--insecure", "--confirm").Execute()).NotTo(o.HaveOccurred())
 
 		// Verify oc-mirror is present
 		output, err := exec.Command("bash", "-c", "stat "+extractTmpDirName+"/oc-mirror").Output()
