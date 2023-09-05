@@ -6194,4 +6194,71 @@ spec:
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-10865-[Apiserver] After Image Size Limit increment can push the image which previously over the limit", func() {
+		exutil.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
+		imageLimitRangeYamlFile := tmpdir + "image-limit-range.yaml"
+
+		exutil.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+		defer oc.AsAdmin().Run("delete").Args("-f", imageLimitRangeYamlFile, "-n", namespace).Execute()
+
+		for i, storage := range []string{"16Mi", "1Gi"} {
+			// Use fmt.Sprintf to update the storage value dynamically
+			imageLimitRangeYaml := fmt.Sprintf(`apiVersion: v1
+kind: LimitRange
+metadata:
+  name: openshift-resource-limits
+spec:
+  limits:
+    - type: openshift.io/Image
+      max:
+        storage: %s
+    - type: openshift.io/ImageStream
+      max:
+        openshift.io/image-tags: 20
+        openshift.io/images: 30
+`, storage)
+
+			exutil.By(fmt.Sprintf("%d.1) Create a resource quota limit of the image with storage limit %s", i+1, storage))
+			f, err := os.Create(imageLimitRangeYamlFile)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer f.Close()
+			w := bufio.NewWriter(f)
+			_, err = w.WriteString(imageLimitRangeYaml)
+			w.Flush()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// Define the action (create or replace) based on the storage value
+			var action string
+			if storage == "16Mi" {
+				action = "create"
+			} else if storage == "1Gi" {
+				action = "replace"
+			}
+
+			quotaErr := oc.AsAdmin().Run(action).Args("-f", imageLimitRangeYamlFile, "-n", namespace).Execute()
+			o.Expect(quotaErr).NotTo(o.HaveOccurred())
+
+			exutil.By(fmt.Sprintf(`%d.2) Using "skopeo" tool to copy image from quay registry to the default internal registry of the cluster`, i+1))
+			destRegistry := "docker://" + defaultRegistryServiceURL + "/" + namespace + "/mystream:latest"
+
+			exutil.By(fmt.Sprintf(`%d.3) Try copying image to the default internal registry of the cluster`, i+1))
+			publicImageUrl := "docker://quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c"
+			output, err := copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
+			if err != nil {
+				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+			} else {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+	})
 })
