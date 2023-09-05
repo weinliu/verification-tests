@@ -4732,6 +4732,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
 
+		schedulableLinuxWorkers := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
+		if len(schedulableLinuxWorkers) < 2 {
+			g.Skip("Skip: This test scenario needs at least 2 worker nodes, test cluster has less than 2 schedulable workers!")
+		}
+
 		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject()
 		for _, provisioner = range supportProvisioners {
