@@ -2761,19 +2761,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		requestsValueErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("configs.imageregistry.operator.openshift.io/cluster", "-p", `{"spec": {"requests": {"read": {"maxInQueue": 1,"maxRunning": 1,"maxWaitInQueue": "120s"},"write": {"maxInQueue": 1,"maxRunning": 1,"maxWaitInQueue": "120s"}}}}`, "--type=merge").Execute()
 		o.Expect(requestsValueErr).NotTo(o.HaveOccurred())
 		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
-
 		g.By("Create the app,and trigger the build")
 		createAppError := oc.WithoutNamespace().AsAdmin().Run("new-app").Args("quay.io/openshifttest/ruby-27:1.2.0~https://github.com/sclorg/ruby-ex", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(createAppError).NotTo(o.HaveOccurred())
-		result, err := exutil.StartBuildResult(oc, "ruby-ex")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForBuildResult(oc.BuildClient().BuildV1().Builds(oc.Namespace()), result)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(result.BuildFailure).To(o.BeTrue(), "Build did succeed: %v", result)
-		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("build/ruby-ex-2", "--tail=10", "-n", oc.Namespace()).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "ruby-ex-1", nil, exutil.CheckBuildFailed, nil)
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("build/ruby-ex-1", "-n", oc.Namespace()).Output()
 		o.Expect(output).To(o.ContainSubstring("too many requests to registry"))
-
 	})
 
 	// author: xiuwang@redhat.com
