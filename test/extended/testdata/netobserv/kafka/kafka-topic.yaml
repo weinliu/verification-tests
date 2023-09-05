@@ -12,7 +12,7 @@ objects:
     namespace: "${NAMESPACE}"
   spec:
     partitions: 6
-    replicas: 3
+    replicas: 1
 parameters:
 - name: TOPIC
   value: "network-flows"

@@ -15,6 +15,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
@@ -31,6 +32,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// Template directories
 		baseDir         = exutil.FixturePath("testdata", "netobserv")
 		lokiDir         = exutil.FixturePath("testdata", "netobserv", "loki")
+		networkingDir   = exutil.FixturePath("testdata", "netobserv", "networking")
 		subscriptionDir = exutil.FixturePath("testdata", "netobserv", "subscription")
 		flowFixturePath = filePath.Join(baseDir, "flowcollector_v1beta1_template.yaml")
 
@@ -579,10 +581,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
-
-		g.By("Ensure flows are observed and all pods are running")
-		exutil.AssertAllPodsToBeReady(oc, namespace)
-		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+		flow.waitForFlowcollectorReady(oc)
 
 		g.By("Get NetObserv and components versions")
 		NOCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[1].env[0].value}").Output()
@@ -649,7 +648,132 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	g.It("NonPreRelease-Author:aramesha-High-62989-Verify SCTP, ICMP, ICMPv6 traffic is observed [Disruptive]", func() {
+		namespace := oc.Namespace()
+
+		var (
+			sctpClientPodTemplatePath = filePath.Join(networkingDir, "sctpclient.yaml")
+			sctpServerPodTemplatePath = filePath.Join(networkingDir, "sctpserver.yaml")
+			sctpModuleTemplatePath    = filePath.Join(networkingDir, "load-sctp-module.yaml")
+			sctpServerPodname         = "sctpserver"
+			sctpClientPodname         = "sctpclient"
+		)
+
+		g.By("install load-sctp-module in all workers")
+		prepareSCTPModule(oc, sctpModuleTemplatePath)
+
+		g.By("Create netobserv-sctp NS")
+		SCTPns := "netobserv-sctp-62989"
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(SCTPns)
+		oc.CreateSpecifiedNamespaceAsAdmin(SCTPns)
+		exutil.SetNamespacePrivileged(oc, SCTPns)
+
+		g.By("create sctpClientPod")
+		createResourceFromFile(oc, SCTPns, sctpClientPodTemplatePath)
+		waitForPodReadyWithLabel(oc, SCTPns, "name=sctpclient")
+
+		g.By("create sctpServerPod")
+		createResourceFromFile(oc, SCTPns, sctpServerPodTemplatePath)
+		waitForPodReadyWithLabel(oc, SCTPns, "name=sctpserver")
+
+		g.By("Deploy FlowCollector")
+		flow := Flowcollector{
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+		flow.waitForFlowcollectorReady(oc)
+
+		ipStackType := checkIPStackType(oc)
+		var sctpServerPodIP string
+
+		g.By("test ipv4 in ipv4 cluster or dualstack cluster")
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			g.By("get ipv4 address from the sctpServerPod")
+			sctpServerPodIP = getPodIPv4(oc, SCTPns, sctpServerPodname)
+		}
+
+		g.By("test ipv6 in ipv6 cluster or dualstack cluster")
+		if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+			g.By("get ipv6 address from the sctpServerPod")
+			sctpServerPodIP = getPodIPv6(oc, SCTPns, sctpServerPodname, ipStackType)
+		}
+
+		g.By("sctpserver pod start to wait for sctp traffic")
+		cmd, _, _, _ := oc.AsAdmin().Run("exec").Args("-n", SCTPns, sctpServerPodname, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
+		defer cmd.Process.Kill()
+		time.Sleep(5 * time.Second)
+
+		g.By("check sctp process enabled in the sctp server pod")
+		msg, err := e2eoutput.RunHostCmd(SCTPns, sctpServerPodname, "ps aux | grep sctp")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
+
+		g.By("sctpclient pod start to send sctp traffic")
+		e2eoutput.RunHostCmd(SCTPns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+
+		g.By("server sctp process will end after get sctp traffic from sctp client")
+		time.Sleep(5 * time.Second)
+		msg1, err1 := e2eoutput.RunHostCmd(SCTPns, sctpServerPodname, "ps aux | grep sctp")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
+
+		// verify logs
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err = removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		//Scenario1: Verify SCTP traffic
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: SCTPns,
+			DstK8S_Namespace: SCTPns,
+			FlowDirection:    "0",
+		}
+
+		g.By("Verify SCTP flows are seen on loki")
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+		parameters := []string{"Proto=\"132\"", "DstPort=\"30102\""}
+
+		SCTPflows, err := lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(SCTPflows)).Should(o.BeNumerically(">", 0), "expected number of SCTP flows > 0")
+
+		//Scenario2: Verify ICMP traffic
+		g.By("sctpclient ping sctpserver")
+		e2eoutput.RunHostCmd(SCTPns, sctpClientPodname, "ping -c 10 "+sctpServerPodIP)
+
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			parameters = []string{"Proto=\"1\""}
+		}
+
+		g.By("test ipv6 in ipv6 cluster or dualstack cluster")
+		if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+			parameters = []string{"Proto=\"58\""}
+		}
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		ICMPflows, err := lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(ICMPflows)).Should(o.BeNumerically(">", 0), "expected number of ICMP flows > 0")
+	})
 	//Add future NetObserv + Loki test-cases here
+
 	g.Context("with KAFKA", func() {
 		var (
 			kafkaDir, kafkaTopicPath string

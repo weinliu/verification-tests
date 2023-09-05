@@ -175,18 +175,6 @@ func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	return err
 }
 
-// get name of flowlogsPipeline pod by label
-func getFlowlogsPipelinePod(oc *exutil.CLI, ns, name string) string {
-	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", "app="+name, "-o=jsonpath={.items[0].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return podName
-}
-
-func waitPodReady(oc *exutil.CLI, ns string, label string) {
-	podName := getFlowlogsPipelinePod(oc, ns, label)
-	exutil.AssertPodToBeReady(oc, podName, ns)
-}
-
 func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
@@ -279,6 +267,12 @@ func checkPodDeleted(oc *exutil.CLI, ns string, label string, checkValue string)
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(podCheck, fmt.Sprintf("found \"%s\" exist or not fully deleted", checkValue))
+}
+
+// For normal user to create resources in the specified namespace from the file (not template)
+func createResourceFromFile(oc *exutil.CLI, ns, file string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file, "--namespace="+ns).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func getSAToken(oc *exutil.CLI, name, ns string) string {

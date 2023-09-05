@@ -35,6 +35,18 @@ func checkFlowcollectionEnabled(oc *exutil.CLI) string {
 	return collectorName
 }
 
+// get name of flowlogsPipeline pod by label
+func getFlowlogsPipelinePod(oc *exutil.CLI, ns, name string) string {
+	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", "app="+name, "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return podName
+}
+
+func waitPodReady(oc *exutil.CLI, ns string, label string) {
+	podName := getFlowlogsPipelinePod(oc, ns, label)
+	exutil.AssertPodToBeReady(oc, podName, ns)
+}
+
 // Verify flow records from logs
 func verifyFlowRecordFromLogs(podLog string) {
 	re := regexp.MustCompile("{\"AgentIP\":.*")
@@ -83,7 +95,7 @@ func (flowlog *Flowlog) verifyFlowRecord() {
 	o.Expect(flowlog.TimeReceived).Should(o.BeNumerically(">", compareTime.Unix()), flow)
 }
 
-func (lokilabels Lokilabels) getLokiQuery() string {
+func (lokilabels Lokilabels) getLokiQuery(parameters ...string) string {
 	label := reflect.ValueOf(&lokilabels).Elem()
 	var lokiQuery = "{"
 	for i := 0; i < label.NumField(); i++ {
@@ -104,16 +116,22 @@ func (lokilabels Lokilabels) getLokiQuery() string {
 	}
 	lokiQuery = strings.TrimSuffix(lokiQuery, ", ")
 	lokiQuery += "}"
+	if len(parameters) != 0 {
+		lokiQuery += " | json"
+		for _, p := range parameters {
+			lokiQuery += fmt.Sprintf(" | %s", p)
+		}
+	}
 	e2e.Logf("Loki query is %s", lokiQuery)
 	return lokiQuery
 }
 
 // TODO: add argument for condition to be matched.
 // Get flows from Loki logs
-func (lokilabels Lokilabels) getLokiFlowLogs(oc *exutil.CLI, token, lokiRoute string) ([]FlowRecord, error) {
+func (lokilabels Lokilabels) getLokiFlowLogs(oc *exutil.CLI, token, lokiRoute string, parameters ...string) ([]FlowRecord, error) {
 	lc := newLokiClient(lokiRoute).withToken(token).retry(5)
 	tenantID := "network"
-	lokiQuery := lokilabels.getLokiQuery()
+	lokiQuery := lokilabels.getLokiQuery(parameters...)
 	flowRecords := []FlowRecord{}
 	var res *lokiQueryResponse
 	err := wait.Poll(30*time.Second, 300*time.Second, func() (done bool, err error) {
