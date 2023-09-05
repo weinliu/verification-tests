@@ -4984,7 +4984,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-64289-[Storageclass] Volume expand failed when nodeexpandsecret is absent", func() {
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "disk.csi.azure.com", "vpc.block.csi.ibm.io", "csi.vsphere.vmware.com", "efs.csi.aws.com", "file.csi.azure.com", "filestore.csi.storage.gke.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "disk.csi.azure.com", "vpc.block.csi.ibm.io", "csi.vsphere.vmware.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 
 		if len(supportProvisioners) == 0 {
