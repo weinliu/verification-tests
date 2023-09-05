@@ -540,9 +540,17 @@ type customResourceDescription struct {
 
 // the method is to create CR with template, and save it to dr.
 func (crinstance *customResourceDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", crinstance.template,
-		"-p", "NAME="+crinstance.name, "NAMESPACE="+crinstance.namespace)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	errCR := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", crinstance.template,
+			"-p", "NAME="+crinstance.name, "NAMESPACE="+crinstance.namespace)
+		if err != nil {
+			e2e.Logf("met error: %v, try next round ...", err.Error())
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errCR, "cr etcdcluster is not created")
+
 	dr.getIr(itName).add(newResource(oc, crinstance.typename, crinstance.name, requireNS, crinstance.namespace))
 	e2e.Logf("create CR %s SUCCESS", crinstance.name)
 }

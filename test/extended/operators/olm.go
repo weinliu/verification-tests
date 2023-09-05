@@ -5960,6 +5960,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("check csv")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
+		errCRD := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "etcdclusters.etcd.database.coreos.com", "-o=jsonpath={.status.storedVersions}").Output()
+			if err != nil {
+				return false, err
+			}
+			if strings.Contains(output, "v1beta2") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCRD, "crd etcdcluster does not exist")
+
 		exutil.By("creat cr")
 		etcdCr.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{etcdCr.typename, etcdCr.name, "-n", etcdCr.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -5967,6 +5979,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("update operator")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"beta\"}}")
 		sub.findInstalledCSV(oc, itName, dr)
+
+		errIP := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.currentCSV}").Output()
+			if err != nil {
+				return false, err
+			}
+			if strings.Contains(output, "etcdoperator.v0.9.4") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errIP, "operator does not change to etcdoperator.v0.9.4")
 
 		exutil.By("check schema does not work")
 		installPlan := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installplan.name}")
