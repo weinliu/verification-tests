@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ovnkubePod, err := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", workerNode)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		podlogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(ovnkubePod, "-n", "openshift-ovn-kubernetes", "-c", "ovnkube-node").Output()
+		podlogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(ovnkubePod, "-n", "openshift-ovn-kubernetes", "-c", "ovnkube-controller").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podlogs).NotTo(o.ContainSubstring("kube-api-token"))
 		g.By("ovnkube-node logs doesn't contain api-token")

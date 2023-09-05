@@ -2066,7 +2066,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.By("3 Check each ovnkube-node pod's log that health check server is started on it \n")
 		expectedString := "Starting Egress IP Health Server on "
 		for _, ovnkubeNodePod := range ovnkubeNodePods {
-			podLogs, LogErr := checkLogMessageInPod(oc, "openshift-ovn-kubernetes", "ovnkube-node", ovnkubeNodePod, "'egress ip'")
+			podLogs, LogErr := checkLogMessageInPod(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnkubeNodePod, "'egress ip'")
 			o.Expect(LogErr).NotTo(o.HaveOccurred())
 			o.Expect(podLogs).To(o.ContainSubstring(expectedString))
 		}
@@ -2851,7 +2851,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		exutil.By("5. Check each ovnkube-node pod's log on hosted cluster that health check server is started on it \n")
 		expectedSeverStartString := "Starting Egress IP Health Server on "
 		for _, ovnkubeNodePod := range ovnkubeNodePods {
-			podLogs, LogErr := checkLogMessageInPodOnHostedCluster(oc, "openshift-ovn-kubernetes", "ovnkube-node", ovnkubeNodePod, "'egress ip'")
+			podLogs, LogErr := checkLogMessageInPodOnHostedCluster(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnkubeNodePod, "'egress ip'")
 			o.Expect(LogErr).NotTo(o.HaveOccurred())
 			o.Expect(podLogs).To(o.ContainSubstring(expectedSeverStartString))
 		}
