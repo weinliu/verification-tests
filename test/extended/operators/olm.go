@@ -635,23 +635,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("NonHyperShiftHOST-Author:jiazha-High-49167-fatal error", func() {
 		exutil.By("1) Check OLM related resources' logs")
 		deps := []string{"catalog-operator", "olm-operator", "package-server-manager", "packageserver"}
-		re1, _ := regexp.Compile("x509.*")
-		re2, _ := regexp.Compile("TLS handshake error.*")
+		// since https://issues.redhat.com/browse/OCPBUGS-13369 closed as Wont'do. I remove the certification checking
+		// re1, _ := regexp.Compile("x509.*")
+		// re2, _ := regexp.Compile("TLS handshake error.*")
 		re3, _ := regexp.Compile("fatal error.*")
 		for _, dep := range deps {
 			logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(fmt.Sprintf("deployment/%s", dep), "-n", "openshift-operator-lifecycle-manager").Output()
 			if err != nil {
 				e2e.Failf("!!! Fail to get %s logs.", dep)
 			}
-			str1 := re1.FindString(logs)
-			str2 := re2.FindString(logs)
+			// str1 := re1.FindString(logs)
+			// str2 := re2.FindString(logs)
 			str3 := re3.FindString(logs)
-			if str1 != "" {
-				e2e.Failf("!!! %s occurs x509 error: %s", dep, str1)
-			}
-			if str2 != "" {
-				e2e.Failf("!!! %s occurs TLS error: %s", dep, str2)
-			}
+			// if str1 != "" {
+			// 	e2e.Failf("!!! %s occurs x509 error: %s", dep, str1)
+			// }
+			// if str2 != "" {
+			// 	e2e.Failf("!!! %s occurs TLS error: %s", dep, str2)
+			// }
 			if str3 != "" {
 				e2e.Failf("!!! %s occurs fatal error: %s", dep, str3)
 			}
