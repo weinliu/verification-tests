@@ -234,7 +234,7 @@ class SummaryClient:
         filter_team = ""
         if self.sub_team.lower() != "all":
             filter_team="team:"+self.sub_team
-        filter_launchtype="launchtype:golang"
+        filter_launchtype="launchtype:golang,pipeline_type:prereleasepipeline"
         if filter_team:
             filter_url = self.ocp_launch_url + '?filter.has.compositeAttribute={0},{1},{2}&filter.btw.startTime=-{3};1440;-0000&page.size=2000'.format(filter_version,filter_team,filter_launchtype,str(1440*day_number))
         else:
