@@ -158,7 +158,7 @@ func (flow *Flowcollector) waitForFlowcollectorReady(oc *exutil.CLI) {
 	exutil.AssertAllPodsToBeReady(oc, flow.Namespace)
 	exutil.AssertAllPodsToBeReady(oc, flow.Namespace+"-privileged")
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
-		status, err := oc.AsAdmin().Run("get").Args("flowcollector", "-o", "jsonpath='{.items[*].status.conditions[*].reason}'").Output()
+		status, err := oc.AsAdmin().Run("get").Args("flowcollector", "-o", "jsonpath='{.items[*].status.conditions[0].reason}'").Output()
 
 		if err != nil {
 			return false, err
