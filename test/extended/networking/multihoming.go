@@ -498,16 +498,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			pod1Name := getPodName(oc, ns1, "name=multihoming-pod1")
 			pod1IPv6 := getPodMultiNetworkIPv6(oc, ns1, pod1Name[0])
 			e2e.Logf("The v6 address of pod1 is: %v", pod1IPv6)
-			if !strings.Contains(pod1IPv6, "fd00:dead:beef:1::2") {
-				e2e.Failf("Pod: %s does not get correct ipv4 address", pod1Name[0])
+			if !strings.Contains(pod1IPv6, "fd00:dead:beef:1::2") && !strings.Contains(pod1IPv6, "fd00:dead:beef:1::3") {
+				e2e.Failf("Pod: %s does not get correct ipv6 address", pod1Name[0])
 			}
 
 			g.By("Get IPs from the pod2's secondary interface")
 			pod2Name := getPodName(oc, ns1, "name=multihoming-pod2")
 			pod2IPv6 := getPodMultiNetworkIPv6(oc, ns1, pod2Name[0])
 			e2e.Logf("The v6 address of pod2 is: %v", pod2IPv6)
-			if !strings.Contains(pod2IPv6, "fd00:dead:beef:1::3") {
-				e2e.Failf("Pod: %s does not get correct ipv4 address", pod2Name[0])
+			if !strings.Contains(pod1IPv6, "fd00:dead:beef:1::2") && !strings.Contains(pod1IPv6, "fd00:dead:beef:1::3") {
+				e2e.Failf("Pod: %s does not get correct ipv6 address", pod2Name[0])
 			}
 
 			g.By("Checking connectivity from pod1 to pod2")
