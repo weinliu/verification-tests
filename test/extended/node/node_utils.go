@@ -819,8 +819,11 @@ func getWorkerNodeDescribe(oc *exutil.CLI, workerNodeName string) error {
 func checkOverlaySize(oc *exutil.CLI, overlaySize string) error {
 	return wait.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
 		workerNode := getSingleWorkerNode(oc)
-		overlayString, err := exutil.DebugNodeWithChroot(oc, workerNode, "/bin/bash", "-c", "head -n 7 /etc/containers/storage.conf | grep size")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//overlayString, err := exutil.DebugNodeWithChroot(oc, workerNode, "/bin/bash", "-c", "head -n 7 /etc/containers/storage.conf | grep size")
+		overlayString, err := exutil.DebugNodeWithChroot(oc, workerNode, "/bin/bash", "-c", "head -n 7 /etc/containers/storage.conf | grep size || true")
+		if err != nil {
+			return false, err
+		}
 		e2e.Logf("overlaySize string : %v", overlayString)
 		if strings.Contains(string(overlayString), overlaySize) {
 			e2e.Logf("overlay size check successfully")
