@@ -390,6 +390,7 @@ const (
 	AzureCreds                 = "azure-credentials"
 	AzureRESGroup              = "os4-common"
 	AzurePublic                = "AzurePublicCloud"
+	AzureGov                   = "AzureUSGovernmentCloud"
 )
 
 // GCP Configurations
@@ -1743,8 +1744,13 @@ func getRegion(oc *exutil.CLI) string {
 	case "aws":
 		region = infrastructure.Status.PlatformStatus.AWS.Region
 	case "azure":
-		// TODO: get region from labels on a Node
-		g.Fail("getRegion is not yet implemented for Azure")
+		region, _, err = oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("get").
+			Args("nodes", "-o=jsonpath={.items[0].metadata.labels['topology\\.kubernetes\\.io/region']}").
+			Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	case "gcp":
 		region = infrastructure.Status.PlatformStatus.GCP.Region
 	default:

@@ -30,36 +30,50 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		hc           hiveconfig
 		testDataDir  string
 		testOCPImage string
+		region       string
+		basedomain   string
+		cloudName    string
+		isGovCloud   bool
 	)
 	g.BeforeEach(func() {
-		// skip ARM64 arch
+		// Skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
 
 		// Skip if running on a non-Azure platform
 		exutil.SkipIfPlatformTypeNot(oc, "azure")
 
-		//Install Hive operator if not
+		// Install Hive operator if non-existent
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
 		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
 
-		//Get OCP Image for Hive testing
+		// Get OCP Image for Hive testing
 		testOCPImage = getTestOCPImage()
+
+		// Get platform configurations
+		region = getRegion(oc)
+		basedomain = getBasedomain(oc)
+		isGovCloud = strings.Contains(region, "usgov")
+		cloudName = AzurePublic
+		if isGovCloud {
+			e2e.Logf("Running on MAG")
+			cloudName = AzureGov
+		}
 	})
 
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-High-28657-Hive API support for Azure[Serial]", func() {
+	// Author: jshu@redhat.com fxie@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-High-28657-High-45175-[Mag] Hive API support for Azure [Serial]", func() {
 		testCaseID := "25447"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
-		oc.SetupProject()
 
 		exutil.By("Config Azure Install-Config Secret...")
 		installConfigSecret := azureInstallConfig{
 			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
-			baseDomain: AzureBaseDomain,
+			baseDomain: basedomain,
 			name2:      cdName,
-			region:     AzureRegion,
+			region:     region,
 			resGroup:   AzureRESGroup,
-			azureType:  AzurePublic,
+			azureType:  cloudName,
 			template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
 		}
 		exutil.By("Config Azure ClusterDeployment...")
@@ -67,13 +81,13 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			fake:                "false",
 			name:                cdName,
 			namespace:           oc.Namespace(),
-			baseDomain:          AzureBaseDomain,
+			baseDomain:          basedomain,
 			clusterName:         cdName,
 			platformType:        "azure",
 			credRef:             AzureCreds,
-			region:              AzureRegion,
+			region:              region,
 			resGroup:            AzureRESGroup,
-			azureType:           AzurePublic,
+			azureType:           cloudName,
 			imageSetRef:         cdName + "-imageset",
 			installConfigSecret: cdName + "-install-config",
 			pullSecretRef:       PullSecret,
@@ -553,7 +567,7 @@ spec:
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "54048"|./bin/extended-platform-tests run --timeout 10m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:mihuang-Medium-54048-Hive to supprt cli-domain-from-installer-image annotation [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:mihuang-Medium-54048-[Mag] Hive to support cli-domain-from-installer-image annotation [Serial]", func() {
 		testCaseID := "54048"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
@@ -571,7 +585,6 @@ spec:
 		exutil.By("Check if ClusterImageSet was created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
-		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
 		exutil.By("Copy Azure platform credentials...")
 		createAzureCreds(oc, oc.Namespace())
@@ -582,12 +595,14 @@ spec:
 		exutil.By("Create Install-Config Secret...")
 		installConfigTemp := filepath.Join(testDataDir, "azure-install-config.yaml")
 		installConfigSecretName := cdName + "-install-config"
-		installConfigSecret := installConfig{
+		installConfigSecret := azureInstallConfig{
 			name1:      installConfigSecretName,
 			namespace:  oc.Namespace(),
-			baseDomain: AzureBaseDomain,
+			baseDomain: basedomain,
 			name2:      cdName,
-			region:     AzureRegion,
+			region:     region,
+			resGroup:   AzureRESGroup,
+			azureType:  cloudName,
 			template:   installConfigTemp,
 		}
 		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
@@ -639,13 +654,13 @@ spec:
 					copyCliDomain:          scenarios[i].copyCliDomain,
 					name:                   cdName,
 					namespace:              oc.Namespace(),
-					baseDomain:             AzureBaseDomain,
+					baseDomain:             basedomain,
 					clusterName:            cdName,
 					platformType:           "azure",
 					credRef:                AzureCreds,
-					region:                 AzureRegion,
+					region:                 region,
 					resGroup:               AzureRESGroup,
-					azureType:              AzurePublic,
+					azureType:              cloudName,
 					imageSetRef:            cdName + "-imageset",
 					installConfigSecret:    cdName + "-install-config",
 					installerImageOverride: scenarios[i].installerImageOverride,
@@ -687,5 +702,4 @@ spec:
 			}()
 		}
 	})
-
 })
