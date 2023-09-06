@@ -2,11 +2,13 @@ package apiserverauth
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -6197,6 +6199,7 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-10865-[Apiserver] After Image Size Limit increment can push the image which previously over the limit", func() {
+
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -6260,5 +6263,85 @@ spec:
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 		}
+	})
+
+	// author: dpunia@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-Low-24389-Verify the CR admission of the APIServer CRD [Slow][Disruptive]", func() {
+		var (
+			patchOut        string
+			patchJsonRevert = `{"spec": {"additionalCORSAllowedOrigins": null}}`
+			patchJson       = `{
+			"spec": {
+				"additionalCORSAllowedOrigins": [
+				"(?i)//127\\.0\\.0\\.1(:|\\z)",
+				"(?i)//localhost(:|\\z)",
+				"(?i)//kubernetes\\.default(:|\\z)",
+				"(?i)//kubernetes\\.default\\.svc\\.cluster\\.local(:|\\z)",
+				"(?i)//kubernetes(:|\\z)",
+				"(?i)//openshift\\.default(:|\\z)",
+				"(?i)//openshift\\.default\\.svc(:|\\z)",
+				"(?i)//openshift\\.default\\.svc\\.cluster\\.local(:|\\z)",
+				"(?i)//kubernetes\\.default\\.svc(:|\\z)",
+				"(?i)//openshift(:|\\z)"
+			]}}`
+		)
+
+		exutil.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
+		apiServerRecover := func() {
+			errKASO := waitCoBecomes(oc, "kube-apiserver", 100, map[string]string{"Progressing": "True"})
+			exutil.AssertWaitPollNoErr(errKASO, "kube-apiserver operator is not start progressing in 100 seconds")
+			e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
+			errKASO = waitCoBecomes(oc, "kube-apiserver", 1500, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
+			exutil.AssertWaitPollNoErr(errKASO, "openshift-kube-apiserver pods revisions recovery not completed")
+		}
+
+		defer func() {
+			if strings.Contains(patchOut, "patched") {
+				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver", "cluster", "--type=merge", "-p", patchJsonRevert).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				// Wait for kube-apiserver recover
+				apiServerRecover()
+			}
+		}()
+
+		exutil.By("1) Update apiserver config(additionalCORSAllowedOrigins) with invalid config `no closing (parentheses`")
+		patch := `{"spec": {"additionalCORSAllowedOrigins": ["no closing (parentheses"]}}`
+		patchOut, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver", "cluster", "--type=merge", "-p", patch).Output()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(patchOut).Should(o.ContainSubstring(`"no closing (parentheses": not a valid regular expression`))
+
+		exutil.By("2) Update apiserver config(additionalCORSAllowedOrigins) with invalid string type")
+		patch = `{"spec": {"additionalCORSAllowedOrigins": "some string"}}`
+		patchOut, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver", "cluster", "--type=merge", "-p", patch).Output()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(patchOut).Should(o.ContainSubstring(`body must be of type array: "string"`))
+
+		exutil.By("3) Update apiserver config(additionalCORSAllowedOrigins) with valid config")
+		patchOut, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver", "cluster", "--type=merge", "-p", patchJson).Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(patchOut).Should(o.ContainSubstring("patched"))
+		// Wait for kube-apiserver recover
+		apiServerRecover()
+
+		exutil.By("4) Verifying the additionalCORSAllowedOrigins by inspecting the HTTP response headers")
+		url, err := oc.Run("whoami").Args("--show-server").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		req, err := http.NewRequest("GET", url, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		req.Header.Set("Origin", "http://localhost")
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
+
+		resp, err := client.Do(req)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer resp.Body.Close()
+		o.Expect(resp.Header.Get("Access-Control-Allow-Origin")).To(o.Equal("http://localhost"))
 	})
 })
