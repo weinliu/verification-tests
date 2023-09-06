@@ -17,9 +17,35 @@ export const Pages = {
     cy.visit('/api-explorer');
     cy.get('table[aria-label="API resources"]').should('be.visible');
   },
+  gotoCreateDeploymentFormView: (namespace: string) => {
+    cy.visit(`/k8s/ns/${namespace}/deployments/~new/form`);
+    cy.get('[data-test="form-view-input"]').click({force: true});
+    cy.get('[data-test="section name"]').should("exist");
+  },
+  gotoCreateDeploymentYamlView: (namespace: string) => {
+    cy.visit(`/k8s/ns/${namespace}/deployments/~new/form`);
+    cy.get('[data-test="yaml-view-input"]').click({force: true});
+    cy.get('[data-test="yaml-editor"]').should("exist");
+  },
+  gotoCreateDeploymentconfigsFormView: (namespace: string) => {
+    cy.visit(`/k8s/ns/${namespace}/deploymentconfigs/~new/form`);
+    cy.get('[data-test="form-view-input"]').click({force: true});
+    cy.get('[data-test="section name"]').should("exist");
+  },
+  gotoCreateDeploymentconfigsYamlView: (namespace: string) => {
+    cy.visit(`/k8s/ns/${namespace}/deploymentconfigs/~new/form`);
+    cy.get('[data-test="yaml-view-input"]').click({force: true});
+    cy.get('[data-test="yaml-editor"]').should("exist");
+  },
   gotoDeploymentsList: () => {
     cy.visit('/k8s/all-namespaces/apps~v1~Deployment');
     listPage.rows.shouldBeLoaded();
+  },
+  gotoDeploymentConfigList: (namespace: string) => {
+    cy.visit(`/k8s/ns/${namespace}/apps.openshift.io~v1~DeploymentConfig`);
+  },
+  gotoDeploymentConfigDetailsTab: (namespace: string, dcname: string)=> {
+    cy.visit(`/k8s/ns/${namespace}/deploymentconfigs/${dcname}`);
   },
   gotoClusterOperatorsList: () => {
     cy.visit('/settings/cluster/clusteroperators');
