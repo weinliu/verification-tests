@@ -1543,3 +1543,38 @@ func isEnabledCapability(oc *exutil.CLI, component string) bool {
 	e2e.Logf("Cluster enabled capability parameters: %v\n", enabledCapabilities)
 	return strings.Contains(enabledCapabilities, component)
 }
+
+// this function is used to check whether openshift-samples installed or not
+func checkOpenshiftSamples(oc *exutil.CLI) bool {
+	err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "openshift-samples").Execute()
+	if err != nil {
+		e2e.Logf("Get clusteroperator openshift-samples failed with error")
+		return true
+	}
+	return false
+}
+
+// this function is used to check the build status
+func checkBuildStatus(oc *exutil.CLI, buildname string, namespace string, expectedStatus string) {
+	err := wait.PollImmediate(10*time.Second, 15*time.Minute, func() (bool, error) {
+		phase, err := oc.Run("get").Args("build", buildname, "-n", namespace, "--template", "{{.status.phase}}").Output()
+		if err != nil {
+			return false, nil
+		}
+		if phase != expectedStatus {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("build status is not same as expected"))
+}
+
+// this function is used to get the prune resource name by namespace
+func getPruneResourceName(pruneCMD string) []string {
+	pruneRsName, err := exec.Command("bash", "-c", pruneCMD).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	pruneRsList := strings.Fields(strings.ReplaceAll(string(pruneRsName), "\n", " "))
+	sort.Strings(pruneRsList)
+	e2e.Logf("pruneRsList %v:", pruneRsList)
+	return pruneRsList
+}
