@@ -11140,6 +11140,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-High-25783-Subscriptions are not getting processed taking very long to get processed [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipForSNOCluster(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -11196,9 +11197,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			}
 		)
 
-		exutil.By("create catsrc")
-		catsrc.create(oc, itName, dr)
-		defer catsrc.delete(itName, dr)
+		proxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(exutil.CheckPlatform(oc), "openstack") || proxy != "" {
+			g.Skip("it is not supported")
+		}
 
 		exutil.By("create operator keda")
 		defer subkeda.delete(itName, dr)
@@ -11206,6 +11209,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		csvkeda.name = subkeda.installedCSV
 		defer csvkeda.delete(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subkeda.installedCSV, "-n", subkeda.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		exutil.By("create catsrc")
+		catsrc.create(oc, itName, dr)
+		defer catsrc.delete(itName, dr)
 
 		exutil.By("create operator Cockroachdb")
 		defer subCockroachdb.delete(itName, dr)
