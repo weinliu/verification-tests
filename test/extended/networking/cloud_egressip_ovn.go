@@ -2117,12 +2117,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		o.Expect(LogErr).NotTo(o.HaveOccurred())
 		o.Expect(podLogs).To(o.ContainSubstring(expectedString2))
 
-		// Due to OCPBUGS-17896, temporarily comment out step 8
-		// exutil.By("8. Verify egressIP is not assigned after blocking iptable rule on port 9170 is added.\n")
-		// o.Eventually(func() bool {
-		// 	egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
-		// 	return len(egressIPMaps1) == 0
-		// }, "300s", "10s").Should(o.BeTrue(), "egressIP is not unassigned after blocking iptable rule on port 9170 is added!!")
+		exutil.By("8. Verify egressIP is not assigned after blocking iptable rule on port 9170 is added.\n")
+		o.Eventually(func() bool {
+			egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
+			return len(egressIPMaps1) == 0
+		}, "300s", "10s").Should(o.BeTrue(), "egressIP is not unassigned after blocking iptable rule on port 9170 is added!!")
 
 		exutil.By("9. Delete the iptables rule, verify from log of ovnkube-control-plane pod that the health check connection is re-established.\n")
 		_, debugNodeErr = exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-D", "INPUT", "-p", "tcp", "--destination-port", "9107", "-j", "DROP")
