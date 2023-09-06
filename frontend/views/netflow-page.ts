@@ -130,6 +130,18 @@ export namespace overviewSelectors {
     export const allPanels = ['Top 5 average rates', 'Top 5 latest rates', 'Top 5 flow rates stacked', 'Total rate', 'Top 5 flow rates stacked with total', 'Top 5 flow rates']
 }
 
+export const loadTimes = {
+    "overview": 8500,
+    "table": 5000,
+    "topology": 5000
+}
+
+export const memoryUsage = {
+    "overview": 300,
+    "table": 450,
+    "topology": 360
+}
+
 export namespace histogramSelectors {
     export const timeRangeContainer = "#chart-histogram > div.pf-l-flex.pf-m-row.histogram-range-container"
     export const zoomin = timeRangeContainer + " > div:nth-child(5) > div > div:nth-child(2) > button"
@@ -203,6 +215,28 @@ Cypress.Commands.add('checkQuerySummary', (metric) => {
     expect(num).to.be.greaterThan(0)
 });
 
+
+Cypress.Commands.add("checkPerformance", (page, loadTime, memUsage) => {
+    let thresPageload, memThreshold
+    switch (page) {
+        case "overview":
+            thresPageload = loadTimes.overview + loadTimes.overview * 0.5
+            memThreshold = memoryUsage.overview + memoryUsage.overview * 0.5
+            break;
+        case "table":
+            thresPageload = loadTimes.table + loadTimes.table * 0.5
+            memThreshold = memoryUsage.table + memoryUsage.table * 0.5
+            break;
+        case "topology":
+            thresPageload = loadTimes.topology + loadTimes.topology * 0.5
+            memThreshold = memoryUsage.topology + memoryUsage.topology * 0.5
+            break;
+    }
+    expect(loadTime).to.be.lessThan(thresPageload)
+    expect(memUsage).to.be.lessThan(memThreshold)
+});
+
+
 declare global {
     namespace Cypress {
         interface Chainable {
@@ -213,6 +247,7 @@ declare global {
             selectPopupItems(id: string, names: string[]): Chainable<Element>
             checkPopupItems(id: string, names: string[]): Chainable<Element>
             checkQuerySummary(metric: JQuery<HTMLElement>): Chainable<Element>
+            checkPerformance(page: string, loadTime: number, memoryUsage: number): Chainable<Element>
         }
     }
 }

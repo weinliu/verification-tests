@@ -27,6 +27,25 @@ export default defineConfig({
   viewportHeight: 900,
   e2e: {
     setupNodeEvents(on, config) {
+      on('before:browser:launch', (browser = {
+        name: "",
+        family: "chromium",
+        channel: "",
+        displayName: "",
+        version: "",
+        majorVersion: "",
+        path: "",
+        isHeaded: false,
+        isHeadless: false
+      }, launchOptions) => {
+        if (browser.family === 'chromium' && browser.name !== 'electron') {
+          // auto open devtools
+          launchOptions.args.push('--enable-precise-memory-info')
+        }
+
+        return launchOptions
+
+      });
       // `on` is used to hook into various events Cypress emits
       on('task', {
         log(message) {

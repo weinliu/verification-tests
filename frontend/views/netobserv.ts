@@ -1,5 +1,7 @@
 import { operatorHubPage } from "../views/operator-hub-page"
 
+export const project = "netobserv"
+
 export const Operator = {
     name: () => {
         if (Cypress.env('noo_catalog_src') == "upstream") {

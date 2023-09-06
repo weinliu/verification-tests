@@ -26,8 +26,8 @@ export const graphSelector = {
 
 Cypress.Commands.add('checkDashboards', (names) => {
     for (let i = 0; i < names.length; i++) {
-        cy.byTestID(names[i]).should('exist')
-            .find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        cy.byTestID(names[i]).should('exist', { timeout: 120000 })
+            .find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
     }
 })
 

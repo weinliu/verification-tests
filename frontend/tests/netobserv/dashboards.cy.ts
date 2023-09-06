@@ -7,7 +7,7 @@ import { dashboard, graphSelector } from "views/dashboards-page"
 const project = 'netobserv'
 
 
-describe('NetObserv dashboards tests', { tags: ['NETOBSERV'] }, function () {
+describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
