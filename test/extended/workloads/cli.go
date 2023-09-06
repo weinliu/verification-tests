@@ -1378,12 +1378,27 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		defer registry.deleteregistry(oc)
 		serInfo := registry.createregistry(oc)
 
-		err := oc.WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c"+"="+serInfo.serviceName+"/testimage:ppc64", "--filter-by-os=linux/ppc64le", "--insecure").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c"+"="+serInfo.serviceName+"/testimage:ppc64", "--filter-by-os=linux/ppc64le", "--insecure").Execute()
+			if err != nil {
+				e2e.Logf("mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("max time reached but mirror still falied"))
 		out, err := oc.WithoutNamespace().Run("image").Args("info", serInfo.serviceName+"/testimage:ppc64", "--insecure").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(out, "ppc64le")).To(o.BeTrue())
-		err = oc.WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c"+"="+serInfo.serviceName+"/testimage:default", "--insecure").Execute()
+		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c"+"="+serInfo.serviceName+"/testimage:default", "--insecure").Execute()
+			if err != nil {
+				e2e.Logf("mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("max time reached but mirror still falied"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		imageInfo, err := oc.WithoutNamespace().Run("image").Args("info", serInfo.serviceName+"/testimage:default", "--insecure").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
