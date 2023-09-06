@@ -2,6 +2,7 @@ package mco
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,6 +14,17 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
+
+// CertExprity describes the information that MCPs are reporting about a given certificate.
+type CertExpiry struct {
+	// Bundle where the cert is storaged
+	Bundle string `json:"bundle"`
+	// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
+	// Expiry expiration date for the certificate
+	// Expiry string `json:"expiry"`
+	// Subject certificate's subject
+	Subject string `json:"subject"`
+}
 
 // MachineConfigPool struct is used to handle MachineConfigPool resources in OCP
 type MachineConfigPool struct {
@@ -558,6 +570,24 @@ func (mcp *MachineConfigPool) SanityCheck() error {
 	}
 
 	return nil
+}
+
+// GetCertsExpiry returns the information about the certificates trackec by the MCP
+func (mcp *MachineConfigPool) GetCertsExpiry() ([]CertExpiry, error) {
+	expiryString, err := mcp.Get(`{.status.certExpirys}`)
+	if err != nil {
+		return nil, err
+	}
+
+	var certsExp []CertExpiry
+
+	jsonerr := json.Unmarshal([]byte(expiryString), &certsExp)
+
+	if jsonerr != nil {
+		return nil, jsonerr
+	}
+
+	return certsExp, nil
 }
 
 // GetAll returns a []MachineConfigPool list with all existing machine config pools sorted by creation time

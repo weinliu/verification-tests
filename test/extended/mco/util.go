@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"net/url"
@@ -772,6 +774,7 @@ func RemoveAllMCOPods(oc *exutil.CLI) error {
 	return nil
 }
 
+// OCCreate executes "oc create -f" command using a file. No "-n" parameter is provided, so the resources will be created in the current namespace or in the namespace defined in the resources' definitions
 func OCCreate(oc *exutil.CLI, fileName string) error {
 	return oc.WithoutNamespace().Run("create").Args("-f", fileName).Execute()
 }
@@ -816,4 +819,52 @@ func RotateMCSCertificates(oc *exutil.CLI) error {
 	logger.Infof(stdout)
 
 	return err
+}
+
+func GetCertificatesInfoFromPemBundle(bundleName string, pemBundle []byte) ([]CertificateInfo, error) {
+	var certificatesInfo []CertificateInfo
+
+	if pemBundle == nil {
+		return nil, fmt.Errorf("Provided pem bundle is nil")
+	}
+
+	if len(pemBundle) == 0 {
+		logger.Infof("Empty pem bundle")
+		return certificatesInfo, nil
+	}
+
+	for {
+		block, rest := pem.Decode(pemBundle)
+		if block == nil {
+			return nil, fmt.Errorf("failed to parse certificate PEM:\n%s", string(pemBundle))
+		}
+
+		logger.Infof("FOUND: %s", block.Type)
+		if block.Type != "CERTIFICATE" {
+			return nil, fmt.Errorf("Only CERTIFICATES are expected in the bundle, but a type %s was found in it", block.Type)
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+
+		certificatesInfo = append(certificatesInfo,
+			CertificateInfo{
+				BundleFile: bundleName,
+				// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
+				// NotAfter:   cert.NotAfter.String(),
+				// NotBefore:  cert.NotBefore.String(),
+				Signer:  cert.Issuer.String(),
+				Subject: cert.Subject.String(),
+			},
+		)
+
+		pemBundle = rest
+		if len(rest) == 0 {
+			break
+		}
+
+	}
+	return certificatesInfo, nil
 }

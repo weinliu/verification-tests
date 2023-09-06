@@ -16,6 +16,8 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	ogs "github.com/onsi/gomega/gstruct"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	bootstrap "github.com/openshift/openshift-tests-private/test/extended/util/bootstrap"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -3339,7 +3341,125 @@ nulla pariatur.`
 			logger.Infof("Suite ok")
 		}
 		logger.Infof("OK!\n")
+	})
 
+	g.It("Author:sregidor-NonHyperShiftHOST-Low-65208-Check the visibility of certificates", func() {
+		var (
+			cc   = NewControllerConfig(oc.AsAdmin(), "machine-config-controller")
+			mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+		)
+
+		exutil.By("Check that the ControllerConfig resource is storing the right kube-apiserver-client-ca information")
+		kubeAPIServerClientCACM := NewNamespacedResource(oc.AsAdmin(), "ConfigMap", "openshift-config-managed", "kube-apiserver-client-ca")
+		kubeAPIServerClientCA := kubeAPIServerClientCACM.GetOrFail(`{.data.ca-bundle\.crt}`)
+
+		ccKubeAPIServerClientCA, err := cc.GetKubeAPIServerServingCAData()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the kubeAPIServerServingCAData information from the ControllerConfig")
+
+		// We write the Expect command so that the certificates are not printed in case of failure
+		o.Expect(strings.Trim(ccKubeAPIServerClientCA, "\n") == strings.Trim(kubeAPIServerClientCA, "\n")).To(o.BeTrue(),
+			"The value of kubeAPIServerServingCAData in the ControllerConfig does not equal the value of configmap -n openshift-config-managed kube-apiserver-client-ca")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the ControllerConfig resource is storing the right rootCAData  information")
+		rootCADataCM := NewNamespacedResource(oc.AsAdmin(), "ConfigMap", "kube-system", "root-ca")
+		rootCAData := rootCADataCM.GetOrFail(`{.data.ca\.crt}`)
+
+		ccRootCAData, err := cc.GetRootCAData()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rootCAData information from the ControllerConfig")
+
+		// We write the Expect command so that the certificates are not printed in case of failure
+		o.Expect(strings.Trim(ccRootCAData, "\n") == strings.Trim(rootCAData, "\n")).To(o.BeTrue(),
+			"The value of rootCAData in the ControllerConfig does not equal the value of configmap -n kube-system root-ca")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check the information from the KubeAPIServerServingCAData certificates")
+
+		ccKCertsInfo, err := cc.GetCertificatesInfoByBundleFileName("KubeAPIServerServingCAData")
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the controller config information for KubeAPIServerServingCAData certificates")
+
+		kubeAPIServerCertsInfo, err := GetCertificatesInfoFromPemBundle("KubeAPIServerServingCAData", []byte(ccKubeAPIServerClientCA))
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error extracting certificate info from KubeAPIServerServingCAData pem bundle")
+
+		o.Expect(kubeAPIServerCertsInfo).To(o.Equal(ccKCertsInfo),
+			"The ControllerConfig is not reporting the right information about the certificates in KubeAPIServerServingCAData bundle")
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Check the information from the rootCAData certificates")
+
+		ccRCertsInfo, err := cc.GetCertificatesInfoByBundleFileName("RootCAData")
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the controller config information for rootCAData certificates")
+
+		rootCACertsInfo, err := GetCertificatesInfoFromPemBundle("RootCAData", []byte(ccRootCAData))
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error extracting certificate info from RootCAData pem bundle")
+
+		o.Expect(rootCACertsInfo).To(o.Equal(ccRCertsInfo),
+			"The ControllerConfig is not reporting the right information about the certificates in rootCAData pem bundle")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that MCPs are reporting information regarding kubeapiserverserviccadata certificates")
+		certsExpiry, err := mMcp.GetCertsExpiry()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the certificates expiry information from master MCP")
+
+		o.Expect(certsExpiry).To(o.HaveLen(len(ccKCertsInfo)),
+			"The expry certs info reported in master MCP has len %d, but the list of kubeAPIServer certs has len %d.\nExpiry:%s\nKubeAPIServer:%s",
+			len(certsExpiry), len(ccKCertsInfo), certsExpiry, ccKCertsInfo)
+
+		for i, certInfo := range ccKCertsInfo {
+			certExpry := certsExpiry[i]
+
+			logger.Infof("%s", certExpry)
+
+			o.Expect(certExpry).To(ogs.MatchAllFields(ogs.Fields{
+				"Bundle": o.Equal(certInfo.BundleFile),
+
+				// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
+				// "Expiry":  o.Equal(certInfo.NotAfter),
+				"Subject": o.Equal(certInfo.Subject),
+			}),
+				"Exipirty information does not match the information repoted in the ControllerConfig")
+		}
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the description of ControllerConfig includes the certificates info")
+		ccDesc, err := cc.Describe()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error describing the ControllerConfig resource")
+
+		o.Expect(ccDesc).To(o.And(
+			o.ContainSubstring("Controller Certificates:"),
+			o.ContainSubstring("Bundle File"),
+			// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
+			// o.ContainSubstring("Not After"),
+			// o.ContainSubstring("Not Before"),
+			o.ContainSubstring("Signer"),
+			o.ContainSubstring("Subject"),
+		),
+			"The ControllerConfig description should include information about the certificate, but it does not:\n%s", ccDesc)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the description of MCP includes the certificates info")
+		mMcpDesc, err := mMcp.Describe()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error describing the master MCP resource")
+
+		o.Expect(mMcpDesc).To(o.And(
+			o.ContainSubstring("Cert Expirys"),
+			o.ContainSubstring("Bundle"),
+			// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
+			// o.ContainSubstring("Expiry"),
+		),
+			"The master MCP description should include information about the certificate, but it does not:\n%s", ccDesc)
+		logger.Infof("OK!\n")
 	})
 })
 

@@ -44,6 +44,7 @@ type ResourceInterface interface {
 	GetAnnotationOrFail(annotation string) string
 	GetConditionByType(ctype string) string
 	AddLabel(label, value string) error
+	Describe() (string, error)
 	ExportToFile(fileName string) error
 	PrettyString() string
 }
@@ -200,6 +201,14 @@ func (r *Resource) AddLabel(label, value string) error {
 // RemoveLabel removes a label to the resource
 func (r *Resource) RemoveLabel(label string) error {
 	return r.oc.WithoutNamespace().Run("label").Args(r.kind, r.name, label+"-").Execute()
+}
+
+func (r *Resource) Describe() (string, error) {
+	params := []string{r.kind, r.name}
+	if r.namespace != "" {
+		params = append([]string{"-n", r.namespace}, params...)
+	}
+	return r.oc.WithoutNamespace().Run("describe").Args(params...).Output()
 }
 
 // ExportToFile writes the resource json information in a given file.
