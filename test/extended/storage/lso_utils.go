@@ -496,6 +496,14 @@ func (lvs *localVolumeSet) getTotalProvisionedDeviceCount(oc *exutil.CLI) (int64
 	return provisionedDeviceCount, err
 }
 
+// Poll get the localVolumeSet CR totalProvisionedDeviceCount returns func() satisfy the Eventually assert
+func (lvs *localVolumeSet) pollGetTotalProvisionedDeviceCount(oc *exutil.CLI) func() int64 {
+	return func() int64 {
+		provisionedDeviceCount, _ := lvs.getTotalProvisionedDeviceCount(oc)
+		return provisionedDeviceCount
+	}
+}
+
 // Waiting for the localVolumeSet CR have already provisioned Device
 func (lvs *localVolumeSet) waitDeviceProvisioned(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {

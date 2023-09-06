@@ -684,6 +684,94 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-NonPreRelease-Author:pewang-High-33907-[LSO] [part] LocalVolumeSet CR should provision matched device and could be used by Pod [Serial]", func() {
+		// Set the resource definition for the scenario
+		var (
+			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
+			podTemplate = filepath.Join(lsoBaseDir, "pod-template.yaml")
+			lvsTemplate = filepath.Join(lsoBaseDir, "/lso/localvolumeset-template.yaml")
+			mylvs       = newLocalVolumeSet(setLvsNamespace(myLso.namespace), setLvsTemplate(lvsTemplate), setLvsFstype("ext4"))
+			pvc         = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylvs.scname))
+			pod         = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+		)
+
+		exutil.By("# Create a new project for the scenario")
+		oc.SetupProject() //create new project
+
+		exutil.By("# Create 1 aws ebs volume and attach the volume to a schedulable worker node")
+		myWorker := getOneSchedulableWorker(allNodes)
+		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey), setVolSize(getRandomNum(12, 20)))
+		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
+		myVolume.create(ac)
+		myVolume.waitStateAsExpected(ac, "available")
+
+		// Attach the volumes to a schedulable linux worker node
+		defer myVolume.detachSucceed(ac)
+		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
+
+		exutil.By("# Create 2 partartions on the volume")
+		partitionDiskCmd := `sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << FDISK_CMDS  | sudo fdisk ` + myVolume.DeviceByID + `
+		g        # create new GPT partition
+		n        # add new partition
+		1        # partition number
+			 # default - first sector 
+		+5120MiB # partition size
+		n        # add new partition
+		2        # partition number
+			 # default - first sector 
+			 # default - last sector 
+		t        # change partition type
+		1        # partition number
+		83       # Linux filesystem
+		t        # change partition type
+		2        # partition number
+		83       # Linux filesystem
+		w        # write partition table and exit
+		FDISK_CMDS`
+		o.Expect(execCommandInSpecificNode(oc, myWorker.name, partitionDiskCmd)).Should(o.ContainSubstring("The partition table has been altered"), "Failed to create partition for the volume")
+
+		exutil.By("# Create a localvolumeSet cr and wait for device provisioned")
+		mylvs.create(oc)
+		defer mylvs.deleteAsAdmin(oc)
+		mylvs.waitDeviceProvisioned(oc)
+		o.Eventually(mylvs.pollGetTotalProvisionedDeviceCount(oc), 120*time.Second, 15*time.Second).Should(o.Equal(int64(2)), "Failed to provision all partitions pv")
+
+		exutil.By("# Create a pvc use the localVolumeSet storageClass and create a pod consume the pvc")
+		pvc.capacity = strconv.FormatInt(getRandomNum(6, myVolume.Size-5), 10) + "Gi"
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		exutil.By("# Check the pod volume can be read and write and have the exec right")
+		pod.checkMountedVolumeCouldRW(oc)
+		pod.checkMountedVolumeHaveExecRight(oc)
+
+		exutil.By("# Delete pod and pvc and check the related pv's status")
+		pvName := pvc.getVolumeName(oc)
+		pod.delete(oc)
+		pvc.delete(oc)
+		pvc.waitStatusAsExpected(oc, "deleted")
+		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
+
+		exutil.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
+		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylvs.scname),
+			setPersistentVolumeClaimCapacity(pvc.capacity))
+		pvcNew.create(oc)
+		defer pvcNew.deleteAsAdmin(oc)
+		podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcNew.name))
+		podNew.create(oc)
+		defer podNew.deleteAsAdmin(oc)
+		podNew.waitReady(oc)
+
+		// The pvcNew should bound with the origin pv
+		o.Expect(pvcNew.getVolumeName(oc)).Should(o.Equal(pvName))
+		// Check the data is cleaned up in the volume
+		podNew.checkMountedVolumeDataExist(oc, false)
+	})
+
+	// author: pewang@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-High-67070-[LSO] [mpath] LocalVolumeSet CR should provision matched device and could be used by Pod [Serial]", func() {
 		// Set the resource definition for the scenario
 		var (
