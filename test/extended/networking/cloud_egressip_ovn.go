@@ -2787,6 +2787,91 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		}
 	})
 
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-67091-Egressip status is synced with cloudprivateipconfig and egressip is assigned correctly after OVNK restart. [Disruptive]", func() {
+
+		// This is for OCPBUGS-12747
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		exutil.By("1. Get list of nodes, get two worker nodes that have same subnet, use them as egress nodes\n")
+		var egressNode1, egressNode2 string
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+		egressNode1 = egressNodes[0]
+		egressNode2 = egressNodes[1]
+
+		exutil.By("2. Apply EgressLabel Key to two egress nodes.\n")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel, "true")
+
+		exutil.By("3. Get two unused IP addresses from the egress node.\n")
+		freeIPs := findFreeIPs(oc, egressNode1, 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
+
+		exutil.By("4. Create an egressip object, verify egressip is assigned to an egress node.\n")
+		egressip1 := egressIPResource1{
+			name:          "egressip-67091",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "purple",
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject2(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+
+		exutil.By("5. Verify egressIP is in cloudprivateipconfig.\n")
+		waitCloudPrivateIPconfigUpdate(oc, freeIPs[0], true)
+
+		exutil.By("6. Restart OVNK, before OVNK is back up, delete cloudprivateipconfig and replace egressip in egressip object to another valid unused IP address\n")
+		//Restart OVNK by deleting all ovnkube-node pods
+		defer waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		delPodErr := oc.AsAdmin().Run("delete").Args("pod", "-l", "app=ovnkube-node", "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(delPodErr).NotTo(o.HaveOccurred())
+
+		delCloudPrivateIPConfigErr := oc.AsAdmin().Run("delete").Args("cloudprivateipconfig", egressIPMaps1[0]["egressIP"]).Execute()
+		o.Expect(delCloudPrivateIPConfigErr).NotTo(o.HaveOccurred())
+
+		// Update the egressip address in the egressip object with another unused ip address
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/"+egressip1.name, "-p", "{\"spec\":{\"egressIPs\":[\""+freeIPs[1]+"\"]}}", "--type=merge").Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("7. Wait for ovnkube-node back up.\n")
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+
+		exutil.By("8. Verify cloudprivateipconfig is updated to new egressip address.\n")
+		waitCloudPrivateIPconfigUpdate(oc, freeIPs[1], true)
+
+		exutil.By("9. Verify egressIP object is updated with new egressIP address, and egressIP is assigned to an egressNode.\n")
+		o.Eventually(func() bool {
+			egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
+			return len(egressIPMaps1) == 1 && egressIPMaps1[0]["egressIP"] == freeIPs[1]
+		}, "300s", "10s").Should(o.BeTrue(), "egressIP was not updated to new ip address, or egressip was not assigned to an egressNode!!")
+		currenAssignedEgressNode := egressIPMaps1[0]["node"]
+
+		exutil.By("10. Unlabel current assigned egress node, verify that egressIP fails over to the other egressNode.\n")
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, currenAssignedEgressNode, egressNodeLabel)
+		var newAssignedEgressNode string
+		if currenAssignedEgressNode == egressNode1 {
+			newAssignedEgressNode = egressNode2
+		} else if currenAssignedEgressNode == egressNode2 {
+			newAssignedEgressNode = egressNode1
+		}
+		o.Eventually(func() bool {
+			egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
+			return len(egressIPMaps1) == 1 && egressIPMaps1[0]["node"] == newAssignedEgressNode
+		}, "300s", "10s").Should(o.BeTrue(), "egressIP was not migrated to second egress node after unlabel first egress node!!")
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
