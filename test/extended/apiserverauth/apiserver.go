@@ -5170,7 +5170,7 @@ spec:
 	g.It("MicroShiftOnly-Author:rgangwar-Medium-62959-[Apiserver] Remove search logic for configuration file [Disruptive]", func() {
 		var (
 			e2eTestNamespace = "microshift-ocp62959"
-			chkConfigCmd     = `su - redhat -c "/usr/bin/microshift show-config --mode effective|grep -i memoryLimitMB"`
+			chkConfigCmd     = `su - redhat -c "sudo /usr/bin/microshift show-config --mode effective|grep -i memoryLimitMB"`
 			valCfg           = "180"
 			etcConfigYaml    = "/etc/microshift/config.yaml"
 			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
@@ -5460,7 +5460,7 @@ EOF`, etcConfigYaml, level)
 			etcConfigYaml    = "/etc/microshift/config.yaml"
 			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
 			tmpManifestPath  = "/var/lib/microshift/manifests/manifestocp63217/"
-			chkConfigCmd     = `/usr/bin/microshift show-config --mode effective`
+			chkConfigCmd     = `sudo /usr/bin/microshift show-config --mode effective`
 		)
 
 		exutil.By("1. Create new namespace for the scenario")
@@ -5663,7 +5663,7 @@ manifests:
 		restartMicroshift(oc, masterNodes[0])
 
 		exutil.By("10.2 :: Scenario-6 :: Check manifest config")
-		pattern := `kustomizePaths:\s*\n\s*- /usr/lib/microshift/manifests\s*\n\s*- /etc/microshift/manifests`
+		pattern := `kustomizePaths:\s*\n\s+-\s+/usr/lib/microshift/manifests\s*\n\s+-\s+/usr/lib/microshift/manifests\.d/\*\s*\n\s+-\s+/etc/microshift/manifests\s*\n\s+-\s+/etc/microshift/manifests\.d/\*`
 		re := regexp.MustCompile(pattern)
 		mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
