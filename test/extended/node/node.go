@@ -488,7 +488,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: minmli@redhat.com
-	g.It("Author:minmli-High-47663-run pods in user namespaces via crio workload annotation", func() {
+	g.It("DEPRECATED-Author:minmli-High-47663-run pods in user namespaces via crio workload annotation", func() {
 		oc.SetupProject()
 		g.By("Test for case OCP-47663")
 		podUserNS47663.name = "userns-47663"
