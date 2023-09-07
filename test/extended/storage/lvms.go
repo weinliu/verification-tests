@@ -8,6 +8,7 @@
 package storage
 
 import (
+	"math"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -27,18 +28,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	var (
 		oc                 = exutil.NewCLI("storage-lvms", exutil.KubeConfigPath())
 		storageTeamBaseDir string
+		storageLvmsBaseDir string
 	)
 
 	g.BeforeEach(func() {
 		checkLvmsOperatorInstalled(oc)
 		storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
+		storageLvmsBaseDir = exutil.FixturePath("testdata", "storage", "lvms")
 	})
 
 	// NOTE: In this test case, we are testing volume provisioning beyond total disk size, it's only specific to LVMS operator
 	//       as it supports over-provisioning, unlike other CSI drivers
 	// author: rdeore@redhat.com
 	// OCP-61425-[LVMS] [Filesystem] [WaitForFirstConsumer] PVC resize on LVM cluster beyond thinpool size, but within over-provisioning limit
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61425-[LVMS] [Filesystem] [WaitForFirstConsumer] PVC resize on LVM cluster beyond thinpool size, but within over-provisioning limit", func() {
+	g.It("Author:rdeore-Critical-61425-[LVMS] [Filesystem] [WaitForFirstConsumer] PVC resize on LVM cluster beyond thinpool size, but within over-provisioning limit", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -68,7 +71,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//       as it supports over-provisioning, unlike other CSI drivers
 	// author: rdeore@redhat.com
 	// OCP-61433-[LVMS] [Block] [WaitForFirstConsumer] PVC resize on LVM cluster beyond thinpool size, but within over-provisioning limit
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61433-[LVMS] [Block] [WaitForFirstConsumer] PVC resize on LVM cluster beyond thinpool size, but within over-provisioning limit", func() {
+	g.It("Author:rdeore-Critical-61433-[LVMS] [Block] [WaitForFirstConsumer] PVC resize on LVM cluster beyond thinpool size, but within over-provisioning limit", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -98,7 +101,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-61585-[LVMS] [Filesystem] [Clone] a pvc with the same capacity should be successful
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61585-[LVMS] [Filesystem] [Clone] a pvc with the same capacity should be successful", func() {
+	g.It("Author:rdeore-Critical-61585-[LVMS] [Filesystem] [Clone] a pvc with the same capacity should be successful", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -153,7 +156,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-61586-[LVMS] [Block] Clone a pvc with Block VolumeMode
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61586-[LVMS] [Block] Clone a pvc with Block VolumeMode", func() {
+	g.It("Author:rdeore-Critical-61586-[LVMS] [Block] Clone a pvc with Block VolumeMode", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -208,7 +211,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-61863-[LVMS] [Filesystem] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61863-[LVMS] [Filesystem] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written", func() {
+	g.It("Author:rdeore-Critical-61863-[LVMS] [Filesystem] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate             = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -268,7 +271,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-61894-[LVMS] [Block] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61894-[LVMS] [Block] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written", func() {
+	g.It("Author:rdeore-Critical-61894-[LVMS] [Block] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate             = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -330,7 +333,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//       as it supports over-provisioning, unlike other CSI drivers
 	// author: rdeore@redhat.com
 	// OCP-61814-[LVMS] [Filesystem] [Clone] a pvc larger than disk size should be successful
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61814-[LVMS] [Filesystem] [Clone] a pvc larger than disk size should be successful", func() {
+	g.It("Author:rdeore-Critical-61814-[LVMS] [Filesystem] [Clone] a pvc larger than disk size should be successful", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -397,7 +400,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//       as it supports over-provisioning, unlike other CSI drivers
 	// author: rdeore@redhat.com
 	// OCP-61828-[LVMS] [Block] [Clone] a pvc larger than disk size should be successful
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61828-[LVMS] [Block] [Clone] a pvc larger than disk size should be successful", func() {
+	g.It("Author:rdeore-Critical-61828-[LVMS] [Block] [Clone] a pvc larger than disk size should be successful", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -464,7 +467,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//       as it supports over-provisioning, unlike other CSI drivers
 	// author: rdeore@redhat.com
 	// OCP-61997-[LVMS] [Filesystem] [Snapshot] should restore volume larger than disk size with snapshot dataSource successfully and the volume could be read and written
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61997-[LVMS] [Filesystem] [Snapshot] should restore volume larger than disk size with snapshot dataSource successfully and the volume could be read and written", func() {
+	g.It("Author:rdeore-Critical-61997-[LVMS] [Filesystem] [Snapshot] should restore volume larger than disk size with snapshot dataSource successfully and the volume could be read and written", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate             = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -536,7 +539,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//       as it supports over-provisioning, unlike other CSI drivers
 	// author: rdeore@redhat.com
 	// OCP-61998-[LVMS] [Block] [Snapshot] should restore volume larger than disk size with snapshot dataSource successfully and the volume could be read and written
-	g.It("NonHyperShiftHOST-Author:rdeore-Critical-61998-[LVMS] [Block] [Snapshot] should restore volume larger than disk size with snapshot dataSource successfully and the volume could be read and written", func() {
+	g.It("Author:rdeore-Critical-61998-[LVMS] [Block] [Snapshot] should restore volume larger than disk size with snapshot dataSource successfully and the volume could be read and written", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate             = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -606,7 +609,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-66321-[LVMS] [Filesystem] [ext4] provision a PVC with fsType:'ext4'
-	g.It("NonHyperShiftHOST-Author:rdeore-High-66321-[LVMS] [Filesystem] [ext4] provision a PVC with fsType:'ext4'", func() {
+	g.It("Author:rdeore-High-66321-[LVMS] [Filesystem] [ext4] provision a PVC with fsType:'ext4'", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -664,7 +667,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-66320-[LVMS] Pre-defined CSI Storageclass should get re-created automatically after deleting
-	g.It("NonHyperShiftHOST-Author:rdeore-High-66320-[LVMS] Pre-defined CSI Storageclass should get re-created automatically after deleting [Disruptive]", func() {
+	g.It("Author:rdeore-High-66320-[LVMS] Pre-defined CSI Storageclass should get re-created automatically after deleting [Disruptive]", func() {
 		//Set the resource template for the scenario
 		var (
 			volumeGroup      = "vg1"
@@ -698,7 +701,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-66322-[LVMS] Show status column for lvmCluster and show warning event for 'Not Enough Storage capacity' directly from PVC
-	g.It("NonHyperShiftHOST-Author:rdeore-High-66322-[LVMS] Show status column for lvmCluster and show warning event for 'Not Enough Storage capacity' directly from PVC", func() {
+	g.It("Author:rdeore-High-66322-[LVMS] Show status column for lvmCluster and show warning event for 'Not Enough Storage capacity' directly from PVC", func() {
 		// Set the resource template for the scenario
 		var (
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -738,7 +741,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-66764-[LVMS] Show warning event for 'Removed Claim Reference' directly from PV
-	g.It("NonHyperShiftHOST-Author:rdeore-High-66764-[LVMS] Show warning event for 'Removed Claim Reference' directly from PV", func() {
+	g.It("Author:rdeore-High-66764-[LVMS] Show warning event for 'Removed Claim Reference' directly from PV", func() {
 		// Set the resource template for the scenario
 		var (
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -779,6 +782,115 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
 		deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-67001-[LVMS] Check deviceSelector logic works with combination of one valid device Path and two optionalPaths
+	g.It("Author:rdeore-High-67001-[LVMS] Check deviceSelector logic works with combination of one valid device Path and two optionalPaths [Disruptive]", func() {
+		//Set the resource template for the scenario
+		var (
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate        = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			lvmClusterTemplate = filepath.Join(storageLvmsBaseDir, "lvmcluster-with-paths-template.yaml")
+			volumeGroup        = "vg1"
+		)
+
+		if exutil.IsSNOCluster(oc) {
+			g.Skip("Skipped: test case is only applicable to multi-node/SNO with additional worker-node cluster")
+		}
+
+		exutil.By("#. Get list of available block devices/disks attached to all worker ndoes")
+		freeDiskNameCountMap := getListOfFreeDisksFromWorkerNodes(oc)
+		if len(freeDiskNameCountMap) < 2 { // this test requires atleast 2 unique disks, 1 for mandatoryDevicePath and 1 for optionalDevicePath
+			g.Skip("Skipped: Cluster's Worker nodes does not have minimum required free block devices/disks attached")
+		}
+		workerNodeCount := len(getWorkersList(oc))
+		var mandatoryDisk string
+		var optionalDisk string
+		isDiskFound := false
+		for diskName, count := range freeDiskNameCountMap {
+			if count == int64(workerNodeCount) { // mandatory disk with same name should be present on all worker nodes as per LVMS requriement
+				mandatoryDisk = diskName
+				isDiskFound = true
+				delete(freeDiskNameCountMap, diskName)
+				break
+			}
+		}
+		if !isDiskFound { // If all Worker nodes doesn't have 1 disk with same name, skip the test scenario
+			g.Skip("Skipped: All Worker nodes does not have a free block device/disk with same name attached")
+		}
+		for diskName := range freeDiskNameCountMap {
+			optionalDisk = diskName
+			break
+		}
+
+		exutil.By("#. Copy and save existing LVMCluster configuration in JSON format")
+		lvmClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		originLvmCluster := newLvmCluster(setLvmClusterName(lvmClusterName), setLvmClusterNamespace("openshift-storage"))
+		originLVMJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", originLvmCluster.name, "-n", "openshift-storage", "-o", "json").Output()
+		debugLogf(originLVMJSON)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		exutil.By("#. Delete existing LVMCluster resource")
+		deleteSpecifiedResource(oc.AsAdmin(), "lvmcluster", originLvmCluster.name, "openshift-storage")
+		defer func() {
+			if !isSpecifiedResourceExist(oc, "lvmcluster/"+originLvmCluster.name, "openshift-storage") {
+				originLvmCluster.createWithExportJSON(oc, originLVMJSON, originLvmCluster.name)
+				originLvmCluster.waitReady(oc)
+			}
+		}()
+
+		exutil.By("#. Create a new LVMCluster resource with paths and optionalPaths")
+		lvmCluster := newLvmCluster(setLvmClustertemplate(lvmClusterTemplate), setLvmClusterPaths([]string{"/dev/" + mandatoryDisk}),
+			setLvmClusterOptionalPaths([]string{"/dev/" + optionalDisk, "/dev/invalid-path"}))
+		lvmCluster.create(oc)
+		defer lvmCluster.deleteLVMClusterSafely(oc) // If new lvmCluster creation fails, need to remove finalizers if any
+		lvmCluster.waitReady(oc)
+
+		exutil.By("#. Check LVMS CSI storage capacity equals backend devices/disks total size")
+		pathsDiskTotalSize := getTotalDiskSizeOnAllWorkers(oc, "/dev/"+mandatoryDisk)
+		optionalPathsDiskTotalSize := getTotalDiskSizeOnAllWorkers(oc, "/dev/"+optionalDisk)
+		ratio, sizePercent := getOverProvisionRatioAndSizePercentByVolumeGroup(oc, "vg1")
+		expectedStorageCapacity := sizePercent * (pathsDiskTotalSize + optionalPathsDiskTotalSize) / 100
+		e2e.Logf("EXPECTED USABLE STORAGE CAPACITY: %d", expectedStorageCapacity)
+		currentLvmStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByStorageClass(oc, "lvms-vg1")
+		actualStorageCapacity := (currentLvmStorageCapacity / ratio) / 1024 // Get size in Gi
+		e2e.Logf("ACTUAL USABLE STORAGE CAPACITY: %d", actualStorageCapacity)
+		storageDiff := float64(expectedStorageCapacity - actualStorageCapacity)
+		absDiff := math.Abs(storageDiff)
+		o.Expect(int(absDiff) < 2).To(o.BeTrue()) // there is always a difference of 1 Gi between backend disk size and usable size
+
+		exutil.By("#. Create a new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("#. Define storage resources")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		exutil.By("#. Create a pvc with the pre-set lvms csi storageclass")
+		pvc.scname = "lvms-" + volumeGroup
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		exutil.By("#. Write file to volume")
+		pod.checkMountedVolumeCouldRW(oc)
+
+		exutil.By("Delete Pod and PVC")
+		deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
+		deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
+
+		exutil.By("Delete newly created LVMCluster resource")
+		lvmCluster.deleteLVMClusterSafely(oc)
+
+		exutil.By("#. Create original LVMCluster resource")
+		originLvmCluster.createWithExportJSON(oc, originLVMJSON, originLvmCluster.name)
+		originLvmCluster.waitReady(oc)
+	})
 })
 
 func checkVolumeBiggerThanDisk(oc *exutil.CLI, pvcName string, pvcNamespace string, thinPoolSize int) {
@@ -815,21 +927,27 @@ func getLvmClusterState(oc *exutil.CLI, namespace string, lvmClusterName string)
 	return lvmClusterState, err
 }
 
+// Get the total thinPoolSize for given volumeGroup from all available worker nodes on the cluster
 func getThinPoolSizeByVolumeGroup(oc *exutil.CLI, volumeGroup string, thinPoolName string) int {
 	cmd := "lvs --units g 2> /dev/null | grep " + volumeGroup + " | awk '{if ($1 == \"" + thinPoolName + "\") print $4;}'"
-	nodeName := getWorkersList(oc)[0]
-	output, err := execCommandInSpecificNode(oc, nodeName, cmd)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	regexForNumbersOnly := regexp.MustCompile("[0-9.]+")
-	sizeVal := regexForNumbersOnly.FindAllString(output, -1)[0]
-	sizeNum := strings.Split(sizeVal, ".")
-	thinPoolSize, err := strconv.Atoi(sizeNum[0])
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("Thin Pool size in Gi from backend node: %d", thinPoolSize)
-	return thinPoolSize
+	workerNodes := getWorkersList(oc)
+	var totalThinPoolSize int = 0
+	for _, workerName := range workerNodes { // Search all worker nodes to fetch thin-pool-size by VG
+		output, err := execCommandInSpecificNode(oc, workerName, cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		regexForNumbersOnly := regexp.MustCompile("[0-9.]+")
+		sizeVal := regexForNumbersOnly.FindAllString(output, -1)[0]
+		sizeNum := strings.Split(sizeVal, ".")
+		thinPoolSize, err := strconv.Atoi(sizeNum[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		totalThinPoolSize = totalThinPoolSize + thinPoolSize
+	}
+	e2e.Logf("Total thin Pool size in Gi from backend nodes: %d", totalThinPoolSize)
+	return totalThinPoolSize
 }
 
-func getOverProvisionRatioByVolumeGroup(oc *exutil.CLI, volumeGroup string) int {
+// Get OverProvision Ratio value and Size Percent value from lvmCluster config
+func getOverProvisionRatioAndSizePercentByVolumeGroup(oc *exutil.CLI, volumeGroup string) (int, int) {
 	lvmCluster, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	lvmClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o=jsonpath={.items[0].metadata.name}").Output()
@@ -840,12 +958,18 @@ func getOverProvisionRatioByVolumeGroup(oc *exutil.CLI, volumeGroup string) int 
 	e2e.Logf("Over-Provision Ratio: %s", overProvisionRatioStr)
 	opRatio, err := strconv.Atoi(strings.TrimSpace(overProvisionRatioStr))
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return opRatio
+	sizePercent := gjson.Get(lvmCluster, "items.#(metadata.name="+lvmClusterName+").spec.storage.deviceClasses.#(name="+volumeGroup+").thinPoolConfig.sizePercent")
+	sizePercentStr := sizePercent.String()
+	o.Expect(sizePercentStr).NotTo(o.BeEmpty())
+	e2e.Logf("Size-percent: %s", sizePercentStr)
+	sizePercentNum, err := strconv.Atoi(strings.TrimSpace(sizePercentStr))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return opRatio, sizePercentNum
 }
 
 func getOverProvisionLimitByVolumeGroup(oc *exutil.CLI, volumeGroup string, thinPoolName string) int {
 	thinPoolSize := getThinPoolSizeByVolumeGroup(oc, volumeGroup, thinPoolName)
-	opRatio := getOverProvisionRatioByVolumeGroup(oc, volumeGroup)
+	opRatio, _ := getOverProvisionRatioAndSizePercentByVolumeGroup(oc, volumeGroup)
 	limit := thinPoolSize * opRatio
 	e2e.Logf("Over-Provisioning Limit in Gi: %d", limit)
 	return limit
