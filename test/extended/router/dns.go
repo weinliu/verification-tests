@@ -392,11 +392,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Check updated value in dns operator file")
 		output, err := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("bufsize 512"))
+		o.Expect(output).To(o.ContainSubstring("bufsize 1232"))
 
 		g.By("Check the cache value in Corefile of coredns under all dns-default-xxx pods")
 		podList := getAllDNSPodsNames(oc)
-		keepSearchInAllDNSPods(oc, podList, "bufsize 512")
+		keepSearchInAllDNSPods(oc, podList, "bufsize 1232")
 
 		g.By("Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
@@ -406,12 +406,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Client send out a dig for google.com to check response")
 		digOutput, err2 := oc.Run("exec").Args(cltPodName, "--", "dig", "google.com").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
-		o.Expect(digOutput).To(o.ContainSubstring("udp: 512"))
+		o.Expect(digOutput).To(o.ContainSubstring("udp: 1232"))
 
 		g.By("Client send out a dig for NXDOMAIN to check response")
 		digOutput1, err3 := oc.Run("exec").Args(cltPodName, "--", "dig", "nxdomain.google.com").Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
-		o.Expect(digOutput1).To(o.ContainSubstring("udp: 512"))
+		o.Expect(digOutput1).To(o.ContainSubstring("udp: 1232"))
 
 		g.By("Check the different DNS records")
 		// To find the PTR record
