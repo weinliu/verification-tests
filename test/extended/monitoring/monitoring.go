@@ -1177,6 +1177,133 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert1", 3*uwmLoadTime)
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="Watchdog"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "Watchdog", 3*uwmLoadTime)
 		})
+
+		// author: tagao@redhat.com
+		g.It("Author:tagao-ConnectedOnly-Medium-44815-Configure containers to honor the global tlsSecurityProfile", func() {
+			g.By("get global tlsSecurityProfile")
+			// % oc get kubeapiservers.operator.openshift.io cluster -o jsonpath='{.spec.observedConfig.servingInfo.cipherSuites}'
+			cipherSuites, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiservers.operator.openshift.io", "cluster", "-ojsonpath={.spec.observedConfig.servingInfo.cipherSuites}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			cipherSuitesFormat := strings.ReplaceAll(cipherSuites, "\"", "")
+			cipherSuitesFormat = strings.ReplaceAll(cipherSuitesFormat, "[", "")
+			cipherSuitesFormat = strings.ReplaceAll(cipherSuitesFormat, "]", "")
+			e2e.Logf("cipherSuites: %s", cipherSuitesFormat)
+			// % oc get kubeapiservers.operator.openshift.io cluster -o jsonpath='{.spec.observedConfig.servingInfo.minTLSVersion}'
+			minTLSVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiservers.operator.openshift.io", "cluster", "-ojsonpath={.spec.observedConfig.servingInfo.minTLSVersion}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("check tls-cipher-suites and tls-min-version for prometheus-adapter under openshift-monitoring")
+			// % oc -n openshift-monitoring get deploy prometheus-adapter -ojsonpath='{.spec.template.spec.containers[?(@tls-cipher-suites=)].args}'
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@tls-cipher-suites=)].args}", "-n", "openshift-monitoring").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, cipherSuitesFormat) {
+				e2e.Failf("tls-cipher-suites is different from global setting! %s", output)
+			}
+			if !strings.Contains(output, minTLSVersion) {
+				e2e.Failf("tls-min-version is different from global setting! %s", output)
+			}
+
+			g.By("check tls-cipher-suites and tls-min-version for all pods which use kube-rbac-proxy container under openshift-monitoring/openshift-user-workload-monitoring")
+			//oc get pod -l app.kubernetes.io/name=alertmanager -n openshift-monitoring
+			alertmanagerPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=alertmanager")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range alertmanagerPodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+				cmd = "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-metric\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+			//oc get pod -l app.kubernetes.io/name=node-exporter -n openshift-monitoring
+			nePodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=node-exporter")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range nePodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+			//oc get pod -l app.kubernetes.io/name=kube-state-metrics -n openshift-monitoring
+			ksmPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=kube-state-metrics")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range ksmPodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-main\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+				cmd = "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-self\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+			//oc get pod -l app.kubernetes.io/name=openshift-state-metrics -n openshift-monitoring
+			osmPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=openshift-state-metrics")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range osmPodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-main\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+				cmd = "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-self\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+			//oc get pod -l app.kubernetes.io/name=prometheus -n openshift-monitoring
+			pk8sPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range pk8sPodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+				cmd = "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-thanos\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+			//oc get pod -l app.kubernetes.io/name=prometheus-operator -n openshift-monitoring
+			poPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-operator")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range poPodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+			//oc get pod -l app.kubernetes.io/name=telemeter-client -n openshift-monitoring
+			tcPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=telemeter-client")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range tcPodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+			//oc get pod -l app.kubernetes.io/name=thanos-query -n openshift-monitoring
+			tqPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=thanos-query")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range tqPodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+				cmd = "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-rules\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+				cmd = "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-metrics\")].args}"
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+			//oc get pod -l app.kubernetes.io/name=prometheus-operator -n openshift-user-workload-monitoring
+			UWMpoPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/name=prometheus-operator")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range UWMpoPodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy\")].args}"
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+			//oc get pod -l app.kubernetes.io/instance=user-workload -n openshift-user-workload-monitoring
+			UWMPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/instance=user-workload")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range UWMPodNames {
+				// Multiple container: kube-rbac-**** under this label, use fuzzy query
+				cmd := "-ojsonpath={.spec.containers[?(@tls-cipher-suites)].args}"
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, cipherSuitesFormat, true)
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, minTLSVersion, true)
+			}
+		})
 	})
 
 	//author: tagao@redhat.com
