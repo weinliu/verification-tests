@@ -65,29 +65,40 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	g.It("NonHyperShiftHOST-Author:yanyang-Medium-49508-disable capabilities by modifying the cv.spec.capabilities.baselineCapabilitySet [Serial]", func() {
 		orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		if orgBaseCap != "vCurrent" {
-			g.Skip("The test requires baselineCapabilitySet=vCurrent, rather than " + orgBaseCap)
+		if orgBaseCap == "None" {
+			g.Skip("The test cannot run on baselineCapabilitySet None")
 		}
 
 		defer func() {
-			out, err := changeCap(oc, true, orgBaseCap)
-			o.Expect(err).NotTo(o.HaveOccurred(), out)
+			if newBaseCap, _ := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet"); orgBaseCap != newBaseCap {
+				var out string
+				var err error
+				e2e.Logf("restoring original base caps to '%s'", orgBaseCap)
+				if orgBaseCap == "" {
+					out, err = changeCap(oc, true, nil)
+				} else {
+					out, err = changeCap(oc, true, orgBaseCap)
+				}
+				o.Expect(err).NotTo(o.HaveOccurred(), out)
+			} else {
+				e2e.Logf("defer baselineCapabilitySet skipped for original value already matching '%v'", newBaseCap)
+			}
 		}()
 
 		g.By("Check cap status and condition prior to change")
 		enabledCap, err := getCVObyJP(oc, ".status.capabilities.enabledCapabilities[*]")
 		o.Expect(err).NotTo(o.HaveOccurred())
-
 		capSet := strings.Split(enabledCap, " ")
-		for _, op := range capSet {
-			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", strings.ToLower(op)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
+		o.Expect(verifyCaps(oc, capSet)).NotTo(o.HaveOccurred())
 
-		status, err := getCVObyJP(oc, ".status.conditions[?(.type=='ImplicitlyEnabledCapabilities')].status")
+		out, err := getCVObyJP(oc, ".status.conditions[?(.type=='ImplicitlyEnabledCapabilities')]")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(status).To(o.Equal("False"))
+		o.Expect(gjson.Get(out, "status").Bool()).To(o.Equal(false),
+			"unexpected status dumping implicit %s", out)
+		o.Expect(gjson.Get(out, "reason").String()).To(o.Equal("AsExpected"),
+			"unexpected reason dumping implicit %s", out)
+		o.Expect(gjson.Get(out, "message").String()).To(o.ContainSubstring("Capabilities match configured spec"),
+			"unexpected message dumping implicit %s", out)
 
 		g.By("Disable capabilities by modifying the baselineCapabilitySet")
 		_, err = changeCap(oc, true, "None")
@@ -97,27 +108,19 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		enabledCapPost, err := getCVObyJP(oc, ".status.capabilities.enabledCapabilities[*]")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(enabledCapPost).To(o.Equal(enabledCap))
+		o.Expect(verifyCaps(oc, capSet)).NotTo(o.HaveOccurred(), "verifyCaps for enabled %v failed", capSet)
 
-		for _, op := range capSet {
-			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", strings.ToLower(op)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		for _, k := range []string{"status", "reason", "message"} {
-			jsonpath := ".status.conditions[?(.type=='ImplicitlyEnabledCapabilities')]." + k
-			out, err := getCVObyJP(oc, jsonpath)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if k == "status" {
-				o.Expect(out).To(o.Equal("True"))
-			} else if k == "reason" {
-				o.Expect(out).To(o.Equal("CapabilitiesImplicitlyEnabled"))
-			} else {
-				msg := append(capSet, "The following capabilities could not be disabled")
-				for _, m := range msg {
-					o.Expect(out).To(o.ContainSubstring(m))
-				}
-			}
-		}
+		g.By("Check implicitly enabled caps are correct")
+		out, err = getCVObyJP(oc, ".status.conditions[?(.type=='ImplicitlyEnabledCapabilities')]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(gjson.Get(out, "status").Bool()).To(o.Equal(true),
+			"unexpected status dumping implicit %s", out)
+		o.Expect(gjson.Get(out, "reason").String()).To(o.Equal("CapabilitiesImplicitlyEnabled"),
+			"unexpected reason dumping implicit %s", out)
+		o.Expect(gjson.Get(out, "message").String()).To(o.ContainSubstring("The following capabilities could not be disabled"),
+			"unexpected message dumping implicit %s", out)
+		o.Expect(gjson.Get(out, "message").String()).To(o.ContainSubstring(strings.Join(capSet, ", ")),
+			"unexpected message dumping implicit %s", out)
 	})
 
 	//author: yanyang@redhat.com

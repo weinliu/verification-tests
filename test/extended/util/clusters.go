@@ -104,7 +104,7 @@ func SkipBaselineCaps(oc *CLI, sets string) {
 	sets = strings.ReplaceAll(sets, " ", "")
 	for _, s := range strings.Split(sets, ",") {
 		if strings.Contains(baselineCapabilitySet, s) {
-			g.Skip("Skip for cluster with baselineCapabilitySet = " + s)
+			g.Skip("Skip for cluster with baselineCapabilitySet = '" + baselineCapabilitySet + "' matching filter: " + s)
 		}
 	}
 }

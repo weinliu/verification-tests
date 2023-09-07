@@ -659,6 +659,35 @@ func changeCap(oc *exutil.CLI, base bool, cap interface{}) (string, error) {
 	return ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", spec, cap}})
 }
 
+// verifies that the capabilities list passed to this func have resources enabled in a cluster
+func verifyCaps(oc *exutil.CLI, caps []string) (err error) {
+	// Important! this map should be updated each version with new capabilities, as they added to openshift.
+	capability_operators := map[string]string{
+		"Build":             "build",
+		"CSISnapshot":       "csi-snapshot-controller",
+		"Console":           "console",
+		"DeploymentConfig":  "dc",
+		"ImageRegistry":     "image-registry",
+		"Insights":          "insights",
+		"MachineAPI":        "machine-api",
+		"NodeTuning":        "node-tuning",
+		"Storage":           "storage",
+		"baremetal":         "baremetal",
+		"marketplace":       "marketplace",
+		"openshift-samples": "openshift-samples",
+	}
+	for _, op := range caps {
+		prefix := "co"
+		if op == "Build" || op == "DeploymentConfig" {
+			prefix = "-A" // special case for caps that isn't co but a resource
+		}
+		if _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(prefix, capability_operators[op]).Output(); err != nil {
+			return
+		}
+	}
+	return
+}
+
 // waits for string 'message' to appear in CVO 'jsonpath'.
 // or waits for message to disappear if waitingToAppear=false.
 // returns error if any.
