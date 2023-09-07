@@ -1041,7 +1041,7 @@ func createSpecialRegistry(oc *exutil.CLI, namespace string, ssldir string, dock
 
 	registryAuthToken := "https://" + hostD + "/auth"
 	registryPara := fmt.Sprintf(`REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/tmp/registry REGISTRY_AUTH=token REGISTRY_AUTH_TOKEN_REALM=%s REGISTRY_AUTH_TOKEN_SERVICE="Docker registry" REGISTRY_AUTH_TOKEN_ISSUER="Acme auth server" REGISTRY_AUTH_TOKEN_ROOTCERTBUNDLE=/ssl/server.pem `, registryAuthToken)
-	err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=myregistry", fmt.Sprintf("%s", registryPara), "-n", namespace, "--image=quay.io/openshifttest/registry:1.2.0").Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=myregistry", fmt.Sprintf("%s", registryPara), "-n", namespace, "--image=quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3", "--import-mode=PreserveOriginal").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = oc.AsAdmin().WithoutNamespace().Run("set").Args("volume", "deploy", "myregistry", "--add", "--name=v2", "--type=secret", "--secret-name=dockerauthssl", "--mount-path=/ssl", "-n", namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1246,7 +1246,7 @@ func getLatestPayload(url string) string {
 }
 
 func (registry *registry) createregistrySpecifyName(oc *exutil.CLI, registryname string) serviceInfo {
-	err := oc.AsAdmin().Run("new-app").Args("--image", registry.dockerImage, "REGISTRY_STORAGE_DELETE_ENABLED=true", "--name", registryname, "-n", registry.namespace).Execute()
+	err := oc.AsAdmin().Run("new-app").Args("--image", registry.dockerImage, "REGISTRY_STORAGE_DELETE_ENABLED=true", "--name", registryname, "-n", registry.namespace, "--import-mode=PreserveOriginal").Execute()
 	if err != nil {
 		e2e.Failf("Failed to create the registry server")
 	}

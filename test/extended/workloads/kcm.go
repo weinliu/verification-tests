@@ -83,7 +83,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 
 		g.By("create apps")
-		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", oc.Namespace()).Execute()
+		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", oc.Namespace(), "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("check the imagestream in the project")
 		output, err = oc.WithoutNamespace().Run("get").Args("imagestream", "-n", oc.Namespace()).Output()
@@ -137,7 +137,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		defer oc.WithoutNamespace().Run("delete").Args("project", "p43092-1").Execute()
 
 		g.By("Create app in the frist project")
-		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "p43092-1").Execute()
+		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "p43092-1", "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		checkPodStatus(oc, "deployment=hello-openshift", "p43092-1", "Running")
@@ -201,7 +201,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		defer oc.WithoutNamespace().Run("delete").Args("project", "p43099").Execute()
 
 		g.By("Create app in the frist project")
-		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "p43099").Execute()
+		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "p43099", "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get the rs references")
