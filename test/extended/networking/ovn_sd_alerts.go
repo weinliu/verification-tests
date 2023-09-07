@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("The alertName is %v", alertName)
 		o.Expect(alertName).To(o.ContainSubstring("SouthboundStale"))
 
-		alertSeverity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"NoOvnMasterLeader\")].labels.severity}").Output()
+		alertSeverity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"NoOvnClusterManagerLeader\")].labels.severity}").Output()
 		o.Expect(severityErr).NotTo(o.HaveOccurred())
 		e2e.Logf("alertSeverity is %v", alertSeverity)
 		o.Expect(alertSeverity).To(o.ContainSubstring("critical"))
