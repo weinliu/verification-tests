@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:geliu-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate [Serial]", func() {
+	g.It("ROSA-ConnectedOnly-Author:geliu-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate [Serial]", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Skip test when the cluster is with STS credential")
 		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
@@ -136,7 +136,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:geliu-High-62063-Low-63486-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
+	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-High-62063-Low-63486-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
 		e2e.Logf("Login with normal user and create new ns.")
 		oc.SetupProject()
 		e2e.Logf("Create issuer in ns scope created in last step.")
@@ -209,7 +209,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("ConnectedOnly-Author:geliu-Medium-62006-RH cert-manager operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
+	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-Medium-62006-RH cert-manager operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
 		e2e.Logf("Login with normal user and create issuers.\n")
 		oc.SetupProject()
 		createIssuers(oc)
@@ -294,7 +294,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("Author:geliu-Medium-62582-Need override dns args when the target hosted zone in ACME dns01 solver overlaps with the cluster's default private hosted zone [Disruptive]", func() {
+	g.It("ROSA-ConnectedOnly-Author:geliu-Medium-62582-Need override dns args when the target hosted zone in ACME dns01 solver overlaps with the cluster's default private hosted zone [Disruptive]", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
 		g.By("Skip test when the cluster is with STS credential")
@@ -417,7 +417,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "certificate status is wrong.")
 	})
-	g.It("Author:geliu-Medium-63555-ACME dns01 solver should work in OpenShift proxy env [Serial]", func() {
+	g.It("ROSA-Author:geliu-Medium-63555-ACME dns01 solver should work in OpenShift proxy env [Serial]", func() {
 		g.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
