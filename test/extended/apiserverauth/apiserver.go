@@ -6341,4 +6341,95 @@ spec:
 		defer resp.Body.Close()
 		o.Expect(resp.Header.Get("Access-Control-Allow-Origin")).To(o.Equal("http://localhost"))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12263-[Apiserver] When exceed openshift.io/images will ban to create image reference or push image to project", func() {
+
+		exutil.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
+		var (
+			imageLimitRangeYamlFile = tmpdir + "image-limit-range.yaml"
+			imageName1              = `quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c`
+			imageName2              = `quay.io/openshifttest/hello-openshift:1.2.0`
+			imageName3              = `quay.io/openshifttest/deployment-example@sha256:5c2f8ffe148168cbb91b49d62571af75853f3ca7c5c575b6d144b53ad2b52498`
+			imageStreamErr          error
+		)
+
+		exutil.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+		defer oc.AsAdmin().Run("delete").Args("-f", imageLimitRangeYamlFile, "-n", namespace).Execute()
+
+		imageLimitRangeYaml := `apiVersion: v1
+kind: LimitRange
+metadata:
+  name: openshift-resource-limits
+spec:
+  limits:
+    - type: openshift.io/Image
+      max:
+        storage: 1Gi
+    - type: openshift.io/ImageStream
+      max:
+        openshift.io/image-tags: 20
+        openshift.io/images: 1
+`
+
+		exutil.By("2) Create a resource quota limit of the image with images limit 1")
+		f, err := os.Create(imageLimitRangeYamlFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		_, err = w.WriteString(imageLimitRangeYaml)
+		w.Flush()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		quotaErr := oc.AsAdmin().Run("create").Args("-f", imageLimitRangeYamlFile, "-n", namespace).Execute()
+		o.Expect(quotaErr).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("3.) Applying a mystream:v1 image tag to %s in an image stream should succeed", imageName1))
+		tagErr := oc.AsAdmin().WithoutNamespace().Run("tag").Args(imageName1, "--source=docker", "mystream:v1", "-n", namespace).Execute()
+		o.Expect(tagErr).NotTo(o.HaveOccurred())
+
+		// Inline steps will wait for tag 1 to get it imported successfully before adding tag 2 and this helps to avoid race-caused failure.Ref:OCPQE-7679.
+		errImage := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			imageStreamOutput, imageStreamErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestream", "mystream", "-n", namespace).Output()
+			if imageStreamErr == nil {
+				if strings.Contains(imageStreamOutput, imageName1) {
+					e2e.Logf("Image is tag with v1 successfully\n%s", imageStreamOutput)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errImage, fmt.Sprintf("Image is tag with v1 is not successfull %s", imageStreamErr))
+
+		exutil.By(fmt.Sprintf("4.) Applying the mystream:v2 image tag to another %s in an image stream should fail due to the ImageStream max images limit", imageName2))
+		tagErr = oc.AsAdmin().WithoutNamespace().Run("tag").Args(imageName2, "--source=docker", "mystream:v2", "-n", namespace).Execute()
+		o.Expect(tagErr).NotTo(o.HaveOccurred())
+
+		var imageStreamv2Err error
+		errImageV2 := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			imageStreamv2Output, imageStreamv2Err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestream", "mystream", "-n", namespace).Output()
+			if imageStreamv2Err == nil {
+				if strings.Contains(imageStreamv2Output, "Import failed") {
+					e2e.Logf("Image is tag with v2 not successfull\n%s", imageStreamv2Output)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errImageV2, fmt.Sprintf("Image is tag with v2 is successfull %s", imageStreamv2Err))
+
+		exutil.By(`5.) Copying an image to the default internal registry of the cluster should be denied due to the max storage size limit for images`)
+		destRegistry := "docker://" + defaultRegistryServiceURL + "/" + namespace + "/mystream:latest"
+		publicImageUrl := "docker://" + imageName3
+		output, err := copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+	})
 })
