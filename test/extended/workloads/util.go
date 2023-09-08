@@ -1554,6 +1554,16 @@ func checkOpenshiftSamples(oc *exutil.CLI) bool {
 	return false
 }
 
+func isSNOCluster(oc *exutil.CLI) bool {
+	//Only 1 master, 1 worker node and with the same hostname.
+	masterNodes, _ := exutil.GetClusterNodesBy(oc, "master")
+	workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
+	if len(masterNodes) == 1 && len(workerNodes) == 1 && masterNodes[0] == workerNodes[0] {
+		return true
+	}
+	return false
+}
+
 // this function is used to check the build status
 func checkBuildStatus(oc *exutil.CLI, buildname string, namespace string, expectedStatus string) {
 	err := wait.PollImmediate(10*time.Second, 15*time.Minute, func() (bool, error) {
