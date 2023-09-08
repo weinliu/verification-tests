@@ -1126,7 +1126,14 @@ func compareMaps(map1, map2 map[string]interface{}) bool {
 }
 
 func getClusterProxy(oc *exutil.CLI, value string) string {
-	clusterProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxies", "-o=jsonpath={.items[*].status."+value+"}").Output()
+	clusterProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxies", "-o=jsonpath={.items[*]."+value+"}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return clusterProxy
+}
+
+func isProxy(oc *exutil.CLI) bool {
+	clusterPayload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "-o=jsonpath={.items[0].status}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	clusterProxies := getPayloadMap(clusterPayload)
+	return len(clusterProxies) != 0
 }
