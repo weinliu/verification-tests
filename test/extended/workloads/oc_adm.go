@@ -8,6 +8,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
@@ -80,4 +81,21 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(strings.Contains(out, "No resources found")).To(o.BeTrue())
 	})
 
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-62956-oc adm node-logs works for nodes logs api", func() {
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--unit=kubelet", "-o", "short", "2>&1 >  /dev/null").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--unit=kubelet", "-g", "crio", "2>&1 >  /dev/null").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--since=-5m", "--until=-1m", "2>&1 >  /dev/null").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--tail", "10", "2>&1 >  /dev/null").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		now := time.Now()
+		sinceT := now.Add(time.Minute * -2).Format("2006-01-02 15:04:05")
+		untilT := now.Add(time.Minute * -10).Format("2006-01-02 15:04:05")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--since", sinceT, "2>&1 >  /dev/null").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--until", untilT, "2>&1 >  /dev/null").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
