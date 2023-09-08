@@ -156,18 +156,21 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		})
 		exutil.AssertWaitPollNoErr(statusErr, fmt.Sprintf("get issuer is wrong: %v", statusErr))
 		e2e.Logf("As the normal user, create certificate.")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath='{.spec.domain}'", "--context=admin").Output()
+		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}", "--context=admin").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		ingressDomain := strings.Fields(output)
 		e2e.Logf("ingressDomain=%s", ingressDomain)
+		dns_name := "t." + ingressDomain
+		if len(dns_name) > 63 {
+			g.Skip("Skip testcase for length of dns_name is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
+		}
 		certHttp01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
-		sedCmd := fmt.Sprintf(`sed -i 's/DNS_NAME/http01-test.%s/g' %s`, ingressDomain[0], certHttp01File)
+		sedCmd := fmt.Sprintf(`sed -i 's/DNS_NAME/%s/g' %s`, dns_name, certHttp01File)
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("create").Args("-f", certHttp01File).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		statusErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-			output, err = oc.Run("get").Args("certificate", "cert-test-http01").Output()
+			output, err := oc.Run("get").Args("certificate", "cert-test-http01").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("certificate status is: %v ", output)
 			if strings.Contains(output, "True") {
@@ -178,7 +181,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
 		g.By("Check certificate secret.")
-		output, err = oc.Run("get").Args("secret", "cert-test-http01").Output()
+		output, err := oc.Run("get").Args("secret", "cert-test-http01").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Get secret/cert-test-http01 output: %v", output)
 		g.By("Verify the certificate content.")
@@ -196,7 +199,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		opensslCmd := "openssl x509 -noout -text -in " + dirname + "/tls.crt"
 		ssloutput, sslerr := exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(sslerr).NotTo(o.HaveOccurred())
-		if !strings.Contains(string(ssloutput), "http01-test."+strings.Split(ingressDomain[0], "'")[1]) {
+		if !strings.Contains(string(ssloutput), dns_name) {
 			e2e.Failf("Failure: The certificate is indeed issued by Let's Encrypt, the Subject Alternative Name is indeed the specified DNS_NAME failed.")
 		}
 		e2e.Logf("Delete certification for ocp-63486.\n")

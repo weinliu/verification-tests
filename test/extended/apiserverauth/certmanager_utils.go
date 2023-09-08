@@ -190,7 +190,11 @@ func createCertificate(oc *exutil.CLI) {
 	certHttp01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
 	f, err := ioutil.ReadFile(certHttp01File)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	f1 := strings.ReplaceAll(string(f), "DNS_NAME", "http01-test."+ingressDomain)
+	dns_name := "t." + ingressDomain
+	if len(dns_name) > 63 {
+		g.Skip("Skip testcase for length of dns_name is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
+	}
+	f1 := strings.ReplaceAll(string(f), "DNS_NAME", dns_name)
 	err = ioutil.WriteFile(certHttp01File, []byte(f1), 0644)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = oc.Run("create").Args("-f", certHttp01File).Execute()
