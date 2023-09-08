@@ -195,12 +195,20 @@ func (r *Resource) GetConditionByType(ctype string) string {
 
 // AddLabel adds a label to the resource
 func (r *Resource) AddLabel(label, value string) error {
-	return r.oc.WithoutNamespace().Run("label").Args(r.kind, r.name, label+"="+value).Execute()
+	params := r.getCommonParams()
+
+	params = append(params, []string{label + "=" + value}...)
+
+	return r.oc.WithoutNamespace().Run("label").Args(params...).Execute()
 }
 
 // RemoveLabel removes a label to the resource
 func (r *Resource) RemoveLabel(label string) error {
-	return r.oc.WithoutNamespace().Run("label").Args(r.kind, r.name, label+"-").Execute()
+	params := r.getCommonParams()
+
+	params = append(params, []string{label + "-"}...)
+
+	return r.oc.WithoutNamespace().Run("label").Args(params...).Execute()
 }
 
 func (r *Resource) Describe() (string, error) {

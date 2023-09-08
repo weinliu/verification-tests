@@ -59,7 +59,7 @@ func (s Secret) ExtractToDir(directory string) error {
 
 // Extract extracts the secret's content to a random directory in the testcase's output directory
 func (s Secret) Extract() (string, error) {
-	layout := "2006_01_02T15-04-05Z"
+	layout := "2006_01_02T15-04-05Z.000"
 
 	directory := filepath.Join(e2e.TestContext.OutputDir, fmt.Sprintf("%s-%s-secret-%s", s.GetNamespace(), s.GetName(), time.Now().Format(layout)))
 	os.MkdirAll(directory, os.ModePerm)

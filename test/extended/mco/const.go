@@ -107,4 +107,16 @@ const (
 
 	// RTKernelIncWait exta minutes that MCPs will wait per node if we use a rt-kernel configuration
 	RTKernelIncWait = 5
+
+	// OCBMachineConfigPoolLabel the label used to enable and disable the on-cluster build functionality in MCPs
+	OCBMachineConfigPoolLabel = "machineconfiguration.openshift.io/layering-enabled"
+
+	// OCBConfigmapName is the name of the on-cluster-build-config configmap
+	OCBConfigmapName = "on-cluster-build-config"
+
+	// OCBDefaultBaseImagePullSecretName default value for the OCB image pull secret name
+	OCBDefaultBaseImagePullSecretName = "mco-global-pull-secret"
+
+	// OCBDefaultFinalImagePushSecretName default value for the OCB image pull secret name
+	OCBDefaultFinalImagePushSecretName = "mco-test-push-secret"
 )

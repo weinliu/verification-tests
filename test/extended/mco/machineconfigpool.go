@@ -192,6 +192,16 @@ func (mcp *MachineConfigPool) SetDefaultWaitingTime() {
 	mcp.MinutesWaitingPerNode = DefaultMinutesWaitingPerNode
 }
 
+// EnableOnClusterBuild() enables on-cluster build funcionality in this pool
+func (mcp *MachineConfigPool) EnableOnClusterBuild() error {
+	return mcp.AddLabel(OCBMachineConfigPoolLabel, "")
+}
+
+// DisableOnClusterBuild() disables on-cluster build funcionality in this pool
+func (mcp *MachineConfigPool) DisableOnClusterBuild() error {
+	return mcp.RemoveLabel(OCBMachineConfigPoolLabel)
+}
+
 // getNodesWithLabels returns a list with the nodes that belong to the machine config pool and has the provided labels
 func (mcp *MachineConfigPool) getNodesWithLabels(extraLabels string) ([]Node, error) {
 	mcp.oc.NotShowInfo()
