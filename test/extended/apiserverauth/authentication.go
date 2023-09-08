@@ -979,7 +979,8 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 		err = oc.Run("replace").Args("--raw", "/api/v1/namespaces/"+testNamespace+"/pods/hello-openshift/ephemeralcontainers", "-f", podJson).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Addition of privileged ephemeral containers failed")
-		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		// It needs more time to wait for Ephemeral Container to come to Running state, so the Poll parameters are larger
+		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
 			output, err := oc.Run("get").Args("po", "-o", "jsonpath={.items[*].status.ephemeralContainerStatuses}").Output()
 			if err != nil {
 				e2e.Logf("Fail to describe the container status, error: %s. Trying again", err)
