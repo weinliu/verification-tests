@@ -361,6 +361,46 @@ func readHaproxyConfig(oc *exutil.CLI, routerPodName, searchString1, grepOption,
 	return output
 }
 
+// used to get block content of haproxy.conf, for example, get one route's whole backend's configuration specified by searchString(for exmpale: "be_edge_http:" + project1 + ":r1-edg")
+func getBlockConfig(oc *exutil.CLI, routerPodName, searchString string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerPodName, "--", "bash", "-c", "cat haproxy.config").Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "get the content of haproxy.config failed")
+	result := ""
+	flag := 0
+	startIndex := 0
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, searchString) {
+			result = result + line + "\n"
+			flag = 1
+			startIndex = len(line) - len(strings.TrimLeft(line, " "))
+		} else if flag == 1 {
+			lineLen := len(line)
+			if lineLen == 0 {
+				result = result + "\n"
+			} else {
+				currentIndex := len(line) - len(strings.TrimLeft(line, " "))
+				if currentIndex > startIndex {
+					result = result + line + "\n"
+				} else {
+					flag = 2
+				}
+			}
+
+		} else if flag == 2 {
+			break
+		}
+	}
+	return result
+}
+
+func regexpGet(target, searchString string, index int) string {
+	result := ""
+	if len(regexp.MustCompile(searchString).FindStringSubmatch(target)) > 0 {
+		result = regexp.MustCompile(searchString).FindStringSubmatch(target)[index]
+	}
+	return result
+}
+
 // this function is used to get haproxy's version
 func getHAProxyVersion(oc *exutil.CLI) string {
 	var proxyVersion = "notFound"
@@ -1167,6 +1207,23 @@ func repeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, repeatTimes in
 		}
 	}
 	return result
+}
+
+func adminRepeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, duration time.Duration) {
+	waitErr := wait.Poll(5*time.Second, duration*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().Run("exec").Args(cmd...).Output()
+		if err != nil {
+			e2e.Logf("failed to execute cmd %v successfully, retrying...", cmd)
+			return false, nil
+		}
+		if strings.Contains(output, expectOutput) {
+			return true, nil
+		} else {
+			return false, nil
+		}
+
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully"))
 }
 
 // this function will collect all dns pods which resides in master node and its respective machine names
