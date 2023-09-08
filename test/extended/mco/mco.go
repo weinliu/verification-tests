@@ -3461,6 +3461,86 @@ nulla pariatur.`
 			"The master MCP description should include information about the certificate, but it does not:\n%s", ccDesc)
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-Low-66046-Check image registry certificates", func() {
+
+		var (
+			nodeCertsDirectory = "/etc/docker/certs.d"
+			nodeCertsFile      = "ca.crt"
+			mcp                = GetCompactCompatiblePool(oc.AsAdmin())
+			node               = mcp.GetNodesOrFail()[0]
+			cc                 = NewControllerConfig(oc.AsAdmin(), "machine-config-controller")
+		)
+
+		imageRegistryCerts, err := GetImageRegistryCertificates(oc.AsAdmin())
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the image registry certificates")
+
+		o.Expect(imageRegistryCerts).NotTo(o.BeEmpty(),
+			"Error. No image registry certificates found!!")
+
+		for certFile, certValue := range imageRegistryCerts {
+			logger.Infof("Checking Certfile: %s", certFile)
+
+			exutil.By(fmt.Sprintf("Check that the ControllerConfig resource has the right value for bundle file %s", certFile))
+			ccImageRegistryBundle, err := cc.GetImageRegistryBundleByFileName(certFile)
+			o.Expect(err).NotTo(o.HaveOccurred(),
+				"Error getting the image registry bundle in file %s in the ControllerConfig resource",
+				certFile)
+
+			o.Expect(ccImageRegistryBundle == certValue).To(o.BeTrue(),
+				"The ControllerConfig resource does not have the right value for the image registry bundle %s",
+				certFile)
+
+			logger.Infof("OK!\n")
+
+			exutil.By(fmt.Sprintf("Check that the ControllerConfig resource reports the right information about bundle file %s", certFile))
+			certInfo, err := GetCertificatesInfoFromPemBundle(certFile, []byte(certValue))
+			o.Expect(err).NotTo(o.HaveOccurred(),
+				"Error extracting certificate info from %s pem bundle", certFile)
+
+			ccCertInfo, err := cc.GetCertificatesInfoByBundleFileName(certFile)
+			o.Expect(err).NotTo(o.HaveOccurred(),
+				"Error getting the controller config information for %s certificates", certFile)
+
+			o.Expect(certInfo).To(o.Equal(ccCertInfo),
+				"The ControllerConfig is not reporting the right information about the certificates in %s bundle",
+				certFile)
+
+			logger.Infof("OK!\n")
+
+			exutil.By(fmt.Sprintf("Check that the file %s has been added to the managed merged trusted image registry configmap", certFile))
+
+			o.Eventually(GetManagedMergedTrustedImageRegistryCertificates, "20s", "10s").WithArguments(oc.AsAdmin()).Should(o.HaveKey(certFile),
+				"The certificate for file %s has not been included in the configmap merged-trusted-image-registry-ca -n openshift-config-managed")
+
+			mmtImageRegistryCert, err := GetManagedMergedTrustedImageRegistryCertificates(oc.AsAdmin())
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error getting managed merged trusted image registry certificates values")
+
+			o.Expect(mmtImageRegistryCert[certFile] == certValue).To(o.BeTrue(),
+				"The certificate in file %s was added to configmap merged-trusted-image-registry-ca -n openshift-config-managed but it has the wrong content")
+
+			logger.Infof("OK!\n")
+
+			exutil.By(fmt.Sprintf("Check that the file %s has been added nodes", certFile))
+			// the filename stored in configmap uses "..", but it is translated to ":" in the node.
+			// so we replace the ".." with ":"
+			decodedFileName := strings.ReplaceAll(certFile, "..", ":")
+			remotePath := nodeCertsDirectory + "/" + decodedFileName + "/" + nodeCertsFile
+			rfCert := NewRemoteFile(node, remotePath)
+
+			o.Eventually(func(gm o.Gomega) { // Passing o.Gomega as parameter we can use assertions inside the Eventually function without breaking the retries.
+				gm.Expect(rfCert.Fetch()).To(o.Succeed(),
+					"Cannot read the certificate file %s in node:%s ", rfCert.fullPath, node.GetName())
+
+				gm.Expect(rfCert.GetTextContent() == certValue).To(o.BeTrue(),
+					"the certificate stored in file %s does not match the expected value", rfCert.fullPath)
+			}, "1m", "10s").
+				Should(o.Succeed(),
+					"The file %s in node %s does not contain the right certificate.", rfCert.GetFullPath(), node.GetName())
+			logger.Infof("OK!\n")
+		}
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason

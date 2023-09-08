@@ -2,8 +2,11 @@ package mco
 
 import (
 	"encoding/json"
+	"fmt"
 
 	b64 "encoding/base64"
+
+	"github.com/tidwall/gjson"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
@@ -64,6 +67,52 @@ func (cc *ControllerConfig) GetRootCAData() (string, error) {
 		return "", err
 	}
 	return string(rootCAData), err
+}
+
+// GetImageRegistryBundleData returns a map[string]string containing the filenames and values of the image registry certificates
+func (cc *ControllerConfig) GetImageRegistryBundleData() (map[string]string, error) {
+	certs := map[string]string{}
+
+	bundleData, err := cc.Get(`{.spec.imageRegistryBundleData}`)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedBundleData := gjson.Parse(bundleData)
+
+	var b64Err error
+	parsedBundleData.ForEach(func(index, item gjson.Result) bool {
+		file := item.Get("file").String()
+		data64 := item.Get("data").String()
+		data, b64Err := b64.StdEncoding.DecodeString(data64)
+		if err != nil {
+			logger.Infof("Error decoding data for image registry bundle file %s: %s", file, b64Err)
+			return false // stop iterating
+		}
+
+		certs[file] = string(data)
+		return true // keep iterating
+	})
+	if b64Err != nil {
+		return nil, b64Err
+	}
+
+	return certs, nil
+}
+
+// GetImageRegistryBundleByFileName returns the image registry bundle searching by bundle filename
+func (cc *ControllerConfig) GetImageRegistryBundleByFileName(fileName string) (string, error) {
+	certs, err := cc.GetImageRegistryBundleData()
+	if err != nil {
+		return "", err
+	}
+
+	data, ok := certs[fileName]
+	if !ok {
+		return "", fmt.Errorf("There is no image registry bundle with file name %s", fileName)
+	}
+
+	return data, nil
 }
 
 // Returns a list of CertificateInfo structs with the information of all the certificates tracked by ControllerConfig

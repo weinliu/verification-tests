@@ -21,6 +21,8 @@ import (
 
 	b64 "encoding/base64"
 
+	"github.com/tidwall/gjson"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -867,4 +869,32 @@ func GetCertificatesInfoFromPemBundle(bundleName string, pemBundle []byte) ([]Ce
 
 	}
 	return certificatesInfo, nil
+}
+
+// GetImageRegistryCertificates returns a map with the image registry certificates content. Key=certificate file name, Value=certificate content
+func GetImageRegistryCertificates(oc *exutil.CLI) (map[string]string, error) {
+	return GetDataFromConfigMap(oc.AsAdmin(), "openshift-config-managed", "image-registry-ca")
+}
+
+// GetManagedMergedTrustedImageRegistryCertificates returns a map with the merged trusted image registry certificates content. Key=certificate file name, Value=certificate content
+func GetManagedMergedTrustedImageRegistryCertificates(oc *exutil.CLI) (map[string]string, error) {
+	return GetDataFromConfigMap(oc.AsAdmin(), "openshift-config-managed", "merged-trusted-image-registry-ca")
+}
+
+// GetDataFromConfigMap returns a map[string]string with the information of the ".data" section of a configmap
+func GetDataFromConfigMap(oc *exutil.CLI, namespace, name string) (map[string]string, error) {
+	data := map[string]string{}
+	cm := NewNamespacedResource(oc.AsAdmin(), "ConfigMap", namespace, name)
+	dataJSON, err := cm.Get(`{.data}`)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedData := gjson.Parse(dataJSON)
+	parsedData.ForEach(func(key, value gjson.Result) bool {
+		data[key.String()] = value.String()
+		return true // keep iterating
+	})
+
+	return data, nil
 }
