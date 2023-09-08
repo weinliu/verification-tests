@@ -1493,6 +1493,59 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		}
 	})
 
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-54406-Medium-54407-Medium-11564-oc rsh should work behind authenticated proxy [Serial]", func() {
+		g.By("Check if it's a proxy cluster")
+		httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpProxy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		httpsProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpsProxy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(httpProxy) == 0 && len(httpsProxy) == 0 {
+			g.Skip("Skip for non-proxy cluster!")
+		}
+
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns54406 := oc.Namespace()
+
+		g.By("Create the test pod")
+		err = oc.WithoutNamespace().Run("run").Args("mypod54406", "--image=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", ns54406).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		assertPodOutput(oc, "run=mypod54406", ns54406, "Running")
+
+		g.By("Set proxy")
+		var httpOriginProxy, httpsOriginProxy string
+		httpOriginProxy = os.Getenv("http_proxy")
+		httpsOriginProxy = os.Getenv("https_proxy")
+		defer func() {
+			if httpOriginProxy != "" {
+				os.Setenv("http_proxy", httpOriginProxy)
+			} else {
+				os.Unsetenv("http_proxy")
+			}
+			if httpsOriginProxy != "" {
+				os.Setenv("https_proxy", httpsOriginProxy)
+			} else {
+				os.Unsetenv("https_proxy")
+			}
+		}()
+
+		os.Setenv("http_proxy", httpProxy)
+		os.Setenv("https_proxy", httpsProxy)
+
+		g.By("Run rsh command")
+		err = oc.WithoutNamespace().Run("rsh").Args("mypod54406").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Run exec command")
+		err = oc.WithoutNamespace().Run("exec").Args("mypod54406", "--", "date").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Run port-forward command")
+		cmd1, _, _, err := oc.Run("port-forward").Args("mypod54406", "40032:8081").Background()
+		defer cmd1.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
 })
 
 // ClientVersion ...
