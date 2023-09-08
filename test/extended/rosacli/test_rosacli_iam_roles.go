@@ -3,15 +3,203 @@ package rosacli
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func() {
 	defer g.GinkgoRecover()
+	var accountRolePrefixesNeedCleanup = make([]string, 0)
 
+	rosaClient := NewClient()
+	ocmResourceService := rosaClient.OCMResource
+	permissionsBoundaryPolicyName := "sdqePBN"
+
+	g.AfterEach(func() {
+		rosaClient.Runner.CloseFormat()
+		if len(accountRolePrefixesNeedCleanup) > 0 {
+			for _, v := range accountRolePrefixesNeedCleanup {
+				_, err := ocmResourceService.deleteAccountRole("--mode", "auto",
+					"--prefix", v,
+					"-y")
+
+				o.Expect(err).To(o.BeNil())
+			}
+		}
+	})
+
+	g.It("Longduration-NonPreRelease-Author:yuwan-High-43070-Create/List/Delete account-roles via rosacli [Serial]", func() {
+		var (
+			userRolePrefixB = "prefixB"
+			userRolePrefixH = "prefixH"
+			userRolePrefixC = "prefixC"
+			path            = "/fd/sd/"
+			versionH        = "4.13"
+			versionC        = "4.12"
+		)
+
+		var policyDocument = `{
+			"Version": "2012-10-17",
+			"Statement": [
+			  {
+				"Effect": "Allow",
+				"Action": [
+				  "ec2:DescribeTags"
+				],
+				"Resource": "*"
+			  }
+			]
+		  }`
+
+		g.By("Create boundry policy")
+		rosaClient.Runner.format = "json"
+		iamClient := exutil.NewIAMClient()
+		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
+		o.Expect(err).To(o.BeNil())
+		defer func() {
+			err := wait.Poll(20*time.Second, 200*time.Second, func() (bool, error) {
+				err := iamClient.DeletePolicy(permissionsBoundaryArn)
+				if err != nil {
+					logger.Errorf("it met err %v when delete policy %s", err, permissionsBoundaryArn)
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "can not delete policy in 200s")
+		}()
+
+		whoamiOutput, err := ocmResourceService.whoami()
+		o.Expect(err).To(o.BeNil())
+		rosaClient.Runner.CloseFormat()
+		whoamiData := ocmResourceService.reflectAccountsInfo(whoamiOutput)
+		AWSAccountID := whoamiData.AWSAccountID
+
+		g.By("Create advanced account-roles of both hosted-cp and classic")
+		output, err := ocmResourceService.createAccountRole("--mode", "auto",
+			"--prefix", userRolePrefixB,
+			"--path", path,
+			"--permissions-boundary", permissionsBoundaryArn,
+			"-y")
+		o.Expect(err).To(o.BeNil())
+
+		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, userRolePrefixB)
+		textData := rosaClient.Parser.textData.Input(output).Parse().tip
+		o.Expect(strings.Contains(textData, "Creating classic account roles")).Should(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).Should(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+
+		g.By("Create advance account-roles of only hosted-cp")
+		output, err = ocmResourceService.createAccountRole("--mode", "auto",
+			"--prefix", userRolePrefixH,
+			"--path", path,
+			"--permissions-boundary", permissionsBoundaryArn,
+			"--version", versionH,
+			"--hosted-cp",
+			"-y")
+		o.Expect(err).To(o.BeNil())
+
+		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, userRolePrefixH)
+		textData = rosaClient.Parser.textData.Input(output).Parse().tip
+		o.Expect(strings.Contains(textData, "Creating classic account roles")).ShouldNot(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).Should(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+
+		g.By("Create advance account-roles of only classic")
+		output, err = ocmResourceService.createAccountRole("--mode", "auto",
+			"--prefix", userRolePrefixC,
+			"--path", path,
+			"--permissions-boundary", permissionsBoundaryArn,
+			"--version", versionC,
+			"--classic",
+			"-y")
+		o.Expect(err).To(o.BeNil())
+
+		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, userRolePrefixC)
+		textData = rosaClient.Parser.textData.Input(output).Parse().tip
+		o.Expect(strings.Contains(textData, "Creating classic account roles")).Should(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).ShouldNot(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+
+		g.By("List account-roles and check the result are expected")
+		output, err = ocmResourceService.listAccountRole()
+		o.Expect(err).To(o.BeNil())
+		accountRoleList, err := ocmResourceService.reflectAccountRoleList(output)
+		o.Expect(err).To(o.BeNil())
+
+		accountRoleSetB := accountRoleList.accountRoles(userRolePrefixB)
+		accountRoleSetH := accountRoleList.accountRoles(userRolePrefixH)
+		accountRoleSetC := accountRoleList.accountRoles(userRolePrefixC)
+
+		selectedRoleH := accountRoleSetH[rand.Intn(len(accountRoleSetH))]
+		selectedRoleC := accountRoleSetC[rand.Intn(len(accountRoleSetC))]
+
+		// selectedRoles := []AccountRole{accountRoleSetB[rand.Intn(len(accountRoleSetB))], accountRoleSetB[rand.Intn(len(accountRoleSetH))], accountRoleSetB[rand.Intn(len(accountRoleSetC))]}
+
+		o.Expect(len(accountRoleSetB)).To(o.Equal(7))
+		o.Expect(len(accountRoleSetH)).To(o.Equal(3))
+		o.Expect(len(accountRoleSetC)).To(o.Equal(4))
+
+		o.Expect(selectedRoleH.RoleArn).To(o.Equal(fmt.Sprintf("arn:aws:iam::%s:role%s%s-HCP-ROSA-%s", AWSAccountID, path, userRolePrefixH, RoleTypeSuffixMap[selectedRoleH.RoleType])))
+		o.Expect(selectedRoleH.OpenshiftVersion).To(o.Equal(versionH))
+		o.Expect(selectedRoleH.AWSManaged).To(o.Equal("Yes"))
+		o.Expect(selectedRoleC.RoleArn).To(o.Equal(fmt.Sprintf("arn:aws:iam::%s:role%s%s-%s", AWSAccountID, path, userRolePrefixC, RoleTypeSuffixMap[selectedRoleC.RoleType])))
+		o.Expect(selectedRoleC.OpenshiftVersion).To(o.Equal(versionC))
+		o.Expect(selectedRoleC.AWSManaged).To(o.Equal("No"))
+
+		g.By("Delete account-roles")
+		output, err = ocmResourceService.deleteAccountRole("--mode", "auto",
+			"--prefix", userRolePrefixB,
+			"-y")
+
+		o.Expect(err).To(o.BeNil())
+		textData = rosaClient.Parser.textData.Input(output).Parse().tip
+		o.Expect(strings.Contains(textData, "Successfully deleted the classic account roles")).Should(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Successfully deleted the hosted CP account roles")).Should(o.BeTrue())
+
+		output, err = ocmResourceService.deleteAccountRole("--mode", "auto",
+			"--prefix", userRolePrefixH,
+			"--hosted-cp",
+			"-y",
+		)
+
+		o.Expect(err).To(o.BeNil())
+		textData = rosaClient.Parser.textData.Input(output).Parse().tip
+		o.Expect(strings.Contains(textData, "Successfully deleted the hosted CP account roles")).Should(o.BeTrue())
+
+		output, err = ocmResourceService.deleteAccountRole("--mode", "auto",
+			"--prefix", userRolePrefixC,
+			"--classic",
+			"-y",
+		)
+
+		o.Expect(err).To(o.BeNil())
+		textData = rosaClient.Parser.textData.Input(output).Parse().tip
+		o.Expect(strings.Contains(textData, "Successfully deleted the classic account roles")).Should(o.BeTrue())
+
+		g.By("List account-roles to check they are deleted")
+		output, err = ocmResourceService.listAccountRole()
+		o.Expect(err).To(o.BeNil())
+		accountRoleList, err = ocmResourceService.reflectAccountRoleList(output)
+		o.Expect(err).To(o.BeNil())
+
+		accountRoleSetB = accountRoleList.accountRoles(userRolePrefixB)
+		accountRoleSetH = accountRoleList.accountRoles(userRolePrefixH)
+		accountRoleSetC = accountRoleList.accountRoles(userRolePrefixC)
+
+		o.Expect(len(accountRoleSetB)).To(o.Equal(0))
+		o.Expect(len(accountRoleSetH)).To(o.Equal(0))
+		o.Expect(len(accountRoleSetC)).To(o.Equal(0))
+	})
+})
+
+var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing", func() {
+	defer g.GinkgoRecover()
 	g.It("Author:yuwan-High-52580-Validations for create/link/unlink user-role by the rosacli command [Serial]", func() {
 		var (
 			userRolePrefix                                string

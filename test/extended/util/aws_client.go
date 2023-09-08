@@ -1,6 +1,7 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -625,4 +626,49 @@ func (iamClient *IAMClient) UpdateRolePolicy(roleName, policyName, policyDocumen
 	}
 
 	return err
+}
+
+// Create policy
+func (iamClient *IAMClient) CreatePolicy(policyDocument string, policyName string, description string, tagList map[string]string, path string) (string, error) {
+	//     Check that required inputs exist
+	if policyDocument == "" || policyName == "" {
+		return "", errors.New("policyDocument or policyName can be an empty string")
+	}
+	createPolicyInput := &iam.CreatePolicyInput{
+		PolicyName:     aws.String(policyName),
+		PolicyDocument: aws.String(policyDocument),
+	}
+	if path != "" {
+		createPolicyInput.Path = aws.String(path)
+	}
+	if description != "" {
+		createPolicyInput.Description = aws.String(description)
+	}
+	if len(tagList) > 0 {
+		createPolicyInput.Tags = getTags(tagList)
+	}
+
+	output, err := iamClient.svc.CreatePolicy(createPolicyInput)
+
+	return aws.StringValue(output.Policy.Arn), err
+}
+
+// Delete policy
+func (iamClient *IAMClient) DeletePolicy(policyArn string) error {
+	_, err := iamClient.svc.DeletePolicy(&iam.DeletePolicyInput{
+		PolicyArn: aws.String(policyArn),
+	})
+	return err
+}
+
+// convert tags map to []iam.Tag
+func getTags(tagList map[string]string) []*iam.Tag {
+	iamTags := []*iam.Tag{}
+	for k, v := range tagList {
+		iamTags = append(iamTags, &iam.Tag{
+			Key:   aws.String(k),
+			Value: aws.String(v),
+		})
+	}
+	return iamTags
 }
