@@ -236,6 +236,21 @@ func (h *hostedCluster) createAwsNodePool(name string, nodeCount int) {
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 }
 
+func (h *hostedCluster) createAwsInPlaceNodePool(name string, nodeCount int, dir string) {
+	npFile := dir + "/np-inplace.yaml"
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift create nodepool aws --name %s --namespace %s --cluster-name %s --node-count %d --render > %s", name, h.namespace, h.name, nodeCount, npFile)
+	_, err := bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	cmdSed := fmt.Sprintf("sed -i 's/Replace/InPlace/g' %s", npFile)
+	_, err = bashClient.Run(cmdSed).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	err = h.oc.AsAdmin().WithoutNamespace().Run(OcpCreate).Args("-f", npFile).Execute()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
 func (h *hostedCluster) createAwsNodePoolWithoutDefaultSG(name string, nodeCount int, dir string) {
 	npFile := dir + "/np.yaml"
 	var bashClient = NewCmdClient().WithShowInfo(true)
@@ -472,8 +487,8 @@ func (h *hostedCluster) pollCheckNodePoolConditions(npName string, conditions []
 func (h *hostedCluster) checkNodePoolConditions(npName string, conditions []nodePoolCondition) bool {
 	o.Expect(doOcpReq(h.oc, OcpGet, true, "nodepools", "-n", h.namespace, "-ojsonpath={.items[*].metadata.name}")).Should(o.ContainSubstring(npName))
 	for _, condition := range conditions {
-		res := doOcpReq(h.oc, OcpGet, true, "nodepools", npName, "-n", h.namespace, fmt.Sprintf(`-ojsonpath={.status.conditions[?(@.type=="%s")].%s}`, condition.conditionsType, condition.conditionsTypeReq))
-		e2e.Logf("checkNodePoolStatus: %s, %s, %s", condition.conditionsType, condition.conditionsTypeReq, res)
+		res := doOcpReq(h.oc, OcpGet, false, "nodepools", npName, "-n", h.namespace, fmt.Sprintf(`-ojsonpath={.status.conditions[?(@.type=="%s")].%s}`, condition.conditionsType, condition.conditionsTypeReq))
+		e2e.Logf("checkNodePoolStatus: %s, %s, expected: %s, res: %s", condition.conditionsType, condition.conditionsTypeReq, condition.expectConditionsResult, res)
 		if !strings.Contains(res, condition.expectConditionsResult) {
 			return false
 		}
@@ -492,10 +507,7 @@ func (h *hostedCluster) getNodepoolStatusPayloadVersion(name string) string {
 	return version
 }
 
-func (h *hostedCluster) upgradeNodepoolPayloadInPlace(name, payload string, isInPlace bool) {
-	if isInPlace {
-		doOcpReq(h.oc, OcpPatch, true, "nodepools", name, "-n", h.namespace, "--type=json", `-p=[{"op": "replace", "path": "/spec/management/upgradeType", "value": "InPlace"}]`)
-	}
+func (h *hostedCluster) upgradeNodepoolPayloadInPlace(name, payload string) {
 	doOcpReq(h.oc, OcpPatch, true, "nodepools", name, "-n", h.namespace, "--type=json", fmt.Sprintf(`-p=[{"op": "replace", "path": "/spec/release/image","value": "%s"}]`, payload))
 }
 

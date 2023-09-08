@@ -10,10 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/blang/semver"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -352,4 +354,40 @@ func getAWSPrivateCredentials() string {
 		privateCred = cred
 	}
 	return privateCred
+}
+
+func subtractMinor(version *semver.Version, count uint64) *semver.Version {
+	result := *version
+	result.Minor = maxInt64(0, result.Minor-count)
+	return &result
+}
+
+func maxInt64(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func getHyperShiftOperatorLatestSupportOCPVersion() string {
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	res, err := bashClient.Run(fmt.Sprintf("oc logs -n hypershift -lapp=operator --tail=-1 | head -1")).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	re := regexp.MustCompile(`Latest supported OCP: (\d+\.\d+\.\d+)`)
+	match := re.FindStringSubmatch(res)
+	o.Expect(len(match) > 1).Should(o.BeTrue())
+	return match[1]
+}
+
+func getHyperShiftSupportedOCPVersion() (semver.Version, semver.Version) {
+	v := getHyperShiftOperatorLatestSupportOCPVersion()
+	latestSupportedVersion := semver.MustParse(v)
+	minSupportedVersion := semver.MustParse(subtractMinor(&latestSupportedVersion, uint64(SupportedPreviousMinorVersions)).String())
+	return latestSupportedVersion, minSupportedVersion
+}
+
+func getMinSupportedOCPVersion() string {
+	_, minVersion := getHyperShiftSupportedOCPVersion()
+	return minVersion.String()
 }

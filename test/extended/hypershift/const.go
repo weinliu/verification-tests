@@ -34,6 +34,7 @@ const (
 const (
 	HyperShiftResourceTagKeyPrefix = "kubernetes.io/cluster/"
 	HyperShiftResourceTagKeyValue  = "owned"
+	SupportedPreviousMinorVersions = 2
 )
 
 type PlatformType = string

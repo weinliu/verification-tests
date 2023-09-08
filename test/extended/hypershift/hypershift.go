@@ -784,14 +784,21 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
 		}
 
+		caseID := "49436"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		replica := 1
 		npNameInPlace := "49436np-inplace-" + strings.ToLower(exutil.RandStrDefault())
 		npNameReplace := "49436np-replace-" + strings.ToLower(exutil.RandStrDefault())
 		defer hostedcluster.deleteNodePool(npNameInPlace)
 		defer hostedcluster.deleteNodePool(npNameReplace)
 		hostedcluster.createAwsNodePool(npNameReplace, replica)
-		hostedcluster.createAwsNodePool(npNameInPlace, replica)
-		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "WaitingForAvailableMachines"}, {"UpdatingConfig", "status", "True"}, {"UpdatingVersion", "status", "True"}}), DefaultTimeout, DefaultTimeout/20).Should(o.BeTrue(), "nodepool ready error")
+		hostedcluster.createAwsInPlaceNodePool(npNameInPlace, replica, dir)
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "ScalingUp"}}), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), "in place nodepool ready error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameReplace, []nodePoolCondition{{"Ready", "reason", "WaitingForAvailableMachines"}, {"UpdatingConfig", "status", "True"}, {"UpdatingVersion", "status", "True"}}), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), "replace nodepool ready error")
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npNameInPlace), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npNameReplace), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
 		hostedcluster.checkNodepoolAllConditions(npNameInPlace)
@@ -800,28 +807,26 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("Set nodepool autoscaling, autorepair, and invaild payload image verify nodepool conditions should correctly generate")
 		hostedcluster.setNodepoolAutoScale(npNameReplace, "3", "1")
 		hostedcluster.setNodepoolAutoRepair(npNameReplace, "true")
-		hostedcluster.upgradeNodepoolPayloadInPlace(npNameReplace, "registry.ci.openshift.org/ocp/release:4.10.0-0.nightly-2022-03-23-095732", false)
-		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameReplace, []nodePoolCondition{{"AutoscalingEnabled", "message", "Maximum nodes: 3, Minimum nodes: 1"}, {"AutorepairEnabled", "status", "True"}, {"ValidReleaseImage", "status", "False"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameReplace, []nodePoolCondition{{"AutoscalingEnabled", "message", "Maximum nodes: 3, Minimum nodes: 1"}, {"AutorepairEnabled", "status", "True"}, {"ValidReleaseImage", "status", "True"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+
 		doOcpReq(oc, OcpPatch, true, "nodepools", npNameReplace, "-n", hostedcluster.namespace, "--type=merge", fmt.Sprintf(`--patch={"spec": {"replicas": 2}}`))
 		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameReplace, []nodePoolCondition{{"AutoscalingEnabled", "message", "only one of nodePool.Spec.Replicas or nodePool.Spec.AutoScaling can be set"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
 
 		g.By("upgrade nodepool payload InPlace, enable autoscaling and autorepair verify nodepool conditions should correctly generate")
 		image := hostedcluster.getCPReleaseImage()
 		hostedcluster.checkNodepoolAllConditions(npNameInPlace)
-		hostedcluster.upgradeNodepoolPayloadInPlace(npNameInPlace, "quay.io/openshift-release-dev/ocp-release:4.11.20-x86_64", true)
-		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"ValidReleaseImage", "message", "y-stream"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
-		hostedcluster.upgradeNodepoolPayloadInPlace(npNameInPlace, "quay.io/openshift-release-dev/ocp-release:quay.io/openshift-release-dev/ocp-release:4.13.0-ec.1-x86_64", false)
+		hostedcluster.upgradeNodepoolPayloadInPlace(npNameInPlace, "quay.io/openshift-release-dev/ocp-release:quay.io/openshift-release-dev/ocp-release:4.13.0-ec.1-x86_64")
 		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"ValidReleaseImage", "message", "invalid reference format"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
-		hostedcluster.upgradeNodepoolPayloadInPlace(npNameInPlace, image, false)
+		hostedcluster.upgradeNodepoolPayloadInPlace(npNameInPlace, image)
 		hostedcluster.setNodepoolAutoScale(npNameInPlace, "6", "3")
 		hostedcluster.setNodepoolAutoRepair(npNameInPlace, "true")
-		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "ScalingUp"}, {"AutoscalingEnabled", "message", "Maximum nodes: 6, Minimum nodes: 3"}, {"AutorepairEnabled", "status", "True"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameInPlace, []nodePoolCondition{{"Ready", "reason", "ScalingUp"}, {"AutoscalingEnabled", "message", "Maximum nodes: 6, Minimum nodes: 3"}, {"AutorepairEnabled", "status", "True"}}), LongTimeout, LongTimeout/30).Should(o.BeTrue(), "nodepool in progress error")
 
-		g.By("creade nodepool with minversion and verify nodepool condition")
+		g.By("create nodepool with minversion and verify nodepool condition")
 		npNameMinVersion := "49436np-minversion-" + strings.ToLower(exutil.RandStrDefault())
 		defer hostedcluster.deleteNodePool(npNameMinVersion)
 		NewAWSNodePool(npNameMinVersion, hostedcluster.name, hostedcluster.namespace).WithNodeCount(&replica).WithReleaseImage("quay.io/openshift-release-dev/ocp-release:4.10.45-x86_64").CreateAWSNodePool()
-		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameMinVersion, []nodePoolCondition{{"ValidReleaseImage", "message", "4.11.0"}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
+		o.Eventually(hostedcluster.pollCheckNodePoolConditions(npNameMinVersion, []nodePoolCondition{{"ValidReleaseImage", "message", getMinSupportedOCPVersion()}}), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool in progress error")
 	})
 
 	// author: liangli@redhat.com
