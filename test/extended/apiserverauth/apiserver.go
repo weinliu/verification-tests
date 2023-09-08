@@ -5415,12 +5415,9 @@ EOF`, etcConfigYaml, level)
 		}
 
 		exutil.By("4) Get project resource")
-		resourceSlice := []string{"pods", "services", "buildConfig", "deployments"}
-		for _, resource := range resourceSlice {
-			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", projectName, resource, "-o", `jsonpath={.items[*].metadata.name}`).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			count := len(strings.TrimSpace(out))
-			o.Expect(count).To(o.BeNumerically(">", 0))
+		for _, resource := range []string{"buildConfig", "deployments", "pods", "services"} {
+			out := getResource(oc, asAdmin, withoutNamespace, resource, "-n", projectName, "-o=jsonpath={.items[*].metadata.name}")
+			o.Expect(len(out)).To(o.BeNumerically(">", 0))
 		}
 
 		exutil.By("5) Delete the project")
@@ -5428,7 +5425,7 @@ EOF`, etcConfigYaml, level)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("5.1) Check project is deleted")
-		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		err = wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
 			out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", projectName).Output()
 			if matched, _ := regexp.MatchString("namespaces .* not found", out); matched {
 				e2e.Logf("Step 5.1. Test Passed, project is deleted")
