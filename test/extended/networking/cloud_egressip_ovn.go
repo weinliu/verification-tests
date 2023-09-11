@@ -497,7 +497,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
 
 		exutil.By("6. Check the egress node was updated in the egressip object.\n")
-		egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		egressipErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			egressIPMaps = getAssignedEIPInEIPObject(oc, egressip1.name)
 			if len(egressIPMaps) != 1 || egressIPMaps[0]["node"] == egressNode1 {
 				e2e.Logf("Wait for new egress node applied,try next round.")
@@ -1049,34 +1049,48 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ns1 := oc.Namespace()
 
 		exutil.By("2. Label EgressIP node\n")
-		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(nodeList.Items) < 3 {
-			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		// As in rdu1 cluster, sriov nodes have different primary NIC name from common node, we need uniq nic name for multiple tcpdump pods to capture packets, so filter out sriov nodes
+		platform := exutil.CheckPlatform(oc)
+		var workers []string
+		if strings.Contains(platform, "baremetal") {
+			workers = excludeSriovNodes(oc)
+			if len(workers) < 3 {
+				g.Skip("Not enough worker nodes for this test, skip the case!!")
+			}
+		} else {
+			nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if len(nodeList.Items) < 3 {
+				g.Skip("Not enough worker nodes for this test, skip the case!!")
+			}
+			for _, node := range nodeList.Items {
+				workers = append(workers, node.Name)
+			}
+
 		}
 
 		exutil.By("3. Apply EgressLabel Key for this test on 3 nodes.\n")
-		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel, "true")
-		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel)
-		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, egressNodeLabel, "true")
-		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, egressNodeLabel)
-		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, egressNodeLabel, "true")
-		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[1], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[1], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[2], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[2], egressNodeLabel)
 
 		exutil.By("4. Apply label to namespace\n")
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 
 		exutil.By("5. Create an egressip object\n")
-		sub1 := getEgressCIDRsForNode(oc, nodeList.Items[0].Name)
-		freeIP1 := findUnUsedIPsOnNode(oc, nodeList.Items[0].Name, sub1, 1)
+		sub1 := getEgressCIDRsForNode(oc, workers[0])
+		freeIP1 := findUnUsedIPsOnNode(oc, workers[0], sub1, 1)
 		o.Expect(len(freeIP1) == 1).Should(o.BeTrue())
-		sub2 := getEgressCIDRsForNode(oc, nodeList.Items[1].Name)
-		freeIP2 := findUnUsedIPsOnNode(oc, nodeList.Items[1].Name, sub2, 1)
+		sub2 := getEgressCIDRsForNode(oc, workers[1])
+		freeIP2 := findUnUsedIPsOnNode(oc, workers[1], sub2, 1)
 		o.Expect(len(freeIP2) == 1).Should(o.BeTrue())
-		sub3 := getEgressCIDRsForNode(oc, nodeList.Items[2].Name)
-		freeIP3 := findUnUsedIPsOnNode(oc, nodeList.Items[2].Name, sub3, 1)
+		sub3 := getEgressCIDRsForNode(oc, workers[2])
+		freeIP3 := findUnUsedIPsOnNode(oc, workers[2], sub3, 1)
 		o.Expect(len(freeIP3) == 1).Should(o.BeTrue())
 
 		egressip1 := egressIPResource1{
@@ -1096,7 +1110,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod1 := pingPodResourceNode{
 			name:      "hello-pod",
 			namespace: ns1,
-			nodename:  nodeList.Items[0].Name,
+			nodename:  workers[0],
 			template:  pingPodNodeTemplate,
 		}
 		pod1.createPingPodNode(oc)
@@ -1120,13 +1134,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIP3[0]))
 		case "tcpdump":
 			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "tcpdump")
-			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "tcpdump", "true")
-			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "tcpdump")
-			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "tcpdump", "true")
-			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, "tcpdump")
-			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, "tcpdump", "true")
-			primaryInf, infErr = getSnifPhyInf(oc, nodeList.Items[0].Name)
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[1], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[1], "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[2], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[2], "tcpdump", "true")
+			primaryInf, infErr = getSnifPhyInf(oc, workers[0])
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
 			defer deleteTcpdumpDS(oc, "tcpdump-47033", ns1)
