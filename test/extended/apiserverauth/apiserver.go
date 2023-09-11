@@ -2273,9 +2273,15 @@ spec:
 		namespace := oc.Namespace()
 
 		exutil.By("2) Get cluster worker node list")
-		nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", `node-role.kubernetes.io/worker,!node-role.kubernetes.io/edge`, "-o", "jsonpath={.items[*].metadata.name}").Output()
+		nodesJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		workernodes := strings.Split(nodes, " ")
+		// Eliminate tainted worker nodes from the selection pool to avoid application scheduling failure
+		nsOutput, nsErr := exec.Command("bash", "-c", fmt.Sprintf("echo '%v' | jq -r '.items[] | select(.spec.taints == null or ([.spec.taints[]?.effect? // empty] | length == 0)) | .metadata.name'", nodesJson)).Output()
+		o.Expect(nsErr).NotTo(o.HaveOccurred())
+		workernodes := strings.Split(strings.TrimSpace(string(nsOutput)), "\n")
+		if workernodes[0] == "" {
+			g.Skip("Skipping: No available worker nodes to schedule the workload.")
+		}
 
 		exutil.By("3) Create new hello pod on first worker node")
 		podTemplate := getTestDataFilePath("create-pod.yaml")
