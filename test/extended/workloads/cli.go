@@ -1492,6 +1492,38 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-12021-Return description with cli describe with invalid parameter", func() {
+		if checkOpenshiftSamples(oc) {
+			g.Skip("Can't find the cluster operator openshift-samples, skip it.")
+		}
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns12021 := oc.Namespace()
+
+		g.By("Create the build")
+		err := oc.WithoutNamespace().Run("new-build").Args("-D", "FROM must-gather", "-n", ns12021).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the deploy app")
+		err = oc.WithoutNamespace().Run("new-app").Args("--image", "quay.io/openshifttest/deployment-example@sha256:9d29ff0fdbbec33bb4eebb0dbe0d0f3860a856987e5481bb0fc39f3aba086184", "-n", ns12021, "--import-mode=PreserveOriginal").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		out, err := oc.WithoutNamespace().Run("describe").Args("services", "-n", ns12021).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "deployment-example")).To(o.BeTrue())
+		out, err = oc.WithoutNamespace().Run("describe").Args("bc", "-n", ns12021).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "ImageStreamTag openshift/must-gather:latest")).To(o.BeTrue())
+		o.Expect(strings.Contains(out, "ImageStreamTag must-gather:latest")).To(o.BeTrue())
+		out, err = oc.WithoutNamespace().Run("describe").Args("build", "-n", ns12021).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "buildconfig=must-gather")).To(o.BeTrue())
+		out, err = oc.WithoutNamespace().Run("describe").Args("builds", "abc", "-n", ns12021).Output()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "not found")).To(o.BeTrue())
+
+	})
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-54406-Medium-54407-Medium-11564-oc rsh should work behind authenticated proxy [Serial]", func() {
