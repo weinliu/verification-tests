@@ -355,6 +355,52 @@ func (a *AwsClient) DeleteSecurityGroup(groupID string) error {
 	return err
 }
 
+func (a *AwsClient) GetInstanceSecurityGroupIDs(instanceID string) ([]string, error) {
+	filters := []*ec2.Filter{
+		{
+			Name:   aws.String("instance-id"),
+			Values: []*string{aws.String(instanceID)},
+		},
+		{
+			Name:   aws.String("instance.group-name"),
+			Values: []*string{aws.String("*")},
+		},
+	}
+
+	input := &ec2.DescribeInstancesInput{Filters: filters}
+	result, err := a.svc.DescribeInstances(input)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result.Reservations) < 1 {
+		return nil, fmt.Errorf("No instance found in current cluster with ID %s", instanceID)
+	}
+
+	instance := result.Reservations[0].Instances[0]
+
+	var securityGroups []string
+	for _, group := range instance.SecurityGroups {
+		securityGroups = append(securityGroups, *group.GroupId)
+	}
+
+	return securityGroups, err
+}
+
+func (a *AwsClient) CreateTag(resource string, key string, value string) error {
+	createTagInput := &ec2.CreateTagsInput{
+		Resources: []*string{aws.String(resource)},
+		Tags: []*ec2.Tag{
+			{
+				Key:   aws.String(key),
+				Value: aws.String(value),
+			},
+		},
+	}
+	_, err := a.svc.CreateTags(createTagInput)
+	return err
+}
+
 func (a *AwsClient) DescribeVpcEndpoint(endpointID string) (*ec2.VpcEndpoint, error) {
 	res, err := a.svc.DescribeVpcEndpoints(&ec2.DescribeVpcEndpointsInput{
 		VpcEndpointIds: aws.StringSlice([]string{endpointID}),

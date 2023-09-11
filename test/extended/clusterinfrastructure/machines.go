@@ -878,4 +878,46 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Scale down machineset")
 		exutil.ScaleMachineSet(oc, machinesetName, 0)
 	})
+
+	// author: dtobolik@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:dtobolik-Medium-66866-AWS machineset support for multiple AWS security groups [Disruptive][Slow]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+
+		g.By("Create aws security group")
+		exutil.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		randomMachineName := exutil.ListWorkerMachineNames(oc)[0]
+		randomInstanceID, err := awsClient.GetAwsInstanceID(randomMachineName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		vpcID, err := awsClient.GetAwsInstanceVPCId(randomInstanceID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		sgName := "ocp-66866-sg"
+		sgID, err := awsClient.CreateSecurityGroup(sgName, vpcID, "ocp-66866 testing security group")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer awsClient.DeleteSecurityGroup(sgID)
+		err = awsClient.CreateTag(sgID, "Name", sgName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a new machineset")
+		machineSetName := "machineset-66866"
+		machineSet := exutil.MachineSetDescription{Name: machineSetName, Replicas: 0}
+		defer exutil.WaitForMachinesDisapper(oc, machineSetName)
+		defer machineSet.DeleteMachineSet(oc)
+		machineSet.CreateMachineSet(oc)
+
+		g.By("Add security group to machineset")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machineSetName, "-n", "openshift-machine-api", "-p", `[{"op":"replace","path":"/spec/replicas","value":1},{"op":"add","path":"/spec/template/spec/providerSpec/value/securityGroups/-","value":{"filters":[{"name":"tag:Name","values":["`+sgName+`"]}]}}]`, "--type=json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machineSetName)
+
+		g.By("Check security group is attached")
+		machineName := exutil.GetMachineNamesFromMachineSet(oc, machineSetName)[0]
+		instanceID, err := awsClient.GetAwsInstanceID(machineName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		securityGroups, err := awsClient.GetInstanceSecurityGroupIDs(instanceID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(securityGroups).Should(o.ContainElement(sgID))
+	})
 })
