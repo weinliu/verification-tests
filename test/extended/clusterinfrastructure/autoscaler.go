@@ -212,40 +212,39 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	//author: miyadav
 	g.It("NonHyperShiftHOST-Author:miyadav-Critical-53080-[clusterautoscaler] Add verbosity option to autoscaler CRD [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		clusterAutoscalerTemplate = filepath.Join(autoscalerBaseDir, "clusterautoscalerutil.yaml")
+		clusterAutoscalerTemplate = filepath.Join(autoscalerBaseDir, "clusterautoscalerverbose.yaml")
 		clusterAutoscaler = clusterAutoscalerDescription{
-			maxNode:              100,
-			minCore:              0,
-			maxCore:              320000,
-			minMemory:            0,
-			maxMemory:            6400000,
-			utilizationThreshold: "0.08",
-			template:             clusterAutoscalerTemplate,
+			logVerbosity: 8,
+			maxNode:      100,
+			minCore:      0,
+			maxCore:      320000,
+			minMemory:    0,
+			maxMemory:    6400000,
+			template:     clusterAutoscalerTemplate,
 		}
 		g.By("Create clusterautoscaler")
 		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
 		clusterAutoscaler.createClusterAutoscaler(oc)
 
-		g.By("Patch clusterautoscaler for logVerbosity")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterautoscaler", "default", "-n", machineAPINamespace, "-p", `{"spec": {"logVerbosity": 8}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Get clusterautoscaler podname")
+		err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+			podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "cluster-autoscaler", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-machine-api").Output()
+			if err != nil {
+				e2e.Logf("error %v is present but this is temprorary..hence trying again ", err.Error())
+				return false, nil
+			}
+			g.By("Get clusterautoscaler log verbosity value for pod")
+			args, _ := oc.AsAdmin().Run("get").Args("pods", podName, "-n", machineAPINamespace, "-o=jsonpath={.spec.containers[0].args}").Output()
 
-		// the pod exists ( old one ) when patched pod restarts and then new one turns up in a while, hence had to use hard-coded to get new pod name
-		time.Sleep(10 * time.Second)
-		g.By("Get clusterautoscaler pod name")
-		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "cluster-autoscaler", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-machine-api").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(args, "--v=8") {
 
-		g.By("Get clusterautoscaler log verbosity value for pod")
-		args, err := oc.AsAdmin().Run("get").Args("pods", podName, "-n", machineAPINamespace, "-o=jsonpath={.spec.containers[0].args}").Output()
-		if err != nil {
+				e2e.Failf("Even after adding logverbosity log levels not changed")
 
-			g.Fail("The failure needs to be reviewed by looking at logs of clusterautoscaler")
-		}
-		if !strings.Contains(args, "--v=8") {
-			g.Fail("Even after adding logverbosity log levels not changed")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "autoscaler pod never for created..")
 
-		}
 	})
 
 	// author: zhsun@redhat.com

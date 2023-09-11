@@ -2,6 +2,7 @@ package clusterinfrastructure
 
 import (
 	"strconv"
+	"strings"
 
 	o "github.com/onsi/gomega"
 
@@ -18,6 +19,7 @@ type clusterAutoscalerDescription struct {
 	maxMemory            int
 	utilizationThreshold string
 	template             string
+	logVerbosity         int
 }
 
 type machineAutoscalerDescription struct {
@@ -40,11 +42,12 @@ type workLoadDescription struct {
 func (clusterAutoscaler *clusterAutoscalerDescription) createClusterAutoscaler(oc *exutil.CLI) {
 	e2e.Logf("Creating clusterautoscaler ...")
 	var err error
-	if clusterAutoscaler.utilizationThreshold == "" {
-		err = applyResourceFromTemplate(oc, "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory))
-
-	} else {
+	if strings.Contains(clusterAutoscaler.template, "util") {
 		err = applyResourceFromTemplate(oc, "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory), "UTILIZATIONTHRESHOLD="+clusterAutoscaler.utilizationThreshold)
+	} else if strings.Contains(clusterAutoscaler.template, "verbose") {
+		err = applyResourceFromTemplate(oc, "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory), "LOGVERBOSITY="+strconv.Itoa(clusterAutoscaler.logVerbosity))
+	} else {
+		err = applyResourceFromTemplate(oc, "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory))
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
