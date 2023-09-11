@@ -231,7 +231,7 @@ func findFreeIPs(oc *exutil.CLI, nodeName string, number int) []string {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		freeIPs = findUnUsedIPs(oc, sub1, number)
 
-	} else if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") || strings.Contains(platform, "nutanix") {
+	} else if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") || strings.Contains(platform, "nutanix") || strings.Contains(platform, "kubevirt") {
 		ipv4Sub, _ := getPrimaryIfaddrFromBMNode(oc, nodeName)
 		tempSlice := strings.Split(ipv4Sub, "/")
 		o.Expect(len(tempSlice) > 1).Should(o.BeTrue())
