@@ -7,7 +7,7 @@ objects:
 - kind: Subscription
   apiVersion: operators.coreos.com/v1alpha1
   metadata:
-    name: local-storage-operator
+    name: ${SUBNAME}
     namespace: ${NAMESPACE}
   spec:
     channel: ${CHANNEL}
@@ -29,6 +29,7 @@ objects:
     targetNamespaces:
     - ${NAMESPACE}
 parameters:
+- name: SUBNAME
 - name: NAMESPACE
 - name: CHANNEL
 - name: SOURCE

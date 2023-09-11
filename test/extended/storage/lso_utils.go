@@ -25,6 +25,7 @@ const (
 
 // Define the localStorageOperator struct
 type localStorageOperator struct {
+	subName        string
 	namespace      string
 	channel        string
 	source         string
@@ -34,6 +35,13 @@ type localStorageOperator struct {
 
 // function option mode to change the default values of lso attributes
 type lsoOption func(*localStorageOperator)
+
+// Replace the default value of lso subscription name
+func setLsoSubName(subName string) lsoOption {
+	return func(lso *localStorageOperator) {
+		lso.subName = subName
+	}
+}
 
 // Replace the default value of lso namespace
 func setLsoNamespace(namespace string) lsoOption {
@@ -66,7 +74,7 @@ func setLsoTemplate(deployTemplate string) lsoOption {
 // Create a new customized lso object
 func newLso(opts ...lsoOption) localStorageOperator {
 	defaultLso := localStorageOperator{
-		// namespace:      "local-storage-" + getRandomString(),
+		subName:        "lso-sub-" + getRandomString(),
 		namespace:      "",
 		channel:        "4.11",
 		source:         "qe-app-registry",
@@ -83,7 +91,7 @@ func (lso *localStorageOperator) install(oc *exutil.CLI) {
 	if lso.namespace == "" {
 		lso.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", lso.deployTemplate, "-p", "NAMESPACE="+lso.namespace, "CHANNEL="+lso.channel,
+	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", lso.deployTemplate, "-p", "SUBNAME="+lso.subName, "NAMESPACE="+lso.namespace, "CHANNEL="+lso.channel,
 		"SOURCE="+lso.source)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
@@ -95,7 +103,7 @@ func (lso *localStorageOperator) getCurrentCSV(oc *exutil.CLI) string {
 		errinfo    error
 	)
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-		currentCSV, errinfo = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lso.namespace, "Subscription", "-o=jsonpath={.items[?(@.metadata.name==\"local-storage-operator\")].status.currentCSV}").Output()
+		currentCSV, errinfo = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lso.namespace, "Subscription", `-o=jsonpath={.items[?(@.metadata.name=="`+lso.subName+`")].status.currentCSV}`).Output()
 		if errinfo != nil {
 			e2e.Logf("Get local storage operator currentCSV failed :%v, wait for next round get.", errinfo)
 			return false, errinfo
@@ -107,7 +115,7 @@ func (lso *localStorageOperator) getCurrentCSV(oc *exutil.CLI) string {
 		return false, nil
 	})
 	if err != nil {
-		describeSubscription, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", lso.namespace, "Subscription/local-storage-operator").Output()
+		describeSubscription, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", lso.namespace, "Subscription/"+lso.subName).Output()
 		e2e.Logf("The openshift local storage operator Subscription detail info is:\n \"%s\"", describeSubscription)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Get local storage operator currentCSV in ns/%s timeout", lso.namespace))
