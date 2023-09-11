@@ -22,6 +22,7 @@ import (
 
 	"cloud.google.com/go/logging"
 	"cloud.google.com/go/logging/logadmin"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"google.golang.org/api/iterator"
@@ -41,12 +42,13 @@ import (
 
 // SubscriptionObjects objects are used to create operators via OLM
 type SubscriptionObjects struct {
-	OperatorName  string
-	Namespace     string
-	OperatorGroup string // the file used to create operator group
-	Subscription  string // the file used to create subscription
-	PackageName   string
-	CatalogSource CatalogSourceObjects `json:",omitempty"`
+	OperatorName       string
+	Namespace          string
+	OperatorGroup      string // the file used to create operator group
+	Subscription       string // the file used to create subscription
+	PackageName        string
+	CatalogSource      CatalogSourceObjects `json:",omitempty"`
+	SkipCaseWhenFailed bool                 // if true, the case will be skipped when operator is not ready, otherwise, the case will be marked as failed
 }
 
 // CatalogSourceObjects defines the source used to subscribe an operator
@@ -139,7 +141,7 @@ func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSo
 	} else {
 		args = append(args, so.PackageName)
 	}
-	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 		packages, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
 		if err != nil {
 			msg := fmt.Sprintf("%v", err)
@@ -154,7 +156,13 @@ func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSo
 		e2e.Logf("Waiting for packagemanifest/%s to appear", so.PackageName)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Packagemanifest %s is not available", so.PackageName))
+	if err != nil {
+		if so.SkipCaseWhenFailed {
+			g.Skip(fmt.Sprintf("Skip the case for can't find packagemanifest/%s", so.PackageName))
+		} else {
+			e2e.Failf("Packagemanifest %s is not available", so.PackageName)
+		}
+	}
 }
 
 // setCatalogSourceObjects set the default values of channel, source namespace and source name if they're not specified
@@ -258,8 +266,65 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create subscription %s in %s project", so.PackageName, so.Namespace))
 		}
 	}
-	//WaitForDeploymentPodsToBeReady(oc, so.Namespace, so.OperatorName)
-	waitForPodReadyWithLabel(oc, so.Namespace, "name="+so.OperatorName)
+
+	// check status in subscription
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub", so.PackageName, `-ojsonpath={.status.state}`).Output()
+		if err != nil {
+			e2e.Logf("error getting subscription/%s: %v", so.PackageName, err)
+			return false, nil
+		}
+		return strings.Contains(output, "AtLatestKnown"), nil
+	})
+	if err != nil {
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub", so.PackageName, `-ojsonpath={.status.conditions}`).Output()
+		e2e.Logf("subscription/%s is not ready, conditions: %v", so.PackageName, out)
+		if so.SkipCaseWhenFailed {
+			g.Skip(fmt.Sprintf("Skip the case for the operator %s is not ready", so.OperatorName))
+		} else {
+			e2e.Failf("can't deploy operator %s", so.OperatorName)
+		}
+	}
+
+	// check pod status
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		pods, err := oc.AdminKubeClient().CoreV1().Pods(so.Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "name=" + so.OperatorName})
+		if err != nil {
+			e2e.Logf("Hit error %v when getting pods", err)
+			return false, nil
+		}
+		if len(pods.Items) == 0 {
+			e2e.Logf("Waiting for pod with label %s to appear\n", "name="+so.OperatorName)
+			return false, nil
+		}
+		ready := true
+		for _, pod := range pods.Items {
+			if pod.Status.Phase != "Running" {
+				ready = false
+				e2e.Logf("Pod %s is not running: %v", pod.Name, pod.Status.Phase)
+				break
+			}
+			for _, containerStatus := range pod.Status.ContainerStatuses {
+				if !containerStatus.Ready {
+					ready = false
+					e2e.Logf("Container %s in pod %s is not ready", &containerStatus.Name, pod.Name)
+					break
+				}
+			}
+		}
+		return ready, nil
+	})
+	if err != nil {
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", so.Namespace, "-l", "name="+so.OperatorName).Execute()
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", so.Namespace, "-l", "name="+so.OperatorName, "-ojsonpath={.items[*].status.conditions}").Output()
+		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", so.Namespace, "-l", "name="+so.OperatorName, "-ojsonpath={.items[*].status.containerStatuses}").Output()
+		e2e.Logf("pod with label %s is not ready:\nconditions: %s\ncontainer status: %s", "name="+so.OperatorName, podStatus, containerStatus)
+		if so.SkipCaseWhenFailed {
+			g.Skip(fmt.Sprintf("Skip the case for the operator %s is not ready", so.OperatorName))
+		} else {
+			e2e.Failf("can't deploy operator %s", so.OperatorName)
+		}
+	}
 }
 
 func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
@@ -307,8 +372,8 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 		}
 		label := strings.Join(labels, ",")
 		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label).Execute()
-		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
-		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[*].status.conditions}").Output()
+		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[*].status.containerStatuses}").Output()
 		e2e.Failf("deployment %s is not ready:\nconditions: %s\ncontainer status: %s", name, podStatus, containerStatus)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not available", name))
@@ -340,8 +405,8 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 		}
 		label := strings.Join(labels, ",")
 		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label).Execute()
-		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
-		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[*].status.conditions}").Output()
+		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[*].status.containerStatuses}").Output()
 		e2e.Failf("statefulset %s is not ready:\nconditions: %s\ncontainer status: %s", name, podStatus, containerStatus)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("statefulset %s is not available", name))
@@ -374,8 +439,8 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 		}
 		label := strings.Join(labels, ",")
 		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Execute()
-		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
-		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.conditions}").Output()
+		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.containerStatuses}").Output()
 		e2e.Failf("daemonset %s is not ready:\nconditions: %s\ncontainer status: %s", name, podStatus, containerStatus)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset %s is not available", name))
@@ -413,8 +478,8 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 	})
 	if err != nil && count != 0 {
 		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Execute()
-		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.conditions}").Output()
-		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].status.containerStatuses}").Output()
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.conditions}").Output()
+		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.containerStatuses}").Output()
 		e2e.Failf("pod with label %s is not ready:\nconditions: %s\ncontainer status: %s", label, podStatus, containerStatus)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod with label %s is not ready", label))
@@ -820,7 +885,7 @@ func (lfme *logFileMetricExporter) create(oc *exutil.CLI, optionalParameters ...
 	if processErr != nil {
 		e2e.Failf("error processing file: %v", processErr)
 	}
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file, "-n", lfme.namespace).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", lfme.namespace).Execute()
 	if err != nil {
 		e2e.Failf("error creating logfilemetricexporter: %v", err)
 	}

@@ -22,32 +22,38 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	var (
 		oc             = exutil.NewCLI("logging-acceptance", exutil.KubeConfigPath())
 		loggingBaseDir string
+		CLO, LO        SubscriptionObjects
 	)
 
 	g.BeforeEach(func() {
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
-		CLO := SubscriptionObjects{
-			OperatorName:  "cluster-logging-operator",
-			Namespace:     cloNS,
-			PackageName:   "cluster-logging",
-			Subscription:  subTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml")}
-		LO := SubscriptionObjects{
-			OperatorName:  "loki-operator-controller-manager",
-			Namespace:     loNS,
-			PackageName:   "loki-operator",
-			Subscription:  subTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml")}
+		CLO = SubscriptionObjects{
+			OperatorName:       "cluster-logging-operator",
+			Namespace:          cloNS,
+			PackageName:        "cluster-logging",
+			Subscription:       subTemplate,
+			OperatorGroup:      filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+			SkipCaseWhenFailed: true,
+		}
+		LO = SubscriptionObjects{
+			OperatorName:       "loki-operator-controller-manager",
+			Namespace:          loNS,
+			PackageName:        "loki-operator",
+			Subscription:       subTemplate,
+			OperatorGroup:      filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+			SkipCaseWhenFailed: true,
+		}
 
-		g.By("deploy CLO and LO")
+		g.By("deploy CLO")
 		CLO.SubscribeOperator(oc)
-		LO.SubscribeOperator(oc)
 		oc.SetupProject()
 	})
 
 	// author qitang@redhat.com
 	g.It("Author:qitang-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
+		g.By("deploy LO")
+		LO.SubscribeOperator(oc)
 		if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
 			g.Skip("Current cluster doesn't have sufficient cpu/memory for this test!")
 		}

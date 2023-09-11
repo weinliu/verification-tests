@@ -1326,8 +1326,22 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			amqNs1 := "openshift-amq-1" + getRandomString()
 			amqNs2 := "openshift-amq-2" + getRandomString()
 			catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
-			amq1 := SubscriptionObjects{"amq-streams-cluster-operator", amqNs1, SingleNamespaceOG, subTemplate, "amq-streams", catsrc}
-			amq2 := SubscriptionObjects{"amq-streams-cluster-operator", amqNs2, SingleNamespaceOG, subTemplate, "amq-streams", catsrc}
+			amq1 := SubscriptionObjects{
+				OperatorName:  "amq-streams-cluster-operator",
+				Namespace:     amqNs1,
+				OperatorGroup: SingleNamespaceOG,
+				Subscription:  subTemplate,
+				PackageName:   "amq-streams",
+				CatalogSource: catsrc,
+			}
+			amq2 := SubscriptionObjects{
+				OperatorName:  "amq-streams-cluster-operator",
+				Namespace:     amqNs2,
+				OperatorGroup: SingleNamespaceOG,
+				Subscription:  subTemplate,
+				PackageName:   "amq-streams",
+				CatalogSource: catsrc,
+			}
 			topicName := "topic-logging-app"
 			kafkaClusterName := "kafka-cluster"
 			fips := isFipsEnabled(oc)
