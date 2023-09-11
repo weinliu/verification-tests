@@ -1588,3 +1588,24 @@ func getPruneResourceName(pruneCMD string) []string {
 	e2e.Logf("pruneRsList %v:", pruneRsList)
 	return pruneRsList
 }
+
+// WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
+func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
+	err := wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				e2e.Logf("Waiting for availability of deployment/%s\n", name)
+				return false, nil
+			}
+			return false, err
+		}
+		if deployment.Status.AvailableReplicas == *deployment.Spec.Replicas && deployment.Status.UpdatedReplicas == *deployment.Spec.Replicas {
+			e2e.Logf("Deployment %s available (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
+			return true, nil
+		}
+		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
+}

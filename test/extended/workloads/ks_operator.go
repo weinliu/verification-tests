@@ -400,4 +400,60 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(strings.Contains(kubeletOutput, `"DynamicResourceAllocation": true`)).To(o.BeTrue())
 
 	})
+
+	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:knarra-High-67153-Validate highNodeUtilization,noScoring,lowNodeUtilization profile on hypershift clusters [Disruptive][Slow]", func() {
+		guestClusterName, _, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
+		hostedClusterNS := hostedClusterName + "-" + guestClusterName
+		e2e.Logf("hostedClusterNS is %s", hostedClusterNS)
+
+		patchYamlToRestore := `[{"op": "remove", "path": "/spec/configuration"}]`
+
+		g.By("Set profile to HighNodeUtilization")
+		patchYamlHighNodeUtilization := `[{"op": "add", "path": "/spec/configuration", "value":{"scheduler":{"profile":"HighNodeUtilization"}}}]`
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlHighNodeUtilization).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer func() {
+			e2e.Logf("Restoring the scheduler cluster's logLevel")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check all the kube-scheduler pods in the hosted cluster namespace should be up and running")
+			waitForDeploymentPodsToBeReady(oc, hostedClusterNS, "kube-scheduler")
+
+		}()
+
+		g.By("Wait for kube-scheduler pods to restart and run fine")
+		waitForDeploymentPodsToBeReady(oc, hostedClusterNS, "kube-scheduler")
+
+		//Get the kube-scheduler pod name & check logs
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", hostedClusterNS, "pods", "-l", "app=kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		schedulerLogs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args(podName, "-n", hostedClusterNS).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("score.*\n.*disabled.*\n.*NodeResourcesBalancedAllocation.*\n.*weight.*0.*", schedulerLogs); !match {
+			e2e.Failf("Enabling HighNodeUtilization Profile failed: %v", err)
+		}
+
+		g.By("Set profile to NoScoring")
+		patchYamlNoScoring := `[{"op": "add", "path": "/spec/configuration", "value":{"scheduler":{"profile":"NoScoring"}}}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlNoScoring).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for kube-scheduler pods to restart and run fine")
+		waitForDeploymentPodsToBeReady(oc, hostedClusterNS, "kube-scheduler")
+
+		//Get the kube-scheduler pod name & check logs
+		podName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", hostedClusterNS, "pods", "-l", "app=kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		schedulerLogs, err = oc.WithoutNamespace().AsAdmin().Run("logs").Args(podName, "-n", hostedClusterNS).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("score.*\n.*disabled.*\n.*name:.'*'.*\n.*weight.*0.*", schedulerLogs); !match {
+			e2e.Failf("Enabling NoScoring Profile failed: %v", err)
+		}
+
+	})
 })
