@@ -88,7 +88,7 @@ objects:
           \  while : ; do\n
           \        curl nginx-service.${SERVER_NS}.svc:8080/data/${OBJECT_SIZE}  2>&1 >  /dev/null ; sleep 5 \n
           \  done"
-      image: quay.io/openshifttest/hello-openshift:multiarch
+      image: quay.io/openshifttest/hello-openshift:1.2.0
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:

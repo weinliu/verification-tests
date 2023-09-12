@@ -94,7 +94,7 @@ spec:
         \  while : ; do\n
         \        curl nginx-service.test-server.svc:80/data/100K  2>&1 >  /dev/null ; sleep 5 \n
         \  done"
-    image: quay.io/openshifttest/hello-openshift:multiarch
+    image: quay.io/openshifttest/hello-openshift:1.2.0
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
