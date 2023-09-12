@@ -378,10 +378,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			invalidServiceMonitor = filepath.Join(monitoringBaseDir, "invalid-ServiceMonitor.yaml")
 		)
 		g.By("delete test ServiceMonitor at the end of case")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("servicemonitor", "console-test-monitoring", "-n", "openshift-console").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("servicemonitor", "console-test-monitoring", "-n", "openshift-monitoring").Execute()
 
 		g.By("create one ServiceMonitor, set scrapeTimeout bigger than scrapeInterval, and no targetLabel setting")
-		createResourceFromYaml(oc, "openshift-console", invalidServiceMonitor)
+		createResourceFromYaml(oc, "openshift-monitoring", invalidServiceMonitor)
 
 		g.By("get prometheus-operator pod name with label")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
@@ -398,12 +398,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 
 		g.By("check the configuration is not loaded to prometheus")
-		checkPrometheusConfig(oc, "openshift-monitoring", "prometheus-k8s-0", `serviceMonitor/openshift-console/console-test-monitoring/0`, false)
+		checkPrometheusConfig(oc, "openshift-monitoring", "prometheus-k8s-0", `serviceMonitor/openshift-monitoring/console-test-monitoring/0`, false)
 
 		g.By("edit ServiceMonitor, and set value for scrapeTimeout less than scrapeInterval")
-		//oc patch servicemonitor console-test-monitoring --type='json' -p='[{"op": "replace", "path": "/spec/endpoints/0/scrapeTimeout", "value":"20s"}]' -n openshift-console
+		//oc patch servicemonitor console-test-monitoring --type='json' -p='[{"op": "replace", "path": "/spec/endpoints/0/scrapeTimeout", "value":"20s"}]' -n openshift-monitoring
 		patchConfig := `[{"op": "replace", "path": "/spec/endpoints/0/scrapeTimeout", "value":"20s"}]`
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-console").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-monitoring").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("able to see error for missing targetLabel in prometheus-operator logs")
@@ -412,13 +412,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 
 		g.By("add targetLabel to ServiceMonitor")
-		//oc -n openshift-console patch servicemonitor console-test-monitoring --type='json' -p='[{"op": "add", "path": "/spec/endpoints/0/relabelings/0/targetLabel", "value": "namespace"}]'
+		//oc -n openshift-monitoring patch servicemonitor console-test-monitoring --type='json' -p='[{"op": "add", "path": "/spec/endpoints/0/relabelings/0/targetLabel", "value": "namespace"}]'
 		patchConfig = `[{"op": "add", "path": "/spec/endpoints/0/relabelings/0/targetLabel", "value": "namespace"}]`
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-console").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-monitoring").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("check the configuration loaded to prometheus")
-		checkPrometheusConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "serviceMonitor/openshift-console/console-test-monitoring/0", true)
+		checkPrometheusConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "serviceMonitor/openshift-monitoring/console-test-monitoring/0", true)
 	})
 
 	// author: juzhao@redhat.com
@@ -1843,7 +1843,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		resourceNames := []string{"route", "servicemonitor", "serviceaccounts", "statefulset", "services", "endpoints", "alertmanagers", "prometheusrules", "clusterrolebindings", "clusterroles", "roles"}
 		for _, resource := range resourceNames {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-n", "openshift-monitoring").Output()
-			o.Expect(output).NotTo(o.ContainSubstring("alertmanager"))
+			o.Expect(strings.Contains(output, "alertmanager")).NotTo(o.BeTrue())
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
