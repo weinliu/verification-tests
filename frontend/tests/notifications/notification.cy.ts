@@ -7,6 +7,7 @@ import testAlert from '../../fixtures/testalert.json';
 describe('Notification drawer tests', () => {
   let $cmexisting = 0, cm_has_been_updated = false;
   before(() => {
+    cy.cliLogin();
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.exec(`oc get cm cluster-monitoring-config -n openshift-monitoring --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -o json`, { failOnNonZeroExit: false }).then((result) => {
       const $ret = result.code;
@@ -68,6 +69,7 @@ describe('Notification drawer tests', () => {
       cy.adminCLI(`oc delete cm cluster-monitoring-config -n openshift-monitoring`);
     }
     cy.exec('rm ./user-cm*.json', {failOnNonZeroExit: false});
+    cy.cliLogout();
   })
 
   it('(OCP-45305,yanpzhan) check alert on overview page and notification drawer list', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
@@ -107,7 +109,6 @@ describe('Notification drawer tests', () => {
     statusCard.isLoaded();
     statusCard.checkAlertItem(`${alertName}`, 'not.exist');
 
-    cy.cliLogin();
     cy.exec('oc create token prometheus-k8s -n openshift-monitoring').then((result) => {
       token = result.stdout;
       query_command = 'oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- curl -k -H "Authorization: Bearer ' + token + '" \'https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?&filter={alertname="KubePodRestartsOften"}\'';

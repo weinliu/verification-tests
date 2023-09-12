@@ -27,7 +27,7 @@ describe('Operators related features', () => {
     operatorHubPage.checkOperatorStatus('CockroachDB Helm Operator', 'Succeed');
   });
 
-  it('(OCP-56081),xiyuzhao) Check opt out when console deletes operands', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-56081,xiyuzhao) Check opt out when console deletes operands', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     const testParams = {
       ns1: "test1-ocp56081",
       ns2: "test2-ocp56081",

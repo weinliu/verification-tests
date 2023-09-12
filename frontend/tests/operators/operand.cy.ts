@@ -11,6 +11,7 @@ describe('operand tests', () => {
         .then(result => { expect(result.stdout).contain("created")
       })
     });
+    cy.cliLogin();
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
@@ -18,6 +19,7 @@ describe('operand tests', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.adminCLI(`oc delete project ${testName}`);
     cy.adminCLI(`oc delete customresourcedefinition mock-resources.test.tectonic.com`);
+    cy.cliLogout();
   });
 
   it('(OCP-46583,xiyuzhao) Operator should be able to customize order of conditions table', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
