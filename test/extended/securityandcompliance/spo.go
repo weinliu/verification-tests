@@ -128,7 +128,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("StagerunBoth-Author:xiyuan-High-49885-Check SeccompProfile stack working as expected", func() {
+	g.It("StagerunBoth-ConnectedOnly-Author:xiyuan-High-49885-Check SeccompProfile stack working as expected", func() {
 		ns := "spo-" + getRandomString()
 		seccompP = seccompProfile{
 			name:      "sleep-sh-pod",
