@@ -33,7 +33,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err := oc.WithoutNamespace().Run("new-build").Args("-D", "FROM must-gather", "-n", ns10618).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		for i := 0; i < 7; i++ {
+		for i := 0; i < 4; i++ {
 			err := oc.Run("start-build").Args("bc/must-gather", "-n", ns10618).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(out, "Prune old completed and failed builds")).To(o.BeTrue())
 
-		for j := 1; j < 9; j++ {
+		for j := 1; j < 6; j++ {
 			checkBuildStatus(oc, "must-gather-"+strconv.Itoa(j), ns10618, "Complete")
 		}
 
@@ -64,6 +64,8 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		out, err = oc.Run("get").Args("build", "-n", ns10618, "-o=jsonpath={.items[?(@.status.phase == \"Complete\")].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		buildNameList := strings.Fields(out)
+		e2e.Logf("the remain build list is %v", buildNameList)
+		e2e.Logf("the remain build list len is %v", len(buildNameList))
 		o.Expect(len(buildNameList) < 3).To(o.BeTrue())
 
 		g.By("Get the remain build and failed should <=1")

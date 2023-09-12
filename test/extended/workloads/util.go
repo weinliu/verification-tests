@@ -1581,9 +1581,19 @@ func checkBuildStatus(oc *exutil.CLI, buildname string, namespace string, expect
 
 // this function is used to get the prune resource name by namespace
 func getPruneResourceName(pruneCMD string) []string {
-	pruneRsName, err := exec.Command("bash", "-c", pruneCMD).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	pruneRsList := strings.Fields(strings.ReplaceAll(string(pruneRsName), "\n", " "))
+	var pruneRsList []string
+	err := wait.PollImmediate(30*time.Second, 5*time.Minute, func() (bool, error) {
+		pruneRsName, err := exec.Command("bash", "-c", pruneCMD).Output()
+		pruneRsList = strings.Fields(strings.ReplaceAll(string(pruneRsName), "\n", " "))
+		if err != nil {
+			return false, nil
+		}
+		if len(pruneRsList) == 0 {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "prune build num is not same as expected")
 	sort.Strings(pruneRsList)
 	e2e.Logf("pruneRsList %v:", pruneRsList)
 	return pruneRsList
