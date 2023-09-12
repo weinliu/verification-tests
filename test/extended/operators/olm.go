@@ -8842,12 +8842,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		namespaceName := oc.Namespace()
 		var (
 			catsrc = catalogSourceDescription{
-				name:        "catsrc-ditto-48439",
+				name:        "catsrc-48439",
 				namespace:   namespaceName,
-				displayName: "Test Catsrc ditto Operators",
+				displayName: "Test Catsrc",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/ditto-index:48439",
+				address:     "quay.io/olmqe/nginxolm-operator-index:ocp-48439",
 				template:    catsrcImageTemplate,
 			}
 			og = operatorGroupDescription{
@@ -8858,13 +8858,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			sub = subscriptionDescription{
 				subName:                "sub-48439",
 				namespace:              namespaceName,
-				catalogSourceName:      "catsrc-ditto-48439",
+				catalogSourceName:      "catsrc-48439",
 				catalogSourceNamespace: namespaceName,
-				channel:                "v0.1.0",
+				channel:                "v0.0.1",
 				ipApproval:             "Automatic",
-				operatorPackage:        "ditto-operator",
+				operatorPackage:        "nginx-operator",
 				template:               subTemplate,
-				startingCSV:            "ditto-operator.v0.1.0",
+				startingCSV:            "nginx-operator.v0.0.1",
 			}
 		)
 		itName := g.CurrentSpecReport().FullText()
@@ -8875,20 +8875,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("2) install sub")
 		sub.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "ditto-operator.v0.1.0", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "nginx-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 
 		exutil.By("3) update sub channel")
-		sub.patch(oc, "{\"spec\": {\"channel\": \"v0.1.1\"}}")
+		sub.patch(oc, "{\"spec\": {\"channel\": \"v1.0.1\"}}")
 		err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			ips := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace)
-			if strings.Contains(ips, "ditto-operator.v0.1.1") {
-				e2e.Logf("Install plan for ditto-operator.v0.1.1 is created")
+			if strings.Contains(ips, "nginx-operator.v1.0.1") {
+				e2e.Logf("Install plan for nginx-operator.v1.0.1 is created")
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "no install plan for ditto-operator.v0.1.1")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "ditto-operator.v0.1.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
+		exutil.AssertWaitPollNoErr(err, "no install plan for nginx-operator.v1.0.1")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "nginx-operator.v1.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 		exutil.By("4) SUCCESS")
 	})
 
