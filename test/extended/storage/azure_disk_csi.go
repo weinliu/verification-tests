@@ -251,10 +251,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: wduan@redhat.com
 	// OCP-60224 - [Azure-Disk-CSI-Driver] support skuName:PremiumV2_LRS in storageclass
 	g.It("ARO-Author:wduan-High-60224-[Azure-Disk-CSI-Driver] support skuName:PremiumV2_LRS in storageclass", func() {
+
+		// https://learn.microsoft.com/en-us/azure/virtual-machines/disks-deploy-premium-v2?tabs=azure-cli#limitations
+		if !checkNodeZoned(oc) {
+			g.Skip("No zoned cluster doesn't support PremiumV2_LRS storage")
+		}
+
 		// Get the region info
 		region := getClusterRegion(oc)
 		// See https://learn.microsoft.com/en-us/azure/virtual-machines/disks-deploy-premium-v2?tabs=azure-cli#regional-availability
-		supportRegions := []string{"eastus", "westeurope"}
+		supportRegions := []string{"australiaeast", "brazilsouth", "canadacentral", "centralindia", "centralus", "eastasia", "eastus", "eastus2", "eastus2euap", "francecentral", "germanywestcentral", "japaneast", "koreacentral", "northeurope", "norwayeast", "southafricanorth", "southcentralus", "southcentralusstg", "southeastasia", "swedencentral", "switzerlandnorth", "uaenorth", "uksouth", "westeurope", "westus2", "westus3"}
 		if !contains(supportRegions, region) {
 			g.Skip("Current region doesn't support PremiumV2_LRS storage")
 		}
