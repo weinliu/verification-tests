@@ -1619,3 +1619,15 @@ func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
 }
+
+func addLabelToNode(oc *exutil.CLI, label string, workerNodeName string, resource string) {
+	_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args(resource, workerNodeName, label, "--overwrite").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("\nLabel Added")
+}
+
+func removeLabelFromNode(oc *exutil.CLI, label string, workerNodeName string, resource string) {
+	_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args(resource, workerNodeName, label).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("\nLabel Removed")
+}
