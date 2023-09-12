@@ -4254,4 +4254,24 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+	g.It("Author:xiuwang-Critical-64796-Image Registry support azure workload identity", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(credType, "Manual") {
+			g.Skip("Skip test on non azure sts cluster")
+		}
+		secretData, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("secret/installer-cloud-credentials", "-o=jsonpath={.data}", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(secretData, "azure_federated_token_file") {
+			e2e.Failf("The installer-cloud-credentials secret don't use azure workload identity for registry")
+		}
+		envList, err := oc.WithoutNamespace().AsAdmin().Run("set").Args("env", "deploy/image-registry", "--list", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(envList, "AZURE_FEDERATED_TOKEN_FILE") || strings.Contains(envList, "REGISTRY_STORAGE_AZURE_ACCOUNTKEY") {
+			e2e.Failf("The image registry don't use azure workload identity")
+		}
+		g.By("Check if could push/pull image to/from registry")
+		checkRegistryFunctionFine(oc, "test-64796", oc.Namespace())
+	})
 })
