@@ -1634,6 +1634,26 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(warningOutDel, "DeploymentConfig is deprecated in v4.14")).To(o.BeTrue())
 	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-67387-oc new-app propagate containerPort information to the deployment if import-mode is default", func() {
+		// Skip case on multi-arch cluster
+		architecture.SkipArchitectures(oc, architecture.MULTI)
+		// Skip case on cluster without imageRegistry
+		if !isEnabledCapability(oc, "ImageRegistry") {
+			g.Skip("Skipped: cluster does not have imageRegistry installed")
+		}
+
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns67387 := oc.Namespace()
+
+		err := oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", ns67387, "--name=example-app67387").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		out, err := oc.WithoutNamespace().Run("get").Args("svc", "-n", ns67387).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "example-app67387")).To(o.BeTrue())
+		waitForDeploymentPodsToBeReady(oc, ns67387, "example-app67387")
+	})
 })
 
 // ClientVersion ...
