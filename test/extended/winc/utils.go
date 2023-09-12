@@ -300,7 +300,10 @@ func createLinuxWorkload(oc *exutil.CLI, namespace string) {
 
 func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace string, replicas int) bool {
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deploymentName, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		e2e.Logf("Command failed with error: %s .... there are no ready workloads", err)
+		return false
+	}
 	numberOfWorkloads, _ := strconv.Atoi(msg)
 	if (msg == "" && replicas == 0) || numberOfWorkloads == replicas {
 		return true
@@ -729,7 +732,10 @@ func getWMCOVersionFromLogs(oc *exutil.CLI) string {
 func waitForEndpointsReady(oc *exutil.CLI, namespace string, waitTime int, numberOfEndpoints int) {
 	waitLogErr := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Minute, func() (bool, error) {
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-ojsonpath={.items[*].subsets[*].addresses[*].ip}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf("Command failed with error: %s .Retrying...", err)
+			return false, nil
+		}
 		if (msg == "" && numberOfEndpoints == 0) || len(strings.Split(msg, " ")) == numberOfEndpoints {
 			return true, nil
 		}
@@ -991,11 +997,18 @@ func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey str
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	poolErr := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
-		return checkWorkloadCreated(oc, wmcoDeployment, namespace, 1), nil
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", wmcoDeployment, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+		if err != nil {
+			e2e.Logf("Command failed with error: %s .Retrying...", err)
+			return false, nil
+		}
+		numberOfWorkloads, _ := strconv.Atoi(msg)
+		if numberOfWorkloads == 1 {
+			return true, nil
+		}
+		return false, nil
 	})
-	if poolErr != nil {
-		e2e.Failf("WMCO deployment did not start up after waiting up to 5 minutes ...")
-	}
+	exutil.AssertWaitPollNoErr(poolErr, "WMCO deployment did not start up after waiting up to 5 minutes ...")
 }
 
 func getContainerdVersion(oc *exutil.CLI, nodeIP string) string {
@@ -1052,7 +1065,10 @@ func checkLogAfterTimeStamp(logOut string, expectedMsg string, timeStamp time.Ti
 func waitForAdminNodeLogEvent(oc *exutil.CLI, host string, logPath string, message string, timeStamp time.Time) {
 	waitLogErr := wait.Poll(10*time.Second, 25*time.Minute, func() (bool, error) {
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", host, "--path="+logPath).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf("Command failed with error: %s .Retrying...", err)
+			return false, nil
+		}
 		if !checkLogAfterTimeStamp(msg, message, timeStamp) {
 			return false, nil
 		}
