@@ -190,7 +190,8 @@ func (ht *HypershiftTest) InstallOnAws() {
 		NewAwsInstallOptions().
 			WithBucket(ht.StrValue(TestCtxKeyBucket)).
 			WithCredential(awscred.file).
-			WithRegion(awscred.region))
+			WithRegion(awscred.region).
+			WithEnableDefaultingWebhook())
 	o.Expect(installErr).NotTo(o.HaveOccurred(), "install hypershift operator via cli failed")
 
 	// check whether pod under ns hypershift is running

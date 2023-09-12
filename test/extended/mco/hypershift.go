@@ -115,6 +115,12 @@ func (opt *AwsInstallOptions) WithNamespace(ns string) *AwsInstallOptions {
 	return opt
 }
 
+// WithEnableDefaultingWebhook builder func to append option enable-defaulting-webhook
+func (opt *AwsInstallOptions) WithEnableDefaultingWebhook() *AwsInstallOptions {
+	opt.appendOption("--enable-defaulting-webhook", "true")
+	return opt
+}
+
 // NewAwsCreateClusterOptions constructor of create cluster on aws options
 func NewAwsCreateClusterOptions() *AwsCreateClusterOptions {
 	opts := &AwsCreateClusterOptions{
