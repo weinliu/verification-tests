@@ -2181,4 +2181,184 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(resHeaders).To(o.ContainSubstring("cache-control: private"))
 		o.Expect(strings.Contains(reqHeaders, "server:")).NotTo(o.BeTrue())
 	})
+
+	// author: shudili@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-62528-adding/deleting http headers to an edge route by a router owner", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
+			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
+			unsecsvcName        = "service-unsecure"
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			srv                 = "gunicorn"
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp62528",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontroller/" + ingctrl.name
+			fileDir         = "/tmp/OCP-62528-ca"
+			dirname         = "/tmp/OCP-62528-ca/"
+			name            = dirname + "62528"
+			validity        = 30
+			caSubj          = "/CN=NE-Test-Root-CA"
+			userCert        = dirname + "user62528"
+			customKey       = userCert + ".key"
+			customCert      = userCert + ".pem"
+		)
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+
+		exutil.By("Try to create custom key and custom certification by openssl, create a new self-signed CA at first, creating the CA key")
+		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 2048`, name)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create the CA certificate")
+		opensslCmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %d -out %s-ca.pem  -subj %s`, name, validity, name, caSubj)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a new user certificate, crearing the user CSR with the private user key")
+		userSubj := "/CN=example-ne.com"
+		opensslCmd = fmt.Sprintf(`openssl req -nodes -newkey rsa:2048 -keyout %s.key -subj %s -out %s.csr`, userCert, userSubj, userCert)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Sign the user CSR and generate the certificate")
+		opensslCmd = fmt.Sprintf(`openssl x509 -extfile <(printf "subjectAltName = DNS:*.`+ingctrl.domain+`") -req -in %s.csr -CA %s-ca.pem -CAkey %s-ca.key -CAcreateserial -out %s.pem -days %d -sha256`, userCert, name, name, userCert, validity)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a custom ingresscontroller")
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("create configmap client-ca-xxxxx in namespace openshift-config")
+		cmFile := "ca-bundle.pem=" + name + "-ca.pem"
+		defer deleteConfigMap(oc, "openshift-config", "client-ca-"+ingctrl.name)
+		createConfigMapFromFile(oc, "openshift-config", "client-ca-"+ingctrl.name, cmFile)
+
+		exutil.By("patch the ingresscontroller to enable client certificate with required policy")
+		routerpod := getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"clientTLS\":{\"clientCA\":{\"name\":\"client-ca-"+ingctrl.name+"\"},\"clientCertificatePolicy\":\"Required\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		createResourceFromFile(oc, project1, testPod)
+		err = waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, unsecsvc)
+
+		exutil.By("create an edge route")
+		routerpod = getRouterPod(oc, ingctrl.name)
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		edgeRouteHost := "r3-edge." + ingctrl.domain
+		lowHostEdge := strings.ToLower(edgeRouteHost)
+		base64HostEdge := base64.StdEncoding.EncodeToString([]byte(edgeRouteHost))
+		edgeRouteDst := edgeRouteHost + ":443:" + podIP
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "route", "edge", "r3-edge", "--service="+unsecsvcName, "--cert="+customCert, "--key="+customKey, "--ca-cert="+name+"-ca.pem", "--hostname="+edgeRouteHost).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Patch the edge route with added/deleted http request/response headers under the spec")
+		patchHeaders := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [" +
+			"{\"name\": \"X-SSL-Client-Cert\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%{+Q}[ssl_c_der,base64]\"}}}," +
+			"{\"name\": \"X-Target\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[req.hdr(host),lower]\"}}}," +
+			"{\"name\": \"reqTestHost1\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[req.hdr(host),lower]\"}}}," +
+			"{\"name\": \"reqTestHost2\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[req.hdr(host),base64]\"}}}," +
+			"{\"name\": \"reqTestHost3\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[req.hdr(Host)]\"}}}," +
+			"{\"name\": \"X-Forwarded-For\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"11.22.33.44\"}}}," +
+			"{\"name\": \"x-forwarded-client-cert\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%{+Q}[ssl_c_der,base64]\"}}}," +
+			"{\"name\": \"reqTestHeader\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"bbb\"}}}," +
+			"{\"name\": \"cache-control\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"private\"}}}," +
+			"{\"name\": \"x-ssl-client-der\", \"action\": {\"type\": \"Delete\"}}" +
+			"]," +
+			"\"response\": [" +
+			"{\"name\": \"X-SSL-Server-Cert\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%{+Q}[ssl_c_der,base64]\"}}}," +
+			"{\"name\": \"X-XSS-Protection\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"1; mode=block\"}}}," +
+			"{\"name\": \"X-Content-Type-Options\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"nosniff`\"}}}," +
+			"{\"name\": \"X-Frame-Options\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"SAMEORIGIN\"}}}," +
+			"{\"name\": \"resTestServer1\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[res.hdr(server),lower]\"}}}," +
+			"{\"name\": \"resTestServer2\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[res.hdr(server),base64]\"}}}," +
+			"{\"name\": \"resTestServer3\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[res.hdr(server)]\"}}}," +
+			"{\"name\": \"cache-control\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"private\"}}}," +
+			"{\"name\": \"server\", \"action\": {\"type\": \"Delete\"}}" +
+			"]}}}}"
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/r3-edge", "-p", patchHeaders, "--type=merge", "-n", project1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("patched"))
+
+		exutil.By("check backend edge route in haproxy that headers to be set or deleted")
+		routerpod = getRouterPod(oc, ingctrl.name)
+		readHaproxyConfig(oc, routerpod, "be_edge_http:"+project1+":r3-edge", "-A33", "X-SSL-Client-Cert")
+		routeBackendCfg := getBlockConfig(oc, routerpod, "be_edge_http:"+project1+":r3-edge")
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-SSL-Client-Cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-Target' '%[req.hdr(host),lower]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'reqTestHost1' '%[req.hdr(host),lower]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'reqTestHost2' '%[req.hdr(host),base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-Forwarded-For' '11.22.33.44'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'x-forwarded-client-cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'reqTestHeader' 'bbb'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'cache-control' 'private'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request del-header 'x-ssl-client-der'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request del-header 'x-ssl-client-der'")).To(o.BeTrue())
+
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'X-SSL-Server-Cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'X-XSS-Protection' '1; mode=block'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'X-Content-Type-Options' 'nosniff`'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'X-Frame-Options' 'SAMEORIGIN'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'resTestServer1' '%[res.hdr(server),lower]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'resTestServer2' '%[res.hdr(server),base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'resTestServer3' '%[res.hdr(server)]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'cache-control' 'private'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
+
+		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
+		curlEdgeRouteReq := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst}
+		curlEdgeRouteRes := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst}
+		lowSrv := strings.ToLower(srv)
+		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
+		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30)
+		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlEdgeRouteReq...).Output()
+		e2e.Logf("reqHeaders is: %v", reqHeaders)
+		o.Expect(len(regexp.MustCompile("\"X-Ssl-Client-Cert\": \"([0-9a-zA-Z]+)").FindStringSubmatch(reqHeaders)) > 0).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"X-Target\": \""+edgeRouteHost+"\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Reqtesthost1\": \""+lowHostEdge+"\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Reqtesthost2\": \""+base64HostEdge+"\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Reqtesthost3\": \""+edgeRouteHost+"\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Reqtestheader\": \"bbb\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Cache-Control\": \"private\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "x-ssl-client-der")).NotTo(o.BeTrue())
+
+		resHeaders, _ := oc.AsAdmin().Run("exec").Args(curlEdgeRouteRes...).Output()
+		e2e.Logf("resHeaders is: %v", resHeaders)
+		o.Expect(len(regexp.MustCompile("x-ssl-server-cert: ([0-9a-zA-Z]+)").FindStringSubmatch(resHeaders)) > 0).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "x-xss-protection: 1; mode=block")).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "x-content-type-options: nosniff")).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "x-frame-options: SAMEORIGIN")).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "restestserver1: "+lowSrv)).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "restestserver2: "+base64Srv)).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "restestserver3: "+srv)).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "cache-control: private")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "server:")).NotTo(o.BeTrue())
+	})
 })
