@@ -1,6 +1,7 @@
 package hive
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"time"
@@ -46,10 +47,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "42345"|./bin/extended-platform-tests run --timeout 10m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Medium-42345-shouldn't create provisioning pod if region mismatch in install config vs Cluster Deployment [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Medium-42345-Low-42349-shouldn't create provisioning pod if region mismatch in install config vs Cluster Deployment [Serial]", func() {
 		testCaseID := "42345"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
-		oc.SetupProject()
 
 		switch iaasPlatform {
 		case "aws":
@@ -178,6 +178,46 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			return true
 		}
 		o.Eventually(waitForClusterDeploymentRequirementsMetFail).WithTimeout(DefaultTimeout * time.Second).WithPolling(3 * time.Second).Should(o.BeTrue())
+
+		exutil.By("OCP-42349: Sort clusterdeployment conditions")
+		var ClusterDeploymentConditions []map[string]string
+		checkConditionSequence := func() bool {
+			stdout, _, err := oc.AsAdmin().Run("get").Args("ClusterDeployment", cdName, "-o", "jsonpath={.status.conditions}").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = json.Unmarshal([]byte(stdout), &ClusterDeploymentConditions)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			if conditionType0, ok := ClusterDeploymentConditions[0]["type"]; !ok || conditionType0 != "RequirementsMet" {
+				e2e.Logf("Error! condition RequirementsMet is not at the top of the conditions list")
+				return false
+			}
+			if conditionStatus0, ok := ClusterDeploymentConditions[0]["status"]; !ok || conditionStatus0 != "False" {
+				e2e.Logf("Error! condition RequirementsMet is not in False status")
+				return false
+			}
+
+			e2e.Logf("Check if conditions with desired state are at the middle, conditions with Unknown are at the bottom")
+			conditionNum := len(ClusterDeploymentConditions)
+			findUnknownFlag := false
+			for i := 1; i < conditionNum; i++ {
+				conditionStatus, ok := ClusterDeploymentConditions[i]["status"]
+				if !ok {
+					e2e.Logf("Error! a condition doesn't have status")
+					return false
+				}
+				if conditionStatus == "Unknown" {
+					findUnknownFlag = true
+				} else {
+					if findUnknownFlag {
+						e2e.Logf("condition with Unknown is not at the bottom")
+						return false
+					}
+				}
+			}
+			e2e.Logf("Check is passed! All conditions with desired state are at the middle, and all conditions with Unknown are at the bottom")
+			return true
+		}
+		o.Consistently(checkConditionSequence).WithTimeout(2 * time.Minute).WithPolling(15 * time.Second).Should(o.BeTrue())
 	})
 
 	//author: lwan@redhat.com
