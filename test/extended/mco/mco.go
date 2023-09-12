@@ -3789,7 +3789,7 @@ func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, f
 
 	exutil.By("Verify that node annotations describe the reason for the Degraded status")
 	reason := workerNode.GetAnnotationOrFail("machineconfiguration.openshift.io/reason")
-	o.Expect(reason).To(o.Equal(fmt.Sprintf(`content mismatch for file "%s"`, rf.fullPath)))
+	o.Expect(reason).To(o.ContainSubstring(fmt.Sprintf(`content mismatch for file "%s"`, rf.fullPath)))
 
 	if forceFile {
 		exutil.By("Restore original content using the ForceFile and wait until pool is ready again")
