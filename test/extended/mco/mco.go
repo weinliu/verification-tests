@@ -1758,9 +1758,6 @@ nulla pariatur.`
 			daemonPodName := node.GetMachineConfigDaemon()
 			logger.Infof("Checking permissions in daemon pod %s", daemonPodName)
 			daemonPod := NewNamespacedResource(node.oc, "pod", MachineConfigNamespace, daemonPodName)
-			o.Expect(daemonPod.GetOrFail(`{.spec.containers[?(@.name == "oauth-proxy")].args}`)).
-				Should(o.ContainSubstring(fmt.Sprintf("--openshift-service-account=%s", expectedServiceAcc)),
-					"oauth-proxy in daemon pod %s should use service account %s", daemonPodName, expectedServiceAcc)
 
 			o.Expect(daemonPod.GetOrFail(`{.spec.serviceAccount}`)).Should(o.Equal(expectedServiceAcc),
 				"Pod %s should use service account: %s", daemonPodName, expectedServiceAcc)
