@@ -1939,7 +1939,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-66560-basic route adding/deleting http headers function work well", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-66560-adding/deleting http headers to a http route by a router owner", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
@@ -1948,9 +1948,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
+			srv                 = "gunicorn"
 		)
 
-		g.By("Deploy a project with a client pod, a backend pod and its service resources")
+		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
@@ -1961,41 +1962,97 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
 		createResourceFromFile(oc, project1, unsecsvc)
 
-		g.By("Expose a route with the unsecure service inside the project")
+		exutil.By("Expose a route with the unsecure service inside the project")
 		baseDomain := getBaseDomain(oc)
-		routehost := "service-unsecure" + "." + "apps." + baseDomain
-		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routehost).Execute()
+		routeHost := "service-unsecure" + "." + "apps." + baseDomain
+		lowHost := strings.ToLower(routeHost)
+		base64Host := base64.StdEncoding.EncodeToString([]byte(routeHost))
+		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routeHost).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		routeOutput := getRoutes(oc, project1)
 		o.Expect(routeOutput).To(o.ContainSubstring(unsecsvcName))
 
-		g.By("Patch the route with added/deleted http request/response headers under the spec")
-		patchHeaders := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"Content-Location\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"/my-first-blog-post\"}}}, {\"name\": \"Referer\", \"action\": {\"type\": \"Delete\"}}], \"response\": [{\"name\": \"X-Frame-Options\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"DENY\"}}}, {\"name\": \"server\", \"action\": {\"type\": \"Delete\"}}]}}}}"
+		exutil.By("Patch the route with added/deleted http request/response headers under the spec")
+		patchHeaders := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [" +
+			"{\"name\": \"X-SSL-Client-Cert\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%{+Q}[ssl_c_der,base64]\"}}}," +
+			"{\"name\": \"X-Target\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[req.hdr(host),lower]\"}}}," +
+			"{\"name\": \"reqTestHost1\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[req.hdr(host),lower]\"}}}," +
+			"{\"name\": \"reqTestHost2\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[req.hdr(host),base64]\"}}}," +
+			"{\"name\": \"reqTestHost3\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[req.hdr(Host)]\"}}}," +
+			"{\"name\": \"X-Forwarded-For\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"11.22.33.44\"}}}," +
+			"{\"name\": \"x-forwarded-client-cert\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%{+Q}[ssl_c_der,base64]\"}}}," +
+			"{\"name\": \"reqTestHeader\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"bbb\"}}}," +
+			"{\"name\": \"cache-control\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"private\"}}}," +
+			"{\"name\": \"Referer\", \"action\": {\"type\": \"Delete\"}}" +
+			"]," +
+			"\"response\": [" +
+			"{\"name\": \"X-SSL-Server-Cert\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%{+Q}[ssl_c_der,base64]\"}}}," +
+			"{\"name\": \"X-XSS-Protection\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"1; mode=block\"}}}," +
+			"{\"name\": \"X-Content-Type-Options\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"nosniff`\"}}}," +
+			"{\"name\": \"X-Frame-Options\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"SAMEORIGIN\"}}}," +
+			"{\"name\": \"resTestServer1\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[res.hdr(server),lower]\"}}}," +
+			"{\"name\": \"resTestServer2\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[res.hdr(server),base64]\"}}}," +
+			"{\"name\": \"resTestServer3\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"%[res.hdr(server)]\"}}}," +
+			"{\"name\": \"cache-control\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"private\"}}}," +
+			"{\"name\": \"server\", \"action\": {\"type\": \"Delete\"}}" +
+			"]}}}}"
+
 		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", patchHeaders, "--type=merge", "-n", project1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("patched"))
 
-		g.By("check in haproxy that headers should be set or deleted")
+		exutil.By("check backend edge route in haproxy that headers to be set or deleted")
 		routerpod := getRouterPod(oc, "default")
-		routeBackend := "be_http:" + project1 + ":" + unsecsvcName
-		reqAddHeader := readHaproxyConfig(oc, routerpod, routeBackend, "-A18", "Content-Location")
-		reqDelHeader := readHaproxyConfig(oc, routerpod, routeBackend, "-A18", "Referer")
-		resAddHeader := readHaproxyConfig(oc, routerpod, routeBackend, "-A18", "X-Frame-Options")
-		resDelHeader := readHaproxyConfig(oc, routerpod, routeBackend, "-A18", "server")
-		o.Expect(reqAddHeader).To(o.ContainSubstring("http-request set-header 'Content-Location' '/my-first-blog-post'"))
-		o.Expect(reqDelHeader).To(o.ContainSubstring("http-request del-header 'Referer'"))
-		o.Expect(resAddHeader).To(o.ContainSubstring("http-response set-header 'X-Frame-Options' 'DENY'"))
-		o.Expect(resDelHeader).To(o.ContainSubstring("http-response del-header 'server'"))
+		readHaproxyConfig(oc, routerpod, "be_http:"+project1+":"+unsecsvcName, "-A33", "X-SSL-Client-Cert")
+		routeBackendCfg := getBlockConfig(oc, routerpod, "be_http:"+project1+":"+unsecsvcName)
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-SSL-Client-Cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-Target' '%[req.hdr(host),lower]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'reqTestHost1' '%[req.hdr(host),lower]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'reqTestHost2' '%[req.hdr(host),base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-Forwarded-For' '11.22.33.44'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'x-forwarded-client-cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'reqTestHeader' 'bbb'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'cache-control' 'private'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request del-header 'Referer'")).To(o.BeTrue())
 
-		g.By("curl the route from the client pod, and then check http headers in the request or response message")
-		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers"}
-		repeatCmd(oc, cmdOnPod, "200", 5)
-		reqHeaders, _ := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "-e", "www.qe-test.com").Output()
-		o.Expect(reqHeaders).To(o.ContainSubstring("\"Content-Location\": \"/my-first-blog-post\""))
-		o.Expect(strings.Contains(reqHeaders, "Referer")).NotTo(o.BeTrue())
-		resHeaders, _ := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "-I").Output()
-		o.Expect(resHeaders).To(o.ContainSubstring("x-frame-options: DENY"))
-		o.Expect(strings.Contains(resHeaders, "server")).NotTo(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'X-SSL-Server-Cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'X-XSS-Protection' '1; mode=block'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'X-Content-Type-Options' 'nosniff`'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'X-Frame-Options' 'SAMEORIGIN'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'resTestServer1' '%[res.hdr(server),lower]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'resTestServer2' '%[res.hdr(server),base64]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'resTestServer3' '%[res.hdr(server)]'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'cache-control' 'private'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
+
+		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
+		curlHTTPRouteReq := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-H reqTestHeader:aaa", "-e", "www.qe-test.com"}
+		curlHTTPRouteRes := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-H reqTestHeader:aaa", "-e", "www.qe-test.com"}
+		lowSrv := strings.ToLower(srv)
+		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
+		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30)
+		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlHTTPRouteReq...).Output()
+		e2e.Logf("reqHeaders is: %v", reqHeaders)
+		o.Expect(strings.Contains(reqHeaders, "\"X-Ssl-Client-Cert\": \"\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"X-Target\": \""+routeHost+"\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Reqtesthost1\": \""+lowHost+"\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Reqtesthost2\": \""+base64Host+"\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Reqtesthost3\": \""+routeHost+"\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Reqtestheader\": \"bbb\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "\"Cache-Control\": \"private\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "x-ssl-client-der")).NotTo(o.BeTrue())
+
+		resHeaders, _ := oc.AsAdmin().Run("exec").Args(curlHTTPRouteRes...).Output()
+		e2e.Logf("resHeaders is: %v", resHeaders)
+		o.Expect(strings.Contains(resHeaders, "x-ssl-server-cert: ")).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "x-xss-protection: 1; mode=block")).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "x-content-type-options: nosniff")).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "x-frame-options: SAMEORIGIN")).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "restestserver1: "+lowSrv)).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "restestserver2: "+base64Srv)).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "restestserver3: "+srv)).To(o.BeTrue())
+		o.Expect(strings.Contains(resHeaders, "cache-control: private")).To(o.BeTrue())
+		o.Expect(strings.Contains(reqHeaders, "server:")).NotTo(o.BeTrue())
 	})
 
 	// author: shudili@redhat.com
