@@ -3738,8 +3738,12 @@ EOF`, dcpolicyrepo)
 			pattern := `admin\s*ClusterRole/admin`
 			r, err := regexp.Compile(pattern)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			errAdmRole := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			errAdmRole := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 				rolebindingOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebinding", "-n", namespace, "--no-headers").Output()
+				output, errUser := oc.AsAdmin().WithoutNamespace().Run("get").Args("user", username).Output()
+				if errUser != nil {
+					e2e.Logf("#### Debug: %s", output)
+				}
 				if r.MatchString(rolebindingOutput) {
 					policyerr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "admin", username, "-n", namespace).Execute()
 					if policyerr != nil {
