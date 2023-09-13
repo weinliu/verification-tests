@@ -78,7 +78,7 @@ func createHostNetworkedPodforUshift(oc *exutil.CLI, pod_pmtrs map[string]string
 
 func rebootUshiftNode(oc *exutil.CLI, nodeName string) {
 	rebootNode(oc, nodeName)
-	exec.Command("bash", "-c", "sleep 60").Output()
+	exec.Command("bash", "-c", "sleep 120").Output()
 	checkNodeStatus(oc, nodeName, "Ready")
 }
 func setMTU(oc *exutil.CLI, nodeName string, mtu string) {

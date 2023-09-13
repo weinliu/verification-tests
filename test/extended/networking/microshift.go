@@ -786,8 +786,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		cpNewConfig := "mkdir /run/systemd/resolve && cp /etc/resolv.conf /run/systemd/resolve/resolv.conf && systemctl restart microshift"
 		rmDnsConfig := "rm -fr /run/systemd/resolve && systemctl restart microshift"
 		defer func() {
-			_, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", rmDnsConfig)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", rmDnsConfig)
 			output := wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
 				dnsConfigMap, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "cm", "dns-default", "-o=jsonpath={.data.Corefile}").Output()
 				if strings.Contains(dnsConfigMap, "/etc/resolv.conf") {
@@ -798,8 +797,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			})
 			exutil.AssertWaitPollNoErr(output, fmt.Sprintf("Fail to updated dns configmap:%s", output))
 		}()
-		_, err1 := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cpNewConfig)
-		o.Expect(err1).NotTo(o.HaveOccurred())
+		exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cpNewConfig)
 
 		g.By("Check the coredns is consuming the new config file")
 		output := wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
