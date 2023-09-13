@@ -4249,12 +4249,15 @@ EOF`, dcpolicyrepo)
 		exutil.By("3. Check the security context of service-ca component which should be non-root")
 		security, securityErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-service-ca", "-o", `jsonpath='{.items[*].spec.containers[0].securityContext}'`).Output()
 		o.Expect(securityErr).NotTo(o.HaveOccurred())
-		o.Expect(security).Should(o.ContainSubstring(`"runAsNonRoot":true,"runAsUser":1000070000`))
+		o.Expect(security).Should(o.ContainSubstring(`"runAsNonRoot":true,"runAsUser":`))
 		podname, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-service-ca", "-o", `jsonpath={.items[*].metadata.name}`).Output()
 		o.Expect(podErr).NotTo(o.HaveOccurred())
 		execPod, execErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-service-ca", podname, "--", "/bin/sh", "-c", `id`).Output()
 		o.Expect(execErr).NotTo(o.HaveOccurred())
-		o.Expect(execPod).Should(o.ContainSubstring(`uid=1000070000(1000070000) gid=0(root) groups=0(root),1000070000`))
+		secUser, securityErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-service-ca", "-o", `jsonpath='{.items[*].spec.containers[0].securityContext.runAsUser}'`).Output()
+		o.Expect(securityErr).NotTo(o.HaveOccurred())
+		secUser = strings.Trim(string(secUser), "'")
+		o.Expect(execPod).Should(o.ContainSubstring(fmt.Sprintf("uid=%s(%s) gid=0(root) groups=0(root),%s", secUser, secUser, secUser)))
 
 		exutil.By("4. check removal for kube-proxy.")
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
@@ -4263,7 +4266,6 @@ EOF`, dcpolicyrepo)
 		proxy, proxyErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", cmd)
 		o.Expect(proxyErr).NotTo(o.HaveOccurred())
 		proxy = regexp.MustCompile(`\n`).ReplaceAllString(string(proxy), "")
-		e2e.Logf("test ::%v::test", proxy)
 		o.Expect(proxy).Should(o.BeEmpty())
 
 		exutil.By("5. check oauth endpoint Curl oauth server url, it should not present.")
@@ -4682,11 +4684,19 @@ spec:
 		defer oc.AsAdmin().WithoutNamespace().Run("delete", "-f", routeYaml).Args().Execute()
 		routeErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", routeYaml).Args().Execute()
 		o.Expect(routeErr).NotTo(o.HaveOccurred())
-		routeOutput, routeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", namespace, "-o", "json").Output()
-		o.Expect(routeErr).NotTo(o.HaveOccurred())
-		routeJsonOutput := gjson.Parse(routeOutput).String()
-		routeType := gjson.Get(routeJsonOutput, `status.ingress.0.conditions.0.type`).String()
-		o.Expect(routeType).Should(o.ContainSubstring("Admitted"), routeName+" type is not set Admitted")
+		var routeJsonOutput string
+		var routeType string
+		routeTypeErr := wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
+			routeOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", namespace, "-o", "json").Output()
+			routeJsonOutput = gjson.Parse(routeOutput).String()
+			routeType = gjson.Get(routeJsonOutput, `status.ingress.0.conditions.0.type`).String()
+			if strings.Contains(routeType, "Admitted") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(routeTypeErr, routeName+" type is not set Admitted")
+
 		routeStatus := gjson.Get(routeJsonOutput, `status.ingress.0.conditions.0.status`).String()
 		o.Expect(routeStatus).Should(o.ContainSubstring("True"), routeStatus+" status is not set True")
 		routeHost := gjson.Get(routeJsonOutput, `spec.host`).String()
