@@ -142,7 +142,12 @@ func createCertManagerOperator(oc *exutil.CLI) {
 		return false, nil
 
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
+	if errCheck != nil {
+		tmpCsvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("csv %s is:%s", csvName, tmpCsvState)
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
+	}
 
 	e2e.Logf("Check cert manager pods.\n")
 	mStatusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
