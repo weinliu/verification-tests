@@ -3,6 +3,8 @@ package util
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os/exec"
 
 	"github.com/tidwall/gjson"
@@ -20,6 +22,27 @@ func GetLatest4StableImage() (string, error) {
 	latestImage := gjson.Get(string(outputCmd), `pullSpec`).String()
 	e2e.Logf("The latest 4-stable OCP image is %s", latestImage)
 	return latestImage, nil
+}
+
+func GetLatest4PreviewImage(arch string) (latestImage string, err error) {
+	url := map[string]string{
+		"amd64": "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-dev-preview/latest",
+		"arm64": "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-dev-preview-arm64/latest",
+		"multi": "https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-dev-preview-multi/latest",
+	}
+	var resp *http.Response
+	var body []byte
+	resp, err = http.Get(url[arch])
+	if err != nil {
+		err = fmt.Errorf("fail to get url %v, error: %v", url[arch], err)
+	}
+	body, err = io.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	if err != nil {
+		err = fmt.Errorf("fail to parse the result, error: %v", err)
+	}
+	latestImage = gjson.Get(string(body), `pullSpec`).String()
+	return
 }
 
 // GetLatestNightlyImage to get the latest nightly OCP image from releasestream link

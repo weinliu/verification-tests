@@ -523,6 +523,47 @@ func extractManifest(oc *exutil.CLI) (tempDataDir string, err error) {
 	return
 }
 
+// Run "oc adm release extract --included --install-config" cmd to extract manifests
+func extractIncludedManifestWithInstallcfg(oc *exutil.CLI, creds bool, cfg string, image string, cloud string) (tempDataDir string, err error) {
+	tempDataDir = filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
+	var out string
+	if err = os.Mkdir(tempDataDir, 0755); err != nil {
+		err = fmt.Errorf("failed to create directory: %v", err)
+		return
+	}
+	if creds && cloud != "" {
+		out, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--install-config", cfg, "--included", "--credentials-requests", "--cloud", cloud, "--from", image, "--to", tempDataDir).Output()
+	} else if creds {
+		out, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--install-config", cfg, "--included", "--credentials-requests", "--from", image, "--to", tempDataDir).Output()
+	} else if cloud != "" {
+		err = fmt.Errorf("--cloud only works with --credentials-requests,creds_var: %v,cloud_var: %v", creds, cloud)
+	} else {
+		out, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--install-config", cfg, "--included", "--from", image, "--to", tempDataDir).Output()
+	}
+	if err != nil {
+		err = fmt.Errorf("failed to extract manifest: %v, command output:%v", err, out)
+		return
+	}
+	return
+}
+
+func getDefaultCapsInCR(version string) []string {
+	switch version {
+	case "4.14":
+		return []string{"Storage", "MachineAPI"}
+	default:
+		e2e.Logf("Unknown version:%s detcted!", version)
+		return nil
+	}
+}
+
+func getRandomPlatform() string {
+	types := [...]string{"aws", "azure", "gcp", "vsphere"}
+	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
+	index := seed.Intn(len(types) - 1)
+	return types[index]
+}
+
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
