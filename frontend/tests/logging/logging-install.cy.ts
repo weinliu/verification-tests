@@ -31,7 +31,7 @@ describe('Logging related features', () => {
   it('(OCP-22558,gkarager) Deploy cluster-logging operator via web console', {tags: ['e2e','admin']}, () => {
     //Install the Cluster Logging Operator with console plungin
     catalogSource.sourceName(CLO.packageName).then((csName) => {
-      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), true);
+      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), "", true);
     });
   });
 

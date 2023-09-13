@@ -1,7 +1,7 @@
 import { listPage } from "../upstream/views/list-page";
 
 //If specific channel/catsrc needed for testing, export the values using CYPRESS_EXTRA_PARAM before running the logging tests
-//ex: export CYPRESS_EXTRA_PARAM='{"openshift-logging": {"cluster-logging": {"channel": "stable", "source": "qe-app-registry"}, "elasticsearch-operator": {"channel": "stable", "source": "qe-app-registry"}, "loki-operator": {"channel": "stable", "source": "qe-app-registry"}}}'
+//ex: export CYPRESS_EXTRA_PARAM='{"openshift-logging": {"cluster-logging": {"channel": "stable-5.8", "version" : "5.8.0", "source": "qe-app-registry"}, "elasticsearch-operator": {"channel": "stable-5.8", "version" : "5.8.0", "source": "qe-app-registry"}, "loki-operator": {"channel": "stable-5.8", "version" : "5.8.0", "source": "qe-app-registry"}}}'
 const extraParam = JSON.stringify(Cypress.env("EXTRA_PARAM"))
 const loggingParam = (extraParam != undefined) ? JSON.parse(extraParam) : null;
 
@@ -14,6 +14,11 @@ export const catalogSource = {
     }
     return channel;
   },
+  //set version (availabe for OCP >= 4.14)
+  version: (packageName) => {
+    let version = (loggingParam != null) ? loggingParam['openshift-logging'][`${packageName}`]['version'] : null;
+    return version;
+  },  
   //set source namespace
   nameSpace: (packageName) => {
     let namespace = (loggingParam != null) ? loggingParam['openshift-logging'][`${packageName}`]['catsrc-namespace'] : null;
@@ -51,14 +56,31 @@ export const catalogSource = {
 };
 
 export const logUtils = {
-  installOperator: (namespace, packageName, csName, channelName?, enablePlugin?: boolean) => {
-    cy.exec(`oc get csv -n ${namespace} -l operators.coreos.com/${packageName}.${namespace} -ojsonpath={.items[].status.phase} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then(result => {
+  installOperator: (namespace, packageName, csName, channelName?, version?, enablePlugin?: boolean) => {
+    cy.exec(`oc get csv -n ${namespace} -l operators.coreos.com/${packageName}.${namespace} -ojsonpath={.items[].status.phase} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false}).then(result => {
       if (result.stdout.includes("Succeeded")) {
         cy.log(`operator ${packageName} is installed in ${namespace} project`)
       } else {
         cy.visit(`/operatorhub/subscribe?pkg=${packageName}&catalog=${csName}&catalogNamespace=openshift-marketplace&targetNamespace=undefined`);
         if (channelName){
-          cy.get(`[data-test="${channelName}-radio-input"]`).click();
+          if (Cypress.$(`[data-test="${channelName}-radio-input"]`).length > 0 ){
+            cy.get(`[data-test="${channelName}-radio-input"]`).click();
+          } else {
+            if (Cypress.$('#pf-select-toggle-id-16').length > 0) {
+              cy.get('#pf-select-toggle-id-16').click(); 
+              cy.get(`#${channelName}`).should('exist').click();
+            }
+          }
+        }
+        if (version){
+          if (Cypress.$('.co-operator-version__select').length > 0) {
+            cy.get('#pf-select-toggle-id-57').click();
+            if (Cypress.$(`#${version}`).length > 0 ) {
+              cy.get(`#${version}`).click();
+            } else {
+              cy.get('.pf-c-select__menu-item').first().click();
+            }
+          }
         }
         cy.exec(`oc get ns ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false}).then(result => {
           if(result.stderr.includes('NotFound')){
@@ -87,16 +109,16 @@ export const logUtils = {
     })
   },
   deleteResourceByName: (kind: string, res_name: string, namespace: string) => {
-    cy.exec(`oc delete ${kind} ${res_name} -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
+    cy.exec(`oc delete ${kind} ${res_name} -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
   },
   deleteResourceByLabel: (kind: string, namespace: string, label: string) => {
-    cy.exec(`oc delete ${kind} -n ${namespace} -l ${label} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
+    cy.exec(`oc delete ${kind} -n ${namespace} -l ${label} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
   },
   deleteNamespace: (namespace: string) => {
-    cy.exec(`oc delete ns ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
+    cy.exec(`oc delete ns ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
   },
   waitforPodReady: (namespace: string, label: string) => {
-    cy.exec(`oc wait --timeout=180s --for=condition=ready pod -l ${label} -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
+    cy.exec(`oc wait --timeout=240s --for=condition=ready pod -l ${label} -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {timeout: 240000, failOnNonZeroExit: false })
   },
   createClusterLoggingViaYamlView: (namespace: string, file: string) => {
     logUtils.removeClusterLogging(namespace)
@@ -111,7 +133,7 @@ export const logUtils = {
     cy.get('[data-test="save-changes"]').click()
   },
   removeClusterLogging:(namespace: string) => {
-    cy.exec(`oc delete cl instance -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
-    cy.exec(`oc delete pvc -n ${namespace} -l logging-cluster=elasticsearch --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
-  },
+    cy.exec(`oc delete cl instance -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
+    cy.exec(`oc delete pvc -n ${namespace} -l logging-cluster=elasticsearch --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
+  }
 };
