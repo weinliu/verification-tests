@@ -1331,7 +1331,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("condition UpdatingConfig should be here to reflect nodepool config rolling upgrade")
 		o.Eventually(func() bool {
-			return "True" == doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", hostedcluster.namespace, `-ojsonpath={.status.conditions[?(@.type=="UpdatingConfig")].status}`)
+			return "True" == doOcpReq(oc, OcpGet, false, "nodepool", npName, "-n", hostedcluster.namespace, `-ojsonpath={.status.conditions[?(@.type=="UpdatingConfig")].status}`)
 		}, ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), "nodepool condition UpdatingConfig not found error")
 
 		g.By("condition UpdatingConfig should be removed when upgrade completed")
@@ -1345,7 +1345,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			workerNodes := hostedcluster.getNodeNameByNodepool(npName)
 			o.Expect(workerNodes).ShouldNot(o.BeEmpty())
 			for _, node := range workerNodes {
-				res, err := hostedcluster.DebugHostedClusterNodeWithChroot("52318", node, "cat", "/home/core/.ssh/authorized_keys.d/ignition")
+				res, err := hostedcluster.DebugHostedClusterNodeWithChroot("52318", node, "cat", "/home/core/.ssh/authorized_keys")
 				if err != nil {
 					e2e.Logf("debug node error node %s: error: %s", node, err.Error())
 					return false
