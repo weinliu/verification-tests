@@ -12,8 +12,47 @@ class TestResult:
                 "Service_Development_A","OLM","Operator_SDK","App_Migration","Windows_Containers","Security_and_Compliance",
                 "KNI","Openshift_Jenkins","RHV","ISV_Operators","PSAP","Multi-Cluster-Networking","OTA","Kata","Build_API",
                 "Image_Registry","Container_Engine_Tools","MCO","API_Server","Authentication","Hypershift","Network_Observability",
-                "DR_Testing","CFE"
+                "DR_Testing","CFE","User_Interface_Cypress","Insights","Sample"
             ]
+
+    coSubteamMap = {
+            "authentication": "Authentication",
+            "baremetal": "INSTALLER",
+            "cloud-controller-manager": "Cluster_Infrastructure",
+            "cloud-credential": "Cluster_Operator",
+            "cluster-autoscaler": "Cluster_Infrastructure",
+            "config-operator": "API_Server",
+            "console": "User_Interface_Cypress",
+            "control-plane-machine-set": "Cluster_Infrastructure",
+            "csi-snapshot-controller": "STORAGE",
+            "dns": "Network_Edge",
+            "etcd": "ETCD",
+            "image-registry": "Image_Registry",
+            "ingress": "Network_Edge",
+            "insights": "Insights",
+            "kube-apiserver": "API_Server",
+            "kube-controller-manager": "Workloads",
+            "kube-scheduler": "Workloads",
+            "kube-storage-version-migrator": "API_Server",
+            "machine-api": "Cluster_Infrastructure",
+            "machine-approver": "Cluster_Infrastructure",
+            "machine-config": "MCO",
+            "marketplace": "OLM",
+            "monitoring": "Cluster_Observability",
+            "network": "SDN",
+            "node-tuning": "PSAP",
+            "openshift-apiserver": "API_Server",
+            "openshift-controller-manager": "Workloads",
+            "openshift-samples": "Sample",
+            "operator-lifecycle-manager": "OLM",
+            "operator-lifecycle-manager-catalog": "OLM",
+            "operator-lifecycle-manager-packageserver": "OLM",
+            "service-ca": "API_Server",
+            "storage": "STORAGE",
+            "cluster-api": "Cluster_Infrastructure",
+            "olm": "OLM",
+            "platform-operators-aggregated": "OLM",
+    }
 
     def removeMonitor(self, input, output):
         noderoot = xml.dom.minidom.parse(input)
@@ -269,16 +308,80 @@ class TestResult:
         # print(authors)
         return authors
 
+    def getSubteamByCO(self, co):
+        subteam = self.coSubteamMap.get(co)
+        # print(co)
+        if subteam is None:
+            return "NoCO"
+        return subteam
+
+    def healcheckRP(self, input, steptype, clusteroperator, scenario, recognize):
+
+        impl = xml.dom.minidom.getDOMImplementation()
+        newdoc = impl.createDocument(None, None, None)
+        testsuite = newdoc.createElement("testsuite")
+
+        testsuite.setAttribute("errors", "0")
+        testsuite.setAttribute("failures", "1")
+        testsuite.setAttribute("name", scenario)
+        testsuite.setAttribute("skipped", "0")
+        testsuite.setAttribute("tests", "1")
+        testsuite.setAttribute("time", "1")
+
+        testcase = newdoc.createElement("testcase")
+        testcase.setAttribute("name", "OCP-00000:{0}_leader:clusteroperator {1} fails at {2} healthcheck".format(scenario, clusteroperator, steptype))
+        if recognize == "no":
+            testcase.setAttribute("name", "OCP-00000:Kui:clusteroperator {1} fails at {2} healthcheck, but no owner, please query with team to add it".format(scenario, clusteroperator, steptype))
+        testcase.setAttribute("time", "1")
+
+        failure = newdoc.createElement("failure")
+        # failure.setAttribute("message", "clusteroperator {0} is still in progressing.\n please take link in the description of the launch to check it".format(clusteroperator))
+        failure.setAttribute("message", "")
+        failure_text = newdoc.createTextNode("clusteroperator {0} is still in progressing.\n please take link in the description of the launch to check it".format(clusteroperator))
+        failure.appendChild(failure_text)
+
+        testcase.appendChild(failure)
+        testsuite.appendChild(testcase)
+
+        if input != "":
+            noderoot = xml.dom.minidom.parse(input)
+            origtestsuite = noderoot.getElementsByTagName("testsuite")[0]
+            tests = origtestsuite.getAttribute("tests")
+            failures = origtestsuite.getAttribute("failures")
+            testsuite.setAttribute("failures", str(int(failures)+1))
+            testsuite.setAttribute("tests", str(int(tests)+1))
+
+            cases = noderoot.getElementsByTagName("testcase")
+            for case in cases:
+                testsuite.appendChild(case)
+
+        newdoc.appendChild(testsuite)
+        with open("import-"+scenario+"bak.xml", 'wb+') as f:
+            writer = codecs.lookup('utf-8')[3](f)
+            newdoc.writexml(writer, encoding='utf-8')
+            writer.close()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("handleresult.py")
-    parser.add_argument("-a","--action", default="get", choices={"replace", "get", "generate", "split"}, required=True)
-    parser.add_argument("-i","--input", default="", required=True)
+    parser.add_argument("-a","--action", default="get", choices={"replace", "get", "generate", "split", "comap", "hcj"}, required=True)
+    parser.add_argument("-i","--input", default="")
     parser.add_argument("-o","--output", default="")
     parser.add_argument("-s","--scenario", default="")
+    parser.add_argument("-co","--clusteroperator", default="")
+    parser.add_argument("-r","--recognize", default="")
+    parser.add_argument("-st","--steptype", default="", choices={"e2e", "preupg", "pstupg"})
     args=parser.parse_args()
 
-    
     testresult = TestResult()
+    if args.action == "comap":
+        print(testresult.getSubteamByCO(args.clusteroperator))
+        exit(0)
+
+    if args.action == "hcj":
+        testresult.healcheckRP(args.input, args.steptype, args.clusteroperator, args.scenario, args.recognize)
+        exit(0)
+
     if args.input == "":
         print("please provide input paramter")
         exit(1)
