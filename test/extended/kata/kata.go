@@ -468,24 +468,85 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	})
 
 	g.It("Author:abhbaner-High-43514-kata pod displaying correct overhead", func() {
-		defaultPodName := "example"
+		const (
+			defaultPodName                = "example"
+			ppWebhookDeploymentName       = "peer-pods-webhook"
+			ppVMExtendedResourceEnv       = "POD_VM_EXTENDED_RESOURCE"
+			expPPVmExtendedResourceLimit  = "1"
+			expPPVExtendedResourceRequest = "1"
+		)
 
 		oc.SetupProject()
 		podNs := oc.Namespace()
 
-		g.By("Deploying pod with kata runtime and verify it")
+		g.By("Deploying pod with kata runtime")
 		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
 		defer deleteKataPod(oc, podNs, newPodName)
-		checkKataPodStatus(oc, podNs, newPodName, podRunState)
-		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 
-		g.By("Checking Pod Overhead")
-		podoverhead, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("runtimeclass", "kata").Output()
+		var kataPodObj string
+		g.By("Verifying pod state")
+		checkKataPodStatus(oc, podNs, newPodName, podRunState)
+		kataPodObj, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=json").Output()
+		if err != nil {
+			e2e.Logf("ERROR: unable to get pod: %v in namepsace: %v - error: %v", newPodName, podNs, err)
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(podoverhead).NotTo(o.BeEmpty())
-		o.Expect(podoverhead).To(o.ContainSubstring("Overhead"))
-		o.Expect(podoverhead).To(o.ContainSubstring("Cpu"))
-		o.Expect(podoverhead).To(o.ContainSubstring("Memory"))
+
+		// peerpod webhook erases the pod overhead
+		g.By("Checking peerpod resources")
+		if kataconfig.enablePeerPods {
+
+			g.By("Fetching peer POD_VM_EXTENDED_RESOURCE defaults from peer-pods-webhook pod")
+			ppVMResourceDefaults, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", ppWebhookDeploymentName, "-n", subscription.namespace, "-o=jsonpath={.spec.template.spec.containers[?(@.name=='"+ppWebhookDeploymentName+"')].env[?(@.name=='"+ppVMExtendedResourceEnv+"')].value}").Output()
+			if err != nil {
+				e2e.Logf("ERROR: unable to get peerpod webhook deployment: %v in namepsace: %v - error: %v", ppWebhookDeploymentName, subscription.namespace, err)
+			}
+			o.Expect(err).ToNot(o.HaveOccurred())
+
+			gjson.Get(kataPodObj, "spec.containers").ForEach(func(key, container gjson.Result) bool {
+
+				e2e.Logf("checking container: %s on pod: %s in namespace: %s ", gjson.Get(container.String(), "name").String(), newPodName, podNs)
+
+				ppVMResourceDefaults := strings.Replace(ppVMResourceDefaults, ".", "\\.", -1)
+
+				actualResourceLimit := gjson.Get(container.String(), "resources.limits."+ppVMResourceDefaults).String()
+				if strings.Compare(actualResourceLimit, expPPVmExtendedResourceLimit) != 0 {
+					e2e.Logf("ERROR: peerpod: %v in namepsace: %v has incorrect pod VM extended resource limit: %v", newPodName, podNs, actualResourceLimit)
+				}
+				o.Expect(actualResourceLimit).To(o.Equal(expPPVmExtendedResourceLimit))
+
+				actualResourceRequest := gjson.Get(container.String(), "resources.requests."+ppVMResourceDefaults).String()
+				if strings.Compare(actualResourceRequest, expPPVExtendedResourceRequest) != 0 {
+					e2e.Logf("ERROR: peerpod: %v in namepsace: %v has incorrect pod VM extended resource request: %v", newPodName, podNs, actualResourceRequest)
+				}
+				o.Expect(actualResourceRequest).To(o.Equal(expPPVExtendedResourceRequest))
+
+				return true
+			})
+		}
+
+		g.By("Checking Kata pod overhead")
+		// for non-peer kata pods, overhead is expected to be same as set in runtimeclass
+		runtimeClassObj, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("runtimeclass", kataconfig.runtimeClassName, "-o=json").Output()
+		if err != nil {
+			e2e.Logf("ERROR: unable to get runtimeclass: %v - error: %v", kataconfig.runtimeClassName, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		actualCpu := gjson.Get(kataPodObj, "spec.overhead.cpu").String()
+		expectedCpu := gjson.Get(runtimeClassObj, "overhead.podFixed.cpu").String()
+		if strings.Compare(expectedCpu, actualCpu) != 0 {
+			e2e.Logf("ERROR: kata pod: %v in namepsace: %v has incorrect cpu overhead: %v", newPodName, podNs, actualCpu)
+		}
+		o.Expect(expectedCpu).To(o.Equal(actualCpu))
+
+		actualMem := gjson.Get(kataPodObj, "spec.overhead.memory").String()
+		expectedMem := gjson.Get(runtimeClassObj, "overhead.podFixed.memory").String()
+		if strings.Compare(expectedMem, actualMem) != 0 {
+			e2e.Logf("ERROR: kata pod: %v in namepsace: %v has incorrect memory overhead: %v", newPodName, podNs, actualMem)
+		}
+		o.Expect(expectedMem).To(o.Equal(actualMem))
+
 		g.By("SUCCESS - kata pod overhead verified")
 		g.By("TEARDOWN - deleting the kata pod")
 	})
