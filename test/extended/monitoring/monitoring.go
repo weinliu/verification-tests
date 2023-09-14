@@ -1104,12 +1104,9 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			)
 			g.By("create alertmanager and set external alertmanager for prometheus/thanosRuler under openshift-user-workload-monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", testAlertmanager)
-			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 
 			g.By("check alertmanager pod is created")
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "alertmanager=test-alertmanager", "-n", "openshift-user-workload-monitoring").Output()
-			o.Expect(output).To(o.ContainSubstring("alertmanager-test-alertmanager-0"))
-			o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.AssertPodToBeReady(oc, "alertmanager-test-alertmanager-0", "openshift-user-workload-monitoring")
 
 			g.By("create example PrometheusRule under user namespace")
 			oc.SetupProject()
@@ -1154,12 +1151,9 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 			g.By("create alertmanager and set external alertmanager for prometheus/thanosRuler under openshift-user-workload-monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", testAlertmanager)
-			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 
 			g.By("check alertmanager pod is created")
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "alertmanager=test-alertmanager", "-n", "openshift-user-workload-monitoring").Output()
-			o.Expect(output).To(o.ContainSubstring("alertmanager-test-alertmanager-0"))
-			o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.AssertPodToBeReady(oc, "alertmanager-test-alertmanager-0", "openshift-user-workload-monitoring")
 
 			g.By("create example PrometheusRule under user namespace")
 			oc.SetupProject()
