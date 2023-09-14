@@ -128,6 +128,11 @@ spec:
 		exutil.By("Check if it's an azure cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "azure")
 
+		mode, _ := getCloudCredentialMode(oc)
+		if mode != "passthrough" {
+			g.Skip("The cco mode is not passthrough - skipping test ...")
+		}
+
 		exutil.By("Check root credential has passthrough annotations")
 		o.Expect(doOcpReq(oc, "get", true, "secret", "-n", "kube-system", "azure-credentials", "-o=jsonpath={.metadata.annotations.cloudcredential\\.openshift\\.io/mode}")).Should(o.Equal("passthrough"))
 	})
@@ -435,6 +440,9 @@ data:
 		cmdOut, err := oc.AsAdmin().Run("get").Args("secret", "azure-credentials", "-n", "kube-system").Output()
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(cmdOut).To(o.ContainSubstring("Error from server (NotFound)"))
+
+		exutil.By("The secret should contain azure_federated_token_file instead of azure credential keys.")
+		o.Expect(strings.Contains(doOcpReq(oc, "get", true, "secrets", "-n", "openshift-image-registry", "installer-cloud-credentials", "-o=jsonpath={.data}"), "azure_federated_token_file")).Should(o.BeTrue())
 	})
 
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:fxie-Critical-64885-CCO-based flow for olm managed operators and AWS STS", func() {
