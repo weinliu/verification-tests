@@ -18,7 +18,7 @@ objects:
         type: RuntimeDefault
     containers:
     - name: userns-test-1
-      image: quay.io/openshifttest/centos@sha256:285bc3161133ec01d8ca8680cd746eecbfdbc1faa6313bd863151c4b26d7e5a5
+      image: quay.io/openshifttest/fedora@sha256:e01002e4dceea4fed7b2883f801a858defe5f9bc2a8a32029457e9d97352648c
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:
