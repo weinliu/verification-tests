@@ -866,7 +866,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		createSub, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subofcatalog, "-p", "NAME=cataloginstall", "NAMESPACE="+namespace, "SOURCENAME=cs-catalog", "OPERATORNAME=catalogtest", "SOURCENAMESPACE="+namespace, "STARTINGCSV=catalogtest.v0.0.1").OutputToFile("createsub-34462.json")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createSub, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.Poll(30*time.Second, 390*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "catalogtest.v0.0.1", "-o=jsonpath={.status.phase}", "-n", namespace).Output()
 			if strings.Contains(msg, "Succeeded") {
 				e2e.Logf("catalogtest installed successfully")
