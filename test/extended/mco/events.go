@@ -250,7 +250,7 @@ func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success boo
 
 		// Could not find an event with the sequence's reason. We fail the match
 		if !found {
-			logger.Errorf("%s event NOT Found after time %s", seqReason, lastEventTime)
+			logger.Infof("%s event NOT Found after time %s", seqReason, lastEventTime)
 			return false, nil
 		}
 	}

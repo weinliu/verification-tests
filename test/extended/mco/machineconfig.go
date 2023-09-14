@@ -13,6 +13,11 @@ import (
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
+// MachineConfigList handles list of nodes
+type MachineConfigList struct {
+	ResourceList
+}
+
 // MachineConfig struct is used to handle MachineConfig resources in OCP
 type MachineConfig struct {
 	Resource
@@ -26,6 +31,11 @@ type MachineConfig struct {
 func NewMachineConfig(oc *exutil.CLI, name, pool string) *MachineConfig {
 	mc := &MachineConfig{Resource: *NewResource(oc, "mc", name), pool: pool}
 	return mc.SetTemplate(*NewMCOTemplate(oc, GenericMCTemplate))
+}
+
+// NewMachineConfigList construct a new node list struct to handle all existing nodes
+func NewMachineConfigList(oc *exutil.CLI) *MachineConfigList {
+	return &MachineConfigList{*NewResourceList(oc, "mc")}
 }
 
 // SetTemplate sets the template that will be used by the "create" method in order to create the MC
@@ -128,4 +138,53 @@ func (mc *MachineConfig) GetAuthorizedKeysByUserAsList(user string) ([]string, e
 // GetIgnitionVersion returns the ignition version used in the MC
 func (mc *MachineConfig) GetIgnitionVersion() (string, error) {
 	return mc.Get(`{.spec.config.ignition.version}`)
+}
+
+// GetAll returns a []MachineConfig list with all existing MCs
+func (mcl *MachineConfigList) GetAll() ([]MachineConfig, error) {
+	allMCResources, err := mcl.ResourceList.GetAll()
+	if err != nil {
+		return nil, err
+	}
+	allMCs := make([]MachineConfig, 0, len(allMCResources))
+
+	for _, item := range allMCResources {
+		mcRes := item
+		// disable the log spam while getting the MCs' "pool"
+		mcRes.oc.NotShowInfo()
+		defer mcRes.oc.SetShowInfo()
+
+		allMCs = append(allMCs,
+			*NewMachineConfig(mcl.oc,
+				mcRes.name,
+				// TODO: why do we have to provide the pool in when constructing a MC.
+				// the pool is actually a label and there are machineconfigs without pool, it should not be mandatory
+				mcRes.GetOrFail(`{.metadata.labels.machineconfiguration\.openshift\.io/role}`)))
+	}
+
+	return allMCs, nil
+}
+
+// GetMachineConfigCreatedByMCPs returns a list of the machineconfigs that were created by a MCP
+func (mcl *MachineConfigList) GetMCPRenderedMachineConfigs() ([]MachineConfig, error) {
+	mcl.SetItemsFilter(`?(@.metadata.ownerReferences[0].kind=="MachineConfigPool")`)
+	return mcl.GetAll()
+}
+
+// GetMachineConfigsWithNameStartingWithRender returns a list with all the MCs  whose name starts with "render-"
+func (mcl *MachineConfigList) GetMachineConfigsWithNameStartingWithRender() ([]MachineConfig, error) {
+	allMCs, err := mcl.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	returnMCs := []MachineConfig{}
+
+	for _, mc := range allMCs {
+		if strings.HasPrefix(mc.GetName(), "rendered-") {
+			returnMCs = append(returnMCs, mc)
+		}
+	}
+
+	return returnMCs, nil
 }

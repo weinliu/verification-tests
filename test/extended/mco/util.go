@@ -210,7 +210,7 @@ func generateTemplateAbsolutePath(fileName string) string {
 		logger.Infof("mco fixture dir is initialized: %s", mcoBaseDir)
 	} else {
 		mcoBaseDir = fixturePathCache[mcoDirName]
-		logger.Infof("mco fixture dir found in cache: %s", mcoBaseDir)
+		logger.Debugf("mco fixture dir found in cache: %s", mcoBaseDir)
 	}
 	return filepath.Join(mcoBaseDir, fileName)
 }

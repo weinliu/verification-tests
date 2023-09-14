@@ -703,50 +703,96 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mcp.waitForComplete()
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-42681-rotate kubernetes certificate authority [Disruptive]", func() {
-		exutil.By("patch secret to trigger CA rotation")
-		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "-p", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`, "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator").Execute()
-		o.Expect(patchErr).NotTo(o.HaveOccurred())
+	g.It("Author:sregidor-NonPreRelease-Longduration-Critical-67395-rotate kubernetes certificate authority. Certificates managed via non-MC path.[Disruptive]", func() {
 
-		exutil.By("monitor update progress of mcp master and worker, new configs should be applied successfully")
-		mcpMaster := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
-		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
-		mcpMaster.waitForComplete()
-		mcpWorker.waitForComplete()
+		var (
+			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			mcList     = NewMachineConfigList(oc.AsAdmin())
+			certSecret = NewSecret(oc.AsAdmin(), "openshift-kube-apiserver-operator", "kube-apiserver-to-kubelet-signer")
+		)
 
-		exutil.By("check new generated rendered configs for kuberlet CA")
-		renderedConfs, renderedErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc", "--sort-by=metadata.creationTimestamp", "-o", "jsonpath='{.items[-2:].metadata.name}'").Output()
-		o.Expect(renderedErr).NotTo(o.HaveOccurred())
-		o.Expect(renderedConfs).NotTo(o.BeEmpty())
-		slices := strings.Split(strings.Trim(renderedConfs, "'"), " ")
-		var renderedMasterConf, renderedWorkerConf string
-		for _, conf := range slices {
-			if strings.Contains(conf, MachineConfigPoolMaster) {
-				renderedMasterConf = conf
-			} else if strings.Contains(conf, MachineConfigPoolWorker) {
-				renderedWorkerConf = conf
-			}
+		exutil.By("Get current kube-apiserver certificate and rendered configs")
+		logger.Infof("Get current kube-apiserver certificate")
+		initialCert := certSecret.GetDataValueOrFail("tls.crt")
+		logger.Infof("Current certificate length: %d", len(initialCert))
+
+		logger.Infof("Get currently rendered MCs")
+		initialMCs, err := mcList.GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the list of rendered MCs")
+		logger.Infof("%d rendered MCs", len(initialMCs))
+		logger.Infof("OK!\n")
+
+		exutil.By("Get start time and start collecting events.")
+		// be aware that windows nodes do not belong to any pool, we are skipping them
+		checkedNodes := append(mMcp.GetNodesOrFail(), wMcp.GetNodesOrFail()...)
+
+		startTime, dErr := checkedNodes[0].GetDate()
+		o.Expect(dErr).ShouldNot(o.HaveOccurred(), "Error getting date in node %s", checkedNodes[0].GetName())
+
+		for _, node := range checkedNodes {
+			o.Expect(node.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+				"Error getting the latest event in node %s", node.GetName())
 		}
-		logger.Infof("new rendered config generated for master: %s", renderedMasterConf)
-		logger.Infof("new rendered config generated for worker: %s", renderedWorkerConf)
+		logger.Infof("OK!\n")
 
-		exutil.By("check logs of machine-config-daemon on master-n-worker nodes, make sure CA change is detected, drain and reboot are skipped")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
+		exutil.By("Rotate certificate")
+		o.Expect(
+			certSecret.Patch("merge", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`),
+		).To(o.Succeed(),
+			"The secret could not be patched in order to rotate the certificate")
+		logger.Infof("OK!\n")
 
-		commonExpectedStrings := []string{"File diff: detected change to /etc/kubernetes/kubelet-ca.crt", "Changes do not require drain, skipping"}
-		expectedStringsForMaster := append(commonExpectedStrings, "Node has Desired Config "+renderedMasterConf+", skipping reboot")
-		expectedStringsForWorker := append(commonExpectedStrings, "Node has Desired Config "+renderedWorkerConf+", skipping reboot")
-		masterMcdLogs, masterMcdLogErr := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, masterNode.GetMachineConfigDaemon(), "")
-		o.Expect(masterMcdLogErr).NotTo(o.HaveOccurred())
-		workerMcdLogs, workerMcdLogErr := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, workerNode.GetMachineConfigDaemon(), "")
-		o.Expect(workerMcdLogErr).NotTo(o.HaveOccurred())
-		foundOnMaster := containsMultipleStrings(masterMcdLogs, expectedStringsForMaster)
-		o.Expect(foundOnMaster).Should(o.BeTrue())
-		logger.Infof("mcd log on master node %s contains expected strings: %v", masterNode.name, expectedStringsForMaster)
-		foundOnWorker := containsMultipleStrings(workerMcdLogs, expectedStringsForWorker)
-		o.Expect(foundOnWorker).Should(o.BeTrue())
-		logger.Infof("mcd log on worker node %s contains expected strings: %v", workerNode.name, expectedStringsForWorker)
+		exutil.By("Get new kube-apiserver certificate")
+		logger.Infof("Wait for certificate rotation")
+		o.Eventually(certSecret.GetDataValueOrFail).WithArguments("tls.crt").
+			ShouldNot(o.Equal(initialCert),
+				"The certificate was not rotated")
+
+		newCert := certSecret.GetDataValueOrFail("tls.crt")
+		logger.Infof("New certificate length: %d", len(newCert))
+
+		o.Expect(initialCert == newCert).NotTo(o.BeTrue(),
+			"The certificate was not rotated")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that no new MC is created")
+		o.Consistently(mcList.GetAll, "3m", "1m").Should(o.HaveLen(len(initialMCs)),
+			"New machine configs have been created, but they should not be created")
+		logger.Infof("OK!\n")
+
+		// We verify all nodes in the pools (be aware that windows nodes do not belong to any pool, we are skipping them)
+		for _, node := range append(wMcp.GetNodesOrFail(), mMcp.GetNodesOrFail()...) {
+			exutil.By(fmt.Sprintf("Checking that the certificate is rotated in node: %s", node.GetName()))
+
+			rfCert := NewRemoteFile(node, "/etc/kubernetes/kubelet-ca.crt")
+
+			// Eventually the certificate file in all nodes should contain the new rotated certificate
+			o.Eventually(func(gm o.Gomega) string { // Passing o.Gomega as parameter we can use assertions inside the Eventually function without breaking the retries.
+				gm.Expect(rfCert.Fetch()).To(o.Succeed(),
+					"Cannot read the certificate file in node:%s ", node.GetName())
+				return rfCert.GetTextContent()
+			}, "5m", "10s").
+				Should(o.ContainSubstring(newCert),
+					"The certificate file %s in node %s does not contain the new rotated certificate.", rfCert.GetFullPath(), node.GetName())
+			logger.Infof("OK!\n")
+
+			exutil.By(fmt.Sprintf("Checking that node: %s was not rebooted", node.GetName()))
+			o.Expect(node.GetUptime()).Should(o.BeTemporally("<", startTime),
+				"The node %s must NOT be rebooted after rotating the certificate, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
+
+			logger.Infof("OK!\n")
+
+			exutil.By(fmt.Sprintf("Checking events in node: %s", node.GetName()))
+			o.Expect(node.GetEvents()).NotTo(HaveEventsSequence("Drain"),
+				"Error, a Drain event was triggered but it shouldn't")
+			o.Expect(node.GetEvents()).NotTo(HaveEventsSequence("Reboot"),
+				"Error, a Reboot event was triggered but it shouldn't")
+
+			logger.Infof("OK!\n")
+
+		}
 	})
 
 	g.It("Author:rioliu-NonPreRelease-Longduration-High-43085-check mcd crash-loop-back-off error in log [Serial]", func() {
