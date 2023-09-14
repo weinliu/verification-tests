@@ -741,6 +741,11 @@ func PtrInt(a int) *int {
 	return &a
 }
 
+// PtrStr returns the pointer to a string
+func PtrStr(a string) *string {
+	return &a
+}
+
 // RemoveAllMCOPods removes all MCO pods in openshift-machine-config-operator namespace
 func RemoveAllMCOPods(oc *exutil.CLI) error {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-n", MachineConfigNamespace, "--all").Execute()

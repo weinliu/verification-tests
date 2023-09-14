@@ -68,7 +68,8 @@ func (matcher *conditionMatcher) Match(actual interface{}) (success bool, err er
 func (matcher *conditionMatcher) FailureMessage(actual interface{}) (message string) {
 	// The type was already validated in Match, we can safely ignore the error
 	resource, _ := actual.(ResourceInterface)
-	message = fmt.Sprintf("In resource %s, the following condition field '%s' failed to satisfy matcher.\n%s\n", resource, matcher.field, matcher.expectedMatcher.FailureMessage(matcher.value))
+	message = fmt.Sprintf("In resource %s, the following condition field '%s.%s' failed to satisfy matcher.\n%s\n", resource,
+		matcher.conditionType, matcher.field, matcher.expectedMatcher.FailureMessage(matcher.value))
 	message += matcher.currentCondition
 
 	return message
@@ -79,42 +80,26 @@ func (matcher *conditionMatcher) NegatedFailureMessage(actual interface{}) (mess
 	// The type was already validated in Match, we can safely ignore the error
 	resource, _ := actual.(ResourceInterface)
 
-	message = fmt.Sprintf("In resource %s, the following condition field '%s' failed satisified matcher, but it shouldn't:\n%s\n", resource, matcher.field, matcher.expectedMatcher.NegatedFailureMessage(matcher.value))
+	message = fmt.Sprintf("In resource %s, the following condition field '%s.%s' failed satisified matcher, but it shouldn't:\n%s\n", resource,
+		matcher.conditionType, matcher.field, matcher.expectedMatcher.NegatedFailureMessage(matcher.value))
 	message += matcher.currentCondition
-
-	return message
-}
-
-// NodeDegradedMessageMatcher struct implementing gomaega matcher interface to check message in the NodeDegraded condition
-type NodeDegradedMessageMatcher struct {
-	*conditionMatcher
-}
-
-// FailureMessage returns the message in case of successful match
-func (matcher *NodeDegradedMessageMatcher) FailureMessage(actual interface{}) (message string) {
-	// The type was already validated in Match, we can safely ignore the error
-	resource, _ := actual.(ResourceInterface)
-
-	message = fmt.Sprintf("Resource %s NodeDegraded message failed to satisfy matcher.\n%s condition: %s\n", resource, matcher.conditionType, matcher.currentCondition)
-	message += matcher.expectedMatcher.FailureMessage(matcher.value)
-
-	return message
-}
-
-// FailureMessage returns the message in case of failed match
-func (matcher *NodeDegradedMessageMatcher) NegatedFailureMessage(actual interface{}) (message string) {
-	// The type was already validated in Match, we can safely ignore the error
-	resource, _ := actual.(ResourceInterface)
-
-	message = fmt.Sprintf("Resource %s NodeDegraded message satisified matcher, but it should not.\n%s condition: %s", resource, matcher.conditionType, matcher.currentCondition)
-	message += matcher.expectedMatcher.NegatedFailureMessage(matcher.value)
 
 	return message
 }
 
 // HaveNodeDegradedMessage returns the gomega matcher to check if a resource is reporting the given degraded message
 func HaveNodeDegradedMessage(expected interface{}) types.GomegaMatcher {
-	return &NodeDegradedMessageMatcher{&conditionMatcher{conditionType: "NodeDegraded", field: "message", expected: expected}}
+	return &conditionMatcher{conditionType: "NodeDegraded", field: "message", expected: expected}
+}
+
+// HaveDegradedMessage returns the gomega matcher to check if a resource is reporting the given node degraded message
+func HaveDegradedMessage(expected interface{}) types.GomegaMatcher {
+	return &conditionMatcher{conditionType: "Degraded", field: "message", expected: expected}
+}
+
+// HaveAvailableMessage returns the gomega matcher to check if a resource is reporting the given node available message
+func HaveAvailableMessage(expected interface{}) types.GomegaMatcher {
+	return &conditionMatcher{conditionType: "Available", field: "message", expected: expected}
 }
 
 // DegradedMatcher struct implementing gomaega matcher interface to check Degraded condition
@@ -147,4 +132,36 @@ func (matcher *DegradedMatcher) NegatedFailureMessage(actual interface{}) (messa
 // BeDegraded returns the gomega matcher to check if a resource is degraded or not.
 func BeDegraded() types.GomegaMatcher {
 	return &DegradedMatcher{&conditionMatcher{conditionType: "Degraded", field: "status", expected: "True"}}
+}
+
+// AvailableMatcher struct implementing gomaega matcher interface to check "Available" condition
+type AvailableMatcher struct {
+	*conditionMatcher
+}
+
+// FailureMessage returns the message in case of successful match
+func (matcher *AvailableMatcher) FailureMessage(actual interface{}) (message string) {
+	// The type was already validated in Match, we can safely ignore the error
+	resource, _ := actual.(ResourceInterface)
+
+	message = fmt.Sprintf("Resource %s is NOT Available but it should.\n%s condition: %s\n", resource, matcher.conditionType, matcher.currentCondition)
+	message += matcher.expectedMatcher.FailureMessage(matcher.value)
+
+	return message
+}
+
+// FailureMessage returns the message in case of failed match
+func (matcher *AvailableMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	// The type was already validated in Match, we can safely ignore the error
+	resource, _ := actual.(ResourceInterface)
+
+	message = fmt.Sprintf("Resource %s is Available but it should not.\n%s condition: %s", resource, matcher.conditionType, matcher.currentCondition)
+	message += matcher.expectedMatcher.NegatedFailureMessage(matcher.value)
+
+	return message
+}
+
+// BeAvailable returns the gomega matcher to check if a resource is available or not.
+func BeAvailable() types.GomegaMatcher {
+	return &DegradedMatcher{&conditionMatcher{conditionType: "Available", field: "status", expected: "True"}}
 }
