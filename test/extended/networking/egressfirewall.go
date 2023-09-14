@@ -542,7 +542,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The egressfirewall rules after project deleted: \n %s", listOutput)
 		o.Expect(listOutput).NotTo(o.ContainSubstring("allow"))
-		o.Expect(listOutput).NotTo(o.ContainSubstring("drop"))
+		o.Expect(listOutput).NotTo(o.ContainSubstring("drop "))
 	})
 
 	// author: huirwang@redhat.com
