@@ -5,6 +5,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -26,6 +27,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		queryCredentialMode    = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=cco_credentials_mode"
 	)
 	g.BeforeEach(func() {
+		// TODO: need update code once https://issues.redhat.com/browse/MULTIARCH-3670 is done.
+		architecture.SkipNonAmd64SingleArch(oc)
 		e2e.Logf("Check for Authentication operator status before test.")
 		checkCoStatus(oc, "authentication", authenticationCoStatus)
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
