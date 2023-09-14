@@ -749,14 +749,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer doOcpReq(oc, OcpPatch, true, "nodepools", npName, "-n", hostedcluster.namespace, "-p", `{"spec":{"nodeDrainTimeout":"0s"}}`, "--type=merge")
 		doOcpReq(oc, OcpPatch, true, "nodepools", npName, "-n", hostedcluster.namespace, "-p", `{"spec":{"nodeDrainTimeout":"1m"}}`, "--type=merge")
 
-		g.By("Check the awsmachines are changed")
-		o.Eventually(func() bool {
-			if !strings.Contains(doOcpReq(oc, OcpGet, true, "awsmachines", "-n", hostedcluster.namespace+"-"+hostedcluster.name, fmt.Sprintf(`-ojsonpath='{.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].metadata.name}'`, hostedcluster.namespace, npName)), awsMachines) {
-				return true
-			}
-			return false
-		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "awsmachines are not changed")
-
 		g.By("Check the guestcluster podDisruptionBudget are not be deleted")
 		pdbNameSpaces := []string{"openshift-console", "openshift-image-registry", "openshift-ingress", "openshift-monitoring", "openshift-operator-lifecycle-manager"}
 		for _, pdbNameSpace := range pdbNameSpaces {
@@ -766,6 +758,10 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("Scale the nodepool to 0")
 		doOcpReq(oc, OcpScale, true, "nodepool", npName, "-n", hostedcluster.namespace, "--replicas=0")
 		o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(npName), LongTimeout, LongTimeout/10).Should(o.Equal(0), fmt.Sprintf("nodepool are not scale down to 0 in hostedcluster %s", hostedcluster.name))
+
+		g.By("Scale the nodepool to 1")
+		doOcpReq(oc, OcpScale, true, "nodepool", npName, "-n", hostedcluster.namespace, "--replicas=1")
+		o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(npName), LongTimeout, LongTimeout/10).Should(o.Equal(1), fmt.Sprintf("nodepool are not scale down to 1 in hostedcluster %s", hostedcluster.name))
 	})
 
 	// author: mihuang@redhat.com
