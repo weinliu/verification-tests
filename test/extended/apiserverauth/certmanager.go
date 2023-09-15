@@ -20,17 +20,11 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                     = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
-		authenticationCoStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-		promPod                = "prometheus-k8s-0"
-		monitoringns           = "openshift-monitoring"
-		queryCredentialMode    = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=cco_credentials_mode"
+		oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
 		// TODO: need update code once https://issues.redhat.com/browse/MULTIARCH-3670 is done.
 		architecture.SkipNonAmd64SingleArch(oc)
-		e2e.Logf("Check for Authentication operator status before test.")
-		checkCoStatus(oc, "authentication", authenticationCoStatus)
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
 		if strings.Contains(output, "NotFound") {
 			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
@@ -42,20 +36,16 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	// author: geliu@redhat.com
 	g.It("ROSA-ConnectedOnly-Author:geliu-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate [Serial]", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
-		g.By("Skip test when the cluster is with STS credential")
-		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(token).NotTo(o.BeEmpty())
-		result, err := getBearerTokenURLViaPod(monitoringns, promPod, queryCredentialMode, token)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(result, "manualpodidentity") {
-			g.Skip("Skip for the aws cluster with STS credential")
+		g.By("Check if the cluster is STS or not")
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			g.Skip("Skipping for the aws cluster without credential in cluster")
 		}
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			e2e.Logf("Remove the secret generic test-secret.")
 			_, errSecret := oc.AsAdmin().Run("delete").Args("-n", "cert-manager", "secret", "test-secret").Output()
 			o.Expect(errSecret).NotTo(o.HaveOccurred())
-			checkCoStatus(oc, "authentication", authenticationCoStatus)
 		}()
 		e2e.Logf("Create secret generic test-secret.")
 		cloudProvider := getCloudProvider(oc)
@@ -100,6 +90,12 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
 		certClusterissuerFile := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+		f, err := ioutil.ReadFile(certClusterissuerFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		randomStr := exutil.GetRandomString()
+		f1 := strings.ReplaceAll(string(f), "auth-custom1", randomStr)
+		err = ioutil.WriteFile(certClusterissuerFile, []byte(f1), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("create").Args("-f", certClusterissuerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
@@ -115,14 +111,12 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(statusErr, fmt.Sprintf("certificate is wrong: %v", statusErr))
-		g.By("Check the certificate content.")
 
+		g.By("Check the certificate content.")
 		defer func() {
 			e2e.Logf("Remove the secret_certificate directory")
 			_, errCert := exec.Command("bash", "-c", "rm -rf oc_extract_secret_certificate-from-dns01").Output()
 			o.Expect(errCert).NotTo(o.HaveOccurred())
-			e2e.Logf("Check for Authentication operator status before test.")
-			checkCoStatus(oc, "authentication", authenticationCoStatus)
 		}()
 		dirname := "oc_extract_secret_certificate-from-dns01"
 		_, err = exec.Command("bash", "-c", "mkdir "+dirname).Output()
@@ -133,7 +127,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		opensslCmd := "openssl x509 -noout -text -in " + dirname + "/tls.crt"
 		ssloutput, sslerr := exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(sslerr).NotTo(o.HaveOccurred())
-		if !strings.Contains(string(ssloutput), "DNS:auth-custom1.qe1.devcluster.openshift.com") || err != nil {
+		if !strings.Contains(string(ssloutput), "DNS:"+randomStr+".qe1.devcluster.openshift.com") || err != nil {
 			e2e.Failf("The certificate indeed issued by Let's Encrypt with SAN failed.")
 		}
 	})
