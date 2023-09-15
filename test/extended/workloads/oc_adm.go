@@ -36,6 +36,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		for i := 0; i < 4; i++ {
 			err := oc.Run("start-build").Args("bc/must-gather", "-n", ns10618).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			time.Sleep(30 * time.Second)
 		}
 		out, err := oc.AsAdmin().Run("adm").Args("prune", "builds", "-h").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -50,9 +51,17 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		pruneBuildCMD := fmt.Sprintf("oc adm prune builds --keep-complete=%v --keep-younger-than=1s --keep-failed=1 --confirm  |grep %s|awk '{print $2}'", keepCompletedRsNum, ns10618)
 
 		g.By("Get the expected prune build list from dry run")
+		buildbeforedryrun, err := oc.Run("get").Args("build", "-n", ns10618, "-o=jsonpath={.items[?(@.status.phase == \"Complete\")].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		buildListPre := strings.Fields(buildbeforedryrun)
+		e2e.Logf("the remain build list is %v", buildListPre)
 		expectedPruneRsName := getPruneResourceName(expectedPrunebuildcmdDryRun)
 
 		g.By("Get the pruned build list")
+		buildbeforeprune, err := oc.Run("get").Args("build", "-n", ns10618, "-o=jsonpath={.items[?(@.status.phase == \"Complete\")].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		buildListPre2 := strings.Fields(buildbeforeprune)
+		e2e.Logf("the remain build list is %v", buildListPre2)
 		prunedBuildName := getPruneResourceName(pruneBuildCMD)
 		if comparePrunedRS(expectedPruneRsName, prunedBuildName) {
 			e2e.Logf("Checked the pruned resources is expected")
