@@ -105,7 +105,13 @@ func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason interface
 			e2e.Logf("Retrying for expected kube-apiserver admission webhook error ::: %s ::: %s ::: %s ::: %s", conditionStatus, webhookError, webHookErrorConditionType, conditionReason)
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Test Fail: Expected Kube-apiserver admissionwebhook errors not present.")
+
+		if err != nil {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ValidatingWebhookConfiguration").Output()
+			e2e.Logf("#### Debug #### List all ValidatingWebhookConfiguration when the case runs into failures:%s\n", output)
+			exutil.AssertWaitPollNoErr(err, "Test Fail: Expected Kube-apiserver admissionwebhook errors not present.")
+		}
+
 	}
 }
 
