@@ -5,6 +5,7 @@ import (
 
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -161,6 +162,66 @@ func waitForMicroshiftAfterRestart(oc *exutil.CLI, nodename string) {
 	exutil.AssertWaitPollNoErr(mStatusErr, fmt.Sprintf("Microshift failed to restart: %v", mStatusErr))
 }
 
+// make sure the PVC is Bound to the PV
+func waitForPvcStatus(oc *exutil.CLI, namespace string, pvcname string) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		pvStatus, err := oc.AsAdmin().Run("get").Args("-n", namespace, "pvc", pvcname, "-o=jsonpath='{.status.phase}'").Output()
+		if err != nil {
+			return false, err
+		}
+		if match, _ := regexp.MatchString("Bound", pvStatus); match {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The PVC is not Bound as expected")
+}
+
+// make sure the PVC is Bound to the PV
+func waitForOneOffBackupToComplete(oc *exutil.CLI, namespace string, bkpname string) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		pvStatus, err := oc.AsAdmin().Run("get").Args("-n", namespace, "etcdbackup", bkpname, "-o=jsonpath='{.status.conditions[*].reason}'").Output()
+		if err != nil {
+			return false, err
+		}
+		if match, _ := regexp.MatchString("BackupCompleted", pvStatus); match {
+			e2e.Logf("OneOffBkpJob status is %v", pvStatus)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The BackupJob is not Completed as expected")
+}
+
+func getOneBackupFile(oc *exutil.CLI, namespace string, bkpname string) string {
+	bkpfile := ""
+	bkpmsg, err := oc.AsAdmin().Run("get").Args("-n", namespace, "etcdbackup", bkpname, "-o=jsonpath='{.status.conditions[*].message}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	bkpmsgList := strings.Fields(bkpmsg)
+	for _, bmsg := range bkpmsgList {
+		if match, _ := regexp.MatchString("backup-test", bmsg); match {
+			e2e.Logf("backupfile is %v", bmsg)
+			bkpfile = bmsg
+			break
+		}
+	}
+	return bkpfile
+}
+
+func verifyBkpFileCreationHost(oc *exutil.CLI, nodeNameList []string, bkpPath string, bkpFile string) bool {
+	cmd := "ls -lrt " + bkpPath
+	for _, node := range nodeNameList {
+		resultOutput, err := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", cmd)
+		if strings.Contains(resultOutput, bkpFile) && err == nil {
+			e2e.Logf("OneOffBackupFile %v successfully verified on node %v", bkpFile, node)
+			return true
+		}
+		e2e.Logf("Trying for next node since BackupFile is not found on this node %v", node)
+	}
+	return false
+
+}
+
 func verifyEtcdClusterMsgStatus(oc *exutil.CLI, msg string, status string) bool {
 	etcdStatus, errSt := oc.AsAdmin().WithoutNamespace().Run("get").Args("etcd", "cluster", "-o=jsonpath='{.status.conditions[?(@.reason==\"BootstrapAlreadyRemoved\")].status}'").Output()
 	o.Expect(errSt).NotTo(o.HaveOccurred())
@@ -201,7 +262,20 @@ func checkOperator(oc *exutil.CLI, operatorName string) {
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "clusteroperator abnormal")
+	exutil.AssertWaitPollNoErr(err, "clusteroperator is abnormal")
+}
+
+func isCRDExisting(oc *exutil.CLI, crd string) bool {
+	output, err := oc.AsAdmin().Run("get").Args("CustomResourceDefinition", crd, "-o=jsonpath={.metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Compare(output, crd) == 0
+}
+func createCRD(oc *exutil.CLI, filename string) {
+	baseDir := exutil.FixturePath("testdata", "etcd")
+	crdTemplate := filepath.Join(baseDir, filename)
+	err := oc.AsAdmin().Run("create").Args("-f", crdTemplate).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Successfully created CRD")
 }
 
 // make sure all the ectd pods are running
