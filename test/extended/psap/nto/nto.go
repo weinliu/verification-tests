@@ -132,7 +132,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", overrideFile, "REAPPLY_SYSCTL=true")
 
 		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "override")
+		assertIfTunedProfileApplied(oc, ntoNamespace, workerNodeName, "override")
 
 		g.By("Check value of fs.inotify.max_user_instances on node (set by sysctl, should be the same as before), expected value is 8192")
 		maxUserInstanceCheck, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, workerNodeName, []string{"-q"}, "sysctl", "fs.inotify.max_user_instances")
@@ -292,7 +292,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(renderCheck).To(o.ContainSubstring("nf-conntrack-max"))
 
 		g.By("Assert nf-conntrack-max applied to the node that web application run on it.")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "nf-conntrack-max")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "nf-conntrack-max")
 
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -365,12 +365,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(renderCheck).NotTo(o.ContainSubstring("nf-conntrack-max"))
 
 		if isSNO || is3Master {
-			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-control-plane")
+			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-control-plane")
 			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(profileCheck).To(o.Equal("openshift-control-plane"))
 		} else {
-			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node")
+			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node")
 			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(profileCheck).To(o.Equal("openshift-node"))
@@ -486,7 +486,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		compareSysctlDifferentFromSpecifiedValueByName(oc, "kernel.pid_max", "128888")
 
 		g.By("Label tuned pod as tuned.openshift.io/elasticsearch=")
-		err = exutil.LabelPod(oc, ntoNamespace, tunedPodName, "tuned.openshift.io/elasticsearch=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", tunedPodName, "-n", ntoNamespace, "tuned.openshift.io/elasticsearch=", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check current profile for each node")
@@ -609,7 +609,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cgroupSchedulerBacklist, "-p", "PROFILE_NAME=cgroup-scheduler-affinecpuset", `CGROUP_BLACKLIST=/kubepods\.slice/`)
 
 		g.By("Check if NTO custom tuned profile cgroup-scheduler-affinecpuset was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "cgroup-scheduler-affinecpuset")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "cgroup-scheduler-affinecpuset")
 
 		g.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
@@ -688,13 +688,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(renderCheck).To(o.ContainSubstring("user-max-mnt-namespaces"))
 
 		//Verify if the new profile is applied
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "user-max-mnt-namespaces")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "user-max-mnt-namespaces")
 		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-mnt-namespaces"))
 
 		g.By("Assert static tuning from profile 'user-max-mnt-namespaces' applied in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `static tuning from profile 'user-max-mnt-namespaces' applied|active and recommended profile \(user-max-mnt-namespaces\) match`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `static tuning from profile 'user-max-mnt-namespaces' applied|active and recommended profile \(user-max-mnt-namespaces\) match`)
 
 		g.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
@@ -710,18 +710,18 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Check if restore to default profile.
 		isSNO := exutil.IsSNOCluster(oc)
 		if isSNO || is3CPNoWorker {
-			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-control-plane")
+			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-control-plane")
 			assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "openshift-control-plane")
 			g.By("Assert static tuning from profile 'openshift-control-plane' applied in tuned pod log")
-			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `static tuning from profile 'openshift-control-plane' applied|active and recommended profile \(openshift-control-plane\) match`)
+			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `static tuning from profile 'openshift-control-plane' applied|active and recommended profile \(openshift-control-plane\) match`)
 
 			profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(profileCheck).To(o.Equal("openshift-control-plane"))
 		} else {
-			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node")
+			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node")
 			g.By("Assert static tuning from profile 'openshift-node' applied in tuned pod log")
-			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `static tuning from profile 'openshift-node' applied|active and recommended profile \(openshift-node\) match`)
+			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `static tuning from profile 'openshift-node' applied|active and recommended profile \(openshift-node\) match`)
 			profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(profileCheck).To(o.Equal("openshift-node"))
@@ -1057,9 +1057,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Clean up the custom profile user-max-mnt-namespaces and unlabel the nginx pod
 		defer ntoRes.delete(oc)
 
+		//First choice to use [tests] image, the image mirrored by default in disconnected cluster
+		//if don't have [tests] image in some environment, we can use hello-openshift as image
+		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
+		AppImageName := exutil.GetImagestreamImageName(oc, "tests")
+		if len(AppImageName) == 0 {
+			AppImageName = "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
+		}
+
 		//Create a nginx web application pod
 		g.By("Create a nginx web pod in nto temp namespace")
-		exutil.ApplyOperatorResourceByYaml(oc, ntoTestNS, podNginxFile)
+		exutil.ApplyNsResourceFromTemplate(oc, ntoTestNS, "--ignore-unknown-parameters=true", "-f", podNginxFile, "-p", "IMAGENAME="+AppImageName)
 
 		//Check if nginx pod is ready
 		exutil.AssertPodToBeReady(oc, "nginx", ntoTestNS)
@@ -1174,7 +1182,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the same node that labeled node
-		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		//tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
 		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
 		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-rt", "worker-rt", 300)
@@ -1207,7 +1215,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Assert if openshift-realtime profile was applied ...")
 		//Verify if the new profile is applied
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-realtime")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-realtime")
 		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("openshift-realtime"))
@@ -1413,7 +1421,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-performance-performance"))
 
 		g.By("Check if new NTO profile openshift-node-performance-performance was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node-performance-performance")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node-performance-performance")
 
 		g.By("Check if profile openshift-node-performance-performance applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -1471,7 +1479,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 600)
 
 		g.By("Check if new NTO profile performance-patch was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "performance-patch")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "performance-patch")
 
 		g.By("Check if contains static tuning from profile 'performance-patch' applied in tuned pod logs on labeled nodes")
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "static tuning from profile 'performance-patch' applied")
@@ -1598,7 +1606,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if new NTO profile performance-patch was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "include-performance-profile")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "include-performance-profile")
 
 		g.By("Check if profile what's active profile applied on nodes")
 		nodeProfileName, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -1742,7 +1750,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(openshift-profile-stuck\) match`)
 
 		g.By("Check if new NTO profile openshift-profile-stuck was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-profile-stuck")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-profile-stuck")
 
 		g.By("Check if profile what's active profile applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -1773,7 +1781,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the same node that labeled node
-		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		//tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
 		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
 		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-hp", "worker-hp", 300)
@@ -1809,7 +1817,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node-hugepages")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node-hugepages")
 
 		g.By("Check if profile openshift-node-hugepages applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -1880,7 +1888,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		//Get the tuned pod name in the same node that labeled node
-		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		//tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-stalld", "-n", ntoNamespace, "--ignore-not-found").Execute()
@@ -1912,7 +1920,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-stalld")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-stalld")
 
 		g.By("Check if profile openshift-stalld applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -1933,7 +1941,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", stalldTunedFile, "-p", "STALLD_STATUS=stop,disable")
 
 		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-stalld")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-stalld")
 
 		g.By("Check if stalld service is inactive and stopped ...")
 		//Return an error when the systemctl status stalld is inactive, so err for o.Expect as expected.
@@ -1945,7 +1953,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", stalldTunedFile, "-p", "STALLD_STATUS=start,enable")
 
 		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-stalld")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-stalld")
 
 		g.By("Check if stalld service is running again ...")
 		stalldStatus, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
@@ -2004,7 +2012,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(tunedNames).To(o.ContainSubstring("openshift-node-postgresql"))
 
 		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node-postgresql")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node-postgresql")
 
 		g.By("Check if profile openshift-node-postgresql applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -2023,10 +2031,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("NonHyperShiftHOST-Author:liqcui-Medium-49705-Tuned net plugin handle net devices with n/a value for a channel. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
-			g.Skip("NTO is not installed - skipping test ...")
+			g.Skip("NTO is not installed or hosted cluster - skipping test ...")
 		}
 
-		if iaasPlatform == "vsphere" || iaasPlatform == "openstack" || iaasPlatform == "none" {
+		if iaasPlatform == "vsphere" || iaasPlatform == "openstack" || iaasPlatform == "none" || iaasPlatform == "powervs" {
 			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
 		}
 
@@ -2080,7 +2088,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "18", 300, `profile 'net-plugin' applied|profile \(net-plugin\) match`)
 
 		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "net-plugin")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "net-plugin")
 
 		g.By("Check if profile net-plugin applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -2347,7 +2355,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if new NTO profile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-stalld")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-stalld")
 
 		g.By("Check if profile openshift-stalld applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -2473,7 +2481,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if new NTO profile openshift-node-performance-pao-baseprofile was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node-performance-pao-baseprofile")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node-performance-pao-baseprofile")
 
 		g.By("Check if profile openshift-node-performance-pao-baseprofile applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -2655,7 +2663,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cgroupSchedulerBacklist, "-p", "PROFILE_NAME=cgroup-scheduler-blacklist", `CGROUP_BLACKLIST=/kubepods\.slice/kubepods-burstable\.slice/;/system\.slice/`)
 
 		g.By("Check if NTO custom tuned profile cgroup-scheduler-blacklist was applied")
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "cgroup-scheduler-blacklist")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "cgroup-scheduler-blacklist")
 
 		g.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
@@ -2705,7 +2713,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//e2e.Logf("The image of NTO is: \n%v", ntoImage)
 
 		//Get the tuned pod name in the same node that labeled node
-		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		//tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
 		//Get NTO Operator Pod Name
 		ntoOperatorPodName := getNTOOperatorPodName(oc, ntoNamespace)
@@ -2757,7 +2765,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Assert if openshift-bootcmdline-cpu profile was applied ...")
 		//Verify if the new profile is applied
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-bootcmdline-cpu")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-bootcmdline-cpu")
 		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("openshift-bootcmdline-cpu"))
@@ -2874,7 +2882,21 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("ROSA-NonHyperShiftHOST-Author:liqcui-Medium-65371-NTO TuneD prevent from reverting node level profiles on termination [Disruptive]", func() {
 
 		//Use the last worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		var (
+			edgeNodeName  string
+			tunedNodeName string
+			err           error
+		)
+		edgeNodeName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/edge", "-oname").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if edgeNodeName == "node/"+tunedNodeName {
+			tunedNodeName, err = exutil.GetLastLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the same node that labeled node
@@ -2921,7 +2943,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterVersion).NotTo(o.BeEmpty())
 
-		e2e.Logf("Current profile for each node: \n%v", output)
 		g.By("Create pod that deletect the value of kernel.pid_max ")
 		exutil.ApplyNsResourceFromTemplate(oc, ntoTestNS, "--ignore-unknown-parameters=true", "-f", podSysctlFile, "-p", "IMAGE_NAME="+AppImageName, "RUNASNONROOT=true")
 

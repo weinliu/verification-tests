@@ -1,7 +1,6 @@
 package nto
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,7 +11,6 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -21,13 +19,15 @@ import (
 func isNTOPodInstalled(oc *exutil.CLI, namespace string) bool {
 
 	e2e.Logf("Checking if pod is found in namespace %s...", namespace)
-	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
+
+	ntoDeployment, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", namespace, "-ojsonpath='{.items[*].metadata.name}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if len(podList.Items) == 0 {
-		e2e.Logf("No pod found in namespace %s :(", namespace)
+
+	if len(ntoDeployment) == 0 {
+		e2e.Logf("No deployment cluster-node-tuning-operator found in namespace %s :(", namespace)
 		return false
 	}
-	e2e.Logf("Pod found in namespace %s!", namespace)
+	e2e.Logf("Deployment %v found in namespace %s!", ntoDeployment, namespace)
 	return true
 }
 
@@ -87,21 +87,16 @@ func getTunedProfile(oc *exutil.CLI, namespace string, tunedNodeName string) (st
 }
 
 // assertIfTunedProfileApplied checks the logs for a given tuned pod in a given namespace to see if the expected profile was applied
-func assertIfTunedProfileApplied(oc *exutil.CLI, namespace string, tunedPodName string, profile string) {
+func assertIfTunedProfileApplied(oc *exutil.CLI, namespace string, tunedNodeName string, tunedName string) {
 
-	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		podLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, "--tail=9", tunedPodName).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		isApplied := strings.Contains(podLogs, "tuned.daemon.daemon: static tuning from profile '"+profile+"' applied")
-		if !isApplied {
-			e2e.Logf("Profile '%s' has not yet been applied to %s - retrying...", profile, tunedPodName)
-			return false, nil
+	o.Eventually(func() bool {
+		appliedStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profile", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+		tunedProfile, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profile", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
+		if err1 != nil || err2 != nil || strings.Contains(appliedStatus, "False") || strings.Contains(appliedStatus, "Unknown") || tunedProfile != tunedName {
+			e2e.Logf("failed to apply custom profile to nodes, the status is %s and profile is %s, check again", appliedStatus, tunedProfile)
 		}
-		e2e.Logf("Profile '%s' has been applied to %s - continuing...", profile, tunedPodName)
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Profile was not applied to %s within timeout limit (30 seconds)", tunedPodName))
+		return strings.Contains(appliedStatus, "True") && tunedProfile == tunedName
+	}, 15*time.Second, time.Second).Should(o.BeTrue())
 }
 
 // assertIfNodeSchedulingDisabled checks all nodes in a cluster to see if 'SchedulingDisabled' status is present on any node

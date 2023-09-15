@@ -10,6 +10,8 @@ objects:
       labels:
         app: sysctlpod
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker-tuning: ""
       containers:
       - name: sysctlpod
         securityContext:
