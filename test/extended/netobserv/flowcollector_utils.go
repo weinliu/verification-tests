@@ -106,7 +106,7 @@ func (lokilabels Lokilabels) getLokiQuery(parameters ...string) string {
 			case "RecordType":
 				lokiQuery += fmt.Sprintf("_%s=\"%s\", ", label.Type().Field(i).Name, label.Field(i).Interface())
 			case "FlowDirection":
-				if label.Field(i).Interface() == "0" || label.Field(i).Interface() == "1" {
+				if label.Field(i).Interface() == "0" || label.Field(i).Interface() == "1" || label.Field(i).Interface() == "2" {
 					lokiQuery += fmt.Sprintf("%s=\"%s\", ", label.Type().Field(i).Name, label.Field(i).Interface())
 				}
 			default:

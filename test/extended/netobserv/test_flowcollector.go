@@ -741,7 +741,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			App:              "netobserv-flowcollector",
 			SrcK8S_Namespace: SCTPns,
 			DstK8S_Namespace: SCTPns,
-			FlowDirection:    "0",
 		}
 
 		g.By("Verify SCTP flows are seen on loki")
