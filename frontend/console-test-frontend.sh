@@ -59,7 +59,7 @@ trap copyArtifacts EXIT
 
 # clone upstream console repo and create soft link
 set -x
-git clone -b master https://github.com/openshift/console.git upstream_console && cd upstream_console/frontend && yarn install
+git clone -b master --depth=1 https://github.com/openshift/console.git upstream_console && cd upstream_console/frontend && yarn install
 cd ../../
 ln -s ./upstream_console/frontend/packages/integration-tests-cypress upstream
 
