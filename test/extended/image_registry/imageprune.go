@@ -30,6 +30,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		tolerationsInfo      = `[{"effect":"NoSchedule","key":"key","operator":"Equal","value":"value"}]`
 		imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 	)
+	g.BeforeEach(func() {
+		if !checkOptionalOperatorInstalled(oc, "ImageRegistry") {
+			g.Skip("Skip for the test due to image registry not installed")
+		}
+	})
+
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:wewang-High-27613-registry operator can publish metrics reporting the status of image-pruner [Disruptive]", func() {
 		g.By("granting the cluster-admin role to user")

@@ -19,6 +19,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	var (
 		oc = exutil.NewCLI("default-registry-upgrade", exutil.KubeConfigPath())
 	)
+	g.BeforeEach(func() {
+		if !checkOptionalOperatorInstalled(oc, "ImageRegistry") {
+			g.Skip("Skip for the test due to image registry not installed")
+		}
+	})
+
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined prepare [Disruptive]", func() {
 		var (

@@ -1269,3 +1269,23 @@ func getManifestList(oc *exutil.CLI, image, auth string) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.TrimSuffix(string(manifestList), "\n")
 }
+
+func checkOptionalOperatorInstalled(oc *exutil.CLI, operator string) bool {
+	baselineCapabilitySet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.spec.capabilities.baselineCapabilitySet}").Output()
+	if err != nil {
+		e2e.Failf("get baselineCapabilitySet failed err %v .", err)
+	}
+	if baselineCapabilitySet != "None" {
+		return true
+	}
+	installedOperators, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
+	if err != nil {
+		e2e.Failf("get enabledCapabilities failed err %v .", err)
+	}
+	if strings.Contains(installedOperators, operator) {
+		e2e.Logf("The %v operator is installed", operator)
+		return true
+	}
+	e2e.Logf("The %v operator is not installed", operator)
+	return false
+}

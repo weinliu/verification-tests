@@ -50,6 +50,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	g.BeforeEach(func() {
 		var message string
+		if !checkOptionalOperatorInstalled(oc, "ImageRegistry") {
+			g.Skip("Skip for the test due to image registry not installed")
+		}
 		waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())

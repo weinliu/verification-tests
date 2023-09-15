@@ -17,6 +17,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc           = exutil.NewCLI("default-image-oci", exutil.KubeConfigPath())
 		manifestType = "application/vnd.oci.image.manifest.v1+json"
 	)
+	g.BeforeEach(func() {
+		if !checkOptionalOperatorInstalled(oc, "ImageRegistry") {
+			g.Skip("Skip for the test due to image registry not installed")
+		}
+	})
+
 	// author: wewang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:wewang-VMonly-ConnectedOnly-High-36291-OCI image is supported by API server and image registry", func() {
 		var containerCLI = container.NewPodmanCLI()
