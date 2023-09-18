@@ -274,6 +274,12 @@ func (c CLI) WithoutKubeconf() *CLI {
 	return &c
 }
 
+// WithKubectl instructs the command should be invoked with binary kubectl, not oc.
+func (c CLI) WithKubectl() *CLI {
+	c.execPath = "kubectl"
+	return &c
+}
+
 // AsGuestKubeconf instructs the command should take kubeconfig of guest cluster
 func (c CLI) AsGuestKubeconf() *CLI {
 	c.asGuestKubeconf = true
