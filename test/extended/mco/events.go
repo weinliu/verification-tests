@@ -282,7 +282,7 @@ func (matcher *haveEventsSequenceMatcher) NegatedFailureMessage(actual interface
 
 	output := "Expecte events\n"
 	for _, event := range events {
-		output += output + fmt.Sprintf("-  %s\n", event)
+		output += fmt.Sprintf("-  %s\n", event)
 	}
 	output += output + fmt.Sprintf("NOT to contain this reason sequence\n\t%s\n", matcher.sequence)
 

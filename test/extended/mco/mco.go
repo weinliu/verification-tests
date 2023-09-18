@@ -731,9 +731,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		startTime, dErr := checkedNodes[0].GetDate()
 		o.Expect(dErr).ShouldNot(o.HaveOccurred(), "Error getting date in node %s", checkedNodes[0].GetName())
 
-		for _, node := range checkedNodes {
-			o.Expect(node.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
-				"Error getting the latest event in node %s", node.GetName())
+		for i := range checkedNodes {
+			o.Expect(checkedNodes[i].IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+				"Error getting the latest event in node %s", checkedNodes[i].GetName())
 		}
 		logger.Infof("OK!\n")
 
