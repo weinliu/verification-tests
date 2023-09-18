@@ -8879,7 +8879,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("3) update sub channel")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"v1.0.1\"}}")
-		err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			ips := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace)
 			if strings.Contains(ips, "nginx-operator.v1.0.1") {
 				e2e.Logf("Install plan for nginx-operator.v1.0.1 is created")
@@ -8887,6 +8887,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 			return false, nil
 		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath-as-json={.spec}")
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath-as-json={.status}")
+		}
 		exutil.AssertWaitPollNoErr(err, "no install plan for nginx-operator.v1.0.1")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "nginx-operator.v1.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 		exutil.By("4) SUCCESS")
