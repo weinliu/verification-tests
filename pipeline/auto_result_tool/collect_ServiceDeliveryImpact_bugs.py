@@ -138,6 +138,7 @@ class CollectClient:
         spreadsheet = self.gclient.open_by_url(self.target_file)
         worksheet = spreadsheet.worksheet("ServiceDeliveryImpact Bugs")
         values_list_all = worksheet.get_all_values()
+        self.logger.info(issues.keys())
         for row in range(1, len(values_list_all)):
             values_list = values_list_all[row]
             self.logger.debug("check row %s: %s", str(row+1), str(values_list))
@@ -161,6 +162,20 @@ class CollectClient:
                 worksheet.update_acell("H"+str(row+1), issues[bug_id]['Target Version'])
                 self.logger.info("update H%s: %s", str(row+1), issues[bug_id]['Target Version'])
                 time.sleep(2)
+            if len(values_list) > 16:
+                if "Done" in values_list[16]:
+                    self.logger.info(bug_id + " is Done")
+                else:
+                    trackJIRAstr = values_list[13]
+                    assigneeStr = values_list[14]
+                    if trackJIRAstr:
+                        trackJIR =  "OCPQE-" + trackJIRAstr.strip().split("OCPQE-")[-1]
+                        trackJIRAIssue = self.jiraManager.jira.issue(trackJIR)
+                        assginee = trackJIRAIssue.fields.assignee
+                        if assigneeStr not in str(assginee):
+                            self.logger.info("update O%s: %s", str(row+1), assginee)
+                            worksheet.update_acell("O"+str(row+1), str(assginee))
+
             issues.pop(bug_id)
             
         for bug_id in issues.keys():
@@ -198,15 +213,13 @@ Automated: the new test case is automated, if the case is manual only, please ma
             bug_id = values_list[0]
             type = values_list[2]
             component = values_list[3]
-            qa_contact = values_list[5]
-            bug_status = values_list[6]
-            rcaed = values_list[8]
-            tested = values_list[9]
-            automated = values_list[10]
+            jiraStr = values_list[13]
+            isDone = values_list[16]
+            qa_contact = values_list[14]
             if "bug" not in type.lower():
                 continue
-            if bug_status.lower() == "verified" or bug_status.lower() == "closed" or bug_status.lower() == "on_qa":
-                if not rcaed or not tested or not automated:
+            if jiraStr:
+                if "Done" not in isDone:
                     message_list.append(bug_id + " "+ component +" @" +qa_contact.split(os.linesep)[0])
         self.logger.info(os.linesep.join(message_list))
     
