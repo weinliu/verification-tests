@@ -74,7 +74,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	g.It("Author:rioliu-Longduration-NonPreRelease-Critical-42361-add chrony systemd config [Disruptive]", func() {
 		exutil.By("create new mc to apply chrony config on worker nodes")
 		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
-		mcName := "change-workers-chrony-configuration"
+		mcName := "ztc-42361-change-workers-chrony-configuration"
 		mcTemplate := "change-workers-chrony-configuration.yaml"
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
 
@@ -662,7 +662,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mcp.pause(true)
 
 		exutil.By("create new mc")
-		mcName := "change-workers-chrony-configuration"
+		mcName := "ztc-42704-change-workers-chrony-configuration"
 		mcTemplate := "change-workers-chrony-configuration.yaml"
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
 		mc.skipWaitForMcp = true
@@ -1631,7 +1631,7 @@ nulla pariatur.`
 		fileContent := "pool 0.rhel.pool.ntp.org iburst\ndriftfile /var/lib/chrony/drift\nmakestep 1.0 3\nrtcsync\nlogdir /var/log/chrony"
 		fileConfig := getBase64EncodedFileConfig(filePath, fileContent, fileMode)
 
-		mcName := "cordontest-change-workers-chrony-configuration"
+		mcName := "ztc-51381-change-workers-chrony-configuration"
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
 		defer mc.delete()
 
