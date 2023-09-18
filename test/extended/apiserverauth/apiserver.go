@@ -2467,6 +2467,10 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("Author:zxiao-Medium-10592-Cluster-admin could get/edit/delete subresource", func() {
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		exutil.By("1) Create new project")
 		oc.SetupProject()
 
@@ -3050,6 +3054,10 @@ spec:
 	})
 
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -3235,6 +3243,10 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Critical-55494-[Apiserver] When using webhooks fails to rollout latest deploymentconfig [Disruptive]", func() {
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		var (
 			caKeypem          = tmpdir + "/caKey.pem"
 			caCertpem         = tmpdir + "/caCert.pem"
@@ -5045,6 +5057,10 @@ type: kubernetes.io/service-account-token`
 
 	// author: kewang@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11289-[origin_platformexp_407] [Apiserver] Check the imagestreams of quota in the project after build image [Serial]", func() {
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		var (
 			caseID                  = "ocp-11289"
 			dirname                 = "/tmp/-" + caseID
@@ -5434,6 +5450,10 @@ EOF`, etcConfigYaml, level)
 
 	// author: dpunia@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-High-11887-Could delete all the resource when deleting the project [Serial]", func() {
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
 		o.Expect(contxtErr).NotTo(o.HaveOccurred())
 		defer func() {
@@ -5795,6 +5815,10 @@ manifests:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Low-12036-APIServer User can pull a private image from a registry when a pull secret is defined [Serial]", func() {
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -5865,6 +5889,10 @@ manifests:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-11905-APIServer Use well-formed pull secret with incorrect credentials will fail to build and deploy [Serial]", func() {
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -6183,6 +6211,10 @@ manifests:
 
 	// author: kewang@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11797-[Apiserver] Image with single or multiple layer(s) sumed up size slightly exceed the openshift.io/image-size will push failed", func() {
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -6242,7 +6274,9 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-10865-[Apiserver] After Image Size Limit increment can push the image which previously over the limit", func() {
-
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -6390,6 +6424,9 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12263-[Apiserver] When exceed openshift.io/images will ban to create image reference or push image to project", func() {
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
 
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)

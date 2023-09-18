@@ -1351,3 +1351,19 @@ func copyImageToInternelRegistry(oc *exutil.CLI, namespace string, source string
 	results, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(command...).Output()
 	return results, err
 }
+
+// Check if BaselineCapabilities have been set to None
+func isBaselineCapsSet(oc *exutil.CLI, component string) bool {
+	baselineCapabilitySet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.spec.capabilities.baselineCapabilitySet}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("baselineCapabilitySet parameters: %v\n", baselineCapabilitySet)
+	return strings.Contains(baselineCapabilitySet, component)
+}
+
+// Check if component is listed in clusterversion.status.capabilities.enabledCapabilities
+func isEnabledCapability(oc *exutil.CLI, component string) bool {
+	enabledCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].status.capabilities.enabledCapabilities}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Cluster enabled capability parameters: %v\n", enabledCapabilities)
+	return strings.Contains(enabledCapabilities, component)
+}
