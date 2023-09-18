@@ -68,7 +68,10 @@ describe('Operator Hub tests', () => {
     cy.visit(`operatorhub/subscribe?pkg=flux-operator&catalog=${testParams.catalogName}&catalogNamespace=${testParams.catalogNamespace}&targetNamespace=undefined`)
       .get('[data-test-id="resource-title"]')
       .should('contain.text','Install Operator')
-    cy.contains(`${testParams.suggestedNamespace} (Operator recommended)`).should('exist')
+    cy.get('[data-test="Operator recommended Namespace:-radio-input"]')
+      .should('have.value', testParams.suggestedNamespace)
+      .should('be.checked');
+    // cy.contains(`${testParams.suggestedNamespace} (Operator recommended)`).should('exist')
     cy.contains(`${testParams.suggestedNamespace} does not exist and will be created`).should('exist')
     cy.get('[data-test="install-operator"]').click()
 
