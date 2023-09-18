@@ -317,7 +317,7 @@ func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
 		linuxWorkers = append(linuxWorkers, allNodes...)
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.readyStatus == "True" {
 				linuxWorkers = append(linuxWorkers, myNode)
 			}
 		}
@@ -333,7 +333,7 @@ func getSchedulableRhelWorkers(allNodes []node) []node {
 		schedulableRhelWorkers = append(schedulableRhelWorkers, allNodes...)
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osID == "rhel" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osID == "rhel" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.readyStatus == "True" {
 				schedulableRhelWorkers = append(schedulableRhelWorkers, myNode)
 			}
 		}
@@ -352,7 +352,8 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 			expectedWorker = allNodes[0]
 		} else {
 			for _, myNode := range allNodes {
-				if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && myNode.readyStatus == "True" {
+				// For aws local zones cluster the default LOCALZONE_WORKER_SCHEDULABLE value is no in both official document and CI configuration
+				if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.readyStatus == "True" {
 					expectedWorker = myNode
 					break
 				}
