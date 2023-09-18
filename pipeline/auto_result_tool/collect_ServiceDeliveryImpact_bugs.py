@@ -216,7 +216,10 @@ Automated: the new test case is automated, if the case is manual only, please ma
             jiraStr = values_list[13]
             isDone = values_list[16]
             qa_contact = values_list[14]
+            closed_notabug = values_list[15]
             if "bug" not in type.lower():
+                continue
+            if closed_notabug:
                 continue
             if jiraStr:
                 if "Done" not in isDone:
