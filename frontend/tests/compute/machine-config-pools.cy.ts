@@ -1,4 +1,3 @@
-import { listPage } from './../../upstream/views/list-page';
 import { ClusterSettingPage } from './../../views/cluster-setting';
 import { mcp } from "../../views/machine-config-pools";
 
@@ -22,7 +21,15 @@ describe("Improve MachineConfigPool list table for update status", () => {
     cy.get('thead').should('contain','Update status');
     cy.get('[aria-label="MachineConfigPools"]').should('not.contain',/Updated|Updating|Paused/);
     mcp.listPage.checkAlertMsg('not.exist',alertmsg);
-    listPage.rows.clickKebabAction("worker", 'Pause updates');
+    cy.byTestID('name-filter-input')
+      .clear()
+      .type('worker')
+      .then(() => {
+        cy.get('button[data-test-id="kebab-button"]')
+          .should('have.length', 1)
+          .click();
+        cy.byTestActionID('Pause updates').click();
+      });
     mcp.listPage.checkUpdateStatus("worker", 'Paused');
     mcp.listPage.checkAlertMsg('contain',alertmsg);
     ClusterSettingPage.goToClusterSettingDetails();
