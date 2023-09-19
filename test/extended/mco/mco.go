@@ -762,8 +762,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			"New machine configs have been created, but they should not be created")
 		logger.Infof("OK!\n")
 
-		// We verify all nodes in the pools (be aware that windows nodes do not belong to any pool, we are skipping them)
-		for _, node := range append(wMcp.GetNodesOrFail(), mMcp.GetNodesOrFail()...) {
+		for _, node := range checkedNodes {
 			exutil.By(fmt.Sprintf("Checking that the certificate is rotated in node: %s", node.GetName()))
 
 			rfCert := NewRemoteFile(node, "/etc/kubernetes/kubelet-ca.crt")
