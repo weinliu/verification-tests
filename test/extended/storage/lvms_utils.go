@@ -102,6 +102,21 @@ func (lvm *lvmCluster) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create a new customized lvmCluster with optional paths and without mandatory paths
+func (lvm *lvmCluster) createWithoutMandatoryPaths(oc *exutil.CLI) {
+	deletePaths := []string{`items.0.spec.storage.deviceClasses.0.deviceSelector.paths`}
+	err := applyResourceFromTemplateDeleteParametersAsAdmin(oc, deletePaths, "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME="+lvm.deviceClassName,
+		"FSTYPE="+lvm.fsType, "OPTIONALPATH1="+lvm.optionalPaths[0], "OPTIONALPATH2="+lvm.optionalPaths[1])
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Create a new customized lvmCluster to return expected error
+func (lvm *lvmCluster) createToExpectError(oc *exutil.CLI) (string, error) {
+	output, err := applyResourceFromTemplateWithOutput(oc.AsAdmin(), "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME="+lvm.deviceClassName,
+		"FSTYPE="+lvm.fsType, "PATH="+lvm.paths[0], "OPTIONALPATH1="+lvm.optionalPaths[0], "OPTIONALPATH2="+lvm.optionalPaths[1])
+	return output, err
+}
+
 // Use LVMCluster resource JSON file to create a new LVMCluster
 func (lvm *lvmCluster) createWithExportJSON(oc *exutil.CLI, originLVMExportJSON string, newLvmClusterName string) {
 	var (

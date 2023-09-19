@@ -836,8 +836,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer func() {
 			if !isSpecifiedResourceExist(oc, "lvmcluster/"+originLvmCluster.name, "openshift-storage") {
 				originLvmCluster.createWithExportJSON(oc, originLVMJSON, originLvmCluster.name)
-				originLvmCluster.waitReady(oc)
 			}
+			originLvmCluster.waitReady(oc)
 		}()
 
 		exutil.By("#. Create a new LVMCluster resource with paths and optionalPaths")
@@ -890,6 +890,169 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("#. Create original LVMCluster resource")
 		originLvmCluster.createWithExportJSON(oc, originLVMJSON, originLvmCluster.name)
 		originLvmCluster.waitReady(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-67002-[LVMS] Check deviceSelector logic works with only optional paths
+	g.It("Author:rdeore-High-67002-[LVMS] Check deviceSelector logic works with only optional paths [Disruptive]", func() {
+		//Set the resource template for the scenario
+		var (
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate        = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			lvmClusterTemplate = filepath.Join(storageLvmsBaseDir, "lvmcluster-with-paths-template.yaml")
+			volumeGroup        = "vg1"
+		)
+
+		if exutil.IsSNOCluster(oc) {
+			g.Skip("Skipped: test case is only applicable to multi-node/SNO with additional worker-node cluster")
+		}
+
+		exutil.By("#. Get list of available block devices/disks attached to all worker ndoes")
+		freeDiskNameCountMap := getListOfFreeDisksFromWorkerNodes(oc)
+		if len(freeDiskNameCountMap) < 1 { // this test requires atleast 1 unique disk for optional Device Path
+			g.Skip("Skipped: Cluster's Worker nodes does not have minimum required free block devices/disks attached")
+		}
+		workerNodeCount := len(getWorkersList(oc))
+		var optionalDisk string
+		isDiskFound := false
+		for diskName, count := range freeDiskNameCountMap {
+			if count == int64(workerNodeCount) { // mandatory disk with same name should be present on all worker nodes as per LVMS requriement
+				optionalDisk = diskName
+				isDiskFound = true
+				delete(freeDiskNameCountMap, diskName)
+				break
+			}
+		}
+		if !isDiskFound { // If all Worker nodes doesn't have 1 disk with same name, skip the test scenario
+			g.Skip("Skipped: All Worker nodes does not have a free block device/disk with same name attached")
+		}
+
+		exutil.By("#. Copy and save existing LVMCluster configuration in JSON format")
+		lvmClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		originLvmCluster := newLvmCluster(setLvmClusterName(lvmClusterName), setLvmClusterNamespace("openshift-storage"))
+		originLVMJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", originLvmCluster.name, "-n", "openshift-storage", "-o", "json").Output()
+		debugLogf(originLVMJSON)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		exutil.By("#. Delete existing LVMCluster resource")
+		defer func() {
+			if !isSpecifiedResourceExist(oc, "lvmcluster/"+originLvmCluster.name, "openshift-storage") {
+				originLvmCluster.createWithExportJSON(oc, originLVMJSON, originLvmCluster.name)
+			}
+			originLvmCluster.waitReady(oc)
+		}()
+		deleteSpecifiedResource(oc.AsAdmin(), "lvmcluster", originLvmCluster.name, "openshift-storage")
+
+		exutil.By("#. Create a new LVMCluster resource with optional paths")
+		lvmCluster := newLvmCluster(setLvmClustertemplate(lvmClusterTemplate), setLvmClusterOptionalPaths([]string{"/dev/" + optionalDisk, "/dev/invalid-path"}))
+		defer lvmCluster.deleteLVMClusterSafely(oc) // If new lvmCluster creation fails, need to remove finalizers if any
+		lvmCluster.createWithoutMandatoryPaths(oc)
+		lvmCluster.waitReady(oc)
+
+		exutil.By("#. Check LVMS CSI storage capacity equals backend devices/disks total size")
+		optionalPathsDiskTotalSize := getTotalDiskSizeOnAllWorkers(oc, "/dev/"+optionalDisk)
+		ratio, sizePercent := getOverProvisionRatioAndSizePercentByVolumeGroup(oc, "vg1")
+		expectedStorageCapacity := sizePercent * optionalPathsDiskTotalSize / 100
+		e2e.Logf("EXPECTED USABLE STORAGE CAPACITY: %d", expectedStorageCapacity)
+		currentLvmStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByStorageClass(oc, "lvms-vg1")
+		actualStorageCapacity := (currentLvmStorageCapacity / ratio) / 1024 // Get size in Gi
+		e2e.Logf("ACTUAL USABLE STORAGE CAPACITY: %d", actualStorageCapacity)
+		storageDiff := float64(expectedStorageCapacity - actualStorageCapacity)
+		absDiff := math.Abs(storageDiff)
+		o.Expect(int(absDiff) < 2).To(o.BeTrue()) // there is always a difference of 1 Gi between backend disk size and usable size
+
+		exutil.By("#. Create a new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("#. Define storage resources")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		exutil.By("#. Create a pvc with the pre-set lvms csi storageclass")
+		pvc.scname = "lvms-" + volumeGroup
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		exutil.By("#. Write file to volume")
+		pod.checkMountedVolumeCouldRW(oc)
+
+		exutil.By("Delete Pod and PVC")
+		deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
+		deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
+
+		exutil.By("Delete newly created LVMCluster resource")
+		lvmCluster.deleteLVMClusterSafely(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-67003-[LVMS] Check deviceSelector logic shows error when only optionalPaths are used which are invalid device paths
+	g.It("Author:rdeore-High-67003-[LVMS] Check deviceSelector logic shows error when only optionalPaths are used which are invalid device paths [Disruptive]", func() {
+		//Set the resource template for the scenario
+		var (
+			lvmClusterTemplate = filepath.Join(storageLvmsBaseDir, "lvmcluster-with-paths-template.yaml")
+		)
+
+		exutil.By("#. Copy and save existing LVMCluster configuration in JSON format")
+		lvmClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		originLvmCluster := newLvmCluster(setLvmClusterName(lvmClusterName), setLvmClusterNamespace("openshift-storage"))
+		originLVMJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", originLvmCluster.name, "-n", "openshift-storage", "-o", "json").Output()
+		debugLogf(originLVMJSON)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		exutil.By("#. Delete existing LVMCluster resource")
+		defer func() {
+			if !isSpecifiedResourceExist(oc, "lvmcluster/"+originLvmCluster.name, "openshift-storage") {
+				originLvmCluster.createWithExportJSON(oc, originLVMJSON, originLvmCluster.name)
+			}
+			originLvmCluster.waitReady(oc)
+		}()
+		deleteSpecifiedResource(oc.AsAdmin(), "lvmcluster", originLvmCluster.name, "openshift-storage")
+
+		exutil.By("#. Create a new LVMCluster resource with invalid optional paths")
+		lvmCluster := newLvmCluster(setLvmClustertemplate(lvmClusterTemplate), setLvmClusterOptionalPaths([]string{"/dev/invalid-path1", "/dev/invalid-path2"}))
+		defer lvmCluster.deleteLVMClusterSafely(oc) // If new lvmCluster creation fails, need to remove finalizers if any
+		lvmCluster.createWithoutMandatoryPaths(oc)
+
+		exutil.By("#. Check LVMCluster state is 'Failed' with proper error reason")
+		lvmCluster.getLvmClusterStatus(oc)
+		o.Eventually(func() string {
+			lvmClusterState, _ := lvmCluster.getLvmClusterStatus(oc)
+			return lvmClusterState
+		}, 120*time.Second, 5*time.Second).Should(o.Equal("Failed"))
+		errMsg := "at least 1 valid device is required if DeviceSelector paths or optionalPaths are specified"
+		errorDesc := lvmCluster.describeLvmCluster(oc)
+		e2e.Logf("LVMCluster resource description: " + errorDesc)
+		o.Expect(strings.Contains(strings.ToLower(errorDesc), strings.ToLower(errMsg))).To(o.BeTrue())
+
+		exutil.By("Delete newly created LVMCluster resource")
+		lvmCluster.deleteLVMClusterSafely(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-67004-[LVMS] Check deviceSelector logic shows error when identical device path is used in both paths and optionalPaths
+	g.It("Author:rdeore-High-67004-[LVMS] Check deviceSelector logic shows error when identical device path is used in both paths and optionalPaths", func() {
+		//Set the resource template for the scenario
+		var (
+			lvmClusterTemplate = filepath.Join(storageLvmsBaseDir, "lvmcluster-with-paths-template.yaml")
+		)
+
+		exutil.By("#. Attempt creating a new LVMCluster resource with identical mandatory and optional device paths")
+		lvmCluster := newLvmCluster(setLvmClustertemplate(lvmClusterTemplate), setLvmClusterPaths([]string{"/dev/diskpath-1"}),
+			setLvmClusterOptionalPaths([]string{"/dev/diskpath-1", "/dev/diskpath-2"}))
+		defer lvmCluster.deleteLVMClusterSafely(oc)
+		errorMsg, _ := lvmCluster.createToExpectError(oc)
+		e2e.Logf("LVMCluster creation error: " + errorMsg)
+
+		exutil.By("#. Check LVMCluster creation failed with proper error reason")
+		expectedErrorSubStr := "error: optional device path /dev/diskpath-1 is specified at multiple places in deviceClass " + lvmCluster.deviceClassName
+		o.Expect(strings.ToLower(errorMsg)).To(o.ContainSubstring(strings.ToLower(expectedErrorSubStr)))
 	})
 })
 
