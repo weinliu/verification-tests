@@ -232,6 +232,12 @@ type egressNetworkpolicy struct {
 	template  string
 }
 
+type svcEndpontDetails struct {
+	ovnKubeNodePod string
+	nodeName       string
+	podIP          string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -2520,7 +2526,7 @@ func getOVNAlertNetworkingRules(oc *exutil.CLI, alertName string) (string, strin
 }
 
 // returns all the logical routers and switches on all the nodes
-func getOVNConstruct(oc *exutil.CLI, constructType string, nodeNames []string) []string {
+func getOVNConstructs(oc *exutil.CLI, constructType string, nodeNames []string) []string {
 	var ovnConstructs []string
 	var matchStr string
 	//var cmdOutput string
@@ -2557,7 +2563,42 @@ func getOVNConstruct(oc *exutil.CLI, constructType string, nodeNames []string) [
 	return ovnConstructs
 }
 
-// returns load balancer entries created for LB service type on routers and switches
+// Returns the logical router or logical switch on a node
+func (svcEndpontDetails *svcEndpontDetails) getOVNConstruct(oc *exutil.CLI, constructType string) string {
+	var ovnConstruct string
+	var matchStr string
+	getCmd := "ovn-nbctl " + constructType
+	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+		cmdOutput, cmdErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", svcEndpontDetails.ovnKubeNodePod, getCmd)
+		if cmdErr != nil {
+			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
+			return false, nil
+		}
+		if cmdOutput == "" {
+			return true, nil
+		}
+		for _, index := range strings.Split(cmdOutput, "\n") {
+
+			if constructType == "ls-list" {
+				matchStr = fmt.Sprintf("\\((%s\\))", svcEndpontDetails.nodeName)
+			} else {
+				matchStr = fmt.Sprintf("\\((GR_%s\\))", svcEndpontDetails.nodeName)
+			}
+			re := regexp.MustCompile(matchStr)
+			if re.FindString(index) != "" {
+				matchedStr := strings.Fields(index)
+				ovnConstruct = matchedStr[0]
+			}
+		}
+		return true, nil
+	})
+	if checkOVNDbErr != nil {
+		e2e.Logf("The result in ovndb is not expected ! See below output \n %s ", checkOVNDbErr)
+	}
+	return ovnConstruct
+}
+
+// returns load balancer entries created for LB service type on routers or switches on all nodes
 func getOVNLBContructs(oc *exutil.CLI, constructType string, endPoint string, ovnConstruct []string) bool {
 	var result bool
 	ovnPod := getOVNKMasterOVNkubeNode(oc)
@@ -2588,6 +2629,36 @@ func getOVNLBContructs(oc *exutil.CLI, constructType string, endPoint string, ov
 		}
 
 	}
+	return result
+}
+
+// returns load balancer entries created for LB service type on routers or switches on a single node
+func (svcEndpontDetails *svcEndpontDetails) getOVNLBContruct(oc *exutil.CLI, constructType string, construct string) bool {
+	var result bool
+	//only if the count for any of output is less than three the success will be false
+	result = true
+	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+		getCmd := "ovn-nbctl " + constructType + " " + construct + " | grep " + svcEndpontDetails.podIP
+		cmdOutput, cmdErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", svcEndpontDetails.ovnKubeNodePod, "northd", getCmd)
+		if cmdErr != nil {
+			e2e.Logf("%v,Waiting for expected result to be synced, try next ...,", cmdErr)
+			result = false
+			return false, nil
+		}
+		if len(strings.Split(cmdOutput, "\n")) >= 2 {
+			e2e.Logf("Required entries %s were created for service on %s", constructType, construct)
+			result = true
+		} else {
+			e2e.Logf("Required entries %s were not created for service on %s", constructType, construct)
+			result = false
+		}
+		return true, nil
+	})
+	if checkOVNDbErr != nil {
+		e2e.Logf("The command check result in ovndb is not expected ! See below output \n %s ", checkOVNDbErr)
+		result = false
+	}
+
 	return result
 }
 

@@ -352,9 +352,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
-			svcEndpoints           []string
-			lsConstructs           []string
-			lrConstructs           []string
+			svcEndpoints           []svcEndpontDetails
+			lsConstruct            string
+			lrConstruct            string
 		)
 		platform := exutil.CheckPlatform(oc)
 		//vSphere does not have LB service support yet
@@ -369,27 +369,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		workerNodes, err := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		allNodes, errNodes := exutil.GetAllNodes(oc)
-		o.Expect(errNodes).NotTo(o.HaveOccurred())
 
-		if len(workerNodes) < 2 {
-			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
-		}
-		g.By("Get namespace")
+		exutil.By("Get namespace")
 		ns := oc.Namespace()
 
-		g.By("create 1st hello pod in ns1")
-
-		pod1 := pingPodResourceNode{
+		exutil.By(fmt.Sprintf("create 1st hello pod in %s", ns))
+		pod := pingPodResourceNode{
 			name:      "hello-pod1",
 			namespace: ns,
 			nodename:  workerNodes[0],
 			template:  pingPodNodeTemplate,
 		}
-		pod1.createPingPodNode(oc)
-		waitPodReady(oc, ns, pod1.name)
+		pod.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod.name)
 
-		g.By("Create a test service which is in front of the above pods")
+		exutil.By("Create a test service which is in front of the above pod")
 		svc := genericServiceResource{
 			servicename:           "test-service",
 			namespace:             ns,
@@ -402,28 +396,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			template:              genericServiceTemplate,
 		}
 		svc.createServiceFromParams(oc)
-
-		g.By("Get endpoints of loadbalancer services")
-		svcEndpoints = append(svcEndpoints, getServiceEndpoints(oc, svc.servicename, svc.namespace))
-		svcEndpoints = append(svcEndpoints, getServiceEndpoints(oc, "kubernetes", "default"))
-
-		g.By("Get logical routes and switches existing nodes")
-		lsConstructs = getOVNConstruct(oc, "ls-list", allNodes)
-		o.Expect(lsConstructs).NotTo(o.BeEmpty())
-		o.Expect(len(lsConstructs) == len(allNodes)).Should(o.BeTrue())
-		//Get logical routes only for worker nodes as kube API service does not have entries for master nodes
-		lrConstructs = getOVNConstruct(oc, "lr-list", workerNodes)
-		o.Expect(lrConstructs).NotTo(o.BeEmpty())
-		o.Expect(len(lsConstructs) == len(allNodes)).Should(o.BeTrue())
-
-		g.By("Validate all the entries are created for user created service and kubernetes/ kube API")
-		for i := 0; i < len(svcEndpoints); i++ {
-			o.Expect(getOVNLBContructs(oc, "ls-lb-list", svcEndpoints[i], lsConstructs)).To(o.BeTrue())
-			o.Expect(getOVNLBContructs(oc, "lr-lb-list", svcEndpoints[i], lrConstructs)).To(o.BeTrue())
-		}
-
-		g.By("Create a new machineset with 2")
-		var newNodes []string
+		exutil.By("Create a new machineset to add new nodes")
 		exutil.SkipConditionally(oc)
 		machinesetName := "machineset-62293"
 		ms := exutil.MachineSetDescription{machinesetName, 2}
@@ -433,26 +406,54 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
 		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
 		nodeName1 := exutil.GetNodeNameFromMachine(oc, machineName[1])
-		newNodes = append(newNodes, nodeName0)
-		newNodes = append(newNodes, nodeName1)
 		e2e.Logf("The nodes %s and %s added successfully", nodeName0, nodeName1)
 
-		g.By("Get logical routes and switches new nodes")
-		lsConstructs = getOVNConstruct(oc, "ls-list", newNodes)
-		o.Expect(lsConstructs).NotTo(o.BeEmpty())
-		o.Expect(len(lsConstructs) == len(newNodes)).Should(o.BeTrue())
-		lrConstructs = getOVNConstruct(oc, "lr-list", newNodes)
-		o.Expect(lrConstructs).NotTo(o.BeEmpty())
-		o.Expect(len(lrConstructs) == len(newNodes)).Should(o.BeTrue())
-
-		g.By("Validate all the entries are created for service new nodes")
-		for i := 0; i < len(svcEndpoints); i++ {
-			o.Expect(getOVNLBContructs(oc, "ls-lb-list", svcEndpoints[i], lsConstructs)).To(o.BeTrue())
-			o.Expect(getOVNLBContructs(oc, "lr-lb-list", svcEndpoints[i], lrConstructs)).To(o.BeTrue())
+		exutil.By(fmt.Sprintf("create 2nd hello pod in %s on newly created node %s", ns, nodeName0))
+		pod = pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns,
+			nodename:  nodeName0,
+			template:  pingPodNodeTemplate,
 		}
-		g.By("Validate kubernetes service is reachable from new nodes")
-		for i := 0; i < len(newNodes); i++ {
-			output, err := exutil.DebugNodeWithChroot(oc, newNodes[i], "bash", "-c", "curl -s -k https://172.30.0.1/healthz --connect-timeout 5")
+		pod.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod.name)
+
+		exutil.By("Get backend pod details of user service")
+		allPods, getPodErr := exutil.GetAllPodsWithLabel(oc, ns, "name=hello-pod")
+		o.Expect(getPodErr).NotTo(o.HaveOccurred())
+		o.Expect(len(allPods)).NotTo(o.BeEquivalentTo(0))
+		for _, eachPod := range allPods {
+			nodeName, nodeNameErr := exutil.GetPodNodeName(oc, ns, eachPod)
+			o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+			podIP := getPodIPv4(oc, ns, eachPod)
+			ovnkubeNodePod, ovnKubeNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+			o.Expect(ovnKubeNodePodErr).NotTo(o.HaveOccurred())
+			svcEndpoint := svcEndpontDetails{
+				ovnKubeNodePod: ovnkubeNodePod,
+				nodeName:       nodeName,
+				podIP:          podIP,
+			}
+			svcEndpoints = append(svcEndpoints, svcEndpoint)
+		}
+
+		exutil.By("Get logical route and switch on node for endpoints of both services to validate they exist on both new and old node")
+		for _, eachEndpoint := range svcEndpoints {
+			lsConstruct = eachEndpoint.getOVNConstruct(oc, "ls-list")
+			o.Expect(lsConstruct).NotTo(o.BeEmpty())
+			e2e.Logf("Logical Switch %s on node %s", lsConstruct, eachEndpoint.nodeName)
+			o.Expect(eachEndpoint.getOVNLBContruct(oc, "ls-lb-list", lsConstruct)).To(o.BeTrue())
+			lrConstruct = eachEndpoint.getOVNConstruct(oc, "lr-list")
+			o.Expect(lrConstruct).NotTo(o.BeEmpty())
+			e2e.Logf("Logical Router %s on node %s", lrConstruct, eachEndpoint.nodeName)
+			o.Expect(eachEndpoint.getOVNLBContruct(oc, "lr-lb-list", lrConstruct)).To(o.BeTrue())
+		}
+
+		exutil.By("Validate kubernetes service is reachable from all nodes including new nodes")
+		allNodes, nodeErr := exutil.GetAllNodes(oc)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		o.Expect(len(allNodes)).NotTo(o.BeEquivalentTo(0))
+		for i := 0; i < len(allNodes); i++ {
+			output, err := exutil.DebugNodeWithChroot(oc, allNodes[i], "bash", "-c", "curl -s -k https://172.30.0.1/healthz --connect-timeout 5")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(output, "ok")).To(o.BeTrue())
 		}
