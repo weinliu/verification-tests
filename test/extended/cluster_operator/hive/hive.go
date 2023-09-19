@@ -8,8 +8,10 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -36,7 +38,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		//Install Hive operator if not
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
-		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
+		_, _ = installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
 
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
@@ -297,5 +299,4 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			e2e.Failf("the pod log does not include Running API Priority and Fairness config worker")
 		}
 	})
-
 })

@@ -13,7 +13,9 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -445,7 +447,7 @@ data:
 		o.Expect(strings.Contains(doOcpReq(oc, "get", true, "secrets", "-n", "openshift-image-registry", "installer-cloud-credentials", "-o=jsonpath={.data}"), "azure_federated_token_file")).Should(o.BeTrue())
 	})
 
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:fxie-Critical-64885-CCO-based flow for olm managed operators and AWS STS", func() {
+	g.It("NonHyperShiftHOST-Author:fxie-Critical-64885-CCO-based flow for olm managed operators and AWS STS", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "aws")
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("This test case is AWS STS only, skipping")

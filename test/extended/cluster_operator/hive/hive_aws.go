@@ -77,7 +77,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		// Install Hive operator if non-existent
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
-		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
+		_, _ = installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
 
 		// Get OCP Image for Hive testing
 		testOCPImage = getTestOCPImage()
@@ -1430,7 +1430,7 @@ spec:
 		maxRetries := 5
 		TTL := 10
 		propagationTimeout, pollingInterval := 15*time.Minute, 4*time.Second
-		awsAccessKeyId, awsSecretAccessKey := extractAWSCredentials(oc)
+		awsAccessKeyId, awsSecretAccessKey := getAWSCredentials(oc)
 		dnsProvider, err := newLegoDNSProvider(maxRetries, TTL, propagationTimeout, pollingInterval, awsAccessKeyId, awsSecretAccessKey, AWSRegion)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = client.Challenge.SetDNS01Provider(dnsProvider)
@@ -1930,10 +1930,9 @@ spec:
 	//author: fxie@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23167"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-23167-The tags created on users in AWS match what the installer did on your instances[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-23167-The tags created on users in AWS match what the installer did on your instances [Serial]", func() {
 		testCaseID := "23167"
 		cdName := "cd-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
-		oc.SetupProject()
 
 		exutil.By("Creating ClusterDeployment ...")
 		installConfig := installConfig{
@@ -2043,7 +2042,7 @@ spec:
 		oc.SetupProject()
 
 		exutil.By("Selecting a custom OCP version to install ...")
-		ocpVersion := extractRelfromImg(testOCPImage)
+		ocpVersion := extractRelFromImg(testOCPImage)
 		xyzVersion := strings.Split(ocpVersion, ".")
 		majorVersion := xyzVersion[0]
 		minorVersion := xyzVersion[1]

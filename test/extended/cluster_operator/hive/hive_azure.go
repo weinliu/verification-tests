@@ -10,8 +10,10 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -44,7 +46,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		// Install Hive operator if non-existent
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
-		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
+		_, _ = installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
 
 		// Get OCP Image for Hive testing
 		testOCPImage = getTestOCPImage()

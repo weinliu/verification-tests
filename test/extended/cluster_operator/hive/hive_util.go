@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,16 +19,21 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/route53"
+	"github.com/aws/aws-sdk-go-v2/service/route53/types"
+
+	"github.com/3th1nk/cidr"
 
 	legoroute53 "github.com/go-acme/lego/v4/providers/dns/route53"
 	"github.com/go-acme/lego/v4/registration"
 
-	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -305,6 +312,46 @@ type gcpClusterPool struct {
 	template       string
 }
 
+// vSphere
+type vSphereInstallConfig struct {
+	secretName     string
+	secretNs       string
+	baseDomain     string
+	icName         string
+	machineNetwork string
+	apiVip         string
+	cluster        string
+	datacenter     string
+	datastore      string
+	ingressVip     string
+	network        string
+	password       string
+	username       string
+	vCenter        string
+	template       string
+}
+
+type vSphereClusterDeployment struct {
+	fake                 bool
+	name                 string
+	namespace            string
+	baseDomain           string
+	manageDns            bool
+	clusterName          string
+	certRef              string
+	cluster              string
+	credRef              string
+	datacenter           string
+	datastore            string
+	network              string
+	vCenter              string
+	imageSetRef          string
+	installConfigSecret  string
+	pullSecretRef        string
+	installAttemptsLimit int
+	template             string
+}
+
 type prometheusQueryResult struct {
 	Data struct {
 		Result []struct {
@@ -351,6 +398,7 @@ const (
 	AWSVmTypeAMD64  = "m6i.xlarge"
 	archARM64       = "arm64"
 	archAMD64       = "amd64"
+	certsPattern    = "-----BEGIN CERTIFICATE-----\\n([A-Za-z0-9+/=\\n]+)\\n-----END CERTIFICATE-----"
 )
 
 // Hive Configurations
@@ -370,15 +418,18 @@ const (
 	HibernateAfterTimer               = 300
 	ClusterSuffixLen                  = 4
 	LogsLimitLen                      = 1024
+	HiveManagedDNS                    = "hivemanageddns" //for all manage DNS Domain
 )
 
 // AWS Configurations
 const (
-	AWSBaseDomain  = "qe.devcluster.openshift.com" //AWS BaseDomain
-	AWSRegion      = "us-east-2"
-	AWSRegion2     = "us-east-1"
-	AWSCreds       = "aws-creds"
-	HiveManagedDNS = "hivemanageddns" //for all manage DNS Domain
+	AWSBaseDomain   = "qe.devcluster.openshift.com" //AWS BaseDomain
+	AWSRegion       = "us-east-2"
+	AWSRegion2      = "us-east-1"
+	AWSCreds        = "aws-creds"
+	AWSCredsPattern = `\[default\]
+aws_access_key_id = ([a-zA-Z0-9+/]+)
+aws_secret_access_key = ([a-zA-Z0-9+/]+)`
 )
 
 // Azure Configurations
@@ -400,6 +451,20 @@ const (
 	GCPRegion      = "us-central1"
 	GCPRegion2     = "us-east1"
 	GCPCreds       = "gcp-credentials"
+)
+
+// VSphere configurations
+// Notes:
+// 1) For DEVQE, DHCP starts at the IP whose last octet is 50. We made the same assumption on the CI segments.
+const (
+	VSphereCreds               = "vsphere-creds"
+	VSphereCerts               = "vsphere-certs"
+	VSphereAWSCredsMountPath   = "/var/run/vault/aws/.awscreds"
+	VSphereNetworkPattern      = "[a-zA-Z]+-[a-zA-Z]+-([\\d]+)"
+	VSphereAWSHostedZoneNameCI = "vmc-ci.devcluster.openshift.com"
+	VSphereAWSHostedZoneName   = "vmc.devcluster.openshift.com"
+	VSphereLastCidrOctetMin    = 3
+	VSphereLastCidrOctetMax    = 49
 )
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
@@ -628,6 +693,28 @@ func (cluster *gcpClusterDeployment) create(oc *exutil.CLI) {
 
 func (pool *gcpClusterPool) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pool.template, "-p", "NAME="+pool.name, "NAMESPACE="+pool.namespace, "FAKE="+pool.fake, "BASEDOMAIN="+pool.baseDomain, "IMAGESETREF="+pool.imageSetRef, "PLATFORMTYPE="+pool.platformType, "CREDREF="+pool.credRef, "REGION="+pool.region, "PULLSECRETREF="+pool.pullSecretRef, "SIZE="+strconv.Itoa(pool.size), "MAXSIZE="+strconv.Itoa(pool.maxSize), "RUNNINGCOUNT="+strconv.Itoa(pool.runningCount), "MAXCONCURRENT="+strconv.Itoa(pool.maxConcurrent), "HIBERNATEAFTER="+pool.hibernateAfter)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// vSphere
+func (ic *vSphereInstallConfig) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ic.template,
+		"-p", "SECRETNAME="+ic.secretName, "SECRETNS="+ic.secretNs, "BASEDOMAIN="+ic.baseDomain,
+		"ICNAME="+ic.icName, "MACHINENETWORK="+ic.machineNetwork, "APIVIP="+ic.apiVip, "CLUSTER="+ic.cluster,
+		"DATACENTER="+ic.datacenter, "DATASTORE="+ic.datastore, "INGRESSVIP="+ic.ingressVip, "NETWORK="+ic.network,
+		"PASSWORD="+ic.password, "USERNAME="+ic.username, "VCENTER="+ic.vCenter)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (cluster *vSphereClusterDeployment) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template,
+		"-p", "FAKE="+strconv.FormatBool(cluster.fake), "NAME="+cluster.name, "NAMESPACE="+cluster.namespace,
+		"BASEDOMAIN="+cluster.baseDomain, "MANAGEDNS="+strconv.FormatBool(cluster.manageDns),
+		"CLUSTERNAME="+cluster.clusterName, "CERTREF="+cluster.certRef, "CLUSTER="+cluster.cluster,
+		"CREDREF="+cluster.credRef, "DATACENTER="+cluster.datacenter, "DATASTORE="+cluster.datastore,
+		"NETWORK="+cluster.network, "VCENTER="+cluster.vCenter, "IMAGESETREF="+cluster.imageSetRef,
+		"INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef,
+		"INSTALLATTEMPTSLIMIT="+strconv.Itoa(cluster.installAttemptsLimit))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1063,8 +1150,29 @@ func createGCPCreds(oc *exutil.CLI, namespace string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-// Reutrn Rlease version from Image
-func extractRelfromImg(image string) string {
+func createVSphereCreds(oc *exutil.CLI, namespace, vCenter string) {
+	username, password := getVSphereCredentials(oc, vCenter)
+	secret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      VSphereCreds,
+			Namespace: namespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		StringData: map[string]string{
+			"username": username,
+			"password": password,
+		},
+	}
+	_, err := oc.AdminKubeClient().CoreV1().Secrets(namespace).Create(context.Background(), secret, metav1.CreateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Return release version from Image
+func extractRelFromImg(image string) string {
 	index := strings.Index(image, ":")
 	if index != -1 {
 		tempStr := image[index+1:]
@@ -1370,7 +1478,7 @@ func checkResourcesMetricValue(oc *exutil.CLI, resourceName, resourceNamespace s
 						e2e.Logf("The region %s has %s install attempts", v.Metric.Region, data.Data.Result[0].Metric.InstallAttempt)
 						return true, nil
 					}
-					e2e.Logf("The metric InstallAttempt lable %s didn't match expected %s, try next round", data.Data.Result[0].Metric.InstallAttempt, expectedResult)
+					e2e.Logf("The metric InstallAttempt label %s didn't match expected %s, try next round", data.Data.Result[0].Metric.InstallAttempt, expectedResult)
 					return false, nil
 				}
 			case "hive_cluster_deployment_install_failure_total_count":
@@ -1379,7 +1487,7 @@ func checkResourcesMetricValue(oc *exutil.CLI, resourceName, resourceNamespace s
 						e2e.Logf("The region %s has %s install attempts", v.Metric.Region, data.Data.Result[2].Metric.InstallAttempt)
 						return true, nil
 					}
-					e2e.Logf("The metric InstallAttempt lable %s didn't match expected %s, try next round", data.Data.Result[2].Metric.InstallAttempt, expectedResult)
+					e2e.Logf("The metric InstallAttempt label %s didn't match expected %s, try next round", data.Data.Result[2].Metric.InstallAttempt, expectedResult)
 					return false, nil
 				}
 			}
@@ -1433,7 +1541,7 @@ func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string
 		case installConfig:
 			ic.create(oc)
 		default:
-			g.Fail("Please provide correct install-config type")
+			e2e.Failf("Incorrect install-config type")
 		}
 		x.create(oc)
 	case gcpClusterDeployment:
@@ -1455,7 +1563,7 @@ func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string
 		case gcpInstallConfig:
 			ic.create(oc)
 		default:
-			g.Fail("Please provide correct install-config type")
+			e2e.Failf("Incorrect install-config type")
 		}
 		x.create(oc)
 	case azureClusterDeployment:
@@ -1477,22 +1585,45 @@ func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string
 		case azureInstallConfig:
 			ic.create(oc)
 		default:
-			g.Fail("Please provide correct install-config type")
+			e2e.Failf("Incorrect install-config type")
+		}
+		x.create(oc)
+	case vSphereClusterDeployment:
+		exutil.By("Creating vSphere ClusterDeployment in namespace: " + ns)
+		imageSet := clusterImageSet{
+			name:         x.name + "-imageset",
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		exutil.By("Creating ClusterImageSet")
+		imageSet.create(oc)
+		exutil.By("Copying vSphere platform credentials")
+		createVSphereCreds(oc, ns, x.vCenter)
+		exutil.By("Copying pull-secret")
+		createPullSecret(oc, ns)
+		exutil.By("Creating vCenter certificates Secret")
+		createVsphereCertsSecret(oc, ns, x.vCenter)
+		exutil.By("Creating vSphere Install-Config Secret")
+		switch ic := installConfigSecret.(type) {
+		case vSphereInstallConfig:
+			ic.create(oc)
+		default:
+			e2e.Failf("Incorrect install-config type")
 		}
 		x.create(oc)
 	default:
-		exutil.By("unknown ClusterDeployment type")
+		exutil.By("Unknown ClusterDeployment type")
 	}
 }
 
 func cleanCD(oc *exutil.CLI, clusterImageSetName string, ns string, secretName string, cdName string) {
 	defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
-	defer cleanupObjects(oc, objectTableRef{"secret", ns, secretName})
+	defer cleanupObjects(oc, objectTableRef{"Secret", ns, secretName})
 	defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", ns, cdName})
 }
 
-// Install Hive Operator if not
-func installHiveOperator(oc *exutil.CLI, ns *hiveNameSpace, og *operatorGroup, sub *subscription, hc *hiveconfig, testDataDir string) {
+// Install Hive Operator if not existent, returns the Hive image deployed.
+func installHiveOperator(oc *exutil.CLI, ns *hiveNameSpace, og *operatorGroup, sub *subscription, hc *hiveconfig, testDataDir string) (string, error) {
 	nsTemp := filepath.Join(testDataDir, "namespace.yaml")
 	ogTemp := filepath.Join(testDataDir, "operatorgroup.yaml")
 	subTemp := filepath.Join(testDataDir, "subscription.yaml")
@@ -1528,11 +1659,30 @@ func installHiveOperator(oc *exutil.CLI, ns *hiveNameSpace, og *operatorGroup, s
 		targetNamespace: HiveNamespace,
 		template:        hcTemp,
 	}
-	//Create Hive Resources if not exist
+
+	// Create Hive Resources if not exist
 	ns.createIfNotExist(oc)
 	og.createIfNotExist(oc)
 	sub.createIfNotExist(oc)
 	hc.createIfNotExist(oc)
+
+	// Get Hive image deployed
+	sub.findInstalledCSV(oc)
+	hiveImg, _, err := oc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("get").
+		Args("csv", sub.installedCSV, "-n", sub.namespace,
+			"-o", "jsonpath={.spec.install.spec.deployments[0].spec.template.spec.containers[0].image}").
+		Outputs()
+	if err != nil {
+		e2e.Logf("Failed to get Hive image: %v", err)
+		return "", err
+	} else {
+		e2e.Logf("Found Hive image deployed = %v", hiveImg)
+	}
+
+	return hiveImg, nil
 }
 
 // Get hiveadmission pod name
@@ -1595,31 +1745,88 @@ func checkCondition(oc *exutil.CLI, kind, resourceName, namespace, conditionType
 		e2e.Logf("For condition %s, all fields checked are expected, proceeding to the next step ...", conditionType)
 		return true
 	}
-
 }
 
-// Get AWS credentials stored in the root Secret
-func extractAWSCredentials(oc *exutil.CLI) (AWSAccessKeyID string, AWSSecretAccessKey string) {
-	AWSAccessKeyID, _, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_access_key_id", "--to=-").Outputs()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	AWSSecretAccessKey, _, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n=kube-system", "--keys=aws_secret_access_key", "--to=-").Outputs()
-	o.Expect(err).NotTo(o.HaveOccurred())
+// Get AWS credentials from root credentials, external configurations
+// and then from local credential files (in that order).
+func getAWSCredentials(oc *exutil.CLI, mountPaths ...string) (AWSAccessKeyID string, AWSSecretAccessKey string) {
+	// Try root credential Secret first
+	if err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n=kube-system").Execute(); err == nil {
+		e2e.Logf("Extracting AWS credentials from the root credential Secret")
+		AWSAccessKeyID, _, err = oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("extract").
+			Args("secret/aws-creds", "-n=kube-system", "--keys=aws_access_key_id", "--to=-").
+			Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		AWSSecretAccessKey, _, err = oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("extract").
+			Args("secret/aws-creds", "-n=kube-system", "--keys=aws_secret_access_key", "--to=-").
+			Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return
+	}
+
+	// Try external configurations next
+	if cfg, err := config.LoadDefaultConfig(context.Background()); err == nil {
+		e2e.Logf("Extracting AWS creds from external configurations")
+		creds, retrieveErr := cfg.Credentials.Retrieve(context.Background())
+		o.Expect(retrieveErr).NotTo(o.HaveOccurred())
+		AWSAccessKeyID = creds.AccessKeyID
+		AWSSecretAccessKey = creds.SecretAccessKey
+		return
+	}
+
+	// Fall back to local credential files
+	for _, mountPath := range mountPaths {
+		e2e.Logf("Extracting AWS creds from %s", mountPath)
+		fileBs, err := os.ReadFile(mountPath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		re, err := regexp.Compile(AWSCredsPattern)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		matches := re.FindStringSubmatch(string(fileBs))
+		o.Expect(len(matches)).To(o.Equal(3))
+		AWSAccessKeyID = matches[1]
+		AWSSecretAccessKey = matches[2]
+		return
+	}
+
+	e2e.Failf("Unable to extract AWS credentials")
 	return
 }
 
-// Get default external configurations for AWS SDK v2
-func getDefaultAWSConfig(oc *exutil.CLI, region string) aws.Config {
-	// Extract AWS credentials
-	AWSAccessKeyID, AWSSecretAccessKey := extractAWSCredentials(oc)
+// Extract vSphere root credentials
+func getVSphereCredentials(oc *exutil.CLI, vCenter string) (username string, password string) {
+	username, _, err := oc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("extract").
+		Args("secret/vsphere-creds", "-n=kube-system", fmt.Sprintf("--keys=%v.username", vCenter), "--to=-").
+		Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	password, _, err = oc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("extract").
+		Args("secret/vsphere-creds", "-n=kube-system", fmt.Sprintf("--keys=%v.password", vCenter), "--to=-").
+		Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
 
-	// Get default AWS config
+	return
+}
+
+// Get AWS-SDK-V2 configurations with static credentials for the provided region
+func getDefaultAWSConfig(oc *exutil.CLI, region string, secretMountPaths ...string) aws.Config {
+	AWSAccessKeyID, AWSSecretAccessKey := getAWSCredentials(oc, secretMountPaths...)
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(AWSAccessKeyID, AWSSecretAccessKey, "")),
 		config.WithRegion(region),
 	)
 	o.Expect(err).NotTo(o.HaveOccurred())
-
 	return cfg
 }
 
@@ -1754,9 +1961,212 @@ func getRegion(oc *exutil.CLI) string {
 	case "gcp":
 		region = infrastructure.Status.PlatformStatus.GCP.Region
 	default:
-		g.Fail("Unknown platform: " + platform)
+		e2e.Failf("Unknown platform: %s", platform)
 	}
 
 	e2e.Logf("Found region = %v", region)
 	return region
+}
+
+// Download root certificates for vCenter, then creates a Secret for them.
+func createVsphereCertsSecret(oc *exutil.CLI, ns, vCenter string) {
+	// Notes:
+	// 1) As we do not necessarily have access to the vCenter URL, we'd better run commands on the ephemeral cluster.
+	// 2) For some reason, /certs/download.zip might contain root certificates for a co-hosted (alias) domain.
+	//    Provision will fail when this happens. As a result, we need to get an additional set of certificates
+	//    with openssl, and merge those certificates into the ones obtained with wget.
+	// TODO: is certificates obtained though openssl sufficient themselves (probably yes) ?
+	e2e.Logf("Getting certificates from the ephemeral cluster")
+	commands := fmt.Sprintf("yum install -y unzip && "+
+		"wget https://%v/certs/download.zip --no-check-certificate && "+
+		"unzip download.zip && "+
+		"cat certs/lin/*.0 && "+
+		"openssl s_client -host %v -port 443 -showcerts", vCenter, vCenter)
+	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--", "bash", "-c", commands).Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	re, err := regexp.Compile(certsPattern)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	matches := re.FindAllStringSubmatch(stdout, -1)
+	var certsSlice []string
+	for _, match := range matches {
+		certsSlice = append(certsSlice, match[0])
+	}
+	certs := strings.Join(certsSlice, "\n")
+
+	e2e.Logf("Creating Secret containing root certificates of vCenter %v", vCenter)
+	certSecret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      VSphereCerts,
+			Namespace: ns,
+		},
+		Type: corev1.SecretTypeOpaque,
+		StringData: map[string]string{
+			".cacert": certs,
+		},
+	}
+	_, err = oc.AdminKubeClient().CoreV1().Secrets(ns).Create(context.Background(), certSecret, metav1.CreateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+/*
+fReserve: when called, reserves an available IP for each domain from the hostedZoneName hosted zone.
+IPs with the following properties can be reserved:
+
+a) Be in the cidr block defined by cidrObj
+b) Be in the IP range defined by minIp and maxIp
+
+fRelease: when called, releases the IPs reserved in fReserve().
+
+domain2Ip: maps domain to the IP reserved for it.
+*/
+func getIps2ReserveFromAWSHostedZone(oc *exutil.CLI, hostedZoneName string, cidrBlock, minIp, maxIp string,
+	domains2Reserve []string) (fReserve func(), fRelease func(), domain2Ip map[string]string) {
+	// Route 53 is global so any region will do
+	cfg := getDefaultAWSConfig(oc, AWSRegion, VSphereAWSCredsMountPath)
+	route53Client := route53.NewFromConfig(cfg)
+
+	// Get hosted zone ID
+	var hostedZoneId *string
+	listHostedZonesByNameOutput, err := route53Client.ListHostedZonesByName(context.Background(),
+		&route53.ListHostedZonesByNameInput{
+			DNSName: aws.String(hostedZoneName),
+		},
+	)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	hostedZoneFound := false
+	for _, hostedZone := range listHostedZonesByNameOutput.HostedZones {
+		if strings.TrimSuffix(aws.ToString(hostedZone.Name), ".") == hostedZoneName {
+			hostedZoneFound = true
+			hostedZoneId = hostedZone.Id
+			break
+		}
+	}
+	o.Expect(hostedZoneFound).To(o.BeTrue())
+	e2e.Logf("Found hosted zone id = %v", aws.ToString(hostedZoneId))
+
+	// Get reserved IPs in cidr
+	cidrObj, parseErr := cidr.Parse(cidrBlock)
+	o.Expect(parseErr).NotTo(o.HaveOccurred())
+	reservedIps := sets.New[string]()
+	listResourceRecordSetsPaginator := route53.NewListResourceRecordSetsPaginator(
+		route53Client,
+		&route53.ListResourceRecordSetsInput{
+			HostedZoneId: hostedZoneId,
+		},
+	)
+	for listResourceRecordSetsPaginator.HasMorePages() {
+		// Get a page of record sets
+		listResourceRecordSetsOutput, listResourceRecordSetsErr := listResourceRecordSetsPaginator.NextPage(context.Background())
+		o.Expect(listResourceRecordSetsErr).NotTo(o.HaveOccurred())
+
+		// Iterate records, mark IPs which belong to the cidr block as reservedIps
+		for _, recordSet := range listResourceRecordSetsOutput.ResourceRecordSets {
+			for _, resourceRecord := range recordSet.ResourceRecords {
+				if ip := aws.ToString(resourceRecord.Value); cidrObj.Contains(ip) {
+					reservedIps.Insert(ip)
+				}
+			}
+		}
+	}
+	e2e.Logf("Found reserved IPs = %v", reservedIps.UnsortedList())
+
+	// Get available IPs in cidr which do not exceed the range defined by minIp and maxIp
+	var ips2Reserve []string
+	err = cidrObj.EachFrom(minIp, func(ip string) bool {
+		// Stop if IP exceeds maxIp or no more IPs to reserve
+		if cidr.IPCompare(net.ParseIP(ip), net.ParseIP(maxIp)) == 1 || len(ips2Reserve) == len(domains2Reserve) {
+			return false
+		}
+		// Reserve available IP
+		if !reservedIps.Has(ip) {
+			ips2Reserve = append(ips2Reserve, ip)
+		}
+		return true
+	})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(len(domains2Reserve)).To(o.Equal(len(ips2Reserve)), "Not enough available IPs to reserve")
+	e2e.Logf("IPs to reserve = %v", ips2Reserve)
+	e2e.Logf("Domains to reserve = %v", domains2Reserve)
+
+	// Get functions to reserve/release IPs
+	var recordSetChanges4Reservation, recordSetChanges4Release []types.Change
+	domain2Ip = make(map[string]string)
+	for i, domain2Reserve := range domains2Reserve {
+		ip2Reserve := ips2Reserve[i]
+		domain2Ip[domain2Reserve] = ip2Reserve
+		e2e.Logf("Will reserve IP %v for domain %v", ip2Reserve, domain2Reserve)
+		recordSetChanges4Reservation = append(recordSetChanges4Reservation, types.Change{
+			Action: types.ChangeActionCreate,
+			ResourceRecordSet: &types.ResourceRecordSet{
+				Name:            aws.String(domain2Reserve),
+				Type:            types.RRTypeA,
+				TTL:             aws.Int64(60),
+				ResourceRecords: []types.ResourceRecord{{Value: aws.String(ip2Reserve)}},
+			},
+		})
+		recordSetChanges4Release = append(recordSetChanges4Release, types.Change{
+			Action: types.ChangeActionDelete,
+			ResourceRecordSet: &types.ResourceRecordSet{
+				Name:            aws.String(domain2Reserve),
+				Type:            types.RRTypeA,
+				TTL:             aws.Int64(60),
+				ResourceRecords: []types.ResourceRecord{{Value: aws.String(ip2Reserve)}},
+			},
+		})
+	}
+	fReserve = func() {
+		e2e.Logf("Reserving IP addresses with domain to IP injection %v", domain2Ip)
+		_, reserveErr := route53Client.ChangeResourceRecordSets(
+			context.Background(),
+			&route53.ChangeResourceRecordSetsInput{
+				HostedZoneId: hostedZoneId,
+				ChangeBatch: &types.ChangeBatch{
+					Changes: recordSetChanges4Reservation,
+				},
+			},
+		)
+		o.Expect(reserveErr).NotTo(o.HaveOccurred())
+	}
+	fRelease = func() {
+		e2e.Logf("Releasing IP addresses for domains %v", domains2Reserve)
+		_, releaseErr := route53Client.ChangeResourceRecordSets(
+			context.Background(),
+			&route53.ChangeResourceRecordSetsInput{
+				HostedZoneId: hostedZoneId,
+				ChangeBatch: &types.ChangeBatch{
+					Changes: recordSetChanges4Release,
+				},
+			},
+		)
+		o.Expect(releaseErr).NotTo(o.HaveOccurred())
+	}
+	return
+}
+
+/*
+Get vSphere CIDR block, minimum and maximum IPs to be used for API/ingress/Node IPs.
+
+Example:
+getVSphereCIDR("ci-segment-100") returns "192.168.100.0/24", "192.168.100.3" and "192.168.100.49"
+*/
+func getVSphereCIDR(network string) (string, string, string) {
+	re, err := regexp.Compile(VSphereNetworkPattern)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	matches := re.FindStringSubmatch(network)
+	o.Expect(len(matches)).To(o.Equal(2))
+
+	segmentIdx := matches[1]
+	e2e.Logf("Found segment index = %v", segmentIdx)
+	cidrBlock := fmt.Sprintf("192.168.%s.0/24", segmentIdx)
+	e2e.Logf("Network CIDR block = %v", cidrBlock)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	minIp := fmt.Sprintf("192.168.%v.%v", segmentIdx, VSphereLastCidrOctetMin)
+	maxIp := fmt.Sprintf("192.168.%v.%v", segmentIdx, VSphereLastCidrOctetMax)
+	e2e.Logf("Min IP = %v, max IP = %v", minIp, maxIp)
+	return cidrBlock, minIp, maxIp
 }
