@@ -24,7 +24,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	)
 
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-ARO-Author:yinzhou-Medium-56929-run the must-gather command with own name space [Slow]", func() {
+	g.It("ARO-Author:yinzhou-Medium-56929-run the must-gather command with own name space [Slow]", func() {
 		g.By("Set namespace as privileged namespace")
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		err := oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "system:serviceaccount:"+oc.Namespace()+":default").Execute()

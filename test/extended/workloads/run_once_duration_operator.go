@@ -77,6 +77,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 	})
 
 	// author: knarra@redhat.com
+	// Added NonHyperShiftHOST as RODO cases cannot be run on hypershift due to bug https://issues.redhat.com/browse/OCPBUGS-17533
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-Critical-60351-Critical-60352-Install Run Once Duration Override  operator via a deployment and verify that it works fine [Serial]", func() {
 
 		podWithRestartPolicy := filepath.Join(buildPruningBaseDir, "pod_with_restart_policy.yaml")
@@ -203,6 +204,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 	})
 
 	// author: knarra@redhat.com
+	// Added NonHyperShiftHOST as RODO cases cannot be run on hypershift due to bug https://issues.redhat.com/browse/OCPBUGS-17533
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-High-62690-Verify that activeDeadLineSeconds value is set as the min value of pod.spec.ActiveDeadlineSeconds and RODOO activeDeadlineSeconds [Serial]", func() {
 		podWithActiveDeadLineSeconds := filepath.Join(buildPruningBaseDir, "pod_with_active_dead_line_seconds.yaml")
 		podWithAdsGreaterThanOperator := filepath.Join(buildPruningBaseDir, "pod_with_ads_greater_than_operator.yaml")

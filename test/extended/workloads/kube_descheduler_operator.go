@@ -1844,7 +1844,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-High-50195-High-50942-Descheduler-Validate priorityfiltering with thresholdPriority param [Slow][Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-50195-High-50942-Descheduler-Validate priorityfiltering with thresholdPriority param [Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 

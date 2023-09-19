@@ -558,6 +558,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: knarra@redhat.com
+	// This is a techpreviewNoUpgrade feature, so added NonHyperShiftHOST
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-Critical-63694-Verify MaxUnavailableStatefulSet feature works fine", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		statefulset63694 := filepath.Join(buildPruningBaseDir, "statefulset_63694.yaml")

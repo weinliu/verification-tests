@@ -21,6 +21,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: yinzhou@redhat.com
+	// Adding NonHyperShiftHOST due to bug https://issues.redhat.com/browse/HOSTEDCP-936
 	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:yinzhou-Medium-31939-Verify logLevel settings in kube scheduler operator [Disruptive][Slow]", func() {
 		patchYamlToRestore := `[{"op": "replace", "path": "/spec/logLevel", "value":"Normal"}]`
@@ -206,6 +207,8 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	})
 
+	// author: knarra@redhat.com
+	// Added NonHyperShiftHOST as added another case 67153 in same file to test this on HypershiftHost a adjusting this becomes very complex.
 	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-50931-Validate HighNodeUtilization profile 4.10 and above [Disruptive][Slow]", func() {
 		patchYamlToRestore := `[{"op": "remove", "path": "/spec/profile"}]`
@@ -253,6 +256,8 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 
+	// author: knarra@redhat.com
+	// Added NonHyperShiftHOST as added another case 67153 in same file to test this on HypershiftHost a adjusting this becomes very complex.
 	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-50932-Validate NoScoring profile 4.10 and above [Disruptive][Slow]", func() {
 		patchYamlToRestore := `[{"op": "remove", "path": "/spec/profile"}]`
@@ -401,6 +406,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	})
 
+	// author: knarra@redhat.com
 	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:knarra-High-67153-Validate highNodeUtilization,noScoring,lowNodeUtilization profile on hypershift clusters [Disruptive][Slow]", func() {
 		guestClusterName, _, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
