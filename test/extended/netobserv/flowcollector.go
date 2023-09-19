@@ -166,7 +166,12 @@ func (flow *Flowcollector) waitForFlowcollectorReady(oc *exutil.CLI) {
 		if status == "'Ready'" {
 			return true, nil
 		}
-		e2e.Logf("flowcollector status is %s", status)
+		msg, err := oc.AsAdmin().Run("get").Args("flowcollector", "-o", "jsonpath='{.items[*].status.conditions[0].message}'").Output()
+		e2e.Logf("flowcollector status is %s due to %s", status, msg)
+		if err != nil {
+			return false, err
+		}
+
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Flowcollector did not become Ready")
