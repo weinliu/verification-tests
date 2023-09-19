@@ -31,8 +31,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		errInfo              = "http.response.status=404"
 		logInfo              = `Unsupported value: "abc": supported values: "", "Normal", "Debug", "Trace", "TraceAll"`
 		updatePolicy         = `"maxSurge":0,"maxUnavailable":"10%"`
-		monitoringns         = "openshift-monitoring"
-		promPod              = "prometheus-k8s-0"
 		patchAuthURL         = `"authURL":"invalid"`
 		patchRegion          = `"regionName":"invaild"`
 		patchDomain          = `"domain":"invaild"`
@@ -43,7 +41,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		domainErrInfo        = "Failed to authenticate provider client"
 		domainIDErrInfo      = "You must provide exactly one of DomainID or DomainName"
 		tenantIDErrInfo      = "Authentication failed"
-		queryCredentialMode  = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=cco_credentials_mode"
 		imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 		requireRules         = "requiredDuringSchedulingIgnoredDuringExecution"
 	)
@@ -70,19 +67,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:wewang-High-39027-Check AWS secret and access key with an OpenShift installed in a regular way", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Skip test when the cluster is with STS credential")
-		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(token).NotTo(o.BeEmpty())
-		result, err := getBearerTokenURLViaPod(monitoringns, promPod, queryCredentialMode, token)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(result, "manualpodidentity") {
-			g.Skip("Skip for the aws cluster with STS credential")
+		if strings.Contains(credType, "Manual") {
+			g.Skip("Skip test on aws sts cluster")
 		}
 
 		g.By("Check AWS secret and access key inside image registry pod")
 		var keyInfo string
 		waitErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			result, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "cat", "/var/run/secrets/cloud/credentials").Output()
+			result, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "cat", "/var/run/secrets/cloud/credentials").Output()
 			if err != nil {
 				e2e.Logf("Fail to rsh into registry pod, error: %s. Trying again", err)
 				return false, nil
@@ -547,17 +541,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Check platforms")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Check if the cluster is with STS credential")
-		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(token).NotTo(o.BeEmpty())
-		result, err := getBearerTokenURLViaPod(monitoringns, promPod, queryCredentialMode, token)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(result, "manualpodidentity") {
-			g.Skip("Skip for the aws cluster without STS credential")
+		if !strings.Contains(credType, "Manual") {
+			g.Skip("Skip test on none aws sts cluster")
 		}
 
 		g.By("Check role_arn/web_identity_token_file inside image registry pod")
-		result, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "cat", "/var/run/secrets/cloud/credentials").Output()
+		result, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "cat", "/var/run/secrets/cloud/credentials").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("role_arn"))
 		o.Expect(result).To(o.ContainSubstring("web_identity_token_file"))
@@ -3112,13 +3103,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:wewang-Medium-31767-Warning appears when registry use invalid AdditionalTrustedCA [Disruptive]", func() {
-		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("image.config/cluster", "-o=jsonpath={.spec.additionalTrustedCA.name}").Output()
-		o.Expect(output).To(o.Equal("registry-config"))
+		trustCAName, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("image.config", "-o=jsonpath={..spec.additionalTrustedCA.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(trustCAName).NotTo(o.BeEmpty())
 
 		g.By("Config AdditionalTrustedCA to use a non-existent ConfigMap")
 		defer func() {
 			var message string
-			err := oc.AsAdmin().Run("patch").Args("image.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": "registry-config"}}}`, "--type=merge").Execute()
+			err := oc.AsAdmin().Run("patch").Args("image.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": "`+trustCAName+`"}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
 				registryDegrade := checkRegistryDegraded(oc)
@@ -3131,7 +3123,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			})
 			exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", message))
 		}()
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": "registry-config-invalid"}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": "registry-config-invalid"}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
 			result, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/cluster-image-registry-operator", "-n", "openshift-image-registry").Output()
@@ -3770,6 +3762,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			expectInfo1      = `Successfully pulled image "` + subMan
 			expectInfo2      = `Successfully pulled image "` + internalRegistry + "/" + oc.Namespace() + "/push59415@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"
 		)
+		// https://docs.openshift.com/container-platform/4.13/networking/enable-cluster-wide-proxy.html#prerequisites
+		// System-wide proxy affects system components only, not user workloads
+		// In proxy cluster, there is no proxy set inside pod, so can't access quay.io inside pod, this causes next steps failed in the case
+		g.By("Skip test on proxy cluster")
+		proxySet, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpProxy}").Output()
+		if proxySet != " " {
+			g.Skip("Skip for proxy platform")
+		}
+
 		g.By("Get token from secret")
 		token, err := getSAToken(oc, "builder", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
