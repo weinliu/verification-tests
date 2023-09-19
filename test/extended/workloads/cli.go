@@ -178,6 +178,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-44797-Could define a Command for DC", func() {
+		if isBaselineCapsSet(oc, "None") {
+			g.Skip("Skipping the test as baselinecaps have been set to None")
+		}
+
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -560,6 +564,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-42982-Describe quota output should always show units", func() {
+		if isBaselineCapsSet(oc, "None") {
+			g.Skip("Skipping the test as baselinecaps have been set to None")
+		}
+
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		deploymentconfigF := filepath.Join(buildPruningBaseDir, "deploymentconfig_with_quota.yaml")
 		clusterresourceF := filepath.Join(buildPruningBaseDir, "clusterresource_for_user.yaml")
