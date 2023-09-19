@@ -153,7 +153,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 	})
 
 	//author: yanyang@redhat.com
-	g.It("DisconnectedOnly-Author:yanyang-High-62641-install/uninstall updateservice instance using oc-mirror [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-DisconnectedOnly-Author:yanyang-High-62641-install/uninstall updateservice instance using oc-mirror [Disruptive]", func() {
 		g.By("Mirror OCP release and graph data image by oc-mirror")
 		registry, err := exutil.GetMirrorRegistry(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
