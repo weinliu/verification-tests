@@ -8186,14 +8186,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("3, Collect olm metrics before installing an operator")
 		metricsCon := []string{"csv_count", "csv_upgrade_count", "catalog_source_count", "install_plan_count", "subscription_count", "subscription_sync_total"}
-		metricsMap := map[string]int{
-			"csv_count":               metricsBefore.csvCount,
-			"csv_upgrade_count":       metricsBefore.csvUpgradeCount,
-			"catalog_source_count":    metricsBefore.catalogSourceCount,
-			"install_plan_count":      metricsBefore.installPlanCount,
-			"subscription_count":      metricsBefore.subscriptionCount,
-			"subscription_sync_total": metricsBefore.subscriptionSyncTotal,
-		}
 		for _, metric := range metricsCon {
 			waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 				queryContent := fmt.Sprintf("https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=%s", metric)
@@ -8210,11 +8202,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				if metric == "subscription_sync_total" {
 					for i = range data.Data.Result {
 						if strings.Contains(data.Data.Result[i].Metric.SrcName, sub.subName) {
-							metricsMap[metric], _ = strconv.Atoi(data.Data.Result[i].Value[1].(string))
+							metricsBefore.subscriptionSyncTotal, _ = strconv.Atoi(data.Data.Result[i].Value[1].(string))
 						}
 					}
 				} else {
-					metricsMap[metric], _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					switch metric {
+					case "csv_count":
+						metricsBefore.csvCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					case "csv_upgrade_count":
+						metricsBefore.csvUpgradeCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					case "catalog_source_count":
+						metricsBefore.catalogSourceCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					case "install_plan_count":
+						metricsBefore.installPlanCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					case "subscription_count":
+						metricsBefore.subscriptionCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					}
 				}
 				return true, nil
 			})
@@ -8232,15 +8235,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("5, learnoperator is at v0.0.3, start to collect olm metrics after")
-		metricsMapAfter := map[string]int{
-			"csv_count":               metricsAfter.csvCount,
-			"csv_upgrade_count":       metricsAfter.csvUpgradeCount,
-			"catalog_source_count":    metricsAfter.catalogSourceCount,
-			"install_plan_count":      metricsAfter.installPlanCount,
-			"subscription_count":      metricsAfter.subscriptionCount,
-			"subscription_sync_total": metricsAfter.subscriptionSyncTotal,
-		}
-
 		for _, metric := range metricsCon {
 			waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 				queryContent := fmt.Sprintf("https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=%s", metric)
@@ -8257,11 +8251,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				if metric == "subscription_sync_total" {
 					for i = range data.Data.Result {
 						if strings.Contains(data.Data.Result[i].Metric.SrcName, sub.subName) {
-							metricsMapAfter[metric], _ = strconv.Atoi(data.Data.Result[i].Value[1].(string))
+							metricsAfter.subscriptionSyncTotal, _ = strconv.Atoi(data.Data.Result[i].Value[1].(string))
 						}
 					}
 				} else {
-					metricsMapAfter[metric], _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					switch metric {
+					case "csv_count":
+						metricsAfter.csvCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					case "csv_upgrade_count":
+						metricsAfter.csvUpgradeCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					case "catalog_source_count":
+						metricsAfter.catalogSourceCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					case "install_plan_count":
+						metricsAfter.installPlanCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					case "subscription_count":
+						metricsAfter.subscriptionCount, _ = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+					}
 				}
 				return true, nil
 			})
