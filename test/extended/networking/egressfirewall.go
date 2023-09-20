@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		o.Expect(networkType).NotTo(o.BeEmpty())
 		if networkType != "ovnkubernetes" {
-			g.Skip("EgressFirewall ACL auditing enabled on OVN network plugin")
+			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVNK network plugin")
 		}
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, egressfirewall cannot be tested on proxy cluster, skip the test.")
