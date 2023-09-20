@@ -2273,10 +2273,11 @@ spec:
 		namespace := oc.Namespace()
 
 		exutil.By("2) Get cluster worker node list")
-		nodesJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o", "json").Output()
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o", "json").OutputToFile("nodesJson.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 		// Eliminate tainted worker nodes from the selection pool to avoid application scheduling failure
-		nsOutput, nsErr := exec.Command("bash", "-c", fmt.Sprintf("echo '%v' | jq -r '.items[] | select(.spec.taints == null or ([.spec.taints[]?.effect? // empty] | length == 0)) | .metadata.name'", nodesJson)).Output()
+		nsOutput, nsErr := exec.Command("bash", "-c", fmt.Sprintf("jq -r '.items[] | select(.spec.taints == null or ([.spec.taints[]?.effect? // empty] | length == 0)) | .metadata.name' %s", out)).Output()
 		o.Expect(nsErr).NotTo(o.HaveOccurred())
 		workernodes := strings.Split(strings.TrimSpace(string(nsOutput)), "\n")
 		if workernodes[0] == "" {
