@@ -1011,3 +1011,36 @@ func kataconfigStatusInUse(oc *exutil.CLI, opNamespace, kcName string) (kataconf
 	}
 	return kataconfigStatusQuery, kataconfigStatusQueryChanged, err
 }
+
+func checkResourceExists(oc *exutil.CLI, resType, resName, resNs string, duration, interval time.Duration) (msg string, err error) {
+	// working: pod, deploy, service, route, ep, ds
+	errCheck := wait.PollImmediate(interval, duration, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resType, resName, "-n", resNs, "--no-headers").Output()
+		e2e.Logf("DEBUG: %v %v %v %v", resType, resName, msg, err)
+		if strings.Contains(msg, resName) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v %v was not found in ns %v after %v sec: %v %v", resType, resName, resNs, duration, msg, err))
+	return msg, nil
+}
+
+func checkResourceJsonpath(oc *exutil.CLI, resType, resName, resNs, jsonpath, expected string, duration, interval time.Duration) (msg string, err error) {
+	// resType=pod,    -o=jsonpath='{.status.phase}',                                               expected="Running"
+	// resType=deploy, -o=jsonpath='{.status.conditions[?(@.type=="Available")].status}',           expected="True"
+	// resType=route,  -o=jsonpath='{.status.ingress..conditions[?(@.type==\"Admitted\")].status}', expected="True"
+	// resType=ds,     -o=jsonpath='{.status.ingress..conditions[?(@.type==\"Admitted\")].status}'", expected= number of nodes w/ kata-oc
+	//   fmt.Sprintf("%v", len(exutil.GetNodeListByLabel(oc, kataocLabel)))
+
+	errCheck := wait.PollImmediate(interval, duration, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resType, resName, "-n", resNs, jsonpath).Output()
+		e2e.Logf("DEBUG %v %v -n %v %v is %v %v", resType, resName, resNs, jsonpath, msg, err)
+		if strings.Contains(msg, expected) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v %v in ns %v is not in %v state after %v sec: %v %v", resType, resName, resNs, expected, duration, msg, err))
+	return msg, nil
+}
