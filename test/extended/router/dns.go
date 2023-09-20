@@ -380,7 +380,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// Bug: 1949361, 1884053, 1756344
-	g.It("Author:mjoseph-High-55821-Check CoreDNS default bufsize, readinessProbe path and policy", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-High-55821-Check CoreDNS default bufsize, readinessProbe path and policy", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
