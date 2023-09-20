@@ -405,7 +405,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				"ignition-server",
 				"ingress-operator",
 				"konnectivity-agent",
-				"konnectivity-server",
 				"kube-controller-manager",
 				"kube-scheduler",
 				"machine-approver",
@@ -415,8 +414,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				"openshift-route-controller-manager",
 				"redhat-marketplace-catalog",
 				"redhat-operators-catalog",
-				//https://issues.redhat.com/browse/OCPBUGS-5060
-				//"cloud-network-config-controller",
+				"cloud-network-config-controller",
 			},
 		}
 
@@ -520,7 +518,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			"ignition-server",
 			"ingress-operator",
 			"konnectivity-agent",
-			"konnectivity-server",
 			"kube-controller-manager",
 			"kube-scheduler",
 			"machine-approver",
@@ -529,13 +526,15 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			"openshift-route-controller-manager",
 			"redhat-marketplace-catalog",
 			"redhat-operators-catalog",
-			//https://issues.redhat.com/browse/OCPBUGS-5060
-			//"aws-ebs-csi-driver-controller",
-			//"aws-ebs-csi-driver-operator",
 			//"cloud-network-config-controller",
-			//"csi-snapshot-controller",
-			//"csi-snapshot-webhook",
+			"csi-snapshot-controller",
+			"csi-snapshot-webhook",
 			//"multus-admission-controller",
+			//"ovnkube-control-plane",
+		}
+
+		if hostedclusterPlatform == AWSPlatform {
+			controlplaneComponents = append(controlplaneComponents, []string{"aws-ebs-csi-driver-controller" /*"aws-ebs-csi-driver-operator"*/}...)
 		}
 
 		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
@@ -549,7 +548,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			o.Expect(res).To(o.ContainSubstring(controlplanAffinityLabelValue))
 		}
 
-		//https://issues.redhat.com/browse/OCPBUGS-5060 ovnkube-master
 		res := doOcpReq(oc, OcpGet, true, "sts", "etcd", "-n", controlplaneNS, ocJsonpath)
 		o.Expect(res).To(o.ContainSubstring(controlplanAffinityLabelKey))
 		o.Expect(res).To(o.ContainSubstring(controlplanAffinityLabelValue))
@@ -599,6 +597,15 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 
 		releaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.release.image}")
+		defer func() {
+			//delete nodepools simultaneously to save time
+			for _, cf := range awsConfigs {
+				hostedcluster.deleteNodePool(cf.nodepoolName)
+			}
+			for _, cf := range awsConfigs {
+				o.Eventually(hostedcluster.pollCheckDeletedNodePool(cf.nodepoolName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
+			}
+		}()
 		for _, cf := range awsConfigs {
 			NewAWSNodePool(cf.nodepoolName, hostedcluster.name, hostedcluster.namespace).
 				WithRootVolumeType(cf.rootVolumeType).
@@ -726,6 +733,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 48673 is for AWS - skipping test ...")
 		}
+		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
 
 		g.By("create aws nodepool with replica 1")
 		npName := "48673np-" + strings.ToLower(exutil.RandStrDefault())
@@ -746,8 +754,17 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		e2e.Logf("awsMachines: %s", awsMachines)
 
 		g.By("Set nodeDrainTimeout to 1m")
-		defer doOcpReq(oc, OcpPatch, true, "nodepools", npName, "-n", hostedcluster.namespace, "-p", `{"spec":{"nodeDrainTimeout":"0s"}}`, "--type=merge")
-		doOcpReq(oc, OcpPatch, true, "nodepools", npName, "-n", hostedcluster.namespace, "-p", `{"spec":{"nodeDrainTimeout":"1m"}}`, "--type=merge")
+		drainTime := "1m"
+		doOcpReq(oc, OcpPatch, true, "nodepools", npName, "-n", hostedcluster.namespace, "-p", fmt.Sprintf(`{"spec":{"nodeDrainTimeout":"%s"}}`, drainTime), "--type=merge")
+		o.Expect("True").To(o.Equal(doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", hostedcluster.namespace, `-ojsonpath={.status.conditions[?(@.type=="Ready")].status}`)))
+
+		g.By("check machinedeployment and machines")
+		mdDrainTimeRes := doOcpReq(oc, OcpGet, true, "machinedeployment", "--ignore-not-found", "-n", controlplaneNS, fmt.Sprintf(`-ojsonpath='{.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].spec.template.spec.nodeDrainTimeout}'`, hostedcluster.namespace, npName))
+		o.Expect(mdDrainTimeRes).To(o.ContainSubstring(drainTime))
+
+		g.By("check machines.cluster.x-k8s.io")
+		mDrainTimeRes := doOcpReq(oc, OcpGet, true, "machines.cluster.x-k8s.io", "--ignore-not-found", "-n", controlplaneNS, fmt.Sprintf(`-ojsonpath='{.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].spec.nodeDrainTimeout}'`, hostedcluster.namespace, npName))
+		o.Expect(mDrainTimeRes).To(o.ContainSubstring(drainTime))
 
 		g.By("Check the guestcluster podDisruptionBudget are not be deleted")
 		pdbNameSpaces := []string{"openshift-console", "openshift-image-registry", "openshift-ingress", "openshift-monitoring", "openshift-operator-lifecycle-manager"}
@@ -762,6 +779,14 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("Scale the nodepool to 1")
 		doOcpReq(oc, OcpScale, true, "nodepool", npName, "-n", hostedcluster.namespace, "--replicas=1")
 		o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(npName), LongTimeout, LongTimeout/10).Should(o.Equal(1), fmt.Sprintf("nodepool are not scale down to 1 in hostedcluster %s", hostedcluster.name))
+
+		g.By("check machinedeployment and machines")
+		mdDrainTimeRes = doOcpReq(oc, OcpGet, true, "machinedeployment", "--ignore-not-found", "-n", controlplaneNS, fmt.Sprintf(`-ojsonpath='{.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].spec.template.spec.nodeDrainTimeout}'`, hostedcluster.namespace, npName))
+		o.Expect(mdDrainTimeRes).To(o.ContainSubstring(drainTime))
+
+		g.By("check machines.cluster.x-k8s.io")
+		mDrainTimeRes = doOcpReq(oc, OcpGet, true, "machines.cluster.x-k8s.io", "--ignore-not-found", "-n", controlplaneNS, fmt.Sprintf(`-ojsonpath='{.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].spec.nodeDrainTimeout}'`, hostedcluster.namespace, npName))
+		o.Expect(mDrainTimeRes).To(o.ContainSubstring(drainTime))
 	})
 
 	// author: mihuang@redhat.com

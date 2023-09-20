@@ -616,8 +616,8 @@ func (h *hostedCluster) isCPHighlyAvailable() bool {
 // checkAWSRooVolumes check aws root-volume configurations,
 // checkItems: iops, size, type
 func (h *hostedCluster) checkAWSRootVolumes(name string, checkItem string, expected interface{}) bool {
-	awsmachineVolumeJSONPathPtn := `-ojsonpath={.items[?(@.metadata.annotations.cluster\.x-k8s\.io/cloned-from-name=="%s")].spec.rootVolume.%s}`
-	awsmachineVolumeFilter := fmt.Sprintf(awsmachineVolumeJSONPathPtn, name, checkItem)
+	awsmachineVolumeJSONPathPtn := `-ojsonpath={.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].spec.rootVolume.%s}`
+	awsmachineVolumeFilter := fmt.Sprintf(awsmachineVolumeJSONPathPtn, h.namespace, name, checkItem)
 	nodepoolVolumeFilter := fmt.Sprintf("-ojsonpath={.spec.platform.aws.rootVolume.%s}", checkItem)
 
 	var expectedVal string
