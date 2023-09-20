@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -134,6 +135,11 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-High-62063-Low-63486-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
+		if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+			g.Skip("Skipping Private clusters that are behind some proxy and can't be directly reachable from externally.")
+		}
+		exutil.SkipIfPlatformType(oc, "openstack")
+
 		e2e.Logf("Login with normal user and create new ns.")
 		oc.SetupProject()
 		e2e.Logf("Create issuer in ns scope created in last step.")

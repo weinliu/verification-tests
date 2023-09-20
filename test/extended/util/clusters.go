@@ -141,6 +141,15 @@ func SkipIfPlatformTypeNot(oc *CLI, platforms string) {
 	}
 }
 
+// skip platform
+func SkipIfPlatformType(oc *CLI, platforms string) {
+	platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(strings.ToLower(platforms), strings.ToLower(platformType)) {
+		g.Skip("Skip for " + platforms + " cluster: " + platformType)
+	}
+}
+
 // IsHypershiftHostedCluster
 func IsHypershiftHostedCluster(oc *CLI) bool {
 	topology, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status.controlPlaneTopology}").Output()
