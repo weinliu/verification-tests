@@ -2807,6 +2807,9 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
+		// cloudprivateipconfig is a resource only available on cloud platforms like AWS, GCP and Azure that egressIP is supported, skip other platforms
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "azure")
+
 		exutil.By("1. Get list of nodes, get two worker nodes that have same subnet, use them as egress nodes\n")
 		var egressNode1, egressNode2 string
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
