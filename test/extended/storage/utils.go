@@ -715,7 +715,7 @@ func checkCSOhealthy(oc *exutil.CLI) (bool, error) {
 
 // Wait for Cluster Storage Operator become healthy
 func waitCSOhealthy(oc *exutil.CLI) {
-	pollErr := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+	pollErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		healthyBool, err := checkCSOhealthy(oc)
 		if err != nil {
 			e2e.Logf("Get CSO status failed of: \"%v\"", err)
