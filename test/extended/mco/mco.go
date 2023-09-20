@@ -3507,11 +3507,9 @@ nulla pariatur.`
 	g.It("Author:sregidor-NonHyperShiftHOST-Low-66046-Check image registry certificates", func() {
 
 		var (
-			nodeCertsDirectory = "/etc/docker/certs.d"
-			nodeCertsFile      = "ca.crt"
-			mcp                = GetCompactCompatiblePool(oc.AsAdmin())
-			node               = mcp.GetNodesOrFail()[0]
-			cc                 = NewControllerConfig(oc.AsAdmin(), "machine-config-controller")
+			mcp  = GetCompactCompatiblePool(oc.AsAdmin())
+			node = mcp.GetNodesOrFail()[0]
+			cc   = NewControllerConfig(oc.AsAdmin(), "machine-config-controller")
 		)
 
 		imageRegistryCerts, err := GetImageRegistryCertificates(oc.AsAdmin())
@@ -3525,7 +3523,7 @@ nulla pariatur.`
 			logger.Infof("Checking Certfile: %s", certFile)
 
 			exutil.By(fmt.Sprintf("Check that the ControllerConfig resource has the right value for bundle file %s", certFile))
-			ccImageRegistryBundle, err := cc.GetImageRegistryBundleByFileName(certFile)
+			ccImageRegistryBundle, err := cc.GetImageRegistryBundleDataByFileName(certFile)
 			o.Expect(err).NotTo(o.HaveOccurred(),
 				"Error getting the image registry bundle in file %s in the ControllerConfig resource",
 				certFile)
@@ -3568,7 +3566,7 @@ nulla pariatur.`
 			// the filename stored in configmap uses "..", but it is translated to ":" in the node.
 			// so we replace the ".." with ":"
 			decodedFileName := strings.ReplaceAll(certFile, "..", ":")
-			remotePath := nodeCertsDirectory + "/" + decodedFileName + "/" + nodeCertsFile
+			remotePath := ImageRegistryCertificatesDir + "/" + decodedFileName + "/" + ImageRegistryCertificatesFileName
 			rfCert := NewRemoteFile(node, remotePath)
 
 			o.Eventually(func(gm o.Gomega) { // Passing o.Gomega as parameter we can use assertions inside the Eventually function without breaking the retries.

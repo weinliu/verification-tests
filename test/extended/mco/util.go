@@ -903,3 +903,39 @@ func GetDataFromConfigMap(oc *exutil.CLI, namespace, name string) (map[string]st
 
 	return data, nil
 }
+
+// createCertificate creates a CA and returns: (path to the key used to sign the CA, path to the CA, error)
+func createCA(tmpDir, caFileName string) (keyPath, caPath string, err error) {
+	var (
+		keyFileName = "privateKey.pem"
+	)
+	caPath = filepath.Join(tmpDir, caFileName)
+	keyPath = filepath.Join(tmpDir, keyFileName)
+
+	logger.Infof("Creating CA in directory %s", tmpDir)
+	logger.Infof("Create key")
+	keyArgs := []string{"genrsa", "-out", keyFileName, "4096"}
+	cmd := exec.Command("openssl", keyArgs...)
+	cmd.Dir = tmpDir
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Errorf(string(output))
+		return "", "", err
+	}
+
+	logger.Infof("Create CA")
+
+	caArgs := []string{"req", "-new", "-x509", "-nodes", "-days", "3600", "-key", "privateKey.pem", "-out", caFileName, "-subj", "/OU=MCO QE/CN=example.com"}
+
+	cmd = exec.Command("openssl", caArgs...)
+	cmd.Dir = tmpDir
+
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		logger.Errorf(string(output))
+		return "", "", err
+	}
+
+	return keyPath, caPath, nil
+}

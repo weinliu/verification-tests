@@ -69,11 +69,21 @@ func (cc *ControllerConfig) GetRootCAData() (string, error) {
 	return string(rootCAData), err
 }
 
-// GetImageRegistryBundleData returns a map[string]string containing the filenames and values of the image registry certificates
+// GetImageRegistryBundleData returns a map[string]string containing the filenames and values of the image registry bundle data
 func (cc *ControllerConfig) GetImageRegistryBundleData() (map[string]string, error) {
+	return cc.GetImageRegistryBundle("imageRegistryBundleData")
+}
+
+// GetImageRegistryBundleUserData returns a map[string]string containing the filenames and values of the image registry bundle user data
+func (cc *ControllerConfig) GetImageRegistryBundleUserData() (map[string]string, error) {
+	return cc.GetImageRegistryBundle("imageRegistryBundleUserData")
+}
+
+// GetImageRegistryBundle returns a map[string]string containing the filenames and values of the image registry certificates in a Bundle field
+func (cc *ControllerConfig) GetImageRegistryBundle(bundleField string) (map[string]string, error) {
 	certs := map[string]string{}
 
-	bundleData, err := cc.Get(`{.spec.imageRegistryBundleData}`)
+	bundleData, err := cc.Get(`{.spec.` + bundleField + `}`)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +94,7 @@ func (cc *ControllerConfig) GetImageRegistryBundleData() (map[string]string, err
 	parsedBundleData.ForEach(func(index, item gjson.Result) bool {
 		file := item.Get("file").String()
 		data64 := item.Get("data").String()
+
 		data, b64Err := b64.StdEncoding.DecodeString(data64)
 		if err != nil {
 			logger.Infof("Error decoding data for image registry bundle file %s: %s", file, b64Err)
@@ -101,8 +112,23 @@ func (cc *ControllerConfig) GetImageRegistryBundleData() (map[string]string, err
 }
 
 // GetImageRegistryBundleByFileName returns the image registry bundle searching by bundle filename
-func (cc *ControllerConfig) GetImageRegistryBundleByFileName(fileName string) (string, error) {
+func (cc *ControllerConfig) GetImageRegistryBundleDataByFileName(fileName string) (string, error) {
 	certs, err := cc.GetImageRegistryBundleData()
+	if err != nil {
+		return "", err
+	}
+
+	data, ok := certs[fileName]
+	if !ok {
+		return "", fmt.Errorf("There is no image registry bundle with file name %s", fileName)
+	}
+
+	return data, nil
+}
+
+// GetImageRegistryUserBundleByFileName returns the image registry bundle searching by bundle filename
+func (cc *ControllerConfig) GetImageRegistryBundleUserDataByFileName(fileName string) (string, error) {
+	certs, err := cc.GetImageRegistryBundleUserData()
 	if err != nil {
 		return "", err
 	}

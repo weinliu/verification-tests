@@ -108,6 +108,12 @@ const (
 	// RTKernelIncWait exta minutes that MCPs will wait per node if we use a rt-kernel configuration
 	RTKernelIncWait = 5
 
+	// ImageRegistryCertificatesDir is the path were the image registry certificates will be stored in a node. Example: /etc/docker/certs.d/mycertname/ca.crt
+	ImageRegistryCertificatesDir = "/etc/docker/certs.d"
+
+	// ImageRegistryCertificatesFileName is the name of the image registry certificates. Example: /etc/docker/certs.d/mycertname/ca.crt
+	ImageRegistryCertificatesFileName = "ca.crt"
+
 	// OCBMachineConfigPoolLabel the label used to enable and disable the on-cluster build functionality in MCPs
 	OCBMachineConfigPoolLabel = "machineconfiguration.openshift.io/layering-enabled"
 
