@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: limitpod-withnetworks
+  annotations:
+    k8s.v1.cni.cncf.io/networks: ipvlan-host-local
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: example
+      image: quay.io/openshifttest/multus-pod@sha256:48da37205f9b43424e0983d4c5e7e07f77b7ba1504bbe35e2f264c75dcb4cd15
+      ports:
+        - containerPort: 8080
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+      resources:
+        requests:
+          cpu: 10m
+          memory: 100Mi
+        limits:
+          cpu: 50m
+          memory: 200Mi
