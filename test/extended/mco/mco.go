@@ -3581,6 +3581,33 @@ nulla pariatur.`
 			logger.Infof("OK!\n")
 		}
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-64833-Do not make an 'orig' copy for config.json file [Serial]", func() {
+
+		var (
+			mMcp                = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			wMcp                = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			configJSONFile      = "/var/lib/kubelet/config.json"
+			configJSONOringFile = "/etc/machine-config-daemon/orig/var/lib/kubelet/config.json.mcdorig"
+		)
+
+		for _, node := range append(wMcp.GetNodesOrFail(), mMcp.GetNodesOrFail()...) {
+			exutil.By(fmt.Sprintf("Check that the /var/lib/kubelet/config.json is preset in node %s", node.GetName()))
+
+			configJSONRemoteFile := NewRemoteFile(node, configJSONFile)
+			configJSONOringRemoteFile := NewRemoteFile(node, configJSONOringFile)
+
+			o.Eventually(configJSONRemoteFile.Exists, "20s", "2s").Should(o.BeTrue(),
+				"The file %s does not exist in node %s", configJSONRemoteFile.GetFullPath(), node.GetName())
+			logger.Infof("OK!\n")
+
+			exutil.By(fmt.Sprintf("Check that the /etc/machine-config-daemon/orig/var/lib/kubelet/config.json.mcdorig is NOT preset in node %s",
+				node.GetName()))
+			o.Eventually(configJSONOringRemoteFile.Exists, "20s", "2s").Should(o.BeFalse(),
+				"The file %s exists in node %s, but it should NOT", configJSONOringRemoteFile.GetFullPath(), node.GetName())
+			logger.Infof("OK!\n")
+		}
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason
