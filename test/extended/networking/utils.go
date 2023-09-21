@@ -2140,7 +2140,7 @@ func getRouterID(oc *exutil.CLI, nodeName string) (string, error) {
 	return routerID, checkOVNDbErr
 }
 
-func getSNATofEgressIP(oc *exutil.CLI, routerID, nodeName, egressIP string) (string, error) {
+func getSNATofEgressIP(oc *exutil.CLI, nodeName, egressIP string) (string, error) {
 	// get the ovnkube-node pod on the node
 	ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
 	o.Expect(podErr).NotTo(o.HaveOccurred())
@@ -2148,7 +2148,8 @@ func getSNATofEgressIP(oc *exutil.CLI, routerID, nodeName, egressIP string) (str
 	var cmdOutput, snatIP string
 	var cmdErr error
 
-	cmd := "ovn-nbctl lr-nat-list " + routerID + " | grep " + egressIP + " |awk '{print $3}'"
+	routerName := "GR_" + nodeName
+	cmd := "ovn-nbctl lr-nat-list " + routerName + " | grep " + egressIP + " |awk '{print $3}'"
 	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
 		cmdOutput, cmdErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubePod, cmd)
 		if cmdErr != nil {

@@ -2721,19 +2721,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		e2e.Logf("Pod's IP for the completed countdown pod is:%v", completedPodIPv4)
 
 		exutil.By("6. Check SNATs of stateful pod and completed pod on the egressNode before rebooting it.\n")
-		routerIDOfEgressNode1, routerErr := getRouterID(oc, nodeToBeRebooted)
-		o.Expect(routerErr).NotTo(o.HaveOccurred())
-		e2e.Logf("routerID Of node to be rebooted is:%v", routerIDOfEgressNode1)
-		snatIP, snatErr := getSNATofEgressIP(oc, routerIDOfEgressNode1, egressNode1, freeIPs[0])
+		snatIP, snatErr := getSNATofEgressIP(oc, nodeToBeRebooted, freeIPs[0])
 		o.Expect(snatErr).NotTo(o.HaveOccurred())
 		e2e.Logf("the SNAT IP for the egressIP is:%v", snatIP)
 		o.Expect(snatIP).Should(o.Equal(helloPodIPv4))
 		o.Expect(snatIP).ShouldNot(o.Equal(completedPodIPv4))
 
 		exutil.By("7. Reboot egress node.\n")
-		defer checkNodeStatus(oc, egressIPMaps1[0]["node"], "Ready")
-		rebootNode(oc, egressIPMaps1[0]["node"])
-		checkNodeStatus(oc, egressIPMaps1[0]["node"], "NotReady")
+		defer checkNodeStatus(oc, nodeToBeRebooted, "Ready")
+		rebootNode(oc, nodeToBeRebooted)
+		checkNodeStatus(oc, nodeToBeRebooted, "NotReady")
 
 		exutil.By("8. As soon as the rebooted node is in NotReady state, delete the statefulSet pod to force it be recreated while the node is rebooting.\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", statefulSetPodName[0], "-n", ns1).Execute()
@@ -2766,9 +2763,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.Equal(hostLeft[0]))
 
 		exutil.By("10. Check SNAT on the second egressNode\n")
-		routerIDOfEgressNode2, routerErr := getRouterID(oc, hostLeft[0])
-		o.Expect(routerErr).NotTo(o.HaveOccurred())
-		snatIP, snatErr = getSNATofEgressIP(oc, routerIDOfEgressNode2, egressNode2, freeIPs[0])
+		snatIP, snatErr = getSNATofEgressIP(oc, newEgressIPHostNode, freeIPs[0])
 		o.Expect(snatErr).NotTo(o.HaveOccurred())
 
 		e2e.Logf("After egressIP failover, the SNAT IP for the egressIP on second router is:%v", snatIP)
@@ -2793,11 +2788,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		e2e.Logf("unassigned nodes are:%v", unassignedNodes)
 
 		for i := 0; i < len(unassignedNodes); i++ {
-			routerID, routerErr := getRouterID(oc, unassignedNodes[i])
-			o.Expect(routerErr).NotTo(o.HaveOccurred())
-			snatIP, snatErr = getSNATofEgressIP(oc, routerID, unassignedNodes[i], freeIPs[0])
+			snatIP, snatErr = getSNATofEgressIP(oc, unassignedNodes[i], freeIPs[0])
 			o.Expect(snatErr).To(o.HaveOccurred())
 			o.Expect(snatIP).Should(o.Equal(""))
+			e2e.Logf("As expected, there is not stale NAT on the unassigned node:%v", unassignedNodes[i])
 		}
 	})
 
