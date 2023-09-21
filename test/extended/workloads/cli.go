@@ -1477,7 +1477,7 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 			o.Expect(err).To(o.HaveOccurred())
 			o.Expect(strings.Contains(buildCreation, "no matches for kind \"Build\" in version \"build.openshift.io/v1\"")).To(o.BeTrue())
 		} else {
-			e2e.Failf("Build and DeploymentConfig are already enabled which is not expected")
+			g.Skip("Build and DeploymentConfig have been enabled as part of additional caps, so skipping")
 		}
 	})
 
