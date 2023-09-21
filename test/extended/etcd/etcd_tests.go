@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -178,6 +179,12 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:skundu-Critical-66726-Automated one-off backup for etcd using PVC on hostpath. [Disruptive]", func() {
 		g.By("Test for case OCP-66726 Automated one-off backup for etcd using PVC on hostpath.")
 
+		featureSet, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		if featureSet != "TechPreviewNoUpgrade" {
+			g.Skip("featureSet is not TechPreviewNoUpgradec, skip it!")
+		}
+
 		tmpdir := "/tmp/OCP-etcd-cases-" + exutil.GetRandomString() + "/"
 		defer os.RemoveAll(tmpdir)
 		err := os.MkdirAll(tmpdir, 0755)
@@ -228,11 +235,6 @@ spec:
    pvcName: %s`, etcdBkp, pvcName)
 		)
 
-		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if featureSet != "TechPreviewNoUpgrade" {
-			g.Skip("featureSet is not TechPreviewNoUpgradec, skip it!")
-		}
 		g.By("2 Create a PV for hostpath")
 		f, err := os.Create(pvYamlFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -255,8 +257,8 @@ spec:
 		w2.Flush()
 		o.Expect(perr).NotTo(o.HaveOccurred())
 
-		defer oc.AsAdmin().Run("delete").Args("-f", pvcYamlFile, "-n", "openshift-etcd").Execute()
-		pvcErr := oc.AsAdmin().Run("create").Args("-f", pvcYamlFile, "-n", "openshift-etcd").Execute()
+		defer oc.AsAdmin().Run("delete").Args("-f", pvcYamlFile, "-n", nameSpace).Execute()
+		pvcErr := oc.AsAdmin().Run("create").Args("-f", pvcYamlFile, "-n", nameSpace).Execute()
 		o.Expect(pvcErr).NotTo(o.HaveOccurred())
 		waitForPvcStatus(oc, nameSpace, pvcName)
 
@@ -294,6 +296,135 @@ spec:
 		verify := verifyBkpFileCreationHost(oc, masterNodeList, bkphostpath, backupfile)
 		o.Expect(verify).To(o.BeTrue(), "Failed to verify backup creation on node")
 
+	})
+
+	// author: skundu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:skundu-Critical-66727-Automated recurring backup for etcd using PVC on hostpath. [Disruptive]", func() {
+		g.By("Test for case OCP-66727 Automated recurring backup for etcd using PVC on hostpath.")
+
+		featureSet, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		if featureSet != "TechPreviewNoUpgrade" {
+			g.Skip("featureSet is not TechPreviewNoUpgradec, skip it!")
+		}
+		tmpdir := "/tmp/OCP-etcd-cases-66727" + exutil.GetRandomString() + "/"
+		defer os.RemoveAll(tmpdir)
+		err := os.MkdirAll(tmpdir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		var (
+			pvName                 = "etcd-backup-pv-h-66727"
+			pvcName                = "etcd-backup-pvc-h-66727"
+			bkphostpath            = "/etc/kubernetes/cluster-backup"
+			etcdBkp                = "testbackup-h-66727"
+			maxNoBackup            = 3
+			nameSpace              = "openshift-etcd"
+			pvYamlFile             = tmpdir + "pv-hostpath.yaml"
+			pvcYamlFile            = tmpdir + "pvc-hostpath.yaml"
+			recurringBkphpYamlFile = tmpdir + "recurringBkp-hostpath.yaml"
+			pvYaml                 = fmt.Sprintf(`apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: %s
+spec:
+  storageClassName: manual
+  capacity:
+    storage: %s
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+     path: %s
+`, pvName, "10Gi", bkphostpath)
+			pvcYaml = fmt.Sprintf(`apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: %s
+  namespace: openshift-etcd
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: %s
+  volumeName: %s
+`, pvcName, "10Gi", pvName)
+			recurringBkphpYaml = fmt.Sprintf(`apiVersion: config.openshift.io/v1alpha1
+kind: Backup
+metadata:
+   name: %s
+spec:
+   etcd:
+      schedule: "*/1 * * * *"
+      timeZone: "UTC"
+      retentionPolicy:
+         retentionType: RetentionNumber
+         retentionNumber:
+            maxNumberOfBackups: %d
+      pvcName: %s`, etcdBkp, maxNoBackup, pvcName)
+		)
+
+		g.By("2 Create a PV for hostpath")
+		f, err := os.Create(pvYamlFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		_, werr := w.WriteString(pvYaml)
+		w.Flush()
+		o.Expect(werr).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().Run("delete").Args("-f", pvYamlFile).Execute()
+		pvErr := oc.AsAdmin().Run("create").Args("-f", pvYamlFile).Execute()
+		o.Expect(pvErr).NotTo(o.HaveOccurred())
+
+		g.By("3 Create a PVC for hostpath")
+		pf, errp := os.Create(pvcYamlFile)
+		o.Expect(errp).NotTo(o.HaveOccurred())
+		defer pf.Close()
+		w2 := bufio.NewWriter(pf)
+		_, perr := w2.WriteString(pvcYaml)
+		w2.Flush()
+		o.Expect(perr).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().Run("delete").Args("-f", pvcYamlFile, "-n", nameSpace).Execute()
+		pvcErr := oc.AsAdmin().Run("create").Args("-f", pvcYamlFile, "-n", nameSpace).Execute()
+		o.Expect(pvcErr).NotTo(o.HaveOccurred())
+		waitForPvcStatus(oc, nameSpace, pvcName)
+
+		e2e.Logf("4. check and enable the CRDs")
+		etcdbkpOpCRDExisting := isCRDExisting(oc, "etcdbackups.operator.openshift.io")
+		if !etcdbkpOpCRDExisting {
+			defer oc.AsAdmin().Run("delete").Args("CustomResourceDefinition", "etcdbackups.operator.openshift.io").Execute()
+			createCRD(oc, "etcdbackupTechPreviewNoUpgradeCrd.yaml")
+		}
+		etcdBkpConCRDExisting := isCRDExisting(oc, "backups.config.openshift.io")
+		if !etcdBkpConCRDExisting {
+			defer oc.AsAdmin().Run("delete").Args("CustomResourceDefinition", "backups.config.openshift.io").Execute()
+			createCRD(oc, "etcdbackupTechPreviewNoUpgradeConfigCrd.yaml")
+		}
+
+		g.By("5 Create a recurringBackup for hostpath")
+		bkpf, bkperr := os.Create(recurringBkphpYamlFile)
+		o.Expect(bkperr).NotTo(o.HaveOccurred())
+		defer bkpf.Close()
+		w3 := bufio.NewWriter(bkpf)
+		_, bwerr := w3.WriteString(recurringBkphpYaml)
+		w3.Flush()
+		o.Expect(bwerr).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().Run("delete").Args("-f", recurringBkphpYamlFile).Execute()
+		bkpErr := oc.AsAdmin().Run("create").Args("-f", recurringBkphpYamlFile).Execute()
+		o.Expect(bkpErr).NotTo(o.HaveOccurred())
+		waitForRecurBackupJobToComplete(oc, nameSpace, etcdBkp, "Succeeded")
+
+		e2e.Logf("select all the master nodes")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+
+		e2e.Logf("Need to wait for 3 minutes as 3 jobs are scheduled after every 1 minute each")
+		time.Sleep(180 * time.Second)
+		e2e.Logf("Verify the backup creation")
+		verify := verifyRecurBkpFileCreationHost(oc, masterNodeList, bkphostpath, "backup-"+etcdBkp, "4")
+		o.Expect(verify).To(o.BeTrue(), "Failed to verify recurring backup files on node")
 	})
 
 	// author: skundu@redhat.com

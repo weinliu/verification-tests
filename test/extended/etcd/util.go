@@ -265,6 +265,62 @@ func checkOperator(oc *exutil.CLI, operatorName string) {
 	exutil.AssertWaitPollNoErr(err, "clusteroperator is abnormal")
 }
 
+func verifyRecurBkpFileCreationHost(oc *exutil.CLI, nodeNameList []string, bkpPath string, bkpFile string, count string) bool {
+	cmd := "ls -lrt " + bkpPath + " | grep " + bkpFile + "  | wc "
+	for _, node := range nodeNameList {
+		resultOutput, err := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", cmd)
+		opWords := strings.Split(resultOutput, " ")
+		if strings.Contains(opWords[0], count) && err == nil {
+			e2e.Logf("Recurring %v successfully verified on node %v", bkpFile, node)
+			return true
+		}
+		e2e.Logf("Trying for next node since expected BackUp files are not found on this node %v", node)
+	}
+	return false
+
+}
+
+func waitForFirstBackupjobToSchedule(oc *exutil.CLI, namespace string, bkpodname string) string {
+	recurPod := ""
+	err := wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
+		podNameOp, err := oc.AsAdmin().Run("get").Args("-n", namespace, "pods", "-o=jsonpath={.items[*].metadata.name}").Output()
+		if err != nil {
+			return false, err
+		}
+		podNameList := strings.Fields(podNameOp)
+		for _, podName := range podNameList {
+			if strings.Contains(podName, bkpodname) && err == nil {
+				e2e.Logf("First RecurringBkpPod is %v", podName)
+				recurPod = podName
+				return true, nil
+			}
+
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The recurring Backup job is not scheduled")
+	return recurPod
+}
+
+func waitForRecurBackupJobToComplete(oc *exutil.CLI, namespace string, expectedPod string, expectedState string) {
+	firstSchPod := waitForFirstBackupjobToSchedule(oc, namespace, expectedPod)
+
+	err := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		statusOp, err := oc.AsAdmin().Run("get").Args("-n", namespace, "pod", firstSchPod, "-o=jsonpath='{.status.phase}'").Output()
+		if err != nil {
+			return false, err
+		}
+
+		if strings.Contains(statusOp, expectedState) && err == nil {
+			e2e.Logf("firstSchPod %v is %v", firstSchPod, statusOp)
+			return true, nil
+		}
+		e2e.Logf("firstSchPod %v is %v, Trying again", firstSchPod, statusOp)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The recurring Backup job is not completed")
+}
+
 func isCRDExisting(oc *exutil.CLI, crd string) bool {
 	output, err := oc.AsAdmin().Run("get").Args("CustomResourceDefinition", crd, "-o=jsonpath={.metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
