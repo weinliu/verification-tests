@@ -1119,7 +1119,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 		npSecurityGroupID := doOcpReq(oc, OcpGet, true, "nodepool", "-n", hostedcluster.namespace, nodepoolName, "--ignore-not-found", `-ojsonpath={.spec.platform.aws.securityGroups[0].id}`)
 		e2e.Logf("nodepool %s SecurityGroups: %s", nodepoolName, npSecurityGroupID)
-		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, nodepoolName, `-ojsonpath={.spec.template.spec.additionalSecurityGroups[0].id}`)).Should(o.Equal(npSecurityGroupID))
+		queryJson := fmt.Sprintf(`-ojsonpath={.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].spec.template.spec.additionalSecurityGroups[0].id}`, hostedcluster.namespace, nodepoolName)
+		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "--ignore-not-found", "-n", hostedcluster.namespace+"-"+hostedcluster.name, queryJson)).Should(o.ContainSubstring(npSecurityGroupID))
 
 		g.By("create nodepool without default securitygroup")
 		npCount := 1
@@ -1132,14 +1133,15 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npWithoutSG), LongTimeout, LongTimeout/10).Should(o.BeTrue(), " check np ready error")
 
 		g.By("check the new nodepool should use the default sg in the hosted cluster")
-		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, npWithoutSG, `-ojsonpath={.spec.template.spec.additionalSecurityGroups[0].id}`)).Should(o.Equal(defaultSG))
+		queryJson = fmt.Sprintf(`-ojsonpath={.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].spec.template.spec.additionalSecurityGroups[0].id}`, hostedcluster.namespace, npWithoutSG)
+		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, queryJson)).Should(o.ContainSubstring(defaultSG))
 
 		g.By("create sg by aws client and use it to create a nodepool")
 		vpcID := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.spec.platform.aws.cloudProviderConfig.vpc}`)
 
 		exutil.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
-		groupID, err := awsClient.CreateSecurityGroup("ocp-60140-sg", vpcID, "hypershift ocp-60140")
+		groupID, err := awsClient.CreateSecurityGroup(fmt.Sprintf("ocp-60140-sg-%s", strings.ToLower(exutil.RandStrDefault())), vpcID, "hypershift ocp-60140")
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		defer awsClient.DeleteSecurityGroup(groupID)
 
@@ -1151,7 +1153,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		NewAWSNodePool(npWithExistingSG, hostedcluster.name, hostedcluster.namespace).WithNodeCount(&npCount).WithSecuritygroupID(groupID).CreateAWSNodePool()
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npWithExistingSG), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npWithExistingSG))
-		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, npWithExistingSG, `-ojsonpath={.spec.template.spec.additionalSecurityGroups[0].id}`)).Should(o.Equal(groupID))
+
+		queryJson = fmt.Sprintf(`-ojsonpath={.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].spec.template.spec.additionalSecurityGroups[0].id}`, hostedcluster.namespace, npWithExistingSG)
+		o.Expect(doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, queryJson)).Should(o.Equal(groupID))
 		g.By("nodepool security group test passed")
 	})
 
