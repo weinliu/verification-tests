@@ -164,7 +164,7 @@ class CollectClient:
                 time.sleep(2)
             if len(values_list) > 16:
                 if "Done" in values_list[16]:
-                    self.logger.info(bug_id + " is Done")
+                    self.logger.debug(bug_id + " is Done")
                 else:
                     trackJIRAstr = values_list[13]
                     assigneeStr = values_list[14]
@@ -172,7 +172,7 @@ class CollectClient:
                         trackJIR =  "OCPQE-" + trackJIRAstr.strip().split("OCPQE-")[-1]
                         trackJIRAIssue = self.jiraManager.jira.issue(trackJIR)
                         assginee = trackJIRAIssue.fields.assignee
-                        if assigneeStr not in str(assginee):
+                        if (not assigneeStr) or (assigneeStr not in str(assginee)):
                             self.logger.info("update O%s: %s", str(row+1), assginee)
                             worksheet.update_acell("O"+str(row+1), str(assginee))
 
