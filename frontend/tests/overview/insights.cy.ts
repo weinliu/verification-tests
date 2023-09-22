@@ -29,6 +29,7 @@ describe('Insights check', () => {
   it('(OCP-47571,yapei) Show Cluster Support Level', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     let sla_text, cluster_id;
     // get clusterID
+    let include_unknown = true;
     cy.adminCLI(`oc get clusterversion version -o jsonpath='{.spec.clusterID}'`)
       .then((result) => {
         cluster_id = result.stdout;
@@ -44,7 +45,7 @@ describe('Insights check', () => {
       cy.get('a.co-external-link')
         .contains('Get support')
         .should('exist')
-        .and('have.property', 'href', `https://console.redhat.com/openshift/details/${cluster_id}`)
+        .and('have.attr', 'href', `https://console.redhat.com/openshift/details/${cluster_id}`)
     }
 
     // SLA text always shown on Overview and Cluster Settings page
@@ -57,12 +58,18 @@ describe('Insights check', () => {
             sla_text = value
             if(!sla_text.includes('Unknown')){
               // when SLA text is not Unknown, we also show info in notification drawer
-              checkSLAInNotificationDrawer();
+              include_unknown = false
             } else {
               cy.log('SLA text is Unknown, skip checking in notification drawer')
             }
           })
+      }).then(() => {
+        if (!include_unknown) {
+          cy.log(cluster_id)
+          checkSLAInNotificationDrawer()
+        }
       })
+    
     cy.visit('/settings/cluster');
     ClusterSettingPage.isLoaded();
     cy.get('@sla_text_value').should('exist');

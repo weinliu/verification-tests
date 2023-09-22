@@ -57,7 +57,7 @@ export const notificationDrawer = {
   toggleNotificationItem: (item: string, toggle: string)=> {
     let action_flag = toggle === 'expand' ? 'true' : 'false'
     cy.get('.pf-c-notification-drawer__group-toggle-title')
-      .contains(`{item}`)
+      .contains(`${item}`)
       .parent('button')
       .as('itemButton')
       .invoke('attr', 'aria-expanded')
