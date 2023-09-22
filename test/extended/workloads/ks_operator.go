@@ -2,10 +2,14 @@ package workloads
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -462,4 +466,138 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 
 	})
+
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-64819-Validate MatchLabelKeysInPodTopologySpread feature is not set when TechPreviewNoUpgrade is enabled", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		deployment60691Yaml := filepath.Join(buildPruningBaseDir, "deployment60691.yaml")
+		nodeZeroOccurences := 0
+		nodeOneOccurences := 0
+
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip for featuregate set as TechPreviewNoUpgrade")
+		}
+
+		//Retrieve worker nodes from the cluster
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode Names are %v", nodeName)
+		node := strings.Fields(nodeName)
+
+		// If no.of workernodes are less than three, skip the test.
+		nodeNum := 3
+		if len(node) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		}
+
+		// Get kubescheduler pod name & check if the feature gate is enabled
+		ksPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-kube-scheduler", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ksPodOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", ksPodName, "-n", "openshift-kube-scheduler", "-o=jsonpath={.spec.containers[0].args}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ksPodOut, "MatchLabelKeysInPodTopologySpread=true")).To(o.BeFalse())
+
+		g.By("Add label to the nodes so that pods could run fine")
+		defer removeLabelFromNode(oc, "ocp64819-zone-", node[0], "nodes")
+		addLabelToNode(oc, "ocp64819-zone=ocp64819zoneA", node[0], "nodes")
+		defer removeLabelFromNode(oc, "ocp64819-zone-", node[1], "nodes")
+		addLabelToNode(oc, "ocp64819-zone=ocp64819zoneA", node[1], "nodes")
+		defer removeLabelFromNode(oc, "ocp64819-zone-", node[2], "nodes")
+		addLabelToNode(oc, "ocp64819-zone=ocp64819zoneB", node[2], "nodes")
+
+		// Create test project
+		g.By("Create test project")
+		oc.SetupProject()
+
+		g.By("Create deployment and see that they violate max skew")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deployment60691Yaml, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForDeploymentPodsToBeReady(oc, oc.Namespace(), "app-ocp64819")
+
+		// Rollout and wait for the deployment to restart
+		g.By("Rollout/restart deployment")
+		err = oc.AsAdmin().WithoutNamespace().Run("rollout").Args("restart", "deployment", "app-ocp64819", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Wait for the pods to be running after rollout
+		g.By("Wait for the pods to be running after rollout")
+		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace()).Output()
+			if err != nil {
+				e2e.Logf("Fail to get pods in the namespace %s, error: %s. Trying again", oc.Namespace(), err)
+				return false, nil
+			}
+			if !strings.Contains("Terminating", output) && !strings.Contains("ContainerCreating", output) {
+				e2e.Logf("All the pods have started running:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Pods have not started running even waiting for about 60 seconds")
+
+		g.By("Get pod nodes using label")
+		podNodeList := getPodNodeListByLabel(oc, oc.Namespace(), "app=app-ocp64819")
+		for _, podNode := range podNodeList {
+			if strings.Compare(podNode, string(node[0])) == 0 || strings.Compare(podNode, string(node[1])) == 0 {
+				nodeZeroOccurences = nodeZeroOccurences + 1
+			} else {
+				nodeOneOccurences = nodeOneOccurences + 1
+			}
+		}
+		currentMaxSkew := nodeZeroOccurences - nodeOneOccurences
+		if currentMaxSkew > 1 || currentMaxSkew < 0 {
+			e2e.Logf("Pods violate currentMaxSkew, which is expected %s", string(currentMaxSkew))
+		}
+
+		// Patch the deployment
+		patchYamlLabelKeys := `[{"op": "add", "path": "/spec/template/spec/topologySpreadConstraints/0/matchLabelKeys", "value": ["app", "pod-template-hash"]}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", "app-ocp64819", "-n", oc.Namespace(), "--type=json", "-p", patchYamlLabelKeys).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Increase the replica number
+		patchYamlReplicas := `[{"op": "replace", "path": "/spec/replicas", "value": 8}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", "app-ocp64819", "-n", oc.Namespace(), "--type=json", "-p", patchYamlReplicas).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Rollout and wait for the deployment to restart
+		g.By("Rollout/restart deployment")
+		err = oc.AsAdmin().WithoutNamespace().Run("rollout").Args("restart", "deployment", "app-ocp64819", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Wait for the pods to be running after rollout
+		//waitForDeploymentPodsToBeReady(oc, oc.Namespace(), "app-ocp64819")
+		g.By("Wait for the pods to be running after rollout")
+		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace()).Output()
+			if err != nil {
+				e2e.Logf("Fail to get pods in the namespace %s, error: %s. Trying again", oc.Namespace(), err)
+				return false, nil
+			}
+			if !strings.Contains("Terminating", output) && !strings.Contains("ContainerCreating", output) {
+				e2e.Logf("All the pods have started running:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Pods have not started running even waiting for about 60 seconds")
+
+		g.By("Get pod nodes using label")
+		nodeZeroOccurencesAR := 0
+		nodeOneOccurencesAR := 0
+		podNodeList = getPodNodeListByLabel(oc, oc.Namespace(), "app=app-ocp64819")
+		for _, podNode := range podNodeList {
+			if strings.Compare(podNode, string(node[0])) == 0 || strings.Compare(podNode, string(node[1])) == 0 {
+				nodeZeroOccurencesAR = nodeZeroOccurencesAR + 1
+			} else {
+				nodeOneOccurencesAR = nodeOneOccurencesAR + 1
+			}
+		}
+		currentMaxSkewAR := nodeZeroOccurencesAR - nodeOneOccurencesAR
+		if currentMaxSkewAR > 1 || currentMaxSkewAR < 0 {
+			e2e.Failf("Pods violate currentMaxSkew, which is not expected %s", string(currentMaxSkewAR))
+		}
+
+	})
+
 })
