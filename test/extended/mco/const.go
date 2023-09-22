@@ -117,6 +117,12 @@ const (
 	// OCBMachineConfigPoolLabel the label used to enable and disable the on-cluster build functionality in MCPs
 	OCBMachineConfigPoolLabel = "machineconfiguration.openshift.io/layering-enabled"
 
+	// OCBMachineOsBuilderLabel the label to identify the machine-os-builder pod
+	OCBMachineOsBuilderLabel = "k8s-app=machine-os-builder"
+
+	// OCBMachineOsBuilderContainer the name of the container running the controller in the machine-os-builder pod
+	OCBMachineOsBuilderContainer = "machine-os-builder"
+
 	// OCBConfigmapName is the name of the on-cluster-build-config configmap
 	OCBConfigmapName = "on-cluster-build-config"
 

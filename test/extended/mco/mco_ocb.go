@@ -185,6 +185,117 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:sregidor-NonPreRelease-High-66573-OCB configure image builder type for config map on-cluster-build-config [Disruptive]", func() {
+		var (
+			infraMcpName = "infra"
+			cm           = NewNamespacedResource(oc.AsAdmin(), "cm", MachineConfigNamespace, OCBConfigmapName)
+			MCOperator   = NewResource(oc.AsAdmin(), "ClusterOperator", "machine-config")
+		)
+		g.Skip("Test case skipped because of issues https://issues.redhat.com/browse/OCPBUGS-18991 and https://issues.redhat.com/browse/OCPBUGS-18955")
+
+		exutil.By("Creating necessary resources to enable OCB functionality")
+
+		defer func() { _ = cleanOCBTestConfigResources(oc.AsAdmin()) }()
+		o.Expect(createOCBDefaultTestConfigResourcesFromPullSecret(oc.AsAdmin())).NotTo(o.BeNil(),
+			"Error creating the necessary CMs and Secrets to enable OCB functionality")
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Create custom infra MCP")
+		infraMcp := NewMachineConfigPool(oc.AsAdmin(), infraMcpName)
+		infraMcp.template = generateTemplateAbsolutePath("custom-machine-config-pool.yaml")
+		defer infraMcp.delete()
+		infraMcp.create()
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Label the infra MCP to enable the OCB functionality")
+		infraMcp.EnableOnClusterBuild()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check the default builder type")
+		o.Eventually(exutil.GetAllPodsWithLabel,
+			"5m", "1m").WithArguments(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel).ShouldNot(
+			o.BeEmpty(),
+			"The machine-os-builder pod was not started when the on-cluster-build functionality was enabled")
+
+		mosBuilderPods, err := exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel)
+		mosBuilderPod := mosBuilderPods[0]
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the machine-os-builder pod")
+		logger.Infof("New machine-os-builder pod: %s", mosBuilderPod)
+
+		o.Eventually(exutil.GetSpecificPodLogs,
+			"5m", "1m").WithArguments(oc, MachineConfigNamespace, OCBMachineOsBuilderContainer, mosBuilderPod, "").Should(
+			o.ContainSubstring(`imageBuilderType not set, defaulting to "openshift-image-builder"`),
+			"The machine-os-builder pod is not reporting the use of the right builder type")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check the openshift-image-builder builder type")
+		logger.Infof("Set the openshift-image-builder builder type")
+		o.Expect(cm.Patch("merge", `{"data":{"imageBuilderType": "openshift-image-builder"}}`)).To(o.Succeed(),
+			"Error patching the on-cluster-build configmap")
+
+		logger.Infof("Checking that the machine-os-builder pod is restarted")
+		o.Eventually(exutil.GetAllPodsWithLabel,
+			"5m", "1m").WithArguments(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel).ShouldNot(
+			o.ContainElement(mosBuilderPod),
+			"The machine-os-builder pod was not restarted after the builder type was reconfigured")
+
+		mosBuilderPods, err = exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel)
+		mosBuilderPod = mosBuilderPods[0]
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the machine-os-builder pod")
+		logger.Infof("New machine-os-builder pod: %s", mosBuilderPod)
+
+		logger.Infof("Checking that the right builder type is reported in the machine-os-builder logs")
+
+		o.Eventually(exutil.GetSpecificPodLogs,
+			"5m", "1m").WithArguments(oc, MachineConfigNamespace, OCBMachineOsBuilderContainer, mosBuilderPod, "").Should(
+			o.ContainSubstring(`imageBuilderType set to "openshift-image-builder"`),
+			"The machine-os-builder pod is not reporting the use of the right builder type")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check the custom-pod-builder builder type")
+		logger.Infof("Set the custom-pod-builder builder type")
+		o.Expect(cm.Patch("merge", `{"data":{"imageBuilderType": "custom-pod-builder"}}`)).To(o.Succeed(),
+			"Error patching the on-cluster-build configmap")
+
+		logger.Infof("Checking that the machine-os-builder pod is restarted")
+		o.Eventually(exutil.GetAllPodsWithLabel,
+			"5m", "1m").WithArguments(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel).ShouldNot(
+			o.ContainElement(mosBuilderPod),
+			"The machine-os-builder pod was not restarted after the builder type was reconfigured")
+
+		mosBuilderPods, err = exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel)
+		mosBuilderPod = mosBuilderPods[0]
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the machine-os-builder pod")
+		logger.Infof("New machine-os-builder pod: %s", mosBuilderPod)
+
+		logger.Infof("Checking that the right builder type is reported in the machine-os-builder logs")
+
+		o.Eventually(exutil.GetSpecificPodLogs,
+			"5m", "1m").WithArguments(oc, MachineConfigNamespace, OCBMachineOsBuilderContainer, mosBuilderPod, "").Should(
+			o.ContainSubstring(`imageBuilderType set to "custom-pod-builder"`),
+			"The machine-os-builder pod is not reporting the use of the right builder type")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check invalid builder type")
+		logger.Infof("Set the invalid builder type")
+		o.Expect(cm.Patch("merge", `{"data":{"imageBuilderType": "custom-pod-builder"}}`)).To(o.Succeed(),
+			"Error patching the on-cluster-build configmap")
+
+		o.Eventually(MCOperator, "5m", "1m").Should(
+			BeDegraded(),
+			"The machine-config ClusterOperator should become degraded when an invalid builder type is configured")
+		o.Eventually(MCOperator, "5m", "1m").Should(
+			HaveDegradedMessage(`invalid image builder type "test-builder", valid types: [custom-pod-builder openshift-image-builder]`),
+			"The machine-config ClusterOperator should become degraded when an invalid builder type is configured.\n%s", MCOperator.PrettyString())
+
+		logger.Infof("OK!\n")
+	})
 })
 
 // OCBConfigMapValues struct that stores the values to configure the OCB functionality in the "on-cluster-build-config" configmap
