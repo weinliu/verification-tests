@@ -1092,7 +1092,7 @@ func isConnectedInternet(oc *exutil.CLI) bool {
 }
 
 func restartMicroshift(oc *exutil.CLI, nodename string) {
-	_, restartErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl restart microshift")
+	_, restartErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl restart microshift &")
 	o.Expect(restartErr).NotTo(o.HaveOccurred())
 	mstatusErr := wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
 		output, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl is-active microshift")

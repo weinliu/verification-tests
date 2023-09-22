@@ -38,11 +38,11 @@ var _ = g.Describe("[sig-api-machinery] API_Server on Microshift", func() {
 			tmpManifestPath  = "/etc/microshift/manifests.d/my-app/base /etc/microshift/manifests.d/my-app/dev /etc/microshift/manifests.d/my-app/dev/patches/"
 		)
 
-		g.By("1. Create new namespace for the scenario")
+		exutil.By("1. Create new namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		g.By("2. Get microshift node")
+		exutil.By("2. Get microshift node")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
@@ -71,7 +71,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on Microshift", func() {
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 		}()
 
-		g.By("3. Take backup of config file")
+		exutil.By("3. Take backup of config file")
 		etcConfig := fmt.Sprintf(`configfile=%v;
 		configfilebak=%v;
 		if [ -f $configfile ]; then 
@@ -80,12 +80,12 @@ var _ = g.Describe("[sig-api-machinery] API_Server on Microshift", func() {
 		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfig)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
-		g.By("4. Create tmp manifest path on node")
+		exutil.By("4. Create tmp manifest path on node")
 		_, dirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo mkdir -p "+tmpManifestPath)
 		o.Expect(dirErr).NotTo(o.HaveOccurred())
 
 		//  Setting glob path values to multiple values should load manifests from all of them.
-		g.By("4.1 Set glob path values to the manifest option in config")
+		exutil.By("4.1 Set glob path values to the manifest option in config")
 		etcConfig = fmt.Sprintf(`
 manifests:
   kustomizePaths:
@@ -119,11 +119,11 @@ manifests:
 				"dev-app-ocp63298",
 			},
 		}
-		g.By("4.2 Create kustomization and deployemnt files")
+		exutil.By("4.2 Create kustomization and deployemnt files")
 		addKustomizationToMicroshift(oc, masterNodes[0], e2eTestNamespace, newSrcFiles)
 		restartMicroshift(oc, masterNodes[0])
 
-		g.By("4.3 Check pods after microshift restart")
+		exutil.By("4.3 Check pods after microshift restart")
 		podsOutput := getPodsList(oc, "hello-openshift-dev-app-ocp63298")
 		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Test case :: Failed :: Pods are not created, manifests are not loaded from defined location")
 		podsOutput = getPodsList(oc, "busybox-base-app-ocp63298")
