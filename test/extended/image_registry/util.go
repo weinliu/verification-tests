@@ -1289,3 +1289,72 @@ func checkOptionalOperatorInstalled(oc *exutil.CLI, operator string) bool {
 	e2e.Logf("The %v operator is not installed", operator)
 	return false
 }
+
+func checkICSP(oc *exutil.CLI) bool {
+	icsp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(icsp, "No resources found") {
+		e2e.Logf("there is no ImageContentSourcePolicy in this cluster")
+		return false
+	}
+	return true
+}
+
+type idmsSource struct {
+	name     string
+	mirrors  string
+	source   string
+	template string
+}
+
+func (idmssrc *idmsSource) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", idmssrc.template, "-p", "NAME="+idmssrc.name, "MIRRORS="+idmssrc.mirrors, "SOURCE="+idmssrc.source)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (idmssrc *idmsSource) delete(oc *exutil.CLI) {
+	e2e.Logf("deleting idms: %s", idmssrc.name)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("idms", idmssrc.name, "--ignore-not-found=true").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+type itmsSource struct {
+	name     string
+	mirrors  string
+	source   string
+	template string
+}
+
+func (itmssrc *itmsSource) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", itmssrc.template, "-p", "NAME="+itmssrc.name, "MIRRORS="+itmssrc.mirrors, "SOURCE="+itmssrc.source)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (itmssrc *itmsSource) delete(oc *exutil.CLI) {
+	e2e.Logf("deleting itms: %s", itmssrc.name)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("itms", itmssrc.name, "--ignore-not-found=true").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+type isStruct struct {
+	name      string
+	namespace string
+	repo      string
+	template  string
+}
+
+func (issrc *isStruct) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", issrc.template, "-p", "NAME="+issrc.name, "REPO="+issrc.repo, "NAMESPACE="+issrc.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// GetMirrorRegistry returns mirror registry from idms
+func GetMirrorRegistry(oc *exutil.CLI) (registry string) {
+	registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("idms", "-o", "jsonpath={.items[0].spec.imageDigestMirrors[0].mirrors[0]}").Output()
+	if err != nil {
+		e2e.Failf("failed to acquire mirror registry from IDMS: %v", err)
+	} else {
+		registry, _, _ = strings.Cut(registry, "/")
+	}
+	return registry
+}

@@ -4278,4 +4278,83 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Check if could push/pull image to/from registry")
 		checkRegistryFunctionFine(oc, "test-64796", oc.Namespace())
 	})
+
+	g.It("Author:wewang-High-67388-Image Registry Pull through should support idms/itms [Serial]", func() {
+		//If a cluster contains any ICSP, it will skip the case
+		if checkICSP(oc) {
+			g.Skip("This cluster contain ICSP, skip the test.")
+		}
+		var (
+			idmsFile = filepath.Join(imageRegistryBaseDir, "idms.yaml")
+			idmssrc  = idmsSource{
+				name:     "digest-mirror",
+				mirrors:  "",
+				source:   "quay.io/openshifttest/hello-openshift",
+				template: idmsFile,
+			}
+			itmsFile = filepath.Join(imageRegistryBaseDir, "itms.yaml")
+			itmssrc  = itmsSource{
+				name:     "tag-mirror",
+				mirrors:  "",
+				source:   "quay.io/openshifttest/hello-openshift",
+				template: itmsFile,
+			}
+			mc = machineConfig{
+				name:     "",
+				pool:     "worker",
+				source:   "",
+				path:     "",
+				template: "",
+			}
+			isFile = filepath.Join(imageRegistryBaseDir, "imagestream-tag-or-digest.yaml")
+			issrc  = isStruct{
+				name:      "is67388",
+				namespace: "",
+				repo:      "",
+				template:  isFile,
+			}
+		)
+		defer func() {
+			idmssrc.delete(oc)
+			itmssrc.delete(oc)
+			mc.waitForMCPComplete(oc)
+			mc.pool = "master"
+			mc.waitForMCPComplete(oc)
+		}()
+		g.By("Create idms and itms")
+		mirror_registry := GetMirrorRegistry(oc)
+		idmssrc.mirrors = mirror_registry + "/openshifttest/hello-openshift"
+		itmssrc.mirrors = mirror_registry + "/openshifttest/hello-openshift"
+		idmssrc.create(oc)
+		itmssrc.create(oc)
+		mc.waitForMCPComplete(oc)
+		mc.pool = "master"
+		mc.waitForMCPComplete(oc)
+
+		g.By("Create imagestream using tag")
+		issrc.name = "is67388tag"
+		issrc.namespace = oc.Namespace()
+		issrc.repo = "quay.io/openshifttest/hello-openshift:1.2.0"
+		issrc.create(oc)
+		err := waitForAnImageStreamTag(oc, oc.Namespace(), "is67388tag", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create imagestream using digest")
+		issrc.name = "is67388digest"
+		issrc.namespace = oc.Namespace()
+		issrc.repo = "quay.io/openshifttest/hello-openshift@sha256:1276e0f79b1b2892e708b8d54a5ad929d33c28bee660f574e302f15ad7daae6f"
+		issrc.create(oc)
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "is67388digest", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("create a pod using the imagestream:is67388digest")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("is67388digest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodsRunningWithLabel(oc, oc.Namespace(), "deployment=is67388digest", 1)
+
+		g.By("create a pod using the imagestream:is67388tag")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("is67388tag", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodsRunningWithLabel(oc, oc.Namespace(), "deployment=is67388tag", 1)
+	})
 })
