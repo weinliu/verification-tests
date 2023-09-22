@@ -157,20 +157,20 @@ class TestResult:
                 # print("No Case ID")
                 tmpname = name.replace("'","")
                 if "[Suite:openshift/" in tmpname:
-                    case.setAttribute("name", "No-CASEID:"+authorname+":" + tmpname.split("[Suite:openshift/")[-2])
+                    case.setAttribute("name", "No-CASEID:"+authorname+":" + scenario + ":" + tmpname.split("[Suite:openshift/")[-2])
                 else:
-                    case.setAttribute("name", "No-CASEID:"+authorname+":" + tmpname)
+                    case.setAttribute("name", "No-CASEID:"+authorname+":" + scenario + ":" + tmpname)
             else:
                 # print("Case ID exists")
                 casetitle = name.split(caseids[-1])[1].replace("'","")
                 if "[Suite:openshift/" in casetitle:
                     casetitle = casetitle.split("[Suite:openshift/")[0]
                 if len(caseids) == 1:
-                    case.setAttribute("name", "OCP-"+caseids[0][:-1]+":"+authorname+":"+casetitle)
+                    case.setAttribute("name", "OCP-"+caseids[0][:-1]+":"+authorname+":" + scenario + ":" +casetitle)
                 else:
                     toBeRemove.append(case)
                     for i in caseids:
-                        casename = "OCP-"+i[:-1]+":"+authorname+":"+casetitle
+                        casename = "OCP-"+i[:-1]+":"+authorname+":" + scenario + ":" +casetitle
                         dupcase = case.cloneNode(True)
                         dupcase.setAttribute("name", casename)
                         toBeAdd.append(dupcase)
@@ -206,7 +206,7 @@ class TestResult:
             if not subteam in self.subteam:
                 subteam = "Unknown"
             # print(subteam)
-            names = self.getNames(name)
+            names = self.getNames(name, subteam)
             # print(names)
             casedesc = {"case": case, "names":names}
             mod = mods.get(subteam)
@@ -280,7 +280,7 @@ class TestResult:
                 writer.close()
 
 
-    def getNames(self, name):
+    def getNames(self, name, subteam):
         names = []
         caseids = re.findall(r'\d{5,}-', name)
         authorname = self.getAuthorName(name)
@@ -288,16 +288,16 @@ class TestResult:
             # print("No Case ID")
             tmpname = name.replace("'","")
             if "[Suite:openshift/" in tmpname:
-                names.append("No-CASEID:"+authorname+":" + tmpname.split("[Suite:openshift/")[-2])
+                names.append("No-CASEID:"+authorname+":" + subteam + ":" + tmpname.split("[Suite:openshift/")[-2])
             else:
-                names.append("No-CASEID:"+authorname+":" + tmpname)
+                names.append("No-CASEID:"+authorname+":" + subteam + ":" + tmpname)
         else:
             # print("Case ID exists")
             casetitle = name.split(caseids[-1])[1].replace("'","")
             if "[Suite:openshift/" in casetitle:
                 casetitle = casetitle.split("[Suite:openshift/")[0]
             for i in caseids:
-                names.append("OCP-"+i[:-1]+":"+authorname+":"+casetitle)
+                names.append("OCP-"+i[:-1]+":"+authorname+":" + subteam + ":"+casetitle)
         return names
 
     def getAuthorName(self, name):
@@ -331,7 +331,7 @@ class TestResult:
         testcase = newdoc.createElement("testcase")
         testcase.setAttribute("name", "OCP-00000:{0}_leader:clusteroperator {1} fails at {2} healthcheck".format(scenario, clusteroperator, steptype))
         if recognize == "no":
-            testcase.setAttribute("name", "OCP-00000:Kui:clusteroperator {1} fails at {2} healthcheck, but no owner, please query with team to add it".format(scenario, clusteroperator, steptype))
+            testcase.setAttribute("name", "OCP-00000:Kui:{0}:clusteroperator {1} fails at {2} healthcheck, but no owner, please query with team to add it".format(scenario, clusteroperator, steptype))
         testcase.setAttribute("time", "1")
 
         failure = newdoc.createElement("failure")
