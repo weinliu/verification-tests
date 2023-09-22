@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,17 +26,40 @@ import (
 )
 
 var (
+	mcoNamespace       = "openshift-machine-api"
 	wmcoNamespace      = "openshift-windows-machine-config-operator"
 	wmcoDeployment     = "windows-machine-config-operator"
-	mcoNamespace       = "openshift-machine-api"
-	defaultNamespace   = "winc-test"
+	privateKey         = ""
+	publicKey          = ""
 	windowsWorkloads   = "win-webserver"
 	linuxWorkloads     = "linux-webserver"
+	windowsServiceDNS  = "win-webserver.winc-test.svc.cluster.local"
+	linuxServiceDNS    = "linux-webserver.winc-test.svc.cluster.local:8080"
+	defaultWindowsMS   = "windows"
+	defaultNamespace   = "winc-test"
+	proxyCAConfigMap   = "trusted-ca"
+	wicdConfigMap      = "windows-services"
+	iaasPlatform       string
+	trustedCACM        = "trusted-ca"
+	zone               string
 	nutanix_proxy_host = "10.0.77.69"
 	vsphere_bastion    = "10.0.76.163"
 	// Bastion user used for Nutanix and vSphere IBMC
-	sshProxyUser     = "root"
-	defaultWindowsMS = "windows"
+	sshProxyUser = "root"
+	svcs         = map[int]string{
+		0: "windows_exporter",
+		1: "kubelet",
+		2: "hybrid-overlay-node",
+		3: "kube-proxy",
+		4: "containerd",
+		5: "windows-instance-config-daemon",
+		6: "csi-proxy",
+	}
+	folders = map[int]string{
+		1: "c:\\k",
+		2: "c:\\temp",
+		3: "c:\\var\\log",
+	}
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
@@ -1152,4 +1177,80 @@ func isProxy(oc *exutil.CLI) bool {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	clusterProxies := getPayloadMap(clusterPayload)
 	return len(clusterProxies) != 0
+}
+
+// the DaemonSet (or other manifests) required for installing CSI drivers in each different
+// platform are provided by the developers in the wmco repo, under the hack/manifests/csi folder.
+// To avoid copy-pasting all the manifest, we rely directly on those manifests by downloading them locally.
+func downloadWindowsCSIDriver(oc *exutil.CLI, fileName, iaasPlatform string) error {
+	driver_url := "https://raw.githubusercontent.com/openshift/windows-machine-config-operator/master/hack/manifests/csi/" + iaasPlatform + "/01-example-driver-daemonset.yaml"
+
+	resp, err := http.Get(driver_url)
+	if err != nil {
+		return fmt.Errorf("couldn't retrieve Windows CSI Drivers manifests from url %v. Error: %v", driver_url, err.Error())
+	}
+	body, err := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("couldn't read site content from url %v. Error: %v", driver_url, err.Error())
+	}
+
+	err = os.WriteFile(fileName, []byte(body), 0644)
+	if err != nil {
+		return fmt.Errorf("couldn't write Windows CSI Drivers manifest content in file %v. Error: %v", fileName, err.Error())
+	}
+	return nil
+}
+
+// installWindowsCSIDriver will download the manifests needed to install the CSI
+// driver in a specific provider (iaasPlatform) and create those resources from the manifest
+func installWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
+
+	tempFileName := "csi-driver-" + iaasPlatform + "-windows.yaml"
+	defer os.Remove(tempFileName)
+	err := downloadWindowsCSIDriver(oc, tempFileName, iaasPlatform)
+	if err != nil {
+		return err
+	}
+	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tempFileName).Output()
+	if err != nil {
+		return fmt.Errorf("creation of manifest %v failed. Error: %v", tempFileName, err.Error())
+	}
+
+	driverName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-f", tempFileName, "-o=jsonpath={.metadata.name}").Output()
+	if err != nil {
+		return fmt.Errorf("can't find Windows CSI Driver name in manifest: %v", err)
+	}
+
+	// using the getMetricsFromCluster function to obtain the number of Windows nodes in the cluster
+	expectedReplicas := getMetricsFromCluster(oc, "node_instance_type_count")
+	timeout := 2 * time.Minute
+	pollErr := wait.Poll(10*time.Second, timeout, func() (bool, error) {
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", driverName, "-o=jsonpath='{.status.numberReady}'", "-n", "openshift-cluster-csi-drivers").Output()
+		if err != nil {
+			return false, err
+		}
+		return (strings.Trim(out, "'") == expectedReplicas), nil
+	})
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Windows CSI Driver %v daemonset is not ready after waiting up to %v minutes ...", driverName, timeout))
+
+	return nil
+}
+
+// uninstallWindowsCSIDriver will download the manifests needed to install the CSI
+// driver in a specific provider (iaasPlatform) and delete those resources already created
+func uninstallWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
+
+	tempFileName := "csi-driver-" + iaasPlatform + "-windows.yaml"
+	defer os.Remove(tempFileName)
+	err := downloadWindowsCSIDriver(oc, tempFileName, iaasPlatform)
+	if err != nil {
+		return err
+	}
+	_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", tempFileName).Output()
+	if err != nil {
+		return fmt.Errorf("deletion of manifest %v failed. Error: %v", tempFileName, err.Error())
+	}
+
+	return nil
 }

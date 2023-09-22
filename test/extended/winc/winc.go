@@ -26,38 +26,7 @@ import (
 var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	defer g.GinkgoRecover()
 
-	var (
-		oc                = exutil.NewCLIWithoutNamespace("default")
-		mcoNamespace      = "openshift-machine-api"
-		wmcoNamespace     = "openshift-windows-machine-config-operator"
-		wmcoDeployment    = "windows-machine-config-operator"
-		privateKey        = ""
-		publicKey         = ""
-		windowsWorkloads  = "win-webserver"
-		linuxWorkloads    = "linux-webserver"
-		windowsServiceDNS = "win-webserver.winc-test.svc.cluster.local"
-		linuxServiceDNS   = "linux-webserver.winc-test.svc.cluster.local:8080"
-		defaultWindowsMS  = "windows"
-		defaultNamespace  = "winc-test"
-		proxyCAConfigMap  = "trusted-ca"
-		wicdConfigMap     = "windows-services"
-		iaasPlatform      string
-		trustedCACM       = "trusted-ca"
-		zone              string
-		svcs              = map[int]string{
-			0: "windows_exporter",
-			1: "kubelet",
-			2: "hybrid-overlay-node",
-			3: "kube-proxy",
-			4: "containerd",
-			5: "windows-instance-config-daemon",
-		}
-		folders = map[int]string{
-			1: "c:\\k",
-			2: "c:\\temp",
-			3: "c:\\var\\log",
-		}
-	)
+	var oc = exutil.NewCLIWithoutNamespace("default")
 
 	// Struct used to define a service in the windows-services
 	type Service struct {
@@ -699,6 +668,16 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				e2e.Failf("Failed to retrieve wicd log on: " + winHostName)
 			}
 		}
+
+		g.By("Check a cluster-admin can retrieve csi-proxy logs")
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=csi-proxy/csi-proxy.log").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, winHostName := range windowsHostNames {
+			e2e.Logf("Retrieve csi-proxy runtime log on: " + winHostName)
+			if !strings.Contains(string(msg), winHostName+" Log file created at:") {
+				e2e.Failf("Failed to retrieve csi-proxy log on: " + winHostName)
+			}
+		}
 	})
 
 	// author: sgao@redhat.com
@@ -723,6 +702,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			"host_service_logs/windows/log_files/wicd/windows-instance-config-daemon.exe.ERROR",
 			"host_service_logs/windows/log_files/wicd/windows-instance-config-daemon.exe.INFO",
 			"host_service_logs/windows/log_files/wicd/windows-instance-config-daemon.exe.WARNING",
+			"host_service_logs/windows/log_files/csi-proxy/",
+			"host_service_logs/windows/log_files/csi-proxy/csi-proxy.log",
 		}
 		for _, v := range checkMessage {
 			if !strings.Contains(mustGather, v) {
