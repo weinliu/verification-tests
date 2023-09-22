@@ -23,6 +23,16 @@ export const Operator = {
             }
         })
     },
+    enableFLPMetrics: () => {
+        // this will need to change once NETOBSERV-1284 is fixed.
+        cy.get('#root_spec_processor_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_ignoreTags_accordion-toggle').should('exist').click()
+        cy.enableFLPMetric("namespaces-flows")
+        cy.enableFLPMetric("workloads-flows")
+        cy.enableFLPMetric("nodes-flows")
+        cy.enableFLPMetric("namespaces")
+    },
     createFlowcollector: (namespace: string) => {
         // this assumes Loki is already deployed in netobserv NS
         cy.visit('k8s/ns/openshift-netobserv-operator/operators.coreos.com~v1alpha1~ClusterServiceVersion')
@@ -48,6 +58,7 @@ export const Operator = {
                 cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
                 cy.get('#root_spec_loki_accordion-toggle').click()
                 cy.get('#root_spec_loki_url').clear().type(`http://loki.${namespace}.svc:3100/`)
+                Operator.enableFLPMetrics()
                 cy.get('#root_spec_namespace').clear().type(namespace)
                 cy.byTestID('create-dynamic-form').click()
                 cy.byTestID('status-text').should('exist').should('have.text', 'Ready')
@@ -90,5 +101,18 @@ export const Operator = {
         cy.get('.co-actions-menu > .pf-c-dropdown__toggle').should('exist').click()
         cy.byTestActionID('Delete CatalogSource').should('exist').click()
         cy.byTestID('confirm-action').should('exist').click()
+    }
+}
+Cypress.Commands.add('enableFLPMetric', (tag: string) => {
+    cy.get(`[value=\"${tag}\"]`).parent().parent().within(tag => {
+        cy.get('.co-dynamic-form__array-field-group-remove > button').should('exist').click()
+    })
+});
+
+declare global {
+    namespace Cypress {
+        interface Chainable {
+            enableFLPMetric(tag: string): Chainable<Element>
+        }
     }
 }

@@ -115,7 +115,13 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.get(querySumSelectors.packetsCount).should('exist').then(pktsCnt => {
                 let npkts = 0
                 if (warningExists) {
-                    npkts = Number(pktsCnt.text().split('+ ')[0])
+                    let npktsStr = pktsCnt.text().split('+ ')[0]
+                    if (npktsStr.includes('k')) {
+                        npkts = Number(npktsStr.split('k')[0])
+                    }
+                    else {
+                        npkts = Number(npktsStr)
+                    }
                 }
                 else {
                     npkts = Number(pktsCnt.text().split(' ')[0])

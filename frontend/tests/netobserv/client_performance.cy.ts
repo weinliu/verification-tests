@@ -6,12 +6,9 @@ function getTopologyScopeURL(scope: string): string {
     return `**/topology?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=${scope}`
 }
 
-describe("NETOBSERV Client Performances", { tags: ['NETOBSERV'] }, function () {
+describe("NETOBSERV Client Performances", { browser: 'chrome', tags: ['NETOBSERV'] }, function () {
     before("tests", function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        if (Cypress.browser.name != "chrome") {
-            this.skip()
-        }
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
