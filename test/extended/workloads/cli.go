@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/goexpect"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
@@ -1661,6 +1662,48 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(out, "example-app67387")).To(o.BeTrue())
 		waitForDeploymentPodsToBeReady(oc, ns67387, "example-app67387")
+	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:yinzhou-Medium-49395-oc debug node should exit when timeout", func() {
+		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns49395 := oc.Namespace()
+
+		exutil.SetNamespacePrivileged(oc, ns49395)
+
+		cmd := fmt.Sprintf("oc debug --to-namespace %s node/%s", ns49395, workerNodeList[0])
+		e2e.Logf("cmd: %v", cmd)
+		e, _, err := expect.Spawn(cmd, -1, expect.Verbose(true))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer e.Close()
+		err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+			output, err1 := oc.AsAdmin().Run("get").Args("pod", "-n", ns49395).Output()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("debug", output); matched {
+				e2e.Logf("Check the debug pod in own namespace\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot find the debug pod in own namespace"))
+		err = wait.Poll(30*time.Second, 960*time.Second, func() (bool, error) {
+			output, err1 := oc.AsAdmin().Run("get").Args("pod", "-n", ns49395).Output()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("debug", output); !matched {
+				e2e.Logf("Check the debug pod disappeared in own namespace\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Still find the debug pod in own namespace even wait for 15 mins"))
 	})
 })
 
