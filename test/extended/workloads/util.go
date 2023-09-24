@@ -1631,3 +1631,27 @@ func removeLabelFromNode(oc *exutil.CLI, label string, workerNodeName string, re
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("\nLabel Removed")
 }
+
+func assertSpecifiedPodStatus(oc *exutil.CLI, podname string, namespace string, expected string) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		podStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podname, "-n", namespace, "-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("the result of pod:%v", podStatus)
+		if strings.Contains(podStatus, expected) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with name %s is not expected %s", podname, expected))
+}
+
+func waitForResourceDisappear(oc *exutil.CLI, resource string, resourcename string, namespace string) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		err := oc.Run("get").Args(resource, resourcename, "-n", namespace).Execute()
+		if o.Expect(err.Error()).Should(o.ContainSubstring("exit status 1")) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The specified resrouce %s with name %s is not disappear in time ", resource, resourcename))
+}

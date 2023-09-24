@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
-	"time"
-
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-cli] Workloads", func() {
@@ -23,6 +23,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-10618-Prune old builds by admin command [Serial]", func() {
 		if checkOpenshiftSamples(oc) {
 			g.Skip("Can't find the cluster operator openshift-samples, skip it.")
+		}
+		if isBaselineCapsSet(oc, "None") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
 		}
 
 		g.By("create new namespace")
@@ -108,5 +111,69 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--until", untilT).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-11112-Prune old deploymentconfig by admin command", func() {
+		if isBaselineCapsSet(oc, "None") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns11112 := oc.Namespace()
+
+		err := oc.WithoutNamespace().Run("create").Args("deploymentconfig", "mydc11112", "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", ns11112).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertSpecifiedPodStatus(oc, "mydc11112-1-deploy", ns11112, "Succeeded")
+
+		g.By("Trigger more deployment and wait for succeed")
+		for i := 0; i < 3; i++ {
+			err := oc.Run("rollout").Args("latest", "dc/mydc11112", "-n", ns11112).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			assertSpecifiedPodStatus(oc, "mydc11112-"+strconv.Itoa(i+2)+"-deploy", ns11112, "Succeeded")
+		}
+
+		g.By("Add pre hook to make sure new deployment failed")
+		err = oc.Run("set").Args("deployment-hook", "dc/mydc11112", "--pre", "-c=default-container", "--failure-policy=abort", "--", "/bin/false").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for i := 0; i < 2; i++ {
+			err := oc.Run("rollout").Args("latest", "dc/mydc11112", "-n", ns11112).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			assertSpecifiedPodStatus(oc, "mydc11112-"+strconv.Itoa(i+5)+"-deploy", ns11112, "Failed")
+		}
+
+		g.By("Dry run prune the DC and wait for pruned DC is expected")
+		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			output, warning, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "deployments", "--keep-complete=2", "--keep-failed=1", "--keep-younger-than=1m").Outputs()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The warning %v", warning)
+			if strings.Contains(output, "mydc11112-1") && strings.Contains(output, "mydc11112-5") {
+				e2e.Logf("Found the expected prune output %v", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "timeout wait for prune deploymentconfig dry run")
+		rcOutput, err := oc.Run("get").Args("rc", "-n", ns11112).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(rcOutput, "mydc11112-1")).To(o.BeTrue())
+		o.Expect(strings.Contains(rcOutput, "mydc11112-5")).To(o.BeTrue())
+
+		g.By("Prune the DC and check the result is only prune the first completed and first failed DC")
+		output, _, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "deployments", "--keep-complete=2", "--keep-failed=1", "--keep-younger-than=1m", "--confirm").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "mydc11112-1")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "mydc11112-5")).To(o.BeTrue())
+
+		err = oc.Run("delete").Args("dc/mydc11112", "-n", ns11112, "--cascade=orphan").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Prune the DC with orphans and make sure all the non-running DC are all pruned")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "deployments", "--keep-younger-than=1m", "--confirm", "--orphans").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForResourceDisappear(oc, "rc", "mydc11112-2", ns11112)
+		waitForResourceDisappear(oc, "rc", "mydc11112-3", ns11112)
+		waitForResourceDisappear(oc, "rc", "mydc11112-6", ns11112)
+		rcOutput, err = oc.Run("get").Args("rc", "-n", ns11112).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(rcOutput, "mydc11112-4")).To(o.BeTrue())
 	})
 })
