@@ -289,6 +289,22 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			"parameters": storageClassParameters,
 		}
 
+		// The following regions only support limited AZ, so specify the first zone
+		limitAzRegion := []string{"southeastasia", "brazilsouth", "japaneast", "koreacentral", "centralus", "norwayeast"}
+		if contains(limitAzRegion, region) {
+			zone := []string{region + "-1"}
+			labelExpressions := []map[string]interface{}{
+				{"key": "topology.disk.csi.azure.com/zone", "values": zone},
+			}
+			matchLabelExpressions := []map[string]interface{}{
+				{"matchLabelExpressions": labelExpressions},
+			}
+			extraParameters = map[string]interface{}{
+				"allowedTopologies": matchLabelExpressions,
+				"parameters":        storageClassParameters,
+			}
+		}
+
 		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("disk.csi.azure.com"))
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
