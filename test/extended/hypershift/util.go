@@ -391,3 +391,14 @@ func getMinSupportedOCPVersion() string {
 	_, minVersion := getHyperShiftSupportedOCPVersion()
 	return minVersion.String()
 }
+
+// getAWSMgmtClusterAvailableZones returns available zones based on mgmt cluster's oc client and region
+func getAWSMgmtClusterRegionAvailableZones(oc *exutil.CLI) []string {
+	region, err := exutil.GetAWSClusterRegion(oc)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	exutil.GetAwsCredentialFromCluster(oc)
+	awsClient := exutil.InitAwsSessionWithRegion(region)
+	availableZones, err := awsClient.GetAvailabilityZoneNames()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return availableZones
+}

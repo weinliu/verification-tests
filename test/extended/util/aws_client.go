@@ -41,6 +41,15 @@ func InitAwsSession() *AwsClient {
 	return aClient
 }
 
+func InitAwsSessionWithRegion(region string) *AwsClient {
+	mySession := session.Must(session.NewSession())
+	aClient := &AwsClient{
+		svc: ec2.New(mySession, aws.NewConfig().WithRegion(region)),
+	}
+
+	return aClient
+}
+
 // GetAwsInstanceID Get int svc instance ID
 func (a *AwsClient) GetAwsInstanceID(instanceName string) (string, error) {
 	filters := []*ec2.Filter{
@@ -442,6 +451,20 @@ func (a *AwsClient) GetDefaultSecurityGroupByVpcID(vpcID string) (*ec2.SecurityG
 	}
 
 	return ep.SecurityGroups[0], nil
+}
+
+func (a *AwsClient) GetAvailabilityZoneNames() ([]string, error) {
+	zones, err := a.svc.DescribeAvailabilityZones(&ec2.DescribeAvailabilityZonesInput{})
+	if err != nil {
+		return nil, err
+	}
+	var zoneNames []string
+	for _, az := range zones.AvailabilityZones {
+		if az.ZoneName != nil {
+			zoneNames = append(zoneNames, *az.ZoneName)
+		}
+	}
+	return zoneNames, nil
 }
 
 // S3Client struct for S3 storage operations

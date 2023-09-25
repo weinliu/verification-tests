@@ -46,6 +46,7 @@ type createCluster struct {
 	Annotations             string                `param:"annotations"`
 	EndpointAccess          AWSEndpointAccessType `param:"endpoint-access"`
 	ExternalDnsDomain       string                `param:"external-dns-domain"`
+	ReleaseImage            string                `param:"release-image"`
 }
 
 type infra struct {
@@ -122,6 +123,11 @@ func (c *createCluster) withSSHKey(SSHKey string) *createCluster {
 
 func (c *createCluster) withInfraID(InfraID string) *createCluster {
 	c.InfraID = InfraID
+	return c
+}
+
+func (c *createCluster) withReleaseImage(releaseImage string) *createCluster {
+	c.ReleaseImage = releaseImage
 	return c
 }
 
@@ -359,7 +365,7 @@ func (receiver *installHelper) createAWSHostedClusters(createCluster *createClus
 	vars, err := parse(createCluster)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	var bashClient = NewCmdClient().WithShowInfo(true)
-	cmd := fmt.Sprintf("hypershift create cluster aws %s", strings.Join(vars, " "))
+	cmd := fmt.Sprintf("hypershift create cluster aws %s %s", strings.Join(vars, " "), ` --annotations=hypershift.openshift.io/cleanup-cloud-resources="true"`)
 	e2e.Logf("run hypershift create command: %s", cmd)
 	_, err = bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())

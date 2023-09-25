@@ -441,6 +441,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 48672 is for AWS - skipping test ...")
 		}
+		// this case needs 3 zones
+		zones := getAWSMgmtClusterRegionAvailableZones(oc)
+		if len(zones) < 3 {
+			g.Skip("mgmt cluster has less than 3 zones: " + strings.Join(zones, " ") + " - skipping test ...")
+		}
+
 		caseID := "48672"
 		dir := "/tmp/hypershift" + caseID
 		clusterName := "hypershift-" + caseID
@@ -455,17 +461,19 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		installHelper.hyperShiftInstall()
 
 		g.By("create HostedClusters")
-		zones := []string{installHelper.region + "a", installHelper.region + "b", installHelper.region + "c"}
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName(clusterName).
 			withNodePoolReplicas(1).
-			withZones(strings.Join(zones, ","))
+			withZones(strings.Join(zones[:3], ",")).
+			withReleaseImage(release)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 
 		g.By("Check the hostedcluster and nodepool")
-		checkSubstring(doOcpReq(oc, OcpGet, false, "awsmachines", "-n", hostedCluster.namespace+"-"+hostedCluster.name, `-ojsonpath={.items[*].spec.providerID}`), zones)
+		checkSubstring(doOcpReq(oc, OcpGet, false, "awsmachines", "-n", hostedCluster.namespace+"-"+hostedCluster.name, `-ojsonpath={.items[*].spec.providerID}`), zones[:3])
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(len(zones)), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
 
