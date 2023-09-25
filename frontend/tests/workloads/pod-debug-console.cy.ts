@@ -25,7 +25,7 @@ describe('Debug console for pods', () => {
     // Import the nodejs-ex.git and run the invalid command to cause CrashLoopBackoof && Twice
     cy.switchPerspective('Developer');
     cy.visit(`/import/ns/${testParams.namespace}`)
-    cy.byLegacyTestID('git-form-input-url').clear().type(testParams.gitURL)
+    cy.byLegacyTestID('git-form-input-url').scrollIntoView().clear().type(testParams.gitURL)
     cy.get('#form-input-git-url-field-helper').contains('Validated')
     cy.get('#form-input-name-field').clear().type(testParams.name)
     cy.get('#form-input-image-imageEnv-NPM_RUN-field').clear().type(testParams.invalidCommand)
@@ -65,7 +65,14 @@ describe('Debug console for pods', () => {
         cy.byLegacyTestID('dropdown-button').click()
         cy.get(`#${testParams.name}-link`).contains(testParams.name)
       })
-
+    //Add checkpoint for customer bug OCPBUGS-12244: debug container should not copy main pod network info
+    let ipaddress1, ipaddress2;
+    cy.adminCLI(`oc get pods -n ${testParams.namespace} -o jsonpath='{.items[0].status.podIP}{"\t"}{.items[1].status.podIP}'`).then((result)=> {
+      ipaddress1 = result.stdout.split('\t')[0]
+      ipaddress2 = result.stdout.split('\t')[1]
+      cy.log(`ip1: ${ipaddress1} \t ip2: ${ipaddress2}`);
+      expect(`${ipaddress1}`).to.not.equal(`${ipaddress2}`);
+    })
     // Check customer bug for debug container not terminating after closing tab
     cy.visit(`/dashboard`)
     cy.adminCLI(`oc get pod -n ${testParams.namespace}`)
