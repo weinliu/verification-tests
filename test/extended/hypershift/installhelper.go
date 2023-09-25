@@ -311,10 +311,13 @@ func (receiver *installHelper) hyperShiftInstall() {
 			cmd = cmd + fmt.Sprintf(" --external-dns-provider=aws --external-dns-credentials=%s --external-dns-domain-filter=%s ", receiver.dir+"/credentials", HyperShiftExternalDNS)
 		}
 
+		//only for 4.14 or above
+		cmd = cmd + " --enable-defaulting-webhook=true"
+
 	case "azure":
 		e2e.Logf("extract Azure Credentials")
 		receiver.extractAzureCredentials()
-		cmd = "hypershift install"
+		cmd = "hypershift install --enable-defaulting-webhook=true"
 	default:
 	}
 	o.Expect(cmd).ShouldNot(o.BeEmpty())
