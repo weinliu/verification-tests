@@ -1367,3 +1367,37 @@ func isEnabledCapability(oc *exutil.CLI, component string) bool {
 	e2e.Logf("Cluster enabled capability parameters: %v\n", enabledCapabilities)
 	return strings.Contains(enabledCapabilities, component)
 }
+
+func checkURLEndpointAccess(oc *exutil.CLI, hostIP, nodePort, podName, portCommand, status string) {
+	var url string
+	var curlOutput string
+	var curlErr error
+
+	if isIPv6(hostIP) {
+		url = fmt.Sprintf("[%s]:%s", hostIP, nodePort)
+	} else {
+		url = fmt.Sprintf("%s:%s", hostIP, nodePort)
+	}
+
+	// Construct the full command with the specified command and URL
+	var fullCommand string
+	if portCommand == "https" {
+		fullCommand = fmt.Sprintf("curl -k https://%s", url)
+	} else {
+		fullCommand = fmt.Sprintf("curl %s", url)
+	}
+
+	e2e.Logf("Command: %v", fullCommand)
+	e2e.Logf("Checking if the specified URL endpoint %s  is accessible", url)
+
+	err := wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+		curlOutput, curlErr = oc.Run("exec").Args(podName, "-i", "--", "sh", "-c", fullCommand).Output()
+		if curlErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Unable to access %s", url))
+	o.Expect(curlOutput).To(o.ContainSubstring(status))
+}

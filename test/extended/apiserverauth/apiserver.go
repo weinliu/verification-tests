@@ -6516,4 +6516,85 @@ spec:
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-10970-[Apiserver] Create service with multiports", func() {
+		var (
+			filename  = "pod_with_multi_ports.json"
+			filename1 = "pod-for-ping.json"
+			podName1  = "hello-openshift"
+			podName2  = "pod-for-ping"
+		)
+
+		exutil.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
+		exutil.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		exutil.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
+		template := getTestDataFilePath(filename)
+		err := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("3) Wait for pod with name %s to be ready", podName1))
+		exutil.AssertPodToBeReady(oc, podName1, namespace)
+
+		exutil.By(fmt.Sprintf("4) Check host ip for pod %s", podName1))
+		hostIP, err := oc.Run("get").Args("pods", podName1, "-o=jsonpath={.status.hostIP}", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(hostIP).NotTo(o.Equal(""))
+		e2e.Logf("Get host ip %s", hostIP)
+
+		exutil.By("5) Create nodeport service with random service port")
+		servicePort1 := rand.Intn(3000) + 6000
+		servicePort2 := rand.Intn(6001) + 9000
+
+		serviceErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("service", "nodeport", podName1, fmt.Sprintf("--tcp=%d:8080,%d:8443", servicePort1, servicePort2), "-n", namespace).Execute()
+		o.Expect(serviceErr).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("6) Check the service with the node port %s", podName1))
+		nodePort1, err := oc.Run("get").Args("services", podName1, fmt.Sprintf("-o=jsonpath={.spec.ports[?(@.port==%d)].nodePort}", servicePort1)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodePort1).NotTo(o.Equal(""))
+		nodePort2, err := oc.Run("get").Args("services", podName1, fmt.Sprintf("-o=jsonpath={.spec.ports[?(@.port==%d)].nodePort}", servicePort2)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodePort2).NotTo(o.Equal(""))
+		e2e.Logf("Get node port %s :: %s", nodePort1, nodePort2)
+
+		exutil.By(fmt.Sprintf("6.1) Create pod with resource file %s for checking network access", filename1))
+		template = getTestDataFilePath(filename1)
+		err = oc.Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("6.2) Wait for pod with name %s to be ready", podName2))
+		exutil.AssertPodToBeReady(oc, podName2, namespace)
+
+		exutil.By(fmt.Sprintf("6.3) Check URL endpoint access"))
+		checkURLEndpointAccess(oc, hostIP, nodePort1, podName2, "http", "hello-openshift http-8080")
+		checkURLEndpointAccess(oc, hostIP, nodePort2, podName2, "https", "hello-openshift https-8443")
+
+		exutil.By(fmt.Sprintf("6.4) Delete service %s", podName1))
+		err = oc.Run("delete").Args("service", podName1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("7) Create another service with random target ports %d :: %d", servicePort1, servicePort2))
+		err1 := oc.Run("create").Args("service", "clusterip", podName1, fmt.Sprintf("--tcp=%d:8080,%d:8443", servicePort1, servicePort2)).Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		defer oc.Run("delete").Args("service", podName1).Execute()
+
+		exutil.By(fmt.Sprintf("7.1) Check cluster ip for pod %s", podName1))
+		clusterIP, serviceErr := oc.Run("get").Args("services", podName1, "-o=jsonpath={.spec.clusterIP}", "-n", namespace).Output()
+		o.Expect(serviceErr).NotTo(o.HaveOccurred())
+		o.Expect(clusterIP).ShouldNot(o.BeEmpty())
+		e2e.Logf("Get node clusterIP :: %s", clusterIP)
+
+		exutil.By(fmt.Sprintf("7.2) Check URL endpoint access again"))
+		checkURLEndpointAccess(oc, clusterIP, strconv.Itoa(servicePort1), podName2, "http", "hello-openshift http-8080")
+		checkURLEndpointAccess(oc, clusterIP, strconv.Itoa(servicePort2), podName2, "https", "hello-openshift https-8443")
+	})
 })
