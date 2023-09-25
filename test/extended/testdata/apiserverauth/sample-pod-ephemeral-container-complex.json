@@ -9,7 +9,7 @@
       "ephemeralContainers": [
         {
           "name": "ephemeral-pod-debugger",
-          "image": "gcr.io/google-samples/node-hello:1.0",
+          "image": "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83",
           "command": [
             "bash",
             "-ec"
