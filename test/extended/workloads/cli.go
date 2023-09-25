@@ -789,6 +789,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		creationErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deployStatefulSet, "-n", oc.Namespace()).Execute()
 		o.Expect(creationErr).NotTo(o.HaveOccurred())
 
+		if defaultSC.Array()[0].String() == "filestore-csi" {
+			waitForPvcStatus(oc, oc.Namespace(), "www-hello-statefulset-0")
+		}
+
 		g.By("Check if pod is ready")
 		exutil.AssertPodToBeReady(oc, "hello-statefulset-0", oc.Namespace())
 

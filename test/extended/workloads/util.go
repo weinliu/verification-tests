@@ -1655,3 +1655,18 @@ func waitForResourceDisappear(oc *exutil.CLI, resource string, resourcename stri
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The specified resrouce %s with name %s is not disappear in time ", resource, resourcename))
 }
+
+// make sure the PVC is Bound to the PV
+func waitForPvcStatus(oc *exutil.CLI, namespace string, pvcname string) {
+	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		pvStatus, err := oc.AsAdmin().Run("get").Args("-n", namespace, "pvc", pvcname, "-o=jsonpath='{.status.phase}'").Output()
+		if err != nil {
+			return false, err
+		}
+		if match, _ := regexp.MatchString("Bound", pvStatus); match {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The PVC is not Bound as expected")
+}
