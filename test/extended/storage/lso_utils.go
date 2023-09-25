@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,12 +26,14 @@ const (
 
 // Define the localStorageOperator struct
 type localStorageOperator struct {
-	subName        string
-	namespace      string
-	channel        string
-	source         string
-	deployTemplate string
-	currentCSV     string
+	subName          string
+	namespace        string
+	channel          string
+	source           string
+	deployTemplate   string
+	currentCSV       string
+	currentIteration int
+	maxIteration     int
 }
 
 // function option mode to change the default values of lso attributes
@@ -74,11 +77,13 @@ func setLsoTemplate(deployTemplate string) lsoOption {
 // Create a new customized lso object
 func newLso(opts ...lsoOption) localStorageOperator {
 	defaultLso := localStorageOperator{
-		subName:        "lso-sub-" + getRandomString(),
-		namespace:      "",
-		channel:        "4.11",
-		source:         "qe-app-registry",
-		deployTemplate: "/lso/lso-deploy-template.yaml",
+		subName:          "lso-sub-" + getRandomString(),
+		namespace:        "",
+		channel:          "4.11",
+		source:           "qe-app-registry",
+		deployTemplate:   "/lso/lso-deploy-template.yaml",
+		currentIteration: 1,
+		maxIteration:     3,
 	}
 	for _, o := range opts {
 		o(&defaultLso)
@@ -102,7 +107,7 @@ func (lso *localStorageOperator) getCurrentCSV(oc *exutil.CLI) string {
 		currentCSV string
 		errinfo    error
 	)
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 		currentCSV, errinfo = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lso.namespace, "Subscription", `-o=jsonpath={.items[?(@.metadata.name=="`+lso.subName+`")].status.currentCSV}`).Output()
 		if errinfo != nil {
 			e2e.Logf("Get local storage operator currentCSV failed :%v, wait for next round get.", errinfo)
@@ -117,6 +122,17 @@ func (lso *localStorageOperator) getCurrentCSV(oc *exutil.CLI) string {
 	if err != nil {
 		describeSubscription, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", lso.namespace, "Subscription/"+lso.subName).Output()
 		e2e.Logf("The openshift local storage operator Subscription detail info is:\n \"%s\"", describeSubscription)
+		// Temporarily avoid known issue https://issues.redhat.com/browse/OCPBUGS-19046
+		// TODO: Revert the commit when OCPBUGS-19046 fixed
+		if matched, _ := regexp.MatchString("clusterserviceversion local-storage-operator.*exists and is not referenced by a subscription", describeSubscription); matched && lso.currentIteration < lso.maxIteration {
+			lso.currentIteration = lso.currentIteration + 1
+			regexForLsoCsv := regexp.MustCompile(`local-storage-operator\.v\d+\.\d+\.\d+-\d{12}`)
+			lsoCsv := regexForLsoCsv.FindAllString(describeSubscription, -1)[0]
+			deleteSpecifiedResource(oc, "sub", lso.subName, lso.namespace)
+			deleteSpecifiedResource(oc, "csv", lsoCsv, lso.namespace)
+			lso.install(oc)
+			return lso.getCurrentCSV(oc)
+		}
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Get local storage operator currentCSV in ns/%s timeout", lso.namespace))
 	lso.currentCSV = currentCSV
