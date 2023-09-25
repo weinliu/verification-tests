@@ -19,6 +19,8 @@ describe('console-route', () => {
   });
 
   it('(OCP-64619, klzhao)console route should be re-generated using cluster domain', { tags: ['e2e', 'admin', '@rosa', '@osd-ccs'] }, () => {
+    cy.adminCLI('oc get route console -n openshift-console -ojsonpath="{.metadata.annotations}"')
+      .then(result => expect(result.stdout).contains(`"haproxy.router.openshift.io/timeout":"5m"`));
     cy.adminCLI('oc patch route console -n openshift-console --type json -p \'[{"op":"replace","path":"/spec/host","value":"example.com"}]\'');
     cy.adminCLI('oc get route console -n openshift-console -o template --template="{{.spec.host}}"')
       .then(result => expect(result.stdout).contains(params.host));
