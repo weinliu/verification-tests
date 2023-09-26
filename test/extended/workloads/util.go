@@ -554,18 +554,6 @@ func (registry *registry) createregistry(oc *exutil.CLI) serviceInfo {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	regRoute, err := oc.AsAdmin().Run("get").Args("route", "my-route", "-n", registry.namespace, "-o=jsonpath={.spec.host}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("Check the route of registry available")
-	ingressOpratorPod, err := oc.AsAdmin().Run("get").Args("pod", "-l", "name=ingress-operator", "-n", "openshift-ingress-operator", "-o=jsonpath={.items[0].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	waitErr := wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
-		err := oc.AsAdmin().Run("exec").Args("pod/"+ingressOpratorPod, "-n", "openshift-ingress-operator", "--", "curl", "-v", "https://"+regRoute, "-I", "-k").Execute()
-		if err != nil {
-			e2e.Logf("route is not yet resolving, retrying...")
-			return false, nil
-		}
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the route is not reachable"))
 
 	regSvcURL := regSvcIP + ":" + regSvcPort
 	svc := serviceInfo{

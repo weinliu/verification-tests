@@ -19,6 +19,7 @@ import (
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
@@ -1708,6 +1709,52 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Still find the debug pod in own namespace even wait for 15 mins"))
+	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-37363-High-38859-Check oc image mirror with multi-arch images", func() {
+		g.By("Create new namespace")
+		oc.SetupProject()
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		g.By("Checkpoint for OCP-38859")
+		err := wait.Poll(30*time.Second, 800*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().Run("image").Args("mirror", "--insecure", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", serInfo.serviceName+"/busyboxmulti:latest", "--filter-by-os=.*").Execute()
+			if err != nil {
+				if apierrors.IsServiceUnavailable(err) {
+					e2e.Logf("Registry route not available, retrying...")
+					return false, nil
+				}
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Mirror failed")
+		_, warningOutput, err := oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/busyboxmulti:latest").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(strings.Contains(warningOutput, "the image is a manifest list and contains multiple images - use --filter-by-os to select from")).To(o.BeTrue())
+		g.By("Checkpoint for OCP-37363")
+		err = wait.Poll(30*time.Second, 800*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().Run("image").Args("mirror", "--insecure", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", serInfo.serviceName+"/busyboxmultilist:latest", "--keep-manifest-list=true").Execute()
+			if err != nil {
+				if apierrors.IsServiceUnavailable(err) {
+					e2e.Logf("Registry route not available, retrying...")
+					return false, nil
+				}
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Mirror failed")
+		_, warningOutput2, err := oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/busyboxmultilist:latest").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(strings.Contains(warningOutput2, "the image is a manifest list and contains multiple images - use --filter-by-os to select from")).To(o.BeTrue())
 	})
 })
 
