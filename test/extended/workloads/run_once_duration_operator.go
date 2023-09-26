@@ -177,7 +177,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		for _, pod := range podList {
 			checkPodStatus(oc, "app="+pod, oc.Namespace(), "Running")
 			// Make sure activeDeadLineSeconds field is set to 60
-			err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			err = wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 				activeDeadLineSeconds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, "-n", oc.Namespace(), "-o=jsonpath={.spec.activeDeadlineSeconds}").Output()
 				if err != nil {
 					e2e.Logf("err: %v, and try next round...", err.Error())
@@ -293,7 +293,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 
 		// Make sure activeDeadLineSeconds field is set to 60
 		checkPodStatus(oc, "app=podwithactivedeadlineseconds62690", oc.Namespace(), "Running")
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 			activeDeadLineSeconds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "podwithactivedeadlineseconds62690", "-n", oc.Namespace(), "-o=jsonpath={.spec.activeDeadlineSeconds}").Output()
 			if err != nil {
 				e2e.Logf("err: %v, and try next round...", err.Error())
@@ -358,7 +358,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 
 		// Make sure activeDeadLineSeconds field is set to 80
 		checkPodStatus(oc, "app=podwithadsgo62690", oc.Namespace(), "Running")
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 			activeDeadLineSeconds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "podwithadsgo62690", "-n", oc.Namespace(), "-o=jsonpath={.spec.activeDeadlineSeconds}").Output()
 			if err != nil {
 				e2e.Logf("err: %v, and try next round...", err.Error())
