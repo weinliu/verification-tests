@@ -32,7 +32,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	var (
 		oc = exutil.NewCLI("ocmirror", exutil.KubeConfigPath())
 	)
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-Medium-46517-List operator content with different options", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-Medium-46517-List operator content with different options", func() {
 		dirname := "/tmp/case46517"
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
-	g.It("ConnectedOnly-Author:yinzhou-Medium-46818-Low-46523-check the User Agent for oc-mirror", func() {
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-Medium-46818-Low-46523-check the User Agent for oc-mirror", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		operatorS := filepath.Join(ocmirrorBaseDir, "catlog-loggings.yaml")
 
