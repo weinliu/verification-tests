@@ -98,9 +98,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		)
 
 		// Log where & what we are running every time
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cloudPlatform := strings.ToLower(msg)
+		cloudPlatform := getCloudProvider(oc)
 		ocpMajorVer, ocpMinorVer, clusterVersion = getClusterVersion(oc)
 		// 4.10 and earlier cannot have security context on pods or deployment
 		// defaultPod and defaultDeployment are global in kata.go
@@ -1435,4 +1433,21 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			o.Expect(found).To(o.BeTrue())
 		}
 	})
+
+	g.It("Author:vvoronko-High-67650-pod-with-filesystem", func() {
+		oc.SetupProject()
+		var (
+			podNs    = oc.Namespace()
+			pvcName  = "pvc-67650-" + getRandomString()
+			capacity = "2"
+		)
+		err := createRWOfilePVC(oc, podNs, pvcName, capacity)
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", pvcName, "-n", podNs, "--ignore-not-found").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//TODO: add a function that takes any pod and know to inject storage part to it)
+		// run pod with kata
+		//TODO: test IO
+	})
+
 })

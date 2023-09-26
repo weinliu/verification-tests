@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -1043,4 +1044,72 @@ func checkResourceJsonpath(oc *exutil.CLI, resType, resName, resNs, jsonpath, ex
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v %v in ns %v is not in %v state after %v sec: %v %v", resType, resName, resNs, expected, duration, msg, err))
 	return msg, nil
+}
+
+// Get the cloud provider type of the test environment copied from test/extended/storage/utils
+func getCloudProvider(oc *exutil.CLI) string {
+	var (
+		errMsg error
+		output string
+	)
+	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		output, errMsg = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		if errMsg != nil {
+			e2e.Logf("Get cloudProvider *failed with* :\"%v\",wait 5 seconds retry.", errMsg)
+			return false, errMsg
+		}
+		e2e.Logf("The test cluster cloudProvider is :\"%s\".", strings.ToLower(output))
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Waiting for get cloudProvider timeout")
+	return strings.ToLower(output)
+}
+
+func createRWOfilePVC(oc *exutil.CLI, opNamespace, pvcName, capacity string) (err error) {
+	// author: vvoronko@redhat.com
+	// creates a PVC using as much calculated and default paramers as possible, leaving only:
+	// napespace
+	// Capacity in Gigs
+	// Name
+	// returns err
+	accessMode := "ReadWriteOnce" //ReadWriteOnce, ReadOnlyMany or ReadWriteMany
+	volumeMode := "Filesystem"    //Filesystem, Block
+	return createPVC(oc, opNamespace, pvcName, capacity, volumeMode, accessMode)
+}
+
+func createPVC(oc *exutil.CLI, opNamespace, pvcName, capacity, volumeMode, accessMode string) (err error) {
+	// just single Storage class per platform, block will be supported later?
+	const jsonCsiClass = `{"azure":{"Filesystem":"azurefile-csi","Block":"managed-csi"},
+		"gcp":{"Filesystem":"filestore-csi","Block":"standard-csi"},
+		"aws":{"Filesystem":"efs-sc","Block":"gp3-csi"}}`
+	cloudPlatform := getCloudProvider(oc)
+	scName := gjson.Get(jsonCsiClass, strings.Join([]string{cloudPlatform, volumeMode}, `.`)).String()
+
+	pvcDataDir := exutil.FixturePath("testdata", "storage")
+	pvcTemplate := filepath.Join(pvcDataDir, "pvc-template.yaml")
+
+	//validate provided capacity is a valid integer
+	_, err = strconv.Atoi(capacity)
+	if err != nil {
+		return err
+	}
+
+	g.By("Create pvc from template")
+	pvcFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", pvcTemplate,
+		"-p", "SCNAME="+scName, "-p", "PVCNAME="+pvcName, "-p", "PVCNAMESPACE="+opNamespace,
+		"-p", "ACCESSMODE="+accessMode, "-p", "VOLUMEMODE="+volumeMode, "-p", "PVCCAPACITY="+capacity).OutputToFile(getRandomString() + "pvc-default.json")
+	if err != nil {
+		e2e.Logf("Could not create pvc %v %v", pvcFile, err)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	g.By("Applying pvc " + pvcFile)
+	msg, err := oc.AsAdmin().Run("apply").Args("-f", pvcFile, "-n", opNamespace).Output()
+	if err != nil {
+		e2e.Logf("Could not apply pvc %v %v", msg, err)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	_, err = checkResourceJsonpath(oc, "pvc", pvcName, opNamespace, "-o=jsonpath={.status.phase}", "Bound", 30*time.Second, 5*time.Second)
+	return err
 }
