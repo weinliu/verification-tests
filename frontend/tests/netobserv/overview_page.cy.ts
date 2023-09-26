@@ -42,7 +42,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             cy.checkPanelsNum(4);
         })
 
-        it("should validate overview page features", function () {
+        it("(OCP-54839, amoghrd) should validate overview page features", function () {
 
             cy.byTestID(genSelectors.timeDrop).then(btn => {
                 expect(btn).to.exist
@@ -91,7 +91,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             })
         })
 
-        it("should validate query summary panel", function () {
+        it("(OCP-54839, amoghrd) should validate query summary panel", function () {
             cy.get(querySumSelectors.bytesCount).should('exist').then(bytesCnt => {
                 cy.checkQuerySummary(bytesCnt)
             })
@@ -108,7 +108,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             cy.contains('Sampling').should('exist')
         })
 
-        it("should validate panels", function () {
+        it("(OCP-54839, amoghrd) should validate panels", function () {
             //open panels modal
             cy.openPanelsModal();
 

@@ -6,7 +6,7 @@ function getTopologyScopeURL(scope: string): string {
     return `**/topology?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=${scope}`
 }
 
-describe("NETOBSERV Client Performances", { browser: 'chrome', tags: ['NETOBSERV'] }, function () {
+describe("(OCP-67725, memodi) NETOBSERV Client Performances", { browser: 'chrome', tags: ['NETOBSERV'] }, function () {
     before("tests", function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
@@ -35,7 +35,7 @@ describe("NETOBSERV Client Performances", { browser: 'chrome', tags: ['NETOBSERV
         cy.clearCookies()
     })
 
-    it("should measure overview page load times", function () {
+    it("(OCP-67725, memodi) should measure overview page load times", function () {
         cy.visit("/netflow-traffic")
         netflowPage.clearAllFilters()
         const start = performance.now()
@@ -57,7 +57,7 @@ describe("NETOBSERV Client Performances", { browser: 'chrome', tags: ['NETOBSERV
         })
     })
 
-    it("should measure table page load times", function () {
+    it("(OCP-67725, memodi) should measure table page load times", function () {
         cy.visit("/netflow-traffic")
         cy.get('#tabs-container li:nth-child(2)').click()
         netflowPage.clearAllFilters()
@@ -77,7 +77,7 @@ describe("NETOBSERV Client Performances", { browser: 'chrome', tags: ['NETOBSERV
         })
     })
 
-    it("should measure topology page load times", function () {
+    it("(OCP-67725, memodi) should measure topology page load times", function () {
         cy.visit("/netflow-traffic")
         cy.get('#tabs-container li:nth-child(3)').click()
         netflowPage.clearAllFilters()

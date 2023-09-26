@@ -55,7 +55,7 @@ describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, fu
     })
 
 
-    it("should verify quick filters add", function () {
+    it("(OCP-56222, memodi) should verify quick filters add", function () {
         const addQuickFilterPatch = JSON.stringify(patch).replace('$op', 'add')
         cy.adminCLI(`oc patch flowcollector/cluster --type json -p \'${addQuickFilterPatch}\'`)
         // wait 10 seconds for plugin pod to get restarted
@@ -76,7 +76,7 @@ describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, fu
         cy.get('#filters > div').should('not.have.class', 'custom-chip-group')
     })
 
-    it("should verify quick filters remove", function () {
+    it("(OCP-56222, memodi) should verify quick filters remove", function () {
         const addQuickFilterPatch = JSON.stringify(patch).replace('$op', 'remove')
         cy.adminCLI(`oc patch flowcollector/cluster --type json -p \'${addQuickFilterPatch}\'`)
 

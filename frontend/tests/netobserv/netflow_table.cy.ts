@@ -39,7 +39,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.byTestID("table-composable").should('exist')
         })
 
-        it("should validate netflow table features", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-50532, memodi) should validate netflow table features", { tags: ['e2e', 'admin'] }, function () {
 
             cy.byTestID(genSelectors.timeDrop).then(btn => {
                 expect(btn).to.exist
@@ -81,7 +81,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.byTestID("show-view-options-button").should('exist').click()
         })
 
-        it("should validate query summary panel", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-50532, memodi) should validate query summary panel", { tags: ['e2e', 'admin'] }, function () {
             let warningExists = false
             cy.get(querySumSelectors.queryStatsPanel).should('exist').then(qrySum => {
                 if (Cypress.$(querySumSelectors.queryStatsPanel + ' svg.query-summary-warning').length > 0) {
@@ -137,7 +137,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.contains('Sampling').should('exist')
         })
 
-        it("should validate columns", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-50532, memodi) should validate columns", { tags: ['e2e', 'admin'] }, function () {
             cy.byTestID("show-view-options-button").should('exist').click()
             netflowPage.stopAutoRefresh()
             cy.byTestID('view-options-button').click()
@@ -184,7 +184,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             })
         })
 
-        it("should validate filters", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-50532, memodi) should validate filters", { tags: ['e2e', 'admin'] }, function () {
             netflowPage.stopAutoRefresh()
 
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
@@ -230,7 +230,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.get('div.custom-chip').should('not.exist')
         })
 
-        it("should validate localstorage for plugin", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-50531, memodi) should validate localstorage for plugin", { tags: ['e2e', 'admin'] }, function () {
             netflowPage.stopAutoRefresh()
 
             cy.byTestID(genSelectors.refreshDrop).then(btn => {
@@ -266,7 +266,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             })
         })
 
-        it("should verify histogram", function () {
+        it("(OCP-59408, memodi) should verify histogram", function () {
             cy.byTestID("show-histogram-button").should('exist').click()
             cy.get("#refresh-dropdown button").should('be.disabled')
             cy.get('#popover-netobserv-tour-popover-body').should('exist')

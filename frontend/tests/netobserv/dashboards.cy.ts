@@ -31,7 +31,7 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
         Operator.createFlowcollector(project)
     })
 
-    it('OCP-61893, should have health dashboards', function () {
+    it('(OCP-61893, memodi), should have health dashboards', function () {
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-health")
 
@@ -60,7 +60,7 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
         cy.get('[data-test="operator-reconciliation-rate-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
     })
 
-    it("OCP-63790, should have flow based dashboards", function () {
+    it("(OCP-63790, memodi), should have flow based dashboards", function () {
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
         cy.byTestID("-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
