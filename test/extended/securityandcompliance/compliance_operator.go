@@ -2055,7 +2055,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-40280-The infrastructure feature should show the Compliance operator when the disconnected filter gets applied", func() {
 		g.By("check the infrastructure-features for csv!!!\n")
-		csvName := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", subD.namespace, "-o=jsonpath={.items[0].metadata.name}")
+		csvName := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", subD.namespace, "-l", "operators.coreos.com/compliance-operator.openshift-compliance=", "-o=jsonpath={.items[0].metadata.name}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "[\"disconnected\", \"fips\", \"proxy-aware\"]", ok, []string{"csv",
 			csvName, "-n", subD.namespace, "-o=jsonpath={.metadata.annotations.operators\\.openshift\\.io/infrastructure-features}"}).check(oc)
 	})
