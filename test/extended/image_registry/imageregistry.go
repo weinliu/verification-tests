@@ -4357,4 +4357,32 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "deployment=is67388tag", 1)
 	})
+
+	g.It("Author:xiuwang-Low-50177-Update invalid custom CA for s3 endpoint [Disruptive]", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		g.By("Can't update longer name for trustedCA")
+		originCA, err := oc.AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.storage.s3.trustedCA.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		defer func() {
+			g.By("Recover image registry change")
+			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"trustedCA":{"name":"`+originCA+`"}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		longName := "longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglong"
+		output, err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"trustedCA":{"name":"`+longName+`"}}}}}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		if !strings.Contains(output, "may not be longer than 253") {
+			e2e.Failf("The image registry shouldn't update with name longer than 253")
+		}
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"trustedCA":{"name":"not-exist-ca"}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Progressing\")].message}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, `failed to get trusted CA "not-exist-ca": configmap "not-exist-ca" not found`) {
+			e2e.Failf("The image registry should report error when trustedCA is not found")
+		}
+	})
 })
