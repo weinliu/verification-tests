@@ -25,11 +25,14 @@ func NewRunner() *runner {
 		debug:  false,
 		color:  "auto",
 	}
-
 	return runner
 }
 func (r *runner) Sensitive(sensitive bool) *runner {
 	r.sensitive = sensitive
+	return r
+}
+func (r *runner) Format(format string) *runner {
+	r.format = format
 	return r
 }
 
@@ -171,7 +174,7 @@ func (r *runner) Run() (bytes.Buffer, error) {
 	}
 }
 
-func (r *runner) runCMD(command []string) (bytes.Buffer, error) {
+func (r *runner) RunCMD(command []string) (bytes.Buffer, error) {
 	var output bytes.Buffer
 	var err error
 

@@ -12,21 +12,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type parser struct {
-	jsonData  *jsonData
-	tableData *tableData
-	textData  *textData
+type Parser struct {
+	JsonData  *jsonData
+	TableData *tableData
+	TextData  *textData
 }
 
-func NewParser() *parser {
+func NewParser() *Parser {
 	jsonD := new(jsonData)
 	tableD := new(tableData)
 	textD := new(textData)
 
-	p := &parser{
-		jsonData:  jsonD,
-		tableData: tableD,
-		textData:  textD,
+	p := &Parser{
+		JsonData:  jsonD,
+		TableData: tableD,
+		TextData:  textD,
 	}
 	return p
 }
@@ -47,13 +47,8 @@ type textData struct {
 	tip    string
 }
 
-func (td *textData) Input(input bytes.Buffer) *textData {
-	td.input = input
-	return td
-}
-
 // Read the cmd input and return the []byte array
-func readLines(in bytes.Buffer) [][]byte {
+func ReadLines(in bytes.Buffer) [][]byte {
 	lines := [][]byte{}
 	var line []byte
 	var err error
@@ -64,13 +59,40 @@ func readLines(in bytes.Buffer) [][]byte {
 	return lines
 }
 
+func (jd *jsonData) Input(input bytes.Buffer) *jsonData {
+	jd.input = input
+	return jd
+}
+func (jd *jsonData) Output() interface{} {
+	return jd.output
+}
+
+func (td *textData) Input(input bytes.Buffer) *textData {
+	td.input = input
+	return td
+}
+func (td *textData) Output() string {
+	return td.output
+}
+func (td *textData) Tip() string {
+	return td.tip
+}
+
+func (tad *tableData) Input(input bytes.Buffer) *tableData {
+	tad.input = input
+	return tad
+}
+func (tad *tableData) Output() []map[string]interface{} {
+	return tad.output
+}
+
 // It extracts the useful result struct as a map and the message as a string
 func (td *textData) Parse() *textData {
 	var tips bytes.Buffer
 	var results bytes.Buffer
 
 	input := td.input
-	lines := readLines(input)
+	lines := ReadLines(input)
 	reg1 := regexp.MustCompile(`.*[IEW].*:\x20\S.*\s+\S+`)
 	reg2 := regexp.MustCompile("^```\\s*")
 	for _, line := range lines {
@@ -91,21 +113,16 @@ func (td *textData) Parse() *textData {
 	return td
 }
 
-func (td *textData) yamlToMap() (map[string]interface{}, error) {
+func (td *textData) YamlToMap() (map[string]interface{}, error) {
 	res := make(map[string]interface{})
 	err := yaml.Unmarshal([]byte(td.output), &res)
 	return res, err
 }
 
-func (td *textData) jsonToMap() (map[string]interface{}, error) {
+func (td *textData) JsonToMap() (map[string]interface{}, error) {
 	res := make(map[string]interface{})
 	err := json.Unmarshal([]byte(td.output), &res)
 	return res, err
-}
-
-func (tab *tableData) Input(input bytes.Buffer) *tableData {
-	tab.input = input
-	return tab
 }
 
 // Parse the cmd table ouptut title
@@ -180,7 +197,7 @@ func tableLine(line []byte, offsetMap map[int]string) map[string]interface{} {
 // Parse the table output of the rosa cmd
 func (tab *tableData) Parse() *tableData {
 	input := tab.input
-	lines := readLines(input)
+	lines := ReadLines(input)
 	titleLine := lines[0]
 	offsetMap := tableTitle(titleLine)
 
@@ -191,11 +208,6 @@ func (tab *tableData) Parse() *tableData {
 
 	tab.output = result
 	return tab
-}
-
-func (jd *jsonData) Input(input bytes.Buffer) *jsonData {
-	jd.input = input
-	return jd
 }
 
 func (jd *jsonData) Parse() *jsonData {
@@ -220,11 +232,11 @@ func (jd *jsonData) ParseList(jsonStr string) *jsonData {
 	return jd
 }
 
-func (jd *jsonData) digObject(keys ...interface{}) interface{} {
+func (jd *jsonData) DigObject(keys ...interface{}) interface{} {
 	value := dig(jd.output, keys)
 	return value
 }
-func (jd *jsonData) digString(keys ...interface{}) string {
+func (jd *jsonData) DigString(keys ...interface{}) string {
 	switch result := dig(jd.output, keys).(type) {
 	case nil:
 		return ""
@@ -236,7 +248,7 @@ func (jd *jsonData) digString(keys ...interface{}) string {
 		return fmt.Sprintf("%s", result)
 	}
 }
-func (jd *jsonData) digBool(keys ...interface{}) bool {
+func (jd *jsonData) DigBool(keys ...interface{}) bool {
 	switch result := dig(jd.output, keys).(type) {
 	case nil:
 		return false
@@ -253,7 +265,7 @@ func (jd *jsonData) digBool(keys ...interface{}) bool {
 	}
 }
 
-func (jd *jsonData) digFloat(keys ...interface{}) float64 {
+func (jd *jsonData) DigFloat(keys ...interface{}) float64 {
 	value := dig(jd.output, keys)
 	result := value.(float64)
 	return result
@@ -287,8 +299,8 @@ func dig(object interface{}, keys []interface{}) interface{} {
 }
 
 // mapStructure will map the map to the address of the structre *i
-func mapStructure(m map[string]interface{}, i interface{}) error {
-	m = convertMapKey(m)
+func MapStructure(m map[string]interface{}, i interface{}) error {
+	m = ConvertMapKey(m)
 	jsonbody, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -300,24 +312,24 @@ func mapStructure(m map[string]interface{}, i interface{}) error {
 	return nil
 }
 
-func convertMapKey(m map[string]interface{}) map[string]interface{} {
+func ConvertMapKey(m map[string]interface{}) map[string]interface{} {
 	for k, v := range m {
-		m[k] = convert(v)
+		m[k] = Convert(v)
 	}
 	return m
 }
 
-func convert(i interface{}) interface{} {
+func Convert(i interface{}) interface{} {
 	switch x := i.(type) {
 	case map[interface{}]interface{}:
 		m2 := map[string]interface{}{}
 		for k, v := range x {
-			m2[k.(string)] = convert(v)
+			m2[k.(string)] = Convert(v)
 		}
 		return m2
 	case []interface{}:
 		for i, v := range x {
-			x[i] = convert(v)
+			x[i] = Convert(v)
 		}
 	}
 	return i

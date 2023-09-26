@@ -5,17 +5,17 @@ import (
 )
 
 type MachinePoolService interface {
-	listMachinePool(clusterID string) (bytes.Buffer, error)
-	reflectNodePoolList(result bytes.Buffer) (npl NodePoolList, err error)
-	reflectMachinePoolList(result bytes.Buffer) (mpl MachinePoolList, err error)
-	createMachinePool(clusterID string, flags ...string) (bytes.Buffer, error)
-	editMachinePool(clusterID string, machinePoolName string, flags ...string) (bytes.Buffer, error)
-	deleteMachinePool(clusterID string, machinePoolName string) (bytes.Buffer, error)
+	ListMachinePool(clusterID string) (bytes.Buffer, error)
+	ReflectNodePoolList(result bytes.Buffer) (npl NodePoolList, err error)
+	ReflectMachinePoolList(result bytes.Buffer) (mpl MachinePoolList, err error)
+	CreateMachinePool(clusterID string, flags ...string) (bytes.Buffer, error)
+	EditMachinePool(clusterID string, machinePoolName string, flags ...string) (bytes.Buffer, error)
+	DeleteMachinePool(clusterID string, machinePoolName string) (bytes.Buffer, error)
 }
 
 var _ MachinePoolService = &machinepoolService{}
 
-type machinepoolService service
+type machinepoolService Service
 
 // Struct for the 'rosa list machinepool' output for hosted-cp clusters
 type NodePool struct {
@@ -55,9 +55,9 @@ type MachinePoolList struct {
 }
 
 // Create MachinePool
-func (m *machinepoolService) createMachinePool(clusterID string, flags ...string) (bytes.Buffer, error) {
+func (m *machinepoolService) CreateMachinePool(clusterID string, flags ...string) (bytes.Buffer, error) {
 	combflags := append([]string{"-c", clusterID}, flags...)
-	createMachinePool := m.client.Runner.
+	createMachinePool := m.Client.Runner.
 		Cmd("create", "machinepool").
 		CmdFlags(combflags...)
 
@@ -65,16 +65,16 @@ func (m *machinepoolService) createMachinePool(clusterID string, flags ...string
 }
 
 // List MachinePool
-func (m *machinepoolService) listMachinePool(clusterID string) (bytes.Buffer, error) {
-	listUsers := m.client.Runner.
+func (m *machinepoolService) ListMachinePool(clusterID string) (bytes.Buffer, error) {
+	listUsers := m.Client.Runner.
 		Cmd("list", "machinepool").
 		CmdFlags("-c", clusterID)
 	return listUsers.Run()
 }
 
 // Delete MachinePool
-func (m *machinepoolService) deleteMachinePool(clusterID string, machinePoolName string) (bytes.Buffer, error) {
-	deleteMachinePool := m.client.Runner.
+func (m *machinepoolService) DeleteMachinePool(clusterID string, machinePoolName string) (bytes.Buffer, error) {
+	deleteMachinePool := m.Client.Runner.
 		Cmd("delete", "machinepool").
 		CmdFlags("-c", clusterID, machinePoolName, "-y")
 
@@ -82,10 +82,10 @@ func (m *machinepoolService) deleteMachinePool(clusterID string, machinePoolName
 }
 
 // Edit MachinePool
-func (m *machinepoolService) editMachinePool(clusterID string, machinePoolName string, flags ...string) (bytes.Buffer, error) {
+func (m *machinepoolService) EditMachinePool(clusterID string, machinePoolName string, flags ...string) (bytes.Buffer, error) {
 	combflags := append([]string{"-c", clusterID}, flags...)
 	combflags = append(combflags, machinePoolName)
-	editMachinePool := m.client.Runner.
+	editMachinePool := m.Client.Runner.
 		Cmd("edit", "machinepool").
 		CmdFlags(combflags...)
 
@@ -93,12 +93,12 @@ func (m *machinepoolService) editMachinePool(clusterID string, machinePoolName s
 }
 
 // Pasrse the result of 'rosa list machinepool' to MachinePoolList struct
-func (m *machinepoolService) reflectMachinePoolList(result bytes.Buffer) (mpl MachinePoolList, err error) {
+func (m *machinepoolService) ReflectMachinePoolList(result bytes.Buffer) (mpl MachinePoolList, err error) {
 	mpl = MachinePoolList{}
-	theMap := m.client.Parser.tableData.Input(result).Parse().output
+	theMap := m.Client.Parser.TableData.Input(result).Parse().Output()
 	for _, machinepoolItem := range theMap {
 		mp := &MachinePool{}
-		err = mapStructure(machinepoolItem, mp)
+		err = MapStructure(machinepoolItem, mp)
 		if err != nil {
 			return
 		}
@@ -108,12 +108,12 @@ func (m *machinepoolService) reflectMachinePoolList(result bytes.Buffer) (mpl Ma
 }
 
 // Pasrse the result of 'rosa list machinepool' to NodePoolList struc
-func (m *machinepoolService) reflectNodePoolList(result bytes.Buffer) (npl NodePoolList, err error) {
+func (m *machinepoolService) ReflectNodePoolList(result bytes.Buffer) (npl NodePoolList, err error) {
 	npl = NodePoolList{}
-	theMap := m.client.Parser.tableData.Input(result).Parse().output
+	theMap := m.Client.Parser.TableData.Input(result).Parse().Output()
 	for _, nodepoolItem := range theMap {
 		np := &NodePool{}
-		err = mapStructure(nodepoolItem, np)
+		err = MapStructure(nodepoolItem, np)
 		if err != nil {
 			return
 		}
@@ -123,7 +123,7 @@ func (m *machinepoolService) reflectNodePoolList(result bytes.Buffer) (npl NodeP
 }
 
 // Get specified machinepool by machinepool id
-func (mpl MachinePoolList) machinepool(id string) (mp MachinePool, err error) {
+func (mpl MachinePoolList) Machinepool(id string) (mp MachinePool, err error) {
 	for _, mpItem := range mpl.MachinePools {
 		if mpItem.ID == id {
 			mp = mpItem
@@ -134,7 +134,7 @@ func (mpl MachinePoolList) machinepool(id string) (mp MachinePool, err error) {
 }
 
 // Get specified nodepool by machinepool id
-func (npl NodePoolList) nodepool(id string) (np NodePool, err error) {
+func (npl NodePoolList) Nodepool(id string) (np NodePool, err error) {
 	for _, npItem := range npl.NodePools {
 		if npItem.ID == id {
 			np = npItem

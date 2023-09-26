@@ -17,25 +17,25 @@ var RoleTypeSuffixMap = map[string]string{
 }
 
 type OCMResourceService interface {
-	listRegion(flags ...string) (bytes.Buffer, error)
-	reflectRegionList(result bytes.Buffer) (regions []*CloudRegion, err error)
-	listUserRole() (bytes.Buffer, error)
-	deleteUserRole(flags ...string) (bytes.Buffer, error)
-	linkUserRole(flags ...string) (bytes.Buffer, error)
-	unlinkUserRole(flags ...string) (bytes.Buffer, error)
-	createUserRole(flags ...string) (bytes.Buffer, error)
-	whoami() (bytes.Buffer, error)
-	reflectAccountsInfo(result bytes.Buffer) *AccountsInfo
-	reflectUserRoleList(result bytes.Buffer) (url UserRoleList, err error)
-	createAccountRole(flags ...string) (bytes.Buffer, error)
-	reflectAccountRoleList(result bytes.Buffer) (arl AccountRoleList, err error)
-	deleteAccountRole(flags ...string) (bytes.Buffer, error)
-	listAccountRole() (bytes.Buffer, error)
+	ListRegion(flags ...string) (bytes.Buffer, error)
+	ReflectRegionList(result bytes.Buffer) (regions []*CloudRegion, err error)
+	ListUserRole() (bytes.Buffer, error)
+	DeleteUserRole(flags ...string) (bytes.Buffer, error)
+	LinkUserRole(flags ...string) (bytes.Buffer, error)
+	UnlinkUserRole(flags ...string) (bytes.Buffer, error)
+	CreateUserRole(flags ...string) (bytes.Buffer, error)
+	Whoami() (bytes.Buffer, error)
+	ReflectAccountsInfo(result bytes.Buffer) *AccountsInfo
+	ReflectUserRoleList(result bytes.Buffer) (url UserRoleList, err error)
+	CreateAccountRole(flags ...string) (bytes.Buffer, error)
+	ReflectAccountRoleList(result bytes.Buffer) (arl AccountRoleList, err error)
+	DeleteAccountRole(flags ...string) (bytes.Buffer, error)
+	ListAccountRole() (bytes.Buffer, error)
 }
 
 var _ OCMResourceService = &ocmResourceService{}
 
-type ocmResourceService service
+type ocmResourceService Service
 
 // Struct for the 'rosa list region' output
 type CloudRegion struct {
@@ -81,18 +81,18 @@ type AccountRoleList struct {
 }
 
 // List region
-func (ors *ocmResourceService) listRegion(flags ...string) (bytes.Buffer, error) {
-	listRegion := ors.client.Runner
+func (ors *ocmResourceService) ListRegion(flags ...string) (bytes.Buffer, error) {
+	listRegion := ors.Client.Runner
 	listRegion = listRegion.Cmd("list", "regions").CmdFlags(flags...)
 	return listRegion.Run()
 }
 
 // Pasrse the result of 'rosa regions' to the RegionInfo struct
-func (ors *ocmResourceService) reflectRegionList(result bytes.Buffer) (regions []*CloudRegion, err error) {
-	theMap := ors.client.Parser.tableData.Input(result).Parse().output
+func (ors *ocmResourceService) ReflectRegionList(result bytes.Buffer) (regions []*CloudRegion, err error) {
+	theMap := ors.Client.Parser.TableData.Input(result).Parse().Output()
 	for _, regionItem := range theMap {
 		region := &CloudRegion{}
-		err = mapStructure(regionItem, region)
+		err = MapStructure(regionItem, region)
 		if err != nil {
 			return
 		}
@@ -102,21 +102,21 @@ func (ors *ocmResourceService) reflectRegionList(result bytes.Buffer) (regions [
 }
 
 // Pasrse the result of 'rosa whoami' to the AccountsInfo struct
-func (ors *ocmResourceService) reflectAccountsInfo(result bytes.Buffer) *AccountsInfo {
+func (ors *ocmResourceService) ReflectAccountsInfo(result bytes.Buffer) *AccountsInfo {
 	res := new(AccountsInfo)
-	theMap, _ := ors.client.Parser.textData.Input(result).Parse().jsonToMap()
+	theMap, _ := ors.Client.Parser.TextData.Input(result).Parse().JsonToMap()
 	data, _ := json.Marshal(&theMap)
 	json.Unmarshal(data, res)
 	return res
 }
 
 // Pasrse the result of 'rosa list user-roles' to NodePoolList struct
-func (ors *ocmResourceService) reflectUserRoleList(result bytes.Buffer) (url UserRoleList, err error) {
+func (ors *ocmResourceService) ReflectUserRoleList(result bytes.Buffer) (url UserRoleList, err error) {
 	url = UserRoleList{}
-	theMap := ors.client.Parser.tableData.Input(result).Parse().output
+	theMap := ors.Client.Parser.TableData.Input(result).Parse().Output()
 	for _, userroleItem := range theMap {
 		ur := &UserRole{}
-		err = mapStructure(userroleItem, ur)
+		err = MapStructure(userroleItem, ur)
 		if err != nil {
 			return
 		}
@@ -126,52 +126,52 @@ func (ors *ocmResourceService) reflectUserRoleList(result bytes.Buffer) (url Use
 }
 
 // run `rosa list user-role` command
-func (ors *ocmResourceService) listUserRole() (bytes.Buffer, error) {
-	ors.client.Runner.cmdArgs = []string{}
-	listUserRole := ors.client.Runner.
+func (ors *ocmResourceService) ListUserRole() (bytes.Buffer, error) {
+	ors.Client.Runner.cmdArgs = []string{}
+	listUserRole := ors.Client.Runner.
 		Cmd("list", "user-role")
 	return listUserRole.Run()
 
 }
 
 // run `rosa delete user-role` command
-func (ors *ocmResourceService) deleteUserRole(flags ...string) (bytes.Buffer, error) {
-	deleteUserRole := ors.client.Runner
+func (ors *ocmResourceService) DeleteUserRole(flags ...string) (bytes.Buffer, error) {
+	deleteUserRole := ors.Client.Runner
 	deleteUserRole = deleteUserRole.Cmd("delete", "user-role").CmdFlags(flags...)
 	return deleteUserRole.Run()
 }
 
 // run `rosa link user-role` command
-func (ors *ocmResourceService) linkUserRole(flags ...string) (bytes.Buffer, error) {
-	linkUserRole := ors.client.Runner
+func (ors *ocmResourceService) LinkUserRole(flags ...string) (bytes.Buffer, error) {
+	linkUserRole := ors.Client.Runner
 	linkUserRole = linkUserRole.Cmd("link", "user-role").CmdFlags(flags...)
 	return linkUserRole.Run()
 }
 
 // run `rosa unlink user-role` command
-func (ors *ocmResourceService) unlinkUserRole(flags ...string) (bytes.Buffer, error) {
-	unlinkUserRole := ors.client.Runner
+func (ors *ocmResourceService) UnlinkUserRole(flags ...string) (bytes.Buffer, error) {
+	unlinkUserRole := ors.Client.Runner
 	unlinkUserRole = unlinkUserRole.Cmd("unlink", "user-role").CmdFlags(flags...)
 	return unlinkUserRole.Run()
 }
 
 // run `rosa create user-role` command
-func (ors *ocmResourceService) createUserRole(flags ...string) (bytes.Buffer, error) {
-	createUserRole := ors.client.Runner
+func (ors *ocmResourceService) CreateUserRole(flags ...string) (bytes.Buffer, error) {
+	createUserRole := ors.Client.Runner
 	createUserRole = createUserRole.Cmd("create", "user-role").CmdFlags(flags...)
 	return createUserRole.Run()
 }
 
 // run `rosa whoami` command
-func (ors *ocmResourceService) whoami() (bytes.Buffer, error) {
-	ors.client.Runner.cmdArgs = []string{}
-	whoami := ors.client.Runner.
+func (ors *ocmResourceService) Whoami() (bytes.Buffer, error) {
+	ors.Client.Runner.cmdArgs = []string{}
+	whoami := ors.Client.Runner.
 		Cmd("whoami").OutputFormat()
 	return whoami.Run()
 }
 
 // Get specified user-role by user-role prefix and ocmAccountUsername
-func (url UserRoleList) userRole(prefix string, ocmAccountUsername string) (userRoles UserRole) {
+func (url UserRoleList) UserRole(prefix string, ocmAccountUsername string) (userRoles UserRole) {
 	userRoleName := fmt.Sprintf("%s-User-%s-Role", prefix, ocmAccountUsername)
 	for _, roleItme := range url.UserRoleList {
 		if roleItme.RoleName == userRoleName {
@@ -183,19 +183,19 @@ func (url UserRoleList) userRole(prefix string, ocmAccountUsername string) (user
 }
 
 // run `rosa create account-roles` command
-func (ors *ocmResourceService) createAccountRole(flags ...string) (bytes.Buffer, error) {
-	createAccountRole := ors.client.Runner
+func (ors *ocmResourceService) CreateAccountRole(flags ...string) (bytes.Buffer, error) {
+	createAccountRole := ors.Client.Runner
 	createAccountRole = createAccountRole.Cmd("create", "account-roles").CmdFlags(flags...)
 	return createAccountRole.Run()
 }
 
 // Pasrse the result of 'rosa list account-roles' to AccountRoleList struct
-func (ors *ocmResourceService) reflectAccountRoleList(result bytes.Buffer) (arl AccountRoleList, err error) {
+func (ors *ocmResourceService) ReflectAccountRoleList(result bytes.Buffer) (arl AccountRoleList, err error) {
 	arl = AccountRoleList{}
-	theMap := ors.client.Parser.tableData.Input(result).Parse().output
+	theMap := ors.Client.Parser.TableData.Input(result).Parse().Output()
 	for _, accountRoleItem := range theMap {
 		ar := &AccountRole{}
-		err = mapStructure(accountRoleItem, ar)
+		err = MapStructure(accountRoleItem, ar)
 		if err != nil {
 			return
 		}
@@ -205,23 +205,23 @@ func (ors *ocmResourceService) reflectAccountRoleList(result bytes.Buffer) (arl 
 }
 
 // run `rosa delete account-roles` command
-func (ors *ocmResourceService) deleteAccountRole(flags ...string) (bytes.Buffer, error) {
-	deleteAccountRole := ors.client.Runner
+func (ors *ocmResourceService) DeleteAccountRole(flags ...string) (bytes.Buffer, error) {
+	deleteAccountRole := ors.Client.Runner
 	deleteAccountRole = deleteAccountRole.Cmd("delete", "account-roles").CmdFlags(flags...)
 	return deleteAccountRole.Run()
 }
 
 // run `rosa list account-roles` command
-func (ors *ocmResourceService) listAccountRole() (bytes.Buffer, error) {
-	ors.client.Runner.cmdArgs = []string{}
-	listAccountRole := ors.client.Runner.
+func (ors *ocmResourceService) ListAccountRole() (bytes.Buffer, error) {
+	ors.Client.Runner.cmdArgs = []string{}
+	listAccountRole := ors.Client.Runner.
 		Cmd("list", "account-roles")
 	return listAccountRole.Run()
 
 }
 
 // Get specified account roles by prefix
-func (arl AccountRoleList) accountRoles(prefix string) (accountRoles []AccountRole) {
+func (arl AccountRoleList) AccountRoles(prefix string) (accountRoles []AccountRole) {
 
 	for _, roleItme := range arl.AccountRoleList {
 		if strings.Contains(roleItme.RoleName, prefix) {

@@ -3,7 +3,7 @@ package rosacli
 type Client struct {
 	// Clients
 	Runner *runner
-	Parser *parser
+	Parser *Parser
 
 	// services
 	Cluster     ClusterService
@@ -28,15 +28,15 @@ func NewClient() *Client {
 		Parser: parser,
 	}
 
-	client.Cluster = &clusterService{client: client}
-	client.IDP = &idpService{client: client}
-	client.OCMResource = &ocmResourceService{client: client}
-	client.User = &userService{client: client}
-	client.MachinePool = &machinepoolService{client: client}
+	client.Cluster = &clusterService{Client: client}
+	client.IDP = &idpService{Client: client}
+	client.OCMResource = &ocmResourceService{Client: client}
+	client.User = &userService{Client: client}
+	client.MachinePool = &machinepoolService{Client: client}
 
 	return client
 }
 
-type service struct {
-	client *Client
+type Service struct {
+	Client *Client
 }

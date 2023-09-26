@@ -7,19 +7,19 @@ import (
 )
 
 type UserService interface {
-	listUsers(clusterID string) (bytes.Buffer, error)
-	reflectUsersList(result bytes.Buffer) (gul GroupUserList, err error)
-	revokeUser(clusterID string, flags ...string) (bytes.Buffer, error)
-	grantUser(clusterID string, flags ...string) (bytes.Buffer, error)
-	removeAllUsers(clusterID string) (err error)
-	createAdmin(clusterID string) (bytes.Buffer, error)
-	describeAdmin(clusterID string) (bytes.Buffer, error)
-	deleteAdmin(clusterID string) (bytes.Buffer, error)
+	ListUsers(clusterID string) (bytes.Buffer, error)
+	ReflectUsersList(result bytes.Buffer) (gul GroupUserList, err error)
+	RevokeUser(clusterID string, flags ...string) (bytes.Buffer, error)
+	GrantUser(clusterID string, flags ...string) (bytes.Buffer, error)
+	RemoveAllUsers(clusterID string) (err error)
+	CreateAdmin(clusterID string) (bytes.Buffer, error)
+	DescribeAdmin(clusterID string) (bytes.Buffer, error)
+	DeleteAdmin(clusterID string) (bytes.Buffer, error)
 }
 
 var _ UserService = &userService{}
 
-type userService service
+type userService Service
 
 // Struct for the 'rosa list users' output
 type GroupUser struct {
@@ -31,8 +31,8 @@ type GroupUserList struct {
 }
 
 // Grant user
-func (c *userService) grantUser(clusterID string, flags ...string) (bytes.Buffer, error) {
-	grantUser := c.client.Runner.
+func (c *userService) GrantUser(clusterID string, flags ...string) (bytes.Buffer, error) {
+	grantUser := c.Client.Runner.
 		Cmd("grant", "user").
 		CmdFlags(append([]string{"-c", clusterID}, flags...)...)
 
@@ -40,9 +40,9 @@ func (c *userService) grantUser(clusterID string, flags ...string) (bytes.Buffer
 }
 
 // Revoke user
-func (c *userService) revokeUser(clusterID string, flags ...string) (bytes.Buffer, error) {
+func (c *userService) RevokeUser(clusterID string, flags ...string) (bytes.Buffer, error) {
 	combflags := append([]string{"-c", clusterID}, flags...)
-	revokeUser := c.client.Runner.
+	revokeUser := c.Client.Runner.
 		Cmd("revoke", "user").
 		CmdFlags(combflags...)
 
@@ -50,20 +50,20 @@ func (c *userService) revokeUser(clusterID string, flags ...string) (bytes.Buffe
 }
 
 // List users
-func (c *userService) listUsers(clusterID string) (bytes.Buffer, error) {
-	listUsers := c.client.Runner.
+func (c *userService) ListUsers(clusterID string) (bytes.Buffer, error) {
+	listUsers := c.Client.Runner.
 		Cmd("list", "users").
 		CmdFlags("-c", clusterID)
 	return listUsers.Run()
 }
 
 // Pasrse the result of 'rosa list user' to  []*GroupUser struct
-func (c *userService) reflectUsersList(result bytes.Buffer) (gul GroupUserList, err error) {
+func (c *userService) ReflectUsersList(result bytes.Buffer) (gul GroupUserList, err error) {
 	gul = GroupUserList{}
-	theMap := c.client.Parser.tableData.Input(result).Parse().output
+	theMap := c.Client.Parser.TableData.Input(result).Parse().Output()
 	for _, userItem := range theMap {
 		user := &GroupUser{}
-		err = mapStructure(userItem, user)
+		err = MapStructure(userItem, user)
 		if err != nil {
 			return
 		}
@@ -73,15 +73,15 @@ func (c *userService) reflectUsersList(result bytes.Buffer) (gul GroupUserList, 
 }
 
 // Delete all users
-func (c *userService) removeAllUsers(clusterID string) (err error) {
-	out, err := c.listUsers(clusterID)
-	gul, err := c.reflectUsersList(out)
+func (c *userService) RemoveAllUsers(clusterID string) (err error) {
+	out, err := c.ListUsers(clusterID)
+	gul, err := c.ReflectUsersList(out)
 	if err != nil {
 		return err
 	}
 	if len(gul.GroupUsers) != 0 {
 		for _, uitem := range gul.GroupUsers {
-			_, err = c.revokeUser(clusterID,
+			_, err = c.RevokeUser(clusterID,
 				uitem.Groups,
 				"--user", uitem.ID,
 				"-y",
@@ -98,7 +98,7 @@ func (c *userService) removeAllUsers(clusterID string) (err error) {
 }
 
 // Get specified user by user name
-func (gl GroupUserList) user(userName string) (user GroupUser, err error) {
+func (gl GroupUserList) User(userName string) (user GroupUser, err error) {
 	for _, userItem := range gl.GroupUsers {
 		if userItem.ID == userName {
 			user = userItem
@@ -109,8 +109,8 @@ func (gl GroupUserList) user(userName string) (user GroupUser, err error) {
 }
 
 // Create admin
-func (c *userService) createAdmin(clusterID string) (bytes.Buffer, error) {
-	createAdmin := c.client.Runner.
+func (c *userService) CreateAdmin(clusterID string) (bytes.Buffer, error) {
+	createAdmin := c.Client.Runner.
 		Cmd("create", "admin").
 		CmdFlags("-c", clusterID, "-y")
 
@@ -118,8 +118,8 @@ func (c *userService) createAdmin(clusterID string) (bytes.Buffer, error) {
 }
 
 // describe admin
-func (c *userService) describeAdmin(clusterID string) (bytes.Buffer, error) {
-	describeAdmin := c.client.Runner.
+func (c *userService) DescribeAdmin(clusterID string) (bytes.Buffer, error) {
+	describeAdmin := c.Client.Runner.
 		Cmd("describe", "admin").
 		CmdFlags("-c", clusterID)
 
@@ -127,8 +127,8 @@ func (c *userService) describeAdmin(clusterID string) (bytes.Buffer, error) {
 }
 
 // delete admin
-func (c *userService) deleteAdmin(clusterID string) (bytes.Buffer, error) {
-	deleteAdmin := c.client.Runner.
+func (c *userService) DeleteAdmin(clusterID string) (bytes.Buffer, error) {
+	deleteAdmin := c.Client.Runner.
 		Cmd("delete", "admin").
 		CmdFlags("-c", clusterID, "-y")
 

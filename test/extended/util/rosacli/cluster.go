@@ -7,15 +7,15 @@ import (
 )
 
 type ClusterService interface {
-	describeCluster(clusterID string) (bytes.Buffer, error)
-	reflectClusterDescription(result bytes.Buffer) *ClusterDescription
-	list() (bytes.Buffer, error)
-	createDryRun(clusterID string, flags ...string) (bytes.Buffer, error)
+	DescribeCluster(clusterID string) (bytes.Buffer, error)
+	ReflectClusterDescription(result bytes.Buffer) *ClusterDescription
+	List() (bytes.Buffer, error)
+	CreateDryRun(clusterID string, flags ...string) (bytes.Buffer, error)
 }
 
 var _ ClusterService = &clusterService{}
 
-type clusterService service
+type clusterService Service
 
 // Struct for the 'rosa describe cluster' output
 type ClusterDescription struct {
@@ -42,12 +42,11 @@ type ClusterDescription struct {
 	Network          []map[string]string `yaml:"Network,omitempty"`
 }
 
-func (c *clusterService) describeCluster(clusterID string) (bytes.Buffer, error) {
-	describe := c.client.Runner.
+func (c *clusterService) DescribeCluster(clusterID string) (bytes.Buffer, error) {
+	describe := c.Client.Runner.
 		Cmd("describe", "cluster").
 		CmdFlags("-c", clusterID).
 		OutputFormat()
-
 	// if jsonOutput {
 	// 	describe = describe.JsonFormat(jsonOutput)
 	// }
@@ -56,22 +55,22 @@ func (c *clusterService) describeCluster(clusterID string) (bytes.Buffer, error)
 }
 
 // Pasrse the result of 'rosa describe cluster' to the RosaClusterDescription struct
-func (c *clusterService) reflectClusterDescription(result bytes.Buffer) *ClusterDescription {
+func (c *clusterService) ReflectClusterDescription(result bytes.Buffer) *ClusterDescription {
 	res := new(ClusterDescription)
-	theMap, _ := c.client.Parser.textData.Input(result).Parse().yamlToMap()
+	theMap, _ := c.Client.Parser.TextData.Input(result).Parse().YamlToMap()
 	data, _ := yaml.Marshal(&theMap)
 	yaml.Unmarshal(data, res)
 	return res
 }
 
-func (c *clusterService) list() (bytes.Buffer, error) {
-	list := c.client.Runner.Cmd("list", "cluster")
+func (c *clusterService) List() (bytes.Buffer, error) {
+	list := c.Client.Runner.Cmd("list", "cluster")
 	return list.Run()
 }
 
-func (c *clusterService) createDryRun(clusterID string, flags ...string) (bytes.Buffer, error) {
+func (c *clusterService) CreateDryRun(clusterID string, flags ...string) (bytes.Buffer, error) {
 	combflags := append([]string{"-c", clusterID, "--dry-run"}, flags...)
-	createDryRun := c.client.Runner.
+	createDryRun := c.Client.Runner.
 		Cmd("create", "cluster").
 		CmdFlags(combflags...)
 	return createDryRun.Run()
