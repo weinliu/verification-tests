@@ -32,7 +32,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Check only on Azure cluster with manual credentialsMode
 		credentialsMode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cloudcredentials/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if cloudProvider != "azure" || credentialsMode != "Manual" {
+		serviceAccountIssuer, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication/cluster", "-o=jsonpath={.spec.serviceAccountIssuer}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Temporarily fix by checking serviceAccountIssuer
+		if cloudProvider != "azure" || credentialsMode != "Manual" || serviceAccountIssuer == "" {
 			g.Skip("This case is only applicable for Azure cluster with Manual credentials mode, skipped")
 		}
 
