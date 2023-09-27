@@ -1658,3 +1658,30 @@ func waitForPvcStatus(oc *exutil.CLI, namespace string, pvcname string) {
 	})
 	exutil.AssertWaitPollNoErr(err, "The PVC is not Bound as expected")
 }
+
+// wait for DC to be ready
+func waitForDeploymentconfigToBeReady(oc *exutil.CLI, namespace string, name string) {
+	err := wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+		dcAvailableReplicas, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dc/"+name, "-n", namespace, "-o=jsonpath={.status.availableReplicas}").Outputs()
+		if err != nil {
+			e2e.Logf("error: %v happen, try next", err)
+			return false, nil
+		}
+		dcReadyReplicas, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dc/"+name, "-n", namespace, "-o=jsonpath={.status.readyReplicas}").Outputs()
+		if err != nil {
+			e2e.Logf("error: %v happen, try next", err)
+			return false, nil
+		}
+		dcReplicas, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dc/"+name, "-n", namespace, "-o=jsonpath={.spec.replicas}").Outputs()
+		if err != nil {
+			e2e.Logf("error: %v happen, try next", err)
+			return false, nil
+		}
+		if dcAvailableReplicas == dcReadyReplicas && dcReadyReplicas == dcReplicas {
+			e2e.Logf("Deploymentconfig is ready")
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Deploymentconfig %s is not available", name))
+}

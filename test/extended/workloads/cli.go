@@ -1619,6 +1619,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(strings.Contains(warningOutSca, "DeploymentConfig is deprecated in v4.14")).To(o.BeTrue())
 		_, warningOutApp, err := oc.WithoutNamespace().Run("apply").Args("view-last-applied", "deploymentconfig", "dc66124-1", "-n", ns66124).Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForDeploymentconfigToBeReady(oc, ns66124, "dc66124-1")
 		o.Expect(strings.Contains(warningOutApp, "DeploymentConfig is deprecated in v4.14")).To(o.BeTrue())
 		_, warningOutLog, err := oc.WithoutNamespace().Run("logs").Args("deploymentconfig/dc66124-1", "-n", ns66124).Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
