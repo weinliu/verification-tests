@@ -134,18 +134,57 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-High-62063-Low-63486-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
+	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-High-62063-High-63325-Low-63486-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
 		if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
 			g.Skip("Skipping Private clusters that are behind some proxy and can't be directly reachable from externally.")
 		}
 		exutil.SkipIfPlatformType(oc, "openstack")
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
+		output0, err0 := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec.trustedCA.name}").Output()
+		if !strings.Contains(output, "httpsProxy") || err != nil || output0 == "" || err0 != nil {
+			e2e.Logf("Fail to check httpsProxy, ocp-63325 skipped.")
+		} else {
+			defer func() {
+				e2e.Logf("Delete configmap trusted-ca.")
+				err = oc.AsAdmin().Run("delete").Args("-n", "cert-manager", "cm", "trusted-ca").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
+
+			e2e.Logf("Create configmap trusted-ca.")
+			_, err := oc.AsAdmin().Run("create").Args("-n", "cert-manager", "configmap", "trusted-ca").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.AsAdmin().Run("label").Args("-n", "cert-manager", "cm", "trusted-ca", "config.openshift.io/inject-trusted-cabundle=true").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer func() {
+				e2e.Logf("Patch subscription for recovery.")
+				patchPath1 := "{\"spec\":{\"config\":{\"env\":[]}}}"
+				err0 := oc.AsAdmin().Run("patch").Args("-n", "cert-manager-operator", "sub", "openshift-cert-manager-operator", "--type=merge", "-p", patchPath1).Execute()
+				o.Expect(err0).NotTo(o.HaveOccurred())
+			}()
+			e2e.Logf("patch sub openshift-cert-manager-operator.")
+			patchPath := "{\"spec\":{\"config\":{\"env\":[{\"name\":\"TRUSTED_CA_CONFIGMAP_NAME\",\"value\":\"trusted-ca\"}]}}}"
+			err0 := oc.AsAdmin().Run("patch").Args("-n", "cert-manager-operator", "sub", "openshift-cert-manager-operator", "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err0).NotTo(o.HaveOccurred())
+			err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", "cert-manager", "cert-manager", "-o=jsonpath={.spec.template.spec.containers[0].volumeMounts}").Output()
+				output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", "cert-manager", "cert-manager", "-o=jsonpath={.spec.template.spec.volumes}").Output()
+				if !strings.Contains(output, "trusted-ca") || err != nil || !strings.Contains(output1, "trusted-ca") || err1 != nil {
+					e2e.Logf("cert-manager deployment is not ready.")
+					return false, nil
+				}
+				e2e.Logf("cert-manager deployment is ready.")
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "Waiting for deployment times out.")
+		}
 
 		e2e.Logf("Login with normal user and create new ns.")
 		oc.SetupProject()
 		e2e.Logf("Create issuer in ns scope created in last step.")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
 		issuerHttp01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
-		err := oc.Run("create").Args("-f", issuerHttp01File).Execute()
+		err = oc.Run("create").Args("-f", issuerHttp01File).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 
@@ -184,7 +223,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
 		g.By("Check certificate secret.")
-		output, err := oc.Run("get").Args("secret", "cert-test-http01").Output()
+		output, err = oc.Run("get").Args("secret", "cert-test-http01").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Get secret/cert-test-http01 output: %v", output)
 		g.By("Verify the certificate content.")
