@@ -737,7 +737,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Eventually(mylvs.pollGetTotalProvisionedDeviceCount(oc), 120*time.Second, 15*time.Second).Should(o.Equal(int64(2)), "Failed to provision all partitions pv")
 
 		exutil.By("# Create a pvc use the localVolumeSet storageClass and create a pod consume the pvc")
-		pvc.capacity = strconv.FormatInt(getRandomNum(6, myVolume.Size-5), 10) + "Gi"
+		// Use the "6Gi" capacity could makes sure the new pvc bound the same pv with origin pvc and it always less equal the larger pv capacity
+		pvc.capacity = "6Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 		pod.create(oc)
