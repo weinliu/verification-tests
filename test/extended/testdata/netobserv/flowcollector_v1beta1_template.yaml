@@ -123,17 +123,6 @@ objects:
         imagePullPolicy: IfNotPresent
         port: 9001
         logLevel: info
-        autoscaler:
-          status: DISABLED
-          minReplicas: 1
-          maxReplicas: 3
-          metrics:
-          - type: Resource
-            resource:
-              name: cpu
-              target:
-                type: Utilization
-              averageUtilization: 50
         portNaming:
           enable: true
           portNames:
