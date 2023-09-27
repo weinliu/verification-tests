@@ -99,6 +99,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 			defer pvc.deleteAsAdmin(oc)
 
+			// Get the provisioner from defaultsc
+			defaultSC := gjson.Get(allSCRes, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true).metadata.name").String()
+			provisioner, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", defaultSC, "-o", "jsonpath={.provisioner}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
 			exutil.By("Create deployment with the created pvc and wait for the pod ready")
 			dep.create(oc)
 			defer dep.deleteAsAdmin(oc)
@@ -114,7 +119,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, pvc.namespace, pvc.name)
 			scFromPV, err := getScNamesFromSpecifiedPv(oc, pvName)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			defaultSC := gjson.Get(allSCRes, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true).metadata.name").String()
 			if isGP2volumeSupportOnly(oc) {
 				o.Expect(scFromPV).To(o.Equal("gp2-csi"))
 			} else {
