@@ -4342,7 +4342,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Create imagestream using digest")
 		issrc.name = "is67388digest"
 		issrc.namespace = oc.Namespace()
-		issrc.repo = "quay.io/openshifttest/hello-openshift@sha256:1276e0f79b1b2892e708b8d54a5ad929d33c28bee660f574e302f15ad7daae6f"
+		issrc.repo = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
 		issrc.create(oc)
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "is67388digest", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4383,6 +4383,34 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, `failed to get trusted CA "not-exist-ca": configmap "not-exist-ca" not found`) {
 			e2e.Failf("The image registry should report error when trustedCA is not found")
+		}
+	})
+
+	g.It("Author:xiuwang-Medium-67714-Could get the correct digest when import images with the same digest but different import mode at same time", func() {
+		var (
+			isFile = filepath.Join(imageRegistryBaseDir, "is-same-image-differemt-importmode.yaml")
+			issrc  = isStruct{
+				name:      "is67714",
+				namespace: "",
+				repo:      "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83",
+				template:  isFile,
+			}
+		)
+		issrc.namespace = oc.Namespace()
+		issrc.create(oc)
+		err := waitForAnImageStreamTag(oc, oc.Namespace(), "is67714", "tag-manifest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "is67714", "tag-manifest-preserve-original")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestreamtag", "is67714:tag-manifest", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Manifests:") {
+			e2e.Failf("The import-mode is wrong, shoule be Legacy mode")
+		}
+		outputMan, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestreamtag", "is67714:tag-manifest-preserve-original", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(outputMan, "Manifests:") {
+			e2e.Failf("The import-mode is wrong, shoule be PreserveOriginal mode")
 		}
 	})
 })
