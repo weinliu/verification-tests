@@ -121,6 +121,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-37627-SDK run bundle upgrade test [Serial]", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
+		defer func() {
+			output, err := operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
+			if err != nil {
+				e2e.Logf(output)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
 		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
@@ -136,9 +143,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("upgradeoperator upgrade failed in %s ", oc.Namespace()))
-		output, err = operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("uninstalled"))
+
 	})
 
 	// author: jfan@redhat.com
@@ -2177,7 +2182,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		exutil.By("step: run bundle")
 		defer func() {
-			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-quarkus-operator-52377").Output()
+			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-quarkus-operator-52377", "-n", ns).Output()
 			if err != nil {
 				e2e.Logf(output)
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -3576,7 +3581,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		exutil.By("step: run bundle")
 		defer func() {
-			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-operator-52571").Output()
+			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-operator-52571", "-n", ns).Output()
 			if err != nil {
 				e2e.Logf(output)
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -3778,7 +3783,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: run bundle")
 
 		defer func() {
-			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-operator-52572").Output()
+			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-operator-52572", "-n", ns).Output()
 			if err != nil {
 				e2e.Logf(output)
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -3986,7 +3991,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		exutil.By("step: run bundle")
 		defer func() {
-			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-operator-52814").Output()
+			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-operator-52814", "-n", ns).Output()
 			if err != nil {
 				e2e.Logf(output)
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -4723,7 +4728,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 
 		defer func() {
-			output, err := operatorsdkCLI.Run("cleanup").Args("etcd").Output()
+			output, err := operatorsdkCLI.Run("cleanup").Args("etcd", "-n", oc.Namespace()).Output()
 			if err != nil {
 				e2e.Logf(output)
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -4759,7 +4764,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		defer func() {
-			output, err := operatorsdkCLI.Run("cleanup").Args("upgradeoperator").Output()
+			output, err := operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
 			if err != nil {
 				e2e.Logf(output)
 				o.Expect(err).NotTo(o.HaveOccurred())
