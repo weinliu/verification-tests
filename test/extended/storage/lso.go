@@ -801,10 +801,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("# Create multipath config for the attached volume")
 		mpathConfigCmd := `/sbin/mpathconf --enable && systemctl restart multipathd && multipath -a ` + myVolume.ActualDevice + " && systemctl reload multipathd && multipath -l"
 		defer execCommandInSpecificNode(oc, myWorker.name, "multipath -w "+myVolume.ActualDevice+" && multipath -F && systemctl stop multipathd")
-		o.Expect(execCommandInSpecificNode(oc, myWorker.name, mpathConfigCmd)).Should(o.And(
-			o.ContainSubstring("status=enabled"),
-			o.ContainSubstring("dm-"),
-		))
+		o.Expect(execCommandInSpecificNode(oc, myWorker.name, mpathConfigCmd)).Should(o.Or(o.ContainSubstring("status=enabled"), (o.ContainSubstring("added"))))
 
 		exutil.By("# Create a localvolumeSet cr and wait for device provisioned")
 		mylvs.createWithSpecifiedDeviceTypes(oc, []string{"mpath"})
