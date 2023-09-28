@@ -177,7 +177,6 @@ func waitForPvcStatus(oc *exutil.CLI, namespace string, pvcname string) {
 	exutil.AssertWaitPollNoErr(err, "The PVC is not Bound as expected")
 }
 
-// make sure the PVC is Bound to the PV
 func waitForOneOffBackupToComplete(oc *exutil.CLI, namespace string, bkpname string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		pvStatus, err := oc.AsAdmin().Run("get").Args("-n", namespace, "etcdbackup", bkpname, "-o=jsonpath='{.status.conditions[*].reason}'").Output()
@@ -375,4 +374,43 @@ func verifyImageIDwithProxy(oc *exutil.CLI, nodeNameList []string, httpProxy str
 		return false
 
 	}
+}
+
+func waitForPodStatus(oc *exutil.CLI, podName string, nameSpace string, podStatus string) {
+	err := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		statusOp, err := oc.AsAdmin().Run("get").Args("-n", nameSpace, "pod", podName, "-o=jsonpath='{.status.phase}'").Output()
+		if err != nil {
+			return false, err
+		}
+
+		if strings.Contains(statusOp, podStatus) {
+			e2e.Logf("pod %v is %v", podName, podStatus)
+			return true, nil
+		}
+		e2e.Logf("Pod %v is %v, Trying again", podName, statusOp)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The test pod job is not running")
+}
+
+func verifyBkpFileCreationOnExternalVol(oc *exutil.CLI, podName string, nameSpace string, bkpPath string, bkpFile string) bool {
+	resultOutput, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", nameSpace, podName, "bash", "-c", `ls -lrt `+bkpPath).Output()
+	if strings.Contains(resultOutput, bkpFile) && err == nil {
+		e2e.Logf("OneOffBackupFile %v successfully verified on exterval volume", bkpFile)
+		return true
+	} else {
+		e2e.Logf("OneOffBackupFile %v not found on exterval volume", bkpFile)
+		return false
+	}
+}
+
+func verifyRecurringBkpFileOnExternalVol(oc *exutil.CLI, podName string, nameSpace string, bkpPath string, bkpFile string, count string) bool {
+	cmd := "ls -lrt " + bkpPath + " | grep " + bkpFile + "  | wc "
+	resultOutput, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", nameSpace, podName, "bash", "-c", cmd).Output()
+	opWords := strings.Split(resultOutput, " ")
+	if strings.Contains(opWords[0], count) && err == nil {
+		e2e.Logf("Recurring Backup successfully verified on external volume")
+		return true
+	}
+	return false
 }
