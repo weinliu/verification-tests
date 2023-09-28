@@ -4411,27 +4411,21 @@ roleRef:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(namespaceOutput).Should(o.ContainSubstring("namespace/"+namespace+" created"), namespace+" not created..")
 
-		// When a namespace is created, the cluster policy controller is in charge of adding SCC labels.
-		exutil.By("2.Check the scc annotations should have openshift.io to verify that the namespace added scc annotations Cluster Policy Controller integration")
-		scErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-			namespaceOutput, _ = oc.WithoutNamespace().AsAdmin().Run("get").Args("ns", namespace, `-o=jsonpath={.metadata.annotations}`).Output()
-			if strings.Contains(namespaceOutput, "openshift.io/sa.scc") {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(scErr, "Scc annotations not have openshift.io")
-
 		// There are events in the openshift-kube-controller-manager that show the creation of these SCC labels
-		exutil.By("3.Check the events in the openshift-kube-controller-manager which show the creation of these SCC labels for e.g tempocp53792")
-		scErr = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-			eventsOutput, _ := oc.AsAdmin().Run("get").Args("events", "-n", "openshift-kube-controller-manager").Output()
+		exutil.By("2.Check if the events in the ns openshift-kube-controller-manager show the creation of these SCC labels, e.g., tempocp53792")
+		scErr := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+			eventsOutput := getResource(oc, asAdmin, withoutNamespace, "events", "-n", "openshift-kube-controller-manager")
 			if strings.Contains(eventsOutput, "created SCC ranges for "+namespace+" namespace") {
 				return true, nil
 			}
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(scErr, "Not created SCC ranges for "+namespace+" namespace...")
+
+		// When a namespace is created, the cluster policy controller is in charge of adding SCC labels.
+		exutil.By("3.Check the scc annotations should have openshift.io to verify that the namespace added scc annotations Cluster Policy Controller integration")
+		namespaceOutput = getResource(oc, asAdmin, withoutNamespace, "ns", namespace, `-o=jsonpath={.metadata.annotations}`)
+		o.Expect(namespaceOutput).Should(o.ContainSubstring("openshift.io/sa.scc"), "Not have openshift.io Scc annotations")
 
 		// Cluster policy controller does take care of the resourceQuota, verifying that the quota feature works properly after Cluster Policy Controller integration
 		exutil.By("4.Create quota to verify that the quota feature works properly after Cluster Policy Controller integration")
