@@ -20,7 +20,7 @@ func isNTOPodInstalled(oc *exutil.CLI, namespace string) bool {
 
 	e2e.Logf("Checking if pod is found in namespace %s...", namespace)
 
-	ntoDeployment, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", namespace, "-ojsonpath='{.items[*].metadata.name}'").Output()
+	ntoDeployment, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", namespace, "-ojsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	if len(ntoDeployment) == 0 {
@@ -1016,4 +1016,20 @@ func isROSAHostedCluster(oc *exutil.CLI) bool {
 
 	}
 	return strings.Contains(clusterType, "rosa")
+}
+
+func getFirstWorkerMachinesetName(oc *exutil.CLI) string {
+
+	var machinesetName string
+	machinesetList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-machine-api", "machineset", "-oname").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	workerMachineSetReg := regexp.MustCompile(".*worker.*")
+	workerMachineSets := workerMachineSetReg.FindAllString(machinesetList, -1)
+	if len(workerMachineSets) > 0 {
+		machinesetNameStr := workerMachineSets[0]
+		machinesetNameArr := strings.Split(machinesetNameStr, "/")
+		machinesetName = machinesetNameArr[1]
+	}
+	e2e.Logf("machinesetName is %v in getFirstWorkerMachinesetName", machinesetName)
+	return machinesetName
 }

@@ -57,6 +57,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		podSysctlFile      string
 		ntoTunedPidMax     string
 		customTunedProfile string
+		tunedNodeName      string
+		err                error
 	)
 
 	g.BeforeEach(func() {
@@ -464,9 +466,16 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			ntoRes.delete(oc)
 			_ = patchTunedState(oc, ntoNamespace, "default", "Managed")
 		}()
-		//Get the tuned pod name that run on first worker node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
 		defer func() {
@@ -521,9 +530,18 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.By("Remove custom profile (if not already removed) and patch default tuned back to Managed")
 			ntoRes.delete(oc)
 		}()
-		//Get the tuned pod name that run on first worker node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 
 		defer func() {
@@ -567,10 +585,16 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		//Get the tuned pod name that run on first worker node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		//Get how many cpus on the specified worker node
 		g.By("Get how many cpus cores on the labeled worker node")
@@ -853,10 +877,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		//Get the tuned pod name that run on first worker node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
-		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "tuned.openshift.io/default-irq-smp-affinity-").Execute()
 
@@ -1272,15 +1303,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 		//Use the last worker node as labeled node
 		//Support 3 master/worker node, no dedicated worker nodes.
-		if is3Master || isSNO {
-			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
+		if (is3Master || isSNO) && exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 		} else {
 			tunedNodeName, err = exutil.GetLastLinuxWorkerNode(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
+
 		e2e.Logf("tunedNodeName is:\n%v", tunedNodeName)
 
 		//Get the tuned pod name in the same node that labeled node
@@ -1970,8 +2003,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//trying to include two profiles that share the same parent profile "throughput-performance". An example of such profiles
 		// are the openshift-node --> openshift --> (virtual-guest) --> throughput-performance and postgresql profiles.
 		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
@@ -2038,9 +2080,16 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
 		}
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
@@ -2123,10 +2172,16 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
 		}
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
-		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
@@ -2308,8 +2363,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
 		}
 
-		//Use the first rhcos worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstCoreOsWorkerNode(oc)
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			//Use the first rhcos worker node as labeled node
+			tunedNodeName, err = exutil.GetFirstCoreOsWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
 		e2e.Logf("tunedNodeName is [ %v ]", tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -2581,10 +2647,16 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(ntoOperatorPod).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		g.By("Get cloud provider name ...")
 		providerName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profile", tunedNodeName, "-n", ntoNamespace, "-ojsonpath={.spec.config.providerName}").Output()
@@ -2881,23 +2953,31 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	g.It("ROSA-NonHyperShiftHOST-Author:liqcui-Medium-65371-NTO TuneD prevent from reverting node level profiles on termination [Disruptive]", func() {
 
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
 		//Use the last worker node as labeled node
 		var (
 			edgeNodeName  string
 			tunedNodeName string
 			err           error
 		)
+
 		edgeNodeName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/edge", "-oname").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		if edgeNodeName == "node/"+tunedNodeName {
-			tunedNodeName, err = exutil.GetLastLinuxWorkerNode(oc)
+		if edgeNodeName == "node/"+tunedNodeName || exutil.IsMachineSetExist(oc) {
+			//Prior to choose worker nodes with machineset
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)

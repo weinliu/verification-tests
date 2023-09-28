@@ -544,15 +544,23 @@ func GetMachineSetInstanceType(oc *CLI) string {
 	return instanceType
 }
 
-// GetNodeNameByMachineset used for get
+// GetNodeNameByMachineset used for get node name by machineset name
 func GetNodeNameByMachineset(oc *CLI, machinesetName string) string {
 
+	var machineName string
 	machinesetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(machinesetLabels).NotTo(o.BeEmpty())
-	machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetLabels, "-n", "openshift-machine-api", "-oname").Output()
+	machineNameStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetLabels, "-n", "openshift-machine-api", "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(machineName).NotTo(o.BeEmpty())
+	o.Expect(machineNameStr).NotTo(o.BeEmpty())
+	machineNames := strings.Split(machineNameStr, "\n")
+	if len(machineNames) > 0 {
+		machineName = machineNames[1]
+	}
+
+	e2e.Logf("machineName is %v in GetNodeNameByMachineset", machineName)
+
 	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(machineName, "-n", "openshift-machine-api", "-ojsonpath={.status.nodeRef.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(nodeName).NotTo(o.BeEmpty())
