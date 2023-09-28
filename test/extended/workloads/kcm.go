@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-Author:yinzhou-High-28001-bug 1749478 KCM should recover when its temporary secrets are deleted [Disruptive]", func() {
+	g.It("HyperShiftMGMT-Longduration-Author:yinzhou-High-28001-bug 1749478 KCM should recover when its temporary secrets are deleted [Disruptive]", func() {
 		var namespace = "openshift-kube-controller-manager"
 		var temporarySecretsList []string
 
@@ -238,7 +238,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-Author:yinzhou-High-43035-KCM use internal LB to avoid outages during kube-apiserver rollout [Disruptive]", func() {
+	g.It("HyperShiftMGMT-Author:yinzhou-High-43035-KCM use internal LB to avoid outages during kube-apiserver rollout [Disruptive]", func() {
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if infra == "SingleReplica" {
@@ -322,7 +322,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:yinzhou-Medium-55823-make sure split the route controllers out from OCM", func() {
+	g.It("HyperShiftMGMT-NonPreRelease-PstChkUpgrade-Author:yinzhou-Medium-55823-make sure split the route controllers out from OCM", func() {
 		checkMessage := []string{
 			"ingress-to-route",
 			"ingress-ip",
@@ -523,7 +523,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("No job has been created"))
 	})
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Low-60194-Make sure KCM KS operator is rebased onto the latest version of Kubernetes", func() {
+	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:yinzhou-Low-60194-Make sure KCM KS operator is rebased onto the latest version of Kubernetes", func() {
 		g.By("Get the latest version of Kubernetes")
 		ocVersion, versionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(versionErr).NotTo(o.HaveOccurred())

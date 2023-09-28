@@ -310,7 +310,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:knarra-High-60542-Guard controller set the readiness probe endpoint explicitly", func() {
+	g.It("HyperShiftMGMT-NonPreRelease-PstChkUpgrade-Author:knarra-High-60542-Guard controller set the readiness probe endpoint explicitly", func() {
 		// If SNO cluster skip the case as there is no quorum guard pod present in there
 		exutil.SkipForSNOCluster(oc)
 

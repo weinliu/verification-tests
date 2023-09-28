@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Still find the must-gather pod in own namespace even wait for 10 mins"))
 	})
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-Low-51697-Fetch audit logs of login attempts via oc commands [Slow]", func() {
+	g.It("HyperShiftMGMT-ROSA-OSD_CCS-ARO-Author:yinzhou-Low-51697-Fetch audit logs of login attempts via oc commands [Slow]", func() {
 		g.By("run the must-gather")
 		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-51697").Output()
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-51697", "--", "/usr/bin/gather_audit_logs").Output()
