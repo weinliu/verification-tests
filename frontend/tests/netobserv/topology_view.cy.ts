@@ -1,9 +1,6 @@
 import { netflowPage, genSelectors, topologySelectors, topologyPage } from "../../views/netflow-page"
-import { Operator } from "../../views/netobserv"
+import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
-// if project name is changed here, it also needs to be changed 
-// under all netobserv test specs
-const project = 'netobserv'
 const metricFunction = [
     "Latest rate",
     "Average rate",

@@ -1,10 +1,6 @@
-import { Operator } from "../../views/netobserv"
+import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, genSelectors, colSelectors, querySumSelectors, histogramSelectors } from "../../views/netflow-page"
-
-// if project name is changed here, it also needs to be changed 
-// under all netobserv test specs
-const project = 'netobserv'
 
 describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table view tests', { tags: ['NETOBSERV'] }, function () {
 
@@ -135,6 +131,9 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.contains('Cardinality').should('exist')
             cy.contains('Configuration').should('exist')
             cy.contains('Sampling').should('exist')
+            cy.contains('Version').should('exist')
+            cy.contains('Number').should('exist')
+            cy.contains('Date').should('exist')
         })
 
         it("(OCP-50532, memodi) should validate columns", { tags: ['e2e', 'admin'] }, function () {
@@ -196,11 +195,50 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
 
             // Verify NS column for all rows
             cy.get('td:nth-child(3) span.co-resource-item__resource-name').should('exist').each(row => {
-                cy.wrap(row).should('have.text', project)
+                //Can match with openshift-netobserv-operator too
+                cy.wrap(row).should('contain.text', project)
             })
+
+            //Verify swap button
+            cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
+                cy.contains("Swap").should('exist').click()
+            })
+            cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Destination Namespace')
 
             netflowPage.clearAllFilters()
             cy.get('div.custom-chip').should('not.exist')
+
+            //Verify NOT filter switch button
+            cy.get('#filter-compare-switch-button').should('exist').click()
+            cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+            cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
+            cy.byTestID('autocomplete-search').type(project + '{enter}')
+            cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Not Source Namespace')
+
+            netflowPage.clearAllFilters()
+
+            //Verify NOT filter toggle
+            cy.get('#filter-compare-toggle-button').should('exist').click().then(moreOpts => {
+                cy.contains("Not equals").should('exist').click()
+            })
+            cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+            cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
+            cy.byTestID('autocomplete-search').type(project + '{enter}')
+            cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Not Source Namespace')
+
+            //Verify One-way and back-forth button
+            cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
+                cy.contains("One way").should('exist').click()
+            })
+
+            cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
+                cy.contains("Back and forth").should('exist').click()
+            })
+            cy.get('#filter-compare-toggle-button').should('exist').click().then(moreOpts => {
+                cy.contains("Equals").should('exist').click()
+            })
+
+            netflowPage.clearAllFilters()
 
             // Verify src port filter and port Naming
             cy.byTestID("column-filter-toggle").click()
@@ -267,6 +305,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
         })
 
         it("(OCP-59408, memodi) should verify histogram", function () {
+            cy.get('#time-range-dropdown-dropdown').should('exist').click().byTestID("5m").should('exist').click()
             cy.byTestID("show-histogram-button").should('exist').click()
             cy.get("#refresh-dropdown button").should('be.disabled')
             cy.get('#popover-netobserv-tour-popover-body').should('exist')
@@ -342,6 +381,13 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                 cy.get("#5m").should("exist").click()
                 cy.byTestID("refresh-dropdown-dropdown").should('exist').should('not.be.disabled')
             })
+        })
+
+        it("should verify connection tracking is disabled by default", function () {
+            cy.get('#filter-toolbar-search-filters').contains('Query options').click();
+            cy.get('#query-options-dropdown').click();
+            cy.get('#recordType-allConnections').should('be.disabled')
+            cy.get('#filter-toolbar-search-filters').contains('Query options').click();
         })
     })
 

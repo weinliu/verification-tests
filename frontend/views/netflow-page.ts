@@ -89,6 +89,8 @@ export namespace colSelectors {
     export const direction = '[data-test=th-FlowDirection] > .pf-c-table__button'
     export const bytes = '[data-test=th-Bytes] > .pf-c-table__button'
     export const packets = '[data-test=th-Packets] > .pf-c-table__button'
+    export const RecordType = '[data-test=th-RecordType] > .pf-c-table__button'
+    export const conversationID = '[data-test=th-_HashId] > .pf-c-table__button'
 }
 
 export namespace filterSelectors {

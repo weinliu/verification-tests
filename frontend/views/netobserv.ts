@@ -33,7 +33,7 @@ export const Operator = {
         cy.enableFLPMetric("nodes-flows")
         cy.enableFLPMetric("namespaces")
     },
-    createFlowcollector: (namespace: string) => {
+    visitFlowcollector: () => {
         // this assumes Loki is already deployed in netobserv NS
         cy.visit('k8s/ns/openshift-netobserv-operator/operators.coreos.com~v1alpha1~ClusterServiceVersion')
         const selector = '[data-test-operator-row="' + Operator.name() + '"]'
@@ -44,6 +44,18 @@ export const Operator = {
         cy.contains('Flow Collector').invoke('attr', 'href').then(href => {
             cy.visit(href)
         })
+    },
+    createFlowcollector: (namespace, parameters?: string) => {
+        Operator.visitFlowcollector()
+        cy.get('div.loading-box__loaded:nth-child(2)').should('exist')
+        cy.wait(5000)
+        cy.get("#yaml-create").should('exist').then(() => {
+            if ((Cypress.$('td[role="gridcell"]').length > 0) && (parameters != null)) {
+                Operator.deleteFlowCollector()
+                //come back to flowcollector tab after deletion
+                Operator.visitFlowcollector()
+            }
+        })
         // don't create flowcollector if already exists
         cy.get('div.loading-box:nth-child(1)').should('be.visible').then(() => {
             if (Cypress.$('td[role="gridcell"]').length == 0) {
@@ -52,23 +64,41 @@ export const Operator = {
                 cy.adminCLI(`oc create -f ./fixtures/netobserv/loki.yaml -n ${namespace}`)
                 cy.byTestID('item-create').should('exist').click()
                 cy.get('#form').click() // bug in console where yaml view is default
-                cy.get('#root_spec_agent_accordion-toggle').click()
-                cy.get('#root_spec_agent_type').should('have.text', 'EBPF')
-                cy.get('#root_spec_agent_ebpf_accordion-toggle').click()
-                cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
-                cy.get('#root_spec_loki_accordion-toggle').click()
-                cy.get('#root_spec_loki_url').clear().type(`http://loki.${namespace}.svc:3100/`)
+                Operator.configureEbpfAgent()
+                Operator.configureLoki(namespace)
                 Operator.enableFLPMetrics()
                 cy.get('#root_spec_namespace').clear().type(namespace)
+                if (parameters == "Conversations") {
+                    Operator.enableConversations()
+                }
                 cy.byTestID('create-dynamic-form').click()
                 cy.byTestID('status-text').should('exist').should('have.text', 'Ready')
 
                 cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
-                // for OCP <= 4.12 refresh-web-console element doesn't exist, use toast-action instead.
+                // for OCP < 4.12 refresh-web-console element doesn't exist, use toast-action instead.
                 // cy.byTestID('toast-action', { timeout: 60000 }).should('exist')
                 cy.reload(true)
             }
         })
+    },
+    enableConversations: () => {
+        cy.get('#root_spec_processor_logTypes').click().then(moreOpts => {
+            cy.contains("FLOWS").should('exist')
+            cy.contains("ENDED_CONVERSATIONS").should('exist')
+            cy.contains("CONVERSATIONS").should('exist')
+            cy.contains("ALL").should('exist')
+            cy.get('#ALL-link').click()
+        })
+    },
+    configureEbpfAgent: () => {
+        cy.get('#root_spec_agent_accordion-toggle').click()
+        cy.get('#root_spec_agent_type').should('have.text', 'EBPF')
+        cy.get('#root_spec_agent_ebpf_accordion-toggle').click()
+        cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
+    },
+    configureLoki: (namespace: string) => {
+        cy.get('#root_spec_loki_accordion-toggle').click()
+        cy.get('#root_spec_loki_url').clear().type(`http://loki.${namespace}.svc:3100/`)
     },
     deleteFlowCollector: () => {
         cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')
@@ -82,6 +112,12 @@ export const Operator = {
         cy.byLegacyTestID('actions-menu-button').should('exist').click()
         cy.byTestActionID('Delete FlowCollector').should('exist').click()
         cy.byTestID('confirm-action').should('exist').click()
+        cy.adminCLI(`oc delete -f ./fixtures/netobserv/loki.yaml -n ${project}`)
+        cy.adminCLI(`oc delete project ${project}`)
+        cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
+        // for OCP < 4.12 refresh-web-console element doesn't exist, use toast-action instead.
+        // cy.byTestID('toast-action', { timeout: 60000 }).should('exist')
+        cy.reload(true)
     },
     uninstall: () => {
         cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')

@@ -1,10 +1,6 @@
-import { Operator } from "../../views/netobserv"
+import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage } from "../../views/netflow-page"
-
-// if project name is changed here, it also needs to be changed 
-// under all netobserv specs
-const project = 'netobserv'
 var patch = [{
     "op": "$op",
     "path": "/spec/consolePlugin/quickFilters",
