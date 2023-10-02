@@ -1069,7 +1069,7 @@ var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
 		createVpaOperator(oc)
 	})
 	// author: weinliu@redhat.com
-	g.It("StagerunBoth-Author:weinliu-High-60991-VPA Install", func() {
+	g.It("DEPRECATED-StagerunBoth-Author:weinliu-High-60991-VPA Install", func() {
 		g.By("VPA operator is installed successfully")
 	})
 })
