@@ -1080,8 +1080,8 @@ func createRWOfilePVC(oc *exutil.CLI, opNamespace, pvcName, capacity string) (er
 func createPVC(oc *exutil.CLI, opNamespace, pvcName, capacity, volumeMode, accessMode string) (err error) {
 	// just single Storage class per platform, block will be supported later?
 	const jsonCsiClass = `{"azure":{"Filesystem":"azurefile-csi","Block":"managed-csi"},
-		"gcp":{"Filesystem":"filestore-csi","Block":"standard-csi"},
-		"aws":{"Filesystem":"efs-sc","Block":"gp3-csi"}}`
+		"gcp":{"Filesystem":"standard-csi","Block":"standard-csi"},
+		"aws":{"Filesystem":"gp3-csi","Block":"gp3-csi"}}`
 	cloudPlatform := getCloudProvider(oc)
 	scName := gjson.Get(jsonCsiClass, strings.Join([]string{cloudPlatform, volumeMode}, `.`)).String()
 
@@ -1109,7 +1109,6 @@ func createPVC(oc *exutil.CLI, opNamespace, pvcName, capacity, volumeMode, acces
 		e2e.Logf("Could not apply pvc %v %v", msg, err)
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-
-	_, err = checkResourceJsonpath(oc, "pvc", pvcName, opNamespace, "-o=jsonpath={.status.phase}", "Bound", 30*time.Second, 5*time.Second)
+	e2e.Logf("pvc apply output: %v", msg)
 	return err
 }

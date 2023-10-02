@@ -1445,6 +1445,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", pvcName, "-n", podNs, "--ignore-not-found").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		//some platforms provision automatically while others wait got the 1st customer with "Pending" status
+		//_, err = checkResourceJsonpath(oc, "pvc", pvcName, podNs, "-o=jsonpath={.status.phase}", "Bound", 30*time.Second, 5*time.Second)
+
 		//TODO: add a function that takes any pod and know to inject storage part to it)
 		// run pod with kata
 		//TODO: test IO
