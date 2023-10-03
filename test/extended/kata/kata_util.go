@@ -3,6 +3,7 @@ package kata
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -61,6 +62,19 @@ type TestrunConfigmap struct {
 	eligibleSingleNode bool
 	runtimeClassName   string
 	enablePeerPods     bool
+}
+
+// If you changes this please make changes to func createPeerPodSecrets
+type PeerpodParam struct {
+	AWS_SUBNET_ID       string
+	AWS_VPC_ID          string
+	PODVM_INSTANCE_TYPE string
+	PROXY_TIMEOUT       string
+	VXLAN_PORT          string
+	AWS_REGION          string
+	AWS_SG_IDS          string
+	PODVM_AMI_ID        string
+	CLOUD_PROVIDER      string
 }
 
 var (
@@ -828,7 +842,7 @@ func decodeSecret(input string) (msg string, err error) {
 	if err != nil {
 		msg = fmt.Sprintf("Was not able to decode %v.  %v %v", input, debase64, err)
 	} else {
-		msg = strings.ToLower(fmt.Sprintf("%s", debase64))
+		msg = fmt.Sprintf("%s", debase64)
 	}
 	return msg, err
 }
@@ -1044,6 +1058,150 @@ func checkResourceJsonpath(oc *exutil.CLI, resType, resName, resNs, jsonpath, ex
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v %v in ns %v is not in %v state after %v sec: %v %v", resType, resName, resNs, expected, duration, msg, err))
 	return msg, nil
+}
+
+func createApplyPeerPodSecrets(oc *exutil.CLI, provider string, ppParam PeerpodParam, opNamespace, ppSecretName, secretTemplate string) (msg string, err error) {
+	/*
+		Reads the configmap and the secret that the CI had applied "peerpods-param-cm" and "peerpods-param-secret"
+		and creates "peer-pods-secret" from it and then applies it on the cluster.
+
+		Checks if the cluster already has a peer-pods-secret and also for the correct value of the cloud provider
+	*/
+
+	var (
+		secretString  string
+		decodedString string
+		ciCmName      = "peerpods-param-cm"
+		ciSecretName  = "peerpods-param-secret"
+	)
+
+	// Check if the secrets already exist
+	g.By("Checking if peer-pods-secret exists")
+	msg, err = checkPeerPodSecrets(oc, opNamespace, provider, ppSecretName)
+	if err == nil && msg == "" {
+		e2e.Logf("peer-pods-secret exists - skipping creating it")
+		return msg, err
+	} else if err != nil {
+		e2e.Logf("**** peer-pods-secret not found on the cluster - proceeding to create it****")
+	}
+
+	// Check if provider is correct
+	if provider == "aws" || provider == "azure" {
+		ppParam.CLOUD_PROVIDER = provider
+	} else {
+		msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
+		return msg, fmt.Errorf("%v", msg)
+	}
+
+	//Read params from peerpods-param-cm and store in ppParam struct
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName).Output()
+	if err != nil {
+		e2e.Logf("peerpods-param-cm Configmap created by QE CI  not found: msg %v err: %v", msg, err)
+	} else {
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-o=jsonpath={.data}").Output()
+		if err != nil {
+			e2e.Failf("peerpods-param-cm Configmap created by QE CI %v has error, no .data: %v %v", ciCmName, configmapData, err)
+		}
+
+		e2e.Logf("configmap Data is:\n%v", configmapData)
+		if gjson.Get(configmapData, "AWS_REGION").Exists() {
+			ppParam.AWS_REGION = gjson.Get(configmapData, "AWS_REGION").String()
+		}
+		if gjson.Get(configmapData, "AWS_SUBNET_ID").Exists() {
+			ppParam.AWS_SUBNET_ID = gjson.Get(configmapData, "AWS_SUBNET_ID").String()
+		}
+		if gjson.Get(configmapData, "AWS_VPC_ID").Exists() {
+			ppParam.AWS_VPC_ID = gjson.Get(configmapData, "AWS_VPC_ID").String()
+		}
+		if gjson.Get(configmapData, "AWS_SG_IDS").Exists() {
+			ppParam.AWS_SG_IDS = gjson.Get(configmapData, "AWS_SG_IDS").String()
+		}
+	}
+
+	//Read peerpods-param-secret to fetch the access key and secret key
+	secretString, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", ciSecretName, "-o=jsonpath={.data.aws}").Output()
+	if err != nil || secretString == "" {
+		e2e.Logf(" Error:%v CI provided peer pods secret data empty ", err)
+	}
+	decodedString, err = decodeSecret(secretString)
+	if err != nil {
+		return msg, err
+	}
+
+	lines := strings.Split(decodedString, "\n")
+	accessKey := ""
+	secretKey := ""
+
+	for _, line := range lines {
+		parts := strings.Split(line, "=")
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			if key == "aws_access_key_id" {
+				accessKey = value
+			} else if key == "aws_secret_access_key" {
+				secretKey = value
+			}
+		}
+	}
+
+	if accessKey == "" || secretKey == "" {
+		msg = "AWS credentials not found in the data."
+		err = fmt.Errorf("AWS credentials not found")
+		return msg, err
+	}
+
+	g.By("Create peer-pods-secret file")
+
+	// Create a JSON file that represents the secret file format
+	secretJSON := map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "Secret",
+		"type":       "Opaque",
+		"metadata": map[string]string{
+			"name":      ppSecretName,
+			"namespace": opNamespace,
+		},
+		"stringData": map[string]string{
+			"AWS_ACCESS_KEY_ID":     accessKey,
+			"AWS_SECRET_ACCESS_KEY": secretKey,
+			"AWS_REGION":            ppParam.AWS_REGION,
+			"AWS_SUBNET_ID":         ppParam.AWS_SUBNET_ID,
+			"AWS_VPC_ID":            ppParam.AWS_VPC_ID,
+			"AWS_SG_IDS":            ppParam.AWS_SG_IDS,
+		},
+	}
+
+	// Marshal the JSON to a string
+	secretJSONString, err := json.Marshal(secretJSON)
+	if err != nil {
+		return msg, err
+	}
+
+	// Write the JSON string to a file
+	secretFile, err := os.Create(secretTemplate)
+	if err != nil {
+		return msg, err
+	}
+	defer secretFile.Close()
+
+	secretFile.Write(secretJSONString)
+
+	configFile := filepath.Dir(secretTemplate)
+	if configFile != "" {
+		osStatMsg, configFileExists := os.Stat(configFile)
+		if configFileExists != nil {
+			e2e.Logf("issue creating peer-pods-secret file is %s, err: %v , msg: %v' , osStatMsg: %v", configFile, err, msg, osStatMsg)
+		}
+	}
+
+	g.By("(Apply peer-pods-secret  file")
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+	if err != nil {
+		e2e.Logf("Error: applying peer-pods-secret %v failed: %v %v", configFile, msg, err)
+	}
+
+	return msg, err
 }
 
 // Get the cloud provider type of the test environment copied from test/extended/storage/utils

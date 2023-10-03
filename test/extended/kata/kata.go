@@ -47,6 +47,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		kataocLabel       = "node-role.kubernetes.io/kata-oc"
 		customLabel       = "custom-label=test"
 		testrunExists     = false
+		//ppParam           PeerpodParam //commented because of WIP PR
+		//ppSecretName      = "peer-pods-secret"  //commented because of WIP PR
+		//secretTemplateAws = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")  //commented because of WIP PR
 	)
 
 	subscription := SubscriptionDescription{
@@ -208,6 +211,16 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				labelSelectedNodes(oc, workerLabel, customLabel)
 			}
 		}
+
+		//WIP PR work to creat peer pods secret
+		/*if kataconfig.enablePeerPods {
+		    msg,err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateAws)
+			if err != nil && err.Error() == "AWS credentials not found" {
+				e2e.Logf("AWS credentials not found. Skipping test suite execution.")
+				panic("Aborting peer pod test suite execution - AWS credentials not found")
+				}
+
+		}*/
 
 		msg, err = createKataConfig(oc, kataconfig, subscription)
 		e2e.Logf("---------- kataconfig %v create succeeded %v %v", kataconfig.name, msg, err)
