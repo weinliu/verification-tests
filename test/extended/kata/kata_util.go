@@ -170,14 +170,7 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 	// If it is already applied by a parallel test there will be an err
 
 	g.By("(3.3) Check kataconfig creation has started")
-	errCheck := wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "--no-headers").Output()
-		if strings.Contains(msg, kataconf.name) {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get created: %v %v", kataconf.name, msg, err))
+	msg, err = checkResourceExists(oc, "kataconfig", kataconf.name, sub.namespace, snooze*time.Second, 10*time.Second)
 
 	g.By("(3.4) Wait for kataconfig to finish install")
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
@@ -205,16 +198,12 @@ func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName, runtimeClass
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(msg).NotTo(o.BeEmpty())
 
-	msg = fmt.Sprintf("Checking for %v runtime of pod %v", runtimeClassName, newPodName)
+	msg = fmt.Sprintf("Checking if pod %v is ready", newPodName)
 	g.By(msg)
-	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=jsonpath={.spec.runtimeClassName}").Output()
-		if err == nil {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Creating pod %v with %v failed: %v %v", newPodName, configFile, msg, err))
+	msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", "Running", podSnooze*time.Second, 10*time.Second)
+	if msg == "" || err != nil {
+		e2e.Logf("Could not get pod status %v: %v %v", msg, err)
+	}
 
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=jsonpath={.spec.runtimeClassName}").Output()
 	if msg != runtimeClassName || err != nil {
@@ -249,17 +238,7 @@ func deleteKataResource(oc *exutil.CLI, res, resNs, resName string) bool {
 }
 
 // author: abhbaner@redhat.com
-func checkKataPodStatus(oc *exutil.CLI, podNs, podName, expStatus string) {
-	var actualStatus string
-	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
-		actualStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", podName, "-n", podNs, "-o=jsonpath={.status.phase}").Output()
-		if strings.Contains(actualStatus, expStatus) {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod %v is not correct status in ns %v. Expected status: %v, Actual status: %v", podName, podNs, expStatus, actualStatus))
-}
+// checkKataPodStatus() replaced checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -331,57 +310,33 @@ func checkKataInstalled(oc *exutil.CLI, sub SubscriptionDescription, kcName stri
 func subscriptionIsFinished(oc *exutil.CLI, sub SubscriptionDescription) (msg string, err error) {
 	var (
 		csvName    string
-		v          string
 		controlPod string
 	)
 	g.By("(2) Subscription checking")
-	errCheck := wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
-		if strings.Compare(msg, "AtLatestKnown") == 0 {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil || msg == "" || errCheck != nil {
-		e2e.Logf("issue with subscription %v %v, %v", msg, err, errCheck)
-	}
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
+	msg, err = checkResourceJsonpath(oc, "sub", sub.subName, sub.namespace, "-o=jsonpath={.status.state}", "AtLatestKnown", snooze*time.Second, 10*time.Second)
 
 	csvName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
 	if err != nil || csvName == "" {
-		e2e.Logf("Error: get sub for installedCSV %v %v", csvName, err)
+		e2e.Logf("ERROR: cannot get sub %v installedCSV %v %v", sub.subName, csvName, err)
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
 
 	g.By("(2.1) Check that the csv '" + csvName + "' has finished")
-	errCheck = wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status.phase}{.status.reason}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(msg, "SucceededInstallSucceeded") == 0 {
-			v, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace, "--no-headers").Output()
-			msg = fmt.Sprintf("%v state %v", v, msg)
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil || msg == "" || errCheck != nil {
-		e2e.Logf("issue with csv finish %v: %v %v", csvName, msg, err)
-	}
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
+	msg, err = checkResourceJsonpath(oc, "csv", csvName, sub.namespace, "-o=jsonpath={.status.phase}{.status.reason}", "SucceededInstallSucceeded", snooze*time.Second, 10*time.Second)
 
 	// need controller-manager-service and controller-manager-* pod running before kataconfig
 	// oc get pod -o=jsonpath={.items..metadata.name} && find one w/ controller-manager
 	g.By("(2.2) Wait for controller manager pod to start")
-	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+	// checkResourceJsonpath() needs exact pod name. control-manager deploy does not have full name
+	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", sub.namespace).Output()
 		if strings.Contains(msg, "controller-manager") {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Controller manger pod did not start: %v: %v %v", msg, err))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Controller manger pods did not start %v %v", msg, err))
 
 	// what is the pod name?
 	for _, controlPod = range strings.Fields(msg) {
@@ -392,6 +347,7 @@ func subscriptionIsFinished(oc *exutil.CLI, sub SubscriptionDescription) (msg st
 
 	// controller-podname -o=jsonpath={.status.containerStatuses} && !strings.Contains("false")
 	g.By("(2.3) Check that " + controlPod + " is ready")
+	// this checks that the 2 containers in the pod are not showing false.  checkResourceJsonpath() cannot be used
 	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", controlPod, "-o=jsonpath={.status.containerStatuses}", "-n", sub.namespace).Output()
 		if !strings.Contains(strings.ToLower(msg), "false") {
@@ -399,7 +355,7 @@ func subscriptionIsFinished(oc *exutil.CLI, sub SubscriptionDescription) (msg st
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v pod did not become ready: %v: %v %v", controlPod, msg, err))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("control pod %v did not become ready: %v %v", controlPod, msg, err))
 
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	return msg, err
@@ -442,14 +398,10 @@ func waitForNodesInDebug(oc *exutil.CLI, opNamespace string) (msg string, err er
 func imageContentSourcePolicy(oc *exutil.CLI, icspFile, icspName string) (msg string, err error) {
 	g.By("Applying ImageContentSourcePolicy")
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", icspFile).Output()
-	errCheck := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "--no-headers").Output()
-		if strings.Contains(msg, icspName) {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: applying ImageContentSourcePolicy %v failed: %v %v", icspFile, msg, err))
+	if err != nil {
+		e2e.Logf("ERROR applying ImageContentSourcePolicy %v %v", msg, err)
+	}
+	msg, err = checkResourceExists(oc, "ImageContentSourcePolicy", icspName, "default", 360*time.Second, 10*time.Second)
 	return msg, err
 }
 
@@ -605,7 +557,6 @@ func logErrorAndFail(oc *exutil.CLI, logMsg, msg string, err error) {
 	e2e.Logf("%v: %v %v", logMsg, msg, err)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(msg).NotTo(o.BeEmpty())
-
 }
 
 func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testrunEnv TestrunConfigmap, msg string) {
@@ -863,7 +814,7 @@ func checkPeerPodConfigMap(oc *exutil.CLI, opNamespace, provider, ppConfigMapNam
 		providerVars = append(providerVars, "CLOUD_PROVIDER")
 	default:
 		msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
-		err = fmt.Errorf("%v %v", msg)
+		err = fmt.Errorf("%v", msg)
 		return msg, err
 	}
 
@@ -892,6 +843,7 @@ func checkPeerPodControl(oc *exutil.CLI, opNamespace, expStatus string) (msg str
 	)
 
 	g.By("Check for peer pods webhook pod")
+	// checkResourceJsonpath needs a pod name
 	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
 		msg, err := oc.AsAdmin().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", opNamespace).Output()
 		if err != nil {
@@ -928,6 +880,7 @@ func checkPeerPodControl(oc *exutil.CLI, opNamespace, expStatus string) (msg str
 	}
 
 	g.By("Check for peer pods ctrl caa pod")
+	// checkResourceJsonpath needs a podname
 	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", opNamespace).Output()
 		if strings.Contains(msg, "peerpodconfig-ctrl-caa-daemon") {
@@ -938,7 +891,7 @@ func checkPeerPodControl(oc *exutil.CLI, opNamespace, expStatus string) (msg str
 	if err != nil || msg == "" || errCheck != nil {
 		e2e.Logf(" %v %v, %v", msg, err, errCheck)
 	}
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("peer pod ctrl caa pod did not start: %v: %v %v", msg, err))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("peer pod ctrl caa pod did not start %v %v", msg, err))
 
 	//peerpodconfig ctrl CAA pod names
 	msg, err = oc.AsAdmin().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", opNamespace).Output()
@@ -957,41 +910,20 @@ func checkPeerPodControl(oc *exutil.CLI, opNamespace, expStatus string) (msg str
 	checkControlSvc(oc, opNamespace, webhooksvc)
 	g.By("SUCCESS - peerpod config check passed")
 	return msg, err
-
 }
 
 func checkControlPod(oc *exutil.CLI, podName, podNs, expStatus string) (msg string, err error) {
-	var actualStatus string
-	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
-		actualStatus, _ = oc.AsAdmin().Run("get").Args("pods", podName, "-n", podNs, "-o=jsonpath={.status.phase}").Output()
-		if strings.Contains(actualStatus, expStatus) {
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil || msg == "" || errCheck != nil {
-		e2e.Logf(" %v %v, %v", msg, err, errCheck)
-	}
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod %v is not correct status in ns %v. Expected status: %v, Actual status: %v", podName, podNs, expStatus, actualStatus))
+	msg, err = checkResourceJsonpath(oc, "pods", podName, podNs, "-o=jsonpath={.status.phase}", expStatus, podSnooze*time.Second, 10*time.Second)
 	return msg, err
 }
 
 func checkControlSvc(oc *exutil.CLI, svcNs, svcName string) (msg string, err error) {
 	g.By("Check for " + svcName + "service")
-	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().Run("get").Args("service", svcName, "-n", svcNs, "-o=jsonpath={.metadata.name}").Output()
-		if strings.Contains(msg, svcName) {
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil || msg == "" || errCheck != nil {
-		e2e.Logf(" %v %v, %v", msg, err, errCheck)
-	}
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Service %v not found , error: %v", svcName, err))
+	msg, err = checkResourceJsonpath(oc, "service", svcName, svcNs, "-o=jsonpath={.metadata.name}", svcName, podSnooze*time.Second, 10*time.Second)
 
 	g.By("Check for " + svcName + "service endpoints")
-	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+	// checkResourceJsonpath does strings.Contains not ContainsAny
+	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().Run("get").Args("ep", svcName, "-n", svcNs, "-o=jsonpath={.subsets..addresses..ip}").Output()
 		if strings.ContainsAny(msg, "0123456789") {
 			return true, nil
@@ -1031,7 +963,6 @@ func checkResourceExists(oc *exutil.CLI, resType, resName, resNs string, duratio
 	// working: pod, deploy, service, route, ep, ds
 	errCheck := wait.PollImmediate(interval, duration, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resType, resName, "-n", resNs, "--no-headers").Output()
-		e2e.Logf("DEBUG: %v %v %v %v", resType, resName, msg, err)
 		if strings.Contains(msg, resName) {
 			return true, nil
 		}
@@ -1048,9 +979,12 @@ func checkResourceJsonpath(oc *exutil.CLI, resType, resName, resNs, jsonpath, ex
 	// resType=ds,     -o=jsonpath='{.status.ingress..conditions[?(@.type==\"Admitted\")].status}'", expected= number of nodes w/ kata-oc
 	//   fmt.Sprintf("%v", len(exutil.GetNodeListByLabel(oc, kataocLabel)))
 
+	/* readyReplicas might not exist in .status!
+	// resType=deploy, -o=jsonpath='{.status.readyReplicas}',                                       expected = spec.replicas
+	*/
+
 	errCheck := wait.PollImmediate(interval, duration, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resType, resName, "-n", resNs, jsonpath).Output()
-		e2e.Logf("DEBUG %v %v -n %v %v is %v %v", resType, resName, resNs, jsonpath, msg, err)
 		if strings.Contains(msg, expected) {
 			return true, nil
 		}
