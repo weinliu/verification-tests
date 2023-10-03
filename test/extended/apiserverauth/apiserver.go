@@ -4415,12 +4415,12 @@ roleRef:
 		exutil.By("2.Check if the events in the ns openshift-kube-controller-manager show the creation of these SCC labels, e.g., tempocp53792")
 		scErr := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
 			eventsOutput := getResource(oc, asAdmin, withoutNamespace, "events", "-n", "openshift-kube-controller-manager")
-			if strings.Contains(eventsOutput, "created SCC ranges for "+namespace+" namespace") {
+			if strings.Contains(eventsOutput, "CreatedSCCRanges") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(scErr, "Not created SCC ranges for "+namespace+" namespace...")
+		exutil.AssertWaitPollNoErr(scErr, "Not created SCC ranges for namespaces...")
 
 		// When a namespace is created, the cluster policy controller is in charge of adding SCC labels.
 		exutil.By("3.Check the scc annotations should have openshift.io to verify that the namespace added scc annotations Cluster Policy Controller integration")
