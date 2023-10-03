@@ -130,7 +130,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		clusterVersions, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("--------------------openshift version is %s", clusterVersions)
-		SupportVsVersion := ocSupportVsVersion[clusterVersions]
+		var SupportVsVersion string
+		if _, ok := ocSupportVsVersion[clusterVersions]; ok {
+			SupportVsVersion = ocSupportVsVersion[clusterVersions]
+		} else {
+			// TODO: Remember to update the default support vsphere versions map if it is changed in later releases
+			SupportVsVersion = "7.0.2"
+		}
 		e2e.Logf("--------------------support vsphere version should be at least %s", SupportVsVersion)
 
 		exutil.By("Check logs of vsphere problem detector should contain ESXi version")
