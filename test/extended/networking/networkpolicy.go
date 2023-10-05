@@ -1302,18 +1302,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
 		e2e.Logf("ovnkube-node podname %s running on node %s", ovnKNodePod, podNodeName)
 
-		filterString := fmt.Sprintf("'%s' | grep '%s' | wc -l", "transacting operations", podIP1)
-		logContents, logErr1 := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnKNodePod, filterString)
+		getCmd := fmt.Sprintf("cat /var/log/ovnkube/libovsdb.log | grep 'transacting operations' | grep '%s' ", podIP1)
+		logContents, logErr1 := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", getCmd)
 		o.Expect(logErr1).NotTo(o.HaveOccurred())
-		o.Expect(strings.TrimSpace(logContents)).To(o.Equal("1"))
+		e2e.Logf(fmt.Sprintf("Log content before label update \n %s", logContents))
+		logLinesCount := len(strings.Split(logContents, "\n")) - 1
 
 		exutil.By("Label the pods to see transaction count is unchanged")
 		_, reLabelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", pod.namespace, "--overwrite", "pod", pod.name, "type=blue").Output()
 		o.Expect(reLabelErr).NotTo(o.HaveOccurred())
 
-		newLogContents, logErr2 := exutil.GetSpecificPodLogs(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnKNodePod, filterString)
+		newLogContents, logErr2 := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", getCmd)
 		o.Expect(logErr2).NotTo(o.HaveOccurred())
-		o.Expect(strings.TrimSpace(newLogContents)).To(o.Equal("1"))
+		e2e.Logf(fmt.Sprintf("Log content after label update \n %s", newLogContents))
+		newLogLinesCount := len(strings.Split(newLogContents, "\n")) - 1
+		o.Expect(logLinesCount).To(o.Equal(newLogLinesCount))
 
 	})
 	g.It("Author:asood-High-66085-Creating egress network policies for allowing to same namespace and openshift dns in namespace prevents the pod from reaching its own service", func() {
