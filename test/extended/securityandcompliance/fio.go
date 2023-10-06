@@ -409,7 +409,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-33332-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
+	g.It("DEPRECATED-NonHyperShiftHOST-ARO-Author:xiyuan-Medium-33332-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -610,7 +610,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31862-check whether aide config change from non-empty to empty will trigger a re-initialization of the aide database or not [Serial]", func() {
+	g.It("DEPRECATED-NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31862-check whether aide config change from non-empty to empty will trigger a re-initialization of the aide database or not [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
