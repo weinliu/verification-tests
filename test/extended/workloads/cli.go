@@ -926,8 +926,15 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 		g.By("First mirror")
 		defer os.RemoveAll("output61607")
-		err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("mirror", "-f", mappingFile, "--dir", "output61607", "-a", extractTmpDirName+"/.dockerconfigjson").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+			err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("mirror", "-f", mappingFile, "--dir", "output61607", "-a", extractTmpDirName+"/.dockerconfigjson").Execute()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Image mirror failed with error %s", err))
 		g.By("Remove one blob")
 		blobName, err := exec.Command("bash", "-c", `ls output61607/v2/openshifttest/hello-openshift/blobs/ |head  -n 1`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -938,8 +945,15 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(output).NotTo(o.ContainSubstring(string(blobName)))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Second mirror")
-		err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("mirror", "-f", mappingFile, "--dir", "output61607", "-a", extractTmpDirName+"/.dockerconfigjson").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+			err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("mirror", "-f", mappingFile, "--dir", "output61607", "-a", extractTmpDirName+"/.dockerconfigjson").Execute()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Image mirror failed with error %s", err))
 		g.By("Mirror from file to registry")
 		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, serInfo.serviceName, mirrorFile)
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
