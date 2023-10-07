@@ -407,6 +407,7 @@ func verifyBkpFileCreationOnExternalVol(oc *exutil.CLI, podName string, nameSpac
 func verifyRecurringBkpFileOnExternalVol(oc *exutil.CLI, podName string, nameSpace string, bkpPath string, bkpFile string, count string) bool {
 	cmd := "ls -lrt " + bkpPath + " | grep " + bkpFile + "  | wc "
 	resultOutput, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", nameSpace, podName, "bash", "-c", cmd).Output()
+	e2e.Logf("resultOutput is %v", resultOutput)
 	opWords := strings.Split(resultOutput, " ")
 	if strings.Contains(opWords[0], count) && err == nil {
 		e2e.Logf("Recurring Backup successfully verified on external volume")

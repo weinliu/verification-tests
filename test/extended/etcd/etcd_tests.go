@@ -598,6 +598,88 @@ spec:
 	})
 
 	// author: skundu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:skundu-Critical-66729-Validate default value for configurable parameters RetentionNumber for recurring backup of etcd. [Disruptive]", func() {
+
+		g.By("Test for case OCP-66729 Validate default value for configurable parameters RetentionNumber for recurring backup of etcd.")
+
+		featureSet, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		if featureSet != "TechPreviewNoUpgrade" {
+			g.Skip("featureSet is not TechPreviewNoUpgradec, skip it!")
+		}
+
+		output, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		platform := strings.ToLower(output)
+
+		storageCn := ""
+		if platform == "aws" {
+			storageCn = "gp3-csi"
+		} else if platform == "azure" {
+			storageCn = "azurefile-csi"
+		} else if platform == "gcp" {
+			storageCn = "standard-csi"
+		} else {
+			g.Skip("this platform is currently not supported, skip it!")
+		}
+
+		tmpdir := "/tmp/OCP-etcd-cases-66729" + exutil.GetRandomString() + "/"
+		defer os.RemoveAll(tmpdir)
+		err := os.MkdirAll(tmpdir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		var (
+			pvcName   = "etcd-backup-pvc-e-66729"
+			podName   = "test-pod-66729"
+			bkpPath   = "/data"
+			etcdBkp   = "testbackup-e-66729"
+			nameSpace = "openshift-etcd"
+		)
+
+		g.By("1. Create a PVC for requesting external volume")
+		baseDir := exutil.FixturePath("testdata", "etcd")
+		pvcTemplate := filepath.Join(baseDir, "pvc-ext.yaml")
+		params := []string{"-f", pvcTemplate, "-p", "NAME=" + pvcName, "NAMESPACE=" + nameSpace, "STORAGE=10Gi", "SCNAME=" + storageCn}
+		defer oc.AsAdmin().Run("delete").Args("pvc", pvcName, "-n", nameSpace).Execute()
+		exutil.CreateNsResourceFromTemplate(oc, nameSpace, params...)
+
+		e2e.Logf("2. check and enable the CRDs")
+		etcdbkpOpCRDExisting := isCRDExisting(oc, "etcdbackups.operator.openshift.io")
+		if !etcdbkpOpCRDExisting {
+			defer oc.AsAdmin().Run("delete").Args("CustomResourceDefinition", "etcdbackups.operator.openshift.io").Execute()
+			createCRD(oc, "etcdbackupTechPreviewNoUpgradeCrd.yaml")
+		}
+		etcdBkpConCRDExisting := isCRDExisting(oc, "backups.config.openshift.io")
+		if !etcdBkpConCRDExisting {
+			defer oc.AsAdmin().Run("delete").Args("CustomResourceDefinition", "backups.config.openshift.io").Execute()
+			createCRD(oc, "etcdbackupTechPreviewNoUpgradeConfigCrd.yaml")
+		}
+
+		g.By("3. Create a recurringBackup for external volume")
+		recurTemplate := filepath.Join(baseDir, "recurringbkpdefault.yaml")
+		paramsRecur := []string{"-f", recurTemplate, "-p", "NAME=" + etcdBkp, "PVCNAME=" + pvcName}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("Backup", etcdBkp).Execute()
+		exutil.CreateClusterResourceFromTemplate(oc, paramsRecur...)
+
+		g.By("4. Wait for  PVC to bind to the backup pod")
+		waitForPvcStatus(oc, nameSpace, pvcName)
+
+		e2e.Logf("Need to wait for 15 minutes as 15 jobs are scheduled by default at an interval of 1 minute.")
+		time.Sleep(920 * time.Second)
+
+		g.By("5. Create a test-pod to access the volume.")
+		testpodTemplate := filepath.Join(baseDir, "testpod.yaml")
+		paramsTpod := []string{"-f", testpodTemplate, "-p", "NAME=" + podName, "NAMESPACE=" + nameSpace, "PATH=" + bkpPath, "PVCNAME=" + pvcName}
+		defer oc.AsAdmin().Run("delete").Args("pod", podName, "-n", nameSpace).Execute()
+		exutil.CreateNsResourceFromTemplate(oc, nameSpace, paramsTpod...)
+		waitForPodStatus(oc, podName, nameSpace, "Running")
+
+		e2e.Logf("6. Verify the backup creation")
+		verify := verifyRecurringBkpFileOnExternalVol(oc, podName, nameSpace, bkpPath, "backup-"+etcdBkp, "16")
+		o.Expect(verify).To(o.BeTrue(), "Failed to verify backup creation on external volume")
+	})
+
+	// author: skundu@redhat.com
 	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Longduration-Critical-54999-Verify ETCD is not degraded in dual-stack networking cluster.[Serial]", func() {
 		g.By("Test for case OCP-54999 Verify ETCD is not degraded in dual-stack networking cluster.")
 		ipStackType := getIPStackType(oc)
