@@ -95,7 +95,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(strings.Contains(out, "No resources found")).To(o.BeTrue())
 	})
 
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-62956-oc adm node-logs works for nodes logs api", func() {
+	g.It("ARO-Author:yinzhou-Medium-62956-oc adm node-logs works for nodes logs api", func() {
 		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--unit=kubelet", "-o", "short").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--unit=kubelet", "-g", "crio").Output()
