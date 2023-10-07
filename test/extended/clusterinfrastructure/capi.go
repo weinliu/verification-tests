@@ -112,4 +112,21 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "user-data secret isn't synced up from openshift-machine-api to openshift-cluster-api")
 	})
+
+	// author: dtobolik@redhat.com
+	g.It("NonHyperShiftHOST-Author:dtobolik-Medium-61980-[CAPI] Workload annotation missing from deployments", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
+		skipForCAPINotExist(oc)
+
+		deployments, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", clusterAPINamespace, "-oname").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		deploymentList := strings.Split(deployments, "\n")
+
+		for _, deployment := range deploymentList {
+			result, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(deployment, "-n", clusterAPINamespace, `-o=jsonpath={.spec.template.metadata.annotations.target\.workload\.openshift\.io/management}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.Equal(`{"effect": "PreferredDuringScheduling"}`))
+		}
+	})
 })
