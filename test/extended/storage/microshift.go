@@ -872,11 +872,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("MicroShiftOnly-Author:rdeore-Critical-64839-[MicroShift] [Snapshot] [Filesystem] Should provision storage with snapshot datasource and restore successfully", func() {
 		// Set the resource template for the scenario
 		var (
-			caseID                 = "64839"
-			e2eTestNamespace       = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
-			pvcTemplate            = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
-			podTemplate            = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
-			volumesnapshotTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+			caseID                      = "64839"
+			e2eTestNamespace            = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate      = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+			volumeSnapshotClassTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshotclass-template.yaml")
 		)
 
 		// Check if thin-pool lvm device supported storageClass exists in cluster
@@ -907,11 +908,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("#. Write file to volume")
 		podOri.checkMountedVolumeCouldRW(oc)
 
-		// Create volumesnapshot with pre-defined volumesnapshotclass
+		g.By("#. Create a volumeSnapshotClass")
+		volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(topolvmProvisioner), setVolumeSnapshotDeletionpolicy("Delete"))
+		volumesnapshotClass.create(oc)
+		defer volumesnapshotClass.deleteAsAdmin(oc)
+
 		g.By("#. Create volumesnapshot and wait for ready_to_use")
-		presetVscName := getPresetVolumesnapshotClassNameByProvisioner("topolvm", "topolvm.io")
 		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name),
-			setVolumeSnapshotVscname(presetVscName), setVolumeSnapshotNamespace(e2eTestNamespace))
+			setVolumeSnapshotVscname(volumesnapshotClass.name), setVolumeSnapshotNamespace(e2eTestNamespace))
 		volumesnapshot.create(oc)
 		defer volumesnapshot.delete(oc)
 		volumesnapshot.waitReadyToUse(oc)
@@ -943,11 +947,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("MicroShiftOnly-Author:rdeore-Critical-64840-[MicroShift] [Snapshot] [Block] Should provision storage with snapshot datasource and restore successfully", func() {
 		// Set the resource template for the scenario
 		var (
-			caseID                 = "64840"
-			e2eTestNamespace       = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
-			pvcTemplate            = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
-			podTemplate            = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
-			volumesnapshotTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+			caseID                      = "64840"
+			e2eTestNamespace            = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate      = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+			volumeSnapshotClassTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshotclass-template.yaml")
 		)
 
 		// Check if thin-pool lvm device supported storageClass exists in cluster
@@ -981,11 +986,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		podOri.writeDataIntoRawBlockVolume(oc)
 		podOri.execCommand(oc, "sync")
 
-		// Create volumesnapshot with pre-defined volumesnapshotclass
+		g.By("#. Create a volumeSnapshotClass")
+		volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(topolvmProvisioner), setVolumeSnapshotDeletionpolicy("Delete"))
+		volumesnapshotClass.create(oc)
+		defer volumesnapshotClass.deleteAsAdmin(oc)
+
 		g.By("#. Create volumesnapshot and wait for ready_to_use")
-		presetVscName := getPresetVolumesnapshotClassNameByProvisioner("topolvm", "topolvm.io")
 		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name),
-			setVolumeSnapshotVscname(presetVscName), setVolumeSnapshotNamespace(e2eTestNamespace))
+			setVolumeSnapshotVscname(volumesnapshotClass.name), setVolumeSnapshotNamespace(e2eTestNamespace))
 		volumesnapshot.create(oc)
 		defer volumesnapshot.delete(oc)
 		volumesnapshot.waitReadyToUse(oc)
@@ -1139,13 +1147,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("MicroShiftOnly-Author:rdeore-Critical-64856-[MicroShift] [Snapshot] snapshot a volume should support different storage class using the same device class as the source pvc", func() {
 		// Set the resource template for the scenario
 		var (
-			caseID                 = "64856"
-			e2eTestNamespace       = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
-			pvcTemplate            = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
-			podTemplate            = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
-			volumesnapshotTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
-			storageClassTemplate   = filepath.Join(storageMicroshiftBaseDir, "storageclass-template.yaml")
-			storageClassParameters = map[string]string{
+			caseID                      = "64856"
+			e2eTestNamespace            = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate      = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+			volumeSnapshotClassTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshotclass-template.yaml")
+			storageClassTemplate        = filepath.Join(storageMicroshiftBaseDir, "storageclass-template.yaml")
+			storageClassParameters      = map[string]string{
 				"csi.storage.k8s.io/fstype": "xfs",
 				"topolvm.io/device-class":   "ssd-thin",
 			}
@@ -1183,11 +1192,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("#. Write file to volume")
 		podOri.checkMountedVolumeCouldRW(oc)
 
-		// Create volumesnapshot with pre-defined volumesnapshotclass
+		g.By("#. Create a volumeSnapshotClass")
+		volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(topolvmProvisioner), setVolumeSnapshotDeletionpolicy("Delete"))
+		volumesnapshotClass.create(oc)
+		defer volumesnapshotClass.deleteAsAdmin(oc)
+
 		g.By("#. Create volumesnapshot and wait for ready_to_use")
-		presetVscName := getPresetVolumesnapshotClassNameByProvisioner("topolvm", "topolvm.io")
 		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name),
-			setVolumeSnapshotVscname(presetVscName), setVolumeSnapshotNamespace(e2eTestNamespace))
+			setVolumeSnapshotVscname(volumesnapshotClass.name), setVolumeSnapshotNamespace(e2eTestNamespace))
 		volumesnapshot.create(oc)
 		defer volumesnapshot.delete(oc)
 		volumesnapshot.waitReadyToUse(oc)
