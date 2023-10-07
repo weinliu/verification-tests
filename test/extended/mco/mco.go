@@ -236,6 +236,15 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		createMcAndVerifyMCValue(oc, "Kernel argument", "change-worker-kernel-selinux", workerNode, textToVerify, "cat", "/rootfs/proc/cmdline")
 	})
 
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-67825-Use duplicated kernel arguments[Disruptive]", func() {
+		workerNode := skipTestIfOsIsNotCoreOs(oc)
+		textToVerify := TextToVerify{
+			textToVerifyForMC:   "(?s)y=0.*z=4.*y=1.*z=4",
+			textToVerifyForNode: "y=0 z=4 y=1 z=4",
+		}
+		createMcAndVerifyMCValue(oc, "Duplicated kernel argument", "change-worker-duplicated-kernel-argument", workerNode, textToVerify, "cat", "/rootfs/proc/cmdline")
+	})
+
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42367-add extension to RHCOS [Disruptive]", func() {
 		workerNode := skipTestIfOsIsNotCoreOs(oc)
 		textToVerify := TextToVerify{
