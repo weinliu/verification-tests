@@ -1082,6 +1082,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip: Non-supported provisioner!!!")
 		}
 
+		if exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skip: The test cluster is 3 nodes compact cluster not satisfy the test requirement!!")
+		}
+
 		var nonZonedProvisioners = []string{"file.csi.azure.com", "efs.csi.aws.com"}
 		if len(schedulableWorkersWithSameAz) == 0 {
 			e2e.Logf("The test cluster has less than two schedulable workers in each available zone, check whether there is non-zoned provisioner")
