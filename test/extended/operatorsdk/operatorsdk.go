@@ -119,6 +119,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-37627-SDK run bundle upgrade test [Serial]", func() {
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		defer func() {
@@ -148,6 +149,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-38054-SDK run bundle create pods and csv and registry image pod [Serial]", func() {
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/podcsvcheck-bundle:v0.0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
@@ -171,6 +173,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("ConnectedOnly-Author:jfan-High-38060-SDK run bundle detail message about failed", func() {
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		output, _ := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/etcd-bundle:0.0.1", "-n", oc.Namespace(), "--security-context-config=restricted").Output()
@@ -214,6 +217,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-40520-SDK k8sutil 1123Label creates invalid values", func() {
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -223,6 +227,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-35443-SDK run bundle InstallMode for own namespace [Slow] [Serial]", func() {
+		skipOnProxyCluster(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		var operatorGroup = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		operatorsdkCLI.showInfo = true
@@ -295,6 +300,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-41064-SDK run bundle InstallMode for single namespace [Slow] [Serial]", func() {
+		skipOnProxyCluster(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		var operatorGroup = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		operatorsdkCLI.showInfo = true
@@ -366,6 +372,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-41065-SDK run bundle InstallMode for all namespace [Slow] [Serial]", func() {
+		skipOnProxyCluster(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		var operatorGroup = filepath.Join(buildPruningBaseDir, "og-allns.yaml")
 		operatorsdkCLI.showInfo = true
@@ -472,6 +479,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-38757-SDK operator bundle upgrade from traditional operator installation", func() {
+		skipOnProxyCluster(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		var catalogofupgrade = filepath.Join(buildPruningBaseDir, "catalogsource.yaml")
 		var ogofupgrade = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -712,6 +720,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-42929-SDK support the previous base helm image", func() {
+		skipOnProxyCluster(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		var nginx = filepath.Join(buildPruningBaseDir, "helmbase_v1_nginx.yaml")
 		operatorsdkCLI.showInfo = true
@@ -1631,6 +1640,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: xzha@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:xzha-Critical-38101-implement IndexImageCatalogCreator [Serial]", func() {
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		exutil.By("0) check the cluster proxy configuration")
 		httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
@@ -2113,6 +2123,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
+		skipOnProxyCluster(oc)
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			buildPruningBaseDir        = exutil.FixturePath("testdata", "operatorsdk")
@@ -2698,8 +2709,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-44550-SDK support ansible type operator for http_proxy env", func() {
-		if os.Getenv("HTTP_PROXY") == "" && os.Getenv("http_proxy") == "" {
-			g.Skip("HTTP_PROXY is empty - skipping test ...")
+		g.By("Check if it is a proxy platform")
+		proxySet, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpProxy}").Output()
+		if proxySet == " " {
+			g.Skip("Skip for no-proxy platform")
 		}
 		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		tmpBasePath := "/tmp/ocp-44550-" + getRandomString()
@@ -2986,6 +2999,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("NonPreRelease-Longduration-VMonly-ConnectedOnly-Author:jitli-High-50065-SDK Add file based catalog support to run bundle", func() {
 
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		exutil.By("Run bundle without index")
@@ -3024,6 +3038,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jitli-High-52364-SDK Run bundle support large FBC index [Serial]", func() {
 
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		exutil.By("Run bundle with large FBC index (size >3M)")
@@ -3042,6 +3057,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jitli-High-52514-SDK-Run bundle upgrade support large FBC index [Slow]", func() {
 
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		exutil.By("Run bundle with large FBC index (size >3M)")
@@ -3069,6 +3085,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jitli-High-51295-SDK-Run bundle-upgrade from bundle installation without index image [Serial]", func() {
 
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		exutil.By("Run bundle install operator without index image v0.1")
@@ -3088,6 +3105,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jitli-High-51296-SDK-Run bundle-upgrade from bundle installation with index image [Serial]", func() {
 
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 
@@ -3272,6 +3290,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jitli-High-51300-SDK Run bundle upgrade from bundle installation with multi bundles index image", func() {
 
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 
@@ -3341,6 +3360,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jitli-High-50141-SDK Run bundle upgrade from OLM installed operator [Slow]", func() {
 
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 
@@ -3456,6 +3476,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jitli@redhat.com
 	g.It("VMonly-DisconnectedOnly-Author:jitli-High-52571-Disconnected test for ansible type operator", func() {
+		skipOnProxyCluster(oc)
 		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "operatorsdk")
@@ -3659,6 +3680,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jitli@redhat.com
 	g.It("VMonly-DisconnectedOnly-Author:jitli-High-52572-Disconnected test for helm type operator", func() {
+		skipOnProxyCluster(oc)
 		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "operatorsdk")
@@ -3861,6 +3883,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jitli@redhat.com
 	g.It("VMonly-DisconnectedOnly-Author:jitli-High-52305-Disconnected test for go type operator [Slow]", func() {
+		skipOnProxyCluster(oc)
 		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "operatorsdk")
@@ -4683,6 +4706,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jitli@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jitli-High-40964-migrate packagemanifest to bundle", func() {
+		skipOnProxyCluster(oc)
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			tmpBasePath           = "/tmp/ocp-40964-" + getRandomString()
@@ -4761,6 +4785,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jitli-Critical-59885-Run bundle on different security level namespaces [Serial]", func() {
 
+		skipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		defer func() {
