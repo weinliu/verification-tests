@@ -556,7 +556,7 @@ func GetNodeNameByMachineset(oc *CLI, machinesetName string) string {
 	o.Expect(machineNameStr).NotTo(o.BeEmpty())
 	machineNames := strings.Split(machineNameStr, "\n")
 	if len(machineNames) > 0 {
-		machineName = machineNames[1]
+		machineName = machineNames[0]
 	}
 
 	e2e.Logf("machineName is %v in GetNodeNameByMachineset", machineName)

@@ -9,6 +9,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 func cpuManagerStatebyNode(oc *exutil.CLI, namespace string, nodeName string, ContainerName string) (string, string) {
@@ -59,10 +60,12 @@ func getContainerIDByPODName(oc *exutil.CLI, podName string, namespace string) s
 
 func getPODCPUSet(oc *exutil.CLI, namespace string, nodeName string, containerID string) string {
 
-	podCPUSetStdDir, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", namespace, "-q", "--", "chroot", "host", "find", "/sys/fs/cgroup/cpuset/", "-name", "*"+containerID+"*").Output()
+	podCPUSetStdDir, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", namespace, "-q", "--", "chroot", "host", "find", "/sys/fs/cgroup/", "-name", "*crio-"+containerID+"*").Output()
+	e2e.Logf("The podCPUSetStdDir is [ %v ]", podCPUSetStdDir)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(podCPUSetStdDir).NotTo(o.BeEmpty())
 	podCPUSet, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", namespace, "-q", "--", "chroot", "host", "cat", podCPUSetStdDir+"/cpuset.cpus").Output()
+	e2e.Logf("The podCPUSet is [ %v ]", podCPUSet)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(podCPUSet).NotTo(o.BeEmpty())
 	return podCPUSet
