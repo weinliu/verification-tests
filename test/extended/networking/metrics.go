@@ -284,7 +284,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			podName := getOVNKMasterPod(oc)
 			metricName := "ovnkube_clustermanager_num_egress_ips"
-			prometheusURL := "localhost:29106/metrics"
+			prometheusURL := "localhost:29108/metrics"
 
 			exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules before configuration")
 			metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
@@ -660,7 +660,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		)
 
 		exutil.By("1. Get the metrics of " + metricName + " before resource retry failure occur")
-		prometheusURL := "localhost:29106/metrics"
+		prometheusURL := "localhost:29108/metrics"
 		ovnMasterPodName := getOVNKMasterPod(oc)
 		containerName := "kube-rbac-proxy"
 		metricValue1 := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName)
@@ -778,7 +778,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(egressipAssignedNode1).To(o.ContainSubstring(egressNodes[0]))
 
 		exutil.By("3. Get the metrics before egressip re-balance")
-		prometheusURL := "localhost:29106/metrics"
+		prometheusURL := "localhost:29108/metrics"
 		ovnMasterPodName := getOVNKMasterPod(oc)
 		containerName := "kube-rbac-proxy"
 		metric1BeforeReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName1)
