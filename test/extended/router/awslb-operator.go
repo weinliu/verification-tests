@@ -24,17 +24,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	g.BeforeEach(func() {
 		// skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-		if strings.Contains(output, "NotFound") {
-			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
-		}
 		// CredentialReqeust needs to be provioned by Cloud automatically
 		modeInCloudCredential, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("cloudcredential", "cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 		if modeInCloudCredential == "Manual" {
 			g.Skip("Skip since CCO mode is Manual")
 		}
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", operatorNamespace, "pod", "-l", operatorPodLabel).Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", operatorNamespace, "pod", "-l", operatorPodLabel).Output()
 		if !strings.Contains(output, "Running") {
 			createAWSLoadBalancerOperator(oc)
 		}

@@ -1006,7 +1006,8 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "router", "awslb")
 	credentials := filepath.Join(buildPruningBaseDir, "credentialsrequest.yaml")
 	operatorGroup := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-	subscription := filepath.Join(buildPruningBaseDir, "subscription.yaml")
+	subscriptionSrcRedHat := filepath.Join(buildPruningBaseDir, "subscription-src-redhat.yaml")
+	subscriptionSrcQE := filepath.Join(buildPruningBaseDir, "subscription-src-qe.yaml")
 	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
 	ns := "aws-load-balancer-operator"
 
@@ -1016,8 +1017,16 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	e2e.Logf("err %v, msg %v", err, msg)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroup).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
+
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+	if strings.Contains(output, "NotFound") {
+		e2e.Logf("Warning: catalogsource/qe-app-registry is not installed, using redhat-operators instead")
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscriptionSrcRedHat).Output()
+		e2e.Logf("err %v, msg %v", err, msg)
+	} else {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscriptionSrcQE).Output()
+		e2e.Logf("err %v, msg %v", err, msg)
+	}
 
 	// checking subscription status
 	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
