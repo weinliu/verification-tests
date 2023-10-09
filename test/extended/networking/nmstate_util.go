@@ -242,3 +242,17 @@ func isPlatformSuitableForNMState(oc *exutil.CLI) bool {
 	}
 	return true
 }
+
+func preCheckforRegistry(oc *exutil.CLI) {
+	output, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-ojsonpath='{.items[*].status.capabilities}'").Output()
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	if !strings.Contains(output, "enabledCapabilities") {
+		g.Skip("Skip testing as enabledCapabilities not found")
+	}
+
+	catalogsource, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", "openshift-marketplace").Output()
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	if !strings.Contains(catalogsource, "qe-app-registry") {
+		g.Skip("Skip testing as qe-app-registry not found")
+	}
+}

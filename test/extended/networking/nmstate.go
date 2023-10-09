@@ -21,6 +21,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	)
 
 	g.BeforeEach(func() {
+		preCheckforRegistry(oc)
 
 		namespaceTemplate := generateTemplateAbsolutePath("namespace-template.yaml")
 		operatorGroupTemplate := generateTemplateAbsolutePath("operatorgroup-template.yaml")
