@@ -60,6 +60,22 @@ export const logUtils = {
     cy.exec(`oc get csv -n ${namespace} -l operators.coreos.com/${packageName}.${namespace} -ojsonpath={.items[].status.phase} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false}).then(result => {
       if (result.stdout.includes("Succeeded")) {
         cy.log(`operator ${packageName} is installed in ${namespace} project`)
+        if(enablePlugin == true) {
+          cy.exec(`oc get csv -n ${namespace} -l operators.coreos.com/${packageName}.${namespace} -ojsonpath={.items[].metadata.name} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
+          .then(result => {
+            cy.visit(`/k8s/ns/${namespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion/${result.stdout}`);
+            cy.get('[data-test="edit-console-plugin"]').invoke('text').as('plugin_text_value');
+            cy.get<string>('@plugin_text_value').then(plugin => {
+              if(plugin.includes('Enabled')) {
+                cy.log('Logging view plugin is enabled')
+              } else {
+                cy.get('[data-test="edit-console-plugin"]').should('exist').click();
+                cy.get('input[type="radio"][name="logging-view-plugin"][data-test="Enable-radio-input"]').should('exist').click();
+                cy.get('[data-test="confirm-action"]').click();
+              }
+            })
+          })
+        }
       } else {
         cy.visit(`/operatorhub/subscribe?pkg=${packageName}&catalog=${csName}&catalogNamespace=openshift-marketplace&targetNamespace=undefined`);
         if (channelName){
@@ -132,8 +148,12 @@ export const logUtils = {
     cy.wait(10)
     cy.get('[data-test="save-changes"]').click()
   },
-  removeClusterLogging:(namespace: string) => {
+  removeClusterLogging: (namespace: string) => {
     cy.exec(`oc delete cl instance -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
     cy.exec(`oc delete pvc -n ${namespace} -l logging-cluster=elasticsearch --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
+  },
+  removeLokistack: (lokiName: string, namespace: string) => {
+    cy.exec(`oc delete lokistack ${lokiName} -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
+    cy.exec(`oc delete pvc -l app.kubernetes.io/instance=${lokiName} -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
   }
 };
