@@ -3,6 +3,7 @@ package ginkgo
 import (
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -61,17 +62,23 @@ func (opt *TestOptions) Run(args []string) error {
 	// These settings are matched to upstream's ginkgo configuration. See:
 	// https://github.com/kubernetes/kubernetes/blob/v1.25.0/test/e2e/framework/test_context.go#L354-L355
 	// Turn on EmitSpecProgress to get spec progress (especially on interrupt)
-	suiteConfig.EmitSpecProgress = true
+	suiteConfig.EmitSpecProgress = true //it is removed when origin bump to k1.28, but we want to keep it.
 	// Randomize specs as well as suites
 	suiteConfig.RandomizeAllSpecs = true
 	// turn off stdout/stderr capture see https://github.com/kubernetes/kubernetes/pull/111240
-	suiteConfig.OutputInterceptorMode = "none"
+	suiteConfig.OutputInterceptorMode = "none" //it is removed when origin bump to k1.28, but we want to keep it.
 	// https://github.com/kubernetes/kubernetes/blob/v1.25.0/hack/ginkgo-e2e.sh#L172-L173
 	suiteConfig.Timeout = 24 * time.Hour
 	reporterConfig.NoColor = true
+	reporterConfig.Succinct = true //simple the information at the beginning SuiteWillBegin.
+	// reporterConfig.Verbose = true //for g.By when origin bump to k1.28, we do not use it because we alreay make exutil.By
 
 	ginkgo.SetReporterConfig(reporterConfig)
-	ginkgo.GetSuite().RunSpec(test.spec, ginkgo.Labels{}, "", ginkgo.GetFailer(), ginkgo.GetWriter(), suiteConfig)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	ginkgo.GetSuite().RunSpec(test.spec, ginkgo.Labels{}, "openshift extended e2e", cwd, ginkgo.GetFailer(), ginkgo.GetWriter(), suiteConfig, reporterConfig)
 
 	var summary types.SpecReport
 	for _, report := range ginkgo.GetSuite().GetReport().SpecReports {
