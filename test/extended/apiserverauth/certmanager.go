@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("ROSA-ConnectedOnly-Author:geliu-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate [Serial]", func() {
+	g.It("ROSA-ConnectedOnly-Author:geliu-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Check if the cluster is STS or not")
 		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
@@ -598,5 +598,97 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
+	})
+
+	// author: geliu@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:geliu-Low-63500-Multiple solvers mixed with http01 and dns01 in ACME issuer should work well", func() {
+		g.By("Create a clusterissuer which has multiple solvers mixed with http01 and dns01.")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-multiple-solvers.yaml")
+		defer func() {
+			e2e.Logf("Delete clusterissuers.")
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "acme-multiple-solvers").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "acme-multiple-solvers", "-o", "wide").Output()
+			if !strings.Contains(output, "True") || err != nil {
+				e2e.Logf("clusterissuer is not ready.")
+				return false, nil
+			}
+			e2e.Logf("clusterissuer is ready.")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer timeout.")
+
+		e2e.Logf("Create ns with normal user.")
+		oc.SetupProject()
+
+		g.By("As normal user, create below 3 certificates in later steps with above clusterissuer.")
+		e2e.Logf("Create cert, cert-match-test-1.")
+		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth")
+		certFile1 := filepath.Join(buildPruningBaseDir, "cert-match-test-1.yaml")
+		err = oc.Run("create").Args("-f", certFile1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.Run("get").Args("challenge").Output()
+			if !strings.Contains(output, "pending") || err != nil {
+				e2e.Logf("challenge1 is not become pending.%v", output)
+				return false, nil
+			}
+			e2e.Logf("challenge1 is become pending status.")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Fail to wait challenge1 become pending status.")
+		challenge1, err := oc.AsAdmin().Run("get").Args("challenge", "-o=jsonpath={.items[*].spec.solver.selector.matchLabels}").Output()
+		if !strings.Contains(challenge1, `"use-http01-solver":"true"`) || err != nil {
+			e2e.Failf("challenge1 has not output as expected.")
+		}
+		err = oc.Run("delete").Args("cert/cert-match-test-1").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Create cert, cert-match-test-2.")
+		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth")
+		certFile2 := filepath.Join(buildPruningBaseDir, "cert-match-test-2.yaml")
+		err = oc.Run("create").Args("-f", certFile2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.Run("get").Args("challenge").Output()
+			if !strings.Contains(output, "pending") || err != nil {
+				e2e.Logf("challenge2 is not become pending.%v", output)
+				return false, nil
+			}
+			e2e.Logf("challenge2 is become pending status.")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Fail to wait challenge2 become pending status.")
+		challenge2, err := oc.Run("get").Args("challenge", "-o=jsonpath={.items[*].spec.solver.selector.dnsNames}").Output()
+		if !strings.Contains(challenge2, "xxia-test-2.test-example.com") || err != nil {
+			e2e.Failf("challenge2 has not output as expected.")
+		}
+		err = oc.Run("delete").Args("cert/cert-match-test-2").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Create cert, cert-match-test-3.")
+		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth")
+		certFile3 := filepath.Join(buildPruningBaseDir, "cert-match-test-3.yaml")
+		err = oc.Run("create").Args("-f", certFile3).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.Run("get").Args("challenge").Output()
+			if !strings.Contains(output, "pending") || err != nil {
+				e2e.Logf("challenge3 is not become pending.%v", output)
+				return false, nil
+			}
+			e2e.Logf("challenge3 is become pending status.")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Fail to wait challenge3 become pending status.")
+		challenge3, err := oc.Run("get").Args("challenge", "-o=jsonpath={.items[*].spec.solver.selector.dnsZones}").Output()
+		if !strings.Contains(challenge3, "test-example.com") || err != nil {
+			e2e.Failf("challenge3 has not output as expected.")
+		}
 	})
 })
