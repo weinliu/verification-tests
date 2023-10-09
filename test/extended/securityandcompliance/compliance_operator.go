@@ -4877,10 +4877,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 
 		g.By("Install Compliance Operator and check it is sucessfully installed !!! ")
 		createComplianceOperator(oc, sub, og)
+
+		g.By("Check only worker role available !!! ")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "[\"worker\"]", ok, []string{"ss", "default", "-n",
+			sub.namespace, "-o=jsonpath={.roles}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "[\"worker\"]", ok, []string{"ss", "default-auto-apply", "-n",
+			sub.namespace, "-o=jsonpath={.roles}"}).check(oc)
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-Longduration-Author:xiyuan-High-63796-Scan hosted cluster for ocp4-cis and ocp4-cis-node profiles on hypershift hosted cluster [Serial]", func() {
+	g.It("Author:xiyuan-High-63796-Scan hosted cluster for ocp4-cis and ocp4-cis-node profiles on hypershift hosted cluster [Serial]", func() {
 		var tprofileCis = "cis-compliance-hypershift" + getRandomString()
 		var ssb = scanSettingBindingDescription{
 			name:            "test-cis-" + getRandomString(),
@@ -4925,7 +4931,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-Longduration-Author:xiyuan-High-63795-Scan hosted cluster for ocp4-pci-dss and ocp4-pci-dss-node profiles on hypershift hosted cluster [Serial]", func() {
+	g.It("Author:xiyuan-High-63795-Scan hosted cluster for ocp4-pci-dss and ocp4-pci-dss-node profiles on hypershift hosted cluster [Serial]", func() {
 		var tprofileCis = "pci-dss-compliance-hypershift" + getRandomString()
 		var ssb = scanSettingBindingDescription{
 			name:            "test-pci-dss" + getRandomString(),

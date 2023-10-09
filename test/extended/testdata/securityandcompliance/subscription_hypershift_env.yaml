@@ -17,9 +17,9 @@ objects:
     config:
       nodeSelector:
         node-role.kubernetes.io/worker: ""
-    env:
-    - name: PLATFORM
-      value: "HyperShift"
+      env:
+      - name: PLATFORM
+        value: "HyperShift"
 
 parameters:
 - name: SUBNAME
