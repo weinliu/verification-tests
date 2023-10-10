@@ -190,7 +190,7 @@ func createCertificate(oc *exutil.CLI) {
 	if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
 		g.Skip("Skipping Private clusters that are behind some proxy and can't be directly reachable from externally.")
 	}
-	exutil.SkipIfPlatformType(oc, "openstack")
+	exutil.SkipIfPlatformType(oc, "openstack, vsphere")
 
 	e2e.Logf("As the normal user, create certificate.")
 	ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
