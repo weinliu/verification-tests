@@ -3515,6 +3515,8 @@ nulla pariatur.`
 
 	g.It("Author:sregidor-NonHyperShiftHOST-Low-66046-Check image registry certificates", func() {
 
+		skipTestIfBaselineCapabilitySetIsNone(oc)
+
 		var (
 			mcp  = GetCompactCompatiblePool(oc.AsAdmin())
 			node = mcp.GetNodesOrFail()[0]

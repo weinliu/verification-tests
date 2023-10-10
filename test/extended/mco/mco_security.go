@@ -32,6 +32,9 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		preChecks(oc)
 	})
 	g.It("Author:sregidor-NonHyperShiftHOST-Medium-66048-Check image registry user bundle certificate [Disruptive]", func() {
+
+		skipTestIfBaselineCapabilitySetIsNone(oc)
+
 		var (
 			mergedTrustedImageRegistryCACM = NewConfigMap(oc.AsAdmin(), "openshift-config-managed", "merged-trusted-image-registry-ca")
 			imageConfig                    = NewResource(oc.AsAdmin(), "image.config.openshift.io", "cluster")

@@ -705,6 +705,16 @@ func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
 	}
 }
 
+// skipTestIfBaselineCapabilitySetIsNone skips the test cases if no enabledCapabilities found in resource clusterversion
+func skipTestIfBaselineCapabilitySetIsNone(oc *exutil.CLI) {
+	exists := NewResource(oc.AsAdmin(), "clusterversion", "version").GetOrFail(`{.status.capabilities.enabledCapabilities}`)
+	if exists == "" {
+		// i.e. enabledCapabilities not found, skip the test
+		g.Skip("Skip this test because enabledCapabilities not found in resource clusterversion")
+	}
+
+}
+
 // GetCurrentTestPolarionIDNumber inspects the name of the test case and return the number of the polarion ID linked to this automated test case. It returns an empty string if no ID found.
 func GetCurrentTestPolarionIDNumber() string {
 	name := g.CurrentSpecReport().FullText()
