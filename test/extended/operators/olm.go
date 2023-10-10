@@ -6988,7 +6988,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			singleNamespace:        true,
 			template:               subTemplate,
 		}
-
+		exists, err := clusterPackageExists(oc, sub)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !exists {
+			g.Skip("SKIP:PackageMissing learn does not exist in catalog qe-app-registry")
+		}
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
