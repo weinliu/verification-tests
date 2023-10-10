@@ -576,7 +576,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-DisconnectedOnly-Author:miyadav-Low-36489-Machineset creation when publicIP:true in disconnected(stratergy private or public) Azure enviroment [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:miyadav-Low-36489-Machineset creation when publicIP:true in disconnected(stratergy private or public) Azure enviroment [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
 		g.By("Create a new machineset")
