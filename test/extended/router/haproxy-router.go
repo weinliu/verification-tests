@@ -2930,4 +2930,244 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Contains(resHeaders, "cache-control: private")).To(o.BeTrue())
 		o.Expect(strings.Contains(reqHeaders, "server:")).NotTo(o.BeTrue())
 	})
+
+	// author: shudili@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Longduration-Medium-66566-supported max http headers, max length of a http header name, max length value of a http header", func() {
+		var (
+			buildPruningBaseDir      = exutil.FixturePath("testdata", "router")
+			customTemp               = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPod                  = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
+			unsecsvc                 = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
+			unsecsvcName             = "service-unsecure"
+			clientPod                = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName               = "hello-pod"
+			cltPodLabel              = "app=hello-pod"
+			maxHTTPHeaders           = 20
+			maxLengthHTTPHeaderName  = 255
+			maxLengthHTTPHeaderValue = 16384
+			ingctrl                  = ingressControllerDescription{
+				name:      "ocp66566",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontroller/" + ingctrl.name
+		)
+
+		exutil.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		createResourceFromFile(oc, project1, clientPod)
+		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, testPod)
+		err = waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, unsecsvc)
+
+		exutil.By("Expose a route with the unsecure service inside the project")
+		routehost := "service-unsecure" + "." + "apps." + baseDomain
+		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routehost).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		routeOutput := getRoutes(oc, project1)
+		o.Expect(routeOutput).To(o.ContainSubstring(unsecsvcName))
+
+		exutil.By("patch max number of http headers to a route")
+		var maxCfg strings.Builder
+		negMaxCfg := maxCfg
+		patchHeadersPart1 := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": ["
+		patchHeadersPart2 := "]}}}}"
+		maxCfg.WriteString(patchHeadersPart1)
+		negMaxCfg.WriteString(patchHeadersPart1)
+		for i := 0; i < maxHTTPHeaders-1; i++ {
+			maxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(i) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}, ")
+			negMaxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(i) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}, ")
+		}
+		maxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(maxHTTPHeaders) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}" + patchHeadersPart2)
+		negMaxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(maxHTTPHeaders) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}")
+		patchHeaders := maxCfg.String()
+		negMaxCfg.WriteString(", {\"name\": \"test123abc\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}" + patchHeadersPart2)
+		negPatchHeaders := negMaxCfg.String()
+		patchResourceAsAdmin(oc, project1, "route/"+unsecsvcName, patchHeaders)
+		routeBackend := "be_http:" + project1 + ":" + unsecsvcName
+		routerpod := getRouterPod(oc, "ocp66566")
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":80:" + podIP
+		readHaproxyConfig(oc, routerpod, routeBackend, "-A35", "testheader1")
+		routeBackendCfg := getBlockConfig(oc, routerpod, routeBackend)
+		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
+
+		exutil.By("send traffic and check the max http headers specified in a route")
+		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst}
+		repeatCmd(oc, cmdOnPod, "200", 5)
+		resHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Count(strings.ToLower(resHeaders), "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
+
+		exutil.By("try to patch the exceeded max headers to a route")
+		patchResourceAsAdmin(oc, project1, "route/"+unsecsvcName, "{\"spec\": {\"httpHeaders\": null}}")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", negPatchHeaders, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("request headers list can't exceed 20 items"))
+
+		exutil.By("patch a http header with max header name to a route")
+		maxHeaderName := strings.ToLower(getFixedLengthRandomString(maxLengthHTTPHeaderName))
+		negHeaderName := maxHeaderName + "a"
+		maxCfg.Reset()
+		negMaxCfg.Reset()
+		maxCfg.WriteString(patchHeadersPart1 + "{\"name\": \"")
+		maxCfg.WriteString(maxHeaderName)
+		maxCfg.WriteString("\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}" + patchHeadersPart2)
+		patchHeaders = maxCfg.String()
+		negMaxCfg.WriteString(patchHeadersPart1 + "{\"name\": \"")
+		negMaxCfg.WriteString(negHeaderName)
+		negMaxCfg.WriteString("\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}" + patchHeadersPart2)
+		negPatchHeaders = negMaxCfg.String()
+		patchResourceAsAdmin(oc, project1, "route/"+unsecsvcName, patchHeaders)
+		haproxyHeaderName := readHaproxyConfig(oc, routerpod, routeBackend, "-A25", maxHeaderName)
+		o.Expect(haproxyHeaderName).To(o.ContainSubstring(maxHeaderName))
+
+		exutil.By("send traffic and check the max header name specified in a route")
+		resHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(strings.ToLower(resHeaders), maxHeaderName+"\": \"value123abc\"")).To(o.BeTrue())
+
+		exutil.By("try to patch the header to a route with its name exceeded the max length")
+		patchResourceAsAdmin(oc, project1, "route/"+unsecsvcName, "{\"spec\": {\"httpHeaders\": null}}")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", negPatchHeaders, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("exceeds the maximum length, which is 255"))
+
+		exutil.By("patch a http header with max header value to a route")
+		maxHeaderValue := getFixedLengthRandomString(maxLengthHTTPHeaderValue)
+		negMaxHeaderValue := maxHeaderValue + "a"
+		maxCfg.Reset()
+		negMaxCfg.Reset()
+		maxCfg.WriteString(patchHeadersPart1 + "{\"name\": \"header123abc\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"")
+		maxCfg.WriteString(maxHeaderValue)
+		maxCfg.WriteString("\"}}}" + patchHeadersPart2)
+		patchHeaders = maxCfg.String()
+		negMaxCfg.WriteString(patchHeadersPart1 + "{\"name\": \"header123abc\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"")
+		negMaxCfg.WriteString(negMaxHeaderValue)
+		negMaxCfg.WriteString("\"}}}" + patchHeadersPart2)
+		negPatchHeaders = negMaxCfg.String()
+
+		patchResourceAsAdmin(oc, project1, "route/"+unsecsvcName, patchHeaders)
+		haproxyHeaderName = readHaproxyConfig(oc, routerpod, routeBackend, "-A25", "header123abc")
+		o.Expect(strings.Contains(haproxyHeaderName, "http-request set-header 'header123abc' '"+maxHeaderValue+"'")).To(o.BeTrue())
+
+		exutil.By("try to patch the header to a route with its value exceeded the max length")
+		patchResourceAsAdmin(oc, project1, "route/"+unsecsvcName, "{\"spec\": {\"httpHeaders\": null}}")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", negPatchHeaders, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("exceeds the maximum length, which is 16384"))
+
+		exutil.By("patch max number of http headers to an ingress controller")
+		routerpod = getRouterPod(oc, "ocp66566")
+		patchHeadersPart1 = "{\"spec\": {\"httpHeaders\": {\"actions\": {\"response\": ["
+		maxCfg.Reset()
+		negMaxCfg.Reset()
+		maxCfg.WriteString(patchHeadersPart1)
+		negMaxCfg.WriteString(patchHeadersPart1)
+		for i := 0; i < maxHTTPHeaders-1; i++ {
+			//patchHeadersPart2 = patchHeadersPart2 + "{\"name\": \"ocp66566testheader" + strconv.Itoa(i) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}, "
+			maxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(i) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}, ")
+			negMaxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(i) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}, ")
+		}
+		maxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(maxHTTPHeaders) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}" + patchHeadersPart2)
+		negMaxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(maxHTTPHeaders) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}")
+		patchHeaders = maxCfg.String()
+		negMaxCfg.WriteString(", {\"name\": \"test123abc\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}" + patchHeadersPart2)
+		negPatchHeaders = negMaxCfg.String()
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchHeaders)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+		routerpod = getRouterPod(oc, "ocp66566")
+		podIP = getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst = routehost + ":80:" + podIP
+		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", "testheader1")
+		routeBackendCfg = getBlockConfig(oc, routerpod, "defaults")
+		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
+		routeBackendCfg = getBlockConfig(oc, routerpod, "frontend fe_sni")
+		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
+		routeBackendCfg = getBlockConfig(oc, routerpod, "frontend fe_no_sni")
+		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
+
+		exutil.By("send traffic and check the max http headers specified in an ingress controller")
+		icResHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "-I", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Count(strings.ToLower(icResHeaders), "ocp66566testheader") == maxHTTPHeaders).To(o.BeTrue())
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", negPatchHeaders, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Too many: 21: must have at most 20 items"))
+
+		exutil.By("patch a http header with max header name to an ingress controller")
+		maxCfg.Reset()
+		negMaxCfg.Reset()
+		maxCfg.WriteString(patchHeadersPart1 + "{\"name\": \"")
+		maxCfg.WriteString(maxHeaderName)
+		maxCfg.WriteString("\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}" + patchHeadersPart2)
+		patchHeaders = maxCfg.String()
+		negMaxCfg.WriteString(patchHeadersPart1 + "{\"name\": \"")
+		negMaxCfg.WriteString(negHeaderName)
+		negMaxCfg.WriteString("\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}" + patchHeadersPart2)
+		negPatchHeaders = negMaxCfg.String()
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchHeaders)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+		routerpod = getRouterPod(oc, "ocp66566")
+		podIP = getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst = routehost + ":80:" + podIP
+		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", maxHeaderName)
+		routeBackendCfg = getBlockConfig(oc, routerpod, "defaults")
+		o.Expect(strings.Contains(routeBackendCfg, maxHeaderName)).To(o.BeTrue())
+		routeBackendCfg = getBlockConfig(oc, routerpod, "frontend fe_sni")
+		o.Expect(strings.Contains(routeBackendCfg, maxHeaderName)).To(o.BeTrue())
+		routeBackendCfg = getBlockConfig(oc, routerpod, "frontend fe_no_sni")
+		o.Expect(strings.Contains(routeBackendCfg, maxHeaderName)).To(o.BeTrue())
+
+		exutil.By("send traffic and check the header with max length name specified in an ingress controller")
+		icResHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-I", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(strings.ToLower(icResHeaders), maxHeaderName+": value123abc")).To(o.BeTrue())
+
+		exutil.By("try to patch the header to an ingress controller with its name exceeded the max length")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", negPatchHeaders, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Too long: may not be longer than 255"))
+
+		exutil.By("patch a http header with max header value to an ingress controller")
+		maxCfg.Reset()
+		negMaxCfg.Reset()
+		maxCfg.WriteString(patchHeadersPart1 + "{\"name\": \"header123abc\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"")
+		maxCfg.WriteString(maxHeaderValue)
+		maxCfg.WriteString("\"}}}" + patchHeadersPart2)
+		patchHeaders = maxCfg.String()
+		negMaxCfg.WriteString(patchHeadersPart1 + "{\"name\": \"header123abc\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"")
+		negMaxCfg.WriteString(negMaxHeaderValue)
+		negMaxCfg.WriteString("\"}}}" + patchHeadersPart2)
+		negPatchHeaders = negMaxCfg.String()
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchHeaders)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+		routerpod = getRouterPod(oc, "ocp66566")
+		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", "header123abc")
+		routeBackendCfg = getBlockConfig(oc, routerpod, "defaults")
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'header123abc' '"+maxHeaderValue+"'")).To(o.BeTrue())
+		routeBackendCfg = getBlockConfig(oc, routerpod, "frontend fe_sni")
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'header123abc' '"+maxHeaderValue+"'")).To(o.BeTrue())
+		routeBackendCfg = getBlockConfig(oc, routerpod, "frontend fe_no_sni")
+		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'header123abc' '"+maxHeaderValue+"'")).To(o.BeTrue())
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", negPatchHeaders, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Too long: may not be longer than 16384"))
+	})
 })

@@ -77,6 +77,16 @@ func getRandomString() string {
 	return string(buffer)
 }
 
+func getFixedLengthRandomString(length int) string {
+	const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	letterBytes := []byte(chars)
+	result := make([]byte, length)
+	for i := range result {
+		result[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(result)
+}
+
 func getBaseDomain(oc *exutil.CLI) string {
 	var basedomain string
 
