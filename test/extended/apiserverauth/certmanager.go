@@ -327,14 +327,16 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		regexstr, _ = regexp.Compile(".*" + "cert-?manager" + "[0-9A-Za-z-.:]*")
 		clusterroleListArry := regexstr.FindAllString(clusterroleList, -1)
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrole"}, clusterroleListArry...)...).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrole"}, clusterroleListArry...)...).Execute()
+		// Some clusterrole resources returned by `oc get` may be automatically deleted. In such case, `NotTo(o.HaveOccurred())` assertion may fail with "xxxx" not found for those resources. So comment out the assertion.
+		// o.Expect(err).NotTo(o.HaveOccurred())
 		clusterrolebindingList, err := oc.AsAdmin().Run("get").Args("clusterrolebinding").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		regexstr, _ = regexp.Compile("(?m)^[^ ]*cert-?manager[^ ]*")
 		clusterrolebindingListArry := regexstr.FindAllString(clusterrolebindingList, -1)
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrolebinding"}, clusterrolebindingListArry...)...).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrolebinding"}, clusterrolebindingListArry...)...).Execute()
+		// Some clusterrolebinding resources returned by `oc get` may be automatically deleted. In such case, `NotTo(o.HaveOccurred())` assertion may fail with "xxxx" not found for those resources. So comment out the assertion.
+		// o.Expect(err).NotTo(o.HaveOccurred())
 		createCertManagerOperator(oc)
 	})
 
