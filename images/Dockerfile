@@ -21,7 +21,7 @@ RUN sh -c 'echo -e "[google-cloud-sdk]\nname=Google Cloud SDK\nbaseurl=https://p
     chmod g+w /etc/passwd && \
     rm -rf /root/.config/gcloud
 RUN pip3 install --upgrade setuptools pip && pip3 install dotmap minio pyyaml requests python-openstackclient && \
-    sh -c 'echo -e "[rhel8.7-baseos]\nname=rhel8.7-baseos\nbaseurl=http://download-node-02.eng.bos.redhat.com/rhel-8/rel-eng/RHEL-8/latest-RHEL-8.7/compose/BaseOS/x86_64/os\nenabled=0\ngpgcheck=1" >/etc/yum.repos.d/rhel8.7-baseos.repo' && \
+    sh -c 'echo -e "[rhel8.7-baseos]\nname=rhel8.7-baseos\nbaseurl=http://download.eng.rdu.redhat.com/rhel-8/rel-eng/RHEL-8/latest-RHEL-8.7/compose/BaseOS/x86_64/os\nenabled=0\ngpgcheck=1" >/etc/yum.repos.d/rhel8.7-baseos.repo' && \
     yum -y --enablerepo=rhel8.7-baseos install sos
 RUN oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hypershift && mv hypershift /usr/bin/ && chmod 755 /usr/bin/hypershift && \
     curl -s -L https://mirror.openshift.com/pub/openshift-v4/clients/rosa/latest/rosa-linux.tar.gz -o rosa.tar.gz && tar -C /usr/bin -xf rosa.tar.gz && chmod 755 /usr/bin/rosa && rosa version && rm -fr rosa.tar.gz && \
