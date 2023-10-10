@@ -954,6 +954,31 @@ func printProvisionPodLogs(oc *exutil.CLI, provisionPodOutput, namespace string)
 	}
 }
 
+// check if the target string is in a string slice
+func ContainsInStringSlice(items []string, item string) bool {
+	for _, eachItem := range items {
+		if eachItem == item {
+			return true
+		}
+	}
+	return false
+}
+
+func getInfraIDFromCDName(oc *exutil.CLI, cdName string) string {
+	var (
+		infraID string
+		err     error
+	)
+
+	getInfraIDFromCD := func() bool {
+		infraID, _, err = oc.AsAdmin().Run("get").Args("cd", cdName, "-o=jsonpath={.spec.clusterMetadata.infraID}").Outputs()
+		return err == nil && strings.HasPrefix(infraID, cdName)
+	}
+	o.Eventually(getInfraIDFromCD).WithTimeout(10 * time.Minute).WithPolling(5 * time.Second).Should(o.BeTrue())
+	e2e.Logf("Found infraID = %v", infraID)
+	return infraID
+}
+
 func getClusterprovisionName(oc *exutil.CLI, cdName, namespace string) string {
 	var ClusterprovisionName string
 	var err error

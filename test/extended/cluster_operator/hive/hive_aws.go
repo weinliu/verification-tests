@@ -94,6 +94,211 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run | grep "46016" | ./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-High-46016-[HiveSpec] Test HiveConfig.Spec.FailedProvisionConfig.RetryReasons [Disruptive]", func() {
+		// Settings
+		var (
+			testCaseID   = "46016"
+			cdName1      = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+			cdName2      = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+			retryReasons = []string{"AWSVPCLimitExceeded", "S3BucketsLimitExceeded", "NoWorkerNodes", "UnknownError", "KubeAPIWaitFailed"}
+		)
+
+		// AWS Clients
+		var (
+			cfg       = getDefaultAWSConfig(oc, region)
+			ec2Client = ec2.NewFromConfig(cfg)
+		)
+
+		// Functions
+		var (
+			TerminateVMs = func(describeInstancesOutput *ec2.DescribeInstancesOutput) error {
+				var instancesToTerminate []string
+				for _, reservation := range describeInstancesOutput.Reservations {
+					instancesToTerminate = append(instancesToTerminate, *reservation.Instances[0].InstanceId)
+				}
+				_, err := ec2Client.TerminateInstances(context.Background(), &ec2.TerminateInstancesInput{
+					InstanceIds: instancesToTerminate,
+				})
+				e2e.Logf("Terminating VMs %v", instancesToTerminate)
+				return err
+			}
+		)
+
+		exutil.By("Edit hiveconfig, add RetryReasons doesn't match cluster's failure")
+		patch := `
+spec:
+  failedProvisionConfig:
+    retryReasons:
+    - AWSVPCLimitExceeded
+    - S3BucketsLimitExceeded`
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/failedProvisionConfig"}]`).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Creating Install-Config Secret...")
+		installConfigSecretName1 := cdName1 + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      cdName1 + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: basedomain,
+			name2:      cdName1,
+			region:     region,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		exutil.By("Creating ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName1,
+			namespace:            oc.Namespace(),
+			baseDomain:           basedomain,
+			clusterName:          cdName1,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               region,
+			imageSetRef:          cdName1 + "-imageset",
+			installConfigSecret:  installConfigSecretName1,
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 2,
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		exutil.By("Getting infraID from CD...")
+		infraID := getInfraIDFromCDName(oc, cdName1)
+
+		exutil.By("Waiting until the Master & bootstrap VMs are created...")
+		var describeInstancesOutput *ec2.DescribeInstancesOutput
+		waitUntilMasterVMCreated := func() bool {
+			describeInstancesOutput, err = ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
+				Filters: []types.Filter{
+					{
+						Name: aws.String("tag:Name"),
+						// Globbing leads to filtering AFTER returning a page of instances
+						// This results in the necessity of looping through pages of instances,
+						// i.e. some extra complexity.
+						Values: []string{infraID + "-master-0", infraID + "-master-1", infraID + "-master-2", infraID + "-bootstrap"},
+					},
+				},
+				MaxResults: aws.Int32(8),
+			})
+			return err == nil && len(describeInstancesOutput.Reservations) == 4
+		}
+		o.Eventually(waitUntilMasterVMCreated).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		// Terminate all master VMs so the Kubernetes API is never up. Provision may fail at earlier stages though.
+		exutil.By("Terminating the Master & bootstrap VMs...")
+		err = TerminateVMs(describeInstancesOutput)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// The stage at which provision fails is not guaranteed. Here we just make sure provision actually fails.
+		exutil.By("Waiting for the first provision Pod to fail...")
+		provisionPod1 := getProvisionPodNames(oc, cdName1, oc.Namespace())[0]
+		newCheck("expect", "get", asAdmin, requireNS, compare, "Failed", ok, ClusterInstallTimeout, []string{"pod", provisionPod1, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		expectKeyValue := map[string]string{
+			"status": "True",
+			"reason": "FailureReasonNotRetryable",
+		}
+		waitForHRetryFailure1 := checkCondition(oc, "ClusterDeployment", cdName1, oc.Namespace(), "ProvisionStopped", expectKeyValue, "wait for cluster installment failure for FailureReasonNotRetryable")
+		o.Eventually(waitForHRetryFailure1).WithTimeout(10 * time.Minute).WithPolling(15 * time.Second).Should(o.BeTrue())
+
+		exutil.By("Edit hiveconfig, add RetryReasons match cluster's failure")
+		patch2 := `
+spec:
+  failedProvisionConfig:
+    retryReasons:
+    - AWSVPCLimitExceeded
+    - S3BucketsLimitExceeded
+    - NoWorkerNodes
+    - UnknownError
+    - KubeAPIWaitFailed`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=merge", "-p", patch2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Creating Install-Config Secret...")
+		installConfigSecretName2 := cdName2 + "-install-config"
+		installConfigSecret2 := installConfig{
+			name1:      cdName2 + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: basedomain,
+			name2:      cdName2,
+			region:     region,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		exutil.By("Creating ClusterDeployment...")
+		cluster2 := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName2,
+			namespace:            oc.Namespace(),
+			baseDomain:           basedomain,
+			clusterName:          cdName2,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               region,
+			imageSetRef:          cdName1 + "-imageset",
+			installConfigSecret:  installConfigSecretName2,
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 2,
+		}
+		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecret2.name1})
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName2})
+		installConfigSecret2.create(oc)
+		cluster2.create(oc)
+
+		exutil.By("Getting infraID from CD...")
+		infraID = getInfraIDFromCDName(oc, cdName2)
+
+		exutil.By("Waiting until the Master & bootstrap VMs are created...")
+		o.Eventually(waitUntilMasterVMCreated).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		// Terminate all master VMs so the Kubernetes API is never up. Provision may fail at earlier stages though.
+		exutil.By("Terminating the Master & bootstrap VMs...")
+		err = TerminateVMs(describeInstancesOutput)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Make sure the ProvisionFailed condition's reason matches one of retryReasons")
+		waitForProvisionFailed := func() bool {
+			condition := getCondition(oc, "ClusterDeployment", cdName2, oc.Namespace(), "ProvisionFailed")
+			if reason, ok := condition["reason"]; !ok || !ContainsInStringSlice(retryReasons, reason) {
+				e2e.Logf("For condition ProvisionFailed, expected reason is %v, actual reason is %v, retrying ...", retryReasons, reason)
+				return false
+			}
+			e2e.Logf("For condition ProvisionFailed, field reason matches one of retryReasons, proceeding to the next step ...")
+			return true
+		}
+		o.Eventually(waitForProvisionFailed).WithTimeout(10 * time.Minute).WithPolling(5 * time.Second).Should(o.BeTrue())
+
+		exutil.By("Getting infraID from CD again...")
+		var infraID2 string
+		getInfraIDFromCD3 := func() bool {
+			infraID2, _, err = oc.AsAdmin().Run("get").Args("cd", cdName2, "-o=jsonpath={.spec.clusterMetadata.infraID}").Outputs()
+			return err == nil && strings.HasPrefix(infraID2, cdName2) && infraID != infraID2
+		}
+		o.Eventually(getInfraIDFromCD3).WithTimeout(10 * time.Minute).WithPolling(5 * time.Second).Should(o.BeTrue())
+		infraID = infraID2
+		e2e.Logf("Found infraID = %v", infraID)
+
+		// Delete the machines again to make InstallAttempts reach the limit
+		exutil.By("Waiting until the Master & bootstrap VMs are created again ...")
+		o.Eventually(waitUntilMasterVMCreated).WithTimeout(10 * time.Minute).WithPolling(10 * time.Second).Should(o.BeTrue())
+
+		// Terminate all master VMs so the Kubernetes API is never up. Provision may fail at earlier stages though.
+		exutil.By("Terminating the Master & bootstrap VMs again ...")
+		err = TerminateVMs(describeInstancesOutput)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		expectKeyValue2 := map[string]string{
+			"status": "True",
+			"reason": "InstallAttemptsLimitReached",
+		}
+		waitForHRetryFailure2 := checkCondition(oc, "ClusterDeployment", cdName2, oc.Namespace(), "ProvisionStopped", expectKeyValue2, "wait for cluster installment failure for InstallAttemptsLimitReached")
+		o.Eventually(waitForHRetryFailure2).WithTimeout(20 * time.Minute).WithPolling(20 * time.Second).Should(o.BeTrue())
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "59376"|./bin/extended-platform-tests run --timeout 10m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Medium-59376-Configure resources on the hive deployment pods [Disruptive]", func() {
 		exutil.By("Check the default spec.resources.requests.memory value of hive controller pod")
