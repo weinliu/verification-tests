@@ -15,7 +15,7 @@ import (
 // text is the string you want to describe the step.
 func By(text string) {
 
-	formatter := formatter.NewWithNoColorBool(false)
+	formatter := formatter.NewWithNoColorBool(true)
 	fmt.Println(formatter.F("{{bold}}  STEP:{{/}} %s {{gray}}%s{{/}}", text, time.Now().Format(types.GINKGO_TIME_FORMAT)))
 	g.By(text)
 
