@@ -202,6 +202,73 @@ func (mcp *MachineConfigPool) DisableOnClusterBuild() error {
 	return mcp.RemoveLabel(OCBMachineConfigPoolLabel)
 }
 
+// GetInternalIgnitionConfigURL return the internal URL used by the nodes in this pool to get the ignition config
+func (mcp *MachineConfigPool) GetInternalIgnitionConfigURL(secure bool) (string, error) {
+	var (
+		// SecurePort is the tls secured port to serve ignition configs
+		// InsecurePort is the port to serve ignition configs w/o tls
+		port     = IgnitionSecurePort
+		protocol = "https"
+	)
+	internalAPIServerURI, err := GetAPIServerInternalURI(mcp.oc)
+	if err != nil {
+		return "", err
+	}
+	if !secure {
+		port = IgnitionInsecurePort
+		protocol = "http"
+	}
+
+	return fmt.Sprintf("%s://%s:%d/config/%s", protocol, internalAPIServerURI, port, mcp.GetName()), nil
+}
+
+// GetMCSIgnitionConfig returns the ignition config that the MCS is serving for this pool
+func (mcp *MachineConfigPool) GetMCSIgnitionConfig(secure bool, ignitionVersion string) (string, error) {
+	var (
+		// SecurePort is the tls secured port to serve ignition configs
+		// InsecurePort is the port to serve ignition configs w/o tls
+		port = IgnitionSecurePort
+	)
+	if !secure {
+		port = IgnitionInsecurePort
+	}
+
+	url, err := mcp.GetInternalIgnitionConfigURL(secure)
+	if err != nil {
+		return "", err
+	}
+
+	// We will request the config from a master node
+	mMcp := NewMachineConfigPool(mcp.oc.AsAdmin(), MachineConfigPoolMaster)
+	masters, err := mMcp.GetNodes()
+	if err != nil {
+		return "", err
+	}
+	master := masters[0]
+
+	logger.Infof("Remove the iptables rules that block the ignition config")
+	removedRules, err := master.RemoveIPTablesRulesByRegexp(fmt.Sprintf("%d", port))
+	defer master.ExecIPTables(removedRules)
+	if err != nil {
+		return "", err
+	}
+
+	cmd := []string{"curl", "-s"}
+	if secure {
+		cmd = append(cmd, "-k")
+	}
+	if ignitionVersion != "" {
+		cmd = append(cmd, []string{"-H", fmt.Sprintf("Accept:application/vnd.coreos.ignition+json;version=%s", ignitionVersion)}...)
+	}
+	cmd = append(cmd, url)
+
+	stdout, stderr, err := master.DebugNodeWithChrootStd(cmd...)
+	if err != nil {
+		return stdout + stderr, err
+	}
+	return stdout, nil
+}
+
 // getNodesWithLabels returns a list with the nodes that belong to the machine config pool and has the provided labels
 func (mcp *MachineConfigPool) getNodesWithLabels(extraLabels string) ([]Node, error) {
 	mcp.oc.NotShowInfo()

@@ -939,3 +939,96 @@ func createCA(tmpDir, caFileName string) (keyPath, caPath string, err error) {
 
 	return keyPath, caPath, nil
 }
+
+// splitCommandString splits a string taking into account double quotes and single quotes, unscaping the quotes if necessary
+// Example. Split this:
+//	command "with \"escaped\" double quotes" and 'with \'escaped\' single quotes' and simple params
+// Result:
+// - command
+// - with "escaped" double quotes
+// - and
+// - with 'escaped' single quotes
+// - and
+// - simple
+// - params
+
+func splitCommandString(strCommand string) []string {
+	command := []string{}
+	insideDoubleQuote := false
+	insideSingleQuote := false
+
+	isSingleQuote := func(b byte) bool {
+		return b == '\'' && !insideDoubleQuote
+	}
+
+	isDoubleQuote := func(b byte) bool {
+		return b == '"' && !insideSingleQuote
+	}
+
+	arg := []byte{}
+	for _, char := range []byte(strings.TrimSpace(strCommand)) {
+		if isDoubleQuote(char) {
+
+			// skip the first character of the quote
+			if !insideDoubleQuote {
+				insideDoubleQuote = true
+				continue
+			}
+			// we are inside a quote
+			// if the new double quote is scaped we unscape it and continue inside a quote
+			if arg[len(arg)-1] == '\\' {
+				arg[len(arg)-1] = '"'
+				continue
+			}
+
+			// If there is no scaped char the we get out of the quote state ignoring the last character of the quote
+			insideDoubleQuote = false
+			continue
+
+		}
+
+		if isSingleQuote(char) {
+			// skip the first character of the quote
+			if !insideSingleQuote {
+				insideSingleQuote = true
+				continue
+			}
+			// we are inside a quote
+			// if the new single quote is scaped we unscape it and continue inside a quote
+			if arg[len(arg)-1] == '\\' {
+				arg[len(arg)-1] = '\''
+				continue
+			}
+
+			// If there is no scaped char the we get out of the quote state ignoring the last character of the quote
+			insideSingleQuote = false
+			continue
+
+		}
+
+		if char == ' ' && !insideDoubleQuote && !insideSingleQuote {
+			command = append(command, string(arg))
+			arg = []byte{}
+			continue
+		}
+
+		arg = append(arg, char)
+	}
+	if len(arg) > 0 {
+		command = append(command, string(arg))
+	}
+
+	return command
+
+}
+
+// GetInternalIgnitionConfigURL return the API server internal uri without any port and without the protocol
+func GetAPIServerInternalURI(oc *exutil.CLI) (string, error) {
+	infra := NewResource(oc, "infrastructure", "cluster")
+	apiServerInternalURI, err := infra.Get(`{.status.apiServerInternalURI}`)
+	if err != nil {
+		return "", err
+	}
+
+	return regexp.MustCompile(`^https*:\/\/(.*):\d+$`).ReplaceAllString(strings.TrimSpace(apiServerInternalURI), `$1`), nil
+}

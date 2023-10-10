@@ -131,4 +131,9 @@ const (
 
 	// OCBDefaultFinalImagePushSecretName default value for the OCB image pull secret name
 	OCBDefaultFinalImagePushSecretName = "mco-test-push-secret"
+
+	// SecurePort is the tls secured port to serve ignition configs
+	IgnitionSecurePort = 22623
+	// InsecurePort is the port to serve ignition configs w/o tls
+	IgnitionInsecurePort = 22624
 )

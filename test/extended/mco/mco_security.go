@@ -138,19 +138,105 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			logger.Infof("OK!\n")
 		}
 	})
+	g.It("Author:sregidor-NonHyperShiftHOST-High-67660-MCS generates ignition configs with certs [Disruptive]", func() {
+		var (
+			proxy                = NewResource(oc.AsAdmin(), "proxy", "cluster")
+			certFileName         = "ca-bundle.crt"
+			cmName               = "test-proxy-config"
+			cmNamespace          = "openshift-config"
+			proxyConfigMap       *ConfigMap
+			kubeCloudConfigMap   = NewConfigMap(oc.AsAdmin(), "openshift-config-managed", "kube-cloud-config")
+			kubeCertFile         = "/etc/kubernetes/kubelet-ca.crt"
+			userCABundleCertFile = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
+			kubeCloudCertFile    = "/etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"
+			ignitionConfig       = "3.4.0"
+		)
+
+		logger.Infof("Using pool %s for testing", mcp.GetName())
+
+		// Create a new config map and configure the proxy additional trusted CA if necessary
+		proxyConfigMapName := proxy.GetOrFail(`{.spec.trustedCA.name}`)
+		if proxyConfigMapName == "" {
+			var err error
+			exutil.By("Configure the proxy with an additional trusted CA")
+			logger.Infof("Create a configmap with the CA")
+			proxyConfigMap, err = CreateConfigMapWithRandomCert(oc.AsAdmin(), cmNamespace, cmName, certFileName)
+			o.Expect(err).NotTo(o.HaveOccurred(),
+				"Error creating a configmap with a CA")
+			defer proxyConfigMap.Delete()
+
+			logger.Infof("Patch the proxy resource to use the new configmap")
+			initProxySpec := proxy.GetOrFail(`{.spec}`)
+			defer func() {
+				logger.Infof("Restore original proxy spec: %s", initProxySpec)
+				_ = proxy.Patch("json", `[{ "op": "add", "path": "/spec", "value": `+initProxySpec+`}]`)
+			}()
+			proxy.Patch("merge", fmt.Sprintf(`{"spec": {"trustedCA": {"name": "%s"}}}`, cmName))
+			logger.Infof("OK!\n")
+		} else {
+			logger.Infof("The proxy is already configured to use the CA inside this configmap: %s", proxyConfigMapName)
+			proxyConfigMap = NewConfigMap(oc.AsAdmin(), "openshift-config", proxyConfigMapName)
+		}
+
+		exutil.By(fmt.Sprintf(`Check that the "%s" is in the ignition config`, kubeCertFile))
+		jsonPath := fmt.Sprintf(`storage.files.#(path=="%s")`, kubeCertFile)
+		o.Eventually(mcp.GetMCSIgnitionConfig,
+			"1m", "20s").WithArguments(true, ignitionConfig).ShouldNot(
+			HavePathWithValue(jsonPath, o.BeEmpty()),
+			"The file %s is not served in the ignition config", kubeCertFile)
+
+		logger.Infof("OK!\n")
+
+		exutil.By(fmt.Sprintf(`Check that the "%s" is in the ignition config`, userCABundleCertFile))
+		logger.Infof("Check that the file is served in the ignition config")
+		jsonPath = fmt.Sprintf(`storage.files.#(path=="%s")`, userCABundleCertFile)
+		o.Eventually(mcp.GetMCSIgnitionConfig,
+			"1m", "20s").WithArguments(true, ignitionConfig).ShouldNot(
+			HavePathWithValue(jsonPath, o.BeEmpty()),
+			"The file %s is not served in the ignition config", userCABundleCertFile)
+
+		logger.Infof("Check that the file has the right content in the nodes")
+		certContent := proxyConfigMap.GetDataValueOrFail(certFileName)
+		EventuallyFileExistsInNode(userCABundleCertFile, certContent, mcp.GetNodesOrFail()[0], "3m", "20s")
+
+		logger.Infof("OK!\n")
+
+		exutil.By(fmt.Sprintf(`Check that the "%s" is in the ignition config`, kubeCloudCertFile))
+		kubeCloudCertContent, err := kubeCloudConfigMap.GetDataValue("ca-bundle.pem")
+		if err != nil {
+			logger.Infof("No KubeCloud cert configured, skipping validation")
+		} else {
+			logger.Infof("Check that the file is served in the ignition config")
+			jsonPath = fmt.Sprintf(`storage.files.#(path=="%s")`, kubeCloudCertFile)
+			o.Eventually(mcp.GetMCSIgnitionConfig,
+				"1m", "20s").WithArguments(true, ignitionConfig).ShouldNot(
+				HavePathWithValue(jsonPath, o.BeEmpty()),
+				"The file %s is not served in the ignition config", kubeCloudCertFile)
+
+			logger.Infof("Check that the file has the right content in the nodes")
+			EventuallyFileExistsInNode(kubeCloudCertFile, kubeCloudCertContent, mcp.GetNodesOrFail()[0], "3m", "20s")
+
+		}
+		logger.Infof("OK!\n")
+
+	})
 })
 
-// EventuallyFileExistsInNode fails the test if the file does not exist in the node after the time specified as parameters
+// EventuallyFileExistsInNode fails the test if the certificate file does not exist in the node after the time specified as parameters
 func EventuallyImageRegistryCertificateExistsInNode(certFileName, certContent string, node Node, timeout, poll string) {
 	certPath := filepath.Join(ImageRegistryCertificatesDir, certFileName, ImageRegistryCertificatesFileName)
-	rfCert := NewRemoteFile(node, certPath)
-	logger.Infof("Checking certificate %s in node %s", certPath, node.GetName())
+	EventuallyFileExistsInNode(certPath, certContent, node, timeout, poll)
+}
 
+// EventuallyFileExistsInNode fails the test if the file does not exist in the node after the time specified as parameters
+func EventuallyFileExistsInNode(filePath, expectedContent string, node Node, timeout, poll string) {
+	logger.Infof("Checking file %s in node %s", filePath, node.GetName())
+	rfCert := NewRemoteFile(node, filePath)
 	o.Eventually(func(gm o.Gomega) { // Passing o.Gomega as parameter we can use assertions inside the Eventually function without breaking the retries.
 		gm.Expect(rfCert.Fetch()).To(o.Succeed(),
 			"Cannot read the certificate file %s in node:%s ", rfCert.fullPath, node.GetName())
 
-		gm.Expect(rfCert.GetTextContent()).To(exutil.Secure(o.Equal(certContent)),
+		gm.Expect(rfCert.GetTextContent()).To(exutil.Secure(o.Equal(expectedContent)),
 			"the certificate stored in file %s does not match the expected value", rfCert.fullPath)
 	}, timeout, poll).
 		Should(o.Succeed(),

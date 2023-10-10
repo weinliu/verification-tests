@@ -730,6 +730,53 @@ func (n *Node) IsInPool(mcp *MachineConfigPool) (bool, error) {
 	return false, nil
 }
 
+// RemoveIPTablesRulesByRegexp removes all the iptables rules printed by `iptables -S` that match the given regexp
+func (n *Node) RemoveIPTablesRulesByRegexp(regx string) ([]string, error) {
+	removedRules := []string{}
+
+	allRulesString, stderr, err := n.DebugNodeWithChrootStd("iptables", "-S")
+	if err != nil {
+		logger.Errorf("Error running `iptables -S`. Stderr: %s", stderr)
+		return nil, err
+	}
+
+	allRules := strings.Split(allRulesString, "\n")
+	for _, rule := range allRules {
+		if !regexp.MustCompile(regx).MatchString(rule) {
+			continue
+		}
+		logger.Infof("%s. Removing iptables rule: %s", n.GetName(), rule)
+		removeCommand := strings.Replace(rule, "-A", "-D", 1)
+		output, err := n.DebugNodeWithChroot(append([]string{"iptables"}, splitCommandString(removeCommand)...)...)
+		if err != nil {
+			logger.Errorf("Output: %s", output)
+			return removedRules, err
+		}
+		removedRules = append(removedRules, rule)
+	}
+	return removedRules, err
+}
+
+// ExecIPTables executes the iptables commands in the node. The "rules" param is a list of iptables commands to be executed. Each string is a full command.
+//
+//	  for example:
+//		[ "-A OPENSHIFT-BLOCK-OUTPUT -p tcp -m tcp --dport 22623 --tcp-flags FIN,SYN,RST,ACK SYN -j REJECT --reject-with icmp-port-unreachable",
+//	       "-A OPENSHIFT-BLOCK-OUTPUT -p tcp -m tcp --dport 22624 --tcp-flags FIN,SYN,RST,ACK SYN -j REJECT --reject-with icmp-port-unreachable" ]
+//
+// This function can be used to restore the rules removed by "RemoveIPTablesRulesByRegexp"
+func (n *Node) ExecIPTables(rules []string) error {
+	for _, rule := range rules {
+		logger.Infof("%s. Adding iptables rule: %s", n.GetName(), rule)
+		output, err := n.DebugNodeWithChroot(append([]string{"iptables"}, splitCommandString(rule)...)...)
+		if err != nil {
+			logger.Errorf("Output: %s", output)
+			return err
+		}
+
+	}
+	return nil
+}
+
 // GetAll returns a []Node list with all existing nodes
 func (nl *NodeList) GetAll() ([]Node, error) {
 	allNodeResources, err := nl.ResourceList.GetAll()
