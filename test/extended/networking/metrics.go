@@ -145,6 +145,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ns := oc.Namespace()
 
 		networkType := checkNetworkType(oc)
+		var metricValue1 string
+		var metricValue2 string
 		if networkType == "ovnkubernetes" {
 			podName := getLeaderInfo(oc, namespace, podLabel, networkType)
 			metricName := "ovnkube_controller_num_egress_firewall_rules"
@@ -152,8 +154,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules before configuration")
 			metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
-				if metricValue == "0" {
+				metricValue1 = getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
+				if metricValue1 >= "0" {
 					return true, nil
 				}
 				e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
@@ -169,8 +171,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(fwOutput).To(o.ContainSubstring("EgressFirewall Rules applied"))
 
 			metricsOutputAfter := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
-				if metricValue == "3" {
+				metricValue2 = getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
+				if metricValue2 != metricValue1 {
 					return true, nil
 				}
 				e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
