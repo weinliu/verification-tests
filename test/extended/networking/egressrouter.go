@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
 
@@ -35,7 +36,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	// author: huirwang@redhat.com
 	g.It("ConnectedOnly-Author:huirwang-High-42340-Egress router redirect mode with multiple destinations.", func() {
 		ipStackType := checkIPStackType(oc)
-		g.By("Skip testing on ipv6 single stack cluster")
+		exutil.By("Skip testing on ipv6 single stack cluster")
 		if ipStackType == "ipv6single" {
 			g.Skip("Skip for single stack cluster!!!")
 		}
@@ -45,8 +46,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			pingPodTemplate      = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 			egressRouterTemplate = filepath.Join(egressBaseDir, "egressrouter-multiple-destination-template.yaml")
 			egressRouterService  = filepath.Join(egressBaseDir, "serive-egressrouter.yaml")
+			url                  = "www.google.com"
 		)
-		g.By("1.Get gateway for one worker node \n")
+
+		exutil.By("1. nslookup obtain dns server ip for url \n")
+		ips, err := net.LookupIP(url)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ip address from nslookup for %v: %v", url, ips)
+		destinationIP := ips[0].String()
+
+		exutil.By("2. Get gateway for one worker node \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -58,25 +67,25 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(prefixIP).ShouldNot(o.BeEmpty())
 		reservedIP := fmt.Sprintf("%s/%s", freeIP[0], prefixIP)
 
-		g.By("2. Obtain the namespace \n")
+		exutil.By("3. Obtain the namespace \n")
 		ns1 := oc.Namespace()
 
-		g.By("3 Create egressrouter \n")
+		exutil.By("4. Create egressrouter \n")
 		egressrouter := egressrouterMultipleDst{
 			name:           "egressrouter-42430",
 			namespace:      ns1,
 			reservedip:     reservedIP,
 			gateway:        gateway,
-			destinationip1: "142.250.188.206",
-			destinationip2: "142.250.188.206",
-			destinationip3: "142.250.188.206",
+			destinationip1: destinationIP,
+			destinationip2: destinationIP,
+			destinationip3: destinationIP,
 			template:       egressRouterTemplate,
 		}
 		egressrouter.createEgressRouterMultipeDst(oc)
 		err = waitForPodWithLabelReady(oc, ns1, "app=egress-router-cni")
 		exutil.AssertWaitPollNoErr(err, "EgressRouter pod is not ready!")
 
-		g.By("4. Schedule the worker \n")
+		exutil.By("5. Schedule the worker \n")
 		// In rdu1 and rdu2 clusters, there are two sriov nodes with mlx nic, by default, egressrouter case cannot run on it
 		// So here exclude sriov nodes in rdu1 and rdu2 clusters, just use the other common worker nodes
 		workers := excludeSriovNodes(oc)
@@ -90,10 +99,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(output).To(o.ContainSubstring("successfully rolled out"))
 		}
 
-		g.By("5. Create serive for egress router pod! \n")
+		exutil.By("6. Create service for egress router pod! \n")
 		createResourceFromFile(oc, ns1, egressRouterService)
 
-		g.By("6. create hello pod in ns1 \n")
+		exutil.By("7. create hello pod in ns1 \n")
 		pod1 := pingPodResourceNode{
 			name:      "hello-pod1",
 			namespace: ns1,
@@ -102,10 +111,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod1.createPingPodNode(oc)
 		waitPodReady(oc, ns1, pod1.name)
 
-		g.By("7. Get service IP \n")
+		exutil.By("8. Get service IP \n")
 		svcIPv4, _ := getSvcIP(oc, ns1, "ovn-egressrouter-multidst-svc")
 
-		g.By("8. Check result,the svc for egessrouter can be accessed \n")
+		exutil.By("9. Check result,the svc for egessrouter can be accessed \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":5000 --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:5000 with error:%v", svcIPv4, err))
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":6000 --connect-timeout 5")
@@ -117,7 +126,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	// author: jechen@redhat.com
 	g.It("ConnectedOnly-PreChkUpgrade-Author:jechen-High-63155-Pre Egress router redirect mode with multiple destinations should still be functional after upgrade.", func() {
 		ipStackType := checkIPStackType(oc)
-		g.By("Skip testing on ipv6 single stack cluster")
+		exutil.By("Skip testing on ipv6 single stack cluster")
 		if ipStackType == "ipv6single" {
 			g.Skip("Skip for single stack cluster!!!")
 		}
@@ -129,7 +138,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			egressRouterService  = filepath.Join(egressBaseDir, "serive-egressrouter.yaml")
 			ns1                  = "63155-upgrade-ns"
 		)
-		g.By("1.Get gateway for one worker node \n")
+		exutil.By("1.Get gateway for one worker node \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -141,11 +150,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(prefixIP).ShouldNot(o.BeEmpty())
 		reservedIP := fmt.Sprintf("%s/%s", freeIP[0], prefixIP)
 
-		g.By("2. Obtain the namespace \n")
+		exutil.By("2. Obtain the namespace \n")
 		oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns1).Execute()
 		exutil.SetNamespacePrivileged(oc, ns1)
 
-		g.By("3 Create egressrouter \n")
+		exutil.By("3 Create egressrouter \n")
 		egressrouter := egressrouterMultipleDst{
 			name:           "egressrouter-63155",
 			namespace:      ns1,
@@ -160,7 +169,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		err = waitForPodWithLabelReady(oc, ns1, "app=egress-router-cni")
 		exutil.AssertWaitPollNoErr(err, "EgressRouter pod is not ready!")
 
-		g.By("4. Schedule the worker \n")
+		exutil.By("4. Schedule the worker \n")
 		// In rdu1 and rdu2 clusters, there are two sriov nodes with mlx nic, by default, egressrouter case cannot run on it
 		// So here exclude sriov nodes in rdu1 and rdu2 clusters, just use the other common worker nodes
 		workers := excludeSriovNodes(oc)
@@ -174,19 +183,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(output).To(o.ContainSubstring("successfully rolled out"))
 		}
 
-		g.By("5. Create serive for egress router pod! \n")
+		exutil.By("5. Create serive for egress router pod! \n")
 		createResourceFromFile(oc, ns1, egressRouterService)
 
-		g.By("6. create hello pod in ns1 \n")
+		exutil.By("6. create hello pod in ns1 \n")
 		createResourceFromFile(oc, ns1, statefulSetHelloPod)
 		podErr := waitForPodWithLabelReady(oc, ns1, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
 		helloPodname := getPodName(oc, ns1, "app=hello")
 
-		g.By("7. Get service IP \n")
+		exutil.By("7. Get service IP \n")
 		svcIPv4, _ := getSvcIP(oc, ns1, "ovn-egressrouter-multidst-svc")
 
-		g.By("8. Check result,the svc for egessrouter can be accessed \n")
+		exutil.By("8. Check result,the svc for egessrouter can be accessed \n")
 		_, err = e2eoutput.RunHostCmd(ns1, helloPodname[0], "curl -s "+svcIPv4+":5000 --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:5000 with error:%v", svcIPv4, err))
 		_, err = e2eoutput.RunHostCmd(ns1, helloPodname[0], "curl -s "+svcIPv4+":6000 --connect-timeout 5")
@@ -197,7 +206,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	g.It("ConnectedOnly-PstChkUpgrade-Author:jechen-High-63155-Pst Egress router redirect mode with multiple destinations should still be funcitonal after upgrade.", func() {
 		ipStackType := checkIPStackType(oc)
-		g.By("Skip testing on ipv6 single stack cluster")
+		exutil.By("Skip testing on ipv6 single stack cluster")
 		if ipStackType == "ipv6single" {
 			g.Skip("Skip for single stack cluster!!!")
 		}
@@ -213,23 +222,23 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("egressrouters", "egressrouter-63155", "-n", ns1, "--ignore-not-found=true").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("Service", "ovn-egressrouter-multidst-svc", "-n", ns1, "--ignore-not-found=true").Execute()
 
-		g.By("1. check egressrouter pod \n")
+		exutil.By("1. check egressrouter pod \n")
 		err := waitForPodWithLabelReady(oc, ns1, "app=egress-router-cni")
 		exutil.AssertWaitPollNoErr(err, "EgressRouter pod is not ready!")
 
-		g.By("2. check egressrouter deployment \n")
+		exutil.By("2. check egressrouter deployment \n")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("-n", ns1, "status", "deployment/egress-router-cni-deployment").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("successfully rolled out"))
 
-		g.By("3. Get the hello pod in ns1 \n")
+		exutil.By("3. Get the hello pod in ns1 \n")
 		helloPodname := getPodName(oc, ns1, "app=hello")
 		o.Expect(len(helloPodname)).Should(o.Equal(1))
 
-		g.By("4. Get egressrouter service IP \n")
+		exutil.By("4. Get egressrouter service IP \n")
 		svcIPv4, _ := getSvcIP(oc, ns1, "ovn-egressrouter-multidst-svc")
 
-		g.By("5. Check svc for egessrouter can be accessed \n")
+		exutil.By("5. Check svc for egessrouter can be accessed \n")
 		_, err = e2eoutput.RunHostCmd(ns1, helloPodname[0], "curl -s "+svcIPv4+":5000 --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:5000 with error:%v", svcIPv4, err))
 		_, err = e2eoutput.RunHostCmd(ns1, helloPodname[0], "curl -s "+svcIPv4+":6000 --connect-timeout 5")
@@ -266,7 +275,7 @@ var _ = g.Describe("[sig-networking] SDN egressrouter", func() {
 			egressRouterTemplate = filepath.Join(egressBaseDir, "egressrouter-redirect-sdn-template.yaml")
 		)
 
-		g.By("1.Get gateway for one worker node \n")
+		exutil.By("1.Get gateway for one worker node \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		node1 := nodeList.Items[0].Name
@@ -278,12 +287,12 @@ var _ = g.Describe("[sig-networking] SDN egressrouter", func() {
 		sub := getEgressCIDRsForNode(oc, node1)
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, node1, sub, 1)
 
-		g.By("2. Obtain the namespace \n")
+		exutil.By("2. Obtain the namespace \n")
 		ns1 := oc.Namespace()
 		defer exutil.RecoverNamespaceRestricted(oc, ns1)
 		exutil.SetNamespacePrivileged(oc, ns1)
 
-		g.By("3 Create egressrouter \n")
+		exutil.By("3 Create egressrouter \n")
 		egressrouter := egressrouterRedSDN{
 			name:          "egressrouter-63472",
 			namespace:     ns1,
