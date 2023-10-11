@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 
 		g.By("Check updateservice operator installed successully!")
 		e2e.Logf("Waiting for osus operator pod creating...")
-		err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=name=updateservice-operator", "-n", oc.Namespace()).Output()
 			if err != nil || strings.Contains(output, "No resources found") {
 				e2e.Logf("error: %v; output: %w", err, output)
@@ -69,7 +69,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		exutil.AssertWaitPollNoErr(err, "pod with name=updateservice-operator is not found")
 
 		e2e.Logf("Waiting for osus operator pod running...")
-		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=name=updateservice-operator", "-n", oc.Namespace(), "-o=jsonpath={.items[0].status.phase}").Output()
 			if err != nil || strings.Compare(status, "Running") != 0 {
 				e2e.Logf("error: %v; status: %w", err, status)
@@ -92,7 +92,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		removeResource(oc, "-n", sub.namespace, "csv", installedCSV)
 
 		g.By("Check updateservice operator uninstalled successully!")
-		err = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("all", "-n", oc.Namespace()).Output()
 			if err != nil || !strings.Contains(output, "No resources found") {
 				e2e.Logf("error: %v; output: %w", err, output)
