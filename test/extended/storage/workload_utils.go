@@ -1163,14 +1163,14 @@ func getCommandCombinations(oc *exutil.CLI, resourceType string, resourceName st
 
 // Function to check the resources exists or no
 func checkResourcesNotExist(oc *exutil.CLI, resourceType string, resourceName string, namespace string) {
-	command := getCommandCombinations(oc, resourceType, resourceName, namespace)
+	command := deleteElement(getCommandCombinations(oc, resourceType, resourceName, namespace), "--all")
 	err := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		output, _ := oc.WithoutNamespace().Run("get").Args(command...).Output()
 		if strings.Contains(output, "not found") && namespace != "" {
 			e2e.Logf("No %s resource exists in the namespace %s", resourceType, namespace)
 			return true, nil
 		}
-		if strings.Contains(output, "not found") && namespace == "" {
+		if (strings.Contains(output, "not found") || strings.Contains(output, "No resources found")) && namespace == "" {
 			e2e.Logf("No %s resource exists", resourceType)
 			return true, nil
 		}

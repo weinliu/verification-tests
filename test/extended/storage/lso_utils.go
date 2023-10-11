@@ -533,8 +533,8 @@ func (lvs *localVolumeSet) waitDeviceProvisioned(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		provisionedDeviceCount, errinfo := lvs.getTotalProvisionedDeviceCount(oc)
 		if errinfo != nil {
-			e2e.Logf("Get LVS provisionedDeviceCount failed :%v, wait for next round get.", errinfo)
-			return false, errinfo
+			e2e.Logf("Get LVS provisionedDeviceCount failed :%v, wait for trying next round get.", errinfo)
+			return false, nil
 		}
 		if provisionedDeviceCount > 0 {
 			e2e.Logf("The localVolumeSet \"%s\" have already provisioned Device [provisionedDeviceCount: %d]", lvs.name, provisionedDeviceCount)
@@ -666,6 +666,9 @@ func (lvd *localVolumeDiscovery) waitDiscoveryAvailable(oc *exutil.CLI) {
 		e2e.Logf("Localvolumediscovery status is still \"%s\" try the next round", lvdAvailableStatus)
 		return false, nil
 	})
+	if err != nil {
+		getOcDescribeInfo(oc, lvd.namespace, "localVolumeDiscovery", "auto-discover-devices")
+	}
 	exutil.AssertWaitPollNoErr(err, "Wait Localvolumediscovery become Available timeout")
 }
 
