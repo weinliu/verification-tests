@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		getCredentialFromCluster(oc)
 		var filestoreJSONMap map[string]interface{}
-		filestoreJSONMap = getFilestoreInstanceFromGCP(oc, pvName, "region", region)
+		filestoreJSONMap = getFilestoreInstanceFromGCP(oc, pvName, "--region="+region)
 
 		o.Expect(fmt.Sprint(filestoreJSONMap["kmsKeyName"])).Should(o.ContainSubstring("projects/openshift-qe/locations/us-central1/keyRings/chaoyang/cryptoKeys/chaoyang"))
 
