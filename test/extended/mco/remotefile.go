@@ -2,10 +2,14 @@ package mco
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 const (
@@ -13,15 +17,12 @@ const (
 	statParser = `Name: (?P<name>.+)\n` +
 		`Size: (?P<size>\d+)\n` +
 		`Kind: (?P<kind>.*)\n` +
-		`Permissions: (?P<nperm>\d+)/(?P<rwxperm>\S+)\n` +
-		`UID: (?P<uidnumber>\d+)/(?P<uidname>\S+)\n` +
-		`GID: (?P<gidnumber>\d+)/(?P<gidname>\S+)\n` +
+		`Permissions: (?P<nperm>\d+)\/(?P<rwxperm>\S+)\n` +
+		`UID: (?P<uidnumber>\d+)\/(?P<uidname>\S+)\n` +
+		`GID: (?P<gidnumber>\d+)\/(?P<gidname>\S+)\n` +
 		`Links: (?P<links>\d+)\n` +
 		`SymLink: (?P<symlink>.*)\n` +
-		`Selinux: (?P<selinux>.*)\n` +
-		`.*\n`
-	startCat = "{{[[!\n"
-	endCat   = "\n!]]}}"
+		`Selinux: (?P<selinux>.*)` // When parsing an "oc debug" command output, remember that the "utils" function will always trim the latest spaces and newlines
 )
 
 // RemoteFile handles files located remotely in a node
@@ -29,7 +30,7 @@ type RemoteFile struct {
 	node     Node
 	fullPath string
 	statData map[string]string
-	content  string
+	content  []byte
 }
 
 // NewRemoteFile creates a new instance of RemoteFile
@@ -39,12 +40,13 @@ func NewRemoteFile(node Node, fullPath string) *RemoteFile {
 
 // Fetch gets the file information from the node
 func (rf *RemoteFile) Fetch() error {
-	output, err := rf.node.DebugNodeWithChroot("stat", statFormat, rf.fullPath)
+	stdout, stderr, err := rf.node.DebugNodeWithChrootStd("stat", statFormat, rf.fullPath)
 	if err != nil {
+		logger.Errorf("Could not fetch the remote file %s. Stderr: %s", rf.fullPath, stderr)
 		return err
 	}
 
-	err = rf.digest(output)
+	err = rf.digest(stdout)
 	if err != nil {
 		return err
 	}
@@ -57,15 +59,22 @@ func (rf *RemoteFile) Fetch() error {
 }
 
 func (rf *RemoteFile) fetchTextContent() error {
-	output, err := rf.node.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("echo -n '%s'; cat %s; echo '%s'", startCat, rf.fullPath, endCat))
+
+	tmpFile := filepath.Join(e2e.TestContext.OutputDir, fmt.Sprintf("fetch-%s", exutil.GetRandomString()))
+
+	err := rf.node.CopyToLocal(rf.fullPath, tmpFile)
 	if err != nil {
+		logger.Errorf("Could not fetch the content of the remote file %s. Error: %s", rf.fullPath, err)
 		return err
 	}
-	// Split by first occurrence of startCat and last occurrence of endCat
-	tmpcontent := strings.SplitN(output, startCat, 2)[1]
-	// take into account that "cat" introduces a newline at the end
-	lastIndex := strings.LastIndex(tmpcontent, endCat)
-	rf.content = fmt.Sprintf(tmpcontent[:lastIndex])
+
+	content, err := os.ReadFile(tmpFile)
+	if err != nil {
+		logger.Errorf("Could not read the fetched content from tmp file  %s. Error: %s", tmpFile, err)
+		return err
+	}
+
+	rf.content = content
 
 	logger.Debugf("remote file %s content is:\n%s", rf.fullPath, rf.content)
 
@@ -84,16 +93,29 @@ func (rf *RemoteFile) PushNewPermissions(newperm string) error {
 }
 
 // PushNewTextContent modifies the remote file's content
-// WARNING: this way of pushing a file's content inside a node has problems dealing with single quotation <'>
-//
-//	if we are going to push content that may use quotation intensively, we should use node.CopyFromLocal.
-//
-// TODO: in the near future we probably should refactor this method to create the file content locally and to copy/rsync it to the node
 func (rf *RemoteFile) PushNewTextContent(newTextContent string) error {
-	logger.Infof("Push content `%s` to file %s in node %s", newTextContent, rf.fullPath, rf.node.GetName())
-	_, err := rf.node.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("echo -n '%s' > '%s'", newTextContent, rf.fullPath))
+	return rf.PushNewContent([]byte(newTextContent))
+}
+
+// PushNewContent modifies the remote file's content
+func (rf *RemoteFile) PushNewContent(newContent []byte) error {
+	exists, err := rf.Exists()
 	if err != nil {
-		logger.Errorf("Error: %s", err)
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("Node %s. file %s. Refuse to modify the content of a file that does not exist", rf.node.GetName(), rf.fullPath)
+	}
+
+	tmpFile := filepath.Join(e2e.TestContext.OutputDir, fmt.Sprintf("fetch-%s", exutil.GetRandomString()))
+
+	if err := os.WriteFile(tmpFile, newContent, 0o600); err != nil {
+		logger.Errorf("Could not read the fetched content from tmp file  %s. Error: %s", tmpFile, err)
+		return err
+	}
+
+	if err := rf.node.CopyFromLocal(tmpFile, rf.fullPath); err != nil {
+		logger.Errorf("Could not push the new content of the remote file %s. Error: %s", rf.fullPath, err)
 		return err
 	}
 	return nil
@@ -101,7 +123,7 @@ func (rf *RemoteFile) PushNewTextContent(newTextContent string) error {
 
 // GetTextContent return the content of the text file. If the file contains binary data this method cannot be used to retrieve the file's content
 func (rf *RemoteFile) GetTextContent() string {
-	return rf.content
+	return string(rf.content)
 }
 
 // Diggest the output of the 'stat' command using the 'statFormat' format. And stores the parsed information inside the 'statData' map
@@ -110,6 +132,7 @@ func (rf *RemoteFile) digest(statOutput string) error {
 
 	logger.Debugf("stat output: %v", statOutput)
 	rf.statData = make(map[string]string)
+	logger.Debugf("parsing with string: %s", statParser)
 	re := regexp.MustCompile(statParser)
 	match := re.FindStringSubmatch(statOutput)
 	logger.Debugf("matched stat info: %v", match)
@@ -124,6 +147,7 @@ func (rf *RemoteFile) digest(statOutput string) error {
 		}
 		if i != 0 && name != "" {
 			rf.statData[name] = match[i]
+			logger.Debugf("Parsing %s = %s", name, rf.statData[name])
 		}
 	}
 
@@ -175,7 +199,7 @@ func (rf *RemoteFile) GetSize() string {
 	return rf.statData["size"]
 }
 
-// GetRWXPermissions returns the file permissions in rwx format
+// GetRWXPermissions returns the file permissions in ugo rwx format
 func (rf *RemoteFile) GetRWXPermissions() string {
 	return rf.statData["rwxperm"]
 }
@@ -197,7 +221,7 @@ func (rf *RemoteFile) IsDirectory() bool {
 
 // GetTextContentAsList returns the content of the text file as a list of strings, one string per line
 func (rf RemoteFile) GetTextContentAsList() []string {
-	return strings.Split(rf.content, "\n")
+	return strings.Split(rf.GetTextContent(), "\n")
 }
 
 // GetFilteredTextContent returns the filetered remote file's text content as a list of strings, one string per line matching the regexp.

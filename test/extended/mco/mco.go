@@ -3858,7 +3858,7 @@ func verifyRenderedMcs(oc *exutil.CLI, renderSuffix string, allRes []ResourceInt
 
 func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, forceFile bool) {
 	workerNode := rf.node
-	origContent := rf.content
+	origContent := rf.GetTextContent()
 	origMode := rf.GetNpermissions()
 
 	exutil.By("Modify file content and check degraded status")
