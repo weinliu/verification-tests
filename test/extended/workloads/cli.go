@@ -1394,7 +1394,7 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-67013-oc image mirror with multi-arch images and --filter-by-os", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-67013-oc image mirror with multi-arch images and --filter-by-os", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 		registry := registry{
