@@ -134,7 +134,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-High-62063-High-63325-Low-63486-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
+	// This case contains three Polarion cases: 62063, 63325, and 63486. The root case is 62063.
+	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-High-62063-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
 		if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
 			g.Skip("Skipping Private clusters that are behind some proxy and can't be directly reachable from externally.")
 		}
@@ -145,6 +146,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		if !strings.Contains(output, "httpsProxy") || err != nil || output0 == "" || err0 != nil {
 			e2e.Logf("Fail to check httpsProxy, ocp-63325 skipped.")
 		} else {
+			// High-63325-Configure cert-manager to work in https proxy OpenShift env with trusted certificate authority
 			defer func() {
 				e2e.Logf("Delete configmap trusted-ca.")
 				err = oc.AsAdmin().Run("delete").Args("-n", "cert-manager", "cm", "trusted-ca").Execute()
@@ -244,6 +246,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		if !strings.Contains(string(ssloutput), dns_name) {
 			e2e.Failf("Failure: The certificate is indeed issued by Let's Encrypt, the Subject Alternative Name is indeed the specified DNS_NAME failed.")
 		}
+
+		// Low-63486-When a Certificate CR is deleted its certificate secret should not be deleted
 		e2e.Logf("Delete certification for ocp-63486.\n")
 		err = oc.Run("delete").Args("certificate", "cert-test-http01").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
