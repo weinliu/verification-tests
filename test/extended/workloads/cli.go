@@ -1510,7 +1510,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		oc = exutil.NewCLIWithoutNamespace("default")
 	)
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-66724-oc explain should be work for all the clusterresource", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-66724-oc explain should be work for all the clusterresource [Serial]", func() {
 		clusterResourceFile, err := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("--no-headers").OutputToFile("apiresourceout.txt")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterResourceList, err := getClusterResourceName(clusterResourceFile)
