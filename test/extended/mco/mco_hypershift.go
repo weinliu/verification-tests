@@ -114,6 +114,8 @@ var _ = g.Describe("[sig-mco] MCO hypershift", func() {
 	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-54366-hypershift Update release image of node pool [Disruptive]", func() {
 		// check arch, only support amd64
 		architecture.SkipNonAmd64SingleArch(oc)
+		// check latest accepted build, if it is same as hostedcluster version, skip this case
+		ht.skipTestIfLatestAcceptedBuildIsSameAsHostedClusterVersion()
 
 		// create a nodepool with 2 replicas and enable in place upgrade
 		defer ht.DestroyNodePoolOnAws()
@@ -619,5 +621,24 @@ func (ht *HypershiftTest) VerifyFileContent() {
 	rf := NewRemoteFile(clonedNode, filePath)
 	o.Expect(rf.Fetch()).NotTo(o.HaveOccurred(), "fetch remote file failed")
 	o.Expect(rf.GetTextContent()).Should(o.ContainSubstring("hello world"), "file content does not match machine config setting")
+
+}
+
+// skipTestIfLatestAcceptedBuildIsSameAsHostedClusterVersion, skip the test if latest accepted nightly build is same as hostedcluster version
+func (ht *HypershiftTest) skipTestIfLatestAcceptedBuildIsSameAsHostedClusterVersion() {
+
+	// OCPQE-17034, if latest accepted build is same as hosted cluster version. i.e. it is nodepool version as well
+	// release image update will not happen, skip this case.
+
+	// Get hosted cluster version
+	hostedclusterName := ht.StrValue(TestCtxKeyCluster)
+	hostedcluster := NewHypershiftHostedCluster(ht.oc.AsAdmin(), ht.clusterNS, hostedclusterName)
+	hostedclusterVersion := hostedcluster.GetVersion()
+	// Get latest accepted build
+	_, latestAcceptedBuild := getLatestImageURL(ht.oc, strings.Join(strings.Split(hostedclusterVersion, ".")[:2], "."))
+
+	if hostedclusterVersion == latestAcceptedBuild {
+		g.Skip(fmt.Sprintf("latest accepted build [%s] is same as hosted cluster version [%s], cannot update release image, skip this case", latestAcceptedBuild, hostedclusterVersion))
+	}
 
 }

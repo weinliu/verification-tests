@@ -49,8 +49,8 @@ const (
 
 	// HypershiftCrNodePool keyword: nodepool
 	HypershiftCrNodePool = "nodepool"
-	// HypershiftHostedCluster keyword: hostedcluster
-	HypershiftHostedCluster = "hostedcluster"
+	// HypershiftCrHostedCluster keyword: hostedcluster
+	HypershiftCrHostedCluster = "hostedcluster"
 	// HypershiftNsClusters namespace: clusters
 	HypershiftNsClusters = "clusters"
 	// HypershiftNs operator namespace: hypershift

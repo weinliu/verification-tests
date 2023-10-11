@@ -330,6 +330,23 @@ func execCmd(name string, args []string) (string, error) {
 	return stdout, err
 }
 
+// HypershiftHostedCluster hostedcluster struct, extends resource
+type HypershiftHostedCluster struct {
+	Resource
+}
+
+// NewHypershiftHostedCluster constructor of hostedcluster struct
+func NewHypershiftHostedCluster(oc *exutil.CLI, clusterNs, name string) *HypershiftHostedCluster {
+	return &HypershiftHostedCluster{
+		Resource: *NewNamespacedResource(oc, HypershiftCrHostedCluster, clusterNs, name),
+	}
+}
+
+// GetVersion will return hosted cluster version
+func (hc *HypershiftHostedCluster) GetVersion() string {
+	return hc.GetOrFail(`{.status.version.desired.version}`)
+}
+
 // HypershiftNodePool node pool struct, extends resource
 type HypershiftNodePool struct {
 	Resource
