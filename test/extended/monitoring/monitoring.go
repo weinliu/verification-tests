@@ -1630,7 +1630,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
 		g.By("skip the case if console CO is absent")
-		checkCO, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/console").Output()
+		checkCO, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(checkCO, "console") {
 			g.Skip("This case is not executable when console CO is absent")
