@@ -1964,7 +1964,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Expose a route with the unsecure service inside the project")
 		baseDomain := getBaseDomain(oc)
-		routeHost := "service-unsecure" + "." + "apps." + baseDomain
+		routeHost := "service-unsecure66560" + "." + "apps." + baseDomain
 		lowHost := strings.ToLower(routeHost)
 		base64Host := base64.StdEncoding.EncodeToString([]byte(routeHost))
 		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routeHost).Execute()
@@ -2146,7 +2146,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("create a reen route")
 		routerpod = getRouterPod(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
-		reenRouteHost := "r2-reen." + ingctrl.domain
+		reenRouteHost := "r2-reen66662." + ingctrl.domain
 		lowHostReen := strings.ToLower(reenRouteHost)
 		base64HostReen := base64.StdEncoding.EncodeToString([]byte(reenRouteHost))
 		reenRouteDst := reenRouteHost + ":443:" + podIP
@@ -2328,7 +2328,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("create an edge route")
 		routerpod = getRouterPod(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
-		edgeRouteHost := "r3-edge." + ingctrl.domain
+		edgeRouteHost := "r3-edge62528." + ingctrl.domain
 		lowHostEdge := strings.ToLower(edgeRouteHost)
 		base64HostEdge := base64.StdEncoding.EncodeToString([]byte(edgeRouteHost))
 		edgeRouteDst := edgeRouteHost + ":443:" + podIP
@@ -2460,7 +2460,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("Expose a route with the unsecure service inside the project")
-		routeHost := "service-unsecure" + "." + ingctrl.domain
+		routeHost := "service-unsecure66572" + "." + ingctrl.domain
 		lowHost := strings.ToLower(routeHost)
 		base64Host := base64.StdEncoding.EncodeToString([]byte(routeHost))
 		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routeHost).Execute()
@@ -2645,7 +2645,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("create an edge route")
-		edgeRouteHost := "r3-edge." + ingctrl.domain
+		edgeRouteHost := "r3-edge67009." + ingctrl.domain
 		lowHostEdge := strings.ToLower(edgeRouteHost)
 		base64HostEdge := base64.StdEncoding.EncodeToString([]byte(edgeRouteHost))
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "route", "edge", "r3-edge", "--service="+unsecsvcName, "--cert="+customCert, "--key="+customKey, "--ca-cert="+name+"-ca.pem", "--hostname="+edgeRouteHost).Execute()
@@ -2831,7 +2831,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, project1, secsvc)
 
 		exutil.By("create a reen route")
-		reenRouteHost := "r2-reen." + ingctrl.domain
+		reenRouteHost := "r2-reen67010." + ingctrl.domain
 		lowHostReen := strings.ToLower(reenRouteHost)
 		base64HostReen := base64.StdEncoding.EncodeToString([]byte(reenRouteHost))
 		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, "-c", "httpbin-https", project1+"/httpbin-pod:"+srvCert, srvCertBackup).Execute()
@@ -2974,7 +2974,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("Expose a route with the unsecure service inside the project")
-		routehost := "service-unsecure" + "." + "apps." + baseDomain
+		routehost := "service-unsecure66566" + "." + "apps." + baseDomain
 		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routehost).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		routeOutput := getRoutes(oc, project1)
