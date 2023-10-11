@@ -135,7 +135,12 @@ func createStack(oc *exutil.CLI, msD monitoringStackDescription, secD monitoring
 	}
 	if stack == "monitor_example_app" {
 		g.By("Install Monitoring Stack")
-		msTemplate := filepath.Join(oboBaseDir, "example-app-monitoring-stack.yaml")
+		var msTemplate string
+		if exutil.IsSNOCluster(oc) {
+			msTemplate = filepath.Join(oboBaseDir, "example-app-monitoring-stack-sno.yaml")
+		} else {
+			msTemplate = filepath.Join(oboBaseDir, "example-app-monitoring-stack.yaml")
+		}
 		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", msTemplate).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
@@ -176,8 +181,14 @@ func checkMonitoringStackPods(oc *exutil.CLI, stack string) {
 	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "prometheus="+name, "-o=jsonpath={.items[*].status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(out, "Running Running") == 0 {
-			return true, nil
+		if exutil.IsSNOCluster(oc) {
+			if strings.Compare(out, "Running") == 0 {
+				return true, nil
+			}
+		} else {
+			if strings.Compare(out, "Running Running") == 0 {
+				return true, nil
+			}
 		}
 		return false, err
 	})
@@ -448,7 +459,7 @@ func checkExampleAppTarget(oc *exutil.CLI) {
 	g.By("Get SA token")
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	g.By("Check whether the scrape targets are present")
-	checkMetric(oc, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=prometheus_sd_discovered_targets{config=~".*%s.*"}' `, "example-app-monitoring-stack-prometheus", namespace, "prometheus-example-monitor"), token, "prometheus-example-monitor", platformLoadTime)
+	checkMetric(oc, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=prometheus_sd_discovered_targets{config=~".*%s.*"}' `, "example-app-monitoring-stack-prometheus", namespace, "prometheus-example-monitor"), token, "prometheus-example-monitor", uwmLoadTime)
 }
 func checkIfMetricValueExists(oc *exutil.CLI, token, url string, timeout time.Duration) {
 	var (
