@@ -82,7 +82,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
 		var (
 			newMsName  = "copied-machineset-modified-tc-52822"
 			kcName     = "change-maxpods-kubelet-config"
@@ -230,7 +230,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-High-65923-SSH key in scaled clusters [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-65923-SSH key in scaled clusters [Disruptive]", func() {
 
 		// It is a safe assumpion that all the tested clusters will have a sshkey deployed in it.
 		// If at any moment this assumption is not safe anymore, we need to check for the sshkey to exist

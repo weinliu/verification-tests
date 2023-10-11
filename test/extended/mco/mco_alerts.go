@@ -119,7 +119,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		// We use master MCP because like that we make sure that we are using a CoreOs node
 		exutil.By("Break the reboot process in a node")
 		// We sort the coreOs list to make sure that we break the first updated not to make the test faster
-		node := coMcp.GetSortedNodesOrFail()[0]
+		node := sortNodeList(coMcp.GetCoreOsNodesOrFail())[0]
 		defer func() {
 			_ = FixRebaseInNode(&node)
 			coMcp.WaitForUpdatedStatus()
@@ -359,7 +359,7 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 	if params.pendingDuration != 0 {
 		exutil.By("Verify that the alert is pending")
 		o.Expect(alertMap).To(o.HaveKeyWithValue("state", "pending"),
-			"Expected the alert to report the MCO namespace")
+			"Expected the alert's state to be 'pending', but it is not.")
 		logger.Infof("OK!\n")
 	}
 

@@ -242,16 +242,22 @@ func (n Node) GetBootedOsTreeDeployment(asJSON bool) (string, error) {
 
 }
 
-// PollIsCordoned returns a function that can be used by Gomega to poll the if the node is cordoned (with Eventually/Consistently)
-func (n *Node) PollIsCordoned() func() bool {
-	return func() bool {
-		key, err := n.Get(`{.spec.taints[?(@.key=="node.kubernetes.io/unschedulable")].key}`)
-		if err != nil {
-			return false
-		}
-
-		return key != ""
+// IsCordoned returns true if the node is cordoned
+func (n *Node) IsCordoned() (bool, error) {
+	key, err := n.Get(`{.spec.taints[?(@.key=="node.kubernetes.io/unschedulable")].key}`)
+	if err != nil {
+		return false, err
 	}
+
+	return key != "", nil
+}
+
+// IsCordonedOrFail returns true if the node is cordoned. It fails the test is there is any error
+func (n *Node) IsCordonedOrFail() bool {
+	isCordoned, err := n.IsCordoned()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the tains in node %s", n.GetName())
+
+	return isCordoned
 }
 
 // RestoreDesiredConfig changes the value of the desiredConfig annotation to equal the value of currentConfig. desiredConfig=currentConfig.
@@ -313,6 +319,24 @@ func (n *Node) IsUpdated() bool {
 func (n *Node) IsTainted() bool {
 	taint, err := n.Get("{.spec.taints}")
 	return err == nil && taint != ""
+}
+
+// Returns true if the node is schedulable
+func (n *Node) IsSchedulable() (bool, error) {
+	unschedulable, err := n.Get(`{.spec.unschedulable}`)
+	if err != nil {
+		return false, err
+	}
+
+	return unschedulable != "true", nil
+}
+
+// Returns true if the node is schedulable and fails the test if there is an error
+func (n *Node) IsSchedulableOrFail() bool {
+	schedulable, err := n.IsSchedulable()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error while getting the taints in node %s", n.GetName())
+
+	return schedulable
 }
 
 // IsUpdating returns if the node is currently updating the machine configuration
@@ -952,4 +976,16 @@ func FixRebaseInNode(node *Node) error {
 	logger.Infof("Fixing rpm-ostree rebase process in node %s", node.GetName())
 	_, err := node.DebugNodeWithChroot("sh", "-c", "mount -o remount,rw /usr; mv /usr/bin/rpm-ostree2 /usr/bin/rpm-ostree")
 	return err
+}
+
+// FilterSchedulableNodes removes from a list of nodes the nodes that are not schedulable
+func FilterSchedulableNodesOrFail(nodes []Node) []Node {
+	returnNodes := []Node{}
+	for _, item := range nodes {
+		node := item
+		if node.IsSchedulableOrFail() {
+			returnNodes = append(returnNodes, node)
+		}
+	}
+	return returnNodes
 }

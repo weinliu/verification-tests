@@ -484,12 +484,13 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.ContainSubstring("/etc/containers/registries.conf: changes made are safe to skip drain"),
 				o.ContainSubstring("Changes do not require drain, skipping")))
 
-		exutil.By("Check that worker nodes are not tained after applying the MC")
+		exutil.By("Check that worker nodes are not cordoned after applying the MC")
 		workerMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		workerNodes, err := workerMcp.GetNodes()
 		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error getting nodes linked to the worker pool")
 		for _, node := range workerNodes {
-			o.Expect(node.IsTainted()).To(o.BeFalse(), "% is tainted. There should be no tainted worker node after applying the configuration.",
+			// We look for the cordon taint. We can't look for "any taint", because in "edge" clusters the "edge" nodes are tained and unschedulable.
+			o.Expect(node.IsCordoned()).To(o.BeFalse(), "% is tainted and cordoned. There should be no cordoned worker node after applying the configuration.",
 				node.GetName())
 		}
 
@@ -840,7 +841,11 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		pdb.create(oc)
 
 		exutil.By("Create new pod for pod disruption budget")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+		// Not all nodes are valid. We need to deploy the "dont-evict-pod" and we can only do that in schedulable nodes
+		// In "edge" clusters, the "edge" nodes are not schedulable, so we need to be careful and not to use them to deploy our pod
+		schedulableNodes := FilterSchedulableNodesOrFail(NewNodeList(oc).GetAllLinuxWorkerNodesOrFail())
+		o.Expect(schedulableNodes).NotTo(o.BeEmpty(), "There are no schedulable worker nodes!!")
+		workerNode := schedulableNodes[0]
 		hostname, err := workerNode.GetNodeHostname()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podName := "dont-evict-43245"
@@ -1650,7 +1655,7 @@ nulla pariatur.`
 		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 
-		o.Eventually(workerNode.PollIsCordoned(), fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "20s").Should(o.BeTrue(), "Worker node must be cordoned")
+		o.Eventually(workerNode.IsCordoned, fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "20s").Should(o.BeTrue(), "Worker node must be cordoned")
 
 		searchRegexp := fmt.Sprintf("(?s)%s: initiating cordon.*node %s: Evicted pod", workerNode.GetName(), workerNode.GetName())
 		o.Eventually(func() string {
@@ -2286,7 +2291,7 @@ nulla pariatur.`
 
 			// Expr: "kargs .*--append|kargs .*--delete"
 			// We need to scape the "--" characters
-			expectedNotLogExtesionRegex = "kargs .*" + regexp.QuoteMeta("--") + "append|kargs .*" + regexp.QuoteMeta("--") + "delete"
+			expectedNotLogExtensionRegex = "kargs .*" + regexp.QuoteMeta("--") + "append|kargs .*" + regexp.QuoteMeta("--") + "delete"
 
 			mcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		)
@@ -2364,7 +2369,7 @@ nulla pariatur.`
 
 		exutil.By("Check that the MCD logs do not make any reference to add or delete kargs")
 		o.Expect(workerNode.CaptureMCDaemonLogsUntilRestartWithTimeout(timeToWait.String())).NotTo(
-			o.MatchRegexp(expectedNotLogExtesionRegex),
+			o.MatchRegexp(expectedNotLogExtensionRegex),
 			"MCD logs should not make any reference to kernel arguments addition/deletion when no new kernel arg is added/deleted")
 
 		logger.Infof("OK!\n")
@@ -2442,9 +2447,11 @@ nulla pariatur.`
 			expectedAlertName = "MCCDrainError"
 		)
 		// Get the first node that will be updated
-		sortedWorkerNodes, sErr := mcp.GetSortedNodes()
-		o.Expect(sErr).NotTo(o.HaveOccurred(), "Error getting the nodes that belong to %s pool", mcp.GetName())
-		workerNode := sortedWorkerNodes[0]
+		// Not all nodes are valid. We need to deploy the "dont-evict-pod" and we can only do that in schedulable nodes
+		// In "edge" clusters, the "edge" nodes are not schedulable, so we need to be careful and not to use them to deploy our pod
+		schedulableNodes := FilterSchedulableNodesOrFail(mcp.GetSortedNodesOrFail())
+		o.Expect(schedulableNodes).NotTo(o.BeEmpty(), "There are no schedulable worker nodes!!")
+		workerNode := schedulableNodes[0]
 
 		exutil.By("Start machine-config-controller logs capture")
 		ignoreMccLogErr := mcc.IgnoreLogsBeforeNow()

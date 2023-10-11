@@ -552,21 +552,21 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Check rpm is installed in worker node
-		exutil.By("Check that the rpm is installed in worker node")
+		exutil.By(fmt.Sprintf("Check that the %s rpm is installed in worker node", rpmName))
 		o.Expect(workerNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
 		logger.Infof("OK\n")
 
 		// Check rpm is installed in master node
-		exutil.By("Check that the rpm is installed in worker node")
+		exutil.By(fmt.Sprintf("Check that the %s rpm is installed in master node", rpmName))
 		o.Expect(masterNode.RpmIsInstalled(rpmName)).
 			To(o.BeTrue(),
 				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, workerNode.GetName())
 		logger.Infof("OK\n")
 
 		// Create MC to apply usbguard extension to worker nodes
-		exutil.By("Create a MC to deploy the new osImage in 'worker' pool")
+		exutil.By("Create a MC to deploy the usbgard extension in 'worker' pool")
 		wUsbguardMcName := "tc-54909-extension-usbguard-worker"
 		wUsbguardMC := NewMachineConfig(oc.AsAdmin(), wUsbguardMcName, MachineConfigPoolWorker).SetMCOTemplate("change-worker-extension-usbguard.yaml")
 		wUsbguardMC.skipWaitForMcp = true
@@ -575,7 +575,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		wUsbguardMC.create()
 
 		// Create MC to apply usbguard extension to master nodes
-		exutil.By("Create a MC to deploy the new osImage in 'master' pool")
+		exutil.By("Create a MC to deploy the usbguard extension in 'master' pool")
 		mUsbguardMcName := "tc-54909-extension-usbguard-master"
 		mUsbguardMC := NewMachineConfig(oc.AsAdmin(), mUsbguardMcName, MachineConfigPoolMaster).SetMCOTemplate("change-worker-extension-usbguard.yaml")
 		mUsbguardMC.skipWaitForMcp = true

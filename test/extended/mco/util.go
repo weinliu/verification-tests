@@ -531,7 +531,7 @@ func preChecks(oc *exutil.CLI) {
 	for _, node := range nodes {
 		o.EventuallyWithOffset(1, node.IsReady, "2m", "20s").Should(o.BeTrue(), "Node %s is not Ready. We can't continue testing.", node.GetName())
 	}
-	logger.Infof("End Of MCO Preconditions")
+	logger.Infof("End of MCO Preconditions\n")
 }
 
 // helper func to generate a temp file path with target dir
