@@ -3170,4 +3170,144 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Too long: may not be longer than 16384"))
 	})
+
+	// author: shudili@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-Medium-66568-negative test of adding/deleting http headers", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
+			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
+			unsecsvcName        = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp66568",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontroller/" + ingctrl.name
+		)
+
+		exutil.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		createResourceFromFile(oc, project1, clientPod)
+		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, testPod)
+		err = waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, unsecsvc)
+
+		exutil.By("Expose a route with the unsecure service inside the project")
+		routehost := "service-unsecure66568" + "." + ingctrl.name + baseDomain
+		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routehost).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		routeOutput := getRoutes(oc, project1)
+		o.Expect(routeOutput).To(o.ContainSubstring(unsecsvcName))
+
+		exutil.By("try to patch two same headers to a route")
+		sameHeaders := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"testheader1\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value1\"}}}, {\"name\": \"testheader1\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value1\"}}}]}}}}"
+		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", sameHeaders, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Duplicate value: \"testheader1\""))
+
+		exutil.By("try to patch proxy header to a route")
+		proxyHeader := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"proxy\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"http://100.200.1.1:80\"}}}]}}}}"
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", proxyHeader, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Forbidden: the following headers may not be modified using this API: strict-transport-security, proxy, cookie, set-cookie"))
+
+		exutil.By("try to patch host header to a route")
+		hostHeader := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"host\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"www.neqe-test.com\"}}}]}}}}"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", hostHeader, "--type=merge", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		jpath := ".spec.httpHeaders.actions.request[?(@.name==\"host\")].action.set.value"
+		host := fetchJSONPathValue(oc, project1, "route/"+unsecsvcName, jpath)
+		o.Expect(host).To(o.ContainSubstring("www.neqe-test.com"))
+
+		exutil.By("try to patch strict-transport-security header to a route")
+		hstsHeader := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"strict-transport-security\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"max-age=31536000;includeSubDomains;preload\"}}}]}}}}"
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", hstsHeader, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Forbidden: the following headers may not be modified using this API: strict-transport-security, proxy, cookie, set-cookie"))
+
+		exutil.By("try to patch cookie header to a route")
+		cookieHeader := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"cookie\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"cookie-test\"}}}]}}}}"
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", cookieHeader, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Forbidden: the following headers may not be modified using this API: strict-transport-security, proxy, cookie, set-cookie"))
+
+		exutil.By("try to patch set-cookie header to a route")
+		setCookieHeader := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"set-cookie\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"set-cookie-test\"}}}]}}}}"
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", setCookieHeader, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Forbidden: the following headers may not be modified using this API: strict-transport-security, proxy, cookie, set-cookie"))
+
+		exutil.By("try to patch two same headers to an ingress-controller")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", sameHeaders, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Duplicate value: map[string]interface {}{\"name\":\"testheader1\"}"))
+
+		exutil.By("try to patch proxy header to an ingress-controller")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", proxyHeader, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("proxy header may not be modified via header actions"))
+
+		exutil.By("try to patch host header to an ingress-controller")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", hostHeader, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("host header may not be modified via header actions"))
+
+		exutil.By("try to patch strict-transport-security header to an ingress-controller")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", hstsHeader, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("strict-transport-security header may not be modified via header actions"))
+
+		exutil.By("try to patch cookie header to an ingress-controller")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", cookieHeader, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("cookie header may not be modified via header actions"))
+
+		exutil.By("try to patch set-cookie header to an ingress-controller")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", setCookieHeader, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("set-cookie header may not be modified via header actions"))
+
+		exutil.By("patch a request and a response headers to a route, while patch the same headers with the same header names but with different header values to an ingress-controller")
+		routeHeaders := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"reqtestheader\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"req111\"}}}], \"response\": [{\"name\": \"restestheader\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"resaaa\"}}}]}}}}"
+		icHeaders := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"reqtestheader\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"req222\"}}}], \"response\": [{\"name\": \"restestheader\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"resbbb\"}}}]}}}}"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", routeHeaders, "--type=merge", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		routerpod := getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, icHeaders)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+
+		exutil.By("send traffic, check the request header reqtestheader which should be set to req111 by the route")
+		routerpod = getRouterPod(oc, ingctrl.name)
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":80:" + podIP
+		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst}
+		repeatCmd(oc, cmdOnPod, "200", 5)
+		reqHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(strings.ToLower(reqHeaders), "\"reqtestheader\": \"req111\"")).To(o.BeTrue())
+
+		exutil.By("send traffic, check the response header restestheader which should be set to resbbb by the ingress-controller")
+		resHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "-I", "--resolve", toDst).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(resHeaders, "restestheader: resbbb")).To(o.BeTrue())
+	})
 })
