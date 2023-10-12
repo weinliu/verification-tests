@@ -1301,6 +1301,27 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, minTLSVersion, true)
 			}
 		})
+
+		// author: tagao@redhat.com
+		g.It("Author:tagao-Medium-68237-Add the trusted CA bundle in the Prometheus user workload monitoring pods", func() {
+			g.By("confirm UWM pod is ready")
+			exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
+
+			g.By("check configmap under namespace: openshift-user-workload-monitoring")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(output).To(o.ContainSubstring("prometheus-user-workload-trusted-ca-bundle"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("check the trusted CA bundle is applied to the pod")
+			PodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/name=prometheus")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range PodNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"prometheus\")].volumeMounts}"
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, "prometheus-user-workload-trusted-ca-bundle", true)
+				cmd = "-ojsonpath={.spec.volumes[?(@.name==\"prometheus-user-workload-trusted-ca-bundle\")]}"
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, "prometheus-user-workload-trusted-ca-bundle", true)
+			}
+		})
 	})
 
 	//author: tagao@redhat.com
