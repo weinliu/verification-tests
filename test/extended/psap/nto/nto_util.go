@@ -195,7 +195,7 @@ func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysct
 }
 
 // compareSysctlDifferentFromSpecifiedValueByName compare if the sysctl parameter is not equal to specified value on all the node
-func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, specifiedvalue string) {
+func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, namespace, sysctlparm, specifiedvalue string) {
 
 	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -203,38 +203,43 @@ func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, 
 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
-		//output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
-		stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
-		conntrackMax := regexpstr.FindString(stdOut)
-		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+		//Only check regular worker node and master nodes
+		if strings.Contains(nodeList[i], "worker") || strings.Contains(nodeList[i], "master") {
+			stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q", "--to-namespace=" + namespace}, "sysctl", sysctlparm)
+			conntrackMax := regexpstr.FindString(stdOut)
+			e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+		}
+
 	}
 
 }
 
 // compareSysctlValueOnSepcifiedNodeByName compare the sysctl parameter's value on specified node, it should different than other node
-func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, tunedNodeName, sysctlparm, defaultvalue, specifiedvalue string) {
+func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, namespace, tunedNodeName, sysctlparm, defaultvalue, specifiedvalue string) {
 
 	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeListSize := len(nodeList)
+	e2e.Logf("The name of nodes is %v", nodeList)
 
 	// tuned nodes should have value of 1048578, others should be 1048576
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
-		//output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
-		stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
-		conntrackMax := regexpstr.FindString(stdOut)
-		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if nodeList[i] == tunedNodeName {
-			o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
-		} else {
-			if len(defaultvalue) == 0 {
-				o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+		if strings.Contains(nodeList[i], "worker") || strings.Contains(nodeList[i], "master") {
+			stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q", "--to-namespace=" + namespace}, "sysctl", sysctlparm)
+			conntrackMax := regexpstr.FindString(stdOut)
+			e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if nodeList[i] == tunedNodeName {
+				o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 			} else {
-				o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + defaultvalue))
+				if len(defaultvalue) == 0 {
+					o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+				} else {
+					o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + defaultvalue))
+				}
 			}
 		}
 	}
@@ -682,10 +687,10 @@ func AssertNTOCertificateRotate(oc *exutil.CLI, ntoNamespace string, tunedNodeNa
 	metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
 	err := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
 
-		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
+		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true", "--to-namespace=" + ntoNamespace}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		openSSLExpireDateAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | /bin/openssl x509 -noout -dates")
+		openSSLExpireDateAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true", "--to-namespace=" + ntoNamespace}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | /bin/openssl x509 -noout -dates")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("The openSSL Expired Date information of NTO openSSL after rotate as below: \n%v", openSSLExpireDateAfter)

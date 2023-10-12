@@ -495,7 +495,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check all nodes for kernel.pid_max value, all node should different from 128888")
-		compareSysctlDifferentFromSpecifiedValueByName(oc, "kernel.pid_max", "128888")
+		compareSysctlDifferentFromSpecifiedValueByName(oc, ntoNamespace, "kernel.pid_max", "128888")
 
 		g.By("Label tuned pod as tuned.openshift.io/elasticsearch=")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", tunedPodName, "-n", ntoNamespace, "tuned.openshift.io/elasticsearch=", "--overwrite").Execute()
@@ -505,13 +505,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 
 		g.By("Compare if the value kernel.pid_max in on node with labeled pod, should be 128888")
-		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "kernel.pid_max", "", "128888")
+		compareSysctlValueOnSepcifiedNodeByName(oc, ntoNamespace, tunedNodeName, "kernel.pid_max", "", "128888")
 
 		g.By("Delete labeled tuned pod by name")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", tunedPodName, "-n", ntoNamespace).Execute()
 
 		g.By("Check all nodes for kernel.pid_max value, all node should different from 128888")
-		compareSysctlDifferentFromSpecifiedValueByName(oc, "kernel.pid_max", "128888")
+		compareSysctlDifferentFromSpecifiedValueByName(oc, ntoNamespace, "kernel.pid_max", "128888")
 
 	})
 
@@ -563,7 +563,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check all nodes for user.max_ipc_namespaces value, all node should different from 121112")
-		compareSysctlDifferentFromSpecifiedValueByName(oc, "user.max_ipc_namespaces", "121112")
+		compareSysctlDifferentFromSpecifiedValueByName(oc, ntoNamespace, "user.max_ipc_namespaces", "121112")
 
 		g.By("Label tuned pod as tuned.openshift.io/elasticsearch=")
 		err = exutil.LabelPod(oc, ntoNamespace, tunedPodName, "tuned.openshift.io/elasticsearch=")
@@ -573,14 +573,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 
 		g.By("Compare if the value user.max_ipc_namespaces in on node with labeled pod, should be 121112")
-		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "user.max_ipc_namespaces", "", "121112")
+		compareSysctlValueOnSepcifiedNodeByName(oc, ntoNamespace, tunedNodeName, "user.max_ipc_namespaces", "", "121112")
 
 		g.By("Remove label from tuned pod as tuned.openshift.io/elasticsearch-")
 		err = exutil.LabelPod(oc, ntoNamespace, tunedPodName, "tuned.openshift.io/elasticsearch-")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check all nodes for user.max_ipc_namespaces value, all node should different from 121112")
-		compareSysctlDifferentFromSpecifiedValueByName(oc, "user.max_ipc_namespaces", "121112")
+		compareSysctlDifferentFromSpecifiedValueByName(oc, ntoNamespace, "user.max_ipc_namespaces", "121112")
 
 	})
 
@@ -733,7 +733,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Compare if the value user.max_mnt_namespaces in on node with labeled pod, should be 142214")
-		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "user.max_mnt_namespaces", "", "142214")
+		compareSysctlValueOnSepcifiedNodeByName(oc, ntoNamespace, tunedNodeName, "user.max_mnt_namespaces", "", "142214")
 
 		g.By("Delete custom profile")
 		ntoRes.delete(oc)
@@ -759,7 +759,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		g.By("Check all nodes for user.max_mnt_namespaces value, all node should different from 142214")
-		compareSysctlDifferentFromSpecifiedValueByName(oc, "user.max_mnt_namespaces", "142214")
+		compareSysctlDifferentFromSpecifiedValueByName(oc, ntoNamespace, "user.max_mnt_namespaces", "142214")
 	})
 
 	g.It("ROSA-OSD_CCS-NonHyperShiftHOST-NonPreRelease-Longduration-Author:liqcui-Medium-37125-Turning on debugging for tuned containers.[Disruptive]", func() {
@@ -788,9 +788,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		oc.SetupProject()
 		ntoTestNS := oc.Namespace()
 
+		//First choice to use [tests] image, the image mirrored by default in disconnected cluster
+		//if don't have [tests] image in some environment, we can use hello-openshift as image
+		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
+		AppImageName := exutil.GetImagestreamImageName(oc, "tests")
+		if len(AppImageName) == 0 {
+			AppImageName = "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
+		}
+
 		//Create a nginx web application pod
 		g.By("Create a nginx web pod in nto temp namespace")
-		exutil.ApplyOperatorResourceByYaml(oc, ntoTestNS, podNginxFile)
+		exutil.ApplyNsResourceFromTemplate(oc, ntoTestNS, "--ignore-unknown-parameters=true", "-f", podNginxFile, "-p", "IMAGENAME="+AppImageName)
 
 		//Check if nginx pod is ready
 		exutil.AssertPodToBeReady(oc, "nginx", ntoTestNS)
@@ -1145,7 +1153,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(logsCheck).To(o.ContainSubstring("tuning-pidmax"))
 
 		g.By("Compare if the value user.max_ipc_namespaces in on node with labeled pod, should be 182218")
-		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "kernel.pid_max", "", "182218")
+		compareSysctlValueOnSepcifiedNodeByName(oc, ntoNamespace, tunedNodeName, "kernel.pid_max", "", "182218")
 
 		g.By("Patch default tuned to 'Removed'")
 		err = patchTunedState(oc, ntoNamespace, "default", "Removed")
@@ -1205,7 +1213,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(logsCheck).To(o.ContainSubstring("tuning-pidmax"))
 
 		g.By("Compare if the value user.max_ipc_namespaces in on node with labeled pod, should be 182218")
-		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "kernel.pid_max", "", "182218")
+		compareSysctlValueOnSepcifiedNodeByName(oc, ntoNamespace, tunedNodeName, "kernel.pid_max", "", "182218")
 	})
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-30589-NTO Use MachineConfigs to lay down files needed for tuned [Disruptive] [Slow]", func() {
@@ -1700,7 +1708,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			o.ContainSubstring("nto_profile_calculated_total")))
 	})
 
-	g.It("NonPreRelease-Longduration-Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
+	g.It("NonPreRelease-Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
 		// test requires NTO to be installed
 		is3CPNoWorker := exutil.Is3MasterNoDedicatedWorkerNode(oc)
 
@@ -1708,9 +1716,18 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed or No need to test on compact cluster - skipping test ...")
 		}
 
-		//Use the last worker node as labeled node
-		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		isSNO := exutil.IsSNOCluster(oc)
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) && !isSNO && !is3CPNoWorker {
+			machinesetName := getFirstWorkerMachinesetName(oc)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		e2e.Logf("The tuned node name is: \n%v", tunedNodeName)
 
