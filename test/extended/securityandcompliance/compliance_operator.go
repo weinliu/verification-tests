@@ -2632,8 +2632,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	//Added DEPRECATED tag due to product bug https://issues.redhat.com/browse/OCPBUGS-18025. Will be removed once the bug is fixed
-	g.It("DEPRECATED-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42960-Low-43098-Check that TokenMaxAge and TokenInactivityTimeout are configurable for oauthclient objects [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42960-Low-43098-Check that TokenMaxAge and TokenInactivityTimeout are configurable for oauthclient objects [Disruptive][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "moderate-test" + getRandomString(),
 			namespace:       "",

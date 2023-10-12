@@ -260,8 +260,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	//Added DEPRECATED tag due to product bug https://issues.redhat.com/browse/OCPBUGS-18025. Will be removed once the bug is fixed
-	g.It("DEPRECATED-NonHyperShiftHOST-Author:pdhamdhe-High-41182-The bind command of oc compliance plugin will take the given parameters and create a ScanSettingBinding object [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-High-41182-The bind command of oc compliance plugin will take the given parameters and create a ScanSettingBinding object [Serial][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  false,
