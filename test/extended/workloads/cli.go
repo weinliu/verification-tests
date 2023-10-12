@@ -637,8 +637,15 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		secretFile, err := getPullSecret(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "new", "--registry-config="+secretFile, "--reference-mode=source", "--keep-manifest-list", "-f", manifestlistImagestream, "--name", "4.11.0-0.nightly", "--to-image="+registryHost+"/ocp-release:4.11.0-0.nightly", "--insecure").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "new", "--registry-config="+secretFile, "--reference-mode=source", "--keep-manifest-list", "-f", manifestlistImagestream, "--name", "4.11.0-0.nightly", "--to-image="+registryHost+"/ocp-release:4.11.0-0.nightly", "--insecure").Execute()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The release new command failed with error %s", err))
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", registryHost+"/ocp-release:4.11.0-0.nightly", "--insecure").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		out, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", registryHost+"/ocp-release:4.11.0-0.nightly", "--filter-by-os", "linux/s390x", "--insecure").Output()

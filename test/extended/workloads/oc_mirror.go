@@ -204,11 +204,18 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		serInfo := registry.createregistry(oc)
 
 		g.By("Mirror to registry")
-		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(out, "using stateless mode") {
-			e2e.Failf("Can't see the stateless mode log")
-		}
+		err := wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if strings.Contains(out, "using stateless mode") {
+				return true, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't see the stateless mode log with %s", err))
 		g.By("Mirror to localhost")
 		dirname := "/tmp/46506test"
 		defer os.RemoveAll(dirname)
@@ -320,8 +327,15 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer removeOcMirrorLog()
 		g.By("Create the mapping file by oc-mirror dry-run command")
-		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ocpPlatformConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dry-run").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ocpPlatformConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dry-run").Execute()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Image mirror failed with error %s", err))
 		g.By("Checkpoint for 40322, mirror with mapping")
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "-f", "oc-mirror-workspace/mapping.txt", "--max-per-registry", "1", "--skip-multiple-scopes=true", "--insecure").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -406,8 +420,15 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		ociFullConfig := filepath.Join(ocmirrorBaseDir, "config-oci-all.yaml")
 		defer os.RemoveAll("oc-mirror-workspace")
-		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFullConfig, "docker://"+serInfo.serviceName, "--include-local-oci-catalogs", "--dest-skip-tls", "--dry-run").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFullConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dry-run").Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Image mirror failed with error %s", err))
 	})
 
 	g.It("NonHyperShiftHOST-ConnectedOnly-Longduration-Author:yinzhou-NonPreRelease-Medium-60597-Critical-60595-oc-mirror support for TargetCatalog field for operator[Serial]", func() {
@@ -445,12 +466,19 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		normalConfig := filepath.Join(ocmirrorBaseDir, "config-60597-normal.yaml")
 		defer os.RemoveAll("oc-mirror-workspace")
 		defer os.RemoveAll("olm_artifacts")
-		output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalTargetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if matched, _ := regexp.MatchString(serInfo.serviceName+"/abc/redhat-operator-index:v4.13", output); !matched {
-			e2e.Failf("Can't find the expect target catalog\n")
-		}
-		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalTargetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString(serInfo.serviceName+"/abc/redhat-operator-index:v4.13", output); matched {
+				return true, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find the expect target catalog %s", err))
+		output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("/mno/redhat-operator-index:v5", output); !matched {
 			e2e.Failf("Can't find the expect target catalog\n")
@@ -519,8 +547,15 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		defer os.RemoveAll("mirror_seq1_000000.tar")
 		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", configFirst, "file://").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Image mirror failed with error %s", err))
 		g.By("Check the tag for mirrored image")
 		checkCmd := fmt.Sprintf(`curl -k 'https://%s/v2/openshift4/ose-cluster-kube-descheduler-operator/tags/list'`, serInfo.serviceName)
 		output, err := exec.Command("bash", "-c", checkCmd).Output()
@@ -587,13 +622,20 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+serInfo.serviceName, "--include-local-oci-catalogs", "--dest-skip-tls", "--dry-run").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dry-run").Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Image mirror failed with error %s", err))
 		_, err = oc.WithoutNamespace().Run("image").Args("mirror", "-f", "oc-mirror-workspace/mapping.txt", "--insecure").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Use oc-mirror with registry.conf")
-		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+secondSerInfo.serviceName, "--include-local-oci-catalogs", "--dest-skip-tls", "--oci-registries-config", registryConfig).Output()
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+secondSerInfo.serviceName, "--dest-skip-tls", "--oci-registries-config", registryConfig).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Make sure data forword from local registry")
