@@ -1244,3 +1244,60 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		exutil.AssertWaitPollNoErr(err, "application logs are not found")
 	})
 })
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operator deployments", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc             = exutil.NewCLI("logging-operators", exutil.KubeConfigPath())
+		loggingBaseDir string
+	)
+
+	g.BeforeEach(func() {
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+	})
+
+	g.It("CPaasrunOnly-Author:anli-Low-65518-deploy cluster-logging-operator after datadog-agent is deployed [Disruptive]", func() {
+		oc.SetupProject()
+		datadogNS := oc.Namespace()
+		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
+		ogPath := filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml")
+		podLabel := "app.kubernetes.io/name=datadog-operator"
+
+		g.By("Make the datadog operator ready")
+		sourceCert := CatalogSourceObjects{
+			Channel:         "stable",
+			SourceName:      "certified-operators",
+			SourceNamespace: "openshift-marketplace",
+		}
+		subDog := SubscriptionObjects{
+			OperatorName:       "datadog-operator-certified",
+			PackageName:        "datadog-operator-certified",
+			Namespace:          datadogNS,
+			Subscription:       subTemplate,
+			OperatorPodLabel:   podLabel,
+			OperatorGroup:      ogPath,
+			CatalogSource:      sourceCert,
+			SkipCaseWhenFailed: true,
+		}
+
+		subDog.SubscribeOperator(oc)
+
+		g.By("Delete cluster-logging operator if exist")
+		sourceQE := CatalogSourceObjects{
+			Channel:         "stable",
+			SourceName:      "qe-app-registry",
+			SourceNamespace: "openshift-marketplace",
+		}
+		subCLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     "openshift-logging",
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+			CatalogSource: sourceQE,
+		}
+		subCLO.uninstallOperator(oc)
+
+		g.By("deploy cluster-logging operator")
+		subCLO.SubscribeOperator(oc)
+	})
+})

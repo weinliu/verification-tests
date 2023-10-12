@@ -47,6 +47,7 @@ type SubscriptionObjects struct {
 	OperatorGroup      string // the file used to create operator group
 	Subscription       string // the file used to create subscription
 	PackageName        string
+	OperatorPodLabel   string               //The operator pod label which is used to select pod
 	CatalogSource      CatalogSourceObjects `json:",omitempty"`
 	SkipCaseWhenFailed bool                 // if true, the case will be skipped when operator is not ready, otherwise, the case will be marked as failed
 }
@@ -199,6 +200,9 @@ func (so *SubscriptionObjects) setCatalogSourceObjects(oc *exutil.CLI) {
 // SubscribeOperator is used to subcribe the CLO and EO
 func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 	// check if the namespace exists, if it doesn't exist, create the namespace
+	if so.OperatorPodLabel == "" {
+		so.OperatorPodLabel = "name=" + so.OperatorName
+	}
 	_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), so.Namespace, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -288,7 +292,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 
 	// check pod status
 	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-		pods, err := oc.AdminKubeClient().CoreV1().Pods(so.Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "name=" + so.OperatorName})
+		pods, err := oc.AdminKubeClient().CoreV1().Pods(so.Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: so.OperatorPodLabel})
 		if err != nil {
 			e2e.Logf("Hit error %v when getting pods", err)
 			return false, nil
@@ -315,10 +319,10 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 		return ready, nil
 	})
 	if err != nil {
-		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", so.Namespace, "-l", "name="+so.OperatorName).Execute()
-		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", so.Namespace, "-l", "name="+so.OperatorName, "-ojsonpath={.items[*].status.conditions}").Output()
-		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", so.Namespace, "-l", "name="+so.OperatorName, "-ojsonpath={.items[*].status.containerStatuses}").Output()
-		e2e.Logf("pod with label %s is not ready:\nconditions: %s\ncontainer status: %s", "name="+so.OperatorName, podStatus, containerStatus)
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", so.Namespace, "-l", so.OperatorPodLabel).Execute()
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", so.Namespace, "-l", so.OperatorPodLabel, "-ojsonpath={.items[*].status.conditions}").Output()
+		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", so.Namespace, "-l", so.OperatorPodLabel, "-ojsonpath={.items[*].status.containerStatuses}").Output()
+		e2e.Logf("pod with label %s is not ready:\nconditions: %s\ncontainer status: %s", so.OperatorPodLabel, podStatus, containerStatus)
 		if so.SkipCaseWhenFailed {
 			g.Skip(fmt.Sprintf("Skip the case for the operator %s is not ready", so.OperatorName))
 		} else {
