@@ -856,4 +856,72 @@ etcd:
 		}
 	})
 
+	// author: geliu@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:geliu-Critical-66829-Tuning etcd latency parameters etcd_heartbeat_interval and etcd_election_timeout. [Disruptive]", func() {
+
+		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if featureSet != "TechPreviewNoUpgrade" {
+			g.Skip("featureSet is not TechPreviewNoUpgradec, skip it!")
+		}
+
+		defer func() {
+			e2e.Logf("Patch etcd cluster:controlPlaneHardwareSpeed for recovery.")
+			patchPath1 := "{\"spec\":{\"controlPlaneHardwareSpeed\":null}}"
+			err0 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", patchPath1).Execute()
+			o.Expect(err0).NotTo(o.HaveOccurred())
+		}()
+
+		e2e.Logf("patch etcd cluster to stardard.")
+		patchPath1 := "{\"spec\":{\"controlPlaneHardwareSpeed\":\"Standard\"}}"
+		err0 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", patchPath1).Execute()
+		o.Expect(err0).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Force an etcd rollout, restart all etcd pods at a time to pick up the new values")
+		t := time.Now()
+		defer func() {
+			e2e.Logf("Patch etcd cluster:forceRedeploymentReason for recovery.")
+			patchPath1 := "{\"spec\":{\"forceRedeploymentReason\":null}}"
+			err0 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", patchPath1).Execute()
+			o.Expect(err0).NotTo(o.HaveOccurred())
+			checkOperator(oc, "etcd")
+		}()
+
+		err0 = oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"forceRedeploymentReason\": \"hardwareSpeedChange-%s\"}}", t.Format("2023-01-02 15:04:05"))).Execute()
+		o.Expect(err0).NotTo(o.HaveOccurred())
+		checkOperator(oc, "etcd")
+
+		e2e.Logf("Check the ETCD_ELECTION_TIMEOUT and ETCD_HEARTBEAT_INTERVAL in etcd pod.")
+		etcdPodList := getPodListByLabel(oc, "etcd=true")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.spec.containers[0].env[8].value}").Output()
+		if output != "1000" || err != nil {
+			e2e.Failf("ETCD_ELECTION_TIMEOUT is not default value: 1000")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.spec.containers[0].env[13].value}").Output()
+		if output != "100" || err != nil {
+			e2e.Failf("ETCD_HEARTBEAT_INTERVAL is not default value: 100")
+		}
+
+		e2e.Logf("patch etcd cluster to Slower.")
+		patchPath1 = "{\"spec\":{\"controlPlaneHardwareSpeed\":\"Slower\"}}"
+		err0 = oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", patchPath1).Execute()
+		o.Expect(err0).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Force an etcd rollout, restart all etcd pods at a time to pick up the new values")
+		err0 = oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"forceRedeploymentReason\": \"hardwareSpeedChange-%s\"}}", t.Format("2023-01-02 15:05:05"))).Execute()
+		o.Expect(err0).NotTo(o.HaveOccurred())
+		checkOperator(oc, "etcd")
+
+		e2e.Logf("Check the ETCD_ELECTION_TIMEOUT and ETCD_HEARTBEAT_INTERVAL in etcd pod.")
+		etcdPodList = getPodListByLabel(oc, "etcd=true")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.spec.containers[0].env[8].value}").Output()
+		if output != "2500" || err != nil {
+			e2e.Failf("ETCD_ELECTION_TIMEOUT is not expected value: 2500")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.spec.containers[0].env[13].value}").Output()
+		if output != "500" || err != nil {
+			e2e.Failf("ETCD_HEARTBEAT_INTERVAL is not expected value: 500")
+		}
+	})
+
 })
