@@ -38,21 +38,24 @@ else
 fi
 
 sudo rm -f /etc/yum.repos.d/redhat_offcial.repo /etc/yum.repos.d/localdev-rhel-8-baseos-rpms.repo /etc/yum.repos.d/google-cloud-sdk.repo /etc/yum.repos.d/azure-cli.repo
-sudo cp ${WORKBUILDDIR}/pipeline/repo-file/aos-devel-$NIGHTLYFLAG.repo /etc/yum.repos.d/puddle.repo
+#sudo cp ${WORKBUILDDIR}/pipeline/repo-file/aos-devel-$NIGHTLYFLAG.repo /etc/yum.repos.d/puddle.repo
 sudo cp -f ${WORKBUILDDIR}/pipeline/repo-file/rhel8.7-baseos.repo /etc/yum.repos.d/rhel8.7-baseos.repo
 sudo ls -lrt /etc/yum.repos.d/
 sudo yum remove 'origin*.x86_64' 'atomic-openshift*.x86_64' 'openshift-clients*.x86_64' -y
-sudo yum -y install openshift-clients
+#sudo yum -y install openshift-clients
 sudo yum -y install jq patch docker
 sudo yum -y --enablerepo=rhel8.7-baseos install sos
 sudo yum clean all -y
 sudo pip3 install requests
 sos -h
-if [[ "x${http_proxy_tmp}x" != "xx" ]] || [[ "x${https_proxy_tmp}x" != "xx" ]]; then
-    echo "set env http_proxy https_proxy"
-    export http_proxy=${http_proxy_tmp}
-    export https_proxy=${https_proxy_tmp}
-fi
+#get oc client
+echo "------------------get oc------------------------"
+echo "get latest oc"
+unset http_proxy https_proxy
+curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp/candidate-4.14/openshift-client-linux.tar.gz -o oc-linux.tar.gz
+tar -xzvf oc-linux.tar.gz
+echo "get oc-linux.tar.gz successfully"
+rm -f oc-linux.tar.gz
 echo "oc version:"
 oc version
 retVal=$?
@@ -61,6 +64,7 @@ if [ $retVal -ne 0 ]; then
     exit 1
 fi
 
+echo "------------------get oc Done------------------------"
 #get operatorSDK
 if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
     unset http_proxy https_proxy
