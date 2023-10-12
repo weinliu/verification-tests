@@ -1685,3 +1685,13 @@ func waitForDeploymentconfigToBeReady(oc *exutil.CLI, namespace string, name str
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Deploymentconfig %s is not available", name))
 }
+
+// this function is used to check whether must-gather imagestreamtag exist or not
+func checkMustgatherImagestreamTag(oc *exutil.CLI) bool {
+	err := oc.AsAdmin().WithoutNamespace().Run("get").Args("istag", "must-gather:latest", "-n", "openshift").Execute()
+	if err != nil {
+		e2e.Logf("Failed to get the must-gather imagestreamtag")
+		return false
+	}
+	return true
+}

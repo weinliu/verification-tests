@@ -27,6 +27,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		if isBaselineCapsSet(oc, "None") {
 			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
 		}
+		if !checkMustgatherImagestreamTag(oc) {
+			g.Skip("Skipping the test as can't find the imagestreamtag for must-gather")
+		}
 
 		g.By("create new namespace")
 		oc.SetupProject()
