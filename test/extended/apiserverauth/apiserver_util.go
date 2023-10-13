@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -902,40 +903,48 @@ func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool
 	return "", nil
 }
 
-// the method is to get something from resource. it is "oc get xxx" actaully
-func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
+// Get something existing resource
+func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) (string, error) {
+	return doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
+}
+
+// Get something resource to be ready
+func getResourceToBeReady(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	var err error
-	err = wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
+	errPoll := wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
 		result, err = doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
-		if err != nil {
-			e2e.Logf("The output is %v, error is %v, and try next", result, err)
+		if err != nil || len(result) == 0 {
+			e2e.Logf("Unable to retrieve the expected resource, retrying...")
 			return false, nil
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get %v", parameters))
+	exutil.AssertWaitPollNoErr(errPoll, fmt.Sprintf("Failed to retrieve %v", parameters))
 	e2e.Logf("The resource returned:\n%v", result)
 	return result
 }
 
 func getGlobalProxy(oc *exutil.CLI) (string, string, string) {
-	httpProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpProxy}")
-	httpsProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpsProxy}")
-	noProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.noProxy}")
+	httpProxy, err := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpProxy}")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	httpsProxy, err := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpsProxy}")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	noProxy, err := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.noProxy}")
+	o.Expect(err).NotTo(o.HaveOccurred())
 	return httpProxy, httpsProxy, noProxy
 }
 
 // Get the pods List by label
 func getPodsListByLabel(oc *exutil.CLI, namespace string, selectorLabel string) []string {
-	podsOp := getResource(oc, asAdmin, withoutNamespace, "pod", "-n", namespace, "-l", selectorLabel, "-o=jsonpath={.items[*].metadata.name}")
+	podsOp := getResourceToBeReady(oc, asAdmin, withoutNamespace, "pod", "-n", namespace, "-l", selectorLabel, "-o=jsonpath={.items[*].metadata.name}")
 	o.Expect(podsOp).NotTo(o.BeEmpty())
 	return strings.Split(podsOp, " ")
 }
 
 func checkApiserversAuditPolicies(oc *exutil.CLI, auditPolicyName string) {
 	e2e.Logf("Checking the current " + auditPolicyName + " audit policy of cluster")
-	defaultProfile := getResource(oc, asAdmin, withoutNamespace, "apiserver/cluster", `-o=jsonpath={.spec.audit.profile}`)
+	defaultProfile := getResourceToBeReady(oc, asAdmin, withoutNamespace, "apiserver/cluster", `-o=jsonpath={.spec.audit.profile}`)
 	o.Expect(defaultProfile).Should(o.ContainSubstring(auditPolicyName), "current audit policy of cluster is not default :: "+defaultProfile)
 
 	e2e.Logf("Checking the audit config file of kube-apiserver currently in use.")
@@ -1118,7 +1127,7 @@ func replacePatternInfile(oc *exutil.CLI, microshiftFilePathYaml string, oldPatt
 
 // Get the pods List by label
 func getPodsList(oc *exutil.CLI, namespace string) []string {
-	podsOp := getResource(oc, asAdmin, withoutNamespace, "pod", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}")
+	podsOp := getResourceToBeReady(oc, asAdmin, withoutNamespace, "pod", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}")
 	podNames := strings.Split(strings.TrimSpace(podsOp), " ")
 	e2e.Logf("Namespace %s pods are: %s", namespace, string(podsOp))
 	return podNames
@@ -1352,12 +1361,15 @@ func copyImageToInternelRegistry(oc *exutil.CLI, namespace string, source string
 	return results, err
 }
 
-// Check if BaselineCapabilities have been set to None
-func isBaselineCapsSet(oc *exutil.CLI, component string) bool {
+// Check if BaselineCapabilities have been set
+func isBaselineCapsSet(oc *exutil.CLI) bool {
 	baselineCapabilitySet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.spec.capabilities.baselineCapabilitySet}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("baselineCapabilitySet parameters: %v\n", baselineCapabilitySet)
-	return strings.Contains(baselineCapabilitySet, component)
+	if len(baselineCapabilitySet) == 0 {
+		return false
+	}
+	return true
 }
 
 // Check if component is listed in clusterversion.status.capabilities.enabledCapabilities
@@ -1400,4 +1412,13 @@ func checkURLEndpointAccess(oc *exutil.CLI, hostIP, nodePort, podName, portComma
 
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Unable to access %s", url))
 	o.Expect(curlOutput).To(o.ContainSubstring(status))
+}
+
+func imageImportModeOnArmAndMutiArch(oc *exutil.CLI, tagName string, image string, nameSpace string) {
+	arch := architecture.ClusterArchitecture(oc)
+	if arch.String() == "arm64" || arch.String() == "multi" {
+		e2e.Logf("Set import policy to PreserveOriginal")
+		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args(tagName, "--from="+image, `--import-mode=PreserveOriginal`, "-n", nameSpace, "--reference-policy=local", "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }

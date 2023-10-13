@@ -2468,8 +2468,8 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("Author:zxiao-Medium-10592-Cluster-admin could get/edit/delete subresource", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		exutil.By("1) Create new project")
@@ -3055,8 +3055,8 @@ spec:
 	})
 
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		exutil.By("Check if it's a proxy cluster")
@@ -3069,6 +3069,7 @@ spec:
 		oc.SetupProject()
 
 		exutil.By("2) Build hello-world from external source")
+		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		buildName := fmt.Sprintf("ocp11138-test-%s", strings.ToLower(exutil.RandStr(5)))
 		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
@@ -3244,8 +3245,8 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Critical-55494-[Apiserver] When using webhooks fails to rollout latest deploymentconfig [Disruptive]", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		var (
@@ -3266,7 +3267,8 @@ spec:
 
 		// Skipped case on arm64 and proxy cluster with techpreview
 		exutil.By("Check if it's a proxy cluster with techpreview")
-		featureTech := getResource(oc, asAdmin, withoutNamespace, "featuregate", "cluster", "-o=jsonpath={.spec.featureSet}")
+		featureTech, err := getResource(oc, asAdmin, withoutNamespace, "featuregate", "cluster", "-o=jsonpath={.spec.featureSet}")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		httpProxy, _, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") && strings.Contains(featureTech, "TechPreview") {
 			g.Skip("Skip for proxy platform with techpreview")
@@ -4414,7 +4416,7 @@ roleRef:
 		// There are events in the openshift-kube-controller-manager that show the creation of these SCC labels
 		exutil.By("2.Check if the events in the ns openshift-kube-controller-manager show the creation of these SCC labels, e.g., tempocp53792")
 		scErr := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-			eventsOutput := getResource(oc, asAdmin, withoutNamespace, "events", "-n", "openshift-kube-controller-manager")
+			eventsOutput := getResourceToBeReady(oc, asAdmin, withoutNamespace, "events", "-n", "openshift-kube-controller-manager")
 			if strings.Contains(eventsOutput, "CreatedSCCRanges") {
 				return true, nil
 			}
@@ -4424,7 +4426,7 @@ roleRef:
 
 		// When a namespace is created, the cluster policy controller is in charge of adding SCC labels.
 		exutil.By("3.Check the scc annotations should have openshift.io to verify that the namespace added scc annotations Cluster Policy Controller integration")
-		namespaceOutput = getResource(oc, asAdmin, withoutNamespace, "ns", namespace, `-o=jsonpath={.metadata.annotations}`)
+		namespaceOutput = getResourceToBeReady(oc, asAdmin, withoutNamespace, "ns", namespace, `-o=jsonpath={.metadata.annotations}`)
 		o.Expect(namespaceOutput).Should(o.ContainSubstring("openshift.io/sa.scc"), "Not have openshift.io Scc annotations")
 
 		// Cluster policy controller does take care of the resourceQuota, verifying that the quota feature works properly after Cluster Policy Controller integration
@@ -5052,8 +5054,8 @@ type: kubernetes.io/service-account-token`
 
 	// author: kewang@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11289-[origin_platformexp_407] [Apiserver] Check the imagestreams of quota in the project after build image [Serial]", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		var (
@@ -5087,12 +5089,12 @@ spec:
 		o.Expect(quotaErr).NotTo(o.HaveOccurred())
 
 		exutil.By("3. Checking the created Resource Quota of the Image Stream")
-		quota := getResource(oc, asAdmin, withoutNamespace, "quota", "openshift-object-counts", `--template={{.status.used}}`, "-n", namespace)
+		quota := getResourceToBeReady(oc, asAdmin, withoutNamespace, "quota", "openshift-object-counts", `--template={{.status.used}}`, "-n", namespace)
 		o.Expect(quota).Should(o.ContainSubstring("openshift.io/imagestreams:0"), "openshift-object-counts")
 
 		checkImageStreamQuota := func(buildName string, step string) {
 			buildErr := wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
-				bs := getResource(oc, asAdmin, withoutNamespace, "builds", buildName, "-ojsonpath={.status.phase}", "-n", namespace)
+				bs := getResourceToBeReady(oc, asAdmin, withoutNamespace, "builds", buildName, "-ojsonpath={.status.phase}", "-n", namespace)
 				if strings.Contains(bs, "Complete") {
 					e2e.Logf("Building of %s status:%v", buildName, bs)
 					return true, nil
@@ -5103,11 +5105,12 @@ spec:
 			exutil.AssertWaitPollNoErr(buildErr, fmt.Sprintf("ERROR: Build status of %s is not complete!", buildName))
 
 			exutil.By(fmt.Sprintf("%s.1 Checking the created Resource Quota of the Image Stream", step))
-			quota := getResource(oc, asAdmin, withoutNamespace, "quota", "openshift-object-counts", `--template={{.status.used}}`, "-n", namespace)
+			quota := getResourceToBeReady(oc, asAdmin, withoutNamespace, "quota", "openshift-object-counts", `--template={{.status.used}}`, "-n", namespace)
 			o.Expect(quota).Should(o.ContainSubstring("openshift.io/imagestreams:2"), "openshift-object-counts")
 		}
 
 		exutil.By("4. Create a source build using source code and check the build info")
+		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
 		imgErr := oc.AsAdmin().WithoutNamespace().Run("new-build").Args(`quay.io/openshifttest/ruby-27:1.2.0~https://github.com/sclorg/ruby-ex.git`, "-n", namespace).Execute()
 		if imgErr != nil {
 			if !isConnectedInternet(oc) {
@@ -5445,8 +5448,8 @@ EOF`, etcConfigYaml, level)
 
 	// author: dpunia@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-High-11887-Could delete all the resource when deleting the project [Serial]", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
@@ -5463,6 +5466,7 @@ EOF`, etcConfigYaml, level)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("2) Create new app")
+		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
 		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-openshift", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -5477,7 +5481,7 @@ EOF`, etcConfigYaml, level)
 
 		exutil.By("4) Get project resource")
 		for _, resource := range []string{"buildConfig", "deployments", "pods", "services"} {
-			out := getResource(oc, asAdmin, withoutNamespace, resource, "-n", projectName, "-o=jsonpath={.items[*].metadata.name}")
+			out := getResourceToBeReady(oc, asAdmin, withoutNamespace, resource, "-n", projectName, "-o=jsonpath={.items[*].metadata.name}")
 			o.Expect(len(out)).To(o.BeNumerically(">", 0))
 		}
 
@@ -5810,8 +5814,8 @@ manifests:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Low-12036-APIServer User can pull a private image from a registry when a pull secret is defined [Serial]", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		exutil.By("Check if it's a proxy cluster")
@@ -5824,6 +5828,7 @@ manifests:
 		oc.SetupProject()
 
 		exutil.By("2) Build hello-world from external source")
+		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		buildName := fmt.Sprintf("ocp12036-test-%s", strings.ToLower(exutil.RandStr(5)))
 		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
@@ -5884,8 +5889,8 @@ manifests:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-11905-APIServer Use well-formed pull secret with incorrect credentials will fail to build and deploy [Serial]", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		exutil.By("Check if it's a proxy cluster")
@@ -5898,6 +5903,7 @@ manifests:
 		oc.SetupProject()
 
 		exutil.By("2) Build hello-world from external source")
+		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		buildName := fmt.Sprintf("ocp11905-test-%s", strings.ToLower(exutil.RandStr(5)))
 		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
@@ -6130,7 +6136,7 @@ manifests:
 		o.Expect(postRevisionSum).Should(o.BeNumerically("==", preRevisionSum), "Validation failed as PostRevision value not equal to PreRevision")
 		e2e.Logf("No changes on revisions of kube-apiservers.")
 
-		kasPodsOutput := getResource(oc, asAdmin, withoutNamespace, "pods", "-l apiserver", "--no-headers", "-n", kas)
+		kasPodsOutput := getResourceToBeReady(oc, asAdmin, withoutNamespace, "pods", "-l apiserver", "--no-headers", "-n", kas)
 		o.Expect(kasPodsOutput).ShouldNot(o.ContainSubstring("CrashLoopBackOff"))
 		e2e.Logf("Kube-apiservers didn't roll out as expected.")
 	})
@@ -6206,8 +6212,8 @@ manifests:
 
 	// author: kewang@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11797-[Apiserver] Image with single or multiple layer(s) sumed up size slightly exceed the openshift.io/image-size will push failed", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		exutil.By("Check if it's a proxy cluster")
@@ -6269,9 +6275,10 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-10865-[Apiserver] After Image Size Limit increment can push the image which previously over the limit", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
+
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -6419,8 +6426,8 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12263-[Apiserver] When exceed openshift.io/images will ban to create image reference or push image to project", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		exutil.By("Check if it's a proxy cluster")
@@ -6594,8 +6601,8 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12158-[Apiserver] Specify ResourceQuota on project", func() {
-		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
-			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
 		exutil.By("Check if it's a proxy cluster")
