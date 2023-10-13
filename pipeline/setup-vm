@@ -56,6 +56,11 @@ curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp/
 tar -xzvf oc-linux.tar.gz
 echo "get oc-linux.tar.gz successfully"
 rm -f oc-linux.tar.gz
+if [[ "x${http_proxy_tmp}x" != "xx" ]] || [[ "x${https_proxy_tmp}x" != "xx" ]]; then
+    echo "set env http_proxy https_proxy"
+    export http_proxy=${http_proxy_tmp}
+    export https_proxy=${https_proxy_tmp}
+fi
 echo "oc version:"
 oc version
 retVal=$?
