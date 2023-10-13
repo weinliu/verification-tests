@@ -126,8 +126,8 @@ func (lso *localStorageOperator) getCurrentCSV(oc *exutil.CLI) string {
 		// TODO: Revert the commit when OCPBUGS-19046 fixed
 		if matched, _ := regexp.MatchString("clusterserviceversion local-storage-operator.*exists and is not referenced by a subscription", describeSubscription); matched && lso.currentIteration < lso.maxIteration {
 			lso.currentIteration = lso.currentIteration + 1
-			regexForLsoCsv := regexp.MustCompile(`local-storage-operator\.v\d+\.\d+\.\d+-\d{12}`)
-			lsoCsv := regexForLsoCsv.FindAllString(describeSubscription, -1)[0]
+			lsoCsv, getCsvErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "packagemanifests.packages.operators.coreos.com", "-l", "catalog="+lso.source, `-o=jsonpath={.items[?(@.metadata.name=="local-storage-operator")].status.channels[0].currentCSV}`).Output()
+			o.Expect(getCsvErr).NotTo(o.HaveOccurred(), "Failed to get LSO csv from packagemanifests")
 			deleteSpecifiedResource(oc, "sub", lso.subName, lso.namespace)
 			deleteSpecifiedResource(oc, "csv", lsoCsv, lso.namespace)
 			lso.install(oc)
