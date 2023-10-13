@@ -3310,4 +3310,145 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(resHeaders, "restestheader: resbbb")).To(o.BeTrue())
 	})
+
+	// author: shudili@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Longduration-Medium-66569-set different type of values for a http header name and its value", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
+			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
+			unsecsvcName        = "service-unsecure"
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp66569",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontroller/" + ingctrl.name
+			routeResource   = "route/" + unsecsvcName
+		)
+
+		exutil.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("Deploy a project with a backend pod and its service resources")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		createResourceFromFile(oc, project1, testPod)
+		err = waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, unsecsvc)
+
+		exutil.By("Expose a route with the unsecure service inside the project")
+		routehost := "service-unsecure66569" + "." + ingctrl.name + baseDomain
+		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routehost).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		routeOutput := getRoutes(oc, project1)
+		o.Expect(routeOutput).To(o.ContainSubstring(unsecsvcName))
+
+		exutil.By("patch http headers with valid number, alphabet, a combination of both header names and header values to a route, and then check the added headers in haproxy.conf")
+		validHeaders := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"001\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"20230906\"}}}, {\"name\": \"aBc\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"Wednesday\"}}}, {\"name\": \"test01\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value01\"}}}]}}}}"
+		patchResourceAsAdmin(oc, project1, routeResource, validHeaders)
+		routerpod := getRouterPod(oc, ingctrl.name)
+		routeBackend := "be_http:" + project1 + ":" + unsecsvcName
+		readHaproxyConfig(oc, routerpod, routeBackend, "-A35", "test01")
+		routeBackendCfg := getBlockConfig(oc, routerpod, routeBackend)
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header '001' '20230906'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'aBc' 'Wednesday'")).To(o.BeTrue())
+		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'test01' 'value01'")).To(o.BeTrue())
+
+		exutil.By("try to patch http header with blank value in the header name to a route")
+		blankHeaderName := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"aa bb\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"abc\"}}}]}}}}"
+		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", blankHeaderName, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"aa bb\": name must be a valid HTTP header name as defined in RFC 2616 section 4.2"))
+
+		exutil.By("patch http header with #$* in the header name to a route, and then check it in haproxy.config")
+		specialHeaderName1 := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"aabbccdd#$*ee\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"abc\"}}}]}}}}"
+		patchResourceAsAdmin(oc, project1, routeResource, specialHeaderName1)
+		specialHeaderNameCfg := readHaproxyConfig(oc, routerpod, routeBackend, "-A20", "aabbccdd")
+		o.Expect(specialHeaderNameCfg).To(o.ContainSubstring("http-request set-header 'aabbccdd#$*ee' 'abc'"))
+
+		exutil.By("patch http header with ' in the header name to a route, and then check it in haproxy.config")
+		specialHeaderName2 := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"aabbccdd'ee\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"abc\"}}}]}}}}"
+		patchResourceAsAdmin(oc, project1, routeResource, specialHeaderName2)
+		specialHeaderNameCfg = readHaproxyConfig(oc, routerpod, routeBackend, "-A20", "aabbccdd")
+		o.Expect(specialHeaderNameCfg).To(o.ContainSubstring("http-request set-header 'aabbccdd'\\''ee' 'abc'"))
+
+		exutil.By("try to patch http header with \" in the header name to a route")
+		specialHeaderName3 := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"aabbccdd\\\"ee\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"abc\"}}}]}}}}"
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", specialHeaderName3, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"aabbccdd\\\"ee\": name must be a valid HTTP header name"))
+
+		exutil.By("patch http header with specical characters in header value to a route")
+		specialHeaderValues := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"aabbccddee\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"vlalueabc #$*'\\\"cc\"}}}]}}}}"
+		patchResourceAsAdmin(oc, project1, routeResource, specialHeaderValues)
+		specialHeaderValueCfg := readHaproxyConfig(oc, routerpod, routeBackend, "-A20", "aabbccdd")
+		o.Expect(specialHeaderValueCfg).To(o.ContainSubstring("http-request set-header 'aabbccddee' 'vlalueabc #$*'\\''\"cc'"))
+
+		exutil.By("patch http headers with valid number, alphabet, a combination of both header names and header values to an ingress controller, then check the added headers in haproxy.conf")
+		routerpod = getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, validHeaders)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+		routerpod = getRouterPod(oc, ingctrl.name)
+		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", "test01")
+		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
+			routeBackendCfg = getBlockConfig(oc, routerpod, backend)
+			o.Expect(strings.Contains(routeBackendCfg, "http-request set-header '001' '20230906'")).To(o.BeTrue())
+			o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'aBc' 'Wednesday'")).To(o.BeTrue())
+			o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'test01' 'value01'")).To(o.BeTrue())
+		}
+
+		exutil.By("patch http header with blank value in the header name to an ingress controller")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", blankHeaderName, "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		e2e.Logf("blanck output is: %v", output)
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"aa bb\""))
+
+		exutil.By("patch http header with #$* in the header name to an ingress controller")
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, specialHeaderName1)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+		routerpod = getRouterPod(oc, ingctrl.name)
+		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A20", "aabbccdd")
+		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
+			routeBackendCfg = getBlockConfig(oc, routerpod, backend)
+			o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'aabbccdd#$*ee' 'abc'")).To(o.BeTrue())
+		}
+
+		exutil.By("patch http header with ' in the header name to an ingress controller")
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, specialHeaderName2)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+		routerpod = getRouterPod(oc, ingctrl.name)
+		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A20", "aabbccdd")
+		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
+			routeBackendCfg = getBlockConfig(oc, routerpod, backend)
+			o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'aabbccdd'\\''ee' 'abc'")).To(o.BeTrue())
+		}
+
+		exutil.By("patch http header with \" in the header name to an ingress controller")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", specialHeaderName3, "--type=merge", "-n", project1).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"aabbccdd\\\"ee\""))
+
+		exutil.By("patch http header with specical characters in header value to an ingress controller")
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, specialHeaderValues)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+		routerpod = getRouterPod(oc, ingctrl.name)
+		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A20", "aabbccdd")
+		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
+			routeBackendCfg = getBlockConfig(oc, routerpod, backend)
+			o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'aabbccddee' 'vlalueabc #$*'\\''\"cc'")).To(o.BeTrue())
+		}
+	})
 })
