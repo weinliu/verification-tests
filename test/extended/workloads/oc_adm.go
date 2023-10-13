@@ -24,7 +24,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		if checkOpenshiftSamples(oc) {
 			g.Skip("Can't find the cluster operator openshift-samples, skip it.")
 		}
-		if isBaselineCapsSet(oc, "None") {
+
+		// Skip the test if baselinecaps is set to v4.13 or v4.14
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") {
 			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
 		}
 		if !checkMustgatherImagestreamTag(oc) {
@@ -116,7 +118,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-11112-Prune old deploymentconfig by admin command", func() {
-		if isBaselineCapsSet(oc, "None") {
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") {
 			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
 		}
 

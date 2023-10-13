@@ -180,8 +180,8 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-44797-Could define a Command for DC", func() {
-		if isBaselineCapsSet(oc, "None") {
-			g.Skip("Skipping the test as baselinecaps have been set to None")
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
 		}
 
 		g.By("create new namespace")
@@ -566,8 +566,8 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-42982-Describe quota output should always show units", func() {
-		if isBaselineCapsSet(oc, "None") {
-			g.Skip("Skipping the test as baselinecaps have been set to None")
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
 		}
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
@@ -1532,6 +1532,11 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		if checkOpenshiftSamples(oc) {
 			g.Skip("Can't find the cluster operator openshift-samples, skip it.")
 		}
+		// Skip the test if baselinecaps is set to none, v4.12 or v4.13
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		g.By("Create new namespace")
 		oc.SetupProject()
 		ns12021 := oc.Namespace()
@@ -1614,6 +1619,11 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-66124-Check deprecate DeploymentConfigs in 4.14", func() {
+		// Skip the test if baselinecaps is set to None or v4.13 or v4.12
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
 		g.By("Create new namespace")
 		oc.SetupProject()
 		ns66124 := oc.Namespace()
