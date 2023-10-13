@@ -198,7 +198,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		podModify.create(oc)
 		g.By("Check pod Status")
-		err = podStatus(oc)
+		err = podStatus(oc, podModify.namespace, podModify.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 		g.By("Delete Pod")
 		podModify.delete(oc)
@@ -233,7 +233,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		podModify.create(oc)
 		g.By("Check pod Status")
-		err = podStatus(oc)
+		err = podStatus(oc, podModify.namespace, podModify.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 		g.By("Delete Pod ")
 		podModify.delete(oc)
@@ -268,7 +268,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		podModify.create(oc)
 		g.By("Check pod Status")
-		err = podStatus(oc)
+		err = podStatus(oc, podModify.namespace, podModify.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 		g.By("Delete Pod ")
 		podModify.delete(oc)
@@ -302,7 +302,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		podModify.create(oc)
 		g.By("Check pod Status")
-		err = podStatus(oc)
+		err = podStatus(oc, podModify.namespace, podModify.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 		g.By("Delete Pod ")
 		podModify.delete(oc)
@@ -322,7 +322,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Create a pod with initContainer using volume\n")
 		podModify.create(oc)
 		g.By("Check pod status")
-		err := podStatus(oc)
+		err := podStatus(oc, podModify.namespace, podModify.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 		g.By("Check Vol status\n")
 		err = volStatus(oc)
@@ -341,7 +341,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Create a pod with termination grace period\n")
 		podTermination.create(oc)
 		g.By("Check pod status\n")
-		err := podStatus(oc)
+		err := podStatus(oc, podTermination.namespace, podTermination.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 		g.By("Check container TimeoutStopUSec\n")
 		err = podTermination.getTerminationGrace(oc)
@@ -362,7 +362,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		defer podInitCon38271.delete(oc)
 
 		g.By("Check pod status")
-		err := podStatus(oc)
+		err := podStatus(oc, podInitCon38271.namespace, podInitCon38271.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("Check init container exit normally")
@@ -395,7 +395,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		}
 
 		g.By("Check pod status\n")
-		err := podStatus(oc)
+		err := podStatus(oc, podModify.namespace, podModify.name)
 		exutil.AssertWaitPollNoErr(err, "pod is NOT running")
 
 		g.By("Delete project\n")
@@ -467,7 +467,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podTwoContainers.create(oc)
 		defer podTwoContainers.delete(oc)
 		g.By("Check pod status")
-		err := podStatus(oc)
+		err := podStatus(oc, podTwoContainers.namespace, podTwoContainers.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 		g.By("Enter container 1 and write files")
 		_, err = exutil.RemoteShPodWithBashSpecifyContainer(oc, podTwoContainers.namespace, podTwoContainers.name, "hello-openshift", "echo 'written_from_container1' > /dev/shm/c1")
@@ -507,7 +507,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		defer podUserNS47663.deletePodUserNS(oc)
 
 		g.By("Check pod status")
-		err = podStatus(oc)
+		err = podStatus(oc, podUserNS47663.namespace, podUserNS47663.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("Check pod run in user namespace")
@@ -549,7 +549,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podWkloadCpu52328.create(oc)
 
 		g.By("Check pod status")
-		err = podStatus(oc)
+		err = podStatus(oc, podWkloadCpu52328.namespace, podWkloadCpu52328.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("Check the pod only override cpushares")
@@ -592,7 +592,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podWkloadCpu52313.create(oc)
 
 		g.By("Check pod status")
-		err = podStatus(oc)
+		err = podStatus(oc, podWkloadCpu52313.namespace, podWkloadCpu52313.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("Check the pod get configured to default workload setting")
@@ -609,7 +609,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podWkloadCpu52326.create(oc)
 
 		g.By("Check pod status")
-		err = podStatus(oc)
+		err = podStatus(oc, podWkloadCpu52326.namespace, podWkloadCpu52326.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("Check the pod override the default workload setting")
@@ -627,7 +627,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podWkloadCpu52329.create(oc)
 
 		g.By("Check pod status")
-		err = podStatus(oc)
+		err = podStatus(oc, podWkloadCpu52329.namespace, podWkloadCpu52329.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("Check the pod keep default workload setting")
@@ -669,7 +669,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		defer podTermination.delete(oc)
 
 		g.By("Check pod status")
-		err = podStatus(oc)
+		err = podStatus(oc, podTermination.namespace, podTermination.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("Check in pod the root partition size for Overlay is correct.")
@@ -687,7 +687,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podHello.create(oc)
 
 		g.By("Check pod status")
-		err := podStatus(oc)
+		err := podStatus(oc, podHello.namespace, podHello.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("Get Pod's Node name")
@@ -990,7 +990,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podLogLink65404.create(oc)
 
 		exutil.By("Check pod status")
-		err = podStatus(oc)
+		err = podStatus(oc, podLogLink65404.namespace, podLogLink65404.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		exutil.By("Check log link successfully")

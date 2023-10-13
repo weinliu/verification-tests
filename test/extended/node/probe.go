@@ -54,7 +54,7 @@ var _ = g.Describe("[sig-node] NODE Probe feature", func() {
 		defer pod41579.deletePodLivenessProbe(oc)
 
 		g.By("check pod status")
-		err := podStatus(oc)
+		err := podStatus(oc, pod41579.namespace, pod41579.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 
 		g.By("check pod events") // create function
@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-node] NODE Probe feature", func() {
 		exutil.AssertWaitPollNoErr(err, "event check failed: "+keyword)
 
 		g.By("check pod restart in override termination grace period")
-		err = podStatus(oc)
+		err = podStatus(oc, pod41579.namespace, pod41579.name)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 	})
 

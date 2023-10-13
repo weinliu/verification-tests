@@ -497,16 +497,13 @@ func podStatusterminatedReason(oc *exutil.CLI) error {
 	})
 }
 
-func podStatus(oc *exutil.CLI) error {
+func podStatus(oc *exutil.CLI, namespace string, podName string) error {
 	e2e.Logf("check if pod is available")
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
-		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[*].status.phase}", "-n", oc.Namespace()).Output()
-		if err != nil {
-			e2e.Failf("the result of ReadFile:%v", err)
-			return false, nil
-		}
-		if strings.Contains(status, "Running") && !strings.Contains(status, "Pending") {
-			e2e.Logf("Pod status is : %s", status)
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(status, "True") {
+			e2e.Logf("Pod is running and container is Ready!")
 			return true, nil
 		}
 		return false, nil
