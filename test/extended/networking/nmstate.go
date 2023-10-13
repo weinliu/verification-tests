@@ -3,6 +3,7 @@ package networking
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -872,6 +873,169 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		o.Expect(ifaceInfo1).Should(o.ContainSubstring("inet6"))
 		o.Expect(ifaceInfo1).Should(o.ContainSubstring(freeIPs[0]))
 		e2e.Logf("SUCCESS - ipv6 is enabled and egressIP is not deconfigured")
+	})
+
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:qiowang-Medium-66174-Verify knmstate operator support for IPv6 single stack - ipv6 default route [Disruptive]", func() {
+		exutil.By("Check the platform if it is suitable for running the test")
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "oauth-openshift", "-n", "openshift-authentication").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
+			g.Skip("Skip this case since it needs another Nic to configure routes!")
+		}
+		ipStackType := checkIPStackType(oc)
+		if ipStackType != "ipv6single" {
+			g.Skip("Should be tested on IPv6 single stack platform, skipping!")
+		}
+
+		var (
+			ifName      = "enp1s0"
+			destAddr    = "::/0"
+			nextHopAddr = "fd00:1101::1"
+		)
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+
+		exutil.By("1. Create NMState CR")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		exutil.By("2. Apply default routes on node")
+		exutil.By("2.1 Configure NNCP for default route in main route table")
+		policyTemplate := generateTemplateAbsolutePath("apply-route-template.yaml")
+		policyName1 := "default-route-in-main-table-66174"
+		routePolicy1 := routePolicyResource{
+			name:        policyName1,
+			nodelabel:   "kubernetes.io/hostname",
+			labelvalue:  nodeName,
+			ifacename:   ifName,
+			destaddr:    destAddr,
+			nexthopaddr: nextHopAddr,
+			tableid:     254,
+			template:    policyTemplate,
+		}
+		defer deleteNNCP(oc, policyName1)
+		defer exutil.DebugNode(oc, nodeName, "ip", "-6", "route", "del", "default", "via", routePolicy1.nexthopaddr, "dev", routePolicy1.ifacename, "table", strconv.Itoa(routePolicy1.tableid))
+		configErr1 := routePolicy1.configNNCP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		exutil.By("2.2 Configure NNCP for default route in custom route table")
+		policyName2 := "default-route-in-custom-table-66174"
+		routePolicy2 := routePolicyResource{
+			name:        policyName2,
+			nodelabel:   "kubernetes.io/hostname",
+			labelvalue:  nodeName,
+			ifacename:   ifName,
+			destaddr:    destAddr,
+			nexthopaddr: nextHopAddr,
+			tableid:     66,
+			template:    policyTemplate,
+		}
+		defer deleteNNCP(oc, policyName2)
+		defer exutil.DebugNode(oc, nodeName, "ip", "-6", "route", "del", "default", "via", routePolicy2.nexthopaddr, "dev", routePolicy2.ifacename, "table", strconv.Itoa(routePolicy2.tableid))
+		configErr2 := routePolicy2.configNNCP(oc)
+		o.Expect(configErr2).NotTo(o.HaveOccurred())
+
+		exutil.By("2.3 Verify the policies are applied")
+		nncpErr1 := checkNNCPStatus(oc, policyName1, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		nncpErr2 := checkNNCPStatus(oc, policyName2, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, "policy applied failed")
+		e2e.Logf("SUCCESS - policies are applied")
+
+		exutil.By("2.4 Verify the status of enactments are updated")
+		nnceName1 := nodeName + "." + policyName1
+		nnceErr1 := checkNNCEStatus(oc, nnceName1, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+		nnceName2 := nodeName + "." + policyName2
+		nnceErr2 := checkNNCEStatus(oc, nnceName2, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr2, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments are updated")
+
+		exutil.By("2.5 Verify the default routes found in node network state")
+		routes, nnsRoutesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.routes.config[?(@.next-hop-interface=="`+ifName+`")]}`).Output()
+		o.Expect(nnsRoutesErr).NotTo(o.HaveOccurred())
+		o.Expect(routes).Should(o.ContainSubstring(routePolicy1.nexthopaddr))
+		o.Expect(routes).Should(o.ContainSubstring(routePolicy2.nexthopaddr))
+		e2e.Logf("SUCCESS - the default routes found in node network state")
+
+		exutil.By("2.6 Verify the default routes are shown on the node")
+		route1, routeErr1 := exutil.DebugNode(oc, nodeName, "ip", "-6", "route", "show", "default", "table", strconv.Itoa(routePolicy1.tableid))
+		o.Expect(routeErr1).NotTo(o.HaveOccurred())
+		o.Expect(route1).Should(o.ContainSubstring("default via " + routePolicy1.nexthopaddr + " dev " + routePolicy1.ifacename))
+		route2, routeErr2 := exutil.DebugNode(oc, nodeName, "ip", "-6", "route", "show", "default", "table", strconv.Itoa(routePolicy2.tableid))
+		o.Expect(routeErr2).NotTo(o.HaveOccurred())
+		o.Expect(route2).Should(o.ContainSubstring("default via " + routePolicy2.nexthopaddr + " dev " + routePolicy2.ifacename))
+		e2e.Logf("SUCCESS - default routes are shown on the node")
+
+		exutil.By("3. Remove default routes on node")
+		exutil.By("3.1 Configure NNCP for removing default route in main route table")
+		rmpolicyTemplate := generateTemplateAbsolutePath("remove-route-template.yaml")
+		routePolicy1 = routePolicyResource{
+			name:        policyName1,
+			nodelabel:   "kubernetes.io/hostname",
+			labelvalue:  nodeName,
+			ifacename:   ifName,
+			state:       "absent",
+			destaddr:    destAddr,
+			nexthopaddr: nextHopAddr,
+			tableid:     254,
+			template:    rmpolicyTemplate,
+		}
+		configErr1 = routePolicy1.configNNCP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		exutil.By("3.2 Configure NNCP for removing default route in custom route table")
+		routePolicy2 = routePolicyResource{
+			name:        policyName2,
+			nodelabel:   "kubernetes.io/hostname",
+			labelvalue:  nodeName,
+			ifacename:   ifName,
+			state:       "absent",
+			destaddr:    destAddr,
+			nexthopaddr: nextHopAddr,
+			tableid:     66,
+			template:    rmpolicyTemplate,
+		}
+		configErr2 = routePolicy2.configNNCP(oc)
+		o.Expect(configErr2).NotTo(o.HaveOccurred())
+
+		exutil.By("3.3 Verify the policies are applied")
+		nncpErr1 = checkNNCPStatus(oc, policyName1, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		nncpErr2 = checkNNCPStatus(oc, policyName2, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, "policy applied failed")
+		e2e.Logf("SUCCESS - policies are applied")
+
+		exutil.By("3.4 Verify the status of enactments are updated")
+		nnceErr1 = checkNNCEStatus(oc, nnceName1, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+		nnceErr2 = checkNNCEStatus(oc, nnceName2, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr2, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments are updated")
+
+		exutil.By("3.5 Verify the removed default routes cannot be found in node network state")
+		routes1, nnsRoutesErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.routes}`).Output()
+		o.Expect(nnsRoutesErr1).NotTo(o.HaveOccurred())
+		o.Expect(routes1).ShouldNot(o.ContainSubstring(routePolicy1.nexthopaddr))
+		o.Expect(routes1).ShouldNot(o.ContainSubstring(routePolicy2.nexthopaddr))
+		e2e.Logf("SUCCESS - the default routes cannot be found in node network state")
+
+		exutil.By("3.6 Verify the default routes are removed from the node")
+		route1, routeErr1 = exutil.DebugNode(oc, nodeName, "ip", "-6", "route", "show", "default", "table", strconv.Itoa(routePolicy1.tableid))
+		o.Expect(routeErr1).NotTo(o.HaveOccurred())
+		o.Expect(route1).ShouldNot(o.ContainSubstring("default via " + routePolicy1.nexthopaddr + " dev " + routePolicy1.ifacename))
+		route2, routeErr2 = exutil.DebugNode(oc, nodeName, "ip", "-6", "route", "show", "default", "table", strconv.Itoa(routePolicy2.tableid))
+		o.Expect(routeErr2).NotTo(o.HaveOccurred())
+		o.Expect(route2).ShouldNot(o.ContainSubstring("default via " + routePolicy2.nexthopaddr + " dev " + routePolicy2.ifacename))
+		e2e.Logf("SUCCESS - default routes are removed from the node")
 	})
 
 })

@@ -83,6 +83,18 @@ type stIPRoutePolicyResource struct {
 	template      string
 }
 
+type routePolicyResource struct {
+	name        string
+	nodelabel   string
+	labelvalue  string
+	ifacename   string
+	state       string
+	destaddr    string
+	nexthopaddr string
+	tableid     int
+	template    string
+}
+
 func generateTemplateAbsolutePath(fileName string) string {
 	testDataDir := exutil.FixturePath("testdata", "networking/nmstate")
 	return filepath.Join(testDataDir, fileName)
@@ -168,6 +180,16 @@ func (stpr *stIPRoutePolicyResource) configNNCP(oc *exutil.CLI) error {
 		"IPADDRV4="+stpr.ipaddrv4, "DESTADDRV4="+stpr.destaddrv4, "NEXTHOPADDRV4="+stpr.nexthopaddrv4, "IPADDRV6="+stpr.ipaddrv6, "DESTADDRV6="+stpr.destaddrv6, "NEXTHOPADDRV6="+stpr.nexthopaddrv6)
 	if err != nil {
 		e2e.Logf("Error configure static ip and route %v", err)
+		return err
+	}
+	return nil
+}
+
+func (rpr *routePolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", rpr.template, "-p", "NAME="+rpr.name, "NODELABEL="+rpr.nodelabel, "LABELVALUE="+rpr.labelvalue, "IFACENAME="+rpr.ifacename, "STATE="+rpr.state,
+		"DESTADDR="+rpr.destaddr, "NEXTHOPADDR="+rpr.nexthopaddr, "ID="+strconv.Itoa(rpr.tableid))
+	if err != nil {
+		e2e.Logf("Error configure route %v", err)
 		return err
 	}
 	return nil
