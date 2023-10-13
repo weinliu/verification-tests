@@ -23,8 +23,7 @@ sudo rm -f /usr/bin/oc /usr/local/bin/oc /usr/local/bin/opm /usr/local/bin/initi
 export no_proxy=quay.io
 
 cd /etc/pki/ca-trust/source/anchors
-sudo curl -O --insecure https://password.corp.redhat.com/RH-IT-Root-CA.crt
-sudo curl -O --insecure https://password.corp.redhat.com/legacy.crt
+sudo curl -O --insecure https://certs.corp.redhat.com/certs/Current-IT-Root-CAs.pem
 sudo curl -O --insecure https://engineering.redhat.com/Eng-CA.crt
 sudo update-ca-trust extract
 cd $WORKDIR
