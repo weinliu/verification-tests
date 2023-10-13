@@ -151,6 +151,14 @@ func debugNode(oc *CLI, nodeName string, cmdOptions []string, needChroot bool, r
 			}
 		}
 	}
+
+	// For default nodeSelector enabled test clusters we need to add the extra annotation to avoid the debug pod's
+	// nodeSelector overwritten by the scheduler
+	if IsDefaultNodeSelectorEnabled(oc) && !IsWorkerNode(oc, nodeName) && !IsSpecifiedAnnotationKeyExist(oc, "ns/"+debugNodeNamespace, "", `openshift.io/node-selector`) {
+		AddAnnotationsToSpecificResource(oc, "ns/"+debugNodeNamespace, "", `openshift.io/node-selector=`)
+		defer RemoveAnnotationFromSpecificResource(oc, "ns/"+debugNodeNamespace, "", `openshift.io/node-selector`)
+	}
+
 	if len(cmdOptions) > 0 {
 		cargs = append(cargs, cmdOptions...)
 	}
@@ -377,10 +385,23 @@ func GetNodeArchByName(oc *CLI, nodeName string) string {
 	return nodeArch
 }
 
-// Get node list by label
+// GetNodeListByLabel gets the node list by label
 func GetNodeListByLabel(oc *CLI, labelKey string) []string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", labelKey, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Fail to get node with label %v, got error: %v\n", labelKey, err)
 	nodeNameList := strings.Fields(output)
 	return nodeNameList
+}
+
+// IsDefaultNodeSelectorEnabled judges whether the test cluster enabled the defaultNodeSelector
+func IsDefaultNodeSelectorEnabled(oc *CLI) bool {
+	defaultNodeSelector, getNodeSelectorErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("scheduler", "cluster", "-o=jsonpath={.spec.defaultNodeSelector}").Output()
+	o.Expect(getNodeSelectorErr).NotTo(o.HaveOccurred(), "Fail to get cluster scheduler defaultNodeSelector got error: %v\n", getNodeSelectorErr)
+	return !strings.EqualFold(defaultNodeSelector, "")
+}
+
+// IsWorkerNode judges whether the node has the worker role
+func IsWorkerNode(oc *CLI, nodeName string) bool {
+	isWorker, _ := StringsSliceContains(GetNodeListByLabel(oc, `node-role.kubernetes.io/worker`), nodeName)
+	return isWorker
 }
