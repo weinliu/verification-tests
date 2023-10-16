@@ -3397,7 +3397,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-Medium-11364-[platformmanagement_public_624] Create nodeport service", func() {
+	g.It("HyperShiftMGMT-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-Medium-11364-[platformmanagement_public_624] Create nodeport service", func() {
 		var (
 			generatedNodePort int
 			curlOutput        string
@@ -6081,7 +6081,7 @@ manifests:
 	})
 
 	// author: kewang@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:kewang-High-65924-Specifying non-existen secret for API namedCertificates renders inconsistent config [Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-HyperShiftMGMT-Author:kewang-High-65924-Specifying non-existen secret for API namedCertificates renders inconsistent config [Disruptive]", func() {
 		// Currently, there is one bug OCPBUGS-15853 on 4.13, after the related PRs are merged, consider back-porting the case to 4.13
 		var (
 			apiserver           = "apiserver/cluster"
