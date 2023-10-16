@@ -2,6 +2,7 @@ package workloads
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -180,5 +181,25 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		rcOutput, err = oc.Run("get").Args("rc", "-n", ns11112).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(rcOutput, "mydc11112-4")).To(o.BeTrue())
+	})
+	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Author:yinzhou-Medium-68242-oc adm release mirror works fine with multi-arch image to image stream", func() {
+		extractTmpDirName := "/tmp/case68242"
+		err := os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns68242 := oc.Namespace()
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		payloadImage := getLatestPayload("https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "mirror", "-a", extractTmpDirName+"/.dockerconfigjson", "--from="+payloadImage, "--to-image-stream=release", "--keep-manifest-list=true", "-n", ns68242).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		imageMediaType, err := oc.Run("get").Args("istag", "release:installer", "-n", ns68242, "-o=jsonpath={.image.dockerImageManifestMediaType}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The output %v", imageMediaType)
+		o.Expect(strings.Contains(imageMediaType, "application/vnd.docker.distribution.manifest.list.v2+json")).To(o.BeTrue())
 	})
 })
