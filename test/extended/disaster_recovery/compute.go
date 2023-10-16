@@ -33,37 +33,37 @@ func (i *instance) GetName() string {
 // ComputeNodes handles ComputeNode interface
 type ComputeNodes []ComputeNode
 
-// GetDrMasterNodes list nodes according to plaforn and creds.
-func GetDrMasterNodes(oc *exutil.CLI) (ComputeNodes, func()) {
+// GetNodes get master nodes according to platform and creds with the specified label.
+func GetNodes(oc *exutil.CLI, label string) (ComputeNodes, func()) {
 	platform := exutil.CheckPlatform(oc)
 	switch platform {
 	case "aws":
 		e2e.Logf("\n AWS is detected, running the case on AWS\n")
-		return GetAwsMasterNodes(oc)
+		return GetAwsNodes(oc, label)
 	case "gcp":
 		e2e.Logf("\n GCP is detected, running the case on gcp\n")
-		return GetGcpMasterNodes(oc)
+		return GetGcpNodes(oc, label)
 	case "vsphere":
 		e2e.Logf("\n vsphere is detected, running the case on vsphere\n")
-		return GetVsphereMasterNodes(oc)
+		return GetVsphereNodes(oc, label)
 	case "openstack":
 		e2e.Logf("\n OSP is detected, running the case on osp\n")
-		return GetOspMasterNodes(oc)
+		return GetOspNodes(oc, label)
 	case "azure":
 		e2e.Logf("\n Azure is detected, running the case on azure\n")
-		return GetAzureMasterNodes(oc)
+		return GetAzureNodes(oc, label)
 	case "baremetal":
 		e2e.Logf("\n IPI Baremetal is detected, running the case on baremetal\n")
-		return GetBaremetalMasterNodes(oc)
+		return GetBaremetalNodes(oc, label)
 	case "none":
 		e2e.Logf("\n UPI Baremetal is detected, running the case on baremetal\n")
-		return GetUPIBaremetalMasterNodes(oc)
+		return GetUPIBaremetalNodes(oc, label)
 	case "ibmcloud":
 		e2e.Logf("\n IBM is detected, running the case on IBM\n")
-		return GetIbmMasterNodes(oc)
+		return GetIbmNodes(oc, label)
 	case "nutanix":
 		e2e.Logf("\n Nutanix is detected, running the case on nutanix\n")
-		return GetNutanixMasterNodes(oc)
+		return GetNutanixNodes(oc, label)
 	default:
 		g.Skip("Not support cloud provider for DR cases for now. Test cases should be run on IBM or vsphere or aws or gcp or openstack or azure or baremetal, skip for other platforms!!")
 	}

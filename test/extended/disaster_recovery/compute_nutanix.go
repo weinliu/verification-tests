@@ -15,9 +15,9 @@ type nutanixInstance struct {
 	client *exutil.NutanixSession
 }
 
-// GetNutanixMasterNodes get master nodes and load clouds cred.
-func GetNutanixMasterNodes(oc *exutil.CLI) ([]ComputeNode, func()) {
-	nodeNames, err := exutil.GetClusterNodesBy(oc, "master")
+// Get nodes and load clouds cred with the specified label.
+func GetNutanixNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
+	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nutanixUsername, nutanixPassword, nutanixEndpointURL, credErr := exutil.GetNutanixCredentialFromCluster(oc)
 	o.Expect(credErr).NotTo(o.HaveOccurred())

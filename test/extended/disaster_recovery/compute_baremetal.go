@@ -25,9 +25,9 @@ func newBaremetalIPIInstance(oc *exutil.CLI, nodeName string) *baremetalIPIInsta
 	}
 }
 
-// GetBaremetalMasterNodes get master nodes.
-func GetBaremetalMasterNodes(oc *exutil.CLI) ([]ComputeNode, func()) {
-	nodeNames, err := exutil.GetClusterNodesBy(oc, "master")
+// GetBaremetalNodes get nodes and load clouds cred with the specified label.
+func GetBaremetalNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
+	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var results []ComputeNode
 	for _, nodeName := range nodeNames {

@@ -18,9 +18,9 @@ type gcpInstance struct {
 	client    *exutil.Gcloud
 }
 
-// GetGcpMasterNodes get master nodes and load clouds cred.
-func GetGcpMasterNodes(oc *exutil.CLI) ([]ComputeNode, func()) {
-	nodeNames, err := exutil.GetClusterNodesBy(oc, "master")
+// GetGcpNodes get nodes and load clouds cred with the specified label.
+func GetGcpNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
+	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	projectID, err := exutil.GetGcpProjectID(oc)
 	o.Expect(err).ToNot(o.HaveOccurred())

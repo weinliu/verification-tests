@@ -21,9 +21,9 @@ type ospInstance struct {
 	ospObj exutil.Osp
 }
 
-// GetOspMasterNodes get master nodes and load clouds cred.
-func GetOspMasterNodes(oc *exutil.CLI) ([]ComputeNode, func()) {
-	nodeNames, err := exutil.GetClusterNodesBy(oc, "master")
+// Get nodes and load clouds cred with the specified label.
+func GetOspNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
+	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	OspCredentials(oc)
 	var results []ComputeNode

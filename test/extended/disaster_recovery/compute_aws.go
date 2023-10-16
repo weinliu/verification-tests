@@ -15,10 +15,10 @@ type awsInstance struct {
 	client *exutil.AwsClient
 }
 
-// GetAwsMasterNodes get master nodes and load clouds cred.
-func GetAwsMasterNodes(oc *exutil.CLI) ([]ComputeNode, func()) {
+// GetAwsNodes get nodes and load clouds cred with the specified label.
+func GetAwsNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
 	exutil.GetAwsCredentialFromCluster(oc)
-	nodeNames, err := exutil.GetClusterNodesBy(oc, "master")
+	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var results []ComputeNode
 	for _, nodeName := range nodeNames {

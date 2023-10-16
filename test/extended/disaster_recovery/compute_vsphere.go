@@ -25,9 +25,9 @@ type vsphereInstance struct {
 	vspClient *govmomi.Client
 }
 
-// GetVsphereMasterNodes get master nodes and load clouds cred.
-func GetVsphereMasterNodes(oc *exutil.CLI) ([]ComputeNode, func()) {
-	nodeNames, err := exutil.GetClusterNodesBy(oc, "master")
+// Get nodes and load clouds cred with the specified label.
+func GetVsphereNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
+	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	vspObj, vspClient := VsphereCloudClient(oc)
 	var results []ComputeNode

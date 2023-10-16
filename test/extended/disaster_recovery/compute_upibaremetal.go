@@ -22,9 +22,9 @@ type UPIInstance struct {
 	buildid   string
 }
 
-// GetUPIBaremetalMasterNodes get master nodes and load clouds cred.
-func GetUPIBaremetalMasterNodes(oc *exutil.CLI) ([]ComputeNode, func()) {
-	nodeNames, err := exutil.GetClusterNodesBy(oc, "master")
+// Get nodes and load clouds cred with the specified label.
+func GetUPIBaremetalNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
+	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// Currently DR on UPI baremetal only supported for RDU intances.
 	if !strings.Contains(nodeNames[0], "qeclusters.arm.eng.rdu2.redhat.com") {

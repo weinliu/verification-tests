@@ -2,6 +2,7 @@ package disasterrecovery
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"time"
@@ -18,7 +19,23 @@ import (
 var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLIWithoutNamespace("default")
+	var (
+		oc          = exutil.NewCLIWithoutNamespace("default")
+		startStates = map[string]bool{
+			"poweredOn": true,
+			"running":   true,
+			"active":    true,
+			"ready":     true,
+		}
+		stopStates = map[string]bool{
+			"poweredOff":  true,
+			"stopped":     true,
+			"terminated":  true,
+			"paused":      true,
+			"deallocated": true,
+			"notready":    true,
+		}
+	)
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-19941-[Apiserver] [failure inject] when 1 master is down the cluster should continue serving well without unavailable more than 30s [Disruptive]", func() {
@@ -41,9 +58,9 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		platform := exutil.CheckPlatform(oc)
-		g.By("1. Get the leader master node of cluster")
+		exutil.By("1. Get the leader master node of cluster")
 
-		nodes, cleanup := GetDrMasterNodes(oc)
+		nodes, cleanup := GetNodes(oc, "master")
 		if cleanup != nil {
 			defer cleanup()
 		}
@@ -68,18 +85,18 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			vmState, err := node.State()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", node.GetName()))
-			if vmState == "poweredOff" || vmState == "stopped" || vmState == "stopping" || vmState == "terminated" || vmState == "paused" || vmState == "pausing" || vmState == "deallocated" || vmState == "notready" {
+			if _, ok := stopStates[vmState]; ok {
 				e2e.Logf("Restarting leader_master_node %s", node.GetName())
 				err = node.Start()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				err = ClusterHealthcheck(oc, "OCP-19941/log")
 				o.Expect(err).NotTo(o.HaveOccurred())
-			} else if vmState == "poweredOn" || vmState == "running" || vmState == "active" || vmState == "ready" {
+			} else if _, ok := startStates[vmState]; ok {
 				e2e.Logf("leader_master_node %s machine instance state is already %s", node.GetName(), vmState)
 			}
 		}()
 
-		g.By("2. Shut down a leader master node to simulate a user failure.")
+		exutil.By("2. Shut down a leader master node to simulate a user failure.")
 		e2e.Logf("Checking leader_master_node machine instance.")
 		vmInstance, err := node.GetInstanceID()
 		o.Expect(vmInstance).ShouldNot(o.BeEmpty(), "Not able to get leader_master_node machine instance")
@@ -92,9 +109,10 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		vmState, stateErr := node.State()
 		o.Expect(stateErr).NotTo(o.HaveOccurred())
 		o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", node.GetName()))
-		if vmState == "poweredOff" || vmState == "stopped" || vmState == "terminated" || vmState == "paused" || vmState == "deallocated" || vmState == "notready" {
+
+		if _, ok := stopStates[vmState]; ok {
 			e2e.Failf("leader_master_node %s instance state is already %s....before running case, so exiting from case run as cluster not ready.", vmInstance, vmState)
-		} else if vmState == "poweredOn" || vmState == "running" || vmState == "active" || vmState == "ready" {
+		} else if _, ok := startStates[vmState]; ok {
 			e2e.Logf("Bringing down leader master node %s machine instance", vmInstance)
 			err = node.Stop()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -102,7 +120,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			e2e.Logf("Not able to get leader_master_node %s machine instance state :: %s", vmInstance, err)
 		}
 
-		g.By("3. When the leader master node is unavailable, apiservers continue to serve after a short interruption.")
+		exutil.By("3. When the leader master node is unavailable, apiservers continue to serve after a short interruption.")
 		// Adding wait time here of 300s because sometimes wait poll taking more thans 30s to complete for osp platform.
 		if platform == "openstack" {
 			expectedOutageTime = 300
@@ -167,7 +185,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		})
 		exutil.AssertWaitPollNoErr(apiserverOutageWatcher, "The cluster outage time lasted longer than we expected!")
 
-		g.By("4. During the leader master node is unavailable, verify the cluster availability")
+		exutil.By("4. During the leader master node is unavailable, verify the cluster availability")
 		err = ClusterSanitycheck(oc, randProject1)
 		if err == nil {
 			e2e.Logf("Post down leader master node, cluster availability sanity check passed")
@@ -183,12 +201,121 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			e2e.Failf("Failed to restart the leader master node %s", node.GetName())
 		}
 
-		g.By("5. After restarted the leader master node, verify the cluster availability")
+		exutil.By("5. After restarted the leader master node, verify the cluster availability")
 		err = ClusterHealthcheck(oc, "OCP-19941/log")
 		if err == nil {
 			e2e.Logf("Post restarting the leader master node, cluster health check passed")
 		} else {
 			e2e.Failf("Post restarting the leader master node, cluster health check failed :: %s ", err)
+		}
+	})
+
+	// author: kewang@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:kewang-Medium-67718-[Apiserver] The cluster still works well after restarted frequently multiple times [Disruptive]", func() {
+		var (
+			dirname = "/tmp/-OCP-67718/"
+			n       = 0
+		)
+
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Cluster should be healthy before running case.")
+		err = ClusterHealthcheck(oc, "OCP-67718/log")
+		if err == nil {
+			e2e.Logf("Cluster health check passed before running case")
+		} else {
+			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
+		}
+
+		exutil.By("1. Get nodes of cluster")
+		masterNodes, cleanup := GetNodes(oc, "master")
+		if cleanup != nil {
+			defer cleanup()
+		}
+		workerNodes, cleanup := GetNodes(oc, "worker")
+		if cleanup != nil {
+			defer cleanup()
+		}
+
+		exutil.By("2. Shut down nodes to stop cluster.")
+		stopNodesOfCluster := func(nodes ComputeNodes, shutdownType int) {
+			for _, node := range nodes {
+				vmState, stateErr := node.State()
+				nodeName := node.GetName()
+				o.Expect(stateErr).NotTo(o.HaveOccurred())
+				o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get node %s machine instance state", nodeName))
+
+				if _, ok := startStates[vmState]; ok {
+					if shutdownType == 1 {
+						e2e.Logf("Force node %s shutdown ...", nodeName)
+						err = node.Stop()
+					} else {
+						e2e.Logf("Node %s is being soft shutdown ...", nodeName)
+						_, err = exutil.DebugNodeWithChroot(oc, nodeName, "shutdown", "-h", "1")
+					}
+					o.Expect(err).NotTo(o.HaveOccurred())
+				} else {
+					e2e.Logf("The node %s are not active :: %s", nodeName, err)
+				}
+			}
+		}
+
+		// Number 1 indicates indicates force shutdown, 2 indicates soft shutdown
+		shutdownType := rand.Intn(2-1+1) + 1
+		// Keep this order, worker nodes first, then master nodes, especially soft shutdown
+		stopNodesOfCluster(workerNodes, shutdownType)
+		stopNodesOfCluster(masterNodes, shutdownType)
+
+		exutil.By("3. Waiting for the cluster to shutdown completely...")
+		nodes := append(masterNodes, workerNodes...)
+		numOfNodes := len(nodes)
+
+		duration := time.Duration(300)
+		if shutdownType == 2 {
+			duration = time.Duration(480)
+		}
+		err = wait.Poll(20*time.Second, duration*time.Second, func() (bool, error) {
+			poweroffDone := false
+			for i := 0; i < len(nodes); i++ {
+				vmState, stateErr := nodes[i].State()
+				nodeName := nodes[i].GetName()
+				o.Expect(stateErr).NotTo(o.HaveOccurred())
+				if _, ok := stopStates[vmState]; ok {
+					n += 1
+					// Remove completely stopped node
+					nodes = append(nodes[:i], nodes[i+1:]...)
+					i--
+					e2e.Logf("The node %s has been stopped completely!", nodeName)
+				}
+			}
+			if n == numOfNodes {
+				poweroffDone = true
+			}
+			e2e.Logf("%d/%d nodes have been stopped completely!", n, numOfNodes)
+			return poweroffDone, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Node was unable to stop!")
+
+		exutil.By("4. Start nodes again after the cluster has been shut down completely")
+
+		nodes = append(masterNodes, workerNodes...)
+		for _, node := range nodes {
+			err = node.Start()
+			if err == nil {
+				e2e.Logf("Started node %s ...", node.GetName())
+			} else {
+				e2e.Failf("Failed to start the node %s", node.GetName())
+			}
+		}
+
+		exutil.By("5. After restarted nodes of the cluster, verify the cluster availability")
+		err = ClusterHealthcheck(oc, "OCP-67718/log")
+		if err == nil {
+			e2e.Logf("Post restarting the cluster, cluster health check passed")
+		} else {
+			e2e.Failf("Post restarting the cluster, cluster health check failed :: %s ", err)
 		}
 	})
 })

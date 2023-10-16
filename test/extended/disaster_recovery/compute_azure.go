@@ -12,9 +12,9 @@ type azureInstance struct {
 	client      *exutil.AzureSession
 }
 
-// GetAzureMasterNodes get master nodes and load clouds cred.
-func GetAzureMasterNodes(oc *exutil.CLI) ([]ComputeNode, func()) {
-	nodeNames, err := exutil.GetClusterNodesBy(oc, "master")
+// GetAzureNodes get nodes and load clouds cred with the specified label.
+func GetAzureNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
+	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	azureRGname, rgerr := exutil.GetAzureCredentialFromCluster(oc)
 	o.Expect(rgerr).NotTo(o.HaveOccurred())

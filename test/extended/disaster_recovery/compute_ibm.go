@@ -13,9 +13,9 @@ type ibmInstance struct {
 	client     *exutil.IBMSession
 }
 
-// GetIbmMasterNodes get master nodes and load clouds cred.
-func GetIbmMasterNodes(oc *exutil.CLI) ([]ComputeNode, func()) {
-	nodeNames, err := exutil.GetClusterNodesBy(oc, "master")
+// Get nodes and load clouds cred with the specified label.
+func GetIbmNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
+	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	ibmApiKey, ibmRegion, ibmVpcName, credErr := exutil.GetIBMCredentialFromCluster(oc)
 	o.Expect(credErr).NotTo(o.HaveOccurred())
