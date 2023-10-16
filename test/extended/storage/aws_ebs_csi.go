@@ -290,7 +290,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				myPvc                        = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(myStorageClass.name))
 				myPod                        = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(myPvc.name))
 				volumeType                   = "gp3"
-				fsFormatBlockSize            = fmt.Sprint(getRandomNum(1000, 5000))
+				fsFormatBlockSize            = fmt.Sprint(getRandomNum(1024, 5000))
 				validFsFormatBlockSizeValues = []string{"1024", "2048", "4096"}
 			)
 
