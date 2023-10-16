@@ -92,7 +92,23 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("# Create deployment B with the same pvc and wait for it becomes ready")
 			// deployment B nodeSelector zone is different from deploymentA
 			o.Expect(volAvailableZones[0]).ShouldNot(o.Equal(volAvailableZones[1]))
-			depB.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", deleteElement(volAvailableZones, myWorkers[0].availableZone)[0])
+			toleration := []map[string]string{
+				{
+					"key":      "node-role.kubernetes.io/master",
+					"operator": "Exists",
+					"effect":   "NoSchedule",
+				},
+			}
+			nodeSelector := map[string]string{
+				"topology.kubernetes.io/zone": deleteElement(volAvailableZones, myWorkers[0].availableZone)[0],
+			}
+			extraParameters := map[string]interface{}{
+				"jsonPath":     `items.0.spec.template.spec.`,
+				"tolerations":  toleration,
+				"nodeSelector": nodeSelector,
+			}
+
+			depB.createWithExtraParameters(oc, extraParameters)
 			defer depB.deleteAsAdmin(oc)
 			depB.waitReady(oc)
 
