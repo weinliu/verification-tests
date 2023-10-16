@@ -396,6 +396,10 @@ func GetNodeListByLabel(oc *CLI, labelKey string) []string {
 // IsDefaultNodeSelectorEnabled judges whether the test cluster enabled the defaultNodeSelector
 func IsDefaultNodeSelectorEnabled(oc *CLI) bool {
 	defaultNodeSelector, getNodeSelectorErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("scheduler", "cluster", "-o=jsonpath={.spec.defaultNodeSelector}").Output()
+	if getNodeSelectorErr != nil && strings.Contains(defaultNodeSelector, `the server doesn't have a resource type`) {
+		e2e.Logf("WARNING: The scheduler API is not supported on the test cluster")
+		return false
+	}
 	o.Expect(getNodeSelectorErr).NotTo(o.HaveOccurred(), "Fail to get cluster scheduler defaultNodeSelector got error: %v\n", getNodeSelectorErr)
 	return !strings.EqualFold(defaultNodeSelector, "")
 }
