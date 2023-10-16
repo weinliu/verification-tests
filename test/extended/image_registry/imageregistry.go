@@ -141,6 +141,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if err != nil && strings.Contains(output, `openshift-samples" not found`) {
 			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
 		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.samples/cluster", "-o=jsonpath={.spec.managementState}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if output == "Removed" {
+			g.Skip("Skip test for openshift-samples which is removed")
+		}
 
 		g.By("Start a build and pull image from internal registry")
 		oc.SetupProject()
@@ -2506,7 +2511,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if err != nil && strings.Contains(output, `openshift-samples" not found`) {
 			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
 		}
-
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.samples/cluster", "-o=jsonpath={.spec.managementState}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if output == "Removed" {
+			g.Skip("Skip test for openshift-samples which is removed")
+		}
 		g.By("Create app with template")
 		newappErr := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--template=eap74-basic-s2i", "-n", oc.Namespace()).Execute()
 		o.Expect(newappErr).NotTo(o.HaveOccurred())

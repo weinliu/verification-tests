@@ -358,6 +358,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if err != nil && strings.Contains(sampleOut, `openshift-samples" not found`) {
 			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
 		}
+		sampleOut, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.samples/cluster", "-o=jsonpath={.spec.managementState}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if sampleOut == "Removed" {
+			g.Skip("Skip test for openshift-samples which is removed")
+		}
 
 		g.By("Check if it's a https_proxy cluster")
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec}").Output()
