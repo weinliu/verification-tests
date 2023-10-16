@@ -2670,6 +2670,81 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:huirwang-Critical-66512-pod2pod should work well when one is egress pod,another is located on egress node. [Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+
+		exutil.By("Verify there are two more worker nodes in the cluster.")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		exutil.By("Get namespace")
+		ns1 := oc.Namespace()
+
+		exutil.By("Apply EgressLabel Key to one node. \n")
+		egressNode := nodeList.Items[1].Name
+		nonEgressNode := nodeList.Items[0].Name
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+
+		exutil.By("Create an egressip object\n")
+		freeIPs := findFreeIPs(oc, egressNode, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+		egressip1 := egressIPResource1{
+			name:          "egressip-66512",
+			template:      egressIP1Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		exutil.By("Create a test pod on egress node\n")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  egressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns1, pod1.name)
+
+		exutil.By("Create a second namespace\n")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		exutil.By("Create a test pod on nonegress node under second namespace.\n")
+		pod2 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns2,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod2.createPingPodNode(oc)
+		waitPodReady(oc, ns2, pod2.name)
+
+		exutil.By("patch label to second namespace and pod")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "org-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "org=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer exutil.LabelPod(oc, ns2, pod2.name, "color-")
+		err = exutil.LabelPod(oc, ns2, pod2.name, "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Should be able to access pod1 from pod2 and reverse works as well\n")
+		CurlPod2PodPass(oc, ns1, pod1.name, ns2, pod2.name)
+		CurlPod2PodPass(oc, ns2, pod2.name, ns1, pod1.name)
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
