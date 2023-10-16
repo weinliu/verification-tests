@@ -3,6 +3,7 @@ package etcd
 import (
 	"bufio"
 	"fmt"
+
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,8 +13,8 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -125,13 +126,21 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	// author: skundu@redhat.com
 	g.It("NonHyperShiftHOST-PstChkUpgrade-ConnectedOnly-Author:skundu-NonPreRelease-Critical-22665-Check etcd image have been update to target release value after upgrade [Serial]", func() {
 		g.By("Test for case OCP-22665 Check etcd image have been update to target release value after upgrade.")
-		g.By("Check if it's a proxy cluster")
 
+		var (
+			errImg      error
+			etcdImageID string
+		)
 		e2e.Logf("Discover all the etcd pods")
 		etcdPodList := getPodListByLabel(oc, "etcd=true")
 
 		e2e.Logf("get the image id from the etcd pod")
-		etcdImageID, errImg := oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.status.containerStatuses[?(@.name==\"etcd\")].imageID}").Output()
+		arch := architecture.ClusterArchitecture(oc)
+		if arch.String() == "arm64" || arch.String() == "multi" {
+			etcdImageID, errImg = oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.status.containerStatuses[?(@.name==\"etcd\")].image}").Output()
+		} else {
+			etcdImageID, errImg = oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.status.containerStatuses[?(@.name==\"etcd\")].imageID}").Output()
+		}
 		o.Expect(errImg).NotTo(o.HaveOccurred())
 		e2e.Logf("etcd imagid is %v", etcdImageID)
 
