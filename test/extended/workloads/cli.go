@@ -1214,6 +1214,11 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 
 	// author: knarra@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-64920-High-63851-Verify oc adm release info and oc image extract --icsp-file flag still works with deprecated warning message", func() {
+		// Skip the case if cluster is C2S/SC2S disconnected as external network cannot be accessed
+		if strings.HasPrefix(getClusterRegion(oc), "us-iso") {
+			g.Skip("Skipped: AWS C2S/SC2S disconnected clusters are not satisfied for this test case")
+		}
+
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		icspFile64920 := filepath.Join(buildPruningBaseDir, "icspFile64920.yaml")
 		var (

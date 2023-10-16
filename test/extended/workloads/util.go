@@ -1695,3 +1695,16 @@ func checkMustgatherImagestreamTag(oc *exutil.CLI) bool {
 	}
 	return true
 }
+
+func getWorkersList(oc *exutil.CLI) []string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(output, " ")
+}
+
+func getClusterRegion(oc *exutil.CLI) string {
+	node := getWorkersList(oc)[0]
+	region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.metadata.labels.failure-domain\\.beta\\.kubernetes\\.io\\/region}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return region
+}
