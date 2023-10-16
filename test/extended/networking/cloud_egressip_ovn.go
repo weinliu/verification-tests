@@ -1757,6 +1757,156 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Skip for not support scenarios!")
 		}
 	})
+
+	// author: jechen@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:jechen-High-68213-Outgoing traffic sourced from same egressIP when only one egressIP is assigned even if the egressIP object has multiple egressIP addresses configured in it. [Serial]", func() {
+
+		// Updated the case for OCPBUGS-19905
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		timer := estimateTimeoutForEgressIP(oc) * 2
+
+		exutil.By("1. Get two worker nodes with same subnets")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+
+		exutil.By("2. Apply EgressLabel Key for this test on one node.")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
+
+		exutil.By("3. Apply label to namespace\n")
+		ns1 := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Create an egressip object")
+		freeIPs := findFreeIPs(oc, egressNodes[0], 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
+		egressip1 := egressIPResource1{
+			name:      "egressip-68213",
+			template:  egressIPTemplate,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		egressip1.createEgressIPObject1(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		exutil.By("5. Check only one EgressIP assigned in the object.")
+		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
+
+		// Find out the other egressip address that is not assigned to egress node
+		var unassignedIP []string
+		for i, v := range freeIPs {
+			if v == egressIPMaps[0]["egressIP"] {
+				unassignedIP = append(freeIPs[:i], freeIPs[i+1:]...)
+				break
+			}
+		}
+		e2e.Logf("\n unassigned ip address: %v\n\n\n", unassignedIP)
+
+		exutil.By("6. Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("7. Check only the egressIP that is assigned to egressNode is consistently used in outbounding traffic.")
+		var dstHost, primaryInf string
+		var infErr, snifErr error
+		var tcpdumpDS *tcpdumpDaemonSet
+		errMsgFmt := "Any error in finding %v in tcpdump?: %v\n\n\n"
+		switch flag {
+		case "ipecho":
+			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+			sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(sourceIP)
+			o.Expect(sourceIP).Should(o.ContainSubstring(egressIPMaps[0]["egressIP"]))
+			o.Expect(sourceIP).ShouldNot(o.ContainSubstring(unassignedIP[0]))
+		case "tcpdump":
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump", "true")
+			primaryInf, infErr = getSnifPhyInf(oc, egressNodes[0])
+			o.Expect(infErr).NotTo(o.HaveOccurred())
+			dstHost = nslookDomainName("ifconfig.me")
+			defer deleteTcpdumpDS(oc, "tcpdump-68213", ns1)
+			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns1, "tcpdump-68213", "tcpdump", "true", dstHost, primaryInf, 80)
+			o.Expect(snifErr).NotTo(o.HaveOccurred())
+
+			exutil.By("Verify only one the assigned egressIP is used as sourceIP.")
+			egressipErr := wait.Poll(30*time.Second, timer, func() (bool, error) {
+				randomStr, url := getRequestURL(dstHost)
+				_, cmdErr := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..30}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+				o.Expect(cmdErr).NotTo(o.HaveOccurred())
+				egressIPCheck1 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, egressIPMaps[0]["egressIP"], true)
+				e2e.Logf(errMsgFmt, egressIPMaps[0]["egressIP"], egressIPCheck1)
+				egressIPCheck2 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, unassignedIP[0], false)
+				e2e.Logf(errMsgFmt, unassignedIP[0], egressIPCheck2)
+				if egressIPCheck1 != nil || egressIPCheck2 != nil {
+					e2e.Logf("Did not find assigned egressIPs %s in tcpdump log, or found the unaisggned ip %s unexpectedly, try next round.", egressIPMaps[0]["egressIP"], unassignedIP[0])
+					return false, nil
+				}
+				e2e.Logf("Found the egressIP in tcpdump log as expected")
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get EgressIPs %s in tcpdump", egressIPMaps[0]["egressIP"]))
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		exutil.By("8. Apply EgressLabel Key for this test on second node.")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
+
+		exutil.By("9. Check two EgressIP assigned in the object.")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
+
+		exutil.By("Check source IP is randomly one of egress ips.\n")
+		switch flag {
+		case "ipecho":
+			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+			sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(sourceIP)
+			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[0]))
+			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[1]))
+		case "tcpdump":
+			exutil.By(" Use tcpdump to verify egressIP")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump", "true")
+			dsReadyErr := waitDaemonSetReady(oc, ns1, tcpdumpDS.name)
+			o.Expect(dsReadyErr).NotTo(o.HaveOccurred())
+
+			exutil.By("Check source IP is randomly one of egress ips for both namespaces.")
+			egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+				randomStr, url := getRequestURL(dstHost)
+				_, cmdErr := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..10}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+				o.Expect(cmdErr).NotTo(o.HaveOccurred())
+				if checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIPs[0], true) != nil || checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIPs[1], true) != nil {
+					e2e.Logf("No matched egressIPs in tcpdump log, try next round.")
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get both EgressIPs %s,%s in tcpdump", freeIPs[0], freeIPs[1]))
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
