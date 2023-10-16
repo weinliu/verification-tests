@@ -152,8 +152,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		e2e.Logf("--------------------Esxi version is  %s", esxiVersion)
 		vCenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", "data.result.0.metric.version")
 		o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+		e2e.Logf("--------------------vCenter version is  %s", vCenterVersion)
 
-		if !versionIsAbove(esxiVersion, SupportVsVersion) || !versionIsAbove(vCenterVersion, SupportVsVersion) {
+		if !(versionIsAbove(esxiVersion, SupportVsVersion) && versionIsAbove(vCenterVersion, SupportVsVersion)) && esxiVersion != SupportVsVersion && vCenterVersion != SupportVsVersion {
 			checkAlertRaised(oc, "VSphereOlderVersionPresent")
 		}
 	})

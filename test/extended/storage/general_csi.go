@@ -1814,12 +1814,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
 		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
 			mo := newMonitor(oc.AsAdmin())
-			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
 			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
-			if !versionIsAbove(vcenterVersion, "7.0.2") {
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
@@ -1913,12 +1919,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
 		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
 			mo := newMonitor(oc.AsAdmin())
-			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
 			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
-			if !versionIsAbove(vcenterVersion, "7.0.2") {
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
@@ -2015,12 +2027,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
 		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
 			mo := newMonitor(oc.AsAdmin())
-			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
 			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
-			if !versionIsAbove(vcenterVersion, "7.0.2") {
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
@@ -2113,12 +2131,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
 		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
 			mo := newMonitor(oc.AsAdmin())
-			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
 			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
-			if !versionIsAbove(vcenterVersion, "7.0.2") {
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
@@ -2678,12 +2702,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
 		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
 			mo := newMonitor(oc.AsAdmin())
-			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
 			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
-			if !versionIsAbove(vcenterVersion, "7.0.2") {
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
@@ -3053,12 +3083,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
 		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
 			mo := newMonitor(oc.AsAdmin())
-			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
 			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
-			if !versionIsAbove(vcenterVersion, "7.0.2") {
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
@@ -3172,12 +3208,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
 		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
 			mo := newMonitor(oc.AsAdmin())
-			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
 			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
-			if !versionIsAbove(vcenterVersion, "7.0.2") {
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
@@ -3238,12 +3280,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
 		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
 			mo := newMonitor(oc.AsAdmin())
-			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
 			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
-			if !versionIsAbove(vcenterVersion, "7.0.2") {
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
@@ -3330,12 +3378,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
 		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
 			mo := newMonitor(oc.AsAdmin())
-			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
 			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
-			if !versionIsAbove(vcenterVersion, "7.0.2") {
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
