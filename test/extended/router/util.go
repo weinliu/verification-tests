@@ -293,6 +293,7 @@ func getAnnotation(oc *exutil.CLI, ns, resource, resourceName string) string {
 func setEnvVariable(oc *exutil.CLI, ns, resource, envstring string) {
 	err := oc.WithoutNamespace().Run("set").Args("env", "-n", ns, resource, envstring).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	time.Sleep(10 * time.Second)
 }
 
 // Generic function to collect resource values with jsonpath option
@@ -477,8 +478,36 @@ func ensureLogsContainString(oc *exutil.CLI, ns, label, match string) {
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the string in the logs."))
 }
 
-func ensureIpfailoverEnterMaster(oc *exutil.CLI, ns, label string) {
-	ensureLogsContainString(oc, ns, label, "Entering MASTER STATE")
+// This function will identify the master and backup pod of the ipfailover pods
+func ensureIpfailoverMasterBackup(oc *exutil.CLI, ns string, podList []string) (string, string) {
+	var masterPod, backupPod string
+	// The sleep is given for the election process to finish
+	time.Sleep(10 * time.Second)
+	podLogs1, err1 := exutil.GetSpecificPodLogs(oc, ns, "", podList[0], "Entering")
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	logList1 := strings.Split((strings.TrimSpace(podLogs1)), "\n")
+	e2e.Logf("The first pod log's last line is:- %v", logList1[len(logList1)-1])
+	podLogs2, err2 := exutil.GetSpecificPodLogs(oc, ns, "", podList[1], "Entering")
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	logList2 := strings.Split((strings.TrimSpace(podLogs2)), "\n")
+	e2e.Logf("The second pod log's last line is:- %v", logList2[len(logList2)-1])
+
+	switch {
+	// Checking whether the first pod is failover state master and second pod backup
+	case strings.Contains(logList1[len(logList1)-1], "Entering MASTER STATE"):
+		o.Expect(logList2[len(logList2)-1]).To(o.ContainSubstring("Entering BACKUP STATE"))
+		masterPod = podList[0]
+		backupPod = podList[1]
+	// Checking whether the second pod is failover state master and first pod backup
+	case strings.Contains(logList1[len(logList1)-1], "Entering BACKUP STATE"):
+		o.Expect(logList2[len(logList2)-1]).To(o.ContainSubstring("Entering MASTER STATE"))
+		masterPod = podList[1]
+		backupPod = podList[0]
+	default:
+		e2e.Failf("The pod is niether MASTER nor BACKUP and hence IPfailover didn't happened")
+	}
+	e2e.Logf("The Master pod is %v and Backup pod is %v", masterPod, backupPod)
+	return masterPod, backupPod
 }
 
 // For collecting information from router pod [usage example: readRouterPodData(oc, podname, executeCmd, "search string")] .
@@ -1175,7 +1204,8 @@ func checkProxy(oc *exutil.CLI) bool {
 func unicastIPFailover(oc *exutil.CLI, ns, failoverName string) {
 	platformtype := exutil.CheckPlatform(oc)
 
-	if platformtype == "nutanix" {
+	if platformtype == "nutanix" || platformtype == "none" {
+		getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		workerIPAddress, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-ojsonpath={.items[*].status.addresses[0].address}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		modifiedIPList := strings.Split(workerIPAddress, " ")
