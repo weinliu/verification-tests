@@ -249,6 +249,13 @@ func findFreeIPs(oc *exutil.CLI, nodeName string, number int) []string {
 	return freeIPs
 }
 
+func findFreeIPsForCIDRs(oc *exutil.CLI, nodeName, cidr string, number int) []string {
+	var freeIPs []string
+	freeIPs = findUnUsedIPsOnNode(oc, nodeName, cidr, number)
+	o.Expect(len(freeIPs)).Should(o.Equal(number))
+	return freeIPs
+}
+
 func findFreeIPv6s(oc *exutil.CLI, nodeName string, number int) []string {
 	var freeIPs []string
 	_, ipv6Sub := getPrimaryIfaddrFromBMNode(oc, nodeName)

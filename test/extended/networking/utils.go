@@ -2894,3 +2894,29 @@ func waitForNetworkOperatorState(oc *exutil.CLI, interval int, timeout int, expe
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for the expected condition"))
 }
+
+func enableIPForwardingOnSpecNodeNIC(oc *exutil.CLI, worker, secNIC string) {
+	cmd := fmt.Sprintf("sysctl net.ipv4.conf.%s.forwarding", secNIC)
+	output, debugNodeErr := exutil.DebugNode(oc, worker, "bash", "-c", cmd)
+	o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+	if !strings.Contains(output, ".forwarding = 1") {
+		e2e.Logf("Enable IP forwarding for NIC %s on node %s ...", secNIC, worker)
+		enableCMD := fmt.Sprintf("sysctl -w net.ipv4.conf.%s.forwarding=1", secNIC)
+		_, debugNodeErr = exutil.DebugNode(oc, worker, "bash", "-c", enableCMD)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+	}
+	e2e.Logf("IP forwarding was enabled for NIC %s on node %s!", secNIC, worker)
+}
+
+func disableIPForwardingOnSpecNodeNIC(oc *exutil.CLI, worker, secNIC string) {
+	cmd := fmt.Sprintf("sysctl net.ipv4.conf.%s.forwarding", secNIC)
+	output, debugNodeErr := exutil.DebugNode(oc, worker, "bash", "-c", cmd)
+	o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+	if strings.Contains(output, ".forwarding = 1") {
+		e2e.Logf("Disable IP forwarding for NIC %s on node %s ...", secNIC, worker)
+		disableCMD := fmt.Sprintf("sysctl -w net.ipv4.conf.%s.forwarding=0", secNIC)
+		_, debugNodeErr = exutil.DebugNode(oc, worker, "bash", "-c", disableCMD)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+	}
+	e2e.Logf("IP forwarding was disabled for NIC %s on node %s!", secNIC, worker)
+}
