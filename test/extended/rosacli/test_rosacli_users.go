@@ -10,11 +10,11 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		clusterID string
-		err       error
+		clusterID   string
+		err         error
+		rosaClient  *rosacli.Client
+		userService rosacli.UserService
 	)
-	rosaClient := rosacli.NewClient()
-	userService := rosaClient.User
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
@@ -25,6 +25,10 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 		g.By("Delete all users of the cluster")
 		err = userService.RemoveAllUsers(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
+
+		g.By("Init the client")
+		rosaClient = rosacli.NewClient()
+		userService = rosaClient.User
 	})
 
 	g.It("Author:yuwan-Critical-36128-rosacli Grant/List/Revoke users by the rosa tool [Serial]", func() {

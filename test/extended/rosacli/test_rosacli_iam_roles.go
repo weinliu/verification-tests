@@ -16,12 +16,18 @@ import (
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func() {
 	defer g.GinkgoRecover()
-	var accountRolePrefixesNeedCleanup = make([]string, 0)
 
-	rosaClient := rosacli.NewClient()
-	ocmResourceService := rosaClient.OCMResource
-	permissionsBoundaryPolicyName := "sdqePBN"
-
+	var (
+		accountRolePrefixesNeedCleanup = make([]string, 0)
+		permissionsBoundaryPolicyName  = "sdqePBN"
+		rosaClient                     *rosacli.Client
+		ocmResourceService             rosacli.OCMResourceService
+	)
+	g.BeforeEach(func() {
+		g.By("Init the client")
+		rosaClient = rosacli.NewClient()
+		ocmResourceService = rosaClient.OCMResource
+	})
 	g.AfterEach(func() {
 		rosaClient.Runner.CloseFormat()
 		if len(accountRolePrefixesNeedCleanup) > 0 {
@@ -314,5 +320,118 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		o.Expect(err).NotTo(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Expected a valid user role ARN to link to a current account"))
+	})
+
+	g.It("Author:yuwan-High-46187-User can create/delete/unlink/link ocm-roles in auto mode via rosacli by command [Serial]", func() {
+		var (
+			ocmrolePrefix                                 string
+			invalidPermisionBoundary                      string
+			notExistedPermissionBoundaryUnderDifferentAWS string
+			ocmOrganizationExternalID                     string
+			notExistedOcmroleocmRoleArn                   string
+			ocmroleArnInWrongFormat                       string
+			foundOcmrole                                  rosacli.OCMRole
+		)
+		rosaClient := rosacli.NewClient()
+		ocmResourceService := rosaClient.OCMResource
+		rosaClient.Runner.Format("json")
+		whoamiOutput, err := ocmResourceService.Whoami()
+		o.Expect(err).To(o.BeNil())
+		rosaClient.Runner.CloseFormat()
+		whoamiData := ocmResourceService.ReflectAccountsInfo(whoamiOutput)
+		ocmOrganizationExternalID = whoamiData.OCMOrganizationExternalID
+		rand.Seed(time.Now().UnixNano())
+		ocmrolePrefix = fmt.Sprintf("QEAuto-ocmr-%s-46187", time.Now().UTC().Format("20060102"))
+
+		g.By("Create an ocm-role with invalid mode")
+		output, err := ocmResourceService.CreateOCMRole("--mode", "invalidamode",
+			"--prefix", ocmrolePrefix,
+			"-y")
+		o.Expect(err).NotTo(o.BeNil())
+		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Invalid mode. Allowed values are [auto manual]"))
+
+		g.By("Create an ocm-role with invalid permision boundady")
+		invalidPermisionBoundary = "arn-permission-boundary"
+		output, err = ocmResourceService.CreateOCMRole("--mode", "auto",
+			"--permissions-boundary", invalidPermisionBoundary,
+			"--prefix", ocmrolePrefix,
+			"-y")
+		o.Expect(err).NotTo(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Expected a valid policy ARN for permissions boundary"))
+
+		g.By("Create ocm-role with the permision boundady under another aws account")
+		notExistedPermissionBoundaryUnderDifferentAWS = "arn:aws:iam::aws:policy/notexisted"
+		output, err = ocmResourceService.CreateOCMRole("--mode", "auto",
+			"--permissions-boundary", notExistedPermissionBoundaryUnderDifferentAWS,
+			"--prefix", ocmrolePrefix,
+			"-y")
+		o.Expect(err).NotTo(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("There was an error creating the ocm role: NoSuchEntity"))
+
+		g.By("Create an ocm-role")
+		output, err = ocmResourceService.CreateOCMRole("--mode", "auto",
+			"--prefix", ocmrolePrefix,
+			"-y")
+		o.Expect(err).To(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Created role"))
+		o.Expect(textData).Should(o.ContainSubstring("Successfully linked role"))
+
+		g.By("Get the ocm-role info")
+		output, err = ocmResourceService.ListOCMRole()
+		o.Expect(err).To(o.BeNil())
+		ocmRoleList, err := ocmResourceService.ReflectOCMRoleList(output)
+		o.Expect(err).To(o.BeNil())
+		foundOcmrole = ocmRoleList.OCMRole(ocmrolePrefix, ocmOrganizationExternalID)
+		o.Expect(foundOcmrole).ToNot(o.BeNil())
+
+		defer func() {
+			g.By("Delete ocm-role")
+			output, err = ocmResourceService.DeleteOCMRole("--mode", "auto",
+				"--role-arn", foundOcmrole.RoleArn,
+				"-y")
+
+			o.Expect(err).To(o.BeNil())
+			textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+			o.Expect(textData).Should(o.ContainSubstring("Successfully deleted the OCM role"))
+		}()
+
+		g.By("Unlink ocm-role with not-exist role")
+		notExistedOcmroleocmRoleArn = "arn:aws:iam::301721915996:role/notexistuserrolearn"
+		output, err = ocmResourceService.UnlinkOCMRole("--role-arn", notExistedOcmroleocmRoleArn, "-y")
+		o.Expect(err).NotTo(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("is not linked with the organization account"))
+
+		g.By("Unlink ocm-role with the role arn in incorrect format")
+		ocmroleArnInWrongFormat = "arn301721915996:rolenotexistuserrolearn"
+		output, err = ocmResourceService.UnlinkOCMRole("--role-arn", ocmroleArnInWrongFormat, "-y")
+		o.Expect(err).NotTo(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Expected a valid ocm role ARN to unlink from the current organization"))
+
+		g.By("Unlink ocm-role")
+		output, err = ocmResourceService.UnlinkOCMRole("--role-arn", foundOcmrole.RoleArn, "-y")
+		o.Expect(err).To(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Successfully unlinked role"))
+
+		g.By("Get the ocm-role info")
+		output, err = ocmResourceService.ListOCMRole()
+		o.Expect(err).To(o.BeNil())
+		ocmRoleList, err = ocmResourceService.ReflectOCMRoleList(output)
+		o.Expect(err).To(o.BeNil())
+
+		foundOcmrole = ocmRoleList.OCMRole(ocmrolePrefix, ocmOrganizationExternalID)
+		o.Expect(foundOcmrole.Linded).To(o.Equal("No"))
+
+		g.By("Link ocm-role with the role arn in incorrect format")
+		output, err = ocmResourceService.LinkOCMRole("--role-arn", ocmroleArnInWrongFormat, "-y")
+		o.Expect(err).NotTo(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Expected a valid ocm role ARN to link to a current organization"))
 	})
 })

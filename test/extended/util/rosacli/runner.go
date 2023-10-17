@@ -137,6 +137,7 @@ func (r *runner) ReplaceFlag(flag string, value string) *runner {
 	r.cmdArgs = cmdArgs
 	return r
 }
+
 func (r *runner) Run() (bytes.Buffer, error) {
 	rosacmd := "rosa"
 	cmdElements := r.cmds

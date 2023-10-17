@@ -7,6 +7,7 @@ import (
 )
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with admin negative testing", func() {
+	defer g.GinkgoRecover()
 	var (
 		invalidUser     = "ad/min" // disallowed character
 		validUser       = "admin"
@@ -14,7 +15,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with
 		validPassword   = "Th3long,validpassword"
 		clusterID       string
 	)
-	defer g.GinkgoRecover()
+
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
 		clusterID = getClusterIDENVExisted()
