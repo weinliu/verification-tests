@@ -26,6 +26,7 @@ export default defineConfig({
   viewportWidth: 1440,
   viewportHeight: 900,
   e2e: {
+    experimentalSessionAndOrigin: true,
     setupNodeEvents(on, config) {
       on('before:browser:launch', (browser = {
         name: "",
