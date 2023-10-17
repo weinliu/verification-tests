@@ -65,6 +65,9 @@ export const Operator = {
                 cy.byTestID('item-create').should('exist').click()
                 cy.get('#form').click() // bug in console where yaml view is default
                 Operator.configureEbpfAgent()
+                if (parameters == "PacketDrop") {
+                    Operator.enablePacketDrop()
+                }
                 Operator.configureLoki(namespace)
                 Operator.enableFLPMetrics()
                 cy.get('#root_spec_namespace').clear().type(namespace)
@@ -81,6 +84,25 @@ export const Operator = {
             }
         })
     },
+    configureEbpfAgent: () => {
+        cy.get('#root_spec_agent_accordion-toggle').click()
+        cy.get('#root_spec_agent_type').should('have.text', 'EBPF')
+        cy.get('#root_spec_agent_ebpf_accordion-toggle').click()
+        cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
+    },
+    enablePacketDrop: () => {
+        cy.get('#root_spec_agent_ebpf_privileged').click()
+        cy.get('#root_spec_agent_ebpf_features_accordion-toggle').click()
+        cy.get('#root_spec_agent_ebpf_features_add-btn').click()
+        cy.get('#root_spec_agent_ebpf_features_0').click().then(features => {
+            cy.contains("PacketDrop").should('exist')
+            cy.get('#PacketDrop-link').click()
+        })
+    },
+    configureLoki: (namespace: string) => {
+        cy.get('#root_spec_loki_accordion-toggle').click()
+        cy.get('#root_spec_loki_url').clear().type(`http://loki.${namespace}.svc:3100/`)
+    },
     enableConversations: () => {
         cy.get('#root_spec_processor_logTypes').click().then(moreOpts => {
             cy.contains("FLOWS").should('exist')
@@ -89,16 +111,6 @@ export const Operator = {
             cy.contains("ALL").should('exist')
             cy.get('#ALL-link').click()
         })
-    },
-    configureEbpfAgent: () => {
-        cy.get('#root_spec_agent_accordion-toggle').click()
-        cy.get('#root_spec_agent_type').should('have.text', 'EBPF')
-        cy.get('#root_spec_agent_ebpf_accordion-toggle').click()
-        cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
-    },
-    configureLoki: (namespace: string) => {
-        cy.get('#root_spec_loki_accordion-toggle').click()
-        cy.get('#root_spec_loki_url').clear().type(`http://loki.${namespace}.svc:3100/`)
     },
     deleteFlowCollector: () => {
         cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')

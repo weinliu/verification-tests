@@ -2,6 +2,14 @@ import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, genSelectors, colSelectors, querySumSelectors, histogramSelectors } from "../../views/netflow-page"
 
+function getTableLimitURL(limit: string): string {
+    return `**/netflow-traffic?timeRange=300&match=all&reporter=destination&function=last&type=bytes&packetLoss=all&recordType=flowLog&filters=&showDup=false&limit=${limit}`
+}
+
+function getTableDuplicatesURL(duplicates: string): string {
+    return `**/netflow-traffic?timeRange=300&match=all&reporter=destination&function=last&type=bytes&packetLoss=all&recordType=flowLog&filters=&limit=50&showDup=${duplicates}`
+}
+
 describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table view tests', { tags: ['NETOBSERV'] }, function () {
 
     before('any test', function () {
@@ -33,6 +41,36 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             netflowPage.visit()
             cy.get('#tabs-container li:nth-child(2)').click()
             cy.byTestID("table-composable").should('exist')
+        })
+
+        it("(OCP-50532, aramesha) should verify Query Options dropdown", { tags: ['e2e', 'admin'] }, function () {
+            //Toggle between the page limits
+            cy.changeQueryOption('500')
+            netflowPage.waitForLokiQuery()
+            cy.intercept('GET', getTableLimitURL('500'), {
+                fixture: 'netobserv/netflow_table_500.json'
+            }).as('matchedUrl')
+
+            cy.changeQueryOption('100')
+            netflowPage.waitForLokiQuery()
+            cy.intercept('GET', getTableLimitURL('100'), {
+                fixture: 'netobserv/netflow_table_100.json'
+            }).as('matchedUrl')
+
+            cy.changeQueryOption('50')
+            netflowPage.waitForLokiQuery()
+            cy.intercept('GET', getTableLimitURL('50'), {
+                fixture: 'netobserv/netflow_table_50.json'
+            }).as('matchedUrl')
+
+            //check to show duplicate flows
+            cy.changeQueryOption('Show duplicates')
+            cy.intercept('GET', getTableDuplicatesURL('true'), {
+                fixture: 'netobserv/netflow_table_duplicates.json'
+            }).as('matchedUrl')
+
+            //uncheck duplicate flows
+            cy.changeQueryOption('Show duplicates')
         })
 
         it("(OCP-50532, memodi) should validate netflow table features", { tags: ['e2e', 'admin'] }, function () {
@@ -383,10 +421,17 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             })
         })
 
-        it("should verify connection tracking is disabled by default", function () {
+        it("(OCP-60701, aramesha)should verify connection tracking is disabled by default", function () {
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
             cy.get('#query-options-dropdown').click();
             cy.get('#recordType-allConnections').should('be.disabled')
+            cy.get('#filter-toolbar-search-filters').contains('Query options').click();
+        })
+
+        it("(OCP-66141, aramesha)should verify packet drop filters are disabled by default", function () {
+            cy.get('#filter-toolbar-search-filters').contains('Query options').click();
+            cy.get('#query-options-dropdown').click();
+            cy.get('#packet-loss-dropped').should('be.disabled')
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
         })
     })

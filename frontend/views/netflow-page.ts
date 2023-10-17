@@ -1,7 +1,7 @@
 
 export const netflowPage = {
     visit: () => {
-        cy.intercept('**/backend/api/loki/topology*').as('call1')
+        cy.intercept('**/backend/api/loki/flow/metrics*').as('call1')
         cy.visit('/netflow-traffic')
         // wait for all calls to complete before checking due to bug
         cy.wait('@call1', { timeout: 60000 }).wait('@call1')
@@ -128,8 +128,12 @@ export namespace overviewSelectors {
     export const typeDrop = 'type-dropdown'
     export const scopeDrop = 'scope-dropdown'
     export const truncateDrop = 'truncate-dropdown'
+    export const managePanelsList = ['Top X average rates (donut)', 'Top X latest rates (donut)', 'Top X flow rates stacked (bars)', 'Total rate (line)', 'Top X flow rates stacked with total (bars)', 'Top X flow rates (lines)']
+    export const managePacketDropPanelsList = managePanelsList.concat(['Top X flow dropped rates stacked (bars)', 'Total dropped rate (line)', 'Top X dropped state (donut)', 'Top X dropped cause (donut)', 'Top X flow dropped rates stacked with total (bars)'])
     export const defaultPanels = ['Top 5 average rates', 'Top 5 latest rates', 'Top 5 flow rates stacked with total', 'Top 5 flow rates']
+    export const defaultPacketDropPanels = defaultPanels.concat(['Top 5 dropped state', 'Top 5 dropped cause', 'Top 5 flow dropped rates stacked with total'])
     export const allPanels = ['Top 5 average rates', 'Top 5 latest rates', 'Top 5 flow rates stacked', 'Total rate', 'Top 5 flow rates stacked with total', 'Top 5 flow rates']
+    export const allPacketDropPanels = allPanels.concat(defaultPacketDropPanels, ['Top 5 flow dropped rates stacked', 'Total dropped rate'])
 }
 
 export const loadTimes = {
@@ -203,13 +207,20 @@ Cypress.Commands.add('selectPopupItems', (id, names) => {
 Cypress.Commands.add('checkQuerySummary', (metric) => {
     let warningExists = false
     let num = 0
+    let metricStr: string
     cy.get(querySumSelectors.queryStatsPanel).should('exist').then(qrySum => {
         if (Cypress.$(querySumSelectors.queryStatsPanel + ' svg.query-summary-warning').length > 0) {
             warningExists = true
         }
     })
     if (warningExists) {
-        num = Number(metric.text().split('+ ')[0])
+        metricStr = metric.text().split('+ ')[0]
+        if (metricStr.includes('k')) {
+            num = Number(metricStr.split('k')[0])
+        }
+        else {
+            num = Number(metricStr)
+        }
     }
     else {
         num = Number(metric.text().split(' ')[0])
@@ -238,6 +249,12 @@ Cypress.Commands.add("checkPerformance", (page, loadTime, memUsage) => {
     expect(memUsage).to.be.lessThan(memThreshold)
 });
 
+Cypress.Commands.add('changeQueryOption', (name) => {
+    cy.get('#filter-toolbar-search-filters').contains('Query options').click();
+    cy.get('#query-options-dropdown').contains(name).click();
+    cy.get('#filter-toolbar-search-filters').contains('Query options').click();
+});
+
 
 declare global {
     namespace Cypress {
@@ -250,6 +267,7 @@ declare global {
             checkPopupItems(id: string, names: string[]): Chainable<Element>
             checkQuerySummary(metric: JQuery<HTMLElement>): Chainable<Element>
             checkPerformance(page: string, loadTime: number, memoryUsage: number): Chainable<Element>
+            changeQueryOption(name: string): Chainable<Element>
         }
     }
 }

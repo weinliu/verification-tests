@@ -108,9 +108,8 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             //open panels modal
             cy.openPanelsModal();
 
-            //check if all panels are listed 
-            var panels: string[] = ['Top X average rates (donut)', 'Top X latest rates (donut)', 'Top X flow rates stacked (bars)', 'Total rate (line)', 'Top X flow rates stacked with total (bars)', 'Top X flow rates (lines)']
-            cy.checkPopupItems(overviewSelectors.panelsModal, panels);
+            //check if all panels are listed  
+            cy.checkPopupItems(overviewSelectors.panelsModal, overviewSelectors.managePanelsList);
 
             //select all panels
             cy.get(overviewSelectors.panelsModal).contains('Select all').click();
@@ -134,7 +133,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             cy.checkPanel([overviewSelectors.allPanels[3]])
             cy.checkPanelsNum(1);
 
-            //restrore default panels and check if visible on console
+            //restore default panels and check if visible on console
             cy.openPanelsModal();
             cy.get(overviewSelectors.panelsModal).contains('Restore default panels').click();
             cy.get(overviewSelectors.panelsModal).contains('Save').click();
