@@ -353,7 +353,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
-	g.It("Author:rugong-Medium-20052-New field forbiddenSysctls for SCC [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:rugong-Medium-20052-New field forbiddenSysctls for SCC [Disruptive]", func() {
 		// In 4.11 and above, we should use SCC "restricted-v2"
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -412,7 +412,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
-	g.It("Author:rugong-Medium-20050-New field allowedUnsafeSysctls for SCC [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:rugong-Medium-20050-New field allowedUnsafeSysctls for SCC [Disruptive]", func() {
 		// In 4.11 and above, we should use SCC "restricted-v2"
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
