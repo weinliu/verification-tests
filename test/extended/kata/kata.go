@@ -39,14 +39,15 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		clusterVersion    string
 		ocpMajorVer       string
 		ocpMinorVer       string
-		operatorVer       = "1.3.0"
-		workload          = "have securityContext"
-		podRunState       = "Running"
-		featureLabel      = "feature.node.kubernetes.io/runtime.kata=true"
-		workerLabel       = "node-role.kubernetes.io/worker"
-		kataocLabel       = "node-role.kubernetes.io/kata-oc"
-		customLabel       = "custom-label=test"
-		testrunExists     = false
+		operatorVer                     = "1.3.0"
+		workload                        = "have securityContext"
+		podRunState                     = "Running"
+		featureLabel                    = "feature.node.kubernetes.io/runtime.kata=true"
+		workerLabel                     = "node-role.kubernetes.io/worker"
+		kataocLabel                     = "node-role.kubernetes.io/kata-oc"
+		customLabel                     = "custom-label=test"
+		testrunExists                   = false
+		podSnooze         time.Duration = 600
 		//ppParam           PeerpodParam //commented because of WIP PR
 		//ppSecretName      = "peer-pods-secret"  //commented because of WIP PR
 		//secretTemplateAws = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")  //commented because of WIP PR
@@ -397,7 +398,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		g.By("Deploying pod with kata runtime and verify it")
 		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
-		defer deleteKataPod(oc, podNs, newPodName)
+		defer deleteKataResource(oc, "pod", podNs, newPodName)
 		// checkKataPodStatus() replace with checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		if err != nil {
@@ -459,7 +460,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		g.By("Deploying pod with kata runtime and verify it")
 		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
-		defer deleteKataPod(oc, podNs, newPodName)
+		defer deleteKataResource(oc, "pod", podNs, newPodName)
 		msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		if err != nil {
 			e2e.Logf("ERROR: %v %v", msg, err)
@@ -494,7 +495,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		g.By("Deploying pod with kata runtime and verify it")
 		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
-		defer deleteKataPod(oc, podNs, newPodName)
+		defer deleteKataResource(oc, "pod", podNs, newPodName)
 
 		msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed: %v %v", newPodName, msg, err)
@@ -526,7 +527,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		g.By("Deploying pod with kata runtime")
 		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
-		defer deleteKataPod(oc, podNs, newPodName)
+		defer deleteKataResource(oc, "pod", podNs, newPodName)
 
 		g.By("Verifying pod state")
 		// checkKataPodStatus() replace with checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
@@ -619,7 +620,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		g.By("Deploy a pod with kata runtime")
 		podName = createKataPod(oc, podNs, defaultPod, "admtop", kataconfig.runtimeClassName)
-		defer deleteKataPod(oc, podNs, podName)
+		defer deleteKataResource(oc, "pod", podNs, podName)
 		msg, err = checkResourceJsonpath(oc, "pod", podName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 
 		g.By("Get oc top adm metrics for the pod")
@@ -682,7 +683,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed: %v %v", newPodName, msg, err)
 
 		g.By("Deleting pod")
-		deleteKataPod(oc, podNs, newPodName)
+		deleteKataResource(oc, "pod", podNs, newPodName)
 
 		g.By("Deleting kataconfig")
 
@@ -768,7 +769,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		msg = fmt.Sprintf("Deleting pod %v from deployment", podName)
 		g.By(msg)
-		msg, err = oc.AsAdmin().Run("delete").Args("pod", podName, "-n", podNs).Output()
+		msg, err = deleteResource(oc, "pod", podName, podNs, podSnooze*time.Second, 10*time.Second)
 		e2e.Logf("%v pod deleted: %v %v", podName, msg, err)
 
 		g.By("Wait for deployment to re-replicate")
@@ -785,6 +786,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		g.By("SUCCESSS - kataconfig installed and post that pod with runc successfully restarted ")
+		msg, err = deleteResource(oc, "deploy", deployName, podNs, podSnooze*time.Second, 10*time.Second)
+
 	})
 
 	// author: tbuskey@redhat.com
@@ -1423,7 +1426,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		defer deleteDeployment(oc, podNs, deployName)
+		defer deleteKataResource(oc, "deploy", podNs, deployName)
 
 		g.By("Wait for deployment to be ready")
 		msg, err = waitForDeployment(oc, podNs, deployName)

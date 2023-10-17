@@ -214,26 +214,11 @@ func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName, runtimeClass
 	return newPodName
 }
 
-// author: abhbaner@redhat.com, vvoronko@redhat.com
-func deleteKataPod(oc *exutil.CLI, podNs, delPodName string) bool {
-	return deleteKataResource(oc, "pod", podNs, delPodName)
-}
-
 func deleteKataResource(oc *exutil.CLI, res, resNs, resName string) bool {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(res, resName, "-n", resNs, "--ignore-not-found").Output()
+	_, err := deleteResource(oc, res, resName, resNs, podSnooze*time.Second, 10*time.Second)
 	if err != nil {
-		e2e.Logf("issue deleting %v %v in namespace %v, output: %v/nerror: %v", res, resName, resNs, output, err)
 		return false
 	}
-
-	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
-		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(res, resName, "-n", resNs).Output()
-		if err != nil {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v %v was not finally deleted in ns %v", res, resName, resNs))
 	return true
 }
 
@@ -746,8 +731,11 @@ func createServiceAndRoute(oc *exutil.CLI, deployName, podNs string) (host strin
 
 // cleanup for createServiceAndRoute func
 func deleteRouteAndService(oc *exutil.CLI, deployName, podNs string) {
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "-n", podNs, deployName, "--ignore-not-found").Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", "-n", podNs, deployName, "--ignore-not-found").Execute()
+	// oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "-n", podNs, deployName, "--ignore-not-found").Execute()
+	// oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", "-n", podNs, deployName, "--ignore-not-found").Execute()
+	_, _ = deleteResource(oc, "svc", deployName, podNs, podSnooze*time.Second, 10*time.Second)
+	_, _ = deleteResource(oc, "route", deployName, podNs, podSnooze*time.Second, 10*time.Second)
+
 }
 
 func checkPeerPodSecrets(oc *exutil.CLI, opNamespace, provider string, ppSecretName string) (msg string, err error) {
@@ -992,6 +980,31 @@ func checkResourceJsonpath(oc *exutil.CLI, resType, resName, resNs, jsonpath, ex
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v %v in ns %v is not in %v state after %v sec: %v %v", resType, resName, resNs, expected, duration, msg, err))
 	return msg, nil
+}
+
+func deleteResource(oc *exutil.CLI, res, resName, resNs string, duration, interval time.Duration) (msg string, err error) {
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(res, resName, "-n", resNs, "--ignore-not-found").Output()
+	if err != nil {
+		msg = fmt.Sprintf("ERROR: Cannot start deleting %v %v -n %v: %v %v", res, resName, resNs, msg, err)
+		e2e.Failf(msg)
+	}
+
+	// make sure it doesn't exist
+	errCheck := wait.PollImmediate(interval, duration, func() (bool, error) {
+		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(res, resName, "-n", resNs, "--no-headers").Output()
+		if strings.Contains(msg, "not found") {
+			return true, nil
+		}
+		return false, nil
+	})
+	if errCheck != nil {
+		e2e.Logf("ERROR: Timeout waiting for delete to finish on %v %v -n %v: %v", res, resName, resNs, msg)
+	}
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v %v was not finally deleted in ns %v", res, resName, resNs))
+
+	msg = fmt.Sprintf("deleted %v %v -n %v: %v %v", res, resName, resNs, msg, err)
+	err = nil
+	return msg, err
 }
 
 func createApplyPeerPodSecrets(oc *exutil.CLI, provider string, ppParam PeerpodParam, opNamespace, ppSecretName, secretTemplate string) (msg string, err error) {
