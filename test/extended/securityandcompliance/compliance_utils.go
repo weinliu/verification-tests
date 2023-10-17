@@ -976,12 +976,17 @@ func getSAToken(oc *exutil.CLI, account string, ns string) string {
 
 func checkMetric(oc *exutil.CLI, metricString []string, namespace string, operator string) {
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+	url := fmt.Sprintf("https://metrics." + namespace + ".svc:8585/metrics-" + operator)
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-		metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), "https://metrics."+namespace+".svc:8585/metrics-"+operator).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The metrics %v is: ", metrics)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).OutputToFile("metrics.txt")
+		if err != nil {
+			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
+			return false, nil
+		}
+		metricsLog, _ := exec.Command("bash", "-c", "cat "+output+"| grep compliance").Output()
+
 		for _, metricStr := range metricString {
-			matched, err := regexp.MatchString(metricStr, metrics)
+			matched, err := regexp.MatchString(metricStr, string(metricsLog))
 			if err != nil || !matched {
 				return false, nil
 			}
@@ -1041,13 +1046,14 @@ func getAlertManager(oc *exutil.CLI) string {
 	return alertManager
 }
 
-func checkAlert(oc *exutil.CLI, token, alertString string, timeout time.Duration) {
-	alertManager := getAlertManager(oc)
-	url := "https://" + alertManager + "/api/v1/alerts"
-	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
+func checkAlert(oc *exutil.CLI, alertString string, timeout time.Duration) {
+	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+	url := getAlertManager(oc)
+	alertName := "NonCompliant"
+	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq '.data[] | select(.labels.alertname == \"%s\")'", token, url, alertName)
 	err := wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
-		alerts, err1 := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", getCmd)
-		o.Expect(err1).NotTo(o.HaveOccurred())
+		alerts, err := exec.Command("bash", "-c", alertCMD).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString(alertString, string(alerts)); matched {
 			return true, nil
 		}

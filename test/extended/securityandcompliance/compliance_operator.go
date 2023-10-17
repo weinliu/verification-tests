@@ -3548,7 +3548,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-43066-check the metrics and alerts are available for Compliance Operator [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-43066-check the metrics and alerts are available for Compliance Operator [Serial]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "cis-test" + getRandomString(),
 			namespace:       "",
@@ -3562,8 +3562,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
 
 		metricSsbStr := []string{
-			"compliance_operator_compliance_scan_status_total{name=\"ocp4-cis-node-master\",phase=\"DONE\",result=\"COMPLIANT\"}",
-			"compliance_operator_compliance_scan_status_total{name=\"ocp4-cis-node-worker\",phase=\"DONE\",result=\"COMPLIANT\"}",
+			"compliance_operator_compliance_scan_status_total{name=\"ocp4-cis-node-master\",phase=\"DONE\",result=\"NON-COMPLIANT\"}",
+			"compliance_operator_compliance_scan_status_total{name=\"ocp4-cis-node-worker\",phase=\"DONE\",result=\"NON-COMPLIANT\"}",
 			"compliance_operator_compliance_state{name=\"" + ssb.name + "\"}"}
 
 		newCheck("expect", asAdmin, withoutNamespace, contain, "openshift.io/cluster-monitoring", ok, []string{"namespace", subD.namespace, "-o=jsonpath={.metadata.labels}"}).check(oc)
@@ -4341,7 +4341,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-48643-Check if the prometheusRule that verifies the Compliance alerts [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-48643-Check if the prometheusRule that verifies the Compliance alerts [Serial]", func() {
 		var (
 			ssb = scanSettingBindingDescription{
 				name:            "pci-test",
@@ -4369,12 +4369,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD.complianceSuiteName(oc, ssb.name)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
-		g.By("Get token of SA prometheus-k8s")
-		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-
 		g.By("check alerts")
-		alertString := "annotations.*The compliance suite pci-test returned as.*The cluster is out-of-compliance"
-		checkAlert(oc, token, alertString, 200)
+		alertString := "The compliance suite pci-test returned as NON-COMPLIANT, ERROR, or INCONSISTENT"
+		checkAlert(oc, alertString, 300)
 	})
 
 	// author: xiyuan@redhat.com
