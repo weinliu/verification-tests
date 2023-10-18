@@ -668,7 +668,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		registryHost := createSpecialRegistry(oc, ns, ssldir, dockerConfigDir)
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/testroute/%s/g' %s", registryHost, dockerauthfile)).Output()
 
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
 			_, err1 := oc.WithoutNamespace().Run("image").Args("mirror", "--insecure", "-a", dockerauthfile, "quay.io/openshifttest/busybox:latest", registryHost+"/test/busybox:latest").Output()
 			if err1 != nil {
 				e2e.Logf("the err:%v, and try next round", err1)
