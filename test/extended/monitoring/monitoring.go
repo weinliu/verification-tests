@@ -1,8 +1,10 @@
 package monitoring
 
 import (
+	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -487,6 +489,20 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("check btrfs collector is disabled by default")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("no-collector.btrfs"))
+	})
+
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-68292-Limit the value of GOMAXPROCS on node-exporter to 4", func() {
+		g.By("check the gomaxprocs value in logs")
+		// % oc -n openshift-monitoring logs -l app.kubernetes.io/name=node-exporter --tail=-1 -c node-exporter | grep -o 'gomaxprocs=[0-9]*' | uniq | cut -d= -f2
+		nodeExporterLogs, errLogs := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=node-exporter", "--tail=-1", "-c", "node-exporter", "-n", "openshift-monitoring").OutputToFile("OCP-68292_nodeExporter.log")
+		o.Expect(errLogs).NotTo(o.HaveOccurred())
+		cmd := fmt.Sprintf(`cat %v | grep -o '%s' | uniq | cut -d= -f2`, nodeExporterLogs, "gomaxprocs=[0-9]*")
+		gomaxprocsValue, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf("gomaxprocsValue output: %s", gomaxprocsValue)
+		gomaxprocsNum, _ := strconv.Atoi(string(gomaxprocsValue))
+		o.Expect(gomaxprocsNum).To(o.BeNumerically("<=", 4))
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	g.Context("user workload monitoring", func() {
