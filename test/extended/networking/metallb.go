@@ -24,7 +24,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		serviceLabelValue         = "Test"
 		serviceNodePortAllocation = true
 		testDataDir               = exutil.FixturePath("testdata", "networking/metallb")
-		l2Addresses               = [2]string{"192.168.111.61-192.168.111.69", "192.168.111.70-192.168.111.79"}
+		l2Addresses               = [2]string{"192.168.111.65-192.168.111.74", "192.168.111.75-192.168.111.84"}
 		bgpAddresses              = [2][2]string{{"10.10.10.1-10.10.10.10", "10.10.11.1-10.10.11.10"}, {"10.10.12.1-10.10.12.10", "10.10.13.1-10.10.13.10"}}
 		expectedAddress1          = "10.10.10.1"
 		myASN                     = 64500
@@ -559,7 +559,6 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			defer deleteIPAddressPool(oc, ipAddresspool)
 			o.Expect(createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)).To(o.BeTrue())
 			priority_val = priority_val + 10
-			//ipaddresspools = append(ipaddresspools, ipAddresspool)
 			ipaddrpools = append(ipaddrpools, ipAddresspool.name)
 		}
 
@@ -593,6 +592,8 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			template:                      loadBalancerServiceTemplate,
 		}
 		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)).To(o.BeTrue())
+		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
 		e2e.Logf("The service %s External IP is %q", svc.name, svcIP)
 		o.Expect(strings.Contains(svcIP, expectedAddress1)).To(o.BeTrue())

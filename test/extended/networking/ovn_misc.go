@@ -49,8 +49,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("NonHyperShiftHOST-Author:anusaxen-High-55144-Switching OVN gateway modes should not delete custom routes created on node logical routers.[Disruptive] ", func() {
-		g.By("it's for bug 2042516")
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:anusaxen-High-55144-Switching OVN gateway modes should not delete custom routes created on node logical routers.[Disruptive] ", func() {
+		exutil.By("it's for bug 2042516")
 		var desiredMode string
 		networkType := exutil.CheckNetworkType(oc)
 		o.Expect(networkType).NotTo(o.BeEmpty())
@@ -71,39 +71,48 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		if len(nodeList.Items) < 1 {
 			g.Skip("This case requires at least one schedulable node")
 		}
+		exutil.By("Add a logical route on a node")
 		nodeLogicalRouterName := "GR_" + nodeList.Items[0].Name
-		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
+		ovnKNodePod, ovnkNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeList.Items[0].Name)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
 		lrRouteListDelCmd := "ovn-nbctl lr-route-del " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
 		lrRouteListAddCmd := "ovn-nbctl lr-route-add " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
 
-		_, lrlErr1 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListAddCmd)
+		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListDelCmd)
+		_, lrlErr1 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListAddCmd)
 		o.Expect(lrlErr1).NotTo(o.HaveOccurred())
-		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
 
 		defer switchOVNGatewayMode(oc, origMode)
 		switchOVNGatewayMode(oc, desiredMode)
-
+		exutil.By("List the logical route on a node after gateway mode switch")
 		lrRouteListCmd := "ovn-nbctl lr-route-list " + nodeLogicalRouterName
-		ovnMasterPodName = getOVNKMasterOVNkubeNode(oc)
-		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
+		ovnKNodePod, ovnkNodePodErr = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeList.Items[0].Name)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
 
-		lRlOutput, lrlErr2 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListCmd)
+		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListDelCmd)
+		lRlOutput, lrlErr2 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListCmd)
 		o.Expect(lrlErr2).NotTo(o.HaveOccurred())
 		o.Expect(lRlOutput).To(o.ContainSubstring("192.168.122.0/24"))
 		o.Expect(lRlOutput).To(o.ContainSubstring("192.168.122.4"))
 
 		//reverting back cluster to original mode it was on and deleting fake route
 		switchOVNGatewayMode(oc, origMode)
+		exutil.By("List the logical route on a node after gateway mode revert")
+		ovnKNodePod, ovnkNodePodErr = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeList.Items[0].Name)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
 
-		ovnMasterPodName = getOVNKMasterOVNkubeNode(oc)
-		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
-
-		_, lrlErr3 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListCmd)
+		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListDelCmd)
+		_, lrlErr3 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListCmd)
 		o.Expect(lrlErr3).NotTo(o.HaveOccurred())
 		o.Expect(lRlOutput).To(o.ContainSubstring("192.168.122.0/24"))
 		o.Expect(lRlOutput).To(o.ContainSubstring("192.168.122.4"))
-		lrRouteListDelCmd = "ovn-nbctl lr-route-del " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
-		_, lrlErr4 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, lrRouteListDelCmd)
+
+		exutil.By("Delete the logical route on a node after gateway mode revert")
+		//lrRouteListDelCmd = "ovn-nbctl lr-route-del " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
+		_, lrlErr4 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListDelCmd)
 		o.Expect(lrlErr4).NotTo(o.HaveOccurred())
 	})
 

@@ -2069,7 +2069,7 @@ func switchOVNGatewayMode(oc *exutil.CLI, mode string) {
 	_, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", "openshift-ovn-kubernetes", "ds", "ovnkube-node").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	//on OVN IC it takes upto 660 seconds for nodes ds to rollout so lets poll with timeout of 700 seconds
-	checkNetworkOperatorState(oc, 900, 900)
+	waitForNetworkOperatorState(oc, 100, 18, "True.*False.*False")
 }
 
 // getOVNGatewayMode will return configured OVN gateway mode, shared or local
