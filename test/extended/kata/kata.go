@@ -22,35 +22,36 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                = exutil.NewCLI("kata", exutil.KubeConfigPath())
-		opNamespace       = "openshift-sandboxed-containers-operator"
-		testDataDir       = exutil.FixturePath("testdata", "kata")
-		kcTemplate        = filepath.Join(testDataDir, "kataconfig.yaml")
-		defaultDeployment = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
-		defaultPod        = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
-		subTemplate       = filepath.Join(testDataDir, "subscription_template.yaml")
-		nsFile            = filepath.Join(testDataDir, "namespace.yaml")
-		ogFile            = filepath.Join(testDataDir, "operatorgroup.yaml")
-		mustGatherImage   = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
-		icspName          = "kata-brew-registry"
-		icspFile          = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
-		testrunInitial    TestrunConfigmap
-		testrun           TestrunConfigmap
-		clusterVersion    string
-		ocpMajorVer       string
-		ocpMinorVer       string
-		operatorVer                     = "1.3.0"
-		workload                        = "have securityContext"
-		podRunState                     = "Running"
-		featureLabel                    = "feature.node.kubernetes.io/runtime.kata=true"
-		workerLabel                     = "node-role.kubernetes.io/worker"
-		kataocLabel                     = "node-role.kubernetes.io/kata-oc"
-		customLabel                     = "custom-label=test"
-		testrunExists                   = false
-		podSnooze         time.Duration = 600
-		//ppParam           PeerpodParam //commented because of WIP PR
-		//ppSecretName      = "peer-pods-secret"  //commented because of WIP PR
-		//secretTemplateAws = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")  //commented because of WIP PR
+		oc                  = exutil.NewCLI("kata", exutil.KubeConfigPath())
+		opNamespace         = "openshift-sandboxed-containers-operator"
+		testDataDir         = exutil.FixturePath("testdata", "kata")
+		kcTemplate          = filepath.Join(testDataDir, "kataconfig.yaml")
+		defaultDeployment   = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
+		defaultPod          = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
+		subTemplate         = filepath.Join(testDataDir, "subscription_template.yaml")
+		nsFile              = filepath.Join(testDataDir, "namespace.yaml")
+		ogFile              = filepath.Join(testDataDir, "operatorgroup.yaml")
+		mustGatherImage     = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
+		icspName            = "kata-brew-registry"
+		icspFile            = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
+		testrunInitial      TestrunConfigmap
+		testrun             TestrunConfigmap
+		clusterVersion      string
+		ocpMajorVer         string
+		ocpMinorVer         string
+		operatorVer         = "1.3.0"
+		workload            = "have securityContext"
+		podRunState         = "Running"
+		featureLabel        = "feature.node.kubernetes.io/runtime.kata=true"
+		workerLabel         = "node-role.kubernetes.io/worker"
+		kataocLabel         = "node-role.kubernetes.io/kata-oc"
+		customLabel         = "custom-label=test"
+		testrunExists       = false
+		ppParam             PeerpodParam
+		ppSecretName        = "peer-pods-secret"
+		ppConfigMapName     = "peer-pods-cm"
+		secretTemplateAws   = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")
+		ppConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-cm-template.yaml")
 	)
 
 	subscription := SubscriptionDescription{
@@ -213,15 +214,18 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			}
 		}
 
-		//WIP PR work to creat peer pods secret
-		/*if kataconfig.enablePeerPods {
-		    msg,err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateAws)
+		//create peer pods secret and peer pods cm
+		if kataconfig.enablePeerPods {
+			msg, err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateAws)
 			if err != nil && err.Error() == "AWS credentials not found" {
-				e2e.Logf("AWS credentials not found. Skipping test suite execution.")
-				panic("Aborting peer pod test suite execution - AWS credentials not found")
-				}
-
-		}*/
+				err = fmt.Errorf("AWS credentials not found") // Generate a custom error
+				e2e.Failf("AWS credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
+			}
+			msg, err = createApplyPeerPodConfigMap(oc, cloudPlatform, ppParam, opNamespace, ppConfigMapName, ppConfigMapTemplate)
+			if err != nil {
+				e2e.Failf("peer-pods-cm NOT applied msg: %v , err: %v", msg, err)
+			}
+		}
 
 		msg, err = createKataConfig(oc, kataconfig, subscription)
 		e2e.Logf("---------- kataconfig %v create succeeded %v %v", kataconfig.name, msg, err)

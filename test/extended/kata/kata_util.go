@@ -1217,3 +1217,78 @@ func createPVC(oc *exutil.CLI, opNamespace, pvcName, capacity, volumeMode, acces
 	e2e.Logf("pvc apply output: %v", msg)
 	return err
 }
+
+func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam PeerpodParam, opNamespace, ppConfigMapName, ppConfigMapTemplate string) (msg string, err error) {
+	/*
+	   Reads the configmap that the CI had applied "peerpods-param-cm"
+	   and creates "peer-pods-cm" from it and then applies it on the cluster.
+
+	   Checks if the cluster already has a peer-pods-cm and also for the correct value of the cloud provider
+	*/
+
+	var (
+		ciCmName   = "peerpods-param-cm"
+		configFile string
+	)
+
+	// Check if the cm already exist
+	g.By("Checking if peer-pods-cm exists")
+	msg, err = checkPeerPodConfigMap(oc, opNamespace, provider, ppConfigMapName)
+	if err == nil && msg == "" {
+		e2e.Logf("peer-pods-secret cm - skipping creating it")
+		return msg, err
+	} else if err != nil {
+		e2e.Logf("**** peer-pods-cm not found on the cluster - proceeding to create it****")
+	}
+
+	// Check if provider is correct
+	if provider == "aws" || provider == "azure" {
+		ppParam.CLOUD_PROVIDER = provider
+	} else {
+		msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
+		return msg, fmt.Errorf("%v", msg)
+	}
+
+	//Read params from peerpods-param-cm and store in ppParam struct
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName).Output()
+	if err != nil {
+		e2e.Logf("peerpods-param-cm Configmap created by QE CI  not found: msg %v err: %v", msg, err)
+	} else {
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-o=jsonpath={.data}").Output()
+		if err != nil {
+			e2e.Failf("peerpods-param-cm Configmap created by QE CI %v has error, no .data: %v %v", ciCmName, configmapData, err)
+		}
+
+		e2e.Logf("configmap Data is:\n%v", configmapData)
+		if gjson.Get(configmapData, "VXLAN_PORT").Exists() {
+			ppParam.VXLAN_PORT = gjson.Get(configmapData, "VXLAN_PORT").String()
+		}
+		if gjson.Get(configmapData, "PODVM_INSTANCE_TYPE").Exists() {
+			ppParam.PODVM_INSTANCE_TYPE = gjson.Get(configmapData, "PODVM_INSTANCE_TYPE").String()
+		}
+		if gjson.Get(configmapData, "PROXY_TIMEOUT").Exists() {
+			ppParam.PROXY_TIMEOUT = gjson.Get(configmapData, "PROXY_TIMEOUT").String()
+		}
+	}
+
+	g.By("Create peer-pods-cm file")
+
+	// Processing configmap template and create  " <randomstring>peer-pods-cm.json"
+	configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate, "-p", "CLOUD_PROVIDER="+ppParam.CLOUD_PROVIDER, "VXLAN_PORT="+ppParam.VXLAN_PORT, "PODVM_INSTANCE_TYPE="+ppParam.PODVM_INSTANCE_TYPE,
+		"PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
+
+	if configFile != "" {
+		osStatMsg, configFileExists := os.Stat(configFile)
+		if configFileExists != nil {
+			e2e.Logf("issue creating peer-pods-cm file %s, err: %v , msg: %v' , osStatMsg: %v", configFile, err, msg, osStatMsg)
+		}
+	}
+
+	g.By("(Apply peer-pods-cm  file")
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+	if err != nil {
+		e2e.Logf("Error: applying peer-pods-cm %v failed: %v %v", configFile, msg, err)
+	}
+
+	return msg, err
+}
