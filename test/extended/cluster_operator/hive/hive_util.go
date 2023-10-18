@@ -174,6 +174,7 @@ type machinepool struct {
 	iops           int
 	template       string
 	authentication string
+	gcpSecureBoot  string
 }
 
 type syncSetResource struct {
@@ -275,6 +276,7 @@ type gcpInstallConfig struct {
 	region     string
 	projectid  string
 	template   string
+	secureBoot string
 }
 
 type gcpClusterDeployment struct {
@@ -645,7 +647,11 @@ func (cluster *clusterDeploymentPrivateLink) create(oc *exutil.CLI) {
 }
 
 func (machine *machinepool) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME="+machine.clusterName, "NAMESPACE="+machine.namespace, "IOPS="+strconv.Itoa(machine.iops), "AUTHENTICATION="+machine.authentication)
+	// Set default values
+	if machine.gcpSecureBoot == "" {
+		machine.gcpSecureBoot = "Disabled"
+	}
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME="+machine.clusterName, "NAMESPACE="+machine.namespace, "IOPS="+strconv.Itoa(machine.iops), "AUTHENTICATION="+machine.authentication, "SECUREBOOT="+machine.gcpSecureBoot)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -682,7 +688,11 @@ func (pool *azureClusterPool) create(oc *exutil.CLI) {
 
 // GCP
 func (config *gcpInstallConfig) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PROJECTID="+config.projectid)
+	// Set default values
+	if config.secureBoot == "" {
+		config.secureBoot = "Disabled"
+	}
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PROJECTID="+config.projectid, "SECUREBOOT="+config.secureBoot)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

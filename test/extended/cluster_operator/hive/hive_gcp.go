@@ -1,14 +1,20 @@
 package hive
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+
+	compute "cloud.google.com/go/compute/apiv1"
+	"cloud.google.com/go/compute/apiv1/computepb"
+	"google.golang.org/api/iterator"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
@@ -24,13 +30,15 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc           = exutil.NewCLI("hive-"+getRandomString(), exutil.KubeConfigPath())
+		oc           = exutil.NewCLI("hive", exutil.KubeConfigPath())
 		ns           hiveNameSpace
 		og           operatorGroup
 		sub          subscription
 		hc           hiveconfig
 		testDataDir  string
 		testOCPImage string
+		region       string
+		basedomain   string
 	)
 	g.BeforeEach(func() {
 		// Skip ARM64 arch
@@ -45,6 +53,108 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		// Get OCP Image for Hive testing
 		testOCPImage = getTestOCPImage()
+
+		// Get platform configurations
+		region = getRegion(oc)
+		basedomain = getBasedomain(oc)
+	})
+
+	// Author: fxie@redhat.com
+	// Timeout: 60min
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Critical-68240-Enable UEFISecureBoot for day 2 VMs on GCP [Serial]", func() {
+		var (
+			testCaseID   = "68240"
+			cdName       = "cd-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+			cdTemplate   = filepath.Join(testDataDir, "clusterdeployment-gcp.yaml")
+			icName       = cdName + "-install-config"
+			icTemplate   = filepath.Join(testDataDir, "gcp-install-config.yaml")
+			imageSetName = cdName + "-imageset"
+			mpTemplate   = filepath.Join(testDataDir, "machinepool-infra-gcp.yaml")
+		)
+
+		var (
+			// Count the number of VMs in a project, after filtering with the passed-in filter
+			countVMs = func(client *compute.InstancesClient, projectID, filter string) (vmCount int) {
+				instancesIterator := client.AggregatedList(context.Background(), &computepb.AggregatedListInstancesRequest{
+					Filter:  &filter,
+					Project: projectID,
+				})
+				for {
+					resp, err := instancesIterator.Next()
+					if err == iterator.Done {
+						break
+					}
+					o.Expect(err).NotTo(o.HaveOccurred())
+					vmCount += len(resp.Value.Instances)
+				}
+				e2e.Logf("Found VM count = %v", vmCount)
+				return vmCount
+			}
+		)
+
+		exutil.By("Getting project ID from the Hive cd")
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(projectID).NotTo(o.BeEmpty())
+		e2e.Logf("Found project ID = %v", projectID)
+
+		exutil.By("Creating a spoke cluster with shielded VM enabled")
+		installConfigSecret := gcpInstallConfig{
+			name1:      icName,
+			namespace:  oc.Namespace(),
+			baseDomain: basedomain,
+			name2:      cdName,
+			region:     region,
+			projectid:  projectID,
+			template:   icTemplate,
+			secureBoot: "Enabled",
+		}
+		cd := gcpClusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           basedomain,
+			clusterName:          cdName,
+			platformType:         "gcp",
+			credRef:              GCPCreds,
+			region:               region,
+			imageSetRef:          imageSetName,
+			installConfigSecret:  icName,
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 1,
+			template:             cdTemplate,
+		}
+		defer cleanCD(oc, imageSetName, oc.Namespace(), icName, cdName)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cd)
+
+		exutil.By("Waiting for the CD to be installed")
+		newCheck("expect", "get", asAdmin, requireNS, compare, "true", ok,
+			ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		// The Google cloud SDK must be able to locate Application Default Credentials (ADC).
+		// To this end, we should point the GOOGLE_APPLICATION_CREDENTIALS environment
+		// variable to a Google cloud credential file.
+		instancesClient, err := compute.NewInstancesRESTClient(context.Background())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		filter := fmt.Sprintf("(name=%s*) AND (shieldedInstanceConfig.enableSecureBoot = true)", cdName)
+		o.Expect(countVMs(instancesClient, projectID, filter)).To(o.Equal(6))
+
+		exutil.By("Create an infra MachinePool with secureboot enabled")
+		inframp := machinepool{
+			namespace:     oc.Namespace(),
+			clusterName:   cdName,
+			template:      mpTemplate,
+			gcpSecureBoot: "Enabled",
+		}
+		// The inframp will be deprovisioned along with the CD, so no need to defer a deletion here.
+		inframp.create(oc)
+
+		exutil.By("Make sure all infraVMs have secureboot enabled")
+		infraId := getInfraIDFromCDName(oc, cdName)
+		filterInfra := fmt.Sprintf("(name=%s*) AND (shieldedInstanceConfig.enableSecureBoot = true)", infraId+"-infra")
+		o.Eventually(func() bool {
+			return countVMs(instancesClient, projectID, filterInfra) == 1
+		}).WithTimeout(15 * time.Minute).WithPolling(30 * time.Second).Should(o.BeTrue())
 	})
 
 	//author: lwan@redhat.com

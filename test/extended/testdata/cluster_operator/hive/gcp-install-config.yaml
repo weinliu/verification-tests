@@ -40,11 +40,12 @@ objects:
           hostPrefix: 23
         machineNetwork:
         - cidr: 10.0.0.0/16
-        networkType: OpenShiftSDN
         serviceNetwork:
         - 172.30.0.0/16
       platform:
         gcp:
+          defaultMachinePlatform:
+            secureBoot: "${SECUREBOOT}"
           projectID: "${PROJECTID}"
           region: "${REGION}"
   type: Opaque
@@ -55,3 +56,4 @@ parameters:
 - name: NAME2
 - name: PROJECTID
 - name: REGION
+- name: SECUREBOOT

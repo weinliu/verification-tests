@@ -3,6 +3,7 @@ module github.com/openshift/openshift-tests-private
 go 1.20
 
 require (
+	cloud.google.com/go/compute v1.23.0
 	cloud.google.com/go/logging v1.7.0
 	cloud.google.com/go/storage v1.30.1
 	github.com/3th1nk/cidr v0.2.0
@@ -80,7 +81,6 @@ require (
 
 require (
 	cloud.google.com/go v0.110.6 // indirect
-	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.1 // indirect
 	cloud.google.com/go/longrunning v0.5.1 // indirect
