@@ -609,7 +609,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		ns26247 := oc.Namespace()
 
 		g.By("create deploy")
-		deployCreationErr := oc.WithoutNamespace().Run("create").Args("deployment", "deploy26247", "-n", ns26247, "--image", "image-registry.openshift-image-registry.svc:5000/openshift/cli", "--", "sleep", "3600").Execute()
+		deployCreationErr := oc.WithoutNamespace().Run("create").Args("deployment", "deploy26247", "-n", ns26247, "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83").Execute()
 		o.Expect(deployCreationErr).NotTo(o.HaveOccurred())
 
 		g.By("create pdb")
