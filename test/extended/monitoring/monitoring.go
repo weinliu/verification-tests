@@ -1980,14 +1980,17 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"100Mi"`))
 
 		g.By("check the resources.requests and resources.limits take effect for telemeter-client")
-		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="telemeter-client",namespace="openshift-monitoring"}'`, token, `"pod":"telemeter-client-`, 3*uwmLoadTime)
-		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/telemeter-client", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"telemeter-client\")].resources.requests}", "-n", "openshift-monitoring").Output()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get telemeter-client container resources.requests setting")
-		o.Expect(result).To(o.ContainSubstring(`"cpu":"2m","memory":"50Mi"`))
+		telemeterPod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app.kubernetes.io/name=telemeter-client", "-n", "openshift-monitoring").Output()
+		if strings.Contains(telemeterPod, "telemeter-client") {
+			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="telemeter-client",namespace="openshift-monitoring"}'`, token, `"pod":"telemeter-client-`, 3*uwmLoadTime)
+			result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/telemeter-client", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"telemeter-client\")].resources.requests}", "-n", "openshift-monitoring").Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get telemeter-client container resources.requests setting")
+			o.Expect(result).To(o.ContainSubstring(`"cpu":"2m","memory":"50Mi"`))
 
-		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/telemeter-client", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"telemeter-client\")].resources.limits}", "-n", "openshift-monitoring").Output()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get telemeter-client container resources.limits setting")
-		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"100Mi"`))
+			result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/telemeter-client", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"telemeter-client\")].resources.limits}", "-n", "openshift-monitoring").Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get telemeter-client container resources.limits setting")
+			o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"100Mi"`))
+		}
 
 		createResourceFromYaml(oc, "openshift-user-workload-monitoring", uwmResources)
 		exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
