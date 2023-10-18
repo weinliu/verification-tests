@@ -83,15 +83,15 @@ func getTunedRender(oc *exutil.CLI, namespace string) (string, error) {
 
 // getTunedProfile returns a string representation of the status.tunedProfile of the given node in the given namespace
 func getTunedProfile(oc *exutil.CLI, namespace string, tunedNodeName string) (string, error) {
-	return oc.AsAdmin().WithoutNamespace().Run("get").Args("profile", tunedNodeName, "-n", namespace, "-o=jsonpath={.status.tunedProfile}").Output()
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("profiles.tuned.openshift.io", tunedNodeName, "-n", namespace, "-o=jsonpath={.status.tunedProfile}").Output()
 }
 
 // assertIfTunedProfileApplied checks the logs for a given tuned pod in a given namespace to see if the expected profile was applied
 func assertIfTunedProfileApplied(oc *exutil.CLI, namespace string, tunedNodeName string, tunedName string) {
 
 	o.Eventually(func() bool {
-		appliedStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profile", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
-		tunedProfile, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profile", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
+		appliedStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+		tunedProfile, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
 		if err1 != nil || err2 != nil || strings.Contains(appliedStatus, "False") || strings.Contains(appliedStatus, "Unknown") || tunedProfile != tunedName {
 			e2e.Logf("failed to apply custom profile to nodes, the status is %s and profile is %s, check again", appliedStatus, tunedProfile)
 		}
@@ -195,7 +195,7 @@ func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysct
 }
 
 // compareSysctlDifferentFromSpecifiedValueByName compare if the sysctl parameter is not equal to specified value on all the node
-func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, namespace, sysctlparm, specifiedvalue string) {
+func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, specifiedvalue string) {
 
 	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -203,43 +203,38 @@ func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, namespace, s
 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
-		//Only check regular worker node and master nodes
-		if strings.Contains(nodeList[i], "worker") || strings.Contains(nodeList[i], "master") {
-			stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q", "--to-namespace=" + namespace}, "sysctl", sysctlparm)
-			conntrackMax := regexpstr.FindString(stdOut)
-			e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
-		}
-
+		//output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
+		stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
+		conntrackMax := regexpstr.FindString(stdOut)
+		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 	}
 
 }
 
 // compareSysctlValueOnSepcifiedNodeByName compare the sysctl parameter's value on specified node, it should different than other node
-func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, namespace, tunedNodeName, sysctlparm, defaultvalue, specifiedvalue string) {
+func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, tunedNodeName, sysctlparm, defaultvalue, specifiedvalue string) {
 
 	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeListSize := len(nodeList)
-	e2e.Logf("The name of nodes is %v", nodeList)
 
 	// tuned nodes should have value of 1048578, others should be 1048576
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
-		if strings.Contains(nodeList[i], "worker") || strings.Contains(nodeList[i], "master") {
-			stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q", "--to-namespace=" + namespace}, "sysctl", sysctlparm)
-			conntrackMax := regexpstr.FindString(stdOut)
-			e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if nodeList[i] == tunedNodeName {
-				o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+		//output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
+		stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
+		conntrackMax := regexpstr.FindString(stdOut)
+		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if nodeList[i] == tunedNodeName {
+			o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+		} else {
+			if len(defaultvalue) == 0 {
+				o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 			} else {
-				if len(defaultvalue) == 0 {
-					o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
-				} else {
-					o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + defaultvalue))
-				}
+				o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + defaultvalue))
 			}
 		}
 	}
@@ -309,7 +304,7 @@ func (ntoRes ntoResource) assertTunedProfileApplied(oc *exutil.CLI, workerNodeNa
 
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 
-		appliedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoRes.namespace, "profile", workerNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+		appliedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoRes.namespace, "profiles.tuned.openshift.io", workerNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
 		if err == nil && strings.Contains(appliedStatus, "True") {
 			e2e.Logf("Tuned custom profile applied to nodes, the status is %s", appliedStatus)
 			//Check if the new profiles name applied on a node
@@ -331,7 +326,7 @@ func assertNTOOperatorLogs(oc *exutil.CLI, namespace string, ntoOperatorPod stri
 // assertDebugSettings
 func assertDebugSettings(oc *exutil.CLI, tunedNodeName string, ntoNamespace string, isDebug string) bool {
 
-	nodeProfile, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("profile", tunedNodeName, "-n", ntoNamespace).Output()
+	nodeProfile, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("profiles.tuned.openshift.io", tunedNodeName, "-n", ntoNamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	regDebugCheck, err := regexp.Compile(".*Debug:.*" + isDebug)
@@ -687,10 +682,10 @@ func AssertNTOCertificateRotate(oc *exutil.CLI, ntoNamespace string, tunedNodeNa
 	metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
 	err := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
 
-		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true", "--to-namespace=" + ntoNamespace}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
+		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		openSSLExpireDateAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true", "--to-namespace=" + ntoNamespace}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | /bin/openssl x509 -noout -dates")
+		openSSLExpireDateAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | /bin/openssl x509 -noout -dates")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("The openSSL Expired Date information of NTO openSSL after rotate as below: \n%v", openSSLExpireDateAfter)
@@ -983,19 +978,19 @@ func getValueOfSysctlByName(oc *exutil.CLI, ntoNamespace, tunedNodeName, sysctlp
 // assertNTOCustomProfileStatus return correct profile status
 func assertNTOCustomProfileStatus(oc *exutil.CLI, ntoNamespace string, tunedNodeName string, expectedProfile string, expectedAppliedStatus string, expectedDegradedStatus string) bool {
 
-	currentProfile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile", tunedNodeName, `-ojsonpath={.status.tunedProfile}`).Output()
+	currentProfile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io", tunedNodeName, `-ojsonpath={.status.tunedProfile}`).Output()
 	currentProfile = strings.Trim(currentProfile, "'")
 	e2e.Logf("currentProfile is %v", currentProfile)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(currentProfile).NotTo(o.BeEmpty())
 
-	appliedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+	appliedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
 	appliedStatus = strings.Trim(appliedStatus, "'")
 	e2e.Logf("appliedStatus is %v", appliedStatus)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(appliedStatus).NotTo(o.BeEmpty())
 
-	degradedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Degraded")].status}'`).Output()
+	degradedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Degraded")].status}'`).Output()
 	degradedStatus = strings.Trim(degradedStatus, "'")
 	e2e.Logf("degradedStatus is %v", degradedStatus)
 	o.Expect(err).NotTo(o.HaveOccurred())

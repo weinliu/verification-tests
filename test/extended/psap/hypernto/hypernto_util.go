@@ -123,12 +123,12 @@ func compareSpecifiedValueByNameOnLabelNodeWithRetryInHostedCluster(oc *exutil.C
 func assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc *exutil.CLI, namespace string, tunedNodeName string, expectedTunedName string) {
 
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		currentTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
+		currentTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(currentTunedName).NotTo(o.BeEmpty())
 		e2e.Logf("The profile name on the node %v is: \n %v ", tunedNodeName, currentTunedName)
 
-		expectedAppliedStatus, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+		expectedAppliedStatus, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(expectedAppliedStatus).NotTo(o.BeEmpty())
 
@@ -137,7 +137,7 @@ func assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc *exutil.CLI, n
 			return false, nil
 		}
 		e2e.Logf("Profile '%s' has been applied to %s - continuing...", expectedTunedName, tunedNodeName)
-		tunedProfiles, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile").Output()
+		tunedProfiles, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(expectedAppliedStatus).NotTo(o.BeEmpty())
 		e2e.Logf("Current profiles on each node : \n %v ", tunedProfiles)
@@ -194,18 +194,18 @@ func assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc *exutil.CLI, n
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The nodes in nodepool [%v] is:\n%v", nodePoolName, nodeNames)
 
-		currentProfiles, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile").Output()
+		currentProfiles, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io").Output()
 		e2e.Logf("The currentProfiles in nodepool [%v] is:\n%v", nodePoolName, currentProfiles)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		matchNum = 0
 		for i := 0; i < len(nodeNames); i++ {
-			currentTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", nodeNames[i], "-ojsonpath={.status.tunedProfile}").Output()
+			currentTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", nodeNames[i], "-ojsonpath={.status.tunedProfile}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(currentTunedName).NotTo(o.BeEmpty())
 			matchTunedProfile = strings.Contains(currentTunedName, expectedTunedName)
 
-			currentAppliedStatus, err = oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", nodeNames[i], `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+			currentAppliedStatus, err = oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", nodeNames[i], `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(currentAppliedStatus).NotTo(o.BeEmpty())
 			matchAppliedStatus = strings.Contains(currentAppliedStatus, "True")
@@ -220,7 +220,7 @@ func assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc *exutil.CLI, n
 		}
 
 		if matchNum == len(nodeNames) {
-			tunedProfiles, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile").Output()
+			tunedProfiles, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("Current profiles on each node : \n %v ", tunedProfiles)
 			return true, nil

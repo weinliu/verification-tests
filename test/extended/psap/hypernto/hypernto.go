@@ -229,7 +229,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Assert active and recommended profile (hc-nodepool-invalid) match in tuned pod log")
 		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "20", 300, `ERROR    tuned.plugins.plugin_sysctl: Failed to read sysctl parameter`)
 
-		expectedDegradedStatus, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", ntoNamespace, "profile", workerNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Degraded")].status}'`).Output()
+		expectedDegradedStatus, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io", workerNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Degraded")].status}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(expectedDegradedStatus).NotTo(o.BeEmpty())
 		o.Expect(expectedDegradedStatus).To(o.ContainSubstring("True"))
