@@ -4527,6 +4527,85 @@ roleRef:
 		} else {
 			e2e.Failf("Not able find the processes which are running on pod %v as user 2000 :: %v", testpod2, execCmdOuptut)
 		}
+
+		// Adding this for https://issues.redhat.com/browse/USHIFT-1384 in >= 4.14
+		exutil.By("8. Ensure that pods in different namespaces are launched with different UIDs.")
+		namespace1 := "testpod-namespace-1"
+		namespace2 := "testpod-namespace-2"
+
+		defer func() {
+			oc.DeleteSpecifiedNamespaceAsAdmin(namespace1)
+			oc.DeleteSpecifiedNamespaceAsAdmin(namespace2)
+		}()
+
+		exutil.By("8.1 Create two different namespaces.")
+		oc.CreateSpecifiedNamespaceAsAdmin(namespace1)
+		oc.CreateSpecifiedNamespaceAsAdmin(namespace2)
+
+		template = getTestDataFilePath("pod-for-ping.json")
+
+		exutil.By("8.2 Create pods in both namespaces")
+		createPod := func(namespace string) string {
+			createPodErr := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
+			o.Expect(createPodErr).NotTo(o.HaveOccurred())
+			podName := getPodsList(oc.AsAdmin(), namespace)
+			exutil.AssertPodToBeReady(oc, podName[0], namespace)
+			return getResourceToBeReady(oc, asAdmin, withoutNamespace, "pod", "-n", namespace, `-o=jsonpath='{range .items[*]}{@.metadata.name}{" runAsUser: "}{@.spec.containers[*].securityContext.runAsUser}{" fsGroup: "}{@.spec.securityContext.fsGroup}{" seLinuxOptions: "}{@.spec.securityContext.seLinuxOptions.level}{"\n"}{end}'`)
+		}
+
+		exutil.By("8.3 Verify pods should have different UID's and desc in both namespaces.")
+		// Original pod descriptions
+		podDesc1 := createPod(namespace1)
+		podDesc2 := createPod(namespace2)
+
+		// Split the descriptions into lines
+		lines1 := strings.Split(podDesc1, "\n")
+		lines2 := strings.Split(podDesc2, "\n")
+
+		// Initialize a flag to check for differences
+		differencesFound := false
+
+		// Iterate through each line and compare the specified fields
+		for i := 0; i < len(lines1) && i < len(lines2); i++ {
+			fields1 := strings.Fields(lines1[i])
+			fields2 := strings.Fields(lines2[i])
+
+			if len(fields1) != len(fields2) {
+				e2e.Failf("Number of fields in line %d differ: %d != %d", i+1, len(fields1), len(fields2))
+			}
+
+			// Check if fields1 has enough elements before extracting values
+			if len(fields1) > 2 {
+				// Extract the values of interest
+				runAsUser1 := fields1[2]      // Assuming runAsUser is the 3rd field
+				fsGroup1 := fields1[4]        // Assuming fsGroup is the 5th field
+				seLinuxOptions1 := fields1[6] // Assuming seLinuxOptions is the 7th field
+
+				runAsUser2 := fields2[2]
+				fsGroup2 := fields2[4]
+				seLinuxOptions2 := fields2[6]
+
+				// Compare the values
+				if runAsUser1 != runAsUser2 && fsGroup1 != fsGroup2 && seLinuxOptions1 != seLinuxOptions2 {
+					e2e.Logf("Line %d: runAsUser does not match: '%s' != '%s'", i+1, runAsUser1, runAsUser2)
+					e2e.Logf("Line %d: fsGroup does not match: '%s' != '%s'", i+1, fsGroup1, fsGroup2)
+					e2e.Logf("Line %d: seLinuxOptions do not match: '%s' != '%s'", i+1, seLinuxOptions1, seLinuxOptions2)
+					differencesFound = true
+				} else {
+					e2e.Logf("Line %d: runAsUser does match: '%s' != '%s'", i+1, runAsUser1, runAsUser2)
+					e2e.Logf("Line %d: fsGroup does match: '%s' != '%s'", i+1, fsGroup1, fsGroup2)
+					e2e.Logf("Line %d: seLinuxOptions does match: '%s' != '%s'", i+1, seLinuxOptions1, seLinuxOptions2)
+					differencesFound = false
+					break
+				}
+			}
+		}
+		// Check if any differences were found and pass or fail accordingly
+		if differencesFound {
+			e2e.Logf("Both pods in different namespaces have different UIDs and SCC descriptions\n")
+		} else {
+			e2e.Failf("Both pods in different namespaces don't have different UIDs and SCC descriptions\n")
+		}
 	})
 
 	// author: rgangwar@redhat.com
