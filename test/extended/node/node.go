@@ -147,6 +147,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			overlay:  "",
 			template: ctrcfgOverlayTemp,
 		}
+
 		runtimeTimeout = runtimeTimeoutDescription{
 			name:       "",
 			labelkey:   "",
@@ -995,6 +996,26 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		exutil.By("Check log link successfully")
 		checkLogLink(oc, podLogLink65404.namespace)
+	})
+
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-55683-Crun on OpenShift enable [Disruptive]", func() {
+		exutil.By("Apply a ContarinerRuntimeConfig to enable crun")
+		ctrcfgCrun := filepath.Join(buildPruningBaseDir, "containerRuntimeConfig-crun.yaml")
+		mcpName := "worker"
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + ctrcfgCrun).Execute()
+			err := checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + ctrcfgCrun).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the mcp finish updating")
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("Check crun is running")
+		checkCrun(oc)
 	})
 })
 

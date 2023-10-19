@@ -1559,6 +1559,29 @@ func checkImgSignature(oc *exutil.CLI) error {
 	})
 }
 
+func checkCrun(oc *exutil.CLI) {
+	var crunProc string
+	var libcrun string
+	nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodename := nodeList.Items[0].Name
+	waitErr := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		crunProc, _ = exutil.DebugNodeWithChroot(oc, nodename, "bash", "-c", "ps -aux | grep crun")
+		libcrun, _ = exutil.DebugNodeWithChroot(oc, nodename, "bash", "-c", "systemctl status crio-$(sudo crictl ps -aq | head -n1).scope")
+		if strings.Contains(string(crunProc), "root=/run/crun") && strings.Contains(string(libcrun), "libcrun") {
+			e2e.Logf("crun is running!")
+			return true, nil
+		}
+		e2e.Logf("crun is not running!")
+		return false, nil
+	})
+	if waitErr != nil {
+		e2e.Logf("crunProc is :\n%s\n", crunProc)
+		e2e.Logf("libcrun is :\n%s\n", libcrun)
+	}
+	exutil.AssertWaitPollNoErr(waitErr, "crun check failed!")
+}
+
 // this function is for upgrade test to check SYSTEM_RESERVED_ES parameter is not empty
 
 func parameterCheck(oc *exutil.CLI) {
