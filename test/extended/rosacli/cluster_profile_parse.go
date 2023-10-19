@@ -88,14 +88,14 @@ func parseProfile(filePath string) (*ClusterConfig, error) {
 	// Load the JSON file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading JSON file: %v", err)
+		return nil, fmt.Errorf("error reading JSON file: %v", err)
 	}
 
 	// Parse the JSON data into the ClusterConfig struct
 	var config ClusterConfig
 	err = json.Unmarshal(data, &config)
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing JSON data: %v", err)
+		return nil, fmt.Errorf("error parsing JSON data: %v", err)
 	}
 
 	return &config, nil

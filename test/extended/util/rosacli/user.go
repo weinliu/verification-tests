@@ -7,7 +7,7 @@ import (
 )
 
 type UserService interface {
-	ListUsers(clusterID string) (bytes.Buffer, error)
+	ListUsers(clusterID string) (GroupUserList, bytes.Buffer, error)
 	ReflectUsersList(result bytes.Buffer) (gul GroupUserList, err error)
 	RevokeUser(clusterID string, flags ...string) (bytes.Buffer, error)
 	GrantUser(clusterID string, flags ...string) (bytes.Buffer, error)
@@ -50,11 +50,16 @@ func (c *userService) RevokeUser(clusterID string, flags ...string) (bytes.Buffe
 }
 
 // List users
-func (c *userService) ListUsers(clusterID string) (bytes.Buffer, error) {
+func (c *userService) ListUsers(clusterID string) (GroupUserList, bytes.Buffer, error) {
 	listUsers := c.Client.Runner.
 		Cmd("list", "users").
 		CmdFlags("-c", clusterID)
-	return listUsers.Run()
+	output, err := listUsers.Run()
+	if err != nil {
+		return GroupUserList{}, output, err
+	}
+	gul, err := c.ReflectUsersList(output)
+	return gul, output, err
 }
 
 // Pasrse the result of 'rosa list user' to  []*GroupUser struct
@@ -74,8 +79,7 @@ func (c *userService) ReflectUsersList(result bytes.Buffer) (gul GroupUserList, 
 
 // Delete all users
 func (c *userService) RemoveAllUsers(clusterID string) (err error) {
-	out, err := c.ListUsers(clusterID)
-	gul, err := c.ReflectUsersList(out)
+	gul, _, err := c.ListUsers(clusterID)
 	if err != nil {
 		return err
 	}

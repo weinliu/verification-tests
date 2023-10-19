@@ -17,16 +17,12 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A region testing", func() 
 	g.It("Author:yuwan-High-55729-rosacli List regions via rosacli command [Serial]", func() {
 
 		g.By("List region")
-		out, err := ocmResourceService.ListRegion()
-		o.Expect(err).To(o.BeNil())
-		usersTabNonH, err := ocmResourceService.ReflectRegionList(out)
+		usersTabNonH, _, err := ocmResourceService.ListRegion()
 		o.Expect(err).To(o.BeNil())
 		o.Expect(len(usersTabNonH)).NotTo(o.Equal(0))
 
 		g.By("List region --hosted-cp")
-		out, err = ocmResourceService.ListRegion("--hosted-cp")
-		o.Expect(err).To(o.BeNil())
-		usersTabH, err := ocmResourceService.ReflectRegionList(out)
+		usersTabH, _, err := ocmResourceService.ListRegion("--hosted-cp")
 		o.Expect(err).To(o.BeNil())
 		o.Expect(len(usersTabH)).NotTo(o.Equal(0))
 

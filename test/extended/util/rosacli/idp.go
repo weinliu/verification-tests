@@ -7,7 +7,7 @@ import (
 type IDPService interface {
 	ReflectIDPList(result bytes.Buffer) (idplist IDPList, err error)
 	CreateIDP(clusterID string, flags ...string) (bytes.Buffer, error)
-	ListIDP(clusterID string) (bytes.Buffer, error)
+	ListIDP(clusterID string) (IDPList, bytes.Buffer, error)
 	DeleteIDP(clusterID string, idpName string) (bytes.Buffer, error)
 }
 
@@ -72,10 +72,15 @@ func (c *idpService) DeleteIDP(clusterID string, idpName string) (bytes.Buffer, 
 }
 
 // list idp
-func (c *idpService) ListIDP(clusterID string) (bytes.Buffer, error) {
+func (c *idpService) ListIDP(clusterID string) (IDPList, bytes.Buffer, error) {
 	listIDP := c.Client.Runner.
 		Cmd("list", "idp").
 		CmdFlags("-c", clusterID)
 
-	return listIDP.Run()
+	output, err := listIDP.Run()
+	if err != nil {
+		return IDPList{}, output, err
+	}
+	idpList, err := c.ReflectIDPList(output)
+	return idpList, output, err
 }

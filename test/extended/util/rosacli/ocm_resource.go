@@ -17,28 +17,28 @@ var RoleTypeSuffixMap = map[string]string{
 }
 
 type OCMResourceService interface {
-	ListRegion(flags ...string) (bytes.Buffer, error)
+	ListRegion(flags ...string) ([]*CloudRegion, bytes.Buffer, error)
 	ReflectRegionList(result bytes.Buffer) (regions []*CloudRegion, err error)
-	ListUserRole() (bytes.Buffer, error)
+	ListUserRole() (UserRoleList, bytes.Buffer, error)
 	DeleteUserRole(flags ...string) (bytes.Buffer, error)
 	LinkUserRole(flags ...string) (bytes.Buffer, error)
 	UnlinkUserRole(flags ...string) (bytes.Buffer, error)
 	CreateUserRole(flags ...string) (bytes.Buffer, error)
+	ReflectUserRoleList(result bytes.Buffer) (url UserRoleList, err error)
 	Whoami() (bytes.Buffer, error)
 	ReflectAccountsInfo(result bytes.Buffer) *AccountsInfo
-	ReflectUserRoleList(result bytes.Buffer) (url UserRoleList, err error)
 	CreateAccountRole(flags ...string) (bytes.Buffer, error)
 	ReflectAccountRoleList(result bytes.Buffer) (arl AccountRoleList, err error)
 	DeleteAccountRole(flags ...string) (bytes.Buffer, error)
-	ListAccountRole() (bytes.Buffer, error)
-	ListOCMRole() (bytes.Buffer, error)
+	ListAccountRole() (AccountRoleList, bytes.Buffer, error)
+	ListOCMRole() (OCMRoleList, bytes.Buffer, error)
 	DeleteOCMRole(flags ...string) (bytes.Buffer, error)
 	LinkOCMRole(flags ...string) (bytes.Buffer, error)
 	UnlinkOCMRole(flags ...string) (bytes.Buffer, error)
 	CreateOCMRole(flags ...string) (bytes.Buffer, error)
 	ReflectOCMRoleList(result bytes.Buffer) (orl OCMRoleList, err error)
 
-	ListOIDCConfig() (bytes.Buffer, error)
+	ListOIDCConfig() (OIDCConfigList, bytes.Buffer, error)
 	DeleteOIDCConfig(flags ...string) (bytes.Buffer, error)
 	CreateOIDCConfig(flags ...string) (bytes.Buffer, error)
 	ReflectOIDCConfigList(result bytes.Buffer) (oidclist OIDCConfigList, err error)
@@ -115,10 +115,15 @@ type OIDCConfigList struct {
 }
 
 // List region
-func (ors *ocmResourceService) ListRegion(flags ...string) (bytes.Buffer, error) {
+func (ors *ocmResourceService) ListRegion(flags ...string) ([]*CloudRegion, bytes.Buffer, error) {
 	listRegion := ors.Client.Runner
 	listRegion = listRegion.Cmd("list", "regions").CmdFlags(flags...)
-	return listRegion.Run()
+	output, err := listRegion.Run()
+	if err != nil {
+		return []*CloudRegion{}, output, err
+	}
+	rList, err := ors.ReflectRegionList(output)
+	return rList, output, err
 }
 
 // Pasrse the result of 'rosa regions' to the RegionInfo struct
@@ -160,11 +165,16 @@ func (ors *ocmResourceService) ReflectUserRoleList(result bytes.Buffer) (url Use
 }
 
 // run `rosa list user-role` command
-func (ors *ocmResourceService) ListUserRole() (bytes.Buffer, error) {
+func (ors *ocmResourceService) ListUserRole() (UserRoleList, bytes.Buffer, error) {
 	ors.Client.Runner.cmdArgs = []string{}
 	listUserRole := ors.Client.Runner.
 		Cmd("list", "user-role")
-	return listUserRole.Run()
+	output, err := listUserRole.Run()
+	if err != nil {
+		return UserRoleList{}, output, err
+	}
+	uList, err := ors.ReflectUserRoleList(output)
+	return uList, output, err
 
 }
 
@@ -246,11 +256,16 @@ func (ors *ocmResourceService) DeleteAccountRole(flags ...string) (bytes.Buffer,
 }
 
 // run `rosa list account-roles` command
-func (ors *ocmResourceService) ListAccountRole() (bytes.Buffer, error) {
+func (ors *ocmResourceService) ListAccountRole() (AccountRoleList, bytes.Buffer, error) {
 	ors.Client.Runner.cmdArgs = []string{}
 	listAccountRole := ors.Client.Runner.
 		Cmd("list", "account-roles")
-	return listAccountRole.Run()
+	output, err := listAccountRole.Run()
+	if err != nil {
+		return AccountRoleList{}, output, err
+	}
+	arl, err := ors.ReflectAccountRoleList(output)
+	return arl, output, err
 
 }
 
@@ -273,12 +288,16 @@ func (ors *ocmResourceService) CreateOCMRole(flags ...string) (bytes.Buffer, err
 }
 
 // run `rosa list ocm-role` command
-func (ors *ocmResourceService) ListOCMRole() (bytes.Buffer, error) {
+func (ors *ocmResourceService) ListOCMRole() (OCMRoleList, bytes.Buffer, error) {
 	ors.Client.Runner.cmdArgs = []string{}
 	listOCMRole := ors.Client.Runner.
 		Cmd("list", "ocm-role")
-	return listOCMRole.Run()
-
+	output, err := listOCMRole.Run()
+	if err != nil {
+		return OCMRoleList{}, output, err
+	}
+	orl, err := ors.ReflectOCMRoleList(output)
+	return orl, output, err
 }
 
 // run `rosa delete ocm-role` command
@@ -337,11 +356,16 @@ func (ors *ocmResourceService) CreateOIDCConfig(flags ...string) (bytes.Buffer, 
 }
 
 // run `rosa list oidc-config` command
-func (ors *ocmResourceService) ListOIDCConfig() (bytes.Buffer, error) {
+func (ors *ocmResourceService) ListOIDCConfig() (OIDCConfigList, bytes.Buffer, error) {
 	ors.Client.Runner.cmdArgs = []string{}
 	listOIDCConfig := ors.Client.Runner.
 		Cmd("list", "oidc-config")
-	return listOIDCConfig.Run()
+	output, err := listOIDCConfig.Run()
+	if err != nil {
+		return OIDCConfigList{}, output, err
+	}
+	oidcl, err := ors.ReflectOIDCConfigList(output)
+	return oidcl, output, err
 
 }
 

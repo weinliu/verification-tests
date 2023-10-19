@@ -60,11 +60,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 		o.Expect(textData).Should(o.ContainSubstring("Granted role '%s' to user '%s' on cluster '%s'", clusterAdminsGroupName, clusterAdminsUserName, clusterID))
 
 		g.By("Get specific users")
-		out, err = userService.ListUsers(
-			clusterID,
-		)
-		o.Expect(err).To(o.BeNil())
-		usersList, err := userService.ReflectUsersList(out)
+		usersList, _, err := userService.ListUsers(clusterID)
 		o.Expect(err).To(o.BeNil())
 
 		user, err := usersList.User(dedicatedAdminsUserName)
@@ -100,12 +96,9 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 		o.Expect(textData).Should(o.ContainSubstring("Revoked role '%s' from user '%s' on cluster '%s'", clusterAdminsGroupName, clusterAdminsUserName, clusterID))
 
 		g.By("List users")
-		out, err = userService.ListUsers(
-			clusterID,
-		)
+		usersList, out, err = userService.ListUsers(clusterID)
 		o.Expect(err).ToNot(o.BeNil())
 		o.Expect(out.String()).Should(o.ContainSubstring("There are no users configured for cluster"))
-		usersList, err = userService.ReflectUsersList(out)
 		o.Expect(err).To(o.BeNil())
 		o.Expect(len(usersList.GroupUsers)).To(o.Equal(0))
 	})

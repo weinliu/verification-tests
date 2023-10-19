@@ -67,19 +67,6 @@ func getInstallerRoleArn(hostedcp bool) (string, error) {
 	return "", nil
 }
 
-// Extract the oidc id from the output of `rosa create oidc-config`
-func extractOIDCProviderID(output string) string {
-	re := regexp.MustCompile(`rosa create operator-roles --prefix <user-defined> --oidc-config-id\s+([a-zA-Z0-9]+)`)
-	match := re.FindStringSubmatch(output)
-	if len(match) > 1 {
-		oidcConfigID := match[1]
-		return oidcConfigID
-	} else {
-		logger.Warnf("Cannot find the oidc config input string %s! Please check the matching string", output)
-		return ""
-	}
-}
-
 // Split resources from the aws arn
 func splitARNResources(v string) []string {
 	var parts []string
@@ -120,11 +107,7 @@ func extractOIDCProviderIDFromARN(arn string) string {
 func getOIDCIdFromList(providerURL string) (string, error) {
 	var rosaClient = rosacli.NewClient()
 	ocmResourceService := rosaClient.OCMResource
-	output, err := ocmResourceService.ListOIDCConfig()
-	if err != nil {
-		return "", err
-	}
-	oidcConfigList, err := ocmResourceService.ReflectOIDCConfigList(output)
+	oidcConfigList, _, err := ocmResourceService.ListOIDCConfig()
 	if err != nil {
 		return "", err
 	}

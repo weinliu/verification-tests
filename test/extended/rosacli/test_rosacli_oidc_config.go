@@ -44,12 +44,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 				o.Expect(strings.Contains(textData, "Successfully deleted the OIDC provider")).Should(o.BeTrue())
 
 				g.By("Check the managed oidc config is deleted")
-				output, err = ocmResourceService.ListOIDCConfig()
+				oidcConfigList, _, err := ocmResourceService.ListOIDCConfig()
 				o.Expect(err).To(o.BeNil())
-
-				oidcConfigList, err := ocmResourceService.ReflectOIDCConfigList(output)
-				o.Expect(err).To(o.BeNil())
-
 				foundOIDCConfig := oidcConfigList.OIDCConfig(id)
 				o.Expect(foundOIDCConfig).To(o.Equal(rosacli.OIDCConfig{}))
 			}
@@ -85,12 +81,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 		oidcConfigIDsNeedToClean = append(oidcConfigIDsNeedToClean, unmanagedOIDCConfigID)
 
 		g.By("Check the created unmananged oidc by `rosa list oidc-config`")
-		output, err = ocmResourceService.ListOIDCConfig()
+		oidcConfigList, output, err := ocmResourceService.ListOIDCConfig()
 		o.Expect(err).To(o.BeNil())
-
-		oidcConfigList, err := ocmResourceService.ReflectOIDCConfigList(output)
-		o.Expect(err).To(o.BeNil())
-
 		foundOIDCConfig := oidcConfigList.OIDCConfig(unmanagedOIDCConfigID)
 		o.Expect(foundOIDCConfig).NotTo(o.BeNil())
 		o.Expect(foundOIDCConfig.Managed).To(o.Equal("false"))
@@ -111,12 +103,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 		oidcConfigIDsNeedToClean = append(oidcConfigIDsNeedToClean, managedOIDCConfigID)
 
 		g.By("Check the created mananged oidc by `rosa list oidc-config`")
-		output, err = ocmResourceService.ListOIDCConfig()
+		oidcConfigList, output, err = ocmResourceService.ListOIDCConfig()
 		o.Expect(err).To(o.BeNil())
-
-		oidcConfigList, err = ocmResourceService.ReflectOIDCConfigList(output)
-		o.Expect(err).To(o.BeNil())
-
 		foundOIDCConfig = oidcConfigList.OIDCConfig(managedOIDCConfigID)
 		o.Expect(foundOIDCConfig).NotTo(o.BeNil())
 		o.Expect(foundOIDCConfig.Managed).To(o.Equal("true"))

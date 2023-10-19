@@ -136,9 +136,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
 
 		g.By("List account-roles and check the result are expected")
-		output, err = ocmResourceService.ListAccountRole()
-		o.Expect(err).To(o.BeNil())
-		accountRoleList, err := ocmResourceService.ReflectAccountRoleList(output)
+		accountRoleList, _, err := ocmResourceService.ListAccountRole()
 		o.Expect(err).To(o.BeNil())
 
 		accountRoleSetB := accountRoleList.AccountRoles(userRolePrefixB)
@@ -192,9 +190,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		o.Expect(strings.Contains(textData, "Successfully deleted the classic account roles")).Should(o.BeTrue())
 
 		g.By("List account-roles to check they are deleted")
-		output, err = ocmResourceService.ListAccountRole()
-		o.Expect(err).To(o.BeNil())
-		accountRoleList, err = ocmResourceService.ReflectAccountRoleList(output)
+		accountRoleList, _, err = ocmResourceService.ListAccountRole()
 		o.Expect(err).To(o.BeNil())
 
 		accountRoleSetB = accountRoleList.AccountRoles(userRolePrefixB)
@@ -268,9 +264,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		o.Expect(textData).Should(o.ContainSubstring("Successfully linked role"))
 
 		g.By("Get the user-role info")
-		output, err = ocmResourceService.ListUserRole()
-		o.Expect(err).To(o.BeNil())
-		userRoleList, err := ocmResourceService.ReflectUserRoleList(output)
+		userRoleList, output, err := ocmResourceService.ListUserRole()
 		o.Expect(err).To(o.BeNil())
 		foundUserRole = userRoleList.UserRole(userRolePrefix, ocmAccountUsername)
 		o.Expect(foundUserRole).ToNot(o.BeNil())
@@ -307,11 +301,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		o.Expect(textData).Should(o.ContainSubstring("Successfully unlinked role"))
 
 		g.By("Get the user-role info")
-		output, err = ocmResourceService.ListUserRole()
+		userRoleList, output, err = ocmResourceService.ListUserRole()
 		o.Expect(err).To(o.BeNil())
-		userRoleList, err = ocmResourceService.ReflectUserRoleList(output)
-		o.Expect(err).To(o.BeNil())
-
 		foundUserRole = userRoleList.UserRole(userRolePrefix, ocmAccountUsername)
 		o.Expect(foundUserRole.Linded).To(o.Equal("No"))
 
@@ -381,9 +372,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		o.Expect(textData).Should(o.ContainSubstring("Successfully linked role"))
 
 		g.By("Get the ocm-role info")
-		output, err = ocmResourceService.ListOCMRole()
-		o.Expect(err).To(o.BeNil())
-		ocmRoleList, err := ocmResourceService.ReflectOCMRoleList(output)
+		ocmRoleList, output, err := ocmResourceService.ListOCMRole()
 		o.Expect(err).To(o.BeNil())
 		foundOcmrole = ocmRoleList.OCMRole(ocmrolePrefix, ocmOrganizationExternalID)
 		o.Expect(foundOcmrole).ToNot(o.BeNil())
@@ -420,11 +409,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		o.Expect(textData).Should(o.ContainSubstring("Successfully unlinked role"))
 
 		g.By("Get the ocm-role info")
-		output, err = ocmResourceService.ListOCMRole()
+		ocmRoleList, output, err = ocmResourceService.ListOCMRole()
 		o.Expect(err).To(o.BeNil())
-		ocmRoleList, err = ocmResourceService.ReflectOCMRoleList(output)
-		o.Expect(err).To(o.BeNil())
-
 		foundOcmrole = ocmRoleList.OCMRole(ocmrolePrefix, ocmOrganizationExternalID)
 		o.Expect(foundOcmrole.Linded).To(o.Equal("No"))
 

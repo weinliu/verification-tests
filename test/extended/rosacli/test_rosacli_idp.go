@@ -49,9 +49,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(textData).Should(o.ContainSubstring("There is an admin on cluster"))
 
 		g.By("List IDP")
-		output, err = idpService.ListIDP(clusterID)
-		o.Expect(err).To(o.BeNil())
-		idpTab, err := idpService.ReflectIDPList(output)
+		idpTab, _, err := idpService.ListIDP(clusterID)
 		o.Expect(err).To(o.BeNil())
 		o.Expect(idpTab.IsExist("cluster-admin")).To(o.BeTrue())
 
@@ -68,9 +66,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(textData).Should(o.ContainSubstring("There is no admin on cluster"))
 
 		g.By("List IDP after the admin is deleted")
-		output, err = idpService.ListIDP(clusterID)
-		o.Expect(err).To(o.BeNil())
-		idpTab, err = idpService.ReflectIDPList(output)
+		idpTab, _, err = idpService.ListIDP(clusterID)
 		o.Expect(err).To(o.BeNil())
 		o.Expect(idpTab.IsExist("cluster-admin")).To(o.BeFalse())
 
@@ -116,9 +112,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(textData).Should(o.ContainSubstring("There is an admin on cluster"))
 
 		g.By("List IDP")
-		output, err = idpService.ListIDP(clusterID)
-		o.Expect(err).To(o.BeNil())
-		idpTab, err = idpService.ReflectIDPList(output)
+		idpTab, output, err = idpService.ListIDP(clusterID)
 		o.Expect(err).To(o.BeNil())
 		o.Expect(idpTab.IsExist("cluster-admin")).To(o.BeTrue())
 		o.Expect(idpTab.IsExist(idpName)).To(o.BeTrue())
@@ -287,9 +281,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idp["OpenID"].name))
 
 		g.By("list all IDPs")
-		output, err = idpService.ListIDP(clusterID)
-		o.Expect(err).To(o.BeNil())
-		idpTab, err := idpService.ReflectIDPList(output)
+		idpTab, _, err := idpService.ListIDP(clusterID)
 		o.Expect(err).To(o.BeNil())
 		for k := range idp {
 			o.Expect(idpTab.IsExist(idp[k].name)).To(o.BeTrue())
