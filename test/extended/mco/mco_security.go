@@ -143,16 +143,17 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 	})
 	g.It("Author:sregidor-NonHyperShiftHOST-High-67660-MCS generates ignition configs with certs [Disruptive]", func() {
 		var (
-			proxy                = NewResource(oc.AsAdmin(), "proxy", "cluster")
-			certFileName         = "ca-bundle.crt"
-			cmName               = "test-proxy-config"
-			cmNamespace          = "openshift-config"
-			proxyConfigMap       *ConfigMap
-			kubeCloudConfigMap   = NewConfigMap(oc.AsAdmin(), "openshift-config-managed", "kube-cloud-config")
-			kubeCertFile         = "/etc/kubernetes/kubelet-ca.crt"
-			userCABundleCertFile = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
-			kubeCloudCertFile    = "/etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"
-			ignitionConfig       = "3.4.0"
+			proxy                 = NewResource(oc.AsAdmin(), "proxy", "cluster")
+			certFileName          = "ca-bundle.crt"
+			userCABundleConfigMap = NewConfigMap(oc.AsAdmin(), "openshift-config", "user-ca-bundle")
+			cmName                = "test-proxy-config"
+			cmNamespace           = "openshift-config"
+			proxyConfigMap        *ConfigMap
+			kubeCloudConfigMap    = NewConfigMap(oc.AsAdmin(), "openshift-config-managed", "kube-cloud-config")
+			kubeCertFile          = "/etc/kubernetes/kubelet-ca.crt"
+			userCABundleCertFile  = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
+			kubeCloudCertFile     = "/etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"
+			ignitionConfig        = "3.4.0"
 		)
 
 		logger.Infof("Using pool %s for testing", mcp.GetName())
@@ -199,7 +200,15 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			"The file %s is not served in the ignition config", userCABundleCertFile)
 
 		logger.Infof("Check that the file has the right content in the nodes")
-		certContent := proxyConfigMap.GetDataValueOrFail(certFileName)
+
+		certContent := ""
+		userCABundleCert, exists, err := userCABundleConfigMap.HasKey(certFileName)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error checking if %s contains key '%s'", userCABundleConfigMap, certFileName)
+		if exists {
+			certContent = userCABundleCert
+		}
+
+		certContent += proxyConfigMap.GetDataValueOrFail(certFileName)
 		EventuallyFileExistsInNode(userCABundleCertFile, certContent, mcp.GetNodesOrFail()[0], "3m", "20s")
 
 		logger.Infof("OK!\n")

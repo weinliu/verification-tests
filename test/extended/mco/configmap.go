@@ -18,6 +18,22 @@ func NewConfigMap(oc *exutil.CLI, namespace, name string) *ConfigMap {
 	return &ConfigMap{Resource: *NewNamespacedResource(oc, "ConfigMap", namespace, name)}
 }
 
+// HasKey returns if a key is present in "data"
+func (cm *ConfigMap) HasKey(key string) (string, bool, error) {
+	dataMap, err := cm.GetDataMap()
+
+	if err != nil {
+		return "", false, err
+	}
+
+	data, ok := dataMap[key]
+	if !ok {
+		return "", false, nil
+	}
+
+	return data, true, nil
+}
+
 // GetDataValue return the value of a key stored in "data".
 func (cm *ConfigMap) GetDataValue(key string) (string, error) {
 	// We cant use the "resource.Get" method, because exutil.client will trim the output, removing spaces and newlines that could be important in a configuration.
