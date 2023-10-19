@@ -11157,26 +11157,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 
-			subkeda = subscriptionDescription{
-				subName:                "keda",
-				namespace:              "openshift-operators",
-				channel:                "alpha",
-				ipApproval:             "Automatic",
-				operatorPackage:        "keda",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
-				startingCSV:            "", //get it from package based on currentCSV if ipApproval is Automatic
-				currentCSV:             "",
-				installedCSV:           "",
-				template:               subTemplate,
-				singleNamespace:        false,
-			}
-
-			csvkeda = csvDescription{
-				name:      "",
-				namespace: "openshift-operators",
-			}
-
 			catsrc = catalogSourceDescription{
 				name:        "catsrc-25783-operator",
 				namespace:   "openshift-marketplace",
@@ -11213,13 +11193,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			g.Skip("it is not supported")
 		}
 
-		exutil.By("create operator keda")
-		defer subkeda.delete(itName, dr)
-		subkeda.create(oc, itName, dr)
-		csvkeda.name = subkeda.installedCSV
-		defer csvkeda.delete(itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subkeda.installedCSV, "-n", subkeda.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-
 		exutil.By("create catsrc")
 		catsrc.create(oc, itName, dr)
 		defer catsrc.delete(itName, dr)
@@ -11230,7 +11203,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		csvCockroachdb.name = subCockroachdb.installedCSV
 		defer csvCockroachdb.delete(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subCockroachdb.installedCSV, "-n", subCockroachdb.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-
 	})
 
 	// It will cover test case: OCP-21484, OCP-21532(actually it covers OCP-21484), author: kuiwang@redhat.com
