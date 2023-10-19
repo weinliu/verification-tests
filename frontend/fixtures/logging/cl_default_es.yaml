@@ -1,28 +1,49 @@
-apiVersion: logging.openshift.io/v1
-kind: ClusterLogging
+kind: Template
+apiVersion: template.openshift.io/v1
 metadata:
-  namespace: openshift-logging
-  name: instance
-spec:
-  collection:
-    type: vector
-  logStore:
-    elasticsearch:
-      nodeCount: 1
-      redundancyPolicy: ZeroRedundancy
-      resources:
-        requests:
-          memory: 2Gi
-    retentionPolicy:
-      application:
-        maxAge: 7h
-      infra:
-        maxAge: 3d
-      audit:
-        maxAge: 6h
-    type: elasticsearch
-  managementState: Managed
-  visualization:
-    kibana:
-      replicas: 1
-    type: kibana
+  name: clusterlogging-template
+objects:
+- kind: "ClusterLogging"
+  apiVersion: "logging.openshift.io/v1"
+  metadata:
+    name: ${NAME}
+    namespace: ${NAMESPACE}
+  spec:
+    managementState: "Managed"
+    logStore:
+      type: "elasticsearch"
+      retentionPolicy:
+        application:
+          maxAge: 3h
+        infra:
+          maxAge: 3h
+        audit:
+          maxAge: 3h
+      elasticsearch:
+        nodeCount: ${{ES_NODE_COUNT}}
+        redundancyPolicy: ${REDUNDANCY_POLICY}
+        resources:
+          requests:
+            memory: ${ES_REQUEST_MEMORY}
+        storage: {}
+    visualization:
+      type: "kibana"
+      kibana:
+        replicas: ${{KIBANA_REPLICAS}}
+    collection:
+      type: ${COLLECTOR}
+parameters:
+  - name: NAME
+    value: "instance"
+  - name: NAMESPACE
+    value: "openshift-logging"
+  - name: ES_NODE_COUNT
+    value: "1"
+  - name: REDUNDANCY_POLICY
+    value: "ZeroRedundancy"
+  - name: ES_REQUEST_MEMORY
+    value: "2Gi"
+  - name: COLLECTOR
+    value: "vector"
+  - name: KIBANA_REPLICAS
+    value: "1"

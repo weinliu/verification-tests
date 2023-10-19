@@ -52,7 +52,3 @@ parameters:
   value: "loki-aosqe"
 - name: LOKICMNAME
   value: "loki-config"
-
-
-
-

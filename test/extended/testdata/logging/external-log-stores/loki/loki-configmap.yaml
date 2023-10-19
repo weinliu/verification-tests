@@ -29,7 +29,7 @@ objects:
             replication_factor: 1
           final_sleep: 0s
         chunk_idle_period: 1h       # Any chunk not receiving new logs in this time will be flushed
-        chunk_target_size: 8388608 
+        chunk_target_size: 8388608
         max_chunk_age: 1h           # All chunks will be flushed when they hit this age, default is 1h
         chunk_retain_period: 30s    # Must be greater than index read cache TTL if using an index cache (Default index read cache TTL is 5m)
         max_transfer_retries: 0     # Chunk transfers disabled
@@ -86,4 +86,3 @@ parameters:
   value: "loki-aosqe"
 - name: LOKICMNAME
   value: "loki-config"
-
