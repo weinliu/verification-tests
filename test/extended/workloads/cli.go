@@ -1315,6 +1315,11 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 
 	// author: knarra@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-64921-Critical-63854-Verify oc adm release info and oc image extract using --idms-file flag", func() {
+		// Skip the case if cluster is C2S/SC2S disconnected as external network cannot be accessed
+		if strings.HasPrefix(getClusterRegion(oc), "us-iso") {
+			g.Skip("Skipped: AWS C2S/SC2S disconnected clusters are not satisfied for this test case")
+		}
+
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		idmsFile64921 := filepath.Join(buildPruningBaseDir, "idmsFile64921.yaml")
 		var (
