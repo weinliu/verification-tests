@@ -4943,6 +4943,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover part of test case: OCP-25855, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-High-25855-Add the channel field to subscription_sync_count [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5001,7 +5006,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		infoCatalogOperator := strings.Fields(output)
 
 		exutil.By("check the subscription_sync_total")
-		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			subscriptionSyncTotal, _ := exec.Command("bash", "-c", "oc exec -c catalog-operator "+infoCatalogOperator[0]+" -n openshift-operator-lifecycle-manager -- curl -s -k -H 'Authorization: Bearer $(oc create token prometheus-k8s -n openshift-monitoring)' https://"+infoCatalogOperator[1]+"/metrics").Output()
 			if !strings.Contains(string(subscriptionSyncTotal), sub.installedCSV) {
 				e2e.Logf("the metric is not counted and try next round")
@@ -5899,6 +5904,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-24382, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24382-Should restrict CRD update if schema changes [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -11150,7 +11160,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-High-25783-Subscriptions are not getting processed taking very long to get processed [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
-		exutil.SkipForSNOCluster(oc)
+		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
