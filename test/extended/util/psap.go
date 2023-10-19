@@ -513,6 +513,7 @@ func IsMachineSetExist(oc *CLI) bool {
 	Output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", "-n", "openshift-machine-api").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(Output).NotTo(o.BeEmpty())
+
 	if strings.Contains(Output, "No resources found") {
 		haveMachineSet = false
 	}
@@ -959,4 +960,15 @@ func GetImagestreamImageName(oc *CLI, imagestreamName string) string {
 
 	}
 	return imageName
+}
+
+// GetRelicasByMachinesetName used for get replicas number by machineset name
+func GetRelicasByMachinesetName(oc *CLI, machinesetName string) string {
+
+	machineseReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-n", "openshift-machine-api", `-ojsonpath="{.spec.replicas}"`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(machineseReplicas).NotTo(o.BeEmpty())
+
+	e2e.Logf("machineseReplicas is %v in GetRelicasByMachinesetName", machineseReplicas)
+	return machineseReplicas
 }

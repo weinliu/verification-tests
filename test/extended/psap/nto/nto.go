@@ -468,14 +468,21 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}()
 
 		isSNO := exutil.IsSNOCluster(oc)
-		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
@@ -539,8 +546,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if exutil.IsMachineSetExist(oc) && !isSNO {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
@@ -595,8 +609,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if exutil.IsMachineSetExist(oc) && !isSNO {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
@@ -681,10 +702,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//First choice to use [tests] image, the image mirrored by default in disconnected cluster
 		//if don't have [tests] image in some environment, we can use hello-openshift as image
 		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
-		AppImageName := exutil.GetImagestreamImageName(oc, "tests")
-		if len(AppImageName) == 0 {
-			AppImageName = "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
-		}
+		// AppImageName := exutil.GetImagestreamImageName(oc, "tests")
+		// if len(AppImageName) == 0 {
+		AppImageName := "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
+		// }
 
 		//Create a nginx web application pod
 		g.By("Create a nginx web pod in nto temp namespace")
@@ -889,8 +910,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if exutil.IsMachineSetExist(oc) && !isSNO {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
@@ -1099,10 +1127,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//First choice to use [tests] image, the image mirrored by default in disconnected cluster
 		//if don't have [tests] image in some environment, we can use hello-openshift as image
 		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
-		AppImageName := exutil.GetImagestreamImageName(oc, "tests")
-		if len(AppImageName) == 0 {
-			AppImageName = "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
-		}
+		// AppImageName := exutil.GetImagestreamImageName(oc, "tests")
+		// if len(AppImageName) == 0 {
+		AppImageName := "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
+		// }
 
 		//Create a nginx web application pod
 		g.By("Create a nginx web pod in nto temp namespace")
@@ -1314,10 +1342,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if !is3Master && !isSNO && exutil.IsMachineSetExist(oc) {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
-			tunedNodeName, err = exutil.GetFirstWorkerNode(oc)
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
@@ -2017,8 +2052,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if exutil.IsMachineSetExist(oc) && !isSNO {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
@@ -2091,12 +2133,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		isSNO := exutil.IsSNOCluster(oc)
+
 		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
@@ -2202,8 +2252,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if exutil.IsMachineSetExist(oc) && !isSNO {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
@@ -2391,18 +2448,23 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		isSNO := exutil.IsSNOCluster(oc)
-		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-
 		e2e.Logf("tunedNodeName is [ %v ]", tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -2679,8 +2741,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if exutil.IsMachineSetExist(oc) && !isSNO {
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
@@ -2999,11 +3068,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 
 		if (edgeNodeName == "node/"+tunedNodeName || exutil.IsMachineSetExist(oc)) && !isSNO {
-			//Prior to choose worker nodes with machineset
 			machinesetName := getFirstWorkerMachinesetName(oc)
 			e2e.Logf("machinesetName is %v ", machinesetName)
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
