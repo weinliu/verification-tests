@@ -671,12 +671,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		g.By("uninstall CLO and EO")
 		CLO.uninstallOperator(oc)
 		EO.uninstallOperator(oc)
-		deleteNamespace(oc, CLO.Namespace)
-		deleteNamespace(oc, EO.Namespace)
+		resource{"operatorgroup", cloNS, cloNS}.clear(oc)
 	})
 	g.AfterEach(func() {
-		deleteNamespace(oc, cloNS)
-		deleteNamespace(oc, eoNS)
+		resource{"operatorgroup", cloNS, cloNS}.clear(oc)
 	})
 
 	// author: qitang@redhat.com
@@ -965,15 +963,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		for _, crd := range []string{"alertingrules.loki.grafana.com", "lokistacks.loki.grafana.com", "recordingrules.loki.grafana.com", "rulerconfigs.loki.grafana.com"} {
 			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crd).Execute()
 		}
-		deleteNamespace(oc, clo.Namespace)
-		deleteNamespace(oc, lo.Namespace)
+		resource{"operatorgroup", cloNS, cloNS}.clear(oc)
 	})
 	g.AfterEach(func() {
 		for _, crd := range []string{"alertingrules.loki.grafana.com", "lokistacks.loki.grafana.com", "recordingrules.loki.grafana.com", "rulerconfigs.loki.grafana.com"} {
 			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crd).Execute()
 		}
-		deleteNamespace(oc, cloNS)
-		deleteNamespace(oc, eoNS)
+		resource{"operatorgroup", cloNS, cloNS}.clear(oc)
 	})
 
 	// author qitang@redhat.com
