@@ -392,7 +392,14 @@ type legoUser struct {
 	key          crypto.PrivateKey
 }
 
-// General Configurations
+type testEnv string
+
+// General configurations
+const (
+	pemX509CertPattern = "-----BEGIN CERTIFICATE-----\\n([A-Za-z0-9+/=\\n]+)\\n-----END CERTIFICATE-----"
+)
+
+// Installer Configurations
 const (
 	PublishExternal = "External"
 	PublishInternal = "Internal"
@@ -400,7 +407,12 @@ const (
 	AWSVmTypeAMD64  = "m6i.xlarge"
 	archARM64       = "arm64"
 	archAMD64       = "amd64"
-	certsPattern    = "-----BEGIN CERTIFICATE-----\\n([A-Za-z0-9+/=\\n]+)\\n-----END CERTIFICATE-----"
+)
+
+// Monitoring configurations
+const (
+	PrometheusURL    = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
+	thanosQuerierURL = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query?query="
 )
 
 // Hive Configurations
@@ -408,8 +420,6 @@ const (
 	HiveNamespace                     = "hive" //Hive Namespace
 	PullSecret                        = "pull-secret"
 	hiveAdditionalCASecret            = "hive-additional-ca"
-	PrometheusURL                     = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
-	thanosQuerierURL                  = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query?query="
 	HiveImgRepoOnQuay                 = "app-sre"
 	ClusterInstallTimeout             = 3600
 	DefaultTimeout                    = 120
@@ -421,6 +431,13 @@ const (
 	ClusterSuffixLen                  = 4
 	LogsLimitLen                      = 1024
 	HiveManagedDNS                    = "hivemanageddns" //for all manage DNS Domain
+)
+
+// Test environments
+const (
+	testEnvLocal   testEnv = "Local"
+	testEnvJenkins testEnv = "Jenkins"
+	testEnvCI      testEnv = "CI"
 )
 
 // AWS Configurations
@@ -456,17 +473,13 @@ const (
 )
 
 // VSphere configurations
-// Notes:
-// 1) For DEVQE, DHCP starts at the IP whose last octet is 50. We made the same assumption on the CI segments.
 const (
-	VSphereCreds               = "vsphere-creds"
-	VSphereCerts               = "vsphere-certs"
-	VSphereAWSCredsMountPath   = "/var/run/vault/aws/.awscreds"
-	VSphereNetworkPattern      = "[a-zA-Z]+-[a-zA-Z]+-([\\d]+)"
-	VSphereAWSHostedZoneNameCI = "vmc-ci.devcluster.openshift.com"
-	VSphereAWSHostedZoneName   = "vmc.devcluster.openshift.com"
-	VSphereLastCidrOctetMin    = 3
-	VSphereLastCidrOctetMax    = 49
+	VSphereCreds              = "vsphere-creds"
+	VSphereCerts              = "vsphere-certs"
+	VSphereAWSCredsFilePathCI = "/var/run/vault/aws/.awscred"
+	VSphereNetworkPattern     = "[a-zA-Z]+-[a-zA-Z]+-([\\d]+)"
+	VSphereLastCidrOctetMin   = 3
+	VSphereLastCidrOctetMax   = 49
 )
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
@@ -1782,12 +1795,13 @@ func checkCondition(oc *exutil.CLI, kind, resourceName, namespace, conditionType
 	}
 }
 
-// Get AWS credentials from root credentials, external configurations
-// and then from local credential files (in that order).
+// Get AWS credentials from root credentials, mount paths, and then from external configurations (in that order)
 func getAWSCredentials(oc *exutil.CLI, mountPaths ...string) (AWSAccessKeyID string, AWSSecretAccessKey string) {
-	// Try root credential Secret first
-	if err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n=kube-system").Execute(); err == nil {
-		e2e.Logf("Extracting AWS credentials from the root credential Secret")
+	err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n=kube-system").Execute()
+	switch {
+	// Try root credentials
+	case err == nil:
+		e2e.Logf("Extracting AWS credentials from root credentials")
 		AWSAccessKeyID, _, err = oc.
 			AsAdmin().
 			WithoutNamespace().
@@ -1802,46 +1816,56 @@ func getAWSCredentials(oc *exutil.CLI, mountPaths ...string) (AWSAccessKeyID str
 			Args("secret/aws-creds", "-n=kube-system", "--keys=aws_secret_access_key", "--to=-").
 			Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		return
-	}
-
-	// Try external configurations next
-	if cfg, err := config.LoadDefaultConfig(context.Background()); err == nil {
-		e2e.Logf("Extracting AWS creds from external configurations")
-		creds, retrieveErr := cfg.Credentials.Retrieve(context.Background())
-		o.Expect(retrieveErr).NotTo(o.HaveOccurred())
-		AWSAccessKeyID = creds.AccessKeyID
-		AWSSecretAccessKey = creds.SecretAccessKey
-		return
-	}
-
-	// Fall back to local credential files
-	for _, mountPath := range mountPaths {
-		e2e.Logf("Extracting AWS creds from %s", mountPath)
-		fileBs, err := os.ReadFile(mountPath)
-		o.Expect(err).NotTo(o.HaveOccurred())
+	// Try mount paths
+	case len(mountPaths) > 0:
+		e2e.Logf("Extracting AWS creds from credential mounts")
+		e2e.Logf("Is the test running in the CI environment, targeting a non-AWS platform  ?")
 		re, err := regexp.Compile(AWSCredsPattern)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		matches := re.FindStringSubmatch(string(fileBs))
-		o.Expect(len(matches)).To(o.Equal(3))
-		AWSAccessKeyID = matches[1]
-		AWSSecretAccessKey = matches[2]
-		return
+		for _, mountPath := range mountPaths {
+			e2e.Logf("Extracting AWS creds from path %s", mountPath)
+			fileBs, err := os.ReadFile(mountPath)
+			if err != nil {
+				e2e.Logf("Failed to read file: %v", err)
+				continue
+			}
+			matches := re.FindStringSubmatch(string(fileBs))
+			if len(matches) != 3 {
+				e2e.Logf("Incorrect credential format")
+				continue
+			}
+			AWSAccessKeyID = matches[1]
+			AWSSecretAccessKey = matches[2]
+			break
+		}
+	// Fall back to external configurations
+	default:
+		e2e.Logf("Extracting AWS creds from external configurations")
+		e2e.Logf("Is the test running locally, targeting a non-AWS platform ?")
+		if cfg, err := config.LoadDefaultConfig(context.Background()); err == nil {
+			creds, retrieveErr := cfg.Credentials.Retrieve(context.Background())
+			o.Expect(retrieveErr).NotTo(o.HaveOccurred())
+			AWSAccessKeyID = creds.AccessKeyID
+			AWSSecretAccessKey = creds.SecretAccessKey
+		}
 	}
 
-	e2e.Failf("Unable to extract AWS credentials")
+	o.Expect(AWSAccessKeyID).NotTo(o.BeEmpty())
+	o.Expect(AWSSecretAccessKey).NotTo(o.BeEmpty())
 	return
 }
 
 // Extract vSphere root credentials
 func getVSphereCredentials(oc *exutil.CLI, vCenter string) (username string, password string) {
-	username, _, err := oc.
+	var err error
+	username, _, err = oc.
 		AsAdmin().
 		WithoutNamespace().
 		Run("extract").
 		Args("secret/vsphere-creds", "-n=kube-system", fmt.Sprintf("--keys=%v.username", vCenter), "--to=-").
 		Outputs()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(username).NotTo(o.BeEmpty())
 	password, _, err = oc.
 		AsAdmin().
 		WithoutNamespace().
@@ -1849,12 +1873,14 @@ func getVSphereCredentials(oc *exutil.CLI, vCenter string) (username string, pas
 		Args("secret/vsphere-creds", "-n=kube-system", fmt.Sprintf("--keys=%v.password", vCenter), "--to=-").
 		Outputs()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	// This assertion fails only when the password is an empty string, so the password is never logged out.
+	o.Expect(password).NotTo(o.BeEmpty())
 
 	return
 }
 
-// Get AWS-SDK-V2 configurations with static credentials for the provided region
-func getDefaultAWSConfig(oc *exutil.CLI, region string, secretMountPaths ...string) aws.Config {
+// getAWSConfig gets AWS-SDK-V2 configurations with static credentials for the provided region
+func getAWSConfig(oc *exutil.CLI, region string, secretMountPaths ...string) aws.Config {
 	AWSAccessKeyID, AWSSecretAccessKey := getAWSCredentials(oc, secretMountPaths...)
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
@@ -2019,7 +2045,7 @@ func createVsphereCertsSecret(oc *exutil.CLI, ns, vCenter string) {
 		"openssl s_client -host %v -port 443 -showcerts", vCenter, vCenter)
 	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--", "bash", "-c", commands).Outputs()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	re, err := regexp.Compile(certsPattern)
+	re, err := regexp.Compile(pemX509CertPattern)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	matches := re.FindAllStringSubmatch(stdout, -1)
 	var certsSlice []string
@@ -2058,10 +2084,15 @@ fRelease: when called, releases the IPs reserved in fReserve().
 
 domain2Ip: maps domain to the IP reserved for it.
 */
-func getIps2ReserveFromAWSHostedZone(oc *exutil.CLI, hostedZoneName string, cidrBlock, minIp, maxIp string,
+func getIps2ReserveFromAWSHostedZone(oc *exutil.CLI, hostedZoneName, cidrBlock, minIp, maxIp, awsCredsFilePath string,
 	domains2Reserve []string) (fReserve func(), fRelease func(), domain2Ip map[string]string) {
 	// Route 53 is global so any region will do
-	cfg := getDefaultAWSConfig(oc, AWSRegion, VSphereAWSCredsMountPath)
+	var cfg aws.Config
+	if awsCredsFilePath == "" {
+		cfg = getAWSConfig(oc, AWSRegion)
+	} else {
+		cfg = getAWSConfig(oc, AWSRegion, awsCredsFilePath)
+	}
 	route53Client := route53.NewFromConfig(cfg)
 
 	// Get hosted zone ID
@@ -2204,4 +2235,35 @@ func getVSphereCIDR(network string) (string, string, string) {
 	maxIp := fmt.Sprintf("192.168.%v.%v", segmentIdx, VSphereLastCidrOctetMax)
 	e2e.Logf("Min IP = %v, max IP = %v", minIp, maxIp)
 	return cidrBlock, minIp, maxIp
+}
+
+// Get the environment in which the test runs
+func getTestEnv() (tEnv testEnv) {
+	if val, ok := os.LookupEnv("OPENSHIFT_CI"); ok && val == "true" {
+		tEnv = testEnvCI
+	} else if _, ok := os.LookupEnv("JENKINS_HOME"); ok {
+		tEnv = testEnvJenkins
+	} else {
+		tEnv = testEnvLocal
+	}
+	return
+}
+
+func getAWSCredsFilePath4VSphere(tEnv testEnv) (credsFilePath string) {
+	switch tEnv {
+	case testEnvCI:
+		credsFilePath = VSphereAWSCredsFilePathCI
+	case testEnvJenkins:
+		e2e.Failf(`
+VSphere test cases are meant to be tested locally (instead of on Jenkins).
+In fact, an additional set of AWS credentials are required for DNS setup,
+and those credentials are loaded using external AWS configurations (which
+are only available locally) when running in non-CI environments.`)
+	case testEnvLocal:
+		// Credentials will be retrieved from external configurations using AWS tool chains when running locally.
+		credsFilePath = ""
+	default:
+		e2e.Failf("Unknown test environment")
+	}
+	return credsFilePath
 }

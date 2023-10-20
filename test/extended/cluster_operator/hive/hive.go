@@ -23,7 +23,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc           = exutil.NewCLI("hive-"+getRandomString(), exutil.KubeConfigPath())
+		oc           = exutil.NewCLI("hive", exutil.KubeConfigPath())
 		ns           hiveNameSpace
 		og           operatorGroup
 		sub          subscription
@@ -288,7 +288,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "55904"|./bin/extended-platform-tests run --timeout 5m -f -
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:mihuang-Low-55904-[aws]Hiveadmission log enhancement[Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:mihuang-Low-55904-Hiveadmission log enhancement[Serial]", func() {
 		hiveadmissionPod := getHiveadmissionPod(oc, sub.namespace)
 		hiveadmissionPodLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(hiveadmissionPod, "-n", sub.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

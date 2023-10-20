@@ -15,14 +15,6 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-/*
-Notes:
-1) VSphere test cases are meant to be tested locally (instead of on Jenkins).
-In fact, an additional set of AWS credentials are required for DNS setup,
-and those credentials are loaded using external AWS configurations (which
-are only available locally) when running in non-CI environments.
-2) A stable VPN connection is required for running vSphere test cases locally.
-*/
 var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	defer g.GinkgoRecover()
 
@@ -36,33 +28,32 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		randStr      string
 
 		// Platform-specific
-		datacenter string
-		datastore  string
-		network    string
-		vCenter    string
-		cluster    string
-		basedomain string
+		datacenter       string
+		datastore        string
+		network          string
+		vCenter          string
+		cluster          string
+		basedomain       string
+		awsCredsFilePath string
+		tEnv             testEnv
 	)
 
 	// Under the hood, "extended-platform-tests run" calls "extended-platform-tests run-test" on each test
 	// case separately. This means that all necessary initializations need to be done before every single
 	// test case, either globally or in a Ginkgo node like BeforeEach.
 	g.BeforeEach(func() {
-		// Skip if non-compatible platforms
+		// Skip incompatible platforms
 		exutil.SkipIfPlatformTypeNot(oc, "vsphere")
 		architecture.SkipNonAmd64SingleArch(oc)
 
-		// Install Hive operator if non-existent
+		// Get test-specific configs
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
-		_, _ = installHiveOperator(oc, &hiveNameSpace{}, &operatorGroup{}, &subscription{}, &hiveconfig{}, testDataDir)
-
-		// Get OCP release image used for provisioning
 		testOCPImage = getTestOCPImage()
-
-		// Get random string
 		randStr = getRandomString()[:ClusterSuffixLen]
 
-		// Get platform info
+		// Get platform-specific configs
+		tEnv = getTestEnv()
+		awsCredsFilePath = getAWSCredsFilePath4VSphere(tEnv)
 		basedomain = getBasedomain(oc)
 		infrastructure, err := oc.
 			AdminConfigClient().
@@ -76,13 +67,18 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		network = failureDomains[0].Topology.Networks[0]
 		vCenter = failureDomains[0].Server
 		cluster = failureDomains[0].Topology.ComputeCluster
-		e2e.Logf(fmt.Sprintf(`Found platform configurations:
+		e2e.Logf(`Found platform configurations:
 1) Datacenter: %s
 2) Datastore: %s
 3) Network: %s
 4) vCenter Server: %s
 5) Cluster: %s
-6) Base domain: %s`, datacenter, datastore, network, vCenter, cluster, basedomain))
+6) Base domain: %s
+7) Test environment: %s
+8) AWS creds file path: %s`, datacenter, datastore, network, vCenter, cluster, basedomain, tEnv, awsCredsFilePath)
+
+		// Install Hive operator if necessary
+		_, _ = installHiveOperator(oc, &hiveNameSpace{}, &operatorGroup{}, &subscription{}, &hiveconfig{}, testDataDir)
 	})
 
 	// Author: fxie@redhat.com
@@ -105,7 +101,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		exutil.By(fmt.Sprintf("Reserving API/ingress IPs for domains %v", domains2Reserve))
 		fReserve, fRelease, domain2Ip := getIps2ReserveFromAWSHostedZone(oc, basedomain,
-			networkCIDR, minIp, maxIp, domains2Reserve)
+			networkCIDR, minIp, maxIp, awsCredsFilePath, domains2Reserve)
 		defer fRelease()
 		fReserve()
 

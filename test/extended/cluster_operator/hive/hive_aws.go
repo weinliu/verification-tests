@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		// AWS Clients
 		var (
-			cfg       = getDefaultAWSConfig(oc, region)
+			cfg       = getAWSConfig(oc, region)
 			ec2Client = ec2.NewFromConfig(cfg)
 		)
 
@@ -797,7 +797,7 @@ spec:
 		o.Eventually(checkSpotMachineName).WithTimeout(DefaultTimeout * time.Second).WithPolling(5 * time.Second).Should(o.BeTrue())
 
 		// Get AWS client
-		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		cfg := getAWSConfig(oc, AWSRegion)
 		ec2Client := ec2.NewFromConfig(cfg)
 
 		e2e.Logf("Waiting until the spot VMs are created...")
@@ -2859,7 +2859,7 @@ spec:
 
 		// AWS Clients
 		var (
-			cfg                  = getDefaultAWSConfig(oc, AWSRegion)
+			cfg                  = getAWSConfig(oc, AWSRegion)
 			cloudFormationClient = cloudformation.NewFromConfig(cfg)
 			ec2Client            = ec2.NewFromConfig(cfg)
 		)
@@ -3206,7 +3206,7 @@ spec:
 
 		// AWS Clients
 		var (
-			cfg                  = getDefaultAWSConfig(oc, region)
+			cfg                  = getAWSConfig(oc, region)
 			cloudFormationClient = cloudformation.NewFromConfig(cfg)
 			ec2Client            = ec2.NewFromConfig(cfg)
 		)
@@ -3949,7 +3949,7 @@ spec:
 		e2e.Logf("Instance IDs found: %v", instanceIdByMachinePool)
 
 		exutil.By("Checking IMDSv2 settings")
-		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		cfg := getAWSConfig(oc, AWSRegion)
 		ec2Client := ec2.NewFromConfig(cfg)
 		expectedIMDSv2 := map[string]string{
 			workerMpName: "optional",
@@ -4249,7 +4249,7 @@ spec:
 		e2e.Logf("Found infraID = %v", infraID)
 
 		// Get AWS client
-		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		cfg := getAWSConfig(oc, AWSRegion)
 		ec2Client := ec2.NewFromConfig(cfg)
 
 		exutil.By("Waiting until the master VMs are created...")
@@ -4592,7 +4592,7 @@ spec:
 		e2e.Logf("Make sure the adopted CD is gone on Hive cluster 2")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, adoptCDName, nok, DefaultTimeout, []string{"ClusterDeployment", "-n", hiveCluster2NS}).check(oc)
 		e2e.Logf("Make sure the cloud resources persist (here we look for the EC2 instances)")
-		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		cfg := getAWSConfig(oc, AWSRegion)
 		ec2Client := ec2.NewFromConfig(cfg)
 		describeInstancesOutput, err := ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{
 			Filters: []types.Filter{
@@ -5887,7 +5887,7 @@ spec:
 
 		exutil.By("login to aws console, check there will add 2 Spot Requests in ec2 \"Spot Requests\" list")
 		// Get AWS client
-		cfg := getDefaultAWSConfig(oc, AWSRegion)
+		cfg := getAWSConfig(oc, AWSRegion)
 		ec2Client := ec2.NewFromConfig(cfg)
 
 		waitUntilSpotInstanceRequestsCreated := func() bool {

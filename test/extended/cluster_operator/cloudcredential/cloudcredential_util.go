@@ -140,7 +140,7 @@ func getRootSecretName(oc *exutil.CLI) (string, error) {
 	case "ovirt":
 		rootSecretName = "ovirt-credentials"
 	default:
-		e2e.Logf("Unsupport platform: %v", iaasPlatform)
+		e2e.Logf("Unsupported platform: %v", iaasPlatform)
 		return "", nil
 
 	}
