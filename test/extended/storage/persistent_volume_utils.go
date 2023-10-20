@@ -409,7 +409,8 @@ func waitForPersistentVolumeStatusAsExpected(oc *exutil.CLI, pvName string, expe
 		err    error
 	)
 	if expectedStatus == "deleted" {
-		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		//  GCP filestore volume need more than 2 min for the delete call succeed
+		err = wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 			status, err = getPersistentVolumeStatus(oc, pvName)
 			if err != nil && strings.Contains(interfaceToString(err), "not found") {
 				e2e.Logf("The persist volume '%s' becomes to expected status: '%s' ", pvName, expectedStatus)
@@ -419,7 +420,8 @@ func waitForPersistentVolumeStatusAsExpected(oc *exutil.CLI, pvName string, expe
 			return false, nil
 		})
 	} else {
-		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		// err = wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
+		err = wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
 			status, err = getPersistentVolumeStatus(oc, pvName)
 			if err != nil {
 				// Adapt for LSO test
@@ -440,8 +442,13 @@ func waitForPersistentVolumeStatusAsExpected(oc *exutil.CLI, pvName string, expe
 		})
 	}
 	if err != nil {
-		pvInfo, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pv", pvName).Output()
+		pvInfo, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o", "json").Output()
 		e2e.Logf("Failed to wait for PV %s's status as expected, its detail info is:\n%s", pvName, pvInfo)
+		if gjson.Get(pvInfo, `spec.claimRef`).Exists() {
+			pvcName := gjson.Get(pvInfo, `spec.claimRef.name`).String()
+			pvcInfo, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", gjson.Get(pvInfo, `.spec.claimRef.namespace`).String(), "pvc", pvcName).Output()
+			e2e.Logf("The PV %s bound pvc %s info is:\n%s", pvName, pvcName, pvcInfo)
+		}
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The persist volume '%s' didn't become to expected status'%s' ", pvName, expectedStatus))
 }

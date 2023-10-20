@@ -1311,12 +1311,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				newpod.waitReady(oc)
 
 				exutil.By("# Check the retained pv's data still exist and have exec right")
-				output, err := newpod.execCommand(oc, "cat "+newpod.mountPath+"/testfile")
-				o.Expect(err).ShouldNot(o.HaveOccurred())
-				o.Expect(output).Should(o.ContainSubstring("storage test"))
-				output, err = newpod.execCommand(oc, newpod.mountPath+"/hello")
-				o.Expect(err).ShouldNot(o.HaveOccurred())
-				o.Expect(output).Should(o.ContainSubstring("Hello OpenShift Storage"))
+				newpod.checkMountedVolumeDataExist(oc, true)
+				newpod.checkMountedVolumeHaveExecRight(oc)
 
 				exutil.By("# Delete the pv and check the retained pv delete in backend")
 				deleteSpecifiedResource(oc, "pod", newpod.name, newpod.namespace)
