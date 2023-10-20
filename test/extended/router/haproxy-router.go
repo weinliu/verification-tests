@@ -1393,13 +1393,32 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(proxyEnv).To(o.ContainSubstring("ROUTER_USE_PROXY_PROTOCOL=true"))
 
 		g.By("check the accept-proxy in haproxy.config of a router pod")
-		HTTPProxy := "bind :80"
-		HTTPSProxy := "bind :443"
-		HTTPCheck := readHaproxyConfig(oc, routerpod, HTTPProxy, "-A1", "accept-proxy")
-		o.Expect(HTTPCheck).To(o.ContainSubstring("bind :80 accept-proxy"))
-		HTTPSCheck := readHaproxyConfig(oc, routerpod, HTTPSProxy, "-A1", "accept-proxy")
-		o.Expect(HTTPSCheck).To(o.ContainSubstring("bind :443 accept-proxy"))
-
+		bindCfg, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "cat haproxy.config | grep \"bind :\"").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		IPStackType := checkIPStackType(oc)
+		if IPStackType == "ipv4single" {
+			o.Expect(strings.Count(bindCfg, "bind :")).To(o.Equal(2))
+			HTTPCheck := readHaproxyConfig(oc, routerpod, "bind :80", "-A1", "accept-proxy")
+			o.Expect(HTTPCheck).To(o.ContainSubstring("bind :80 accept-proxy"))
+			HTTPSCheck := readHaproxyConfig(oc, routerpod, "bind :443", "-A1", "accept-proxy")
+			o.Expect(HTTPSCheck).To(o.ContainSubstring("bind :443 accept-proxy"))
+		} else if IPStackType == "ipv6single" {
+			o.Expect(strings.Count(bindCfg, "bind :")).To(o.Equal(2))
+			HTTPCheck := readHaproxyConfig(oc, routerpod, "bind :::80", "-A1", "accept-proxy")
+			o.Expect(HTTPCheck).To(o.ContainSubstring("bind :::80 v6only accept-proxy"))
+			HTTPSCheck := readHaproxyConfig(oc, routerpod, "bind :::443", "-A1", "accept-proxy")
+			o.Expect(HTTPSCheck).To(o.ContainSubstring("bind :::443 v6only accept-proxy"))
+		} else if IPStackType == "dualstack" {
+			o.Expect(strings.Count(bindCfg, "bind :")).To(o.Equal(4))
+			HTTPCheck := readHaproxyConfig(oc, routerpod, "bind :80", "-A1", "accept-proxy")
+			o.Expect(HTTPCheck).To(o.ContainSubstring("bind :80 accept-proxy"))
+			HTTPSCheck := readHaproxyConfig(oc, routerpod, "bind :443", "-A1", "accept-proxy")
+			o.Expect(HTTPSCheck).To(o.ContainSubstring("bind :443 accept-proxy"))
+			HTTPCheck2 := readHaproxyConfig(oc, routerpod, "bind :::80", "-A1", "accept-proxy")
+			o.Expect(HTTPCheck2).To(o.ContainSubstring("bind :::80 v6only accept-proxy"))
+			HTTPSCheck2 := readHaproxyConfig(oc, routerpod, "bind :::443", "-A1", "accept-proxy")
+			o.Expect(HTTPSCheck2).To(o.ContainSubstring("bind :::443 v6only accept-proxy"))
+		}
 	})
 
 	// OCPBUGS-4573

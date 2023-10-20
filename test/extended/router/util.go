@@ -1450,3 +1450,16 @@ func checkDnsRecordsInIngressOperator(oc *exutil.CLI, recordName, privateZoneId,
 		o.Expect(Zones).To(o.ContainSubstring(publicZoneId))
 	}
 }
+
+func checkIPStackType(oc *exutil.CLI) string {
+	svcNetwork, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.serviceNetwork}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Count(svcNetwork, ":") >= 2 && strings.Count(svcNetwork, ".") >= 2 {
+		return "dualstack"
+	} else if strings.Count(svcNetwork, ":") >= 2 {
+		return "ipv6single"
+	} else if strings.Count(svcNetwork, ".") >= 2 {
+		return "ipv4single"
+	}
+	return ""
+}
