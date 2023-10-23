@@ -39,8 +39,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/BareMetal cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 
-		if !strings.Contains(platform, "none") && checkProxy(oc) {
-			g.Skip("This is proxy cluster, skip the test.")
+		if !strings.Contains(platform, "none") && (checkProxy(oc) || checkDisconnect(oc)) {
+			g.Skip("This is proxy/disconnect cluster, skip the test.")
 		}
 
 		switch platform {
@@ -101,7 +101,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 					e2e.Logf("Cannot get azure credential, will use tcpdump tool to verify egressIP,%v", creErr)
 					flag = "tcpdump"
 				} else {
-					rg, azGroupErr := getAzureResourceGroup(oc)
+					rg, azGroupErr := getAzureIntSvcResrouceGroup(oc)
 					if azGroupErr != nil {
 						e2e.Logf("Cannot get azure resource group, will use tcpdump tool to verify egressIP,%v", azGroupErr)
 						flag = "tcpdump"
@@ -128,6 +128,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 						}
 					}
 				}
+			}
+			if isAzurePrivate(oc) && ipEchoURL == "" {
+				//Due to bug https://issues.redhat.com/browse/OCPBUGS-5491 and fix limitation, if no ipecho installed on bastion host, need to skip the test.
+				g.Skip("No ip-echo service installed on the bastion host in Azure private cluste,skip the tests.")
 			}
 		case "openstack":
 			e2e.Logf("\n OpenStack is detected, running the case on OpenStack\n")
@@ -158,7 +162,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			e2e.Logf("Not support cloud provider for  egressip cases for now.")
 			g.Skip("Not support cloud provider for  egressip cases for now.")
 		}
-
 	})
 
 	// author: huirwang@redhat.com
@@ -2772,10 +2775,13 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
-		if checkProxy(oc) {
-			g.Skip("This is proxy cluster, skip the test.")
+		if checkProxy(oc) || checkDisconnect(oc) {
+			g.Skip("This is proxy/disconnect cluster, skip the test.")
 		}
 
+		if isAzurePrivate(oc) {
+			g.Skip("Skip this test on azure private cluster.")
+		}
 		exutil.By("Get the temporary namespace")
 		ns := oc.Namespace()
 

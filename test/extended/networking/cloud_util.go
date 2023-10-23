@@ -586,6 +586,34 @@ func getAzureResourceGroup(oc *exutil.CLI) (string, error) {
 	return string(azureResourceGroup), nil
 }
 
+func isAzurePrivate(oc *exutil.CLI) bool {
+	installConfig, err := runOcWithRetry(oc.AsAdmin(), "get", "cm", "cluster-config-v1", "-n", "kube-system", "-o=jsonpath={.data.install-config}")
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "i/o timeout") {
+			e2e.Logf("System issues with err=%v\n)", err)
+			return true
+		}
+		e2e.Logf("\nTry to get cm  cluster-config-v1, but failed with error: %v \n", err)
+		return false
+	}
+
+	if strings.Contains(installConfig, "publish: Internal") && strings.Contains(installConfig, "outboundType: Loadbalancer") {
+		e2e.Logf("This is Azure Private cluster.")
+		return true
+	}
+
+	return false
+}
+
+func getAzureIntSvcResrouceGroup(oc *exutil.CLI) (string, error) {
+	azureResourceGroup, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.networkResourceGroupName}").Output()
+	if err != nil {
+		e2e.Logf("Cannot get resource group, error: %v", err)
+		return "", err
+	}
+	return azureResourceGroup, nil
+}
+
 func getAzureIntSvcVMPrivateIP(oc *exutil.CLI, sess *exutil.AzureSession, rg string) (string, error) {
 	privateIP := ""
 	clusterPrefixName := exutil.GetClusterPrefixName(oc)
@@ -1285,4 +1313,20 @@ func stopInstanceOnNutanix(nutanix *exutil.NutanixClient, hostname string) {
 
 	})
 	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("The instance is not in a state from which it can be stopped."))
+}
+
+func checkDisconnect(oc *exutil.CLI) bool {
+	workNode, err := exutil.GetFirstWorkerNode(oc)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	curlCMD := "curl -I ifconfig.me --connect-timeout 5"
+	output, debugNodeErr := exutil.DebugNode(oc, workNode, "bash", "-c", curlCMD)
+	o.Expect(debugNodeErr).ShouldNot(o.HaveOccurred())
+	if strings.Contains(output, "HTTP") {
+		e2e.Logf("Be able to access the public Internet from the cluster.")
+		return false
+	}
+
+	e2e.Logf("Not able to access the public Internet from the cluster.")
+	return true
+
 }
