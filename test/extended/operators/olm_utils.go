@@ -1537,3 +1537,35 @@ func getAllCSV(oc *exutil.CLI) []string {
 	}
 	return csvListOutput
 }
+
+// ToDo:
+func CreateCatalog(oc *exutil.CLI, catalogName, indexImage, catalogTemplate string) {
+	catalog, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalog", catalogName).Output()
+	if err != nil {
+		if strings.Contains(catalog, "not found") {
+			err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", catalogTemplate, "-p", fmt.Sprintf("NAME=%s", catalogName), fmt.Sprintf("IMAGE=%s", indexImage))
+			if err != nil {
+				e2e.Logf("Failed to create catalog %s: %s", catalogName, err)
+				// we do not asser it here because it is possible race condition. it means two cases create it at same
+				// time, and the second will raise error
+			}
+			// here we will assert if the catalog is created successfully with checking unpack status.
+			// need to check unpack status before continue to use it
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+				phase, errPhase := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalog", catalogName, "-o=jsonpath={.status.phase}").Output()
+				if errPhase != nil {
+					e2e.Logf("%v, next try", errPhase)
+					return false, nil
+				}
+				if strings.Compare(phase, "Unpacked") == 0 {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "catalog unpack fails")
+
+		} else {
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	}
+}
