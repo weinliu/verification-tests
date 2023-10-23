@@ -1055,7 +1055,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 
 			g.By("check the alerts could be found in alertmanager under openshift-user-workload-monitoring project")
-			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			token := getSAToken(oc, "thanos-ruler", "openshift-user-workload-monitoring")
 			checkMetric(oc, `https://alertmanager-user-workload.openshift-user-workload-monitoring.svc:9095/api/v2/alerts`, token, "TestAlert1", 3*uwmLoadTime)
 
 			g.By("check the alerts could not be found in openshift-monitoring project")
