@@ -202,10 +202,14 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("Check that the file has the right content in the nodes")
 
 		certContent := ""
-		userCABundleCert, exists, err := userCABundleConfigMap.HasKey(certFileName)
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error checking if %s contains key '%s'", userCABundleConfigMap, certFileName)
-		if exists {
-			certContent = userCABundleCert
+		if userCABundleConfigMap.Exists() {
+			userCABundleCert, exists, err := userCABundleConfigMap.HasKey(certFileName)
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error checking if %s contains key '%s'", userCABundleConfigMap, certFileName)
+			if exists {
+				certContent = userCABundleCert
+			}
+		} else {
+			logger.Infof("%s does not exist. We don't take it into account", userCABundleConfigMap)
 		}
 
 		certContent += proxyConfigMap.GetDataValueOrFail(certFileName)
