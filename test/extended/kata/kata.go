@@ -323,7 +323,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		const (
 			ppConfigMapName = "peer-pods-cm"
 			ppSecretName    = "peer-pods-secret"
-			ppRuntimeClass  = "kata-remote-cc"
+			ppRuntimeClass  = "kata-remote"
 		)
 
 		var (
