@@ -18,30 +18,33 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 	defer g.GinkgoRecover()
 
 	var (
-		accountRolePrefixesNeedCleanup = make([]string, 0)
-		permissionsBoundaryPolicyName  = "sdqePBN"
-		rosaClient                     *rosacli.Client
-		ocmResourceService             rosacli.OCMResourceService
+		accountRolePrefixesNeedCleanup  = make([]string, 0)
+		operatorRolePrefixedNeedCleanup = make([]string, 0)
+		permissionsBoundaryPolicyName   = "sdqePBN"
+		rosaClient                      *rosacli.Client
+		ocmResourceService              rosacli.OCMResourceService
 	)
 	g.BeforeEach(func() {
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
 		ocmResourceService = rosaClient.OCMResource
-	})
-	g.AfterEach(func() {
 		rosaClient.Runner.CloseFormat()
-		if len(accountRolePrefixesNeedCleanup) > 0 {
-			for _, v := range accountRolePrefixesNeedCleanup {
-				_, err := ocmResourceService.DeleteAccountRole("--mode", "auto",
-					"--prefix", v,
-					"-y")
-
-				o.Expect(err).To(o.BeNil())
-			}
-		}
 	})
 
 	g.It("Longduration-NonPreRelease-Author:yuwan-High-43070-Create/List/Delete account-roles via rosacli [Serial]", func() {
+		defer func() {
+			g.By("Cleanup created account-roles in high level of the test case")
+			if len(accountRolePrefixesNeedCleanup) > 0 {
+				for _, v := range accountRolePrefixesNeedCleanup {
+					_, err := ocmResourceService.DeleteAccountRole("--mode", "auto",
+						"--prefix", v,
+						"-y")
+
+					o.Expect(err).To(o.BeNil())
+				}
+			}
+		}()
+
 		var (
 			userRolePrefixB = "prefixB"
 			userRolePrefixH = "prefixH"
@@ -96,8 +99,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		o.Expect(err).To(o.BeNil())
 
 		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, userRolePrefixB)
-		// rosaClient.Parser.TextData.Input = output
-		// textData := rosaClient.Parser.TextData.Parse().Tip
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(strings.Contains(textData, "Creating classic account roles")).Should(o.BeTrue())
 		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).Should(o.BeTrue())
@@ -145,8 +146,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 
 		selectedRoleH := accountRoleSetH[rand.Intn(len(accountRoleSetH))]
 		selectedRoleC := accountRoleSetC[rand.Intn(len(accountRoleSetC))]
-
-		// selectedRoles := []AccountRole{accountRoleSetB[rand.Intn(len(accountRoleSetB))], accountRoleSetB[rand.Intn(len(accountRoleSetH))], accountRoleSetB[rand.Intn(len(accountRoleSetC))]}
 
 		o.Expect(len(accountRoleSetB)).To(o.Equal(7))
 		o.Expect(len(accountRoleSetH)).To(o.Equal(3))
@@ -200,6 +199,282 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		o.Expect(len(accountRoleSetB)).To(o.Equal(0))
 		o.Expect(len(accountRoleSetH)).To(o.Equal(0))
 		o.Expect(len(accountRoleSetC)).To(o.Equal(0))
+	})
+
+	g.It("Author:yuwan-High-60971-Create operator-roles prior to cluster creation [Serial]", func() {
+		defer func() {
+			g.By("Cleanup created operator-roles in high level of the test case")
+			if len(operatorRolePrefixedNeedCleanup) > 0 {
+				for _, v := range operatorRolePrefixedNeedCleanup {
+					_, err := ocmResourceService.DeleteOperatorRoles(
+						"--prefix", v,
+						"--mode", "auto",
+						"-y",
+					)
+					o.Expect(err).To(o.BeNil())
+				}
+			}
+		}()
+		var (
+			oidcPrivodeIDFromOutputMessage  string
+			oidcPrivodeARNFromOutputMessage string
+			notExistedOIDCConfigID          = "asdasdfsdfsdf"
+			invalidInstallerRole            = "arn:/qeci-default-accountroles-Installer-Role"
+			notExistedInstallerRole         = "arn:aws:iam::301721915996:role/notexisted-accountroles-Installer-Role"
+			hostedCPOperatorRolesPrefix     = "hopp60971"
+			classicSTSOperatorRolesPrefix   = "sopp60971"
+			managedOIDCConfigID             string
+			hostedCPInstallerRoleArn        string
+			ClassicInstallerRoleArn         string
+		)
+
+		var policyDocument = `{
+			"Version": "2012-10-17",
+			"Statement": [
+			  {
+				"Effect": "Allow",
+				"Action": [
+				  "ec2:DescribeTags"
+				],
+				"Resource": "*"
+			  }
+			]
+		  }`
+
+		g.By("Create boundry policy")
+		rosaClient.Runner.Format("json")
+		iamClient := exutil.NewIAMClient()
+		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
+		o.Expect(err).To(o.BeNil())
+		defer func() {
+			err := wait.Poll(20*time.Second, 200*time.Second, func() (bool, error) {
+				err := iamClient.DeletePolicy(permissionsBoundaryArn)
+				if err != nil {
+					logger.Errorf("it met err %v when delete policy %s", err, permissionsBoundaryArn)
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "can not delete policy in 200s")
+		}()
+
+		g.By("Get the installer role arn")
+
+		hostedCPInstallerRoleArn, err = getInstallerRoleArn(true)
+		o.Expect(err).To(o.BeNil())
+		ClassicInstallerRoleArn, err = getInstallerRoleArn(false)
+		o.Expect(err).To(o.BeNil())
+
+		g.By("Create managed oidc-config in auto mode")
+		output, err := ocmResourceService.CreateOIDCConfig("--mode", "auto", "-y")
+		o.Expect(err).To(o.BeNil())
+		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(strings.Contains(textData, "Created OIDC provider with ARN")).Should(o.BeTrue())
+		oidcPrivodeARNFromOutputMessage = extractOIDCProviderARN(output.String())
+		oidcPrivodeIDFromOutputMessage = extractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
+
+		managedOIDCConfigID, err = getOIDCIdFromList(oidcPrivodeIDFromOutputMessage)
+		o.Expect(err).To(o.BeNil())
+		defer func() {
+			output, err := ocmResourceService.DeleteOIDCConfig(
+				"--oidc-config-id", managedOIDCConfigID,
+				"--mode", "auto",
+				"-y",
+			)
+			o.Expect(err).To(o.BeNil())
+			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+			o.Expect(strings.Contains(textData, "Successfully deleted the OIDC provider")).Should(o.BeTrue())
+		}()
+		g.By("Create hosted-cp and classic sts Operator-roles pror to cluster spec")
+		output, err = ocmResourceService.CreateOperatorRoles(
+			"--oidc-config-id", oidcPrivodeIDFromOutputMessage,
+			"--installer-role-arn", ClassicInstallerRoleArn,
+			"--mode", "auto",
+			"--prefix", classicSTSOperatorRolesPrefix,
+			"-y",
+		)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Created role"))
+		operatorRolePrefixedNeedCleanup = append(operatorRolePrefixedNeedCleanup, classicSTSOperatorRolesPrefix)
+		defer func() {
+			output, err := ocmResourceService.DeleteOperatorRoles(
+				"--prefix", classicSTSOperatorRolesPrefix,
+				"--mode", "auto",
+				"-y",
+			)
+			o.Expect(err).To(o.BeNil())
+			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+			o.Expect(strings.Contains(textData, "Successfully deleted the operator roles")).Should(o.BeTrue())
+
+			roles, err := iamClient.ListOperatsorRolesByPrefix(classicSTSOperatorRolesPrefix, "")
+			o.Expect(err).To(o.BeNil())
+			o.Expect(len(roles)).To(o.Equal(0))
+
+			operatorRolePrefixedNeedCleanup = removeStringElementFromArray(operatorRolePrefixedNeedCleanup, classicSTSOperatorRolesPrefix)
+		}()
+
+		roles, err := iamClient.ListOperatsorRolesByPrefix(classicSTSOperatorRolesPrefix, "")
+		o.Expect(err).To(o.BeNil())
+		o.Expect(len(roles)).To(o.Equal(6))
+
+		output, err = ocmResourceService.CreateOperatorRoles(
+			"--oidc-config-id", oidcPrivodeIDFromOutputMessage,
+			"--installer-role-arn", hostedCPInstallerRoleArn,
+			"--mode", "auto",
+			"--prefix", hostedCPOperatorRolesPrefix,
+			"--hosted-cp",
+			"-y",
+		)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Created role"))
+		operatorRolePrefixedNeedCleanup = append(operatorRolePrefixedNeedCleanup, hostedCPOperatorRolesPrefix)
+
+		roles, err = iamClient.ListOperatsorRolesByPrefix(hostedCPOperatorRolesPrefix, "")
+		o.Expect(err).To(o.BeNil())
+		o.Expect(len(roles)).To(o.Equal(8))
+
+		defer func() {
+			output, err := ocmResourceService.DeleteOperatorRoles(
+				"--prefix", hostedCPOperatorRolesPrefix,
+				"--mode", "auto",
+				"-y",
+			)
+			o.Expect(err).To(o.BeNil())
+			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+			o.Expect(strings.Contains(textData, "Successfully deleted the operator roles")).Should(o.BeTrue())
+
+			roles, err := iamClient.ListOperatsorRolesByPrefix(hostedCPOperatorRolesPrefix, "")
+			o.Expect(err).To(o.BeNil())
+			o.Expect(len(roles)).To(o.Equal(0))
+
+			operatorRolePrefixedNeedCleanup = removeStringElementFromArray(operatorRolePrefixedNeedCleanup, hostedCPOperatorRolesPrefix)
+		}()
+
+		g.By("Create operator roles with not-existed role")
+		output, err = ocmResourceService.CreateOperatorRoles(
+			"--oidc-config-id", oidcPrivodeIDFromOutputMessage,
+			"--installer-role-arn", notExistedInstallerRole,
+			"--mode", "auto",
+			"--prefix", classicSTSOperatorRolesPrefix,
+			"-y",
+		)
+		o.Expect(err).To(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("cannot be found"))
+
+		g.By("Create operator roles with role arn in incorrect format")
+		output, err = ocmResourceService.CreateOperatorRoles(
+			"--oidc-config-id", oidcPrivodeIDFromOutputMessage,
+			"--installer-role-arn", invalidInstallerRole,
+			"--mode", "auto",
+			"--prefix", classicSTSOperatorRolesPrefix,
+			"-y",
+		)
+		o.Expect(err).To(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Invalid ARN"))
+
+		g.By("Create operator roles with not-existed oidc id")
+		output, err = ocmResourceService.CreateOperatorRoles(
+			"--oidc-config-id", notExistedOIDCConfigID,
+			"--installer-role-arn", ClassicInstallerRoleArn,
+			"--mode", "auto",
+			"--prefix", classicSTSOperatorRolesPrefix,
+			"-y",
+		)
+		o.Expect(err).To(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("not found"))
+
+		g.By("Create operator-role without setting oidc-config-id")
+		output, err = ocmResourceService.CreateOperatorRoles(
+			"--installer-role-arn", ClassicInstallerRoleArn,
+			"--mode", "auto",
+			"--prefix", hostedCPOperatorRolesPrefix,
+			"--hosted-cp",
+			"-y",
+		)
+		o.Expect(err).To(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("oidc-config-id is mandatory for prefix param flow"))
+
+		g.By("Create operator-role without setting installer-role-arn")
+		output, err = ocmResourceService.CreateOperatorRoles(
+			"--oidc-config-id", oidcPrivodeIDFromOutputMessage,
+			"--mode", "auto",
+			"--prefix", hostedCPOperatorRolesPrefix,
+			"--hosted-cp",
+			"-y",
+		)
+		o.Expect(err).To(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("installer-role-arn is mandatory for prefix param flow"))
+
+		g.By("Create operator-role without setting id neither prefix")
+		output, err = ocmResourceService.CreateOperatorRoles(
+			"--oidc-config-id", oidcPrivodeIDFromOutputMessage,
+			"--installer-role-arn", ClassicInstallerRoleArn,
+			"--mode", "auto",
+			"--hosted-cp",
+			"-y",
+		)
+		o.Expect(err).To(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Either a cluster key for STS cluster or an operator roles prefix must be specified"))
+	})
+
+	g.It("Author:yuwan-High-43051-Validation will work when user create operator-roles to cluster [Serial]", func() {
+		g.By("Get the cluster id")
+		clusterID := getClusterIDENVExisted()
+		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
+
+		g.By("Check if cluster is sts cluster")
+		StsCluster, err := isSTSCluster(clusterID)
+		o.Expect(err).To(o.BeNil())
+
+		g.By("Check if cluster is using reusable oidc config")
+		UsingReusableOIDCConfig, err := isUsingReusableOIDCConfig(clusterID)
+		o.Expect(err).To(o.BeNil())
+
+		notExistedClusterID := "notexistedclusterid111"
+		rosaClient := rosacli.NewClient()
+		ocmResourceService := rosaClient.OCMResource
+
+		switch StsCluster {
+		case true:
+			g.By("Create operator-roles on sts cluster which status is not pending")
+			output, err := ocmResourceService.CreateOperatorRoles(
+				"--mode", "auto",
+				"-c", clusterID,
+				"-y")
+			o.Expect(err).To(o.BeNil())
+			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+			if UsingReusableOIDCConfig {
+				o.Expect(strings.Contains(textData, "is using reusable OIDC Config and operator roles already exist")).Should(o.BeTrue())
+			} else {
+				o.Expect(strings.Contains(textData, "is ready and does not need additional configuration")).Should(o.BeTrue())
+			}
+		case false:
+			g.By("Create operator-roles on classic non-sts cluster")
+			output, err := ocmResourceService.CreateOIDCProvider(
+				"--mode", "auto",
+				"-c", clusterID,
+				"-y")
+			o.Expect(err).NotTo(o.BeNil())
+			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+			o.Expect(strings.Contains(textData, "is not an STS cluster")).Should(o.BeTrue())
+		}
+		g.By("Create operator-roles on not-existed cluster")
+		output, err := ocmResourceService.CreateOIDCProvider(
+			"--mode", "auto",
+			"-c", notExistedClusterID,
+			"-y")
+		o.Expect(err).NotTo(o.BeNil())
+		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(strings.Contains(textData, "There is no cluster with identifier or name")).Should(o.BeTrue())
+
 	})
 })
 

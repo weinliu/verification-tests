@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -740,4 +741,35 @@ func getTags(tagList map[string]string) []*iam.Tag {
 		})
 	}
 	return iamTags
+}
+
+func (iamClient *IAMClient) ListRoles() ([]*iam.Role, error) {
+	roles := []*iam.Role{}
+	err := iamClient.svc.ListRolesPages(&iam.ListRolesInput{}, func(page *iam.ListRolesOutput, lastPage bool) bool {
+		roles = append(roles, page.Roles...)
+		return aws.BoolValue(page.IsTruncated)
+	})
+	return roles, err
+}
+
+func (iamClient *IAMClient) ListOperatsorRolesByPrefix(prefix string, version string) ([]*iam.Role, error) {
+	operatorRoles := []*iam.Role{}
+	roles, err := iamClient.ListRoles()
+	if err != nil {
+		return operatorRoles, err
+	}
+	prefixOperatorRoleRE := regexp.MustCompile(`(?i)(?P<Prefix>[\w+=,.@-]+)-(openshift|kube-system)`)
+	for _, role := range roles {
+		matches := prefixOperatorRoleRE.FindStringSubmatch(*role.RoleName)
+		if len(matches) == 0 {
+			continue
+		}
+		prefixIndex := prefixOperatorRoleRE.SubexpIndex("Prefix")
+		foundPrefix := strings.ToLower(matches[prefixIndex])
+		if foundPrefix != prefix {
+			continue
+		}
+		operatorRoles = append(operatorRoles, role)
+	}
+	return operatorRoles, nil
 }

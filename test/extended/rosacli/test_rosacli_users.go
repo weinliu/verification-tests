@@ -17,21 +17,21 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 	)
 
 	g.BeforeEach(func() {
+		g.By("Init the client")
+		rosaClient = rosacli.NewClient()
+		userService = rosaClient.User
+
 		g.By("Get the cluster")
 		clusterID = getClusterIDENVExisted()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 	})
-	g.AfterEach(func() {
-		g.By("Delete all users of the cluster")
-		err = userService.RemoveAllUsers(clusterID)
-		o.Expect(err).ToNot(o.HaveOccurred())
-
-		g.By("Init the client")
-		rosaClient = rosacli.NewClient()
-		userService = rosaClient.User
-	})
 
 	g.It("Author:yuwan-Critical-36128-rosacli Grant/List/Revoke users by the rosa tool [Serial]", func() {
+		defer func() {
+			g.By("Delete all users of the cluster")
+			err = userService.RemoveAllUsers(clusterID)
+			o.Expect(err).ToNot(o.HaveOccurred())
+		}()
 		var (
 			dedicatedAdminsGroupName = "dedicated-admins"
 			clusterAdminsGroupName   = "cluster-admins"

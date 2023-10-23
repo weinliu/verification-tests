@@ -42,6 +42,11 @@ type OCMResourceService interface {
 	DeleteOIDCConfig(flags ...string) (bytes.Buffer, error)
 	CreateOIDCConfig(flags ...string) (bytes.Buffer, error)
 	ReflectOIDCConfigList(result bytes.Buffer) (oidclist OIDCConfigList, err error)
+
+	DeleteOperatorRoles(flags ...string) (bytes.Buffer, error)
+	CreateOperatorRoles(flags ...string) (bytes.Buffer, error)
+
+	CreateOIDCProvider(flags ...string) (bytes.Buffer, error)
 }
 
 var _ OCMResourceService = &ocmResourceService{}
@@ -399,4 +404,25 @@ func (oidcl OIDCConfigList) OIDCConfig(id string) (oidc OIDCConfig) {
 		}
 	}
 	return
+}
+
+// run `rosa create operator-roles` command
+func (ors *ocmResourceService) CreateOperatorRoles(flags ...string) (bytes.Buffer, error) {
+	createOperatorRoles := ors.Client.Runner
+	createOperatorRoles = createOperatorRoles.Cmd("create", "operator-roles").CmdFlags(flags...)
+	return createOperatorRoles.Run()
+}
+
+// run `rosa delete operator-roles` command
+func (ors *ocmResourceService) DeleteOperatorRoles(flags ...string) (bytes.Buffer, error) {
+	deleteOperatorRoles := ors.Client.Runner
+	deleteOperatorRoles = deleteOperatorRoles.Cmd("delete", "operator-roles").CmdFlags(flags...)
+	return deleteOperatorRoles.Run()
+}
+
+// run `rosa create oidc-proviedr` command
+func (ors *ocmResourceService) CreateOIDCProvider(flags ...string) (bytes.Buffer, error) {
+	createODICProvider := ors.Client.Runner
+	createODICProvider = createODICProvider.Cmd("create", "oidc-provider").CmdFlags(flags...)
+	return createODICProvider.Run()
 }

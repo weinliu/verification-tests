@@ -27,32 +27,32 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 		o.Expect(err).To(o.BeNil())
 	})
 
-	g.AfterEach(func() {
-		g.By("make sure that all oidc configs created during the testing")
-		if len(oidcConfigIDsNeedToClean) > 0 {
-			g.By("Delete oidc configs")
-			rosaClient := rosacli.NewClient()
-			ocmResourceService := rosaClient.OCMResource
-			for _, id := range oidcConfigIDsNeedToClean {
-				output, err := ocmResourceService.DeleteOIDCConfig(
-					"--oidc-config-id", id,
-					"--mode", "auto",
-					"-y",
-				)
-				o.Expect(err).To(o.BeNil())
-				textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-				o.Expect(strings.Contains(textData, "Successfully deleted the OIDC provider")).Should(o.BeTrue())
+	g.It("Author:yuwan-High-57570-Create/List/Delete BYO oidc config in auto mode via rosacli [Serial]", func() {
+		defer func() {
+			g.By("make sure that all oidc configs created during the testing")
+			if len(oidcConfigIDsNeedToClean) > 0 {
+				g.By("Delete oidc configs")
+				rosaClient := rosacli.NewClient()
+				ocmResourceService := rosaClient.OCMResource
+				for _, id := range oidcConfigIDsNeedToClean {
+					output, err := ocmResourceService.DeleteOIDCConfig(
+						"--oidc-config-id", id,
+						"--mode", "auto",
+						"-y",
+					)
+					o.Expect(err).To(o.BeNil())
+					textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+					o.Expect(strings.Contains(textData, "Successfully deleted the OIDC provider")).Should(o.BeTrue())
 
-				g.By("Check the managed oidc config is deleted")
-				oidcConfigList, _, err := ocmResourceService.ListOIDCConfig()
-				o.Expect(err).To(o.BeNil())
-				foundOIDCConfig := oidcConfigList.OIDCConfig(id)
-				o.Expect(foundOIDCConfig).To(o.Equal(rosacli.OIDCConfig{}))
+					g.By("Check the managed oidc config is deleted")
+					oidcConfigList, _, err := ocmResourceService.ListOIDCConfig()
+					o.Expect(err).To(o.BeNil())
+					foundOIDCConfig := oidcConfigList.OIDCConfig(id)
+					o.Expect(foundOIDCConfig).To(o.Equal(rosacli.OIDCConfig{}))
+				}
 			}
-		}
-	})
+		}()
 
-	g.It("Author:yuwan-High-57570-VCreate/List/Delete BYO oidc config in auto mode via rosacli[Serial]", func() {
 		var (
 			oidcConfigPrefix       = "op57570"
 			longPrefix             = "1234567890abcdef"

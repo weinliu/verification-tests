@@ -25,9 +25,38 @@ func isHostedCPCluster(clusterID string) (bool, error) {
 		return false, err
 	}
 	rosaClient.Runner.CloseFormat()
-	rosaClient.Parser.JsonData.Input(output)
 	jsonData := rosaClient.Parser.JsonData.Input(output).Parse()
 	return jsonData.DigBool("hypershift", "enabled"), nil
+}
+
+// Check if the cluster is sts cluster. hosted-cp cluster is also treated as sts cluster
+func isSTSCluster(clusterID string) (bool, error) {
+	var rosaClient = rosacli.NewClient()
+	rosaClient.Runner.Format("json")
+	clusterService := rosaClient.Cluster
+	output, err := clusterService.DescribeCluster(clusterID)
+	if err != nil {
+		logger.Errorf("it met error when describeCluster in isHostedCPCluster is %v", err)
+		return false, err
+	}
+	rosaClient.Runner.CloseFormat()
+	jsonData := rosaClient.Parser.JsonData.Input(output).Parse()
+	return jsonData.DigBool("aws", "sts", "enabled"), nil
+}
+
+// Check if the cluster is using reusable oidc-config
+func isUsingReusableOIDCConfig(clusterID string) (bool, error) {
+	var rosaClient = rosacli.NewClient()
+	rosaClient.Runner.Format("json")
+	clusterService := rosaClient.Cluster
+	output, err := clusterService.DescribeCluster(clusterID)
+	if err != nil {
+		logger.Errorf("it met error when describeCluster in isHostedCPCluster is %v", err)
+		return false, err
+	}
+	rosaClient.Runner.CloseFormat()
+	jsonData := rosaClient.Parser.JsonData.Input(output).Parse()
+	return jsonData.DigBool("aws", "sts", "oidc_config", "reusable"), nil
 }
 
 // Check if the cluster is private cluster
@@ -41,7 +70,6 @@ func isPrivateCluster(clusterID string) (bool, error) {
 		return false, err
 	}
 	rosaClient.Runner.CloseFormat()
-	rosaClient.Parser.JsonData.Input(output)
 	jsonData := rosaClient.Parser.JsonData.Input(output).Parse()
 	return jsonData.DigString("api", "listening") == "internal", nil
 }
@@ -118,4 +146,15 @@ func getOIDCIdFromList(providerURL string) (string, error) {
 	}
 	logger.Warnf("No oidc with the url %s is found.", providerURL)
 	return "", nil
+}
+
+// Remove an string element from slice
+func removeStringElementFromArray(slice []string, element string) []string {
+	var newSlice []string
+	for _, v := range slice {
+		if v != element {
+			newSlice = append(newSlice, v)
+		}
+	}
+	return newSlice
 }
