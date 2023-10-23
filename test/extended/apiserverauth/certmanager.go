@@ -346,10 +346,17 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	g.It("ROSA-ConnectedOnly-Author:geliu-Medium-62582-Need override dns args when the target hosted zone in ACME dns01 solver overlaps with the cluster's default private hosted zone [Disruptive]", func() {
+		g.By("Check proxy env.")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "httpsProxy") {
+			g.Skip("The cluster has httpsProxy, ocp-62582 skipped.")
+		}
+
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
 		g.By("Skip test when the cluster is with STS credential")
-		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			g.Skip("Skipping for the aws cluster without credential in cluster")
 		}
@@ -396,7 +403,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
 		certClusterissuerFile := filepath.Join(buildPruningBaseDir, "cert-hosted-zone-overlapped.yaml")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("ingressDomain=%s", string(output))
 		f, err = ioutil.ReadFile(certClusterissuerFile)
