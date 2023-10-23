@@ -36,9 +36,16 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	g.It("ROSA-ConnectedOnly-Author:geliu-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate", func() {
+		g.By("Check proxy env.")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "httpsProxy") {
+			g.Skip("The cluster has httpsProxy, ocp-62494 skipped.")
+		}
+
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Check if the cluster is STS or not")
-		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			g.Skip("Skipping for the aws cluster without credential in cluster")
 		}
@@ -91,10 +98,18 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
 		certClusterissuerFile := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+		// Hard code dns zone to be "qe1.devcluster.openshift.com" temporarily.
+		// TODO: when having time in future, change to be: get apps.clustername.yyy...com, trim "apps.clustername.", let dnsZone = yyy...com, implement AWS API for `aws route53 list-hosted-zones | jq -r '.HostedZones[] | select(.Name=="yyyy...com.") | .Id'` to get the hosted zone ID, replace clusterissuer YAML file's hostedZoneID. So even in AWS env not using QE's AWS account, this case can still pass.
+		dnsZone := "qe1.devcluster.openshift.com"
 		f, err := ioutil.ReadFile(certClusterissuerFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		randomStr := exutil.GetRandomString()
-		f1 := strings.ReplaceAll(string(f), "auth-custom1", randomStr)
+		dnsName := randomStr + "." + dnsZone
+		if len(dnsName) > 63 {
+			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
+		}
+		e2e.Logf("dnsName=%s", dnsName)
+		f1 := strings.ReplaceAll(string(f), "DNS_NAME", dnsName)
 		err = ioutil.WriteFile(certClusterissuerFile, []byte(f1), 0644)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("create").Args("-f", certClusterissuerFile).Execute()
@@ -185,8 +200,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		oc.SetupProject()
 		e2e.Logf("Create issuer in ns scope created in last step.")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
-		issuerHttp01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
-		err = oc.Run("create").Args("-f", issuerHttp01File).Execute()
+		issuerHTTP01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
+		err = oc.Run("create").Args("-f", issuerHTTP01File).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 
@@ -203,15 +218,15 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}", "--context=admin").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("ingressDomain=%s", ingressDomain)
-		dns_name := "t." + ingressDomain
-		if len(dns_name) > 63 {
-			g.Skip("Skip testcase for length of dns_name is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
+		dnsName := "t." + ingressDomain
+		if len(dnsName) > 63 {
+			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
 		}
-		certHttp01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
-		sedCmd := fmt.Sprintf(`sed -i 's/DNS_NAME/%s/g' %s`, dns_name, certHttp01File)
+		certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
+		sedCmd := fmt.Sprintf(`sed -i 's/DNS_NAME/%s/g' %s`, dnsName, certHTTP01File)
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("create").Args("-f", certHttp01File).Execute()
+		err = oc.Run("create").Args("-f", certHTTP01File).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		statusErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			output, err := oc.Run("get").Args("certificate", "cert-test-http01").Output()
@@ -243,7 +258,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		opensslCmd := "openssl x509 -noout -text -in " + dirname + "/tls.crt"
 		ssloutput, sslerr := exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(sslerr).NotTo(o.HaveOccurred())
-		if !strings.Contains(string(ssloutput), dns_name) {
+		if !strings.Contains(string(ssloutput), dnsName) {
 			e2e.Failf("Failure: The certificate is indeed issued by Let's Encrypt, the Subject Alternative Name is indeed the specified DNS_NAME failed.")
 		}
 
@@ -530,20 +545,23 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		exutil.AssertWaitPollNoErr(err, "Waiting for clusterissuer ready timeout.")
 
 		g.By("Create the certificate.")
-		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("ingressDomain=%s", string(ingressDomain))
+		// Hard code dns zone to be "qe1.devcluster.openshift.com" temporarily.
+		// TODO: when having time in future, change to be: get apps.clustername.yyy...com, trim "apps.clustername.", let dnsZone = yyy...com, implement AWS API for `aws route53 list-hosted-zones | jq -r '.HostedZones[] | select(.Name=="yyyy...com.") | .Id'` to get the hosted zone ID, replace clusterissuer YAML file's hostedZoneID. So even in AWS env not using QE's AWS account, this case can still pass.
+		dnsZone := "qe1.devcluster.openshift.com"
 		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth")
-		certDns01File := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		f, err = ioutil.ReadFile(certDns01File)
+		certDNS01File := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+		f, err = ioutil.ReadFile(certDNS01File)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		randomStr := exutil.GetRandomString()
-		dns_name := randomStr + "." + string(ingressDomain)
-		e2e.Logf("dns_name=%s", dns_name)
-		f1 = strings.ReplaceAll(string(f), "DNS_NAME", dns_name)
-		err = ioutil.WriteFile(certDns01File, []byte(f1), 0644)
+		dnsName := randomStr + "." + dnsZone
+		if len(dnsName) > 63 {
+			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
+		}
+		e2e.Logf("dnsName=%s", dnsName)
+		f1 = strings.ReplaceAll(string(f), "DNS_NAME", dnsName)
+		err = ioutil.WriteFile(certDNS01File, []byte(f1), 0644)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("create").Args("-f", certDns01File).Execute()
+		err = oc.Run("create").Args("-f", certDNS01File).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the certificate and its challenge")

@@ -5,7 +5,7 @@ metadata:
 spec:
   secretName: certificate-from-dns01
   dnsNames:
-  - auth-custom1.qe1.devcluster.openshift.com
+  - DNS_NAME
   issuerRef:
     kind: ClusterIssuer
     name: letsencrypt-dns01

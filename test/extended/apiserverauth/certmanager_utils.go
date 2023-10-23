@@ -170,8 +170,8 @@ func createCertManagerOperator(oc *exutil.CLI) {
 func createIssuers(oc *exutil.CLI) {
 	e2e.Logf("Create issuer in ns scope created in last step.")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
-	issuerHttp01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
-	err := oc.Run("create").Args("-f", issuerHttp01File).Execute()
+	issuerHTTP01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
+	err := oc.Run("create").Args("-f", issuerHTTP01File).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 		output, err := oc.Run("get").Args("issuer", "letsencrypt-http01").Output()
@@ -197,17 +197,17 @@ func createCertificate(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("ingressDomain=%s", ingressDomain)
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
-	certHttp01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
-	f, err := ioutil.ReadFile(certHttp01File)
+	certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
+	f, err := ioutil.ReadFile(certHTTP01File)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dns_name := "t." + ingressDomain
-	if len(dns_name) > 63 {
-		g.Skip("Skip testcase for length of dns_name is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
+	dnsName := "t." + ingressDomain
+	if len(dnsName) > 63 {
+		g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
 	}
-	f1 := strings.ReplaceAll(string(f), "DNS_NAME", dns_name)
-	err = ioutil.WriteFile(certHttp01File, []byte(f1), 0644)
+	f1 := strings.ReplaceAll(string(f), "DNS_NAME", dnsName)
+	err = ioutil.WriteFile(certHTTP01File, []byte(f1), 0644)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.Run("create").Args("-f", certHttp01File).Execute()
+	err = oc.Run("create").Args("-f", certHTTP01File).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 		output, err := oc.Run("get").Args("certificate", "cert-test-http01").Output()
