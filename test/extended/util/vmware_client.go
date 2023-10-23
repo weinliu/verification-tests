@@ -51,7 +51,7 @@ func (vmware *Vmware) Login() (*Vmware, *govmomi.Client) {
 	}
 
 	// Connect and log in to ESX or vCenter
-	c, err := govmomi.NewClient(ctx, u, false)
+	c, err := govmomi.NewClient(ctx, u, true)
 	if err != nil {
 		e2e.Logf("Error in login, please check vmware url\n")
 		o.Expect(err).NotTo(o.HaveOccurred())

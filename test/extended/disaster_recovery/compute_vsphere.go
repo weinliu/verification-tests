@@ -3,6 +3,7 @@ package disasterrecovery
 import (
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -68,7 +69,8 @@ func VsphereCloudClient(oc *exutil.CLI) (*exutil.Vmware, *govmomi.Client) {
 	envPassword := string(secureKey)
 	envURL := string(serverURL)
 	envURL = strings.TrimSuffix(envURL, "\n")
-	govmomiURL := "https://" + envUsername + ":" + envPassword + "@" + envURL + "/sdk"
+	encodedPassword := url.QueryEscape(envPassword)
+	govmomiURL := fmt.Sprintf("https://%s:%s@%s/sdk", envUsername, encodedPassword, envURL)
 	vmware := exutil.Vmware{GovmomiURL: govmomiURL}
 	return vmware.Login()
 }
