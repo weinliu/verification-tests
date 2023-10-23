@@ -420,8 +420,7 @@ func waitForPersistentVolumeStatusAsExpected(oc *exutil.CLI, pvName string, expe
 			return false, nil
 		})
 	} else {
-		// err = wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
-		err = wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+		err = wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 			status, err = getPersistentVolumeStatus(oc, pvName)
 			if err != nil {
 				// Adapt for LSO test
