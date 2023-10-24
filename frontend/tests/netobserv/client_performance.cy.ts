@@ -62,7 +62,7 @@ describe("(OCP-67725, memodi) NETOBSERV Client Performances", { browser: 'chrome
         cy.get('#tabs-container li:nth-child(2)').click()
         netflowPage.clearAllFilters()
         const start = performance.now()
-        const url = '**/loki/flows?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=count'
+        const url = '**/loki/flow/records?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=count'
         cy.intercept('GET', url, {
             fixture: 'netobserv/netflow_table_perf.json'
         })
@@ -83,7 +83,7 @@ describe("(OCP-67725, memodi) NETOBSERV Client Performances", { browser: 'chrome
         netflowPage.clearAllFilters()
         const start = performance.now()
         cy.intercept('GET', getTopologyScopeURL("namespace"), {
-            fixture: 'netobserv/topology_perf.json'
+            fixture: 'netobserv/flow_metrics_perf.json'
         })
         cy.get('[data-surface="true"]').should('be.visible').then(() => {
             cy.wrap(performance.now()).then(end => {

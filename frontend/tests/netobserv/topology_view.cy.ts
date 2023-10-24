@@ -13,11 +13,11 @@ const metricType = [
 ]
 
 function getTopologyScopeURL(scope: string): string {
-    return `**/topology?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=${scope}`
+    return `**/flow/metrics?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=${scope}`
 }
 
 function getTopologyResourceScopeGroupURL(groups: string): string {
-    return `**/topology?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=resource&groups=${groups}`
+    return `**/flow/metrics?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=resource&groups=${groups}`
 }
 
 describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOBSERV'] }, function () {
@@ -95,7 +95,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
     it("(OCP-53591, memodi) should verify namespace scope", function () {
         const scope = "namespace"
         cy.intercept('GET', getTopologyScopeURL(scope), {
-            fixture: 'netobserv/topology_namespace.json'
+            fixture: 'netobserv/flow_metrics_namespace.json'
         }).as('matchedUrl')
 
         // selecting something different first  
@@ -115,7 +115,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
     it("(OCP-53591, memodi) should verify owner scope", function () {
         const scope = "owner"
         cy.intercept('GET', getTopologyScopeURL(scope), {
-            fixture: 'netobserv/topology_owner.json'
+            fixture: 'netobserv/flow_metrics_owner.json'
         }).as('matchedUrl')
         topologyPage.selectScopeGroup(scope, null)
         cy.wait('@matchedUrl').then(({ response }) => {
@@ -129,7 +129,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
 
     it("(OCP-53591, memodi) should verify resource scope", function () {
         const scope = 'resource'
-        cy.intercept('GET', getTopologyScopeURL(scope), { fixture: 'netobserv/topology_resource.json' }).as('matchedUrl')
+        cy.intercept('GET', getTopologyScopeURL(scope), { fixture: 'netobserv/flow_metrics_resource.json' }).as('matchedUrl')
         topologyPage.selectScopeGroup(scope, null)
         cy.wait('@matchedUrl').then(({ response }) => {
             expect(response.statusCode).to.eq(200)
@@ -143,7 +143,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
     it("(OCP-53591, memodi) should verify group Nodes", function () {
         const groups = 'hosts'
         cy.intercept('GET', getTopologyResourceScopeGroupURL(groups), {
-            fixture: 'netobserv/topology_ghosts.json'
+            fixture: 'netobserv/flow_metrics_ghosts.json'
         })
         topologyPage.selectScopeGroup("resource", groups)
         topologyPage.isViewRendered()
@@ -152,27 +152,27 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
     })
 
     it("(OCP-53591, memodi) should verify group Nodes+NS", function () {
-        cy.intercept('GET', getTopologyResourceScopeGroupURL('hosts%2Bnamespaces'), { fixture: 'netobserv/topology_ghostsNS.json' })
+        cy.intercept('GET', getTopologyResourceScopeGroupURL('hosts%2Bnamespaces'), { fixture: 'netobserv/flow_metrics_ghostsNS.json' })
         topologyPage.selectScopeGroup("resource", "hosts+namespaces")
         topologyPage.isViewRendered()
         cy.get(topologySelectors.nGroups).should('have.length', 6)
     })
 
     it("(OCP-53591, memodi) should verify group Nodes+Owners", function () {
-        cy.intercept('GET', getTopologyResourceScopeGroupURL('hosts%2Bowners'), { fixture: 'netobserv/topology_ghostsOwners.json' })
+        cy.intercept('GET', getTopologyResourceScopeGroupURL('hosts%2Bowners'), { fixture: 'netobserv/flow_metrics_ghostsOwners.json' })
         topologyPage.selectScopeGroup("resource", "hosts+owners")
         // verify number of groups
         cy.get(topologySelectors.nGroups).should('have.length', 20)
     })
 
     it("(OCP-53591, memodi) should verify group NS", function () {
-        cy.intercept('GET', getTopologyResourceScopeGroupURL('namespaces'), { fixture: 'netobserv/topology_gNS.json' })
+        cy.intercept('GET', getTopologyResourceScopeGroupURL('namespaces'), { fixture: 'netobserv/flow_metrics_gNS.json' })
         topologyPage.selectScopeGroup("resource", "namespaces")
         cy.get(topologySelectors.nGroups).should('have.length', 4)
     })
 
     it("(OCP-53591, memodi) should verify group NS+Owners", function () {
-        cy.intercept('GET', getTopologyResourceScopeGroupURL('namespaces%2Bowners'), { fixture: 'netobserv/topology_gNSOwners.json' })
+        cy.intercept('GET', getTopologyResourceScopeGroupURL('namespaces%2Bowners'), { fixture: 'netobserv/flow_metrics_gNSOwners.json' })
         topologyPage.selectScopeGroup("resource", "namespaces+owners")
         cy.get(topologySelectors.nGroups).should('have.length', 20)
     })
@@ -224,7 +224,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         })
 
         it("(OCP-53591, memodi) should verify group owners", function () {
-            cy.intercept(getTopologyResourceScopeGroupURL('owners'), { fixture: 'netobserv/topology_gOwners.json' })
+            cy.intercept(getTopologyResourceScopeGroupURL('owners'), { fixture: 'netobserv/flow_metrics_gOwners.json' })
             cy.get(topologySelectors.nGroups).should('have.length', 13)
         })
 
