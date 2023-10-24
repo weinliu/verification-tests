@@ -155,6 +155,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules before configuration")
 			metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 				metricValue1 = getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
+				e2e.Logf("The output of the ovnkube_master_num_egress_firewall_rules metrics before applying egressfirewall rules is : %v", metricValue1)
 				if metricValue1 >= "0" {
 					return true, nil
 				}
@@ -172,7 +173,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			metricsOutputAfter := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 				metricValue2 = getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
-				if metricValue2 != metricValue1 {
+				e2e.Logf("The output of the ovnkube_master_num_egress_firewall_rules metrics after applying egressfirewall rules is : %v", metricValue1)
+				metricValue1Int, _ := strconv.Atoi(metricValue1)
+				metricValue2Int, _ := strconv.Atoi(metricValue2)
+				if metricValue2Int == metricValue1Int+3 {
 					return true, nil
 				}
 				e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
@@ -186,9 +190,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			leaderPodName := getLeaderInfo(oc, sdnnamespace, sdncmName, networkType)
 			output := getSDNMetrics(oc, leaderPodName)
 			metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep sdn_controller_num_egress_firewall_rules | awk 'NR==3{print $2}'").Output()
-			metricValue := strings.TrimSpace(string(metricOutput))
-			e2e.Logf("The output of the sdn_controller_num_egress_firewall_rules metrics is : %v", metricValue)
-			o.Expect(metricValue).To(o.ContainSubstring("0"))
+			metricValue1 := strings.TrimSpace(string(metricOutput))
+			metricValue1Int, _ := strconv.Atoi(metricValue1)
+			e2e.Logf("The output of the ovnkube_master_num_egress_firewall_rules metrics before applying egressfirewall rules is : %v", metricValue1)
 
 			exutil.By("create egressNetworkpolicy rules in SDN cluster")
 			fwErr := oc.AsAdmin().Run("create").Args("-n", ns, "-f", egressNetworkpolicy).Execute()
@@ -200,9 +204,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			exutil.By("get the metrics of sdn_controller_num_egress_firewalls after configuration")
 			output1 := getSDNMetrics(oc, leaderPodName)
 			metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep sdn_controller_num_egress_firewall_rules | awk 'NR==3{print $2}'").Output()
-			metricValue1 := strings.TrimSpace(string(metricOutput1))
-			e2e.Logf("The output of the sdn_controller_num_egress_firewall_rules metrics is : %v", metricValue1)
-			o.Expect(metricValue1).To(o.ContainSubstring("2"))
+			metricValue2 := strings.TrimSpace(string(metricOutput1))
+			e2e.Logf("The output of the ovnkube_master_num_egress_firewall_rules metrics after applying egressfirewall rules is : %v", metricValue2)
+			metricValue2Int, _ := strconv.Atoi(metricValue2)
+			o.Expect(metricValue2Int).Should(o.Equal(metricValue1Int + 2))
 		}
 	})
 
