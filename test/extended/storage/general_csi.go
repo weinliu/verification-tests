@@ -3480,7 +3480,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://issues.redhat.com/browse/STOR-994
 	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-storage/3141-prevent-volume-mode-conversion
 	// OCP-60487 - [CSI-Driver] [Snapshot] should prevent unauthorised users from converting the volume mode when enable the prevent-volume-mode-conversion
-	g.It("ROSA-OSD-Longduration-NonPreRelease-Author:pewang-Medium-60487-[CSI-Driver] [Snapshot] should prevent unauthorised users from converting the volume mode when enable the prevent-volume-mode-conversion [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD-Longduration-NonPreRelease-Author:pewang-Medium-60487-[CSI-Driver] [Snapshot] should prevent unauthorised users from converting the volume mode when enable the prevent-volume-mode-conversion [Disruptive]", func() {
 
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com"}
@@ -4457,7 +4457,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: jiasun@redhat.com
 	// OCP-57148 [CSI Driver] Attachable volume number on each node should obey CSINode allocatable count for different instance types
-	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:jiasun-High-57148-[CSI Driver] Attachable volume number on each node should obey CSINode allocatable count for different instance types [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:jiasun-High-57148-[CSI Driver] Attachable volume number on each node should obey CSINode allocatable count for different instance types [Serial]", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "vpc.block.csi.ibm.io", "csi.vsphere.vmware.com", "pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario

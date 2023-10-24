@@ -132,7 +132,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-51537 - [Metrics] Check metric and alert for default storage class count [Disruptive]
-	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-NonPreRelease-Longduration-Medium-51537-[Storageclass] [Metrics] Check metric and alert for default storage class count [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:ropatil-NonPreRelease-Longduration-Medium-51537-[Storageclass] [Metrics] Check metric and alert for default storage class count [Disruptive]", func() {
 
 		// Set the resource template for the scenario
 		var (

@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-64793-[CSI-Driver-Operator] should restart driver controller Pods if CA certificates are updated
-	g.It("NonPreRelease-Longduration-ROSA-OSD_CCS-ARO-Author:pewang-High-64793-[CSI-Driver-Operator] should restart driver controller Pods if CA certificates are updated [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-OSD_CCS-ARO-Author:pewang-High-64793-[CSI-Driver-Operator] should restart driver controller Pods if CA certificates are updated [Disruptive]", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "pd.csi.storage.gke.io", "disk.csi.azure.com", "file.csi.azure.com", "filestore.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario

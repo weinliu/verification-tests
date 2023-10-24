@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: jiasun@redhat.com
 	// OCP-37783 - [storage] Metric should report storage volume numbers per storage plugins and volume mode
-	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-ARO-Author:jiasun-High-37783-[storage] Metric should report storage volume numbers per storage plugins and volume mode [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Longduration-NonPreRelease-ARO-Author:jiasun-High-37783-[storage] Metric should report storage volume numbers per storage plugins and volume mode [Serial]", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -57,7 +57,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: ropatil@redhat.com
 	// OCP-64184 - [CSI-Driver] check the storage volume mount failure alert node name[Serial]
 	// https://issues.redhat.com/browse/OCPBUGS-14307 Fix User real node name in failing mount alerts
-	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:ropatil-Medium-64184-[CSI-Driver] check the storage volume mount failure alert node name [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:ropatil-Medium-64184-[CSI-Driver] check the storage volume mount failure alert node name [Serial]", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		// Set the resource template for the scenario
@@ -134,7 +134,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-64186 - [CSI-Driver] check the storage volume attach failure alert [Serial]
-	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:ropatil-Medium-64186-[CSI-Driver] check the storage volume attach failure alert [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:ropatil-Medium-64186-[CSI-Driver] check the storage volume attach failure alert [Serial]", func() {
 		// Define the test scenario support provisioners
 		// Removing vsphere provisioner: https://issues.redhat.com/browse/OCPBUGS-14854
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "vpc.block.csi.ibm.io"}
