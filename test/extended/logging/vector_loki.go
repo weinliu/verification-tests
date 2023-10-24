@@ -1427,7 +1427,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54525-LokiStack Cluster Logging comply with the old tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Medium-54525-LokiStack Cluster Logging comply with the old tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
 
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1659,7 +1659,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54527-LokiStack Cluster Logging comply with the global tlsSecurityProfile - old to intermediate[Slow][Disruptive]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Medium-54527-LokiStack Cluster Logging comply with the global tlsSecurityProfile - old to intermediate[Slow][Disruptive]", func() {
 
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")

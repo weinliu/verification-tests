@@ -577,7 +577,7 @@ spec:
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49364-Forward logs to LokiStack with gateway using fluentd as the collector-CLF[Serial]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Low-49364-Forward logs to LokiStack with gateway using fluentd as the collector-CLF[Serial]", func() {
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
