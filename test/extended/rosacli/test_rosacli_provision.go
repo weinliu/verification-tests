@@ -16,22 +16,17 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with
 		clusterID       string
 	)
 
-	g.BeforeEach(func() {
-		g.By("Get the cluster")
-		clusterID = getClusterIDENVExisted()
-		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
-	})
-
 	g.It("Author:mgahagan-Critical-66362-rosacli Try to create cluster with invalid usernames, passwords or unsupported configurations", func() {
 		rosaClient := rosacli.NewClient()
+		clusterID = "fake-cluster" // these tests do not create or use a real cluster so no need to address an existing one.
 
 		g.By("Try to create classic non STS cluster with invalid admin username")
 		output, err := rosaClient.Cluster.CreateDryRun(clusterID, "--cluster-admin-user", invalidUser,
-			"--cluster-admin-password", invalidPassword, "--region", "us-east-2",
+			"--cluster-admin-password", validPassword, "--region", "us-east-2",
 			"--mode", "auto", "-y")
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(textData).Should(o.ContainSubstring("username must not contain"))
+		o.Expect(textData).Should(o.ContainSubstring("sername must not contain"))
 
 		g.By("Try to create classic non STS cluster with invalid admin password")
 		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--cluster-admin-user", validUser,
@@ -39,7 +34,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with
 			"--mode", "auto", "-y")
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(textData).Should(o.ContainSubstring("password must be at least"))
+		o.Expect(textData).Should(o.ContainSubstring("assword must be at least"))
 
 		g.By("Try to create cluster with invalid admin username on classic STS cluster")
 		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--sts", "--cluster-admin-user", invalidUser,
@@ -47,7 +42,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with
 			"--mode", "auto", "-y")
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(textData).Should(o.ContainSubstring("username must not contain"))
+		o.Expect(textData).Should(o.ContainSubstring("sername must not contain"))
 
 		g.By("Try to create cluster with invalid admin password on classic STS cluster")
 		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--sts", "--cluster-admin-user", validUser,
@@ -55,6 +50,14 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with
 			"--mode", "auto", "-y")
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(textData).Should(o.ContainSubstring("password must be at least"))
+		o.Expect(textData).Should(o.ContainSubstring("assword must be at least"))
+
+		g.By("Try to create Hypershift cluster with admin username and password set (unsupported)")
+		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--hosted-cp", "--cluster-admin-user", validUser,
+			"--cluster-admin-password", validPassword, "--region", "us-west-2", "--support-role-arn", "--controlplane-iam-role",
+			"--worker-iam-role", "--mode", "auto", "-y")
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(textData).Should(o.ContainSubstring("is only supported in classic"))
 	})
 })
