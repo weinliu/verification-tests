@@ -4690,7 +4690,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				o.Eventually(func() (expectedValue string) {
 					for _, presetSc := range presetStorageclasses {
 						sc := newStorageClass(setStorageClassName(presetSc))
-						expectedValue = expectedValue + sc.getFieldByJSONPath(oc, scKeyJSONPath[provisioner])
+						scBYOKID, getKeyErr := sc.getFieldByJSONPathWithoutAssert(oc, scKeyJSONPath[provisioner])
+						if getKeyErr != nil {
+							e2e.Logf(`Failed to get storageClass %s keyID, caused by: "%v"`, sc.name, getKeyErr)
+							return "Retry next round"
+						}
+						expectedValue = expectedValue + scBYOKID
 					}
 					return expectedValue
 				}, 60*time.Second, 10*time.Second).Should(o.Equal(""))
@@ -4703,7 +4708,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 					expectedInt = 0
 					for _, presetSc := range presetStorageclasses {
 						sc := newStorageClass(setStorageClassName(presetSc))
-						if sc.getFieldByJSONPath(oc, scKeyJSONPath[provisioner]) == byokKeyID {
+						scBYOKID, getKeyErr := sc.getFieldByJSONPathWithoutAssert(oc, scKeyJSONPath[provisioner])
+						if getKeyErr != nil {
+							e2e.Logf(`Failed to get storageClass %s keyID, caused by: "%v"`, sc.name, getKeyErr)
+							return 0
+						}
+						if scBYOKID == byokKeyID {
 							expectedInt = expectedInt + 1
 						}
 					}

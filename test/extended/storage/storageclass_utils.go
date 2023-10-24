@@ -172,9 +172,14 @@ func (sc *storageClass) createWithExportJSON(oc *exutil.CLI, originScExportJSON 
 	e2e.Logf("The new storage class:\"%s\" created", newScName)
 }
 
+// GetFieldByJSONPathWithoutAssert gets its field value by JSONPath without assert
+func (sc *storageClass) getFieldByJSONPathWithoutAssert(oc *exutil.CLI, JSONPath string) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass/"+sc.name, "-o", "jsonpath="+JSONPath).Output()
+}
+
 // GetFieldByJSONPath gets its field value by JSONPath
 func (sc *storageClass) getFieldByJSONPath(oc *exutil.CLI, JSONPath string) string {
-	fieldValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass/"+sc.name, "-o", "jsonpath="+JSONPath).Output()
+	fieldValue, err := sc.getFieldByJSONPathWithoutAssert(oc, JSONPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return fieldValue
 }
