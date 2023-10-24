@@ -277,7 +277,7 @@ data:
 		}
 	})
 
-	g.It("NonHyperShiftHOST-Author:jshu-Medium-48360 Reconciliation of aws pod identity mutating webhook did not happen [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:jshu-Medium-48360-Reconciliation of aws pod identity mutating webhook did not happen [Disruptive]", func() {
 		//Check IAAS platform type
 		iaasPlatform := exutil.CheckPlatform(oc)
 		if iaasPlatform != "aws" {
