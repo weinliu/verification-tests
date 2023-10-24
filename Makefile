@@ -6,6 +6,9 @@ build:
 	mkdir -p "${OUT_DIR}"
 	export GO111MODULE="on" && export GOFLAGS="" && go build  -ldflags="-s -w" -mod=mod -o "${OUT_DIR}" "./cmd/extended-platform-tests"
 
+go-mod-tidy:
+	./hack/go-mod-tidy.sh
+
 nightly-test: 
 	./hack/nightly_test.sh
 

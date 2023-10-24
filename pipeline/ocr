@@ -1,25 +1,4 @@
 #!/bin/bash
-function go_mod_tidy {
-
-  count=0
-  while [ $count -lt 100 ]; do
-      ret_go_mod=0
-      go mod tidy || ret_go_mod=$?
-      if [ $ret_go_mod -eq 0 ]; then
-        break
-      fi
-      sleep 3
-      echo "========try next to get lib========"
-      ((count++))
-  done
-
-  if [ $count -eq 100 ]; then
-    echo "can not download lib"
-    echo "1" > /tmp/makebinary_result
-  else
-    echo "success to download lib"
-  fi
-}
 
 function run {
   repo_owner="$1"
@@ -46,14 +25,16 @@ function run {
   if [ "${repo_owner}" == "openshift" ]; then
     export DUMP_EVENTS_ON_FAILURE=false
     export ENABLE_PRINT_EVENT_STDOUT=true
-    go_mod_tidy
+    echo "make go-mod-tidy"
+    make go-mod-tidy
     echo "make all"
     make all
     echo $? > /tmp/makebinary_result
   else
     unset DUMP_EVENTS_ON_FAILURE
     export ENABLE_PRINT_EVENT_STDOUT=true
-    go_mod_tidy
+    echo "make go-mod-tidy"
+    make go-mod-tidy
     echo "make build"
     make build
     echo $? > /tmp/makebinary_result
