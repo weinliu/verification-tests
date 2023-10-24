@@ -51,6 +51,7 @@ type ForwardClusterRoleBinding struct {
 
 type Flowlog struct {
 	Packets          int
+	Dscp             int
 	SrcPort          int
 	DstMac           string
 	TimeReceived     int

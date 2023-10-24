@@ -82,7 +82,7 @@ func getFlowRecords(lokiValues [][]string) ([]FlowRecord, error) {
 
 // Verify some key and deterministic flow recrods fields and their values
 func (flowlog *Flowlog) verifyFlowRecord() {
-	flow := fmt.Sprintf("Flow log in error: %+v\n", flowlog)
+	flow := fmt.Sprintf("Flow log is: %+v\n", flowlog)
 	o.Expect(flowlog.AgentIP).To(o.Equal(flowlog.DstK8S_HostIP), flow)
 	o.Expect(flowlog.Bytes).Should(o.BeNumerically(">", 0), flow)
 	var testDuplicate bool

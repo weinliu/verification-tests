@@ -771,6 +771,139 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(ICMPflows)).Should(o.BeNumerically(">", 0), "expected number of ICMP flows > 0")
 	})
+
+	g.It("NonPreRelease-Author:aramesha-High-68125-Verify DSCP with NetObserv [Serial]", func() {
+		namespace := oc.Namespace()
+
+		g.By("Deploying test server and client pods")
+		template := filePath.Join(baseDir, "test-client-server_template.yaml")
+		testTemplate := TestClientServerTemplate{
+			ServerNS:   "test-server-68125",
+			ClientNS:   "test-client-68125",
+			ObjectSize: "100K",
+			Template:   template,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
+		err := testTemplate.createTestClientServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Deploy FlowCollector")
+		flow := Flowcollector{
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+
+		g.By("Ensure flows are observed and all pods are running")
+		flow.waitForFlowcollectorReady(oc)
+
+		// verify logs
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err = removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		//Scenario1: When no QoS label is passed default DSCP value is 0
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: testTemplate.ClientNS,
+			DstK8S_Namespace: testTemplate.ServerNS,
+		}
+
+		g.By("Verify DSCP value=0")
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+
+		flowRecords, err := lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.Dscp).To(o.Equal(0))
+		}
+
+		//Scenario2: Explicitly passing QoS value in ping command
+		ipStackType := checkIPStackType(oc)
+		var destinationIP string
+
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			g.By("test ipv4 in ipv4 cluster or dualstack cluster")
+			destinationIP = "1.1.1.1"
+		} else if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+			g.By("test ipv6 in ipv6 cluster or dualstack cluster")
+			destinationIP = "::1"
+		}
+
+		g.By("Ping loopback address with custom QoS from client pod")
+		e2eoutput.RunHostCmd(testTemplate.ClientNS, "client", "ping -c 10 -Q 0x80 "+destinationIP)
+
+		lokilabels = Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: testTemplate.ClientNS,
+		}
+		parameters := []string{"DstAddr=\"" + destinationIP + "\""}
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		g.By("Verify DSCP value=32")
+		flowRecords, err = lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.Dscp).To(o.Equal(32))
+		}
+
+		//Scenario3: Verify egress QoS feature for OVN CNI
+		exutil.By("Check cluster network type")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType == "ovnkubernetes" {
+			g.By("Create egressQoS")
+			egressQoSPath := filePath.Join(networkingDir, "egressQoS.yaml")
+			createResourceFromFile(oc, namespace, egressQoSPath)
+
+			g.By("Verify DSCP value 59 for flows from FLP pods")
+			FLPpod := getFlowlogsPipelinePod(oc, namespace, "flowlogs-pipeline")
+			lokilabels = Lokilabels{
+				App:              "netobserv-flowcollector",
+				SrcK8S_Namespace: namespace,
+			}
+			parameters = []string{"SrcK8S_Name=\"" + FLPpod + "\""}
+
+			g.By("Wait for a min before logs gets collected and written to loki")
+			time.Sleep(60 * time.Second)
+
+			flowRecords, err = lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route, parameters...)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, r := range flowRecords {
+				o.Expect(r.Flowlog.Dscp).To(o.Equal(59))
+			}
+
+			g.By("Verify DSCP vlaue 0 for flows from pods other than FLP in e2e namespace")
+			lokiPods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app.kubernetes.io/name=lokistack")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			parameters = []string{"SrcK8S_Name=\"" + lokiPods[0] + "\""}
+
+			flowRecords, err = lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route, parameters...)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
+			for _, r := range flowRecords {
+				o.Expect(r.Flowlog.Dscp).To(o.Equal(0))
+			}
+		}
+	})
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with KAFKA", func() {
