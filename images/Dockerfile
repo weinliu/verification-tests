@@ -2,7 +2,10 @@ FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.20-openshift-4.15 AS 
 RUN mkdir -p /go/src/github.com/openshift/openshift-tests-private
 WORKDIR /go/src/github.com/openshift/openshift-tests-private
 COPY . .
-RUN make build; \
+RUN command_go_mod_tidy="go mod tidy" && count=0 && \
+    while [ $count -lt 100 ] && ! $command_go_mod_tidy; do sleep 3; ((count++)); done && \
+    if [ $count -eq 100 ]; then echo "can not download lib"; else echo "success to download lib"; fi && \
+    make build; \
     mkdir -p /tmp/build; \
     cp /go/src/github.com/openshift/openshift-tests-private/pipeline/handleresult.py /tmp/build/handleresult.py; \
     cp /go/src/github.com/openshift/openshift-tests-private/bin/extended-platform-tests /tmp/build/extended-platform-tests
