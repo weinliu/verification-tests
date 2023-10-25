@@ -801,7 +801,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:mihuang-Critical-49436-Test Nodepool conditions[Serial]", func() {
 		g.By("Create nodepool and check nodepool conditions in progress util ready")
 
-		if hostedclusterPlatform == AgentPlatform {
+		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
 			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
 		}
 
@@ -987,7 +987,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:mihuang-Critical-60744-Better signal for NodePool inability to talk to management side[Serial][Disruptive]", func() {
 		g.By("Create a nodepool to verify that NodePool inability to talk to management side")
 
-		if hostedclusterPlatform == AgentPlatform {
+		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
 			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
 		}
 
@@ -1073,7 +1073,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	// author: mihuang@redhat.com
 	g.It("HyperShiftMGMT-Author:mihuang-Critical-62195-Add validation for taint.value in nodePool[Serial][Disruptive]", func() {
 
-		if hostedclusterPlatform == AgentPlatform {
+		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
 			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
 		}
 
@@ -1318,7 +1318,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:heli-Critical-52318-[AWS]-Enforce machineconfiguration.openshift.io/role worker in machine config[Serial]", func() {
 
-		if hostedclusterPlatform == AgentPlatform {
+		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
 			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
 		}
 
@@ -1514,7 +1514,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	// author: liangli@redhat.com
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:liangli-Critical-63535-Stop triggering rollout on labels/taint change[Serial]", func() {
 
-		if hostedclusterPlatform == AgentPlatform {
+		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
 			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
 		}
 
