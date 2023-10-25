@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -53,6 +54,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		baseDomain, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.baseDomain}").Output()
+		if !strings.Contains(baseDomain, "qe.devcluster.openshift.com") {
+			g.Skip("Skip since the DNS base domain is not matched")
+		}
 		createExternalDNSOperator(oc)
 
 		g.By("Create CR ExternalDNS sample-aws-rt and ensure operand pod is ready")
@@ -60,7 +65,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
 		time.Sleep(3 * time.Second)
-		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAWS).Output()
+		sedCmd := fmt.Sprintf(`sed -i 's/basedomain/%s/g' %s`, baseDomain, sampleAWS)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAWS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))

@@ -6,7 +6,7 @@ spec:
   domains:
   - filterType: Include
     matchType: Exact
-    name: qe.devcluster.openshift.com
+    name: basedomain
   provider:
     type: AWS
   source:
