@@ -4790,7 +4790,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-Author:xiyuan-Medium-55355-Check the operator's resources limit is configurable [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:xiyuan-Medium-55355-Check the operator's resources limit is configurable [Serial]", func() {
 		g.By("Check the default resource requirements for compliance operator pod !!!\n")
 		assertEventMessageRegexpMatch(oc, "cpu.*200m.*memory.*500Mi", "pod", "-l", "name=compliance-operator", "-n", subD.namespace,
 			`-o=jsonpath={.items[*].spec.containers[?(@.name=="compliance-operator")].resources.limits}`)
