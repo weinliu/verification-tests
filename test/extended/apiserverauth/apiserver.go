@@ -2580,14 +2580,15 @@ spec:
 		format := `[0-9TZ.:]{5,30}`
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
+		exceptions := "panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}"
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
-		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver-operator* > /tmp/OCP-38865-oaso-errors.log
+		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-38865-oaso-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-38865-oaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-38865-oaso-uniq-errors.log | head -10
 		echo '%s'
 		while read line; do
 			grep "$line" /tmp/OCP-38865-oaso-errors.log | head -1
 		done < <(grep -oP "\w+?\.go\:[0-9]+" /tmp/OCP-38865-oaso-uniq-errors.log | uniq | head -10)
-		echo '%s'`, frontwords, keywords, afterwords, format, startTag, endTag)
+		echo '%s'`, frontwords, keywords, afterwords, exceptions, format, startTag, endTag)
 		masterNode, err := oc.WithoutNamespace().Run("get").Args("po", "-n", clusterOperator, "-o", `jsonpath={.items[0].spec.nodeName}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -2607,7 +2608,6 @@ spec:
 		totalAbnormalLogCount += len(podAbnormalLogs)
 
 		exutil.By("5) On all master nodes, check OAS log files for panic error.")
-		exceptions := "panicked: false|e2e-test-.*|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}"
 		cmd = fmt.Sprintf(`RETAG="[EW][0-9]{4}\s[0-9]{2}:[0-9]{2}"
 		PANIC="${RETAG}.*panic"
 		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-apiserver_apiserver* | grep -Ev "%s" | cut -d ':' -f1 | head -10 | uniq)
@@ -2638,13 +2638,13 @@ spec:
 
 		exutil.By("6) On all master nodes, check OAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		keywords = "fatal|SHOULD NOT HAPPEN"
-		cmd = fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver_apiserver* > /tmp/OCP-38865-oas-errors.log
+		cmd = fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver_apiserver* | grep -Ev "%s"  > /tmp/OCP-38865-oas-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-38865-oas-errors.log | sort | uniq -c | sort -h | tee > /tmp/OCP-38865-oas-uniq-errors.log | head -10
 		echo '%s'
 		while read line; do
 			grep "$line" /tmp/OCP-38865-oas-errors.log | head -1
 		done < <(grep -oP "\w+?\.go\:[0-9]+" /tmp/OCP-38865-oas-uniq-errors.log | uniq | head -10)
-		echo '%s'`, frontwords, keywords, afterwords, format, startTag, endTag)
+		echo '%s'`, frontwords, keywords, afterwords, exceptions, format, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
 			exutil.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
