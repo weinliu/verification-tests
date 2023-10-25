@@ -125,10 +125,17 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("create project ns then attach pv/pvc")
-		oc.SetupProject()
-		ns = oc.Namespace()
-		createResourceFromYaml(oc, ns, helloPodPvc)
+		g.By("check if the cluster have default storage class")
+		checkSC, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "--no-headers").Output()
+		e2e.Logf("storage class: %s", checkSC)
+		hasSC := false
+		if strings.Contains(checkSC, "default") {
+			hasSC = true
+			g.By("create project ns then attach pv/pvc")
+			oc.SetupProject()
+			ns = oc.Namespace()
+			createResourceFromYaml(oc, ns, helloPodPvc)
+		}
 
 		g.By("Check labels for pod")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_labels{pod="alertmanager-main-0"}'`, token, `"label_statefulset_kubernetes_io_pod_name"`, uwmLoadTime)
@@ -145,9 +152,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_poddisruptionbudget_labels{poddisruptionbudget="thanos-querier-pdb"}'`, token, `"label_app_kubernetes_io_name"`, uwmLoadTime)
 		}
 
-		g.By("Check labels for PV/PVC")
-		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolume_labels'`, token, `"persistentvolume"`, 2*uwmLoadTime)
-		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolumeclaim_labels'`, token, `"persistentvolumeclaim"`, 2*uwmLoadTime)
+		g.By("Check labels for PV/PVC if need")
+		if hasSC {
+			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolume_labels'`, token, `"persistentvolume"`, 2*uwmLoadTime)
+			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolumeclaim_labels'`, token, `"persistentvolumeclaim"`, 2*uwmLoadTime)
+		}
 	})
 
 	// author: juzhao@redhat.com
