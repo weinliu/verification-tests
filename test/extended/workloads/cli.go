@@ -1753,7 +1753,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Still find the debug pod in own namespace even wait for 15 mins"))
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-37363-High-38859-Check oc image mirror with multi-arch images", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-37363-High-38859-Check oc image mirror with multi-arch images", func() {
 		g.By("Create new namespace")
 		oc.SetupProject()
 		registry := registry{
