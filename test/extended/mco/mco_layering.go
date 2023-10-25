@@ -54,7 +54,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 `
 		// Capture current rpm-ostree status
 		exutil.By("Capture the current ostree deployment")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the booted ostree deployment")
@@ -248,7 +248,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 `
 		// Install rpm in first worker node
 		exutil.By("Installing rpm package in first working node")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 
 		logger.Infof("Copy yum repo to node")
 		o.Expect(workerNode.CopyFromLocal(yumRepoTemplate, yumRepoFile)).
@@ -469,7 +469,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
     rpm-ostree cleanup -m && \
     ostree container commit
 `, rpmName)
-			workerNode = NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+			workerNode = NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 			masterNode = NewNodeList(oc).GetAllMasterNodesOrFail()[0]
 			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
