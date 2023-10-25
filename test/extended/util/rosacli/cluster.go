@@ -20,27 +20,45 @@ type clusterService Service
 
 // Struct for the 'rosa describe cluster' output
 type ClusterDescription struct {
-	Name             string              `yaml:"Name,omitempty"`
-	ID               string              `yaml:"ID,omitempty"`
-	ExternalID       string              `yaml:"External ID,omitempty"`
-	OpenshiftVersion string              `yaml:"OpenShift Version,omitempty"`
-	ChannelGroup     string              `yaml:"Channel Group,omitempty"`
-	DNS              string              `yaml:"DNS,omitempty"`
-	AWSAccount       string              `yaml:"AWS Account,omitempty"`
-	APIURL           string              `yaml:"API URL,omitempty"`
-	ConsoleURL       string              `yaml:"Console URL,omitempty"`
-	Region           string              `yaml:"Region,omitempty"`
-	MultiAZ          string              `yaml:"Multi-AZ,omitempty"`
-	State            string              `yaml:"State,omitempty"`
-	Private          string              `yaml:"Private,omitempty"`
-	Created          string              `yaml:"Created,omitempty"`
-	DetailsPage      string              `yaml:"Details Page,omitempty"`
-	ControlPlane     string              `yaml:"Control Plane,omitempty"`
-	ScheduledUpgrade string              `yaml:"Scheduled Upgrade,omitempty"`
-	InfraID          string              `yaml:"Infra ID,omitempty"`
-	Availability     []map[string]string `yaml:"Availability,omitempty"`
-	Nodes            []map[string]string `yaml:"Nodes,omitempty"`
-	Network          []map[string]string `yaml:"Network,omitempty"`
+	Name                     string              `yaml:"Name,omitempty"`
+	ID                       string              `yaml:"ID,omitempty"`
+	ExternalID               string              `yaml:"External ID,omitempty"`
+	OpenshiftVersion         string              `yaml:"OpenShift Version,omitempty"`
+	ChannelGroup             string              `yaml:"Channel Group,omitempty"`
+	DNS                      string              `yaml:"DNS,omitempty"`
+	AWSAccount               string              `yaml:"AWS Account,omitempty"`
+	AWSBillingAccount        string              `yaml:"AWS Billing Account,omitempty"`
+	APIURL                   string              `yaml:"API URL,omitempty"`
+	ConsoleURL               string              `yaml:"Console URL,omitempty"`
+	Region                   string              `yaml:"Region,omitempty"`
+	MultiAZ                  string              `yaml:"Multi-AZ,omitempty"`
+	State                    string              `yaml:"State,omitempty"`
+	Private                  string              `yaml:"Private,omitempty"`
+	Created                  string              `yaml:"Created,omitempty"`
+	DetailsPage              string              `yaml:"Details Page,omitempty"`
+	ControlPlane             string              `yaml:"Control Plane,omitempty"`
+	ScheduledUpgrade         string              `yaml:"Scheduled Upgrade,omitempty"`
+	InfraID                  string              `yaml:"Infra ID,omitempty"`
+	AdditionalTrustBundle    string              `yaml:"Additional trust bundle,omitempty"`
+	Ec2MetadataHttpToken     string              `yaml:"Ec2 Metadata Http Token,omitempty"`
+	Availability             []map[string]string `yaml:"Availability,omitempty"`
+	Nodes                    []map[string]string `yaml:"Nodes,omitempty"`
+	Network                  []map[string]string `yaml:"Network,omitempty"`
+	Proxy                    []map[string]string `yaml:"Proxy,omitempty"`
+	STSRoleArn               string              `yaml:"STS Role ARN,omitempty"`
+	STSExternalID            string              `yaml:"STS External ID,omitempty"`
+	SupportRoleARN           string              `yaml:"Support Role ARN,omitempty"`
+	OperatorIAMRoles         []map[string]string `yaml:"Operator IAM Roles,omitempty"`
+	InstanceIAMRoles         []map[string]string `yaml:"Instance IAM Roles,omitempty"`
+	ManagedPolicies          string              `yaml:"Managed Policies,omitempty"`
+	UserWorkloadMonitoring   string              `yaml:"User Workload Monitoring,omitempty"`
+	FIPSMod                  string              `yaml:"FIPS mode,omitempty"`
+	OIDCEndpointURL          string              `yaml:"OIDC Endpoint URL,omitempty"`
+	PrivateHostedZone        []map[string]string `yaml:"Private Hosted Zone,omitempty"`
+	AuditLogForwarding       string              `yaml:"Audit Log Forwarding,omitempty"`
+	ProvisioningErrorMessage string              `yaml:"Provisioning Error Message,omitempty"`
+	ProvisioningErrorCode    string              `yaml:"Provisioning Error Code,omitempty"`
+	LimitedSupport           []map[string]string `yaml:"Limited Support,omitempty"`
 }
 
 func (c *clusterService) DescribeCluster(clusterID string) (bytes.Buffer, error) {

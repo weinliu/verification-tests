@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
 		o.Expect(err).To(o.BeNil())
 		defer func() {
-			err := wait.Poll(20*time.Second, 200*time.Second, func() (bool, error) {
+			err := wait.Poll(20*time.Second, 320*time.Second, func() (bool, error) {
 				err := iamClient.DeletePolicy(permissionsBoundaryArn)
 				if err != nil {
 					logger.Errorf("it met err %v when delete policy %s", err, permissionsBoundaryArn)

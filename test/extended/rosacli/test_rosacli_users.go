@@ -96,10 +96,15 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 		o.Expect(textData).Should(o.ContainSubstring("Revoked role '%s' from user '%s' on cluster '%s'", clusterAdminsGroupName, clusterAdminsUserName, clusterID))
 
 		g.By("List users")
-		usersList, out, err = userService.ListUsers(clusterID)
-		o.Expect(err).ToNot(o.BeNil())
-		o.Expect(out.String()).Should(o.ContainSubstring("There are no users configured for cluster"))
+		usersList, _, err = userService.ListUsers(clusterID)
 		o.Expect(err).To(o.BeNil())
-		o.Expect(len(usersList.GroupUsers)).To(o.Equal(0))
+
+		foundUser, err := usersList.User(dedicatedAdminsUserName)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(foundUser).To(o.BeNil())
+
+		foundUser, err = usersList.User(clusterAdminsUserName)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(foundUser).To(o.BeNil())
 	})
 })

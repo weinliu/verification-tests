@@ -77,14 +77,18 @@ func (c *userService) ReflectUsersList(result bytes.Buffer) (gul GroupUserList, 
 	return gul, err
 }
 
-// Delete all users
+// Delete all users. NOTE: User named 'rosa-admin' in cluster-admins group is the default one created with the cluster, it won't be deleted by this function.
 func (c *userService) RemoveAllUsers(clusterID string) (err error) {
 	gul, _, err := c.ListUsers(clusterID)
 	if err != nil {
 		return err
 	}
 	if len(gul.GroupUsers) != 0 {
+
 		for _, uitem := range gul.GroupUsers {
+			if uitem.ID == "rosa-admin" && uitem.Groups == "cluster-admins" {
+				continue
+			}
 			_, err = c.RevokeUser(clusterID,
 				uitem.Groups,
 				"--user", uitem.ID,
