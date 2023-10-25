@@ -5546,6 +5546,7 @@ EOF`, etcConfigYaml, level)
 
 		exutil.By("2) Create new app")
 		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
+		imageImportModeOnArmAndMutiArch(oc, "hello-openshift:mystream1", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", oc.Namespace())
 		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-openshift", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -6093,7 +6094,7 @@ manifests:
 				ExpectStr: "Hello OpenShift!",
 			},
 			{
-				URL:       "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0",
+				URL:       "quay.io/openshifttest/nginx-alpine@sha256:f78c5a93df8690a5a937a6803ef4554f5b6b1ef7af4f19a441383b8976304b4c",
 				Target:    "nginx-alpine",
 				ExpectStr: "Hello-OpenShift nginx",
 			},
@@ -6101,6 +6102,7 @@ manifests:
 
 		for i, u := range urls {
 			exutil.By(fmt.Sprintf("%d.1) Build "+u.Target+" from external source", i+5))
+			imageImportModeOnArmAndMutiArch(oc, u.Target+":mystream1", u.URL, oc.Namespace())
 			appErr := oc.AsAdmin().WithoutNamespace().Run("new-app").Args(u.URL, "-n", projectNs).Execute()
 			o.Expect(appErr).NotTo(o.HaveOccurred())
 
