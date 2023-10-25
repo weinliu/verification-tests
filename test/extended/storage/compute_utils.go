@@ -142,7 +142,14 @@ func getWorkersInfo(oc *exutil.CLI) string {
 func getWorkersList(oc *exutil.CLI) []string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return strings.Split(output, " ")
+	return strings.Fields(output)
+}
+
+// Get the compact node list, compact node has both master and worker role on it
+func getCompactNodeList(oc *exutil.CLI) []string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/master,node-role.kubernetes.io/worker", "--ignore-not-found", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Fields(output)
 }
 
 // Get the cluster schedulable worker nodes names with the same available zone

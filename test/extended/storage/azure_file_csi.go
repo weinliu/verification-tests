@@ -34,11 +34,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip for non-supported cloud provider: *" + cloudProvider + "* !!!")
 		}
 
+		// azure-file-csi support both "smb" and "nfs" protocols for most scenarios, so add it here as default support protocols in 4.14. But "smb" doesn't support in FIPS enabled cluster.
+		// "nfs" protocols only supports Premium account type
+		// Adding "networkEndpointType: privateEndpoint" in storageclass.parameters as WA to avoid https://issues.redhat.com/browse/OCPBUGS-18581, it is implemented in test/extended/storage/storageclass_utils.go
+		// azure-file-csi doesn't support on Azure Stack Hub
+
 		if isAzureStackCluster(oc) {
 			g.Skip("Azure-file CSI Driver don't support AzureStack cluster, skip!!!")
 		}
 
-		// azure-file-csi support both "smb" and "nfs" protocols for most scenarios, so add it here as default support protocols in 4.14. But "smb" doesn't support in FIPS enabled cluster.
 		supportedProtocols = append(supportedProtocols, "smb", "nfs")
 		if checkFips(oc) {
 			supportedProtocols = deleteElement(supportedProtocols, "smb")

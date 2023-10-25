@@ -134,6 +134,11 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 		finalParameters := make(map[string]interface{}, 10)
 		err = json.Unmarshal(parametersByte, &finalParameters)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// See https://issues.redhat.com/browse/OCPBUGS-18581 for detail
+		// Adding "networkEndpointType: privateEndpoint" for "nfs" protocol when there is compact node
+		if provisioner == "file.csi.azure.com" && finalParameters["protocol"] == "nfs" && len(getCompactNodeList(oc)) > 0 {
+			sc.parameters["networkEndpointType"] = "privateEndpoint"
+		}
 		finalParameters = mergeMaps(sc.parameters, finalParameters)
 		debugLogf("StorageClass/%s final parameter is %v", sc.name, finalParameters)
 		extraParameters["parameters"] = finalParameters
