@@ -1798,6 +1798,22 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(strings.Contains(warningOutput2, "the image is a manifest list and contains multiple images - use --filter-by-os to select from")).To(o.BeTrue())
 	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-68405-oc process works well for cross-namespace template", func() {
+		g.By("Create new namespace")
+		oc.SetupProject()
+		nsName1 := oc.Namespace()
+		g.By("Create template in the first project")
+		temFile, err := oc.WithoutNamespace().Run("adm").Args("create-bootstrap-project-template", "-o", "yaml").OutputToFile("projectT.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("create").Args("-f", temFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Create the second  namespace")
+		oc.SetupProject()
+		g.By("Process the templete in the first namespace")
+		err = oc.AsAdmin().Run("process").Args(nsName1 + "//project-request").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
 
 // ClientVersion ...
