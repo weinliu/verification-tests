@@ -7849,13 +7849,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			sub.create(oc, itName, dr)
 
 			err := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-				err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns).Execute()
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns).Output()
 				if err != nil {
+					e2e.Logf("The validatingwebhookconfiguration is not created:%v", err)
+					return false, nil
+				}
+				if strings.Contains(output, "No resources") {
 					e2e.Logf("The validatingwebhookconfiguration is not created:%v", err)
 					return false, nil
 				}
 				return true, nil
 			})
+			if err != nil {
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "--show-labels").Output()
+				e2e.Logf(output)
+			}
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("validatingwebhookconfiguration which owner ns %s is not created", ns))
 
 			validatingwebhookName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", fmt.Sprintf("olm.owner.namespace=%s", ns), "-o=jsonpath={.items[0].metadata.name}").Output()
