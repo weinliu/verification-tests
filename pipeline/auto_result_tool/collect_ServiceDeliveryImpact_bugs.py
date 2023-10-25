@@ -47,7 +47,7 @@ class JIRAManager:
             try:
                 issues[issue.key]["components"] = issue.fields.components[0].name
             except:
-                issues[issue.key]["components"] = "unknown"
+                issues[issue.key]["components"] = issue.key.split("-")[0]
             try:
                 issues[issue.key]["qe_contact_email"] = issue.fields.customfield_12315948.emailAddress
                 issues[issue.key]["qe_contact_key"] = issue.fields.customfield_12315948.key
