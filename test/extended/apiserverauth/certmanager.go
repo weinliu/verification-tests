@@ -44,6 +44,14 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}
 
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		g.By("Check if cluster region is us-gov or not")
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(region, "us-gov") {
+			g.Skip("Skipping for the aws cluster in us-gov region.")
+		}
+
 		g.By("Check if the cluster is STS or not")
 		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
 		if err != nil && strings.Contains(err.Error(), "not found") {
@@ -369,6 +377,13 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}
 
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		g.By("Check if cluster region is us-gov or not")
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(region, "us-gov") {
+			g.Skip("Skipping for the aws cluster in us-gov region.")
+		}
 
 		g.By("Skip test when the cluster is with STS credential")
 		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
