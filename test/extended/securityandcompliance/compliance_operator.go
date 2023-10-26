@@ -140,6 +140,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		SkipMissingRhcosWorkers(oc)
 		SkipClustersWithRhelNodes(oc)
 
+		g.By("Skip the test if the cluster has no OLM component")
+		exutil.SkipNoOLMCore(oc)
+
 		g.By("Install Compliance Operator and check it is sucessfully installed !!! ")
 		createComplianceOperator(oc, subD, ogD)
 	})
@@ -4867,6 +4870,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 		SkipMissingDefaultSC(oc)
 		SkipMissingRhcosWorkers(oc)
+
+		g.By("Skip the test if the cluster has no OLM component")
+		exutil.SkipNoOLMCore(oc)
 
 		g.By("Install Compliance Operator and check it is sucessfully installed !!! ")
 		createComplianceOperator(oc, sub, og)

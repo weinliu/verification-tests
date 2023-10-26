@@ -45,6 +45,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 			SkipMissingCatalogsource(oc)
 			architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 
+			g.By("Skip the test if the cluster has no OLM component")
+			exutil.SkipNoOLMCore(oc)
+
 			g.By("Check csv and pods for ns1 !!!")
 			rsCsvName := getResourceNameWithKeywordForNamespace(oc, "csv", "file-integrity-operator", ns1)
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", rsCsvName, "-n", ns1, "-o=jsonpath={.status.phase}"}).check(oc)

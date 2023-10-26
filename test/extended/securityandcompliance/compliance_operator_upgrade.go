@@ -52,6 +52,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 			SkipMissingDefaultSC(oc)
 			SkipMissingRhcosWorkers(oc)
 
+			g.By("Skip the test if the cluster has no OLM component")
+			exutil.SkipNoOLMCore(oc)
+
 			g.By("Check csv and pods for coNamspace !!!")
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "-n", coNamspace, "-l",
 				"operators.coreos.com/compliance-operator.openshift-compliance", "-o=jsonpath={.items[0].status.phase}"}).check(oc)
