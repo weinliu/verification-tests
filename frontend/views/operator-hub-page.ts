@@ -67,6 +67,7 @@ export const operatorHubPage = {
   },
   installOperator: (operatorName, csName, installNamespace?) => {
     cy.visit(`/operatorhub/subscribe?pkg=${operatorName}&catalog=${csName}&catalogNamespace=openshift-marketplace&targetNamespace=undefined`);
+    cy.get('body').should('be.visible');
     if (installNamespace) {
       cy.get('[data-test="A specific namespace on the cluster-radio-input"]').click();
       cy.get('button#dropdown-selectbox').click();
