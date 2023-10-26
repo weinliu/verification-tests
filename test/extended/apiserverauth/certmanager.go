@@ -53,8 +53,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}
 
 		g.By("Check if the cluster is STS or not")
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
-		if err != nil && strings.Contains(err.Error(), "not found") {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
+		if err != nil && strings.Contains(output, "not found") {
 			g.Skip("Skipping for the aws cluster without credential in cluster")
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -386,8 +386,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}
 
 		g.By("Skip test when the cluster is with STS credential")
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
-		if err != nil && strings.Contains(err.Error(), "not found") {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
+		if err != nil && strings.Contains(output, "not found") {
 			g.Skip("Skipping for the aws cluster without credential in cluster")
 		}
 		e2e.Logf("Create secret generic test-secret.")
@@ -515,8 +515,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		g.By("Skip test when the cluster is with STS credential")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Execute()
-		if err != nil && strings.Contains(err.Error(), "not found") {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
+		if err != nil && strings.Contains(output, "not found") {
 			g.Skip("Skipping for the aws cluster without credential in cluster")
 		}
 		e2e.Logf("Create secret generic test-secret.")
