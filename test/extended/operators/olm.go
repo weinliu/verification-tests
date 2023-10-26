@@ -32,7 +32,8 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
-var _ = g.Describe("[sig-operators] OLM should", func() {
+// dedicate Describe for OLM v1 to manage v1 case better in the future
+var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
@@ -125,6 +126,16 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "failed to upgrade quay-operator v3.8.12 to v3.9.1!")
+	})
+
+})
+
+var _ = g.Describe("[sig-operators] OLM should", func() {
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
+	g.BeforeEach(func() {
+		exutil.SkipNoOLMCore(oc)
 	})
 
 	// author: jiazha@redhat.com
@@ -4711,6 +4722,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user use", func() {
 		oc = exutil.NewCLI("olm-23440", exutil.KubeConfigPath())
 	)
 
+	g.BeforeEach(func() {
+		exutil.SkipNoOLMCore(oc)
+	})
+
 	// author: tbuskey@redhat.com
 	g.It("Author:tbuskey-Low-24058-components should have resource limits defined", func() {
 		olmUnlimited := 0
@@ -4755,6 +4770,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	)
 
 	g.BeforeEach(func() {
+		exutil.SkipNoOLMCore(oc)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 	})
@@ -4961,6 +4977,8 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	)
 
 	g.BeforeEach(func() {
+		exutil.SkipNoOLMCore(oc)
+
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 	})
@@ -10490,6 +10508,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 	)
 
 	g.BeforeEach(func() {
+		exutil.SkipNoOLMCore(oc)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 	})
@@ -11166,6 +11185,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	)
 
 	g.BeforeEach(func() {
+		exutil.SkipNoOLMCore(oc)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 	})
@@ -11683,6 +11703,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	)
 
 	g.BeforeEach(func() {
+		exutil.SkipNoOLMCore(oc)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 	})
@@ -13139,6 +13160,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	)
 
 	g.BeforeEach(func() {
+		exutil.SkipNoOLMCore(oc)
 		guestClusterName, guestClusterKube, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
 		e2e.Logf("%s, %s, %s", guestClusterName, guestClusterKube, hostedClusterNS)
 		oc.SetGuestKubeconf(guestClusterKube)

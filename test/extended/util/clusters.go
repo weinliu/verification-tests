@@ -109,6 +109,24 @@ func SkipBaselineCaps(oc *CLI, sets string) {
 	}
 }
 
+// SkipNoCapabilities skip the test if the cluster has no one capability
+func SkipNoCapabilities(oc *CLI, capability string) {
+	knownCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.knownCapabilities}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	enabledCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(knownCapabilities, capability) && !strings.Contains(enabledCapabilities, capability) {
+		g.Skip(fmt.Sprintf("the cluster has no %v and skip it", capability))
+	}
+}
+
+// SkipNoOLMCore skip the test if the cluster has no OLM component
+// from 4.15, OLM become optional core component. it means there is no OLM component for some profiles.
+// so, the OLM case and optioinal operator case can not run on such cluster.
+func SkipNoOLMCore(oc *CLI) {
+	SkipNoCapabilities(oc, "OperatorLifecycleManager")
+}
+
 // GetAWSClusterRegion returns AWS region of the cluster
 func GetAWSClusterRegion(oc *CLI) (string, error) {
 	region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
