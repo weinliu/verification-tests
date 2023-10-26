@@ -4679,14 +4679,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				value:     "",
 				template:  tprofileHypershfitTemplate,
 			}
-			ssbCis                = "test-cis" + getRandomString()
-			ssbPcidss             = "test-pci-dss" + getRandomString()
-			ccrsCisShouldFailList = []string{
-				tprofileCis.name + "-audit-log-forwarding-webhook",
-				tprofileCis.name + "-ocp-api-server-audit-log-maxbackup"}
-			ccrsPcidssShouldFailList = []string{
-				tprofilePcidss.name + "-audit-log-forwarding-webhook",
-				tprofilePcidss.name + "-ocp-api-server-audit-log-maxbackup"}
+			ssbCis                   = "test-cis" + getRandomString()
+			ssbPcidss                = "test-pci-dss" + getRandomString()
+			ccrsCisShouldFailList    = []string{tprofileCis.name + "-audit-log-forwarding-webhook"}
+			ccrsPcidssShouldFailList = []string{tprofilePcidss.name + "-audit-log-forwarding-webhook"}
 		)
 
 		defer cleanupObjects(oc,
