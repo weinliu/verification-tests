@@ -148,11 +148,11 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("The dir: %s created successfully...!!\n", dirname)
 		_, err = oc.Run("extract").Args("secret/certificate-from-dns01", "--to="+dirname).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		opensslCmd := "openssl x509 -noout -text -in " + dirname + "/tls.crt"
+		opensslCmd := fmt.Sprintf(`openssl x509 -noout -text -in %s/tls.crt`, dirname)
 		ssloutput, sslerr := exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(sslerr).NotTo(o.HaveOccurred())
-		if !strings.Contains(string(ssloutput), "DNS:"+randomStr+".qe1.devcluster.openshift.com") || err != nil {
-			e2e.Failf("The certificate indeed issued by Let's Encrypt with SAN failed.")
+		if !strings.Contains(string(ssloutput), dnsName) || err != nil {
+			e2e.Failf("The certificate was failed issued by Let's Encrypt with SAN(Subject Alternative Name).")
 		}
 	})
 
@@ -263,11 +263,11 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("The dir: %s created successfully...!!\n", dirname)
 		_, err = oc.Run("extract").Args("secret/cert-test-http01", "--to="+dirname).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		opensslCmd := "openssl x509 -noout -text -in " + dirname + "/tls.crt"
+		opensslCmd := fmt.Sprintf(`openssl x509 -noout -text -in %s/tls.crt`, dirname)
 		ssloutput, sslerr := exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(sslerr).NotTo(o.HaveOccurred())
-		if !strings.Contains(string(ssloutput), dnsName) {
-			e2e.Failf("Failure: The certificate is indeed issued by Let's Encrypt, the Subject Alternative Name is indeed the specified DNS_NAME failed.")
+		if !strings.Contains(string(ssloutput), dnsName) || err != nil {
+			e2e.Failf("The certificate was failed issued by Let's Encrypt with SAN(Subject Alternative Name).")
 		}
 
 		// Low-63486-When a Certificate CR is deleted its certificate secret should not be deleted
