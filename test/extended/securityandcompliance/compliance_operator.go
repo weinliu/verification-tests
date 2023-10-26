@@ -1190,6 +1190,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-37063-The ComplianceSuite could be triggered for cis profiles for node scanType", func() {
+		skipForSingleNodeCluster(oc)
 
 		var (
 			csuiteD = complianceSuiteDescription{
