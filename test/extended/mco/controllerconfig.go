@@ -27,10 +27,10 @@ type CertificateInfo struct {
 
 	// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
 	// notBefore is the lower boundary for validity
-	// NotBefore string `json:"notBefore"`
+	NotBefore string `json:"notBefore"`
 
 	// notAfter is the upper boundary for validity
-	// NotAfter string `json:"notAfter"`
+	NotAfter string `json:"notAfter"`
 
 	// bundleFile is the larger bundle a cert comes from
 	BundleFile string `json:"bundleFile"`

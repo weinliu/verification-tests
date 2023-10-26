@@ -3480,7 +3480,7 @@ nulla pariatur.`
 				"Bundle": o.Equal(certInfo.BundleFile),
 
 				// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
-				// "Expiry":  o.Equal(certInfo.NotAfter),
+				"Expiry":  o.Equal(certInfo.NotAfter),
 				"Subject": o.Equal(certInfo.Subject),
 			}),
 				"Exipirty information does not match the information repoted in the ControllerConfig")
@@ -3497,8 +3497,8 @@ nulla pariatur.`
 			o.ContainSubstring("Controller Certificates:"),
 			o.ContainSubstring("Bundle File"),
 			// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
-			// o.ContainSubstring("Not After"),
-			// o.ContainSubstring("Not Before"),
+			o.ContainSubstring("Not After"),
+			o.ContainSubstring("Not Before"),
 			o.ContainSubstring("Signer"),
 			o.ContainSubstring("Subject"),
 		),
@@ -3514,7 +3514,7 @@ nulla pariatur.`
 			o.ContainSubstring("Cert Expirys"),
 			o.ContainSubstring("Bundle"),
 			// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
-			// o.ContainSubstring("Expiry"),
+			o.ContainSubstring("Expiry"),
 		),
 			"The master MCP description should include information about the certificate, but it does not:\n%s", ccDesc)
 		logger.Infof("OK!\n")

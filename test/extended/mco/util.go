@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/x509"
+	b64 "encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -18,8 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	b64 "encoding/base64"
 
 	"github.com/tidwall/gjson"
 
@@ -869,11 +868,10 @@ func GetCertificatesInfoFromPemBundle(bundleName string, pemBundle []byte) ([]Ce
 		certificatesInfo = append(certificatesInfo,
 			CertificateInfo{
 				BundleFile: bundleName,
-				// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
-				// NotAfter:   cert.NotAfter.String(),
-				// NotBefore:  cert.NotBefore.String(),
-				Signer:  cert.Issuer.String(),
-				Subject: cert.Subject.String(),
+				NotAfter:   cert.NotAfter.Format(time.RFC3339),
+				NotBefore:  cert.NotBefore.Format(time.RFC3339),
+				Signer:     cert.Issuer.String(),
+				Subject:    cert.Subject.String(),
 			},
 		)
 

@@ -21,7 +21,7 @@ type CertExpiry struct {
 	Bundle string `json:"bundle"`
 	// Date fields have been temporarily removed by devs:  https://github.com/openshift/machine-config-operator/pull/3866
 	// Expiry expiration date for the certificate
-	// Expiry string `json:"expiry"`
+	Expiry string `json:"expiry"`
 	// Subject certificate's subject
 	Subject string `json:"subject"`
 }
