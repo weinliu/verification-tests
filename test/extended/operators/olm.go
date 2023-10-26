@@ -3848,32 +3848,28 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		e2e.Logf("CSV prometheus %v", statusCsv)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		pods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-operator-lifecycle-manager").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(pods)
-
-		lines := strings.Split(pods, "\n")
-		for _, line := range lines {
-			e2e.Logf("line: %v", line)
-			if strings.Contains(line, "olm-operator") {
-				name := strings.Split(line, " ")
-				checkRel, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "pods", name[0], "-n", "openshift-operator-lifecycle-manager").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				linesTop := strings.Split(checkRel, "\n")
-				for _, lineTop := range linesTop {
-					if strings.Contains(lineTop, name[0]) {
-						cpuOutput := strings.Split(strings.TrimSpace(lineTop), " ")[1]
-						cpu := strings.Split(cpuOutput, "m")[0]
-						if cpu > "98" {
-							e2e.Logf("cpu: %v", cpu)
-							e2e.Failf("CPU Limit usage is more than: %v", checkRel)
-						}
-					}
-
-				}
-
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			checkRel, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "pods", "-l", "app=olm-operator", "-n", "openshift-operator-lifecycle-manager", "--no-headers").Output()
+			e2e.Logf("result: %v", checkRel)
+			if !strings.Contains(checkRel, "olm-operator-") {
+				e2e.Logf("get cpu usage failed: output is %s", checkRel)
+				return false, nil
 			}
-		}
+			linesTop := strings.Split(checkRel, "\n")
+			for _, lineTop := range linesTop {
+				if strings.Contains(lineTop, "olm-operator-") {
+					cpu := strings.Fields(lineTop)[1]
+					e2e.Logf("cpu: %v", cpu)
+					intcpu, _ := strconv.Atoi(strings.ReplaceAll(cpu, "m", ""))
+					e2e.Logf("cpu: %v", intcpu)
+					o.Expect(intcpu > 98).NotTo(o.BeTrue())
+					return true, nil
+				}
+			}
+			e2e.Logf("get cpu usage failed: output is %s", checkRel)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "get cpu usage failed")
 	})
 
 	// author: xzha@redhat.com
