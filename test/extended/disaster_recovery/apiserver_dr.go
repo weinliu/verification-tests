@@ -44,6 +44,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			expectedOutageTime = 90
 			randProject1       = "test-ocp19941-project"
 			dirname            = "/tmp/-OCP-19941/"
+			nodeName           string
 		)
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
@@ -59,13 +60,18 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		platform := exutil.CheckPlatform(oc)
 		exutil.By("1. Get the leader master node of cluster")
-
 		nodes, cleanup := GetNodes(oc, "master")
 		if cleanup != nil {
 			defer cleanup()
 		}
+
 		// we're only interested in the leader
 		node := nodes.leaderMasterNodeName(oc)
+		if node != nil {
+			nodeName = node.GetName()
+		} else {
+			e2e.Failf("Failed to get the leader master node of cluster!")
+		}
 
 		defer func() {
 			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", randProject1, "--ignore-not-found").Execute()
@@ -84,40 +90,30 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			e2e.Logf("Recovering cluster")
 			vmState, err := node.State()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", node.GetName()))
+			o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", nodeName))
 			if _, ok := stopStates[vmState]; ok {
-				e2e.Logf("Restarting leader_master_node %s", node.GetName())
+				e2e.Logf("Restarting leader_master_node %s", nodeName)
 				err = node.Start()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				err = ClusterHealthcheck(oc, "OCP-19941/log")
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else if _, ok := startStates[vmState]; ok {
-				e2e.Logf("leader_master_node %s machine instance state is already %s", node.GetName(), vmState)
+				e2e.Logf("leader_master_node %s machine instance state is already %s", nodeName, vmState)
 			}
 		}()
 
 		exutil.By("2. Shut down a leader master node to simulate a user failure.")
-		e2e.Logf("Checking leader_master_node machine instance.")
-		vmInstance, err := node.GetInstanceID()
-		o.Expect(vmInstance).ShouldNot(o.BeEmpty(), "Not able to get leader_master_node machine instance")
-		e2e.Logf("Get instance name : %v.", vmInstance)
-		if err != nil {
-			e2e.Failf("Not able to find leader_master_node %s machine instance :: %s", vmInstance, err)
-		}
-
 		e2e.Logf("Checking leader_master_node instance state.")
 		vmState, stateErr := node.State()
 		o.Expect(stateErr).NotTo(o.HaveOccurred())
-		o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", node.GetName()))
+		o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", nodeName))
 
-		if _, ok := stopStates[vmState]; ok {
-			e2e.Failf("leader_master_node %s instance state is already %s....before running case, so exiting from case run as cluster not ready.", vmInstance, vmState)
-		} else if _, ok := startStates[vmState]; ok {
-			e2e.Logf("Bringing down leader master node %s machine instance", vmInstance)
+		if _, ok := startStates[vmState]; ok {
+			e2e.Logf("Bringing down leader master node: %s", nodeName)
 			err = node.Stop()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		} else {
-			e2e.Logf("Not able to get leader_master_node %s machine instance state :: %s", vmInstance, err)
+			e2e.Failf("leader_master_node %s instance state is already %s....before running case, so exiting from case run as cluster not ready.", nodeName, vmState)
 		}
 
 		exutil.By("3. When the leader master node is unavailable, apiservers continue to serve after a short interruption.")
@@ -196,9 +192,9 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		e2e.Logf("Restarting leader master node")
 		err = node.Start()
 		if err == nil {
-			e2e.Logf("Restarted leader_master_node %s", node.GetName())
+			e2e.Logf("Restarted leader_master_node %s", nodeName)
 		} else {
-			e2e.Failf("Failed to restart the leader master node %s", node.GetName())
+			e2e.Failf("Failed to restart the leader master node %s", nodeName)
 		}
 
 		exutil.By("5. After restarted the leader master node, verify the cluster availability")
@@ -241,6 +237,18 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		exutil.By("2. Shut down nodes to stop cluster.")
 		stopNodesOfCluster := func(nodes ComputeNodes, shutdownType int) {
+			// The method GetNodes returns short name list on GCP, have to handle with separately
+			var gcpNodeFullName []string
+			if exutil.CheckPlatform(oc) == "gcp" && shutdownType == 2 {
+				gcpMasters := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+				gcpWorkers := getNodeListByLabel(oc, "node-role.kubernetes.io/worker=")
+				gcpNodeFullName = append(gcpMasters, gcpWorkers...)
+				for _, nodeName := range gcpNodeFullName {
+					e2e.Logf("Node %s is being soft shutdown on GCP cloud ...", nodeName)
+					_, err = exutil.DebugNodeWithChroot(oc, nodeName, "shutdown", "-h", "1")
+				}
+				return
+			}
 			for _, node := range nodes {
 				vmState, stateErr := node.State()
 				nodeName := node.GetName()
