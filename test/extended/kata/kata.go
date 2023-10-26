@@ -22,36 +22,37 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                  = exutil.NewCLI("kata", exutil.KubeConfigPath())
-		opNamespace         = "openshift-sandboxed-containers-operator"
-		testDataDir         = exutil.FixturePath("testdata", "kata")
-		kcTemplate          = filepath.Join(testDataDir, "kataconfig.yaml")
-		defaultDeployment   = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
-		defaultPod          = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
-		subTemplate         = filepath.Join(testDataDir, "subscription_template.yaml")
-		nsFile              = filepath.Join(testDataDir, "namespace.yaml")
-		ogFile              = filepath.Join(testDataDir, "operatorgroup.yaml")
-		mustGatherImage     = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
-		icspName            = "kata-brew-registry"
-		icspFile            = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
-		testrunInitial      TestrunConfigmap
-		testrun             TestrunConfigmap
-		clusterVersion      string
-		ocpMajorVer         string
-		ocpMinorVer         string
-		operatorVer         = "1.3.0"
-		workload            = "have securityContext"
-		podRunState         = "Running"
-		featureLabel        = "feature.node.kubernetes.io/runtime.kata=true"
-		workerLabel         = "node-role.kubernetes.io/worker"
-		kataocLabel         = "node-role.kubernetes.io/kata-oc"
-		customLabel         = "custom-label=test"
-		testrunExists       = false
-		ppParam             PeerpodParam
-		ppSecretName        = "peer-pods-secret"
-		ppConfigMapName     = "peer-pods-cm"
-		secretTemplateAws   = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")
-		ppConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-cm-template.yaml")
+		oc                = exutil.NewCLI("kata", exutil.KubeConfigPath())
+		opNamespace       = "openshift-sandboxed-containers-operator"
+		testDataDir       = exutil.FixturePath("testdata", "kata")
+		kcTemplate        = filepath.Join(testDataDir, "kataconfig.yaml")
+		defaultDeployment = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
+		defaultPod        = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
+		subTemplate       = filepath.Join(testDataDir, "subscription_template.yaml")
+		nsFile            = filepath.Join(testDataDir, "namespace.yaml")
+		ogFile            = filepath.Join(testDataDir, "operatorgroup.yaml")
+		mustGatherImage   = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
+		icspName          = "kata-brew-registry"
+		icspFile          = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
+		testrunInitial    TestrunConfigmap
+		testrun           TestrunConfigmap
+		clusterVersion    string
+		ocpMajorVer       string
+		ocpMinorVer       string
+		operatorVer       = "1.3.0"
+		workload          = "have securityContext"
+		podRunState       = "Running"
+		featureLabel      = "feature.node.kubernetes.io/runtime.kata=true"
+		workerLabel       = "node-role.kubernetes.io/worker"
+		kataocLabel       = "node-role.kubernetes.io/kata-oc"
+		customLabel       = "custom-label=test"
+		testrunExists     = false
+		ppParam           PeerpodParam
+		ppRuntimeClass    = "kata-remote"
+		ppSecretName      = "peer-pods-secret"
+		ppConfigMapName   = "peer-pods-cm"
+		secretTemplateAws = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")
+		// ppConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-cm-template.yaml")
 	)
 
 	subscription := SubscriptionDescription{
@@ -221,10 +222,10 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				err = fmt.Errorf("AWS credentials not found") // Generate a custom error
 				e2e.Failf("AWS credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
 			}
-			msg, err = createApplyPeerPodConfigMap(oc, cloudPlatform, ppParam, opNamespace, ppConfigMapName, ppConfigMapTemplate)
-			if err != nil {
-				e2e.Failf("peer-pods-cm NOT applied msg: %v , err: %v", msg, err)
-			}
+			//	msg, err = createApplyPeerPodConfigMap(oc, cloudPlatform, ppParam, opNamespace, ppConfigMapName, ppConfigMapTemplate)
+			//	if err != nil {
+			//		e2e.Failf("peer-pods-cm NOT applied msg: %v , err: %v", msg, err)
+			//	}
 		}
 
 		msg, err = createKataConfig(oc, kataconfig, subscription)
@@ -319,12 +320,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		if !kataconfig.enablePeerPods {
 			g.Skip("STEP Peer pods are not enabled with osc-config or OSCSENABLEPEERPODS")
 		}
-
-		const (
-			ppConfigMapName = "peer-pods-cm"
-			ppSecretName    = "peer-pods-secret"
-			ppRuntimeClass  = "kata-remote"
-		)
 
 		var (
 			err       error
