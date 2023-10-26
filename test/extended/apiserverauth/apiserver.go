@@ -5687,8 +5687,9 @@ manifests:
 		addKustomizationToMicroshift(oc, masterNodes[0], e2eTestNamespace, newSrcFiles)
 		restartMicroshift(oc, masterNodes[0])
 		exutil.By("5.3 :: Scenario-1 :: Check pods after microshift restart")
-		podsOutput := getPodsList(oc, "busybox-"+tmpNamespace)
-		o.Expect(podsOutput[0]).To(o.BeEmpty(), "Scenario-1 :: Failed :: Pods are created, manifests are not disabled")
+		podsOp, err := getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "busybox-"+tmpNamespace, "-o=jsonpath={.items[*].metadata.name}")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podsOp).To(o.BeEmpty(), "Scenario-1 :: Failed :: Pods are created, manifests are not disabled")
 		e2e.Logf("Scenario-1 :: Passed :: Pods should not be created, manifests are disabled")
 
 		// Setting the manifest option value to a single value should only load manifests from that location
@@ -5719,7 +5720,7 @@ manifests:
 		restartMicroshift(oc, masterNodes[0])
 
 		exutil.By("6.3 :: Scenario-2 :: Check pods after microshift restart")
-		podsOutput = getPodsList(oc, "busybox-"+tmpNamespace)
+		podsOutput := getPodsList(oc, "busybox-"+tmpNamespace)
 		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-2 :: Failed :: Pods are not created, manifests are not loaded from defined location")
 		e2e.Logf("Scenario-2 :: Passed :: Pods are created, manifests are loaded from defined location :: %s", podsOutput[0])
 
@@ -5779,9 +5780,10 @@ manifests:
 		restartMicroshift(oc, masterNodes[0])
 
 		exutil.By("8.2 Scenario-4 :: Check pods after microshift restart")
-		podsOutput = getPodsList(oc, "hello-openshift-"+tmpNamespace)
-		o.Expect(podsOutput[0]).To(o.BeEmpty(), "Scenario-4 :: Failed :: Pods are created, manifests not ignored defined location")
-		e2e.Logf("Scenario-4 :: Passed :: Pods are not created, manifests ignored defined location :: %s", podsOutput[0])
+		podsOp, err = getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "hello-openshift-"+tmpNamespace, "-o=jsonpath={.items[*].metadata.name}")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podsOp).To(o.BeEmpty(), "Scenario-4 :: Failed :: Pods are created, manifests not ignored defined location")
+		e2e.Logf("Scenario-4 :: Passed :: Pods are not created, manifests ignored defined location :: %s", podsOp)
 
 		//  If the option includes a manifest path that does not exist, it should be ignored.
 		exutil.By("9.1 Scenario-5 :: Set option includes a manifest path that does not exists")
@@ -5790,9 +5792,10 @@ manifests:
 		restartMicroshift(oc, masterNodes[0])
 
 		exutil.By("9.2 Scenario-5 :: Check pods after microshift restart")
-		podsOutput = getPodsList(oc, "hello-openshift-"+tmpNamespace)
-		o.Expect(podsOutput[0]).To(o.BeEmpty(), "Scenario-5 :: Failed :: Pods are created, manifests not ignored defined location")
-		e2e.Logf("Scenario-5 :: Passed :: Pods are not created, manifests ignored defined location :: %s", podsOutput[0])
+		podsOp, err = getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "hello-openshift-"+tmpNamespace, "-o=jsonpath={.items[*].metadata.name}")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podsOp).To(o.BeEmpty(), "Scenario-5 :: Failed :: Pods are created, manifests not ignored defined location")
+		e2e.Logf("Scenario-5 :: Passed :: Pods are not created, manifests ignored defined location :: %s", podsOp)
 
 		// If the option is not specified, the default locations of /etc/microshift/manifests/kustomization.yaml and /usr/lib/microshift/manifests/kustomization.yaml should be loaded
 		exutil.By("10.1 :: Scenario-6 :: Set the manifest option value to an empty for manifest in config")
