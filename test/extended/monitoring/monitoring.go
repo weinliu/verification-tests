@@ -514,6 +514,23 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Low-68401-prometheus-adapter removed --logtostderr", func() {
+		g.By("check prometheus-adapter deployment under openshift-monitoring")
+		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].args}"
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-adapter", cmd, "-n", "openshift-monitoring").Output()
+		o.Expect(output).NotTo(o.ContainSubstring("--logtostderr"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check the same config in pod")
+		prometheusAdapterPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-adapter")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range prometheusAdapterPodNames {
+			cmd := "-ojsonpath={.spec.containers[?(@.name==\"prometheus-adapter\")].args}"
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, "--logtostderr", false)
+		}
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
