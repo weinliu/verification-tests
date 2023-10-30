@@ -35,13 +35,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	)
 
 	g.BeforeEach(func() {
+		g.By("Skip the test if the cluster has no OLM component")
+		exutil.SkipNoOLMCore(oc)
+
 		g.By("Skip test when missingcatalogsource, ARM64, or SkipHetegenous !!!")
 		SkipMissingCatalogsource(oc)
 		SkipMissingRhcosWorkers(oc)
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
-
-		g.By("Skip the test if the cluster has no OLM component")
-		exutil.SkipNoOLMCore(oc)
 
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
 		ogSingleTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")

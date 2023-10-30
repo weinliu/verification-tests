@@ -47,13 +47,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 
 		g.BeforeEach(func() {
 			g.By("Skip test when precondition not meet !!!")
+			exutil.SkipNoOLMCore(oc)
 			SkipMissingCatalogsource(oc)
 			architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 			SkipMissingDefaultSC(oc)
 			SkipMissingRhcosWorkers(oc)
-
-			g.By("Skip the test if the cluster has no OLM component")
-			exutil.SkipNoOLMCore(oc)
 
 			g.By("Check csv and pods for coNamspace !!!")
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "-n", coNamspace, "-l",

@@ -41,12 +41,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 		)
 
 		g.BeforeEach(func() {
+			g.By("Skip the test if the cluster has no OLM component")
+			exutil.SkipNoOLMCore(oc)
+
 			g.By("Skip test when missingcatalogsource, ARM64, or SkipHetegenous !!!")
 			SkipMissingCatalogsource(oc)
 			architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
-
-			g.By("Skip the test if the cluster has no OLM component")
-			exutil.SkipNoOLMCore(oc)
 
 			g.By("Check csv and pods for ns1 !!!")
 			rsCsvName := getResourceNameWithKeywordForNamespace(oc, "csv", "file-integrity-operator", ns1)
