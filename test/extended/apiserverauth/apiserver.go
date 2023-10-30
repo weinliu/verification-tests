@@ -5226,6 +5226,7 @@ spec:
 			var eventLogs string
 			var eventCount int
 			now := time.Now().UTC().Unix()
+			time.Sleep(3 * time.Second)
 			errUser := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", user, "-p", pass).NotShowInfo().Execute()
 			o.Expect(errUser).NotTo(o.HaveOccurred())
 
