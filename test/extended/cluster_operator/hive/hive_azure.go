@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc           = exutil.NewCLI("hive-"+getRandomString(), exutil.KubeConfigPath())
+		oc           = exutil.NewCLI("hive", exutil.KubeConfigPath())
 		ns           hiveNameSpace
 		og           operatorGroup
 		sub          subscription

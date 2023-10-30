@@ -24,6 +24,8 @@ import (
 
 	"github.com/3th1nk/cidr"
 
+	"gopkg.in/yaml.v3"
+
 	legoroute53 "github.com/go-acme/lego/v4/providers/dns/route53"
 	"github.com/go-acme/lego/v4/registration"
 
@@ -384,6 +386,17 @@ type prometheusQueryResult struct {
 		ResultType string `json:"resultType"`
 	} `json:"data"`
 	Status string `json:"status"`
+}
+
+// This type is defined to avoid requiring openshift/installer types
+// which bring in quite a few dependencies, making this repo unnecessarily
+// difficult to maintain.
+type minimalInstallConfig struct {
+	Networking struct {
+		MachineNetwork []struct {
+			CIDR string `yaml:"cidr"`
+		} `yaml:"machineNetwork"`
+	} `yaml:"networking"`
 }
 
 type legoUser struct {
@@ -2043,7 +2056,17 @@ func createVsphereCertsSecret(oc *exutil.CLI, ns, vCenter string) {
 		"unzip download.zip && "+
 		"cat certs/lin/*.0 && "+
 		"openssl s_client -host %v -port 443 -showcerts", vCenter, vCenter)
-	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--", "bash", "-c", commands).Outputs()
+	// No need to recover labels set on oc.Namespace()
+	err := exutil.SetNamespacePrivileged(oc, oc.Namespace())
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// --to-namespace is required for the CI environment, otherwise
+	// the API server will throw a "namespace XXX not found" error.
+	stdout, _, err := oc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("debug").
+		Args("--to-namespace", oc.Namespace(), "--", "bash", "-c", commands).
+		Outputs()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	re, err := regexp.Compile(pemX509CertPattern)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -2084,8 +2107,9 @@ fRelease: when called, releases the IPs reserved in fReserve().
 
 domain2Ip: maps domain to the IP reserved for it.
 */
-func getIps2ReserveFromAWSHostedZone(oc *exutil.CLI, hostedZoneName, cidrBlock, minIp, maxIp, awsCredsFilePath string,
-	domains2Reserve []string) (fReserve func(), fRelease func(), domain2Ip map[string]string) {
+func getIps2ReserveFromAWSHostedZone(oc *exutil.CLI, hostedZoneName string, cidrBlock *cidr.CIDR, minIp net.IP,
+	maxIp net.IP, unavailableIps []string, awsCredsFilePath string, domains2Reserve []string) (fReserve func(),
+	fRelease func(), domain2Ip map[string]string) {
 	// Route 53 is global so any region will do
 	var cfg aws.Config
 	if awsCredsFilePath == "" {
@@ -2115,9 +2139,7 @@ func getIps2ReserveFromAWSHostedZone(oc *exutil.CLI, hostedZoneName, cidrBlock, 
 	e2e.Logf("Found hosted zone id = %v", aws.ToString(hostedZoneId))
 
 	// Get reserved IPs in cidr
-	cidrObj, parseErr := cidr.Parse(cidrBlock)
-	o.Expect(parseErr).NotTo(o.HaveOccurred())
-	reservedIps := sets.New[string]()
+	reservedIps := sets.New[string](unavailableIps...)
 	listResourceRecordSetsPaginator := route53.NewListResourceRecordSetsPaginator(
 		route53Client,
 		&route53.ListResourceRecordSetsInput{
@@ -2132,7 +2154,7 @@ func getIps2ReserveFromAWSHostedZone(oc *exutil.CLI, hostedZoneName, cidrBlock, 
 		// Iterate records, mark IPs which belong to the cidr block as reservedIps
 		for _, recordSet := range listResourceRecordSetsOutput.ResourceRecordSets {
 			for _, resourceRecord := range recordSet.ResourceRecords {
-				if ip := aws.ToString(resourceRecord.Value); cidrObj.Contains(ip) {
+				if ip := aws.ToString(resourceRecord.Value); cidrBlock.Contains(ip) {
 					reservedIps.Insert(ip)
 				}
 			}
@@ -2142,9 +2164,9 @@ func getIps2ReserveFromAWSHostedZone(oc *exutil.CLI, hostedZoneName, cidrBlock, 
 
 	// Get available IPs in cidr which do not exceed the range defined by minIp and maxIp
 	var ips2Reserve []string
-	err = cidrObj.EachFrom(minIp, func(ip string) bool {
+	err = cidrBlock.EachFrom(minIp.String(), func(ip string) bool {
 		// Stop if IP exceeds maxIp or no more IPs to reserve
-		if cidr.IPCompare(net.ParseIP(ip), net.ParseIP(maxIp)) == 1 || len(ips2Reserve) == len(domains2Reserve) {
+		if cidr.IPCompare(net.ParseIP(ip), maxIp) == 1 || len(ips2Reserve) == len(domains2Reserve) {
 			return false
 		}
 		// Reserve available IP
@@ -2213,28 +2235,51 @@ func getIps2ReserveFromAWSHostedZone(oc *exutil.CLI, hostedZoneName, cidrBlock, 
 	return
 }
 
-/*
-Get vSphere CIDR block, minimum and maximum IPs to be used for API/ingress/Node IPs.
-
-Example:
-getVSphereCIDR("ci-segment-100") returns "192.168.100.0/24", "192.168.100.3" and "192.168.100.49"
-*/
-func getVSphereCIDR(network string) (string, string, string) {
-	re, err := regexp.Compile(VSphereNetworkPattern)
+// getVSphereCIDR gets vSphere CIDR block, minimum and maximum IPs to be used for API/ingress VIPs.
+func getVSphereCIDR(oc *exutil.CLI) (*cidr.CIDR, net.IP, net.IP) {
+	// Extracting machine network CIDR from install-config works for different network segments,
+	// including ci-vlan and devqe.
+	stdout, _, err := oc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("extract").
+		Args("cm/cluster-config-v1", "-n", "kube-system", "--keys", "install-config", "--to", "-").
+		Outputs()
+	var ic minimalInstallConfig
 	o.Expect(err).NotTo(o.HaveOccurred())
-	matches := re.FindStringSubmatch(network)
-	o.Expect(len(matches)).To(o.Equal(2))
+	err = yaml.Unmarshal([]byte(stdout), &ic)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	machineNetwork := ic.Networking.MachineNetwork[0].CIDR
+	e2e.Logf("Found machine network segment = %v", machineNetwork)
 
-	segmentIdx := matches[1]
-	e2e.Logf("Found segment index = %v", segmentIdx)
-	cidrBlock := fmt.Sprintf("192.168.%s.0/24", segmentIdx)
-	e2e.Logf("Network CIDR block = %v", cidrBlock)
+	cidrObj, err := cidr.Parse(machineNetwork)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// We need another (temporary) CIDR object which will change with begin.
+	cidrObjTemp, err := cidr.Parse(machineNetwork)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	begin, end := cidrObjTemp.IPRange()
+	// The first 2 IPs should not be used
+	// The next 2 IPs are reserved for the Hive cluster
+	// We thus skip the first 4 IPs
+	minIpOffset := 4
+	for i := 0; i < minIpOffset; i++ {
+		cidr.IPIncr(begin)
+	}
+	e2e.Logf("Min IP = %v, max IP = %v", begin, end)
+	return cidrObj, begin, end
+}
+
+// getVMInternalIPs gets private IPs of cloud VMs
+func getVMInternalIPs(oc *exutil.CLI) []string {
+	stdout, _, err := oc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("get").
+		Args("node", "-o=jsonpath={.items[*].status.addresses[?(@.type==\"InternalIP\")].address}").
+		Outputs()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	minIp := fmt.Sprintf("192.168.%v.%v", segmentIdx, VSphereLastCidrOctetMin)
-	maxIp := fmt.Sprintf("192.168.%v.%v", segmentIdx, VSphereLastCidrOctetMax)
-	e2e.Logf("Min IP = %v, max IP = %v", minIp, maxIp)
-	return cidrBlock, minIp, maxIp
+	return strings.Fields(stdout)
 }
 
 // Get the environment in which the test runs

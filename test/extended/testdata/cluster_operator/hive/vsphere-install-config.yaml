@@ -32,10 +32,12 @@ objects:
         - 172.30.0.0/16
       platform:
         vsphere:
+          # TODO(fxie): use apiVIPs instead
           apiVIP: "${APIVIP}"
           cluster: "${CLUSTER}"
           datacenter: "${DATACENTER}"
           defaultDatastore: "${DATASTORE}"
+          # TODO(fxie): use ingressVIPs instead
           ingressVIP: "${INGRESSVIP}"
           network: "${NETWORK}"
           password: "${PASSWORD}"
