@@ -353,30 +353,41 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
-	g.It("ConnectedOnly-Author:rugong-Medium-20052-New field forbiddenSysctls for SCC [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:rugong-Medium-20052-New field forbiddenSysctls for SCC", func() {
+		oc.SetupProject()
+		username := oc.Username()
+		scc := "scc-test-20052"
 		// In 4.11 and above, we should use SCC "restricted-v2"
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
 		output = re.ReplaceAllString(output, "")
+		output = strings.NewReplacer("MustRunAsRange", "RunAsAny", "name: restricted-v2", "name: "+scc).Replace(output)
+
 		path := "/tmp/scc_restricted_20052.yaml"
 		err = ioutil.WriteFile(path, []byte(output), 0644)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.Remove(path)
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", path).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
-			g.By("Restoring the restricted SCC before exiting the scenario")
-			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", path).Execute()
+			e2e.Logf("Deleting the test SCC before exiting the scenario")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", path).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		oc.SetupProject()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", scc, "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().Run("adm", "policy").Args("remove-scc-from-user", scc, username).Execute()
+		err = oc.AsAdmin().Run("adm", "policy").Args("add-scc-to-user", scc, username).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		BaseDir := exutil.FixturePath("testdata", "apiserverauth")
 		podYaml := filepath.Join(BaseDir, "pod_with_sysctls.yaml")
 		err = oc.Run("create").Args("-f", podYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", scc, "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("sysctl overlaps with kernel.msg"))
 		e2e.Logf("oc patch scc failed, this is expected.")
@@ -385,14 +396,14 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Restore the SCC successfully.")
 
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", scc, "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("delete").Args("po", "busybox").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("create").Args("-f", podYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", scc, "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Execute()
 		o.Expect(err).To(o.HaveOccurred())
 		e2e.Logf("oc patch scc failed, this is expected.")
 
@@ -400,7 +411,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Restore the SCC successfully.")
 
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.shm_rmid_forced"]}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", scc, "-p", `{"forbiddenSysctls":["kernel.shm_rmid_forced"]}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("delete").Args("po", "busybox").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())

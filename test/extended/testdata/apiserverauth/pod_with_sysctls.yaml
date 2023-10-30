@@ -11,6 +11,7 @@ spec:
       imagePullPolicy: IfNotPresent
       name: busybox
   securityContext:
+    runAsUser: 1001
     sysctls:
       - name: kernel.shm_rmid_forced
         value: "1"
