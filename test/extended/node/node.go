@@ -799,7 +799,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: minmli@redhat.com
-	g.It("DEPRECATED-NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:minmli-High-45351-prepare to check crioConfig[Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:minmli-High-45351-prepare to check crioConfig[Disruptive][Slow]", func() {
+		rhelWorkers, err := exutil.GetAllWorkerNodesByOSID(oc, "rhel")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(rhelWorkers) > 0 {
+			g.Skip("ctrcfg.overlay can't be supported by rhel nodes")
+		}
+
 		g.By("1) oc debug one worker and edit /etc/crio/crio.conf")
 		// we update log_level = "debug" in /etc/crio/crio.conf
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -824,7 +830,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: minmli@redhat.com
-	g.It("DEPRECATED-NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:minmli-High-45351-post check crioConfig[Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:minmli-High-45351-post check crioConfig[Disruptive][Slow]", func() {
+		rhelWorkers, err := exutil.GetAllWorkerNodesByOSID(oc, "rhel")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(rhelWorkers) > 0 {
+			g.Skip("ctrcfg.overlay can't be supported by rhel nodes")
+		}
+
 		g.By("1) check overlaySize don't change after upgrade")
 		ctrcfgOverlay.name = "ctrcfg-45351"
 		ctrcfgOverlay.overlay = "35G"
@@ -848,7 +860,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			}
 		}()
 
-		err := checkOverlaySize(oc, ctrcfgOverlay.overlay)
+		err = checkOverlaySize(oc, ctrcfgOverlay.overlay)
 		exutil.AssertWaitPollNoErr(err, "overlaySize change after upgrade")
 
 		g.By("2) check conmon value from crio config")
