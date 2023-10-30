@@ -7,11 +7,13 @@ import requests
 import argparse
 import json
 import logging
+import pprint
 from urllib3.exceptions import InsecureRequestWarning
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 from datetime import date, datetime
 import gspread
+from jira import JIRA
 from oauth2client.service_account import ServiceAccountCredentials
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -67,6 +69,8 @@ class SummaryClient:
         self.target_file = args.file
         self.e2e_sheet = self.version
         self.sub_team = args.subteam
+        self.parent_jira_issue = args.parent_jira
+        self.sheet_name = args.sheet
         
         self.base_url = "https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com"
         self.launch_url = self.base_url +"/api/v1/prow/launch"
@@ -78,6 +82,13 @@ class SummaryClient:
         self.days = args.days
         self.platfrom_list = ["aws", "gcp", "vsphere", "azure", "baremetal", "alibaba", "ibmcloud", "nutanix", "osp", "powervs"]
         self.cases_result = dict()
+        self.jiraManager = None
+        
+        if self.parent_jira_issue:
+            self.jira_token = args.jira_token
+            if not self.jira_token:
+                raise BaseException("ERROR: jira token is empty, please input the jira token using --jira_token")
+            self.jiraManager = JIRAManager("https://issues.redhat.com", self.jira_token, self.logger)
 
 
     def getclient(self):
@@ -437,12 +448,104 @@ class SummaryClient:
                     content.extend([0,0])
             self.logger.info('update M%s:AF%s to %s', row_number, row_number, str(content))
             worksheet_target.update('M'+str(row_number)+':AF'+str(row_number), [content], value_input_option="USER_ENTERED")
+        if self.parent_jira_issue:
+            self.create_sub_jira_task(worksheet_target)
+    
+    def create_sub_jira_task_all(self):
+        spreadsheet_target = self.gclient.open_by_url(self.target_file)
+        worksheet = spreadsheet_target.worksheet(self.sheet_name)
+        self.create_sub_jira_task(worksheet)
         
-         
-            
+    
+    def create_sub_jira_task(self, worksheet):
+        subtasks = self.jiraManager.get_subtask_list(self.parent_jira_issue)
+        values_list_all = worksheet.get_all_values()
+        for row in range(1, len(values_list_all)):
+            values_list = values_list_all[row]
+            row_number = row+1
+            if len(values_list) < 7:
+                continue
+            caseid = values_list[0]
+            case_title = values_list[1]
+            author = values_list[2]
+            if "OCP-" not in values_list[0]:
+                continue
+            if len(values_list) > 9 and values_list[9]:
+                self.logger.info("subtask has been created %s for %s", values_list[10], values_list[0])
+                continue
+            pass_ratio = float(values_list[6].replace("%",""))
+            if pass_ratio < 85:
+                self.logger.info("pass ratio is %f", pass_ratio)
+                comments = self.version+os.linesep+values_list[7]
+                jira_link = self.jiraManager.create_sub_task(self.parent_jira_issue, subtasks, caseid, case_title, author, comments)
+                worksheet.update_acell('J'+str(row_number), "https://issues.redhat.com/browse/"+jira_link)
+        
+    
+      
     def collectResult(self):
         self.logger.info("Collect CI result")
         self.write_e2e_google_sheet()
+        
+class JIRAManager:
+    def __init__(self, jira_server, token_auth, logger):
+        self.logger = logger
+        options = {
+            'server': jira_server,
+            'verify': True 
+        }            
+        self.jira = JIRA(options=options, token_auth=token_auth)
+        
+    def get_subtask_list(self, parent_jira):
+        issues = dict()
+        issue = self.jira.issue(parent_jira)
+        #self.logger.info(json.dumps(issue.raw['fields'], indent=4, sort_keys=True))
+        for issue in issue.fields.subtasks:
+            issues[issue.key] = dict()
+            issues[issue.key]["summary"] = issue.fields.summary
+            issues[issue.key]["link"] = "https://issues.redhat.com/browse/"+issue.key
+            
+        self.logger.info(pprint.pformat(issues, indent=1))
+        #self.logger.debug(json.dumps(issue.raw['fields'], indent=4, sort_keys=True))
+        return issues
+    
+    def create_sub_task(self, parent_jira, subtasks, case_id, case_title, author, comments):
+        auth_map = {"xzha": "rhn-support-xzha",
+                    "jiazha": "rhn-support-jiazha",
+                    "kuiwang": "rhn-support-kuiwang",
+                    "bandrade":"bandrade@redhat.com",
+                    "scolange": "rhn-support-xzha",
+                    "tbuskey": "rhn-support-xzha"
+        }
+        description_str = """
+Hi, @{author}
+{case} {title} is unstable, please help to check it.
+{comments}
+""".format(author=auth_map[author], case=case_id, title=case_title, comments=comments)
+        for substask in subtasks.keys():
+            if case_id.lower() in subtasks[substask]["summary"].lower():
+                self.logger.info("add comments to %s", substask)
+                self.jira.add_comment(substask, description_str)
+                case_issue = self.jira.issue(substask)
+                if case_issue.fields.status.name in ['Closed']:
+                    self.jira.transition_issue(case_issue, transition='In Progress')
+                return substask            
+        self.logger.info("Create sub task for %s", case_id)
+        if not case_id:
+            return
+        parent_issue = self.jira.issue(parent_jira)
+        project_key = parent_issue.fields.project.key
+        parent_issue_key = parent_issue.key
+        subtask = self.jira.create_issue(
+                        project=project_key,
+                        summary=case_id+' is unstable',
+                        description=description_str,
+                        issuetype={'name': 'Sub-task'},
+                        parent={'key': parent_issue_key},
+                        assignee= {"name": auth_map[author]}
+        )
+        self.logger.info("--------- Sub-task %s is created SUCCESS ----------", subtask.key)
+        self.logger.debug(json.dumps(subtask.raw['fields'], indent=4, sort_keys=True))
+        return subtask.key
         
 
 ########################################################################################################################################
@@ -455,9 +558,14 @@ if __name__ == "__main__":
     parser.add_argument("-log","--log", default="", required=False, help="the log file")
     parser.add_argument("-v", "--version", default='4.14', help="the ocp version")
     parser.add_argument("-d", "--days", default=7, type=int, help="the days number")
+    parser.add_argument("-p", "--parent_jira", default="", required=False, help="the parent jira issue link")
+    parser.add_argument("-jt", "--jira_token", default="", required=False, help="the jira token")
+    parser.add_argument("--sheet", default="", required=False, help="the jira token")
+    
     args=parser.parse_args()
 
     sclient = SummaryClient(args)
+    #sclient.create_sub_jira_task_all()
     sclient.collectResult()
     #sclient.get_case_result("393167")
     
