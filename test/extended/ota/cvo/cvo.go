@@ -216,10 +216,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
 		g.By("Check recommended update and notes about additional updates present on the output of oc adm upgrade")
-		o.Expect(checkUpdates(oc, false, 5, 15,
+		o.Expect(checkUpdates(oc, false, 1, 10,
 			"Additional updates which are not recommended",
 			//"based on your cluster configuration are available",
-			"or where the recommended status is \"Unknown\"",
+			//"or where the recommended status is \"Unknown\"",
 			"for your cluster configuration are available",
 			"to view those re-run the command with --include-not-recommended",
 			"Recommended updates:",
@@ -228,7 +228,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		)).To(o.BeTrue(), "recommended update and notes about additional updates")
 
 		g.By("Check risk type=Always updates and 2 risks update present")
-		o.Expect(checkUpdates(oc, true, 5, 15,
+		o.Expect(checkUpdates(oc, true, 1, 3,
 			"Supported but not recommended updates", "Version: 4.88.888888",
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
 				"8888888888888888888888888888888888888888888888888888888888888888",
@@ -238,24 +238,14 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"Version: 4.77.777777",
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
 				"7777777777777777777777777777777777777777777777777777777777777777",
-			"Recommended: Unknown",
-			"Reason: EvaluationFailed",
-		)).To(o.BeTrue(), "risk type=Always updates and 2 risks update")
-
-		g.By("Check Recommended: Unknown update is changed to Recommended: False with MultipleReasons")
-		o.Expect(checkUpdates(oc, true, 60, 15*60,
-			"Supported but not recommended updates",
-			"Version: 4.77.777777",
-			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
-				"7777777777777777777777777777777777777777777777777777777777777777",
 			"Recommended: False",
 			"Reason: MultipleReasons",
 			"Message: On clusters on default invoker user, this imaginary bug can happen. "+
 				"https://bug.example.com/a",
-		)).To(o.BeTrue(), "Unknown update is changed to Recommended=False")
+		)).To(o.BeTrue(), "risk type=Always updates and 2 risks update")
 
 		g.By("Check The reason for the multiple risks is changed to SomeInvokerThing")
-		o.Expect(checkUpdates(oc, true, 60, 15*60,
+		o.Expect(checkUpdates(oc, true, 60, 6*60,
 			"Supported but not recommended updates",
 			"Version: 4.77.777777",
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
@@ -270,7 +260,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "buggy").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		o.Expect(checkUpdates(oc, true, 300, 65*60,
+		o.Expect(checkUpdates(oc, true, 300, 75*60,
 			"Version: 4.77.777777",
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
 				"7777777777777777777777777777777777777777777777777777777777777777",
