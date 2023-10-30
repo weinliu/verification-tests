@@ -1610,7 +1610,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check default gomaxprocs value is 0")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", "node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--runtime.gomaxprocs=0"))
 
 		g.By("set gomaxprocs value to 1")
@@ -1618,8 +1618,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check gomaxprocs value in daemonset")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
-		o.Expect(output2).To(o.ContainSubstring("--runtime.gomaxprocs=1"))
+		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}"
+		checkYamlconfig(oc, "openshift-monitoring", "daemonset", "node-exporter", cmd, "--runtime.gomaxprocs=1", true)
 	})
 
 	//author: tagao@redhat.com
