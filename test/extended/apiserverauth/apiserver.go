@@ -2468,7 +2468,7 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("Author:zxiao-Medium-10592-Cluster-admin could get/edit/delete subresource", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -3055,7 +3055,7 @@ spec:
 	})
 
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -3245,7 +3245,7 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Critical-55494-[Apiserver] When using webhooks fails to rollout latest deploymentconfig [Disruptive]", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -5133,7 +5133,7 @@ type: kubernetes.io/service-account-token`
 
 	// author: kewang@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11289-[origin_platformexp_407] [Apiserver] Check the imagestreams of quota in the project after build image [Serial]", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -5527,7 +5527,7 @@ EOF`, etcConfigYaml, level)
 
 	// author: dpunia@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-High-11887-Could delete all the resource when deleting the project [Serial]", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -5897,7 +5897,7 @@ manifests:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Low-12036-APIServer User can pull a private image from a registry when a pull secret is defined [Serial]", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -5972,7 +5972,7 @@ manifests:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-11905-APIServer Use well-formed pull secret with incorrect credentials will fail to build and deploy [Serial]", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -6296,7 +6296,7 @@ manifests:
 
 	// author: kewang@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11797-[Apiserver] Image with single or multiple layer(s) sumed up size slightly exceed the openshift.io/image-size will push failed", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -6359,7 +6359,7 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-10865-[Apiserver] After Image Size Limit increment can push the image which previously over the limit", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -6510,7 +6510,7 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12263-[Apiserver] When exceed openshift.io/images will ban to create image reference or push image to project", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -6685,7 +6685,7 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12158-[Apiserver] Specify ResourceQuota on project", func() {
-		if isBaselineCapsSet(oc) && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 

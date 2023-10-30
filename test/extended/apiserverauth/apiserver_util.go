@@ -1366,10 +1366,7 @@ func isBaselineCapsSet(oc *exutil.CLI) bool {
 	baselineCapabilitySet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.spec.capabilities.baselineCapabilitySet}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("baselineCapabilitySet parameters: %v\n", baselineCapabilitySet)
-	if len(baselineCapabilitySet) == 0 {
-		return false
-	}
-	return true
+	return len(baselineCapabilitySet) != 0
 }
 
 // Check if component is listed in clusterversion.status.capabilities.enabledCapabilities
