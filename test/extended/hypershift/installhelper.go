@@ -162,7 +162,7 @@ func (c *createCluster) withEndpointAccess(endpointAccess AWSEndpointAccessType)
 }
 
 func (c *createCluster) withAnnotations(annotations string) *createCluster {
-	c.Annotations = annotations
+	c.Annotations = strings.TrimPrefix(c.Annotations+","+annotations, ",")
 	return c
 }
 

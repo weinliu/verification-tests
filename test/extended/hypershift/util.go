@@ -99,6 +99,9 @@ func parseTemplateVarParams(obj interface{}) ([]string, error) {
 	var params []string
 	t := v.Elem().Type()
 	for i := 0; i < t.NumField(); i++ {
+		if !v.Elem().Field(i).CanInterface() {
+			continue
+		}
 		varName := t.Field(i).Name
 		varType := t.Field(i).Type
 		varValue := v.Elem().Field(i).Interface()
@@ -167,6 +170,8 @@ func applyResourceFromTemplate(oc *exutil.CLI, kubeconfig, parsedTemplate string
 	if kubeconfig != "" {
 		args = append(args, "--kubeconfig="+kubeconfig)
 	}
+
+	e2e.Logf("args --> %+v", args)
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args(args...).Execute()
 }
 
@@ -401,4 +406,24 @@ func getAWSMgmtClusterRegionAvailableZones(oc *exutil.CLI) []string {
 	availableZones, err := awsClient.GetAvailabilityZoneNames()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	return availableZones
+}
+
+// removeNodesTaint removes the node taint by taintKey if the node exists
+func removeNodesTaint(oc *exutil.CLI, nodes []string, taintKey string) {
+	for _, no := range nodes {
+		nodeInfo := doOcpReq(oc, OcpGet, false, "no", no, "--ignore-not-found")
+		if nodeInfo != "" {
+			doOcpReq(oc, OcpAdm, false, "taint", "node", no, taintKey+"-")
+		}
+	}
+}
+
+// removeNodesLabel removes the node label by labelKey if the node exists
+func removeNodesLabel(oc *exutil.CLI, nodes []string, labelKey string) {
+	for _, no := range nodes {
+		nodeInfo := doOcpReq(oc, OcpGet, false, "no", no, "--ignore-not-found")
+		if nodeInfo != "" {
+			doOcpReq(oc, OcpLabel, false, "node", no, labelKey+"-")
+		}
+	}
 }

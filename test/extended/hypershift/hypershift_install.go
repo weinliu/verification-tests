@@ -3,6 +3,7 @@ package hypershift
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -771,5 +772,244 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		msg := doOcpReq(oc, OcpGet, false, "hostedcluster", hc.name, "-n", hc.namespace, "--ignore-not-found", "-o", `jsonpath={.status.conditions[?(@.type=="ValidOIDCConfiguration")].message}`)
 		e2e.Logf("error msg of condition ValidOIDCConfiguration is %s", msg)
+	})
+
+	g.It("Longduration-NonPreRelease-Author:heli-Critical-67828-[HyperShiftINSTALL] non-serving components land on non-serving nodes versus default workers [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 67828 is for AWS - skipping test ...")
+		}
+
+		if !exutil.IsInfrastructuresHighlyAvailable(oc) {
+			g.Skip("ocp-67828 is for Infra HA OCP - skipping test ...")
+		}
+
+		msNames := strings.Split(doOcpReq(oc, OcpGet, true, "-n", machineAPINamespace, mapiMachineset, "--ignore-not-found", `-o=jsonpath={.items[*].metadata.name}`), " ")
+		if len(msNames) < 3 {
+			g.Skip("ocp-67828 is for Infra HA OCP and expects for 3 machinesets - skipping test ... ")
+		}
+
+		caseID := "67828"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("config mgmt cluster: scale a machineseet to repicas==2")
+		oriDeletePolicy := doOcpReq(oc, OcpGet, false, "-n", machineAPINamespace, mapiMachineset, msNames[2], `-o=jsonpath={.spec.deletePolicy}`)
+		defer func() {
+			if oriDeletePolicy == "" {
+				doOcpReq(oc, OcpPatch, false, "-n", machineAPINamespace, mapiMachineset, msNames[2], "--type=json", "-p", `[{"op": "remove", "path": "/spec/deletePolicy"}]`)
+			} else {
+				doOcpReq(oc, OcpPatch, false, "-n", machineAPINamespace, mapiMachineset, msNames[2], "--type=merge", fmt.Sprintf(`--patch={"spec": {"deletePolicy": "%s"}}`, oriDeletePolicy))
+			}
+		}()
+		doOcpReq(oc, OcpPatch, true, "-n", machineAPINamespace, mapiMachineset, msNames[2], "--type=merge", `--patch={"spec": {"deletePolicy": "Newest"}}`)
+
+		oriReplicas := doOcpReq(oc, OcpGet, true, "-n", machineAPINamespace, mapiMachineset, msNames[2], `-o=jsonpath={.spec.replicas}`)
+		defer doOcpReq(oc, OcpScale, true, "-n", machineAPINamespace, mapiMachineset, msNames[2], "--replicas="+oriReplicas)
+		doOcpReq(oc, OcpScale, true, "-n", machineAPINamespace, mapiMachineset, msNames[2], "--replicas=2")
+		o.Eventually(func() bool {
+			return checkMachinesetReplicaStatus(oc, msNames[2])
+		}, DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), fmt.Sprintf("machineset %s are ready", msNames[2]))
+
+		// choose msNames[0], msNames[1] as serving component nodes, msNames[2] as non-serving component nodes
+		var nonServingComponentNodes = strings.Split(doOcpReq(oc, OcpGet, true, "-n", machineAPINamespace, mapiMachine, "-l", fmt.Sprintf("machine.openshift.io/cluster-api-machineset=%s", msNames[2]), `-o=jsonpath={.items[*].status.nodeRef.name}`), " ")
+		var servingComponentNodes []string
+		for i := 0; i < 2; i++ {
+			servingComponentNodes = append(servingComponentNodes, strings.Split(doOcpReq(oc, OcpGet, true, "-n", machineAPINamespace, mapiMachine, "-l", fmt.Sprintf("machine.openshift.io/cluster-api-machineset=%s", msNames[i]), `-o=jsonpath={.items[*].status.nodeRef.name}`), " ")...)
+		}
+
+		g.By("install hypershift operator")
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
+		region, err := getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          dir,
+			iaasPlatform: iaasPlatform,
+			installType:  PublicAndPrivate,
+			externalDNS:  true,
+			region:       region,
+		}
+
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		g.By("add label/taint to servingComponentNodes")
+		defer func() {
+			removeNodesTaint(oc, servingComponentNodes, servingComponentNodesTaintKey)
+			removeNodesLabel(oc, servingComponentNodes, servingComponentNodesLabelKey)
+		}()
+		for _, no := range servingComponentNodes {
+			doOcpReq(oc, OcpAdm, true, "taint", "node", no, servingComponentNodesTaint)
+			doOcpReq(oc, OcpLabel, true, "node", no, servingComponentNodesLabel)
+		}
+
+		g.By("add label/taint to nonServingComponentNodes")
+		defer func() {
+			removeNodesTaint(oc, nonServingComponentNodes, nonServingComponentTaintKey)
+			removeNodesLabel(oc, nonServingComponentNodes, nonServingComponentLabelKey)
+		}()
+		for _, no := range nonServingComponentNodes {
+			doOcpReq(oc, OcpAdm, true, "taint", "node", no, nonServingComponentTaint)
+			doOcpReq(oc, OcpLabel, true, "node", no, nonServingComponentLabel)
+		}
+
+		g.By("create MachineHealthCheck for serving component machinesets")
+		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		mhcBaseDir := exutil.FixturePath("testdata", "hypershift")
+		mhcTemplate := filepath.Join(mhcBaseDir, "mhc.yaml")
+
+		mhc := make([]mhcDescription, 2)
+		for i := 0; i < 2; i++ {
+			mhc[i] = mhcDescription{
+				Clusterid:      clusterID,
+				Maxunhealthy:   "100%",
+				MachinesetName: msNames[i],
+				Name:           "mhc-67828-" + msNames[i],
+				Namespace:      machineAPINamespace,
+				template:       mhcTemplate,
+			}
+		}
+		defer mhc[0].deleteMhc(oc, "mhc-67828-"+msNames[0]+".template")
+		mhc[0].createMhc(oc, "mhc-67828-"+msNames[0]+".template")
+		defer mhc[1].deleteMhc(oc, "mhc-67828-"+msNames[1]+".template")
+		mhc[1].createMhc(oc, "mhc-67828-"+msNames[1]+".template")
+
+		g.By("create a hosted cluster")
+		release, er := exutil.GetReleaseImage(oc)
+		o.Expect(er).NotTo(o.HaveOccurred())
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName("hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStr(5))).
+			withNodePoolReplicas(2).
+			withAnnotations(`hypershift.openshift.io/topology=dedicated-request-serving-components`).
+			withEndpointAccess(PublicAndPrivate).
+			withExternalDnsDomain(HyperShiftExternalDNS).
+			withBaseDomain(HyperShiftExternalDNSBaseDomain).
+			withReleaseImage(release)
+
+		defer func() {
+			g.By("in defer function, destroy the hosted cluster")
+			installHelper.destroyAWSHostedClusters(createCluster)
+
+			g.By("check the previous serving nodes are deleted and new serving nodes are created (machinesets are still in ready status)")
+			o.Eventually(func() bool {
+				for _, no := range servingComponentNodes {
+					noinfo := doOcpReq(oc, OcpGet, false, "no", "--ignore-not-found", no)
+					if strings.TrimSpace(noinfo) != "" {
+						return false
+					}
+				}
+
+				for i := 0; i < 2; i++ {
+					if !checkMachinesetReplicaStatus(oc, msNames[i]) {
+						return false
+					}
+				}
+				return true
+			}, 2*DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), fmt.Sprintf("serving node are not deleted %+v", servingComponentNodes))
+
+			g.By("no cluster label annotation in the new serving nodes")
+			for i := 0; i < 2; i++ {
+				for _, no := range strings.Split(doOcpReq(oc, OcpGet, true, "-n", machineAPINamespace, mapiMachine, "-l", fmt.Sprintf("machine.openshift.io/cluster-api-machineset=%s", msNames[i]), `-o=jsonpath={.items[*].status.nodeRef.name}`), " ") {
+					o.Expect(doOcpReq(oc, OcpGet, false, "node", no, "--ignore-not-found", `-ojsonpath={.labels.hypershift\.openshift\.io/cluster}`)).Should(o.BeEmpty())
+					o.Expect(doOcpReq(oc, OcpGet, false, "node", no, "--ignore-not-found", `-ojsonpath={.labels.hypershift\.openshift\.io/cluster-name}`)).Should(o.BeEmpty())
+					o.Expect(doOcpReq(oc, OcpGet, false, "node", no, "--ignore-not-found", `-ojsonpath={.spec.taints[?(@.key=="hypershift.openshift.io/cluster")].value}`)).Should(o.BeEmpty())
+				}
+			}
+		}()
+		hc := installHelper.createAWSHostedClusters(createCluster)
+		hcpNS := hc.namespace + "-" + hc.name
+
+		g.By("check hostedcluster annotation")
+		clusterSchValue := doOcpReq(oc, OcpGet, true, "-n", hc.namespace, "hostedcluster", hc.name, "--ignore-not-found", `-ojsonpath={.metadata.annotations.hypershift\.openshift\.io/cluster-scheduled}`)
+		o.Expect(clusterSchValue).Should(o.Equal("true"))
+		clusterTopology := doOcpReq(oc, OcpGet, true, "-n", hc.namespace, "hostedcluster", hc.name, "--ignore-not-found", `-ojsonpath={.metadata.annotations.hypershift\.openshift\.io/topology}`)
+		o.Expect(clusterTopology).Should(o.Equal("dedicated-request-serving-components"))
+
+		g.By("check hosted cluster hcp serving components' node allocation")
+		var servingComponentsNodeLocation = make(map[string]struct{})
+		hcpServingComponents := []string{"kube-apiserver", "ignition-server-proxy", "oauth-openshift", "private-router"}
+		for _, r := range hcpServingComponents {
+			nodes := strings.Split(doOcpReq(oc, OcpGet, true, "pod", "-n", hcpNS, "-lapp="+r, `-ojsonpath={.items[*].spec.nodeName}`), " ")
+			for _, n := range nodes {
+				o.Expect(n).Should(o.BeElementOf(servingComponentNodes))
+				servingComponentsNodeLocation[n] = struct{}{}
+			}
+		}
+		o.Expect(servingComponentsNodeLocation).ShouldNot(o.BeEmpty())
+
+		g.By("check serving nodes hcp labels and taints are generated automatically on the serving nodes")
+		for no := range servingComponentsNodeLocation {
+			cluster := doOcpReq(oc, OcpGet, false, "node", no, "--ignore-not-found", `-o=jsonpath={.metadata.labels.hypershift\.openshift\.io/cluster}`)
+			o.Expect(cluster).Should(o.Equal(hcpNS))
+			clusterName := doOcpReq(oc, OcpGet, false, "node", no, "--ignore-not-found", `-o=jsonpath={.metadata.labels.hypershift\.openshift\.io/cluster-name}`)
+			o.Expect(clusterName).Should(o.Equal(hc.name))
+			hcpTaint := doOcpReq(oc, OcpGet, false, "node", no, "--ignore-not-found", `-o=jsonpath={.spec.taints[?(@.key=="hypershift.openshift.io/cluster")].value}`)
+			o.Expect(hcpTaint).Should(o.Equal(hcpNS))
+		}
+
+		hcpNonServingComponents := []string{
+			"cloud-controller-manager",
+			"aws-ebs-csi-driver-controller",
+			"capi-provider-controller-manager",
+			"catalog-operator",
+			"certified-operators-catalog",
+			"cloud-network-config-controller",
+			"cluster-api",
+			"cluster-autoscaler",
+			"cluster-network-operator",
+			"cluster-node-tuning-operator",
+			"cluster-policy-controller",
+			"cluster-version-operator",
+			"community-operators-catalog",
+			"control-plane-operator",
+			"csi-snapshot-controller",
+			"csi-snapshot-controller-operator",
+			"csi-snapshot-webhook",
+			"dns-operator",
+			"etcd",
+			"hosted-cluster-config-operator",
+			"ignition-server",
+			"ingress-operator",
+			"konnectivity-agent",
+			"kube-controller-manager",
+			"kube-scheduler",
+			"machine-approver",
+			"multus-admission-controller",
+			"network-node-identity",
+			"olm-operator",
+			"openshift-apiserver",
+			"openshift-controller-manager",
+			"openshift-oauth-apiserver",
+			"openshift-route-controller-manager",
+			"ovnkube-control-plane",
+			"packageserver",
+			"redhat-marketplace-catalog",
+			"redhat-operators-catalog",
+		}
+		for _, r := range hcpNonServingComponents {
+			nodes := strings.Split(doOcpReq(oc, OcpGet, true, "pod", "-n", hcpNS, "-lapp="+r, `-o=jsonpath={.items[*].spec.nodeName}`), " ")
+			for _, n := range nodes {
+				o.Expect(n).Should(o.BeElementOf(nonServingComponentNodes))
+			}
+		}
+
+		//no app labels components
+		hcpNonServingComponentsWithoutAppLabels := []string{
+			"aws-ebs-csi-driver-operator",
+			"cluster-image-registry-operator",
+			"cluster-storage-operator",
+		}
+		for _, r := range hcpNonServingComponentsWithoutAppLabels {
+			nodes := strings.Split(doOcpReq(oc, OcpGet, true, "pod", "-n", hcpNS, "-lname="+r, `-o=jsonpath={.items[*].spec.nodeName}`), " ")
+			for _, n := range nodes {
+				o.Expect(n).Should(o.BeElementOf(nonServingComponentNodes))
+			}
+		}
 	})
 })

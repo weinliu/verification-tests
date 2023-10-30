@@ -195,3 +195,16 @@ func SkipMissingQECatalogsource(oc *CLI) {
 		g.Skip("Skip the test since no catalogsource/qe-app-registry in the cluster")
 	}
 }
+
+// IsInfrastructuresHighlyAvailable check if it is HighlyAvailable for infrastructures. Available for both classic OCP and the hosted cluster.
+func IsInfrastructuresHighlyAvailable(oc *CLI) bool {
+	topology, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures.config.openshift.io", "cluster", `-o=jsonpath={.status.infrastructureTopology}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("infrastructures topology is %s", topology)
+	if topology == "" {
+		status, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status}").Output()
+		e2e.Logf("cluster status %s", status)
+		e2e.Failf("failure: controlPlaneTopology returned empty")
+	}
+	return strings.Compare(topology, "HighlyAvailable") == 0
+}

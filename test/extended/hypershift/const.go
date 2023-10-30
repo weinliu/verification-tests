@@ -20,6 +20,7 @@ const (
 	OcpAdm      OcpClientVerb = "adm"
 	OcpApply    OcpClientVerb = "apply"
 	OcpCreate   OcpClientVerb = "create"
+	OcpLabel    OcpClientVerb = "label"
 
 	//NodepoolNameSpace is the namespace where the nodepool CR is always created
 	NodepoolNameSpace = "clusters"
@@ -131,4 +132,29 @@ const (
 const (
 	HyperShiftExternalDNSBaseDomain = "hypershift-ci.qe.devcluster.openshift.com"
 	HyperShiftExternalDNS           = "hypershift-ext.qe.devcluster.openshift.com"
+)
+
+const (
+	machineAPINamespace      = "openshift-machine-api"
+	clusterAPINamespace      = "openshift-cluster-api"
+	machineApproverNamespace = "openshift-cluster-machine-approver"
+	mapiMachineset           = "machinesets.machine.openshift.io"
+	mapiMachine              = "machines.machine.openshift.io"
+	mapiMHC                  = "machinehealthchecks.machine.openshift.io"
+	capiMachineset           = "machinesets.cluster.x-k8s.io"
+	capiMachine              = "machines.cluster.x-k8s.io"
+	defaultTimeout           = 300 * time.Second
+)
+
+// node isolation
+const (
+	servingComponentNodesTaintKey = "hypershift.openshift.io/request-serving-component"
+	servingComponentNodesLabelKey = "hypershift.openshift.io/request-serving-component"
+	nonServingComponentLabelKey   = "hypershift.openshift.io/control-plane"
+	nonServingComponentTaintKey   = nonServingComponentLabelKey
+
+	servingComponentNodesTaint = servingComponentNodesTaintKey + "=true:NoSchedule"
+	servingComponentNodesLabel = servingComponentNodesLabelKey + "=true"
+	nonServingComponentLabel   = nonServingComponentLabelKey + "=true"
+	nonServingComponentTaint   = nonServingComponentTaintKey + "=true:NoSchedule"
 )
