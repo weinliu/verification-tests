@@ -30,6 +30,7 @@ export CYPRESS_LOGIN_IDP=kube:admin
 export CYPRESS_LOGIN_USERNAME=kubeadmin
 export CYPRESS_LOGIN_PASSWORD=`cat $SHARED_DIR/hostedcluster_kubeadmin_password`
 export CYPRESS_KUBECONFIG_PATH="${KUBECONFIG}"
+export NO_COLOR=1
 ls -ltr
 echo "Triggering tests"
 set -x

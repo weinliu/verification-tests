@@ -74,6 +74,7 @@ export CYPRESS_LOGIN_IDP=uiauto-htpasswd-idp
 export CYPRESS_LOGIN_USERNAME=uiauto-test-1
 export CYPRESS_LOGIN_PASSWORD=$(echo $users | awk -F ',' '{print $1}' | awk -F ':' '{print $2}')
 export CYPRESS_LOGIN_UP_PAIR=$users
+export NO_COLOR=1
 ls -ltr
 echo "triggering tests"
 set -x
