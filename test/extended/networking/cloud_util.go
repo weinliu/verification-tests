@@ -152,6 +152,10 @@ func getIfaddrFromNode(nodeName string, oc *exutil.CLI) string {
 	egressIpconfig, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.cloud\\.network\\.openshift\\.io/egress-ipconfig}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The egressipconfig is %v", egressIpconfig)
+	if len(egressIpconfig) == 0 {
+		e2e.Logf("The node %s doesn't have egressIP annotation", nodeName)
+		return ""
+	}
 	ifaddr := strings.Split(egressIpconfig, "\"")[9]
 	e2e.Logf("The subnet of node %s is %v .", nodeName, ifaddr)
 	return ifaddr
@@ -244,6 +248,10 @@ func findFreeIPs(oc *exutil.CLI, nodeName string, number int) []string {
 
 	} else {
 		sub1 := getIfaddrFromNode(nodeName, oc)
+		if len(sub1) == 0 && strings.Contains(platform, "gcp") {
+			g.Skip("Skip the tests as no egressIP annoatation on this platform nodes!!")
+		}
+		o.Expect(len(sub1) == 0).NotTo(o.BeTrue())
 		freeIPs = findUnUsedIPsOnNode(oc, nodeName, sub1, number)
 	}
 	return freeIPs
@@ -339,10 +347,13 @@ func installIPEchoServiceOnGCP(oc *exutil.CLI, infraID string, host string) (str
 		e2e.Logf("Failed to update firewall rules for port %v: %v", ports, err)
 		return "", err
 	}
-	//o.Expect(err).NotTo(o.HaveOccurred())
+
 	if !strings.Contains(ports, "tcp:"+port) {
 		addIPEchoPort := fmt.Sprintf("%s,tcp:%s", ports, port)
-		o.Expect(getgcloudClient(oc).UpdateFirewallAllowPorts(ruleName, addIPEchoPort)).NotTo(o.HaveOccurred())
+		updateFirewallPortErr := getgcloudClient(oc).UpdateFirewallAllowPorts(ruleName, addIPEchoPort)
+		if updateFirewallPortErr != nil {
+			return "", updateFirewallPortErr
+		}
 		e2e.Logf("Allow Ports: %s", addIPEchoPort)
 	}
 	ipEchoURL := net.JoinHostPort(internalIP, port)
