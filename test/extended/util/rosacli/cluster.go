@@ -59,6 +59,8 @@ type ClusterDescription struct {
 	ProvisioningErrorMessage string              `yaml:"Provisioning Error Message,omitempty"`
 	ProvisioningErrorCode    string              `yaml:"Provisioning Error Code,omitempty"`
 	LimitedSupport           []map[string]string `yaml:"Limited Support,omitempty"`
+	Ec2MetadataHttpTokens    []map[string]string `yaml:"Ec2 Metadata Http Tokens,omitempty"`
+	AuditLogRoleARN          []map[string]string `yaml:"Audit Log Role ARN,omitempty"`
 }
 
 func (c *clusterService) DescribeCluster(clusterID string) (bytes.Buffer, error) {

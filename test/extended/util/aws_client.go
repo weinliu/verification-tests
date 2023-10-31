@@ -701,6 +701,7 @@ func (iamClient *IAMClient) UpdateRolePolicy(roleName, policyName, policyDocumen
 // Create policy
 func (iamClient *IAMClient) CreatePolicy(policyDocument string, policyName string, description string, tagList map[string]string, path string) (string, error) {
 	//     Check that required inputs exist
+	createdPolicy := &iam.CreatePolicyOutput{}
 	if policyDocument == "" || policyName == "" {
 		return "", errors.New("policyDocument or policyName can be an empty string")
 	}
@@ -717,10 +718,9 @@ func (iamClient *IAMClient) CreatePolicy(policyDocument string, policyName strin
 	if len(tagList) > 0 {
 		createPolicyInput.Tags = getTags(tagList)
 	}
+	createdPolicy, err := iamClient.svc.CreatePolicy(createPolicyInput)
 
-	output, err := iamClient.svc.CreatePolicy(createPolicyInput)
-
-	return aws.StringValue(output.Policy.Arn), err
+	return aws.StringValue(createdPolicy.Policy.Arn), err
 }
 
 // Delete policy

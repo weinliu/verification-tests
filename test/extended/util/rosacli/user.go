@@ -84,7 +84,6 @@ func (c *userService) RemoveAllUsers(clusterID string) (err error) {
 		return err
 	}
 	if len(gul.GroupUsers) != 0 {
-
 		for _, uitem := range gul.GroupUsers {
 			if uitem.ID == "rosa-admin" && uitem.Groups == "cluster-admins" {
 				continue

@@ -45,7 +45,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 			dedicatedAdminsGroupName,
 			"--user", dedicatedAdminsUserName,
 		)
-		o.Expect(err).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
 		textData := rosaClient.Parser.TextData.Input(out).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Granted role '%s' to user '%s' on cluster '%s'", dedicatedAdminsGroupName, dedicatedAdminsUserName, clusterID))
 
@@ -55,21 +55,21 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 			clusterAdminsGroupName,
 			"--user", clusterAdminsUserName,
 		)
-		o.Expect(err).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
 		textData = rosaClient.Parser.TextData.Input(out).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Granted role '%s' to user '%s' on cluster '%s'", clusterAdminsGroupName, clusterAdminsUserName, clusterID))
 
 		g.By("Get specific users")
 		usersList, _, err := userService.ListUsers(clusterID)
-		o.Expect(err).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
 
 		user, err := usersList.User(dedicatedAdminsUserName)
-		o.Expect(err).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(user).NotTo(o.BeNil())
 		o.Expect(user.Groups).To(o.Equal(dedicatedAdminsGroupName))
 
 		user, err = usersList.User(clusterAdminsUserName)
-		o.Expect(err).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(user).NotTo(o.BeNil())
 		o.Expect(user.Groups).To(o.Equal(clusterAdminsGroupName))
 
@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 			"--user", dedicatedAdminsUserName,
 			"-y",
 		)
-		o.Expect(err).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
 		textData = rosaClient.Parser.TextData.Input(out).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Revoked role '%s' from user '%s' on cluster '%s'", dedicatedAdminsGroupName, dedicatedAdminsUserName, clusterID))
 
@@ -91,20 +91,20 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 			"--user", clusterAdminsUserName,
 			"-y",
 		)
-		o.Expect(err).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
 		textData = rosaClient.Parser.TextData.Input(out).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Revoked role '%s' from user '%s' on cluster '%s'", clusterAdminsGroupName, clusterAdminsUserName, clusterID))
 
 		g.By("List users")
 		usersList, _, err = userService.ListUsers(clusterID)
-		o.Expect(err).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
 
 		foundUser, err := usersList.User(dedicatedAdminsUserName)
-		o.Expect(err).To(o.BeNil())
-		o.Expect(foundUser).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
+		o.Expect(foundUser).To(o.Equal(rosacli.GroupUser{}))
 
 		foundUser, err = usersList.User(clusterAdminsUserName)
-		o.Expect(err).To(o.BeNil())
-		o.Expect(foundUser).To(o.BeNil())
+		o.Expect(err).ToNot(o.HaveOccurred())
+		o.Expect(foundUser).To(o.Equal(rosacli.GroupUser{}))
 	})
 })

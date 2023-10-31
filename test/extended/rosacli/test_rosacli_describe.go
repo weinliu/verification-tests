@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 		o.Expect(CD.APIURL).To(o.Equal(jsonData.DigString("api", "url")))
 		o.Expect(CD.ConsoleURL).To(o.Equal(jsonData.DigString("console", "url")))
 		o.Expect(CD.Region).To(o.Equal(jsonData.DigString("region", "id")))
-		o.Expect(CD.MultiAZ).To(o.Equal(strconv.FormatBool(jsonData.DigBool("multi_az"))))
+
 		o.Expect(CD.State).To(o.Equal(jsonData.DigString("status", "state")))
 		o.Expect(CD.Created).NotTo(o.BeEmpty())
 		o.Expect(CD.DetailsPage).NotTo(o.BeEmpty())
@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 			//todo
 		} else {
 			if jsonData.DigBool("multi_az") {
-				//todo
+				o.Expect(CD.MultiAZ).To(o.Equal(strconv.FormatBool(jsonData.DigBool("multi_az"))))
 			} else {
 				o.Expect(CD.Nodes[0]["Control plane"]).To(o.Equal(strconv.FormatFloat(jsonData.DigFloat("nodes", "master"), 'f', -1, 64)))
 				o.Expect(CD.Nodes[1]["Infra"]).To(o.Equal(strconv.FormatFloat(jsonData.DigFloat("nodes", "infra"), 'f', -1, 64)))
