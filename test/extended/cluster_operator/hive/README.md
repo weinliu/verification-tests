@@ -18,10 +18,9 @@ TODO: add intro for Hive-specific tags
    git checkout -b $BRANCH_NAME
    ```
 3. Make changes to the code. 
-4. Run static code checks and fix any errors:
+4. Run static code checks, fix any errors, repeat until no errors persist:
    ```shell
-   golangci-lint run --fast --timeout=10m0s ./test/extended/cluster_operator/hive/...
-   go vet ./test/extended/cluster_operator/hive
+   pushd ./test/extended/cluster_operator/hive; golangci-lint run -v; popd
    go mod tidy
    ``` 
 5. Commit and push the changes to your forked repository.
@@ -42,18 +41,7 @@ During the code review process, the following labels are required before a PR ca
 2. An `/approve` label given by a maintainer
 
 Additionally, it is important to approach code reviews with an open mind and maintain a positive 
-and constructive attitude. 
-
-## Things to note
-- Timeouts: the majority of test cases for Hive involve cluster installation, so special care must be taken 
-to avoid timeouts. Please note that the timeout is 100min per test case for Azure and 90min per test case 
-for other platforms.
-- Backports: bug fixes are sometimes cherry-picked to earlier branches. If you're unsure about something, 
-consult with the team.
-- Import style: please follow [this guide](https://github.com/uber-go/guide/blob/master/style.md#import-group-ordering) 
-for import grouping.
-- Code quality: readability, reusability, maintainability, reliability, scalability and performance are all
-important factors, especially for public utilities living in openshift-tests-private/test/extended/util/. 
+and constructive attitude.
 
 # Test case rehearsals
 
@@ -120,9 +108,33 @@ which makes use of each new package version.
 Please avoid requiring openshift/installer types whenever possible as they bring in quite a few dependencies, 
 making this repository unnecessarily difficult to maintain. 
 
-For a minimal install-config, use the `minimalInstallConfig` type, and extend it if necessary. 
+For a minimal install-config, use the `minimalInstallConfig` type, and extend it if necessary.
 
 # Miscellaneous
+
+## Linting
+We utilize golangci-lint for our linting process.
+The configuration file can be found at ./.golangci-lint.yaml.
+Please ensure that you run the linters and resolve any errors before committing your changes.
+
+## Timeouts
+The majority of test cases for Hive involve cluster installation, so special care must be taken
+to avoid timeouts. 
+Please note that the timeout is 100min per test case for Azure and 90min per test case
+for other platforms.
+
+## Backports
+Bug fixes are sometimes cherry-picked to earlier branches. If you're unsure about something, consult with the team.
+
+## Import style
+Please follow [this guide](https://github.com/uber-go/guide/blob/master/style.md#import-group-ordering) for import grouping.
+
+## TODOs
+If a TODO is only for you, please enclose your GitHub ID within parentheses, e.g. TODO(my-github-id).
+
+## Code quality
+Readability, reusability, maintainability, reliability, scalability and performance are all 
+important factors, especially for public utilities living in openshift-tests-private/test/extended/util/.
 
 ## Cloud account agnosticism
 Multi-account support is achieved by dynamically acquiring platform configurations during runtime.
