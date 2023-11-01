@@ -65,7 +65,7 @@ func (upirdu *Upirdusession) StopUPIbaremetalInstance() error {
 	defer cancel()
 	machine, err := bmc.Dial(ctx, argBMCAddr)
 	if err != nil {
-		o.Expect(err).NotTo(o.HaveOccurred())
+		return err
 	}
 	defer machine.Close()
 	e2e.Logf("connected to %v over IPMI v%v", machine.Address(), machine.Version())
@@ -76,13 +76,13 @@ func (upirdu *Upirdusession) StopUPIbaremetalInstance() error {
 	})
 	if err != nil {
 		e2e.Logf("%v", err)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		return err
 	}
 	defer sess.Close(ctx)
 	if err := sess.ChassisControl(ctx, cmd); err != nil {
-		o.Expect(err).NotTo(o.HaveOccurred())
+		return err
 	}
-	return err
+	return nil
 }
 
 // StartUPIbaremetalInstance represents to start upi baremetal rdu instance ...
@@ -96,7 +96,7 @@ func (upirdu *Upirdusession) StartUPIbaremetalInstance() error {
 	defer cancel()
 	machine, err := bmc.Dial(ctx, argBMCAddr)
 	if err != nil {
-		o.Expect(err).NotTo(o.HaveOccurred())
+		return err
 	}
 	defer machine.Close()
 	e2e.Logf("connected to %v over IPMI v%v", machine.Address(), machine.Version())
@@ -106,13 +106,13 @@ func (upirdu *Upirdusession) StartUPIbaremetalInstance() error {
 		MaxPrivilegeLevel: ipmi.PrivilegeLevelOperator,
 	})
 	if err != nil {
-		o.Expect(err).NotTo(o.HaveOccurred())
+		return err
 	}
 	defer sess.Close(ctx)
 	if err := sess.ChassisControl(ctx, cmd); err != nil {
-		o.Expect(err).NotTo(o.HaveOccurred())
+		return err
 	}
-	return err
+	return nil
 }
 
 // GetUPIbaremetalInstance represents upi baremetal rdu instance ...
@@ -138,7 +138,7 @@ func (upirdu *Upirdusession) GetUPIbaremetalInstanceState() (string, error) {
 	defer cancel()
 	machine, err := bmc.Dial(ctx, argBMCAddr)
 	if err != nil {
-		o.Expect(err).NotTo(o.HaveOccurred())
+		return "", err
 	}
 	defer machine.Close()
 	e2e.Logf("connected to %v over IPMI v%v", machine.Address(), machine.Version())
@@ -148,12 +148,13 @@ func (upirdu *Upirdusession) GetUPIbaremetalInstanceState() (string, error) {
 		MaxPrivilegeLevel: ipmi.PrivilegeLevelOperator,
 	})
 	if err != nil {
-		o.Expect(err).NotTo(o.HaveOccurred())
+		return "", err
 	}
 	defer sess.Close(ctx)
 	var instanceState string
 	if status, err := sess.GetChassisStatus(ctx); err != nil {
-		e2e.Failf("failed to get chassis status:: %v :: %v", argBMCAddr, err)
+		e2e.Logf("Failed to get chassis status:: %v :: %v", argBMCAddr, err)
+		return "", err
 	} else if status.PoweredOn == true {
 		e2e.Logf("UPI baremetal instance :: %v :: poweredOn", argBMCAddr)
 		instanceState = "poweredOn"

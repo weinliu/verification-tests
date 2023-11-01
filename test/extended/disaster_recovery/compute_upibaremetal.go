@@ -113,7 +113,15 @@ func (upi *UPIInstance) Stop() error {
 }
 
 func (upi *UPIInstance) State() (string, error) {
-	nodeStatus, statusErr := upi.upiObj.GetUPIbaremetalInstanceState()
-	o.Expect(statusErr).NotTo(o.HaveOccurred())
+	var nodeStatus string
+	var statusErr error
+	errVmstate := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		nodeStatus, statusErr = upi.upiObj.GetUPIbaremetalInstanceState()
+		if statusErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Failed to get VM instance state for master node: %s, error: %s", upi.nodeName, statusErr))
 	return nodeStatus, statusErr
 }
