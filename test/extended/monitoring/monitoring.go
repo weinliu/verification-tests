@@ -222,20 +222,29 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Low-55670-Prometheus should not collecting error messages for completed pods", func() {
-		var output string
-		g.By("check pod conditioning in openshift-kube-scheduler, all pods should be ready")
-		exutil.AssertAllPodsToBeReady(oc, "openshift-kube-scheduler")
-
-		g.By("get prometheus-adapter pod names")
-		prometheusAdapterPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-adapter")
+		g.By("check pod conditioning in openshift-kube-scheduler")
+		PodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-scheduler", "app=installer")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range PodNames {
+			status, err := oc.AsAdmin().Run("get").Args("pod", pod, "-n", "openshift-kube-scheduler", "-o", "jsonpath='{.status.conditions[?(@.type==\"Ready\")].reason}'").Output()
+			o.Expect(status).To(o.ContainSubstring("PodCompleted"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		PodNames, err = exutil.GetAllPodsWithLabel(oc, "openshift-kube-scheduler", "app=pruner")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range PodNames {
+			status, err := oc.AsAdmin().Run("get").Args("pod", pod, "-n", "openshift-kube-scheduler", "-o", "jsonpath='{.status.conditions[?(@.type==\"Ready\")].reason}'").Output()
+			o.Expect(status).To(o.ContainSubstring("PodCompleted"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		g.By("check prometheus-adapter pod logs")
-		for _, pod := range prometheusAdapterPodNames {
-			output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args(pod, "-n", "openshift-monitoring").Output()
-			if strings.Contains(output, "unable to fetch CPU metrics for pod") {
-				e2e.Failf("found unexpected logs: unable to fetch CPU metrics for pod")
-			}
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		output, logsErr := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=prometheus-adapter", "-c", "prometheus-adapter", "--tail=-1", "-n", "openshift-monitoring").Output()
+		o.Expect(logsErr).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "unable to fetch CPU metrics for pod") {
+			e2e.Logf("output result in logs: %s", output)
+			e2e.Failf("found unexpected logs")
 		}
 	})
 
