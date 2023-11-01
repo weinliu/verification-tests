@@ -4,6 +4,7 @@ declare global {
     namespace Cypress {
         interface Chainable<Subject> {
             switchPerspective(perspective: string);
+            uiLogout();
             cliLogin();
             cliLogout();
             adminCLI(command: string);
@@ -27,6 +28,43 @@ Cypress.Commands.add("switchPerspective", (perspective: string) => {
     });
     nav.sidenav.switcher.changePerspectiveTo(perspective);
     nav.sidenav.switcher.shouldHaveText(perspective);
+});
+
+/* Save for debuggin upstream login change
+Cypress.Commands.add('uiLogin', (provider: string, username: string, password: string)=> {
+  cy.clearCookie('openshift-session-token');
+  cy.visit('/');
+  cy.window().then((win: any) => {
+    if(win.SERVER_FLAGS?.authDisabled) {
+      cy.task('log', 'Skipping login, console is running with auth disabled');
+      return;
+    }
+  cy.get('[data-test-id="login"]').should('be.visible');
+  cy.get('body').then(($body) => {
+    if ($body.text().includes(provider)) {
+      cy.contains(provider).should('be.visible').click();
+    }
+  });
+  cy.get('#inputUsername').type(username);
+  cy.get('#inputPassword').type(password);
+  cy.get('button[type=submit]').click();
+  cy.byTestID("username")
+    .should('be.visible');
+  })
+  cy.visit('/');
+}); */
+
+Cypress.Commands.add('uiLogout', () => {
+  cy.window().then((win: any) => {
+    if (win.SERVER_FLAGS?.authDisabled){
+      cy.log('Skipping logout, console is running with auth disabled');
+      return;
+    }
+    cy.log('Loggin out UI');
+    cy.byTestID('user-dropdown').click();
+    cy.byTestID('log-out').should('be.visible');
+    cy.byTestID('log-out').click({ force: true });
+  })
 });
 
 Cypress.Commands.add("cliLogin", () => {

@@ -5,7 +5,7 @@ import { guidedTour } from '../../upstream/views/guided-tour';
 describe("Branding check", () => {
   before(() => {
     cy.login(Cypress.env("LOGIN_IDP"),Cypress.env("LOGIN_USERNAME"),Cypress.env("LOGIN_PASSWORD"));
-    guidedTour.close();   
+    guidedTour.close();
   });
 
   it("(OCP-48357,yanpzhan) Switch the OCP branding logo and title to Red Hat OpenShift logo and title", {tags: ['e2e','@rosa']}, () => {
@@ -13,7 +13,7 @@ describe("Branding check", () => {
     Overview.checkUpperLeftLogo();
     Overview.toggleAbout();
     Branding.checkAboutModalLogo();
-    cy.logout();
+    cy.uiLogout();
     Branding.checkLoginPageLogo();
   });
 });

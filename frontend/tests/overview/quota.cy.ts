@@ -17,7 +17,6 @@ describe('quota related feature', () => {
     cy.adminCLI(`oc delete project test-ocp52470`);
     cy.adminCLI(`oc delete clusterresourcequota testcrq1 testcrq2`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout;
   });
 
   it('(OCP-52470,yanpzhan) Quota charts should support to show all resource types', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {

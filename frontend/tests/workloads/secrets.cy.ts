@@ -17,7 +17,6 @@ describe('Workload Secrets test', () => {
 
   after(() => {
     cy.adminCLI(`oc delete project ${testName}`);
-    cy.logout();
   });
 
   it('(OCP-47010, xiyuzhao) Check Secrets is editable on console', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {

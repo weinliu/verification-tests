@@ -15,7 +15,7 @@ describe('project list tests', () => {
     cy.login(Cypress.env('LOGIN_IDP'), login_user_one, login_passwd_one);
     guidedTour.close();
     cy.createProject('testuserone-project');
-    cy.logout;
+    cy.uiLogout();
 
     cy.login(Cypress.env('LOGIN_IDP'), login_user_two, login_passwd_two);
     guidedTour.close();

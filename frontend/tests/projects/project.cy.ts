@@ -5,10 +5,6 @@ describe('Projects', () => {
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
-  after(() => {
-    cy.logout;
-  });
-
   it('(OCP-44210,yanpzhan) check description and help text on project creation page', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
     projectsPage.goToProjectsPage();
     listPage.clickCreateYAMLbutton();

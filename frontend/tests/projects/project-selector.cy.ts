@@ -10,7 +10,6 @@ describe('Projects dropdown tests', () => {
 
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout;
   });
 
   it('(OCP-43130,yapei) Check default projects toggle bar', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {

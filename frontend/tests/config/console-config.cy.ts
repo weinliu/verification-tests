@@ -6,7 +6,6 @@ describe('console configs features', () => {
 
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout;
   });
 
   it('(OCP-53787,yanpzhan) Backend changes to add nodeArchitectures value to console-config file', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {

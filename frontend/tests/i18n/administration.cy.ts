@@ -10,7 +10,6 @@ describe('Administration pages pesudo translation', () => {
 
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout;
   });
 
   it('(OCP-35766,yapei) administration pages pesudo translation', {tags: ['e2e','admin','@osd-ccs']}, () => {
