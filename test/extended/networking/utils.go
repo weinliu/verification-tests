@@ -238,6 +238,13 @@ type svcEndpontDetails struct {
 	podIP          string
 }
 
+type migrationDetails struct {
+	name                   string
+	template               string
+	namespace              string
+	virtualmachinesintance string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -2919,4 +2926,61 @@ func disableIPForwardingOnSpecNodeNIC(oc *exutil.CLI, worker, secNIC string) {
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
 	}
 	e2e.Logf("IP forwarding was disabled for NIC %s on node %s!", secNIC, worker)
+}
+
+// Create live migration job on Kubevirt cluster
+func (migrationjob *migrationDetails) createMigrationJob(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", migrationjob.template, "-p", "NAME="+migrationjob.name, "NAMESPACE="+migrationjob.namespace, "VMI="+migrationjob.virtualmachinesintance)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create migration job %v", migrationjob.name))
+}
+
+// Delete migration job on Kubevirt cluster
+func (migrationjob *migrationDetails) deleteMigrationJob(oc *exutil.CLI) {
+	removeResource(oc, true, true, "virtualmachineinstancemigration.kubevirt.io", migrationjob.name, "-n", migrationjob.namespace)
+}
+
+// Check all cluster operators status on the cluster
+func checkAllClusterOperatorsState(oc *exutil.CLI, interval int, timeout int) {
+	operatorsString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var clusterOperators []string
+	if operatorsString != "" {
+		clusterOperators = strings.Split(operatorsString, " ")
+	}
+
+	for _, clusterOperator := range clusterOperators {
+		errCheck := wait.Poll(time.Duration(interval)*time.Second, time.Duration(timeout)*time.Minute, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", clusterOperator).Output()
+			if err != nil {
+				e2e.Logf("Fail to get state for operator %s, error:%s. Trying again", clusterOperator, err)
+				return false, err
+			}
+			if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
+				e2e.Logf("Operator %s on hosted cluster is in state:%s", output)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, "Timed out waiting for the expected condition")
+	}
+}
+
+// Check OVNK health: OVNK pods health and ovnkube-node DS health
+func checkOVNKState(oc *exutil.CLI) {
+	// check all OVNK pods
+	waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+	waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
+
+	// check ovnkube-node ds rollout status
+	dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", "openshift-ovn-kubernetes", "ds", "ovnkube-node", "--timeout", "5m").Output()
+	o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
+	o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
 }
