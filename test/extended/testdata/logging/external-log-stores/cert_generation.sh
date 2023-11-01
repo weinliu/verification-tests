@@ -207,10 +207,13 @@ function generate_request() {
       -passout pass:"$PASS_PHRASE" \
       -out ${WORKING_DIR}/${component}.csr \
       -newkey rsa:4096 \
-      -keyout ${WORKING_DIR}/${component}.key \
+      -keyout ${WORKING_DIR}/${component}.key.pem \
       -config ${WORKING_DIR}/${component}.conf \
       -days 712
+    # use pkcs8 for client key to avoid htting issue in FIPS cluster
+    openssl pkcs8 -passin pass:"$PASS_PHRASE" -in ${WORKING_DIR}/${component}.key.pem -topk8 -nocrypt -passout pass:"$PASS_PHRASE" -out ${WORKING_DIR}/${component}.key
   fi
+
 }
 
 function generate_certs() {
