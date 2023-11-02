@@ -983,7 +983,7 @@ func checkMetric(oc *exutil.CLI, metricString []string, namespace string, operat
 			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
 			return false, nil
 		}
-		metricsLog, _ := exec.Command("bash", "-c", "cat "+output+"| grep compliance").Output()
+		metricsLog, _ := exec.Command("bash", "-c", "cat "+output).Output()
 
 		for _, metricStr := range metricString {
 			matched, err := regexp.MatchString(metricStr, string(metricsLog))
