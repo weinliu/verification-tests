@@ -8,8 +8,8 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
@@ -24,11 +24,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	g.BeforeEach(func() {
 		// skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
-		// CredentialReqeust needs to be provioned by Cloud automatically
-		modeInCloudCredential, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("cloudcredential", "cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
-		if modeInCloudCredential == "Manual" {
-			g.Skip("Skip since CCO mode is Manual")
-		}
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", operatorNamespace, "pod", "-l", operatorPodLabel).Output()
 		if !strings.Contains(output, "Running") {
@@ -36,8 +31,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		}
 	})
 
+	g.AfterEach(func() {
+		if exutil.IsSTSCluster(oc) {
+			e2e.Logf("This is STS cluster so clear up AWS IAM resources as well as albo namespace")
+			clearUpAlbOnStsCluster(oc)
+		}
+	})
+
 	// author: hongli@redhat.com
-	g.It("ROSA-OSD_CCS-NonHyperShiftHOST-ConnectedOnly-Author:hongli-High-51189-Support aws-load-balancer-operator", func() {
+	g.It("ROSA-OSD_CCS-NonHyperShiftHOST-ConnectedOnly-Author:hongli-High-51189-Support aws-load-balancer-operator [Serial]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "awslb")
 			AWSLBController     = filepath.Join(buildPruningBaseDir, "awslbcontroller.yaml")

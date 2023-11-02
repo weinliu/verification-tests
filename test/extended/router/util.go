@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -16,6 +17,8 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -1040,6 +1043,36 @@ func createExternalDNSOperator(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
 }
 
+func deleteNamespace(oc *exutil.CLI, ns string) {
+	err := oc.AdminKubeClient().CoreV1().Namespaces().Delete(context.Background(), ns, metav1.DeleteOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			err = nil
+		}
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		_, err = oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), ns, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Namespace %s is not deleted in 3 minutes", ns))
+}
+
+// Get OIDC from STS cluster
+func getOidc(oc *exutil.CLI) string {
+	oidc, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication.config", "cluster", "-o=jsonpath={.spec.serviceAccountIssuer}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	oidc = strings.TrimPrefix(oidc, "https://")
+	e2e.Logf("The OIDC of STS cluster is: %v\n", oidc)
+	return oidc
+}
+
 // this function create aws-load-balancer-operator
 func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "router", "awslb")
@@ -1052,8 +1085,15 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", namespaceFile).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", credentials).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
+
+	if exutil.IsSTSCluster(oc) {
+		e2e.Logf("This is STS cluster, create ALB operator and controller secrets via AWS SDK")
+		prepareAllForStsCluster(oc)
+	} else {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", credentials).Output()
+		e2e.Logf("err %v, msg %v", err, msg)
+	}
+
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroup).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 

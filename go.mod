@@ -24,6 +24,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/iam v1.21.1
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.29.5
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.24.0
+	github.com/aws/aws-sdk-go-v2/service/sts v1.12.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/containers/image/v5 v5.27.0
 	github.com/davecgh/go-spew v1.1.1
@@ -116,7 +117,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.25 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.11.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.7.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.12.0 // indirect
 	github.com/aws/smithy-go v1.14.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
