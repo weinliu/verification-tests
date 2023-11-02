@@ -1650,5 +1650,150 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(regexp.MatchString("Retry delete failed.*no pod IPs found", podLogs)).Should(o.BeFalse())
 
 	})
+	// author: asood@redhat.com
+	g.It("NonHyperShiftHOST-Author:asood-High-64788-Same network policies across multiple namespaces fail to be recreated [Disruptive].", func() {
+		// This is for customer bug https://issues.redhat.com/browse/OCPBUGS-11447
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			networkPolicyFile   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-single-CIDR-template.yaml")
+			policyName          = "ipblock-64788"
+		)
+		exutil.By("Check cluster network type")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("This case requires OVNKubernetes as network backend")
+		}
+		ipStackType := checkIPStackType(oc)
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
+
+		exutil.By("Get namespace")
+		ns := oc.Namespace()
+
+		exutil.By("Create a test pods")
+		createResourceFromFile(oc, ns, testPodFile)
+		err := waitForPodWithLabelReady(oc, ns, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "The pod with label name=test-pods is not ready")
+		testPod := getPodName(oc, ns, "name=test-pods")
+		nodeName, err := exutil.GetPodNodeName(oc, ns, testPod[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		helloPod1ns1IPv6, helloPod1ns1IPv4 := getPodIP(oc, ns, testPod[0])
+		helloPod1ns1IPv4WithCidr := helloPod1ns1IPv4 + "/32"
+		helloPod1ns1IPv6WithCidr := helloPod1ns1IPv6 + "/128"
+		exutil.By("Create ipBlock Ingress CIDRs Policy in namespace")
+		if ipStackType == "dualstack" {
+			npIPBlockNS1 := ipBlockCIDRsDual{
+				name:      policyName,
+				template:  networkPolicyFile,
+				cidrIpv4:  helloPod1ns1IPv4WithCidr,
+				cidrIpv6:  helloPod1ns1IPv6WithCidr,
+				namespace: ns,
+			}
+			npIPBlockNS1.createipBlockCIDRObjectDual(oc)
+		} else {
+			// For singlestack getPodIP returns second parameter empty therefore use helloPod1ns1IPv6 variable but append it
+			// with CIDR based on stack.
+			var helloPod1ns1IPWithCidr string
+			if ipStackType == "ipv6single" {
+				helloPod1ns1IPWithCidr = helloPod1ns1IPv6WithCidr
+			} else {
+				helloPod1ns1IPWithCidr = helloPod1ns1IPv6 + "/32"
+			}
+
+			npIPBlockNS1 := ipBlockCIDRsSingle{
+				name:      policyName,
+				template:  networkPolicyFile,
+				cidr:      helloPod1ns1IPWithCidr,
+				namespace: ns,
+			}
+			npIPBlockNS1.createipBlockCIDRObjectSingle(oc)
+		}
+
+		exutil.By("Check the policy has been created")
+		output, err := oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(policyName))
+
+		ovnKNodePod, ovnkNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+		e2e.Logf("ovnkube-node podname %s running on node %s", ovnKNodePod, nodeName)
+
+		exutil.By("Get the ACL for the created policy")
+		//list ACLs related to the networkpolicy name
+		aclName := fmt.Sprintf("'NP:%s:%s:Ingres'", ns, policyName)
+		listACLCmd := fmt.Sprintf("ovn-nbctl find acl name='NP\\:%s\\:%s\\:Ingres'", ns, policyName)
+		listAclOutput, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", listACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listAclOutput).NotTo(o.BeEmpty())
+		e2e.Logf(listAclOutput)
+		aclMap := nbContructToMap(listAclOutput)
+		o.Expect(len(aclMap)).NotTo(o.Equal(0))
+		aclMap["name"] = aclName
+
+		exutil.By("Get the port group for the created policy")
+		listPGCmd := fmt.Sprintf("ovn-nbctl find port-group | grep -C 2 %s", ns)
+		listPGOutput, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", listPGCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listPGOutput).NotTo(o.BeEmpty())
+		e2e.Logf(listPGOutput)
+		pgMap := nbContructToMap(listPGOutput)
+		o.Expect(len(pgMap)).NotTo(o.Equal(0))
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", policyName, "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Create a duplicate ACL")
+		createAclCmd := fmt.Sprintf("ovn-nbctl --id=@copyacl create acl name=copyacl direction=%s action=%s -- add port_group %s acl @copyacl", aclMap["direction"], aclMap["action"], pgMap["_uuid"])
+		idOutput, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", createAclCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(idOutput).NotTo(o.BeEmpty())
+		e2e.Logf(idOutput)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", policyName, "-n", ns).Execute()
+		exutil.By("Set properties of duplicate ACL")
+		setAclPropertiesCmd := fmt.Sprintf("ovn-nbctl set acl %s  match='%s' priority=%s meter=%s", idOutput, aclMap["match"], aclMap["priority"], aclMap["meter"])
+		_, listErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", setAclPropertiesCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", policyName, "-n", ns).Execute()
+		exutil.By("Set name of duplicate ACL")
+		dupAclName := fmt.Sprintf("'NP\\:%s\\:%s\\:Ingre0'", ns, policyName)
+		setAclNameCmd := fmt.Sprintf("ovn-nbctl set acl %s name=%s", idOutput, dupAclName)
+		_, listErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", setAclNameCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Check duplicate ACL is created successfully")
+		listDupACLCmd := fmt.Sprintf("ovn-nbctl find acl name='NP\\:%s\\:%s\\:Ingre0'", ns, policyName)
+		listDupAclOutput, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", listDupACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listDupAclOutput).NotTo(o.BeEmpty())
+		e2e.Logf(listDupAclOutput)
+
+		exutil.By("Delete the ovnkube node pod on the node")
+		ovnKNodePod, ovnkNodePodErr = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+		e2e.Logf("ovnkube-node podname %s running on node %s", ovnKNodePod, nodeName)
+		defer waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", ovnKNodePod, "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Wait for new ovnkube-node pod to be recreated on the node")
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		ovnKNodePod, ovnkNodePodErr = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+
+		exutil.By("Check the duplicate ACL is removed")
+		listAclOutput, listErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", listACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listAclOutput).NotTo(o.BeEmpty(), listAclOutput)
+
+		listDupAclOutput, listErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", listDupACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listDupAclOutput).To(o.BeEmpty())
+	})
 
 })

@@ -2928,6 +2928,19 @@ func disableIPForwardingOnSpecNodeNIC(oc *exutil.CLI, worker, secNIC string) {
 	e2e.Logf("IP forwarding was disabled for NIC %s on node %s!", secNIC, worker)
 }
 
+func nbContructToMap(nbConstruct string) map[string]string {
+	listKeyValues := strings.Split(nbConstruct, "\n")
+	var tempMap map[string]string
+	tempMap = make(map[string]string)
+	for _, keyValPair := range listKeyValues {
+		keyValItem := strings.Split(keyValPair, ":")
+		key := strings.Trim(keyValItem[0], " ")
+		val := strings.TrimLeft(keyValItem[1], " ")
+		tempMap[key] = val
+	}
+	return tempMap
+}
+
 // Create live migration job on Kubevirt cluster
 func (migrationjob *migrationDetails) createMigrationJob(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
@@ -2983,4 +2996,5 @@ func checkOVNKState(oc *exutil.CLI) {
 	dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", "openshift-ovn-kubernetes", "ds", "ovnkube-node", "--timeout", "5m").Output()
 	o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
 	o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
+
 }
