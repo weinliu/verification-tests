@@ -139,6 +139,28 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-Low-68679-catalogsource with invalid name is created", func() {
+		dr := make(describerResrouce)
+		itName := g.CurrentSpecReport().FullText()
+		dr.addIr(itName)
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+
+		cs := catalogSourceDescription{
+			name:        "bug-68679-4.14", // the name contains "."
+			namespace:   oc.Namespace(),
+			displayName: "QE Operators",
+			publisher:   "QE",
+			sourceType:  "grpc",
+			address:     "registry.redhat.io/redhat/redhat-operator-index:v4.14",
+			template:    csImageTemplate,
+		}
+		defer cs.delete(itName, dr)
+		cs.createWithCheck(oc, itName, dr)
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-63001-workload annotation missing from platform operator deployments", func() {
 		// Now, 2023-04-27, the platform operator is TP, need to be enabled via the featuregate, so check it.
 		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
