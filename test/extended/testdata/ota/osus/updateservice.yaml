@@ -11,10 +11,11 @@ objects:
   spec:
     graphDataImage: "${GRAPHDATA}"
     releases: "${RELEASES}"
-    replicas: 2
+    replicas: ${{REPLICAS}}
 
 parameters:
 - name: NAME
 - name: NAMESPACE
 - name: GRAPHDATA
 - name: RELEASES
+- name: REPLICAS

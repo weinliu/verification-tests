@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +53,7 @@ type updateService struct {
 	graphdata string
 	releases  string
 	template  string
+	replicas  int
 }
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
@@ -110,7 +112,7 @@ func (sub *subscription) delete(oc *exutil.CLI) {
 }
 
 func (us *updateService) create(oc *exutil.CLI) (err error) {
-	err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", us.template, "-p", "NAME="+us.name, "NAMESPACE="+us.namespace, "GRAPHDATA="+us.graphdata, "RELEASES="+us.releases)
+	err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", us.template, "-p", "NAME="+us.name, "NAMESPACE="+us.namespace, "GRAPHDATA="+us.graphdata, "RELEASES="+us.releases, "REPLICAS="+strconv.Itoa(us.replicas))
 	return
 }
 

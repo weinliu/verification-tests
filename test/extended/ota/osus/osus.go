@@ -231,6 +231,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 			template:  usTemp,
 			graphdata: graphdataTag,
 			releases:  registry + "/ocp-release",
+			replicas:  2,
 		}
 		defer uninstallOSUSApp(oc)
 		err = installOSUSAppOC(oc, us)
@@ -258,6 +259,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 			template:  usTemp,
 			graphdata: "quay.io/openshift-qe-optional-operators/graph-data:latest",
 			releases:  "quay.io/openshift-release-dev/ocp-release",
+			replicas:  2,
 		}
 		defer uninstallOSUSApp(oc)
 		err = installOSUSAppOC(oc, us)
@@ -267,5 +269,59 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		err = verifyOSUS(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+	})
+
+	//author: jiajliu@redhat.com
+	g.It("ConnectedOnly-Author:jiajliu-High-48621-Updateservice pod should be re-deployed when update graphDataImage of updateservice", func() {
+		g.By("Install OSUS instance with graph-data:1.0")
+		usTemp := exutil.FixturePath("testdata", "ota", "osus", "updateservice.yaml")
+		us := updateService{
+			name:      "us48621",
+			namespace: oc.Namespace(),
+			template:  usTemp,
+			graphdata: "quay.io/openshift-qe-optional-operators/graph-data:1.0",
+			releases:  "quay.io/openshift-release-dev/ocp-release",
+			replicas:  1,
+		}
+		defer uninstallOSUSApp(oc)
+		err := installOSUSAppOC(oc, us)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Waiting for osus instance pod rolling to expected replicas...")
+		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+			runningPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+			if err != nil || len(strings.Fields(runningPodName)) != us.replicas {
+				e2e.Logf("error: %v; running pod: %w", err, runningPodName)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod is not rolling to expected replicas")
+
+		runningPodNamePre, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		graphDataImagePre, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", runningPodNamePre, "-n", us.namespace, "-o=jsonpath={.spec.initContainers[].image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(graphDataImagePre).To(o.ContainSubstring("1.0"))
+
+		g.By("Update OSUS instance with graph-data:1.1")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", us.namespace, "updateservice/"+us.name, "-p", `{"spec":{"graphDataImage":"quay.io/openshift-qe-optional-operators/graph-data:1.1"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Waiting for osus instance pod rolling...")
+		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+			runningPodNamePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+			if err != nil || strings.Contains(runningPodNamePost, runningPodNamePre) {
+				e2e.Logf("error: %v; running pod after update image: %w; while running pod before update image: %s", err, runningPodNamePost, runningPodNamePre)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod is not rolling successfully after update image")
+		runningPodNamePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		graphDataImagePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", runningPodNamePost, "-n", us.namespace, "-o=jsonpath={.spec.initContainers[].image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(graphDataImagePost).To(o.ContainSubstring("1.1"))
 	})
 })
