@@ -139,6 +139,21 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-Medium-68681-pods with no 'controller: true' ownerReferences", func() {
+		defaultCatalogSources := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
+		exutil.By("1) check default catalog sources' pods if labeled with controller: true")
+		for _, cs := range defaultCatalogSources {
+			controller, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", fmt.Sprintf("olm.catalogSource=%s", cs), "-o=jsonpath={.items[0].metadata.ownerReferences[0].controller}", "-n", "openshift-marketplace").Output()
+			if err != nil {
+				e2e.Failf("fail to get %s's pod's controller label, error:%v", cs, err)
+			}
+			if controller != "true" {
+				e2e.Failf("%s's pod's controller is not true!", cs)
+			}
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-Low-68679-catalogsource with invalid name is created", func() {
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
