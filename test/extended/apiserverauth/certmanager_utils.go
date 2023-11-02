@@ -1,11 +1,13 @@
 package apiserverauth
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"github.com/tidwall/gjson"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -190,7 +192,9 @@ func createCertificate(oc *exutil.CLI) {
 	if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
 		g.Skip("Skipping Private clusters that are behind some proxy and can't be directly reachable from externally.")
 	}
+	// TODO: Un-skip vsphere once port 80 issue is fixed.
 	exutil.SkipIfPlatformType(oc, "openstack, vsphere")
+	skipIfRouteUnreachable(oc)
 
 	e2e.Logf("As the normal user, create certificate.")
 	ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
@@ -220,4 +224,44 @@ func createCertificate(oc *exutil.CLI) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
+}
+
+// Skip case if HTTP and HTTPS route are unreachable.
+func skipIfRouteUnreachable(oc *exutil.CLI) {
+	var (
+		httpReachable  bool
+		httpsReachable bool
+	)
+
+	e2e.Logf("Get route host from ingress canary.")
+	host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "canary", "-n", "openshift-ingress-canary", "--template", `{{range .status.ingress}}{{if eq .routerName "default"}}{{.host}}{{end}}{{end}}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("New the client to detect HTTP, HTTPS connection.")
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	httpResponse, httpErr := httpClient.Get("http://" + host)
+	if httpErr == nil && httpResponse.StatusCode == http.StatusFound { // 302 -> port 80 is opened
+		httpReachable = true
+		defer httpResponse.Body.Close()
+	}
+	httpsResponse, httpsErr := httpClient.Get("https://" + host)
+	if httpsErr == nil {
+		httpsReachable = true
+		defer httpsResponse.Body.Close()
+	}
+
+	if !httpReachable && !httpsReachable {
+		g.Skip("HTTP and HTTPS are both unreachable, skipped.")
+	} else if !httpReachable && httpsReachable {
+		e2e.Failf("HTTPS reachable but HTTP unreachable. Marking case failed to signal router or installer problem. HTTP response error: %s", httpErr)
+	}
 }

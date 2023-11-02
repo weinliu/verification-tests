@@ -162,7 +162,9 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
 			g.Skip("Skipping Private clusters that are behind some proxy and can't be directly reachable from externally.")
 		}
+		// TODO: Un-skip vsphere once port 80 issue is fixed.
 		exutil.SkipIfPlatformType(oc, "openstack, vsphere")
+		skipIfRouteUnreachable(oc)
 
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		output0, err0 := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec.trustedCA.name}").Output()
