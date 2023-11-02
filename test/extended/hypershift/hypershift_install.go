@@ -9,8 +9,9 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
 var _ = g.Describe("[sig-hypershift] Hypershift", func() {
@@ -1011,5 +1012,97 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				o.Expect(n).Should(o.BeElementOf(nonServingComponentNodes))
 			}
 		}
+	})
+
+	// author: heli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:heli-Critical-67721-[HyperShiftINSTALL] Hypershift Operator version validation is not skipping version checks for node pools [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 67721 is for AWS - skipping test ...")
+		}
+
+		caseID := "67721"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		g.By("check hosted cluster supported version")
+		supportedVersion := doOcpReq(oc, OcpGet, true, "configmap", "-n", "hypershift", "supported-versions", `-ojsonpath={.data.supported-versions}`)
+		e2e.Logf("supported version is: " + supportedVersion)
+
+		minSupportedVersion, err := getVersionWithMajorAndMinor(getMinSupportedOCPVersion())
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(supportedVersion).Should(o.ContainSubstring(minSupportedVersion))
+
+		g.By("get max unsupported HostedClusters version nightly release")
+		maxUnsupportedVersion, err := getVersionWithMajorAndMinor(getLatestUnsupportedOCPVersion())
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		release, err := exutil.GetLatestNightlyImage(maxUnsupportedVersion)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		g.By("create HostedClusters with unsupported version")
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName("hypershift-" + caseID).
+			withReleaseImage(release).
+			withNodePoolReplicas(1)
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		hc := installHelper.createAWSHostedClusterWithoutCheck(createCluster)
+
+		g.By("check hc condition & nodepool condition")
+		o.Eventually(func() bool {
+			hcStatus := doOcpReq(oc, OcpGet, false, "hostedcluster", hc.name, "-n", hc.namespace, "--ignore-not-found", `-o=jsonpath={.status.conditions[?(@.type=="ValidReleaseImage")].status}`)
+			if hcStatus != "False" {
+				return false
+			}
+
+			npStatus := doOcpReq(oc, OcpGet, false, "nodepool", "-n", hc.namespace, fmt.Sprintf(`-o=jsonpath={.items[?(@.spec.clusterName=="%s")].status.conditions[?(@.type=="ValidReleaseImage")].status}`, hc.name))
+			for _, st := range strings.Split(npStatus, " ") {
+				if st != "False" {
+					return false
+				}
+			}
+			return true
+		}, LongTimeout, LongTimeout/30).Should(o.BeTrue())
+
+		g.By("add annotation to skip release check")
+		doOcpReq(oc, OcpAnnotate, true, "hostedcluster", hc.name, "-n", hc.namespace, "hypershift.openshift.io/skip-release-image-validation=true")
+		skipReleaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", hc.name, "-n", hc.namespace, `-o=jsonpath={.metadata.annotations.hypershift\.openshift\.io/skip-release-image-validation}`)
+		o.Expect(skipReleaseImage).Should(o.ContainSubstring("true"))
+
+		g.By("check nodepool and hc to be recovered")
+		o.Eventually(func() bool {
+			hcStatus := doOcpReq(oc, OcpGet, false, "hostedcluster", hc.name, "-n", hc.namespace, "--ignore-not-found", `-o=jsonpath={.status.conditions[?(@.type=="ValidReleaseImage")].status}`)
+			if hcStatus != "True" {
+				return false
+			}
+			return true
+		}, DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "hostedcluster ValidReleaseImage could not be recovered back error")
+
+		o.Eventually(func() bool {
+			npStatus := doOcpReq(oc, OcpGet, false, "nodepool", "-n", hc.namespace, fmt.Sprintf(`-o=jsonpath={.items[?(@.spec.clusterName=="%s")].status.conditions[?(@.type=="ValidReleaseImage")].status}`, hc.name))
+			for _, st := range strings.Split(npStatus, " ") {
+				if st != "True" {
+					return false
+				}
+			}
+			return true
+		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ValidReleaseImage could not be recovered back error")
+		o.Eventually(hc.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.BeTrue(), "AWS HostedClusters install error")
+
+		g.By("create a new nodepool")
+		replica := 1
+		npName := caseID + strings.ToLower(exutil.RandStrDefault())
+		NewAWSNodePool(npName, hc.name, hc.namespace).
+			WithNodeCount(&replica).
+			WithReleaseImage(release).
+			CreateAWSNodePool()
+		o.Eventually(hc.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npName))
+
 	})
 })

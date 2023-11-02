@@ -427,3 +427,21 @@ func removeNodesLabel(oc *exutil.CLI, nodes []string, labelKey string) {
 		}
 	}
 }
+
+func getLatestUnsupportedOCPVersion() string {
+	min := semver.MustParse(getMinSupportedOCPVersion())
+	return semver.MustParse(subtractMinor(&min, uint64(1)).String()).String()
+}
+
+// remove z stream suffix 4.12.0 --> 4.12
+func getVersionWithMajorAndMinor(version string) (string, error) {
+	v := strings.Split(version, ".")
+	if len(v) == 0 || len(v) > 3 {
+		return "", fmt.Errorf("invalid version")
+	}
+	if len(v) < 3 {
+		return version, nil
+	} else {
+		return strings.Join(v[:2], "."), nil
+	}
+}
