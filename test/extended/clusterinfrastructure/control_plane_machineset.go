@@ -129,6 +129,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "gcp":
 			changeInstanceType = "e2-standard-4"
 			backupInstanceType = "n2-standard-4"
+			confidentialCompute, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.confidentialCompute}", "-n", machineAPINamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if confidentialCompute == "Enabled" {
+				changeInstanceType = "c2d-standard-4"
+				backupInstanceType = "n2d-standard-4"
+			}
 			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}"
 			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`
 			patchstrSuffix = `"}}}}}}}`
@@ -284,6 +290,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "gcp":
 			changeInstanceType = "e2-standard-4"
 			backupInstanceType = "n2-standard-4"
+			confidentialCompute, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.confidentialCompute}", "-n", machineAPINamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if confidentialCompute == "Enabled" {
+				changeInstanceType = "c2d-standard-4"
+				backupInstanceType = "n2d-standard-4"
+			}
 			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}"
 			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`
 			patchstrSuffix = `"}}}}}}}`
@@ -579,6 +591,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			fieldName = "vmSize"
 		case "gcp":
 			fieldName = "machineType"
+			confidentialCompute, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.confidentialCompute}", "-n", machineAPINamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if confidentialCompute == "Enabled" {
+				fieldValue = "c2d-standard-4"
+			}
 		case "nutanix":
 			fieldName = "bootType"
 			fieldValue = "Legacy"
