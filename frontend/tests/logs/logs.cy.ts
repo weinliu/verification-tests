@@ -14,11 +14,20 @@ describe('logs related features', () => {
     cy.exec(`oc delete project ${testName}`);
     cy.cliLogout();
   });
-
+  it('(OCP-68420,yanpzhan) Should maintain white-space in pod log on console', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
+    cy.exec(`oc create -f ./fixtures/pods/pod-with-white-space-logs.yaml -n ${testName}`);
+    cy.visit(`/k8s/ns/${testName}/pods/example/logs`);
+    logsPage.selectContainer('container2');
+    logsPage.setLogWrap('true');
+    cy.get('span.pf-c-log-viewer__text', {timeout: 60000}).should('contain', 'Log   TEST');
+    logsPage.setLogWrap('false');
+    cy.get('span.pf-c-log-viewer__text', {timeout: 60000}).should('contain', 'Log   TEST');
+  });
   it('(OCP-54875,yanpzhan) Configure default behavior for "Wrap lines" in log viewers by pod annotation', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
     cy.exec(`oc create -f ./fixtures/pods/example-pod.yaml -n ${testName}`);
     cy.exec(`oc create -f ./fixtures/pods/example-pod-with-wrap-annotation.yaml -n ${testName}`);
     cy.visit(`/k8s/ns/${testName}/pods/examplepod/logs`);
+    logsPage.setLogWrap('false');
     logsPage.checkLogWraped('false');
     cy.visit(`/k8s/ns/${testName}/pods/wraplogpod/logs`);
     logsPage.checkLogWraped('true');

@@ -5,6 +5,14 @@ export const logsPage = {
     cy.get('#log-unit').clear();
     cy.get('#log-unit').type(unitname).type('{enter}');
   },
+  selectContainer: (containername?, containernumber?) => {
+    cy.get('button[data-test-id="dropdown-button"]').click();
+    if(containername){
+      cy.contains('span.co-resource-item__resource-name', `${containername}`).click();
+    }else if(containernumber){
+      cy.get('ul.pf-c-dropdown__menu li button').eq(`${containernumber}-1`).click();
+    }
+  },
   selectLogComponent: (componentname: string) => {
     cy.get('button.pf-c-select__toggle').click();
     cy.get('.pf-c-select__menu-item').contains(componentname).click();
@@ -29,7 +37,8 @@ export const logsPage = {
   setLogWrap: (boolvalue) => {
     cy.get('#wrapLogLines').then(($elem) => {
       const $checkedstate = $elem.attr('data-checked-state');
-      if($checkedstate != '${boolvalue}'){
+      cy.log($checkedstate);
+      if(boolvalue != $checkedstate){
         cy.contains('Wrap lines').click();
       }
     })
