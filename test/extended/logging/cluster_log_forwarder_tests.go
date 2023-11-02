@@ -1359,7 +1359,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				kafka := resource{"kafka", kafkaClusterName, amq.Namespace}
 				kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
 				//defer kafka.clear(oc)
-				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.3.1", "MESSAGE_VERSION=3.3.1")
+				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.4.0", "MESSAGE_VERSION=3.4.0")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				// create topics
 				topicTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")

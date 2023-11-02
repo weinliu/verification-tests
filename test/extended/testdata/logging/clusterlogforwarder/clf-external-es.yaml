@@ -17,12 +17,10 @@ objects:
         version: ${{ES_VERSION}}
     pipelines:
     - name: forward-to-external-es
-      inputRefs:
-      - infrastructure
-      - application
-      - audit
+      inputRefs: ${{INPUTREFS}}
       outputRefs:
       - es-created-by-user
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -32,3 +30,7 @@ parameters:
   value: "http://elasticsearch-server.es-aosqe-qa.svc:9200"
 - name: ES_VERSION
   value: "6"
+- name: INPUTREFS
+  value: "[\"infrastructure\", \"audit\", \"application\"]"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

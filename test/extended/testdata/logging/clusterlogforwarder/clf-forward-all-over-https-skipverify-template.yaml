@@ -62,6 +62,7 @@ objects:
       name: audit-logs
       outputRefs:
       - httpout-audit
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: instance
@@ -71,3 +72,5 @@ parameters:
   value: https://fluentdserver.openshift-logging.svc:24224
 - name: SECRET_NAME
   value: fluentdserver
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

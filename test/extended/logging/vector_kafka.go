@@ -61,26 +61,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafka.deployKafka(oc)
 			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9093/clo-topic"
 
-			g.By("Create clusterlogforwarder/instance")
+			g.By("Create clusterlogforwarder")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
-				secretName:   kafka.pipelineSecret,
+				name:                   "clf-49369",
+				namespace:              loggingNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
+				secretName:             kafka.pipelineSecret,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "URL="+kafkaEndpoint)
-
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
@@ -119,26 +111,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafka.deployKafka(oc)
 			kafkaEndpoint := "http://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9092/clo-topic"
 
-			g.By("Create clusterlogforwarder/instance")
+			g.By("Create clusterlogforwarder")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
-				secretName:   kafka.pipelineSecret,
+				name:                   "clf-52420",
+				namespace:              loggingNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
+				secretName:             kafka.pipelineSecret,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "URL="+kafkaEndpoint)
-
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
@@ -179,24 +163,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
-				secretName:   kafka.pipelineSecret,
+				name:                   "clf-52496",
+				namespace:              loggingNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
+				secretName:             kafka.pipelineSecret,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "URL="+kafkaEndpoint)
-
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check app logs in kafka consumer pod")
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
@@ -212,7 +188,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Medium-47036-Vector Forward logs to different AMQ Kafka topics[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:qitang-Medium-47036-Vector Forward logs to different AMQ Kafka topics[Slow]", func() {
 			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
@@ -251,7 +227,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafka := resource{"kafka", kafkaClusterName, amqNS}
 			kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
 			defer kafka.clear(oc)
-			kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.3.1", "MESSAGE_VERSION=3.3.1")
+			kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.4.0", "MESSAGE_VERSION=3.4.0")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// create topics
 			topicNames := []string{"topic-logging-app", "topic-logging-infra", "topic-logging-audit"}
@@ -276,28 +252,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReadyWithLabel(oc, amqNS, "job-name="+topicName+"-consumer")
 			}
 
+			oc.SetupProject()
+			clfNS := oc.Namespace()
+
 			g.By("forward logs to Kafkas")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka_multi_topics.yaml"),
+				name:                      "clf-47036",
+				namespace:                 clfNS,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka_multi_topics.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 
 			bootstrapSVC := kafkaClusterName + "-kafka-bootstrap." + amqNS + ".svc"
 			//since the data in kafka will be write to comsumer pods' stdout, and to avoid collecting these logs, here only collect app logs from appProj
 			clf.create(oc, "BOOTSTRAP_SVC="+bootstrapSVC, "APP_PROJECT="+appProj)
-
-			g.By("deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("check data in kafka")
 			//application logs
@@ -338,7 +311,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Medium-48141-Vector Forward logs to different Kafka brokers.[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:qitang-Medium-48141-Vector Forward logs to different Kafka brokers.[Slow]", func() {
 			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
@@ -390,7 +363,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				kafka := resource{"kafka", kafkaClusterName, amq.Namespace}
 				kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
 				//defer kafka.clear(oc)
-				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.3.1", "MESSAGE_VERSION=3.3.1")
+				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.4.0", "MESSAGE_VERSION=3.4.0")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				// create topics
 				topicTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")
@@ -412,23 +385,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("forward logs to Kafkas")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka_multi_brokers.yaml"),
+				name:                      "clf-48141",
+				namespace:                 loggingNS,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka_multi_brokers.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			brokers, _ := json.Marshal([]string{"tls://" + kafkaClusterName + "-kafka-bootstrap." + amqNs1 + ".svc:9092", "tls://" + kafkaClusterName + "-kafka-bootstrap." + amqNs2 + ".svc:9092"})
 			clf.create(oc, "TOPIC="+topicName, "BROKERS="+string(brokers))
-			g.By("deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("check data in kafka")
 			for _, consumer := range []resource{{"job", topicName + "-consumer", amqNs1}, {"job", topicName + "-consumer", amqNs2}} {
@@ -495,26 +463,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafka.deployKafka(oc)
 			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9093/clo-topic"
 
-			g.By("Create clusterlogforwarder/instance")
+			g.By("Create clusterlogforwarder")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
-				secretName:   kafka.pipelineSecret,
+				name:                   "clf-61549",
+				namespace:              loggingNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka.yaml"),
+				secretName:             kafka.pipelineSecret,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "URL="+kafkaEndpoint, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
-
-			g.By("deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
+			clf.create(oc, "URL="+kafkaEndpoint)
 
 			g.By("The Kafka sink in Vector config must use the Custom tlsSecurityProfile")
 			searchString := `[sinks.kafka_app.tls]
@@ -524,7 +484,7 @@ ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-
 key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
 crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
 ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
-			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -543,7 +503,7 @@ ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
 			g.By("Set Old tlsSecurityProfile for the External Kafka output.")
 			patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Old"}}}]`
 			clf.update(oc, "", patch, "--type=json")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 			g.By("Deploy the log generator app")
 			oc.SetupProject()
@@ -559,14 +519,14 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
 crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
 ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
-			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
 			e2e.Logf("Wait for a minute before the collector logs are generated.")
 			time.Sleep(60 * time.Second)
-			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=component=collector").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Kafka server.")
 

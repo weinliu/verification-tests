@@ -19,12 +19,10 @@ objects:
         logId : ${LOG_ID}
     pipelines:
     - name: test-google-cloud-logging
-      inputRefs:
-        - application
-        - infrastructure
-        - audit
+      inputRefs: ${{INPUTREFS}}
       outputRefs:
         - gcp-logging
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -36,3 +34,7 @@ parameters:
   value: "openshift-qe"
 - name: LOG_ID
   value: "aosqe-logging"
+- name: INPUTREFS
+  value: "[\"infrastructure\", \"audit\", \"application\"]"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

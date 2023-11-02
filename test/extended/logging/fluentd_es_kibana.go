@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			chkMustGather(oc, cl.namespace, "collector")
 
 			g.By("Update CLF to forward logs to default ES and external ES")
-			clf.update(oc, filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-exteranl-es-and-default.yaml"), "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			clf.update(oc, filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-and-default.yaml"), "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
 
 			g.By("Update ClusterLogging to use Elasticsearch as default log store")
 			cl.update(oc, filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"))

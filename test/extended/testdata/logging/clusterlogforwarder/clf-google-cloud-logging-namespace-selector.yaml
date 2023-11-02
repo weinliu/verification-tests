@@ -8,8 +8,6 @@ objects:
   metadata:
     name: ${NAME}
     namespace: ${NAMESPACE}
-    annotations:
-      logging.openshift.io/preview-tls-security-profile: ${PREVIEW_TLS_SECURITY_PROFILE}
   spec:
     inputs:
     - application:
@@ -30,6 +28,7 @@ objects:
         - myAppLogData
       outputRefs:
         - gcp-logging
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -42,5 +41,5 @@ parameters:
 - name: LOG_ID
   value: "aosqe-logging"
 - name: DATA_PROJECT
-- name: PREVIEW_TLS_SECURITY_PROFILE
-  value: "disabled"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

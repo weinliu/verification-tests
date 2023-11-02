@@ -8,8 +8,6 @@ objects:
   metadata:
     name: ${NAME}
     namespace: ${NAMESPACE}
-    annotations:
-      logging.openshift.io/preview-tls-security-profile: ${PREVIEW_TLS_SECURITY_PROFILE}
   spec:
     outputs:
     - name: splunk-aosqe
@@ -22,6 +20,7 @@ objects:
       inputRefs: ${{INPUTREFS}}
       outputRefs:
       - splunk-aosqe
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -34,5 +33,5 @@ parameters:
   required: true
 - name: INPUTREFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
-- name: PREVIEW_TLS_SECURITY_PROFILE
-  value: "disabled"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

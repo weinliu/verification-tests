@@ -20,6 +20,7 @@ objects:
       inputRefs: ${{INPUTS}}
       outputRefs:
         - external-fluentd
+    serviceAccountName: ${{SERVICE_ACCOUNT_NAME}}
 parameters:
 - name: NAME
   value: "instance"
@@ -31,3 +32,5 @@ parameters:
   value: "tls://fluentdserver.openshift-logging.svc:24224"
 - name: INPUTS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

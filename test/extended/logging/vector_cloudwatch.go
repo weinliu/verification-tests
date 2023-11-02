@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cw.deleteGroups()
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Critical-51977-Vector logs to Cloudwatch group by namespaceName and groupPrefix [Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Critical-51977-Vector logs to Cloudwatch group by namespaceName and groupPrefix", func() {
 			cw.setGroupPrefix("logging-51977-" + getInfrastructureName(oc))
 			cw.setGroupType("namespaceName")
 			cw.setLogTypes("infrastructure", "application", "audit")
@@ -67,23 +67,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Create clusterlogforwarder/instance")
+			oc.SetupProject()
+			clfNS := oc.Namespace()
+			cw.setSecretNamespace(clfNS)
+			g.By("Create clusterlogforwarder")
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
-				secretName:   cw.secretName,
+				name:                      "clf-51977",
+				namespace:                 clfNS,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				secretName:                cw.secretName,
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
 
 			g.By("Deploy collector pods")
 			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
+				name:          clf.name,
+				namespace:     clf.namespace,
 				collectorType: "vector",
 				waitForReady:  true,
 				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -96,13 +104,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-High-51978-Vector Forward logs to Cloudwatch using namespaceUUID and groupPrefix[Serial]", func() {
+		g.It("CPaasrunOnly-Author:qitang-High-51978-Vector Forward logs to Cloudwatch using namespaceUUID and groupPrefix", func() {
+			clfNS := oc.Namespace()
+			cw.setSecretNamespace(clfNS)
 			cw.setGroupPrefix("logging-51978-" + getInfrastructureName(oc))
 			cw.setGroupType("namespaceUUID")
 			cw.setLogTypes("application", "infrastructure", "audit")
 
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			g.By("Create log producer")
+			oc.SetupProject()
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -115,31 +126,27 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cw.createClfSecret(oc)
 
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
-				secretName:   cw.secretName,
+				name:                      "clf-51978",
+				namespace:                 clfNS,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				secretName:                cw.secretName,
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
-
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check logs in Cloudwatch")
 			o.Expect(cw.logsFound()).To(o.BeTrue())
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-High-52380-Vector Forward logs from specified pods using label selector to Cloudwatch group [Serial]", func() {
+		g.It("CPaasrunOnly-Author:qitang-High-52380-Vector Forward logs from specified pods using label selector to Cloudwatch group", func() {
+			clfNS := oc.Namespace()
+			cw.setSecretNamespace(clfNS)
 			cw.setGroupPrefix("logging-52380-" + getInfrastructureName(oc))
 			cw.setGroupType("logType")
 			cw.setLogTypes("application")
@@ -147,6 +154,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			testLabel := "{\"run\":\"test-52380\",\"test\":\"test-52380\"}"
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			g.By("Create log producer")
+			oc.SetupProject()
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile, "-p", "LABELS="+testLabel).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -163,37 +171,32 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cw.createClfSecret(oc)
 
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-label-selector.yaml"),
-				secretName:   cw.secretName,
+				name:                   "clf-52380",
+				namespace:              clfNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-label-selector.yaml"),
+				secretName:             cw.secretName,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType, "MATCH_LABELS="+string(testLabel))
-
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check logs in Cloudwatch")
 			o.Expect(cw.logsFound()).To(o.BeTrue())
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Critical-52132-Vector Forward logs from specified pods using namespace selector to Cloudwatch group[Serial]", func() {
+		g.It("CPaasrunOnly-Author:qitang-Critical-52132-Vector Forward logs from specified pods using namespace selector to Cloudwatch group", func() {
+			clfNS := oc.Namespace()
+			cw.setSecretNamespace(clfNS)
 			cw.setGroupPrefix("logging-52132-" + getInfrastructureName(oc))
 			cw.setGroupType("logType")
 			cw.setLogTypes("application")
 
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			g.By("Create log producer")
+			oc.SetupProject()
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -211,31 +214,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cw.createClfSecret(oc)
 
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-namespace-selector.yaml"),
-				secretName:   cw.secretName,
+				name:                   "clf-52132",
+				namespace:              clfNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-namespace-selector.yaml"),
+				secretName:             cw.secretName,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			projects, _ := json.Marshal([]string{appProj1})
 			clf.create(oc, "DATA_PROJECTS="+string(projects), "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
-
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check logs in Cloudwatch")
 			o.Expect(cw.logsFound()).To(o.BeTrue())
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-61600-Collector External Cloudwatch output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+			clfNS := oc.Namespace()
+			cw.setSecretNamespace(clfNS)
 			cw.setGroupPrefix("logging-61600-" + getInfrastructureName(oc))
 			cw.setGroupType("logType")
 			cw.setLogTypes("infrastructure", "audit", "application")
@@ -263,24 +260,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cw.createClfSecret(oc)
 
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
-				secretName:   cw.secretName,
+				name:                      "clf-61600",
+				namespace:                 clfNS,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				secretName:                cw.secretName,
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
-
-			g.By("deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
+			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
 
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			g.By("Create log producer")
@@ -293,7 +284,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			searchString := `[sinks.cw.tls]
 min_tls_version = "VersionTLS12"
 ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"`
-			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -306,9 +297,8 @@ ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-
 
 			g.By("Set Intermediate tlsSecurityProfile for the Cloudwatch output.")
 			patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Intermediate"}}}]`
-			er = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cl.namespace, "clusterlogforwarder/instance", "--type=json", "-p", patch).Execute()
-			o.Expect(er).NotTo(o.HaveOccurred())
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 			g.By("Create log producer")
 			oc.SetupProject()
@@ -321,14 +311,14 @@ ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-
 			searchString = `[sinks.cw.tls]
 min_tls_version = "VersionTLS12"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
-			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs")
 			e2e.Logf("Wait for a minute before the collector logs are generated.")
 			time.Sleep(60 * time.Second)
-			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=component=collector").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Cloudwatch server.")
 

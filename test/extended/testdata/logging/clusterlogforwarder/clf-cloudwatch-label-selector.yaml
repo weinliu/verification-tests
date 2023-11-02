@@ -28,6 +28,7 @@ objects:
       inputRefs: ${{INPUT_REFS}}
       outputRefs:
       - cw
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -45,3 +46,5 @@ parameters:
   value: "[\"myAppLogData\"]"
 - name: MATCH_LABELS
   value: "{\"run\": \"centos-logtest\", \"test\": \"centos-logtest\"}"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

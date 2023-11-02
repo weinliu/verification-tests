@@ -8,8 +8,6 @@ objects:
   metadata:
     name: ${NAME}
     namespace: ${NAMESPACE}
-    annotations:
-      logging.openshift.io/preview-tls-security-profile: ${PREVIEW_TLS_SECURITY_PROFILE}
   spec:
     outputs:
     - name: kafka-app
@@ -23,6 +21,7 @@ objects:
       - application
       outputRefs:
       - kafka-app
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -34,5 +33,5 @@ parameters:
   value: "tls://kafka.openshift-logging.svc.cluster.local:9093/clo-topic"
 - name: SECRET_NAME
   value: "kafka-vector"
-- name: PREVIEW_TLS_SECURITY_PROFILE
-  value: "disabled"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

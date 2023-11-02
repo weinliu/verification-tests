@@ -37,7 +37,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 			CLO.SubscribeOperator(oc)
 		})
-		g.It("CPaasrunOnly-Author:anli-High-54980-Vector forward logs to Splunk 9.0 over HTTP[Serial][Slow]", func() {
+
+		g.It("CPaasrunOnly-Author:anli-High-54980-Vector forward logs to Splunk 9.0 over HTTP", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			sp := splunkPodServer{
@@ -50,7 +51,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// The secret used in CLF to splunk server
 			clfSecret := toSplunkSecret{
 				name:       "to-splunk-secret-54980",
-				namespace:  loggingNS,
+				namespace:  splunkProject,
 				hecToken:   sp.hecToken,
 				caFile:     "",
 				keyFile:    "",
@@ -59,32 +60,27 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				name:                      "clf-54980",
+				namespace:                 splunkProject,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
 			}
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-				waitForReady:  true,
-			}
+
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 
 			g.By("Deploy splunk")
 			defer sp.destroy(oc)
 			sp.deploy(oc)
 
-			g.By("create clusterlogforwarder/instance")
+			g.By("create clusterlogforwarder")
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
 			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name)
-
-			g.By("create clusterlogging/instance")
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("create log producer")
 			oc.SetupProject()
@@ -96,7 +92,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(sp.anyLogFound()).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Medium-56248-vector forward logs to splunk 8.2 over TLS - SkipVerify [Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:anli-Medium-56248-vector forward logs to splunk 8.2 over TLS - SkipVerify", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			keysPath := filepath.Join("/tmp/temp" + getRandomString())
@@ -114,25 +110,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// The secret used in CLF to splunk server
 			clfSecret := toSplunkSecret{
 				name:       "to-splunk-secret-56248",
-				namespace:  loggingNS,
+				namespace:  splunkProject,
 				hecToken:   sp.hecToken,
 				caFile:     keysPath + "/fake_ca.crt",
 				keyFile:    "",
 				certFile:   "",
 				passphrase: "",
 			}
-			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_skipverify_template.yaml"),
-			}
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-				waitForReady:  true,
-			}
+
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 
 			g.By("generate fake certifate for testing")
@@ -150,15 +135,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer sp.destroy(oc)
 			sp.deploy(oc)
 
-			g.By("create clusterlogforwarder/instance")
+			g.By("create clusterlogforwarder")
+			clf := clusterlogforwarder{
+				name:                      "clf-56248",
+				namespace:                 splunkProject,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_skipverify_template.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
+			}
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
 			clf.create(oc, "URL=https://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name)
-
-			g.By("create clusterlogging/instance")
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("create log producer")
 			oc.SetupProject()
@@ -169,7 +160,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check logs in splunk")
 			o.Expect(sp.anyLogFound()).To(o.BeTrue())
 		})
-		g.It("CPaasrunOnly-Author:anli-Critical-55976-vector forward logs to splunk 9.0 over TLS - ServerOnly [Serial][Slow]", func() {
+
+		g.It("CPaasrunOnly-Author:anli-Critical-55976-vector forward logs to splunk 9.0 over TLS - ServerOnly", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			keysPath := filepath.Join("/tmp/temp" + getRandomString())
@@ -187,7 +179,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// The secret used in CLF to splunk server
 			clfSecret := toSplunkSecret{
 				name:       "to-splunk-secret-55976",
-				namespace:  loggingNS,
+				namespace:  splunkProject,
 				hecToken:   sp.hecToken,
 				caFile:     keysPath + "/ca.crt",
 				keyFile:    "",
@@ -195,18 +187,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				passphrase: "",
 			}
 
-			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
-			}
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-				waitForReady:  true,
-			}
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 
 			g.By("Generate certifcate for testing")
@@ -220,15 +200,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer sp.destroy(oc)
 			sp.deploy(oc)
 
-			g.By("create clusterlogforwarder/instance")
+			g.By("create clusterlogforwarder")
+			clf := clusterlogforwarder{
+				name:                      "clf-55976",
+				namespace:                 splunkProject,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
+			}
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
 			clf.create(oc, "URL=https://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name)
-
-			g.By("create clusterlogging/instance")
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("create log producer")
 			oc.SetupProject()
@@ -239,7 +225,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check logs in splunk")
 			o.Expect(sp.allTypeLogsFound()).To(o.BeTrue())
 		})
-		g.It("CPaasrunOnly-Author:anli-Medium-54978-vector forward logs to splunk 8.2 over TLS - Client Key Passphase [Serial][Slow]", func() {
+
+		g.It("CPaasrunOnly-Author:anli-Medium-54978-vector forward logs to splunk 8.2 over TLS - Client Key Passphase", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			keysPath := filepath.Join("/tmp/temp" + getRandomString())
@@ -256,7 +243,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sp.init()
 			clfSecret := toSplunkSecret{
 				name:       "to-splunk-secret-54978",
-				namespace:  loggingNS,
+				namespace:  splunkProject,
 				hecToken:   sp.hecToken,
 				caFile:     keysPath + "/ca.crt",
 				keyFile:    keysPath + "/client.key",
@@ -265,17 +252,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				name:                      "clf-54978",
+				namespace:                 splunkProject,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
 			}
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-				waitForReady:  true,
-			}
+
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 
 			g.By("Generate certifcate for testing")
@@ -289,15 +275,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer sp.destroy(oc)
 			sp.deploy(oc)
 
-			g.By("create clusterlogforwarder/instance")
+			g.By("create clusterlogforwarder")
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
 			clf.create(oc, "URL=https://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name)
-
-			g.By("create clusterlogging/instance")
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("create log producer")
 			oc.SetupProject()
@@ -308,7 +290,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check logs in splunk")
 			o.Expect(sp.anyLogFound()).To(o.BeTrue())
 		})
-		g.It("CPaasrunOnly-Author:anli-Medium-54979-vector forward logs to splunk 9.0 over TLS - ClientAuth [Serial][Slow]", func() {
+
+		g.It("CPaasrunOnly-Author:anli-Medium-54979-vector forward logs to splunk 9.0 over TLS - ClientAuth", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			keysPath := filepath.Join("/tmp/temp" + getRandomString())
@@ -325,7 +308,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sp.init()
 			clfSecret := toSplunkSecret{
 				name:       "to-splunk-secret-54979",
-				namespace:  loggingNS,
+				namespace:  splunkProject,
 				hecToken:   sp.hecToken,
 				caFile:     keysPath + "/ca.crt",
 				keyFile:    keysPath + "/client.key",
@@ -333,17 +316,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				passphrase: "",
 			}
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				name:                      "clf-54979",
+				namespace:                 splunkProject,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
 			}
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-				waitForReady:  true,
-			}
+
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 
 			g.By("Generate certifcate for testing")
@@ -358,15 +340,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer sp.destroy(oc)
 			sp.deploy(oc)
 
-			g.By("create clusterlogforwarder/instance")
+			g.By("create clusterlogforwarder")
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
 			clf.create(oc, "URL=https://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name)
-
-			g.By("create clusterlogging/instance")
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("create log producer")
 			oc.SetupProject()

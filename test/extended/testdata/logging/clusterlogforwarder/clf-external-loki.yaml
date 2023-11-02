@@ -17,6 +17,7 @@ objects:
     - name: forward-to-loki
       inputRefs: ${{INPUTREFS}}
       outputRefs: ${{OUTPUTREFS}}
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -30,3 +31,5 @@ parameters:
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: OUTPUTREFS
   value: "[\"loki-server\"]"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

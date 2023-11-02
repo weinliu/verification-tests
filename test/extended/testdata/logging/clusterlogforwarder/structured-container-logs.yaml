@@ -27,6 +27,7 @@ objects:
       outputRefs:
       - elasticsearch
       parse: json
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -44,3 +45,5 @@ parameters:
   value: collector
 - name: ES_VERSION
   value: "6"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

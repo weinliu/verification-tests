@@ -22,6 +22,7 @@ objects:
       inputRefs: ${{INPUTREFS}}
       outputRefs:
       - splunk-aosqe
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -34,3 +35,5 @@ parameters:
   required: true
 - name: INPUTREFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

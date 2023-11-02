@@ -172,16 +172,17 @@ func getIndexNamesViaRoute(route, token, prefix string) ([]string, error) {
 }
 
 type externalES struct {
-	namespace  string
-	version    string // support 6 and 7
-	serverName string // ES cluster name, configmap/sa/deploy/svc name
-	httpSSL    bool   // `true` means enable `xpack.security.http.ssl`
-	clientAuth bool   // `true` means `xpack.security.http.ssl.client_authentication: required`, only can be set to `true` when httpSSL is `true`
-	userAuth   bool   // `true` means enable user auth
-	username   string // shouldn't be empty when `userAuth: true`
-	password   string // shouldn't be empty when `userAuth: true`
-	secretName string //the name of the secret for the collector to use, it shouldn't be empty when `httpSSL: true` or `userAuth: true`
-	loggingNS  string //the namespace where the collector pods deployed in
+	namespace                  string
+	version                    string // support 6 and 7
+	serverName                 string // ES cluster name, configmap/sa/deploy/svc name
+	httpSSL                    bool   // `true` means enable `xpack.security.http.ssl`
+	clientAuth                 bool   // `true` means `xpack.security.http.ssl.client_authentication: required`, only can be set to `true` when httpSSL is `true`
+	clientPrivateKeyPassphrase string // only works when clientAuth is true
+	userAuth                   bool   // `true` means enable user auth
+	username                   string // shouldn't be empty when `userAuth: true`
+	password                   string // shouldn't be empty when `userAuth: true`
+	secretName                 string //the name of the secret for the collector to use, it shouldn't be empty when `httpSSL: true` or `userAuth: true`
+	loggingNS                  string //the namespace where the collector pods deployed in
 }
 
 func (es externalES) createPipelineSecret(oc *exutil.CLI, keysPath string) {
@@ -189,6 +190,9 @@ func (es externalES) createPipelineSecret(oc *exutil.CLI, keysPath string) {
 	cmd := []string{"secret", "generic", es.secretName, "-n", es.loggingNS}
 	if es.clientAuth {
 		cmd = append(cmd, "--from-file=tls.key="+keysPath+"/client.key", "--from-file=tls.crt="+keysPath+"/client.crt", "--from-file=ca-bundle.crt="+keysPath+"/ca.crt")
+		if es.clientPrivateKeyPassphrase != "" {
+			cmd = append(cmd, "--from-literal=passphrase="+es.clientPrivateKeyPassphrase)
+		}
 	} else if es.httpSSL && !es.clientAuth {
 		cmd = append(cmd, "--from-file=ca-bundle.crt="+keysPath+"/ca.crt")
 	}
@@ -204,7 +208,7 @@ func (es externalES) createPipelineSecret(oc *exutil.CLI, keysPath string) {
 func (es externalES) deploy(oc *exutil.CLI) {
 	// create SA
 	sa := resource{"serviceaccount", es.serverName, es.namespace}
-	err := oc.WithoutNamespace().Run("create").Args("serviceaccount", sa.name, "-n", sa.namespace).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("serviceaccount", sa.name, "-n", sa.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	sa.WaitForResourceToAppear(oc)
 
@@ -223,7 +227,7 @@ func (es externalES) deploy(oc *exutil.CLI) {
 		err = os.MkdirAll(keysPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		cert := certsConf{es.serverName, es.namespace, ""}
+		cert := certsConf{es.serverName, es.namespace, es.clientPrivateKeyPassphrase}
 		cert.generateCerts(oc, keysPath)
 		// create secret for ES if needed
 		if es.httpSSL || es.clientAuth {

@@ -39,7 +39,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-47760-Vector Forward logs to Loki using default value via HTTP[Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-High-47760-Vector Forward logs to Loki using default value via HTTP", func() {
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -57,23 +57,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml"),
+				name:                      "clf-47760",
+				namespace:                 lokiNS,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
-
-			g.By("Create ClusterLogging instance")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
@@ -111,7 +105,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48922-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.namespace_name via HTTP[Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-48922-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.namespace_name via HTTP", func() {
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -128,25 +122,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			loki.deployLoki(oc)
 			tenantKey := "kubernetes_namespace_name"
 
-			g.By("Create ClusterLogForwarder instance")
+			g.By("Create ClusterLogForwarder")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml"),
+				name:                   "clf-48922",
+				namespace:              lokiNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml"),
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "TENANTKEY=kubernetes.namespace_name", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
-
-			g.By("Create ClusterLogging instance")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -168,7 +154,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48060-Medium-47801-Vector Forward logs to Loki using loki.labelKeys [Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-48060-Medium-47801-Vector Forward logs to Loki using loki.labelKeys", func() {
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -192,25 +178,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			labelKeys := "kubernetes_labels_positive"
 			podLabel := "centos-logtest"
 
-			g.By("Create ClusterLogForwarder instance")
+			g.By("Create ClusterLogForwarder")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-labelkey.yaml"),
+				name:                   "clf-47801",
+				namespace:              lokiNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-labelkey.yaml"),
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "LABELKEY=kubernetes.labels.positive", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
-
-			g.By("Create ClusterLogging instance")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Searching for Application Logs in Loki using LabelKey - Postive match")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -245,7 +223,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-48925-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.container_name via HTTP[Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-High-48925-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.container_name via HTTP", func() {
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -264,41 +242,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml"),
+				name:                   "clf-48925",
+				namespace:              lokiNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml"),
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "TENANTKEY=kubernetes.container_name", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 
-			g.By("Create ClusterLogging instance")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
-
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
-			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
-			o.Expect(err).NotTo(o.HaveOccurred())
 			tenantKeyID := "logging-centos-logtest"
-			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
-				appLogs, err := lc.searchByKey("", tenantKey, tenantKeyID)
-				if err != nil {
-					return false, err
-				}
-				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "Failed searching for application logs in Loki")
+			lc.waitForLogsAppearByKey("", tenantKey, tenantKeyID)
 			e2e.Logf("Application Logs Query using kubernetes.container_name as tenantKey is a success")
 		})
 
@@ -839,7 +797,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48489-Vector Forward logs to Grafana Loki using HTTPS [Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-48489-Vector Forward logs to Grafana Loki using HTTPS", func() {
 
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -855,8 +813,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
+			oc.SetupProject()
+			clfNS := oc.Namespace()
 			g.By("Create secret with external Grafana Loki instance credentials")
-			sct := resource{"secret", "loki-client", loggingNS}
+			sct := resource{"secret", "loki-client", clfNS}
 			defer sct.clear(oc)
 			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -864,26 +824,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
-				secretName:   sct.name,
+				name:                   "clf-48489",
+				namespace:              clfNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
+				secretName:             sct.name,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			inputRefs := "[\"application\"]"
 			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
 
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
-
 			g.By(fmt.Sprintf("Search for the %s project logs in Loki", appProj))
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
 			g.By("Searching for Application Logs in Loki")
@@ -903,7 +855,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Application Logs Query is a success")
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48490-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.labels.test [Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-48490-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.labels.test", func() {
 
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -919,8 +871,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
+			oc.SetupProject()
+			clfNS := oc.Namespace()
+
 			g.By("Create secret with external Grafana Loki instance credentials")
-			sct := resource{"secret", "loki-client", loggingNS}
+			sct := resource{"secret", "loki-client", clfNS}
 			defer sct.clear(oc)
 			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -928,25 +883,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance with tenantKey kubernetes_labels.test")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
-				secretName:   sct.name,
+				name:                   "clf-48490",
+				namespace:              clfNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
+				secretName:             sct.name,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "LOKI_URL="+lokiURL, "TENANTKEY=kubernetes.labels.test")
 
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
-
 			g.By(fmt.Sprintf("Search for the %s project logs in Loki", appProj))
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
 			g.By("Searching for Application Logs in Loki")
@@ -966,7 +913,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Application Logs Query is a success")
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48923-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.namespace_name[Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-48923-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.namespace_name", func() {
 
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -982,8 +929,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
+			oc.SetupProject()
+			clfNS := oc.Namespace()
+
 			g.By("Create secret with external Grafana Loki instance credentials")
-			sct := resource{"secret", "loki-client", loggingNS}
+			sct := resource{"secret", "loki-client", clfNS}
 			defer sct.clear(oc)
 			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -991,24 +941,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance with tenantKey kubernetes_labels.test")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
-				secretName:   sct.name,
+				name:                   "clf-48923",
+				namespace:              clfNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
+				secretName:             sct.name,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "LOKI_URL="+lokiURL, "TENANTKEY=kubernetes.namespace_name")
-
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By(fmt.Sprintf("Search for the %s project logs in Loki", appProj))
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
@@ -1047,8 +989,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
+			oc.SetupProject()
+			clfNS := oc.Namespace()
 			g.By("Create secret with external Grafana Loki instance credentials")
-			sct := resource{"secret", "loki-client", loggingNS}
+			sct := resource{"secret", "loki-client", clfNS}
 			defer sct.clear(oc)
 			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1056,37 +1000,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "62975.yaml"),
-				secretName:   sct.name,
+				name:                   "clf-62975",
+				namespace:              clfNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "62975.yaml"),
+				secretName:             sct.name,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			inputRefs := "[\"application\"]"
 			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
 
-			g.By("deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
-
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_AES_128_CCM_SHA256")
 			searchString := `[sinks.loki_server.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_CCM_SHA256"`
-			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
 			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 3*time.Minute, true, func(context.Context) (done bool, err error) {
-				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=component=collector").Output()
 				if err != nil {
 					return false, nil
 				}
@@ -1108,19 +1044,19 @@ ciphersuites = "TLS_AES_128_CCM_SHA256"`
 			g.By("Set the Custom tlsSecurityProfile for Loki output")
 			patch := `{"spec":{"outputs":[{"name":"loki-server","secret":{"name":"loki-client"},"tls":{"securityProfile":{"custom":{"ciphers":["TLS_CHACHA20_POLY1305_SHA256"],"minTLSVersion":"VersionTLS13"},"type":"Custom"}},"type":"loki","url":"https://logs-prod3.grafana.net"}],"tlsSecurityProfile":null}}`
 			clf.update(oc, "", patch, "--type=merge")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_CHACHA20_POLY1305_SHA256")
 			searchString = `[sinks.loki_server.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
-			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
 			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 3*time.Minute, true, func(context.Context) (done bool, err error) {
-				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=component=collector").Output()
 				if err != nil {
 					return false, nil
 				}
@@ -1166,8 +1102,10 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
+			oc.SetupProject()
+			clfNS := oc.Namespace()
 			g.By("Create secret with external Grafana Loki instance credentials")
-			sct := resource{"secret", "loki-client", loggingNS}
+			sct := resource{"secret", "loki-client", clfNS}
 			defer sct.clear(oc)
 			_, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args(sct.kind, "generic", sct.name, "-n", sct.namespace, "--from-literal=username="+lokiUsername+"", "--from-literal=password="+lokiPassword+"").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1175,31 +1113,23 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
-				secretName:   sct.name,
+				name:                   "clf-61476",
+				namespace:              clfNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
+				secretName:             sct.name,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			inputRefs := "[\"application\"]"
-			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
-
-			g.By("deploy collector pods")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
+			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
 
 			g.By("The Loki sink in Vector config must use the intermediate tlsSecurityProfile")
 			searchString := `[sinks.loki_server.tls]
 min_tls_version = "VersionTLS12"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
-			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -1223,7 +1153,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			g.By("Set the Modern tlsSecurityProfile for Loki output")
 			patch = `{"spec":{"outputs":[{"name":"loki-server","secret":{"name":"loki-client"},"tls":{"securityProfile":{"type":"Modern"}},"type":"loki","url":"https://logs-prod3.grafana.net"}],"tlsSecurityProfile":null}}`
 			clf.update(oc, "", patch, "--type=merge")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
@@ -1235,14 +1165,14 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			searchString = `[sinks.loki_server.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"`
-			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
 			e2e.Logf("Wait for a minute before the collector logs are generated.")
 			time.Sleep(60 * time.Second)
-			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=component=collector").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Loki server.")
 
@@ -1790,7 +1720,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("checking app, audit and infra logs in loki")
-			bearerToken = getSAToken(oc, "logcollector", cl.namespace)
 			route = "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc = newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure", "audit"} {

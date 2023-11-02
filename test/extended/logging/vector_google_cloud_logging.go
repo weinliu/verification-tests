@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Critical-53731-Forward logs to Google Cloud Logging using different logName for each log type and using Service Account authentication.[Serial]", func() {
+	g.It("CPaasrunOnly-Author:qitang-Critical-53731-Forward logs to Google Cloud Logging using different logName for each log type and using Service Account authentication.", func() {
 		g.By("Create log producer")
 		appProj := oc.Namespace()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -55,24 +55,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer googleCloudLogging{projectID: projectID, logName: logName + "-" + logType}.removeLogs()
 		}
 
-		gcpSecret := resource{"secret", "gcp-secret-53731", loggingNS}
+		oc.SetupProject()
+		clfNS := oc.Namespace()
+		gcpSecret := resource{"secret", "gcp-secret-53731", clfNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			secretName:   gcpSecret.name,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-multi-logids.yaml"),
+			name:                      "clf-" + getRandomString(),
+			namespace:                 clfNS,
+			secretName:                gcpSecret.name,
+			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-multi-logids.yaml"),
+			waitForPodReady:           true,
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			serviceAccountName:        "test-clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
 		clf.create(oc, "PROJECT_ID="+projectID, "LOG_ID="+logName)
 
 		g.By("Deploy collector pods")
 		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
+			name:          clf.name,
+			namespace:     clf.namespace,
 			collectorType: "vector",
 			waitForReady:  true,
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
@@ -97,7 +104,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-High-53903-Forward logs to Google Cloud Logging using namespace selector.[Serial]", func() {
+	g.It("CPaasrunOnly-Author:qitang-High-53903-Forward logs to Google Cloud Logging using namespace selector.", func() {
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		g.By("Create log producer")
 		appProj1 := oc.Namespace()
@@ -109,6 +116,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		oc.SetupProject()
+		clfNS := oc.Namespace()
 		projectID, err := exutil.GetGcpProjectID(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
@@ -116,30 +125,22 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			logName:   getInfrastructureName(oc) + "-53903",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53903", loggingNS}
+		gcpSecret := resource{"secret", "gcp-secret-53903", clfNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			secretName:   gcpSecret.name,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
+			name:                   "clf-53903",
+			namespace:              clfNS,
+			secretName:             gcpSecret.name,
+			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
+			waitForPodReady:        true,
+			collectApplicationLogs: true,
+			serviceAccountName:     "clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
 		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1)
-
-		g.By("Deploy collector pods")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "vector",
-			waitForReady:  true,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
 
 		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			logs, err := gcl.getLogByType("application")
@@ -160,7 +161,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-High-53904-Forward logs to Google Cloud Logging using label selector.[Serial]", func() {
+	g.It("CPaasrunOnly-Author:qitang-High-53904-Forward logs to Google Cloud Logging using label selector.", func() {
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		testLabel := "{\"run\":\"test-53904\",\"test\":\"test-53904\"}"
 		g.By("Create log producer")
@@ -171,6 +172,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		oc.SetupProject()
+		clfNS := oc.Namespace()
 		projectID, err := exutil.GetGcpProjectID(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
@@ -178,30 +181,22 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			logName:   getInfrastructureName(oc) + "-53904",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53904", loggingNS}
+		gcpSecret := resource{"secret", "gcp-secret-53904", clfNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			secretName:   gcpSecret.name,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-label-selector.yaml"),
+			name:                   "clf-53904",
+			namespace:              clfNS,
+			secretName:             gcpSecret.name,
+			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-label-selector.yaml"),
+			waitForPodReady:        true,
+			collectApplicationLogs: true,
+			serviceAccountName:     "clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
 		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "LABELS="+string(testLabel))
-
-		g.By("Deploy collector pods")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "vector",
-			waitForReady:  true,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
 
 		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			logs, err := gcl.getLogByType("application")
@@ -247,6 +242,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		oc.SetupProject()
+		clfNS := oc.Namespace()
+
 		projectID, err := exutil.GetGcpProjectID(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
@@ -254,36 +252,28 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			logName:   getInfrastructureName(oc) + "-53903",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53903", loggingNS}
+		gcpSecret := resource{"secret", "gcp-secret-53903", clfNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			secretName:   gcpSecret.name,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
+			name:                   "clf-61602",
+			namespace:              clfNS,
+			secretName:             gcpSecret.name,
+			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
+			waitForPodReady:        true,
+			collectApplicationLogs: true,
+			serviceAccountName:     "test-clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
-
-		g.By("Deploy collector pods")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "vector",
-			waitForReady:  true,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
+		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1)
 
 		g.By("The Google Cloud sink in Vector config must use the intermediate tlsSecurityProfile")
 		searchString := `[sinks.gcp_logging.tls]
 min_tls_version = "VersionTLS12"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
-		result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+		result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -303,7 +293,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		g.By("Set Modern tlsSecurityProfile for the External Google Cloud logging output.")
 		patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Modern"}}}]`
 		clf.update(oc, "", patch, "--type=json")
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 		g.By("Delete logs from Google Cloud Logging")
 		err = gcl.removeLogs()
@@ -313,7 +303,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		searchString = `[sinks.gcp_logging.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"`
-		result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+		result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 

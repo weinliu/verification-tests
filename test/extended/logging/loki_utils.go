@@ -278,12 +278,12 @@ func createSecretForAzureContainer(oc *exutil.CLI, bucketName, secretName, ns st
 	if err1 != nil {
 		return fmt.Errorf("can't get azure storage account from cluster: %v", err1)
 	}
-	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, secretName, "--from-literal=environment="+environment, "--from-literal=container="+bucketName, "--from-literal=account_name="+accountName, "--from-literal=account_key="+accountKey).Execute()
+	return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, secretName, "--from-literal=environment="+environment, "--from-literal=container="+bucketName, "--from-literal=account_name="+accountName, "--from-literal=account_key="+accountKey).Execute()
 }
 
 func createSecretForSwiftContainer(oc *exutil.CLI, containerName, secretName, ns string, cred *exutil.OpenstackCredentials) error {
 	userID, domainID := exutil.GetOpenStackUserIDAndDomainID(cred)
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, secretName,
+	err := oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, secretName,
 		"--from-literal=auth_url="+cred.Clouds.Openstack.Auth.AuthURL,
 		"--from-literal=username="+cred.Clouds.Openstack.Auth.Username,
 		"--from-literal=user_domain_name="+cred.Clouds.Openstack.Auth.UserDomainName,
@@ -728,8 +728,7 @@ func (c *lokiClient) doQuery(path string, query string) (*lokiQueryResponse, err
 	return &r, nil
 }
 
-/*
-//query uses the /api/v1/query endpoint to execute an instant query
+// query uses the /api/v1/query endpoint to execute an instant query
 func (c *lokiClient) query(logType string, queryStr string, limit int, forward bool, time time.Time) (*lokiQueryResponse, error) {
 	direction := func() string {
 		if forward {
@@ -742,10 +741,14 @@ func (c *lokiClient) query(logType string, queryStr string, limit int, forward b
 	qsb.setInt("limit", int64(limit))
 	qsb.setInt("time", time.UnixNano())
 	qsb.setString("direction", direction())
-	logPath := apiPath + logType + queryPath
-	return c.doQuery(logPath, qsb.encode(), c.quiet)
+	var logPath string
+	if len(logType) > 0 {
+		logPath = apiPath + logType + queryRangePath
+	} else {
+		logPath = queryRangePath
+	}
+	return c.doQuery(logPath, qsb.encode())
 }
-*/
 
 // queryRange uses the /api/v1/query_range endpoint to execute a range query
 // logType: application, infrastructure, audit
@@ -778,7 +781,7 @@ func (c *lokiClient) queryRange(logType string, queryStr string, limit int, star
 }
 
 func (c *lokiClient) searchLogsInLoki(logType, query string) (*lokiQueryResponse, error) {
-	res, err := c.queryRange(logType, query, 5, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
+	res, err := c.queryRange(logType, query, 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 	return res, err
 }
 

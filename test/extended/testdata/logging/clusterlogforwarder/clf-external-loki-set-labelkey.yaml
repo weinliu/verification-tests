@@ -22,6 +22,7 @@ objects:
       - application
       outputRefs:
       - loki-server
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -32,3 +33,5 @@ parameters:
 - name: LABELKEY
   value: "kubernetes.labels.app"
 - name: URL
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

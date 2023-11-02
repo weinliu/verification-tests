@@ -40,6 +40,7 @@ objects:
       name: test-audit
       outputRefs:
       - kafka-audit
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -47,3 +48,5 @@ parameters:
   value: "openshift-logging"
 - name: BOOTSTRAP_SVC
 - name: APP_PROJECT
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

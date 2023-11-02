@@ -27,6 +27,7 @@ objects:
       inputRefs: ${{INPUT_REFS}}
       outputRefs:
       - cw
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -43,3 +44,5 @@ parameters:
 - name: INPUT_REFS
   value: "[\"myAppLogData\"]"
 - name: DATA_PROJECTS
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

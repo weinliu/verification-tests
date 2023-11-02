@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // SearchResult example
@@ -316,10 +317,8 @@ type ESIndex struct {
 
 // PackageManifest gets the status filed of a packagemanifest
 type PackageManifest struct {
-	Metadata struct {
-		Name string `json:"name"`
-	} `json:"metadata"`
-	Status struct {
+	metav1.ObjectMeta `json:"metadata"`
+	Status            struct {
 		CatalogSource          string `json:"catalogSource"`
 		CatalogSourceNamespace string `json:"catalogSourceNamespace"`
 		Channels               []struct {
@@ -343,10 +342,9 @@ type OperatorHub struct {
 
 // Elasticsearch is the content of elasticsearch CR
 type Elasticsearch struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
-	Metadata   `json:"metadata"`
-	Spec       struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              struct {
 		IndexManagement struct {
 			Mappings []struct {
 				Aliases   []string `json:"aliases"`
@@ -395,12 +393,6 @@ type Elasticsearch struct {
 		} `json:"pods"`
 		ShardAllocationEnabled string `json:"shardAllocationEnabled"`
 	} `json:"status"`
-}
-
-// Metadata contains the name and namespace of a resource
-type Metadata struct {
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
 }
 
 // ElasticsearchClusterHealth contains some basic info of an ES cluster
@@ -462,10 +454,9 @@ type ResourceList struct {
 
 // ClusterLogging the content in clusterlogging CR
 type ClusterLogging struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
-	Metadata   `json:"metadata"`
-	Spec       struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              struct {
 		CollectionSpec struct {
 			Type         string            `json:"type"`
 			Resources    ResourcesSpec     `json:"resources"`

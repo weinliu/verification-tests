@@ -28,6 +28,7 @@ objects:
         - myAppLogData
       outputRefs:
         - gcp-logging
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -41,3 +42,5 @@ parameters:
   value: "aosqe-logging"
 - name: LABELS
   value: "{\"run\": \"centos-logtest\", \"test\": \"centos-logtest\"}"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

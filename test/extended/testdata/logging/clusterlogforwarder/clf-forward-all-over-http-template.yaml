@@ -50,6 +50,7 @@ objects:
       name: audit-logs
       outputRefs:
       - httpout-audit
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: instance
@@ -57,3 +58,5 @@ parameters:
   value: openshift-logging
 - name: URL
   value: http://fluentdserver.openshift-logging.svc:24224
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

@@ -658,7 +658,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:         "instance",
 				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-exteranl-es-and-default.yaml"),
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-and-default.yaml"),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL=http://"+getRouteAddress(oc, ees.namespace, ees.serverName)+":80", "ES_VERSION="+ees.version)
@@ -816,7 +816,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-46882-Vector ClusterLogForwarder forward logs to non ClusterLogging managed Elasticsearch insecure forward[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-High-46882-Vector ClusterLogForwarder forward logs to non ClusterLogging managed Elasticsearch insecure forward", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
@@ -825,7 +825,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				version:    "6",
 				serverName: "elasticsearch-server",
 				httpSSL:    false,
-				loggingNS:  loggingNS,
+				loggingNS:  esProj,
 			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
@@ -837,25 +837,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Create ClusterLogForwarder instance")
+			g.By("Create ClusterLogForwarder")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es.yaml"),
+				name:                      "clf-46882",
+				namespace:                 esProj,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es.yaml"),
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				waitForPodReady:           true,
+				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
-
-			g.By("Create ClusterLogging instance with Vector as collector")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -864,7 +858,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-46920-Vector ClusterLogForwarder forward logs to non ClusterLogging managed Elasticsearch secure forward[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-High-46920-Vector ClusterLogForwarder forward logs to non ClusterLogging managed Elasticsearch secure forward", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
@@ -874,7 +868,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serverName: "elasticsearch-server",
 				httpSSL:    true,
 				secretName: "ees-https",
-				loggingNS:  loggingNS,
+				loggingNS:  esProj,
 			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
@@ -888,24 +882,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
-				secretName:   ees.secretName,
+				name:                      "clf-46920",
+				namespace:                 esProj,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:                ees.secretName,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				waitForPodReady:           true,
+				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
-
-			g.By("Create ClusterLogging instance with Vector as collector")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
+			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version, `TLS={"securityProfile": {"type": "Old"}}`)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -1083,7 +1071,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-55200-Medium-47753-Vector Forward logs to external Elasticsearch with username password HTTP ES 6.x[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-55200-Medium-47753-Vector Forward logs to external Elasticsearch with username password HTTP ES 6.x", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
@@ -1095,7 +1083,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				username:   "user1",
 				password:   getRandomString(),
 				secretName: "ees-http",
-				loggingNS:  loggingNS,
+				loggingNS:  esProj,
 			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
@@ -1109,24 +1097,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
-				secretName:   ees.secretName,
+				name:                      "clf-47753",
+				namespace:                 esProj,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:                ees.secretName,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				waitForPodReady:           true,
+				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
-
-			g.By("Create ClusterLogging instance with Vector as collector")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -1135,7 +1117,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-55199-Medium-47755-Vector Forward logs to external Elasticsearch with username password HTTPS ES 7.x[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-55199-Medium-47755-Vector Forward logs to external Elasticsearch with username password HTTPS ES 7.x", func() {
+			oc.SetupProject()
+			clfNS := oc.Namespace()
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
@@ -1148,7 +1132,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				username:   "user1",
 				password:   getRandomString(),
 				secretName: "ees-47755",
-				loggingNS:  loggingNS,
+				loggingNS:  clfNS,
 			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
@@ -1162,24 +1146,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
-				secretName:   ees.secretName,
+				name:                      "clf-55199",
+				namespace:                 clfNS,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:                ees.secretName,
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "test-clf-" + getRandomString(),
+				enableMonitoring:          true,
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
-
-			g.By("Create ClusterLogging instance with Vector as collector")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -1188,7 +1167,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-55201-Medium-47758-Vector Forward logs to external Elasticsearch with username password mTLS ES 8.x[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-55201-Medium-47758-Vector Forward logs to external Elasticsearch with username password mTLS ES 8.x", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
@@ -1202,7 +1181,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				username:   "user1",
 				password:   getRandomString(),
 				secretName: "ees-47758",
-				loggingNS:  loggingNS,
+				loggingNS:  esProj,
 			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
@@ -1216,24 +1195,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
-				secretName:   ees.secretName,
+				name:                      "clf-47758",
+				namespace:                 esProj,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:                ees.secretName,
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
-
-			g.By("Create ClusterLogging instance with Vector as collector")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -1279,7 +1252,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:         "instance",
 				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-exteranl-es-and-default.yaml"),
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-and-default.yaml"),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
@@ -1539,7 +1512,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serverName: "elasticsearch-server",
 				httpSSL:    true,
 				secretName: "ees-https",
-				loggingNS:  loggingNS,
+				loggingNS:  esProj,
 			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
@@ -1553,31 +1526,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder instance")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
-				secretName:   ees.secretName,
+				name:                      "clf-61450",
+				namespace:                 esProj,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:                ees.secretName,
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version, "PREVIEW_TLS_SECURITY_PROFILE=enabled")
-
-			g.By("Create ClusterLogging instance with Vector as collector")
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
+			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 
 			g.By("The Elasticsearch sink in Vector config must use the Custom tlsSecurityProfile")
 			searchString := `[sinks.es_created_by_user.tls]
 min_tls_version = "VersionTLS10"
 ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256"
 ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
-			result, err := checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -1589,22 +1556,21 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			g.By("Set Old tlsSecurityProfile for the External ES output.")
 			patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Old"}}}]`
 			clf.update(oc, "", patch, "--type=json")
-
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 			g.By("The Elasticsearch sink in Vector config must use the Old tlsSecurityProfile")
 			searchString = `[sinks.es_created_by_user.tls]
 min_tls_version = "VersionTLS10"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256,AES128-SHA,AES256-SHA,DES-CBC3-SHA"
 ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
-			result, err = checkCollectorTLSProfile(oc, cl.namespace, searchString)
+			result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
 			g.By("Check for errors in collector pod logs.")
 			e2e.Logf("Wait for a minute before the collector logs are generated.")
 			time.Sleep(60 * time.Second)
-			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cl.namespace, "--selector=component=collector").Output()
+			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=component=collector").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Elasticsearch server.")
 
@@ -1727,36 +1693,28 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			esProj := oc.Namespace()
 			ees := externalES{
 				namespace:  esProj,
-				version:    "6",
+				version:    "7",
 				serverName: "external-es",
 				httpSSL:    true,
 				secretName: "json-log-52129",
-				loggingNS:  loggingNS,
+				loggingNS:  esProj,
 			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 			eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
 
-			g.By("create clusterlogforwarder/instance")
+			g.By("create clusterlogforwarder")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-logs.yaml"),
-				secretName:   ees.secretName,
+				name:                   "clf-52129",
+				namespace:              esProj,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-logs.yaml"),
+				secretName:             ees.secretName,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "STRUCTURED_CONTAINER=true", "URL="+eesURL, "ES_VERSION="+ees.version)
-
-			// create clusterlogging instance
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("check indices in externale ES")
 			ees.waitForIndexAppear(oc, containerName+"-0")

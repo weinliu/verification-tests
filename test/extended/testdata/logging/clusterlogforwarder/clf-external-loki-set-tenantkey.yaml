@@ -21,6 +21,7 @@ objects:
       - application
       outputRefs:
       - loki-server
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -32,3 +33,5 @@ parameters:
   value: "kubernetes.namespace_name"
 - name: URL
   required: true
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

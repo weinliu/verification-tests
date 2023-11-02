@@ -208,7 +208,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		}
 
 		cw := cloudwatchSpec{
-			groupPrefix: getInfrastructureName(oc),
+			groupPrefix: getInfrastructureName(oc) + "-43443",
 			groupType:   "logType",
 			logTypes:    []string{"infrastructure", "application", "audit"},
 		}
@@ -232,7 +232,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml"),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "REGION="+cw.awsRegion)
+		clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix)
 
 		g.By("deploy collector pods")
 		cl := clusterlogging{
@@ -249,7 +249,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(cw.logsFound()).To(o.BeTrue())
 	})
 
-	g.It("CPaasrunBoth-ConnectedOnly-Author:ikanse-Critical-51974-Vector Forward logs to Cloudwatch by logtype [Serial]", func() {
+	g.It("CPaasrunBoth-ConnectedOnly-Author:ikanse-Critical-51974-Vector Forward logs to Cloudwatch by logtype", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "aws" {
 			g.Skip("Skip for the platform is not AWS!!!")
@@ -259,10 +259,12 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
 		}
 
+		clfNS := oc.Namespace()
 		cw := cloudwatchSpec{
-			groupPrefix: getInfrastructureName(oc),
-			groupType:   "logType",
-			logTypes:    []string{"infrastructure", "application", "audit"},
+			groupPrefix:     getInfrastructureName(oc) + "-51974",
+			groupType:       "logType",
+			logTypes:        []string{"infrastructure", "application", "audit"},
+			secretNamespace: clfNS,
 		}
 		cw.init(oc)
 		defer cw.deleteGroups()
@@ -278,31 +280,25 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		cw.createClfSecret(oc)
 
 		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			secretName:   cw.secretName,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml"),
+			name:                      "clf-51974",
+			namespace:                 clfNS,
+			secretName:                cw.secretName,
+			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml"),
+			waitForPodReady:           true,
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			serviceAccountName:        "test-clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "REGION="+cw.awsRegion)
-
-		g.By("Deploy collector pods")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "vector",
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			waitForReady:  true,
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
+		clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix)
 
 		g.By("Check logs in Cloudwatch")
 		o.Expect(cw.logsFound()).To(o.BeTrue())
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunBoth-ConnectedOnly-Author:qitang-Critical-53691-Forward logs to Google Cloud Logging using Service Account authentication.[Serial]", func() {
+	g.It("CPaasrunBoth-ConnectedOnly-Author:qitang-Critical-53691-Forward logs to Google Cloud Logging using Service Account authentication.", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "gcp" {
 			g.Skip("Skip for the platform is not GCP!!!")
@@ -314,6 +310,9 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		oc.SetupProject()
+		clfNS := oc.Namespace()
+
 		projectID, err := exutil.GetGcpProjectID(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
@@ -321,30 +320,24 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			logName:   getInfrastructureName(oc) + "-53691",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53691", loggingNS}
+		gcpSecret := resource{"secret", "gcp-secret-53691", clfNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			secretName:   gcpSecret.name,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
+			name:                      "clf-53691",
+			namespace:                 clfNS,
+			secretName:                gcpSecret.name,
+			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
+			waitForPodReady:           true,
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			serviceAccountName:        "test-clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
 		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName)
-
-		g.By("Deploy collector pods")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "vector",
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			waitForReady:  true,
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
 
 		for _, logType := range []string{"infrastructure", "audit", "application"} {
 			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
@@ -358,7 +351,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		}
 		appLogs, err := gcl.getLogByNamespace(appProj)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(appLogs) > 0).Should(o.BeTrue())
+		o.Expect(len(appLogs) > 0).Should(o.BeTrue(), "can't find app logs from project/"+appProj)
 	})
 
 })

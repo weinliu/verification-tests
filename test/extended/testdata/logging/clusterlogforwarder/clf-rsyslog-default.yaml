@@ -25,6 +25,7 @@ objects:
       name: forward-to-syslog
       outputRefs:
         - rsyslog
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -38,3 +39,5 @@ parameters:
   value: "true"
 - name: URL
   value: 'udp://rsyslogserver.openshift-logging.svc:514'
+- name: SERVICE_ACCOUNT_NAME
+  value: ""
