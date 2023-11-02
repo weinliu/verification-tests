@@ -1814,6 +1814,16 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		err = oc.AsAdmin().Run("process").Args(nsName1 + "//project-request").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-68670-oc whoami works well with oauth operator", func() {
+		g.By("Create new namespace")
+		oc.SetupProject()
+		err := oc.Run("whoami").Args("").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		out, err := oc.AsAdmin().Run("whoami").Args("").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "system:admin")).To(o.BeTrue())
+	})
 })
 
 // ClientVersion ...
