@@ -159,6 +159,23 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer cs.delete(itName, dr)
 		cs.createWithCheck(oc, itName, dr)
 	})
+	// author: jiazha@redhat.com
+	g.It("ConnectedOnly-Author:jiazha-Low-68680-Operator Channels in random order for FBC Catalogs", func() {
+		var quayChannels string
+		// loop ten times to check if they're the same
+		for i := 0; i < 10; i++ {
+			channels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "quay-operator", "-o=jsonpath={.status.channels[*].name}").Output()
+			if err != nil {
+				e2e.Failf("Fail to get channels: %s, error:%v", channels, err)
+			}
+			if quayChannels == "" {
+				quayChannels = channels
+			}
+			if channels == "" || channels != quayChannels {
+				e2e.Failf("The channel not in order: quayChannels: %s, channels:%v", quayChannels, channels)
+			}
+		}
+	})
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-63001-workload annotation missing from platform operator deployments", func() {
