@@ -8187,7 +8187,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 	})
 
-	g.It("ConnectedOnly-Author:xzha-Medium-59380-Upgrade should be success when there are multiple upgrade paths between channel entries", func() {
+	g.It("ConnectedOnly-Author:xzha-Medium-59380-Medium-68671-Upgrade should be success when there are multiple upgrade paths between channel entries", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -8235,6 +8235,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("STEP 3: install operator ")
 		subManual.createWithoutCheck(oc, itName, dr)
+
+		exutil.By("OCP-68671 Only one operator name is in 'Manual approval required' info section")
+		nameIP := subManual.getIP(oc)
+		clusterServiceVersionNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", nameIP, "-o=jsonpath={.spec.clusterServiceVersionNames}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(clusterServiceVersionNames)).NotTo(o.ContainSubstring(`",`))
+		exutil.By("OCP-68671 SUCCESS")
+
 		e2e.Logf("approve the install plan")
 		subManual.approveSpecificIP(oc, itName, dr, "nginx-operator.v1.6.0", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "nginx-operator.v1.6.0", "-n", subManual.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
