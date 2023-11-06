@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -192,7 +193,7 @@ func (pv *persistentVolume) generateParametersByVolumeKind() (pvExtraParameters 
 	// iscsi kind PersistentVolume
 	case "iscsi":
 		iscsiParameters := map[string]interface{}{
-			"targetPortal":  pv.iscsiServerIP + ":3260",
+			"targetPortal":  net.JoinHostPort(pv.iscsiServerIP, "3260"),
 			"iqn":           "iqn.2016-04.test.com:storage.target00",
 			"lun":           0,
 			"iface":         "default",
