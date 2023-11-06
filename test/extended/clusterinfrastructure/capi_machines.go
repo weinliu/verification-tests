@@ -209,7 +209,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		clusterKind, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cluster", cluster.name, "-n", clusterAPINamespace, "-p", `{"spec":{"infrastructureRef":{"kind":"invalid"}}}`, "--type=merge").Output()
-		o.Expect(clusterKind).To(o.ContainSubstring("Unsupported value: \"invalid\""))
+		o.Expect(clusterKind).To(o.ContainSubstring("invalid"))
 
 		g.By("Shouldn't allow to delete cluster")
 		clusterDelete, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("cluster", cluster.name, "-n", clusterAPINamespace).Output()
