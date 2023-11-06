@@ -27,9 +27,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	var makeCLI = NewMakeCLI()
 	var mvnCLI = NewMVNCLI()
 	var oc = exutil.NewCLIWithoutNamespace("default")
-	var ocpversion = "4.14"
-	var ocppreversion = "4.13"
-	var upstream = false
+	var ocpversion = "4.15"
+	var ocppreversion = "4.14"
+	var upstream = true
 
 	// author: jfan@redhat.com
 	g.It("VMonly-Author:jfan-High-37465-SDK olm improve olm related sub commands", func() {
