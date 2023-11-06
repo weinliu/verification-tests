@@ -101,7 +101,15 @@ export const Operator = {
     },
     configureLoki: (namespace: string) => {
         cy.get('#root_spec_loki_accordion-toggle').click()
-        cy.get('#root_spec_loki_url').clear().type(`http://loki.${namespace}.svc:3100/`)
+        cy.get('#root_spec_loki_mode').click().then(moreOpts => {
+            cy.contains("Manual").should('exist')
+            cy.contains("Microservices").should('exist')
+            cy.contains("Monolithic").should('exist')
+            cy.contains("LokiStack").should('exist')
+            cy.get('#Monolithic-link').click()
+        })
+        cy.get('#root_spec_loki_monolithic_accordion-toggle').click()
+        cy.get('#root_spec_loki_monolithic_url').clear().type(`http://loki.${namespace}.svc:3100/`)
     },
     enableConversations: () => {
         cy.get('#root_spec_processor_logTypes').click().then(moreOpts => {

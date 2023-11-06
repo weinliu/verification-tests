@@ -38,6 +38,12 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             cy.checkPanelsNum(4);
         })
 
+        it("(OCP-54839, aramesha) should verify show duplicates checkbox is disabled", function () {
+            cy.get('#filter-toolbar-search-filters').contains('Query options').click();
+            cy.get('#query-options-dropdown').click();
+            cy.get('#show-duplicates').should('be.disabled')
+        })
+
         it("(OCP-54839, aramesha) should validate overview page features", function () {
 
             cy.byTestID(genSelectors.timeDrop).then(btn => {

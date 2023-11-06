@@ -3,7 +3,7 @@ import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 
 function getTopologyScopeURL(scope: string): string {
-    return `**/topology?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=${scope}`
+    return `**/flow/metrics?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=${scope}`
 }
 
 describe("(OCP-67725, memodi) NETOBSERV Client Performances", { browser: 'chrome', tags: ['NETOBSERV'] }, function () {

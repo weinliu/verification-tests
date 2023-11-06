@@ -788,6 +788,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		err := testTemplate.createTestClientServer(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		exutil.By("Check cluster network type")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType == "ovnkubernetes" {
+			g.By("Deploy egressQoS if OVN CNI")
+			egressQoSPath := filePath.Join(networkingDir, "egressQoS.yaml")
+			createResourceFromFile(oc, namespace, egressQoSPath)
+		}
+
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
 			Namespace:       namespace,
@@ -815,6 +824,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Wait for a min before logs gets collected and written to loki")
 		time.Sleep(60 * time.Second)
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
 		//Scenario1: When no QoS label is passed default DSCP value is 0
 		lokilabels := Lokilabels{
@@ -824,7 +834,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		g.By("Verify DSCP value=0")
-		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
 		flowRecords, err := lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -866,15 +875,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		//Scenario3: Verify egress QoS feature for OVN CNI
-		exutil.By("Check cluster network type")
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
 		if networkType == "ovnkubernetes" {
-			g.By("Create egressQoS")
-			egressQoSPath := filePath.Join(networkingDir, "egressQoS.yaml")
-			createResourceFromFile(oc, namespace, egressQoSPath)
-
-			g.By("Verify DSCP value 59 for flows from FLP pods")
+			g.By("Verify DSCP value=59 for flows from FLP pods")
 			FLPpod := getFlowlogsPipelinePod(oc, namespace, "flowlogs-pipeline")
 			lokilabels = Lokilabels{
 				App:              "netobserv-flowcollector",
@@ -882,16 +884,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			}
 			parameters = []string{"SrcK8S_Name=\"" + FLPpod + "\""}
 
-			g.By("Wait for a min before logs gets collected and written to loki")
-			time.Sleep(60 * time.Second)
-
 			flowRecords, err = lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route, parameters...)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			for _, r := range flowRecords {
 				o.Expect(r.Flowlog.Dscp).To(o.Equal(59))
 			}
 
-			g.By("Verify DSCP vlaue 0 for flows from pods other than FLP in e2e namespace")
+			g.By("Verify DSCP value=0 for flows from pods other than FLP in e2e namespace")
 			lokiPods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app.kubernetes.io/name=lokistack")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			parameters = []string{"SrcK8S_Name=\"" + lokiPods[0] + "\""}

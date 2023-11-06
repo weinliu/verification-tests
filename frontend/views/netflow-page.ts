@@ -83,6 +83,8 @@ export namespace colSelectors {
     export const gK8sOwner = '[data-test=th-K8S_OwnerObject] > .pf-c-table__button'
     export const gIPPort = '[data-test=th-AddrPort] > .pf-c-table__button'
     export const Protocol = '[data-test=th-Proto] > .pf-c-table__button'
+    export const ICMPType = '[data-test=th-IcmpType] > .pf-c-table__button'
+    export const ICMPCode = '[data-test=th-IcmpCode] > .pf-c-table__button'
     export const srcNodeIP = '[data-test=th-SrcK8S_HostIP] > .pf-c-table__button'
     export const srcNS = '[data-test=th-SrcK8S_Namespace] > .pf-c-table__button'
     export const dstNodeIP = '[data-test=th-DstK8S_HostIP] > .pf-c-table__button'
@@ -91,6 +93,7 @@ export namespace colSelectors {
     export const packets = '[data-test=th-Packets] > .pf-c-table__button'
     export const RecordType = '[data-test=th-RecordType] > .pf-c-table__button'
     export const conversationID = '[data-test=th-_HashId] > .pf-c-table__button'
+    export const DSCP = '[data-test=th-Dscp] > .pf-c-table__button'
 }
 
 export namespace filterSelectors {

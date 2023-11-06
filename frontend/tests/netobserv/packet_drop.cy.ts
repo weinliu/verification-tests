@@ -59,7 +59,7 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
             cy.get(overviewSelectors.panelsModal).contains('Restore default panels').click();
             cy.get(overviewSelectors.panelsModal).contains('Save').click();
             netflowPage.waitForLokiQuery()
-            cy.checkPanel(overviewSelectors.defaultPanels)
+            cy.checkPanel(overviewSelectors.defaultPacketDropPanels)
             cy.checkPanelsNum(7);
         })
 

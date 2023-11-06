@@ -70,6 +70,12 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         // Advance options menu remains visible throughout the test
     })
 
+    it("(OCP-53591, aramesha) should verify show duplicates checkbox is disabled", function () {
+        cy.get('#filter-toolbar-search-filters').contains('Query options').click();
+        cy.get('#query-options-dropdown').click();
+        cy.get('#show-duplicates').should('be.disabled')
+    })
+
     it("(OCP-53591, memodi) should verify topology page features", function () {
         cy.byTestID('search-topology-element-input').should('exist')
         cy.contains('Display options').should('exist').click()
