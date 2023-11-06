@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -263,6 +264,58 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		o.Expect(fmt.Sprint(filestoreJSONMap["labels"])).Should(o.ContainSubstring("test:qe" + labelString))
 
+	})
+
+	// author: pewang@redhat.com
+	// OCP-68652 [GCP-Filestore-CSI-Driver] [installer resourceLabels] should be added on the filestore persistent volumes
+	// https://issues.redhat.com/browse/CORS-2455
+	g.It("NonHyperShiftHOST-OSD_CCS-Author:pewang-High-68652-[GCP-Filestore-CSI-Driver] [installer resourceLabels] should be added on the filestore persistent volumes", func() {
+
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			storageClassParameters = map[string]string{
+				"network": network,
+				"tier":    "standard",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		infraPlatformStatus, getInfraErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath={.status.platformStatus.gcp}").Output()
+		o.Expect(getInfraErr).ShouldNot(o.HaveOccurred())
+		if !gjson.Get(infraPlatformStatus, `resourceLabels`).Exists() {
+			g.Skip("Skipped: No resourceLabels set by installer, not satisfy the test scenario!!!")
+		}
+
+		// Set the resource definition for the scenario
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"), setStorageClassProvisioner("filestore.csi.storage.gke.io"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimCapacity("1Ti"))
+
+		exutil.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		exutil.By("# Create a pvc with the preset csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pvc.waitStatusAsExpected(oc, "Bound")
+
+		exutil.By("# Create a pvc with the preset csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pvc.waitStatusAsExpected(oc, "Bound")
+
+		exutil.By("# Check filestore volume info from backend")
+		pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+		getCredentialFromCluster(oc)
+		var filestoreJSONMap map[string]interface{}
+		filestoreJSONMap = getFilestoreInstanceFromGCP(oc, pvName, "--zone="+strings.Split(pvc.getVolumeID(oc), "/")[1])
+		for i := 0; i < len(gjson.Get(infraPlatformStatus, "resourceLabels").Array()); i++ {
+			o.Expect(fmt.Sprint(filestoreJSONMap["labels"])).Should(o.ContainSubstring(gjson.Get(infraPlatformStatus, `resourceLabels.`+strconv.Itoa(i)+`.key`).String() + ":" + gjson.Get(infraPlatformStatus, `resourceLabels.`+strconv.Itoa(i)+`.value`).String()))
+		}
 	})
 
 })

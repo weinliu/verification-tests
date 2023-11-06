@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -8,6 +9,8 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -292,4 +295,50 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		restorepod.checkMountedVolumeCouldWriteData(oc, true)
 		restorepod.checkMountedVolumeHaveExecRight(oc)
 	})
+	// author: pewang@redhat.com
+	// OCP-68651 [GCE-PD-CSI] [installer resourceLabels] should be added on the pd persistent volumes
+	// https://issues.redhat.com/browse/CORS-2455
+	g.It("NonHyperShiftHOST-OSD_CCS-Author:pewang-High-68651-[GCE-PD-CSI] [installer resourceLabels] should be added on the pd persistent volumes", func() {
+
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+		)
+
+		infraPlatformStatus, getInfraErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath={.status.platformStatus.gcp}").Output()
+		o.Expect(getInfraErr).ShouldNot(o.HaveOccurred())
+		if !gjson.Get(infraPlatformStatus, `resourceLabels`).Exists() {
+			g.Skip("Skipped: No resourceLabels set by installer, not satisfy the test scenario!!!")
+		}
+
+		// Set the resource definition for the scenario
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"), setStorageClassProvisioner("pd.csi.storage.gke.io"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+
+		exutil.By("# Create csi storageclass")
+		storageClass.create(oc)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		exutil.By("# Create a pvc with the preset csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pvc.waitStatusAsExpected(oc, "Bound")
+
+		exutil.By("# Create a pvc with the preset csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pvc.waitStatusAsExpected(oc, "Bound")
+
+		exutil.By("# Check pd volume info from backend")
+		pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+
+		getCredentialFromCluster(oc)
+		var pdVolumeInfoJSONMap map[string]interface{}
+		pdVolumeInfoJSONMap = getPdVolumeInfoFromGCP(oc, pvName, "--zone="+pvc.getVolumeNodeAffinityAvailableZones(oc)[0])
+		e2e.Logf("The pd volume info is: %v. \nInfra resourceLabels are: %v", pdVolumeInfoJSONMap, gjson.Get(infraPlatformStatus, "resourceLabels").Array())
+		for i := 0; i < len(gjson.Get(infraPlatformStatus, "resourceLabels").Array()); i++ {
+			o.Expect(fmt.Sprint(pdVolumeInfoJSONMap["labels"])).Should(o.ContainSubstring(gjson.Get(infraPlatformStatus, `resourceLabels.`+strconv.Itoa(i)+`.key`).String() + ":" + gjson.Get(infraPlatformStatus, `resourceLabels.`+strconv.Itoa(i)+`.value`).String()))
+		}
+	})
+
 })

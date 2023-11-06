@@ -951,6 +951,16 @@ func getgcloudClient(oc *exutil.CLI) *exutil.Gcloud {
 	return gcloud.Login()
 }
 
+// getPdVolumeInfoFromGCP returns pd volume detailed info from backend
+func getPdVolumeInfoFromGCP(oc *exutil.CLI, pvID string, filterArgs ...string) map[string]interface{} {
+	pdVolumeInfo, err := getgcloudClient(oc).GetPdVolumeInfo(pvID, filterArgs...)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	debugLogf(`The volume:"%s" info is %s`, pvID, string(pdVolumeInfo))
+	var pdVolumeInfoJSONMap map[string]interface{}
+	json.Unmarshal([]byte(pdVolumeInfo), &pdVolumeInfoJSONMap)
+	return pdVolumeInfoJSONMap
+}
+
 func getFilestoreInstanceFromGCP(oc *exutil.CLI, pvID string, filterArgs ...string) map[string]interface{} {
 	filestoreInfo, err := getgcloudClient(oc).GetFilestoreInstanceInfo(pvID, filterArgs...)
 	o.Expect(err).NotTo(o.HaveOccurred())

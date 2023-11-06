@@ -415,7 +415,7 @@ func (pvc *persistentVolumeClaim) waitStatusAsExpected(oc *exutil.CLI, expectedS
 		err    error
 	)
 	if expectedStatus == "deleted" {
-		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		err = wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 			status, err = pvc.getStatus(oc)
 			if err != nil && strings.Contains(interfaceToString(err), "not found") {
 				e2e.Logf("The persist volume claim '%s' becomes to expected status: '%s' ", pvc.name, expectedStatus)
@@ -425,7 +425,7 @@ func (pvc *persistentVolumeClaim) waitStatusAsExpected(oc *exutil.CLI, expectedS
 			return false, nil
 		})
 	} else {
-		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		err = wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 			status, err = pvc.getStatus(oc)
 			if err != nil {
 				e2e.Logf("Get persist volume claim '%s' status failed of: %v.", pvc.name, err)
@@ -438,6 +438,9 @@ func (pvc *persistentVolumeClaim) waitStatusAsExpected(oc *exutil.CLI, expectedS
 			return false, nil
 
 		})
+	}
+	if err != nil {
+		describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The persist volume claim '%s' didn't become to expected status'%s' ", pvc.name, expectedStatus))
 }

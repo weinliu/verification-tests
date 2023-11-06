@@ -214,3 +214,12 @@ func (gcloud *Gcloud) GetFilestoreInstanceInfo(pvName string, filterArgs ...stri
 	}
 	return filestoreInfo, err
 }
+
+// GetPdVolumeInfo returns pd volume detailed info from backend
+func (gcloud *Gcloud) GetPdVolumeInfo(pvName string, filterArgs ...string) ([]byte, error) {
+	pdVolumeInfo, err := exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute disks describe %s %s --format=json`, pvName, strings.Join(filterArgs, " "))).Output()
+	if len(pdVolumeInfo) == 0 {
+		err = fmt.Errorf(`Couldn't find the pd volume "%s" info`, pvName)
+	}
+	return pdVolumeInfo, err
+}
