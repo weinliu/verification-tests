@@ -36,97 +36,99 @@ import (
 var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
+	// var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
-	// author: jiazha@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-High-68407-operator version pinning and pivoting based on OLMv1", func() {
-		// By now, OLMv1 is TP, need to check if the featuregate is enabled
-		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
-		if err != nil {
-			e2e.Failf("Fail to get the featureSet: %s, error:%v", featureSet, err)
-		}
-		// skip it if featureSet is empty
-		if featureSet == "" {
-			g.Skip("featureSet is empty, skip it")
-		}
-		// The FeatureGate "cluster" is invalid: spec.featureSet: Forbidden: once enabled, custom feature gates may not be disabled
-		if featureSet != "" && featureSet != "TechPreviewNoUpgrade" {
-			g.Skip(fmt.Sprintf("featureSet is not TechPreviewNoUpgrade, but %s", featureSet))
-		}
+	// For now, for 4.15, OLM removes the Package and CatalogMetadata resources,
+	// details: https://github.com/operator-framework/catalogd/pull/149 and https://github.com/operator-framework/catalogd/pull/169
+	// // author: jiazha@redhat.com
+	// g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-High-68407-operator version pinning and pivoting based on OLMv1", func() {
+	// 	// By now, OLMv1 is TP, need to check if the featuregate is enabled
+	// 	featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
+	// 	if err != nil {
+	// 		e2e.Failf("Fail to get the featureSet: %s, error:%v", featureSet, err)
+	// 	}
+	// 	// skip it if featureSet is empty
+	// 	if featureSet == "" {
+	// 		g.Skip("featureSet is empty, skip it")
+	// 	}
+	// 	// The FeatureGate "cluster" is invalid: spec.featureSet: Forbidden: once enabled, custom feature gates may not be disabled
+	// 	if featureSet != "" && featureSet != "TechPreviewNoUpgrade" {
+	// 		g.Skip(fmt.Sprintf("featureSet is not TechPreviewNoUpgrade, but %s", featureSet))
+	// 	}
 
-		exutil.By("1, check the catalog")
-		olmBaseDir := exutil.FixturePath("testdata", "olm")
-		redhatOperators, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalog", "redhat-operators").Output()
-		if err != nil {
-			if strings.Contains(redhatOperators, "not found") {
-				// create it
-				exutil.By("1-1, create the catalog")
-				catalogTemplate := filepath.Join(olmBaseDir, "catalog.yaml")
-				ocpVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
-				if err != nil {
-					e2e.Failf("Failed to get the OCP version: %s", err)
-				}
-				re, _ := regexp.Compile(`\d\.\d{2}`)
-				ocpVersion = re.FindString(ocpVersion)
-				indexImage := fmt.Sprintf("registry.redhat.io/redhat/redhat-operator-index:v%s", ocpVersion)
-				//ToDo: this redhat-operators catalog is a precondition for the following test,
-				// and to save the creating/deleting costs, we're considering to add this action into a Prow/Jenkins CI step.
-				// for now, don't remove it after this case finished.
-				CreateCatalog(oc, "redhat-operators", indexImage, catalogTemplate)
-			}
-		}
+	// 	exutil.By("1, check the catalog")
+	// 	olmBaseDir := exutil.FixturePath("testdata", "olm")
+	// 	redhatOperators, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalog", "redhat-operators").Output()
+	// 	if err != nil {
+	// 		if strings.Contains(redhatOperators, "not found") {
+	// 			// create it
+	// 			exutil.By("1-1, create the catalog")
+	// 			catalogTemplate := filepath.Join(olmBaseDir, "catalog.yaml")
+	// 			ocpVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
+	// 			if err != nil {
+	// 				e2e.Failf("Failed to get the OCP version: %s", err)
+	// 			}
+	// 			re, _ := regexp.Compile(`\d\.\d{2}`)
+	// 			ocpVersion = re.FindString(ocpVersion)
+	// 			indexImage := fmt.Sprintf("registry.redhat.io/redhat/redhat-operator-index:v%s", ocpVersion)
+	// 			//ToDo: this redhat-operators catalog is a precondition for the following test,
+	// 			// and to save the creating/deleting costs, we're considering to add this action into a Prow/Jenkins CI step.
+	// 			// for now, don't remove it after this case finished.
+	// 			CreateCatalog(oc, "redhat-operators", indexImage, catalogTemplate)
+	// 		}
+	// 	}
 
-		exutil.By("2, install an operator, for example, quay-operator")
-		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-			quayPackage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("package", "redhat-operators-quay-operator").Output()
-			if err != nil || strings.Contains(quayPackage, "not found") {
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "failed to get package redhat-operators-quay-operator!")
+	// 	exutil.By("2, install an operator, for example, quay-operator")
+	// 	err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+	// 		quayPackage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("package", "redhat-operators-quay-operator").Output()
+	// 		if err != nil || strings.Contains(quayPackage, "not found") {
+	// 			return false, nil
+	// 		}
+	// 		return true, nil
+	// 	})
+	// 	exutil.AssertWaitPollNoErr(err, "failed to get package redhat-operators-quay-operator!")
 
-		operatorTemplate := filepath.Join(olmBaseDir, "operator.yaml")
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", operatorTemplate, "-p", "NAME=quay-example", "PACKAGE=quay-operator", "CHANNEL=stable-3.8", "VERSION=3.8.12")
-		if err != nil {
-			e2e.Failf("Failed to create operator quay-example: %s", err)
-		}
-		defer func() {
-			exutil.By("4, remove quay-example operator")
-			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("operator.operators.operatorframework.io", "quay-example").Output()
-			if err != nil {
-				e2e.Failf("Fail to delete quay-example operator, error:%v", err)
-			}
-		}()
-		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "quay-operator-system", "deploy", "quay-operator.v3.8.12", "-o=jsonpath={.status.readyReplicas}").Output()
-			if err != nil && !strings.Contains(status, "not found") {
-				e2e.Failf("! fail to check quay-operator.v3.8.12: %s", err)
-			}
-			if status != "1" {
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "failed to install quay-operator.v3.8.12 operator!")
+	// 	operatorTemplate := filepath.Join(olmBaseDir, "operator.yaml")
+	// 	err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", operatorTemplate, "-p", "NAME=quay-example", "PACKAGE=quay-operator", "CHANNEL=stable-3.8", "VERSION=3.8.12")
+	// 	if err != nil {
+	// 		e2e.Failf("Failed to create operator quay-example: %s", err)
+	// 	}
+	// 	defer func() {
+	// 		exutil.By("4, remove quay-example operator")
+	// 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("operator.operators.operatorframework.io", "quay-example").Output()
+	// 		if err != nil {
+	// 			e2e.Failf("Fail to delete quay-example operator, error:%v", err)
+	// 		}
+	// 	}()
+	// 	err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+	// 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "quay-operator-system", "deploy", "quay-operator.v3.8.12", "-o=jsonpath={.status.readyReplicas}").Output()
+	// 		if err != nil && !strings.Contains(status, "not found") {
+	// 			e2e.Failf("! fail to check quay-operator.v3.8.12: %s", err)
+	// 		}
+	// 		if status != "1" {
+	// 			return false, nil
+	// 		}
+	// 		return true, nil
+	// 	})
+	// 	exutil.AssertWaitPollNoErr(err, "failed to install quay-operator.v3.8.12 operator!")
 
-		exutil.By("3, upgrade quay-operator v3.8.12 to v3.9.1")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operator.operators.operatorframework.io", "quay-example", "-p", "{\"spec\": {\"version\": \"3.9.1\", \"channel\": \"stable-3.9\"}}", "--type=merge").Output()
-		if err != nil {
-			e2e.Failf("Fail to upgrade quay-operator v3.8.12 to v3.9.1, error:%v", err)
-		}
-		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "quay-operator-system", "deploy", "quay-operator.v3.9.1", "-o=jsonpath={.status.readyReplicas}").Output()
-			if err != nil && !strings.Contains(status, "not found") {
-				e2e.Failf("! fail to check quay-operator.v3.9.1: %s", err)
-			}
-			if status != "1" {
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "failed to upgrade quay-operator v3.8.12 to v3.9.1!")
-	})
+	// 	exutil.By("3, upgrade quay-operator v3.8.12 to v3.9.1")
+	// 	_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operator.operators.operatorframework.io", "quay-example", "-p", "{\"spec\": {\"version\": \"3.9.1\", \"channel\": \"stable-3.9\"}}", "--type=merge").Output()
+	// 	if err != nil {
+	// 		e2e.Failf("Fail to upgrade quay-operator v3.8.12 to v3.9.1, error:%v", err)
+	// 	}
+	// 	err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+	// 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "quay-operator-system", "deploy", "quay-operator.v3.9.1", "-o=jsonpath={.status.readyReplicas}").Output()
+	// 		if err != nil && !strings.Contains(status, "not found") {
+	// 			e2e.Failf("! fail to check quay-operator.v3.9.1: %s", err)
+	// 		}
+	// 		if status != "1" {
+	// 			return false, nil
+	// 		}
+	// 		return true, nil
+	// 	})
+	// 	exutil.AssertWaitPollNoErr(err, "failed to upgrade quay-operator v3.8.12 to v3.9.1!")
+	// })
 
 })
 
