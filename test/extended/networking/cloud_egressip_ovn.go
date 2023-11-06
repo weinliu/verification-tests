@@ -3830,5 +3830,223 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC", func() {
 		})
 		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get both EgressIPs %s,%s in tcpdump", freeIPs[0], freeIPs[1]))
 	})
+})
+
+var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC Basic", func() {
+	// In this describe function, will use dummy interfaces as non-ovn managed interfaces to test egressIP assignment to egress nodes.
+	defer g.GinkgoRecover()
+
+	var (
+		oc              = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+		egressNodeLabel = "k8s.ovn.org/egress-assignable"
+		ipv4Addr1       = "10.10.0.10/24"
+		ipv4Addr2       = "10.10.0.11/24"
+		ipv6Addr1       = "2001::1/64"
+		ipv6Addr2       = "2001::2/64"
+		ipv4eip1        = "10.10.0.100"
+		ipv6eip1        = "2001::100"
+	)
+
+	g.BeforeEach(func() {
+		platform := exutil.CheckPlatform(oc)
+		networkType := checkNetworkType(oc)
+		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
+		acceptedPlatform := strings.Contains(platform, "baremetal") || strings.Contains(platform, "none")
+		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
+			g.Skip("Test cases should be run on BareMetal cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:huirwang-Critical-66284-Medium-66286-Medium-66285-EgressIP can be applied on secondary NIC. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		exutil.By("1 Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		egressNode := nodeList.Items[0].Name
+
+		exutil.By("Apply EgressLabel Key for this test on one node.\n")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+
+		exutil.By("Create one dummy interface on egress node.\n")
+		ipStackType := checkIPStackType(oc)
+		var egressIP, dummyIP string
+		dummyNICName := "dummy-66284"
+
+		if ipStackType == "ipv6single" {
+			dummyIP = ipv6Addr1
+			egressIP = ipv6eip1
+		} else {
+			dummyIP = ipv4Addr1
+			egressIP = ipv4eip1
+		}
+		defer removeDummyInterface(oc, egressNode, dummyNICName)
+		addDummyInferface(oc, egressNode, dummyIP, dummyNICName)
+
+		exutil.By("Create egressIP object.\n")
+		egressip1 := egressIPResource1{
+			name:          "egressip-66284",
+			template:      egressIP2Template,
+			egressIP1:     egressIP,
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		exutil.By("Verify egressIP was assigned to egress node.\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		if ipStackType == "dualstack" {
+			exutil.By("Verify egressIP was assigned to egress node with IPv6 in dualstack cluster.\n")
+			removeDummyInterface(oc, egressNode, dummyNICName)
+			addDummyInferface(oc, egressNode, ipv6Addr1, dummyNICName)
+			egressip1.deleteEgressIPObject1(oc)
+			egressip1.egressIP1 = ipv6eip1
+			egressip1.createEgressIPObject2(oc)
+			verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+		}
+
+		// Test case OCP-66285
+		exutil.By("Remove IP address from dummy interface\n")
+		if ipStackType == "ipv4single" {
+			delIPFromInferface(oc, egressNode, ipv4Addr1, dummyNICName)
+		} else {
+			delIPFromInferface(oc, egressNode, ipv6Addr1, dummyNICName)
+		}
+
+		exutil.By("Verify egressIP was not assigned to egress node\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 0)
+
+		exutil.By("Add IP back to dummy interface\n")
+		if ipStackType == "ipv4single" {
+			addIPtoInferface(oc, egressNode, ipv4Addr1, dummyNICName)
+		} else {
+			addIPtoInferface(oc, egressNode, ipv6Addr1, dummyNICName)
+		}
+
+		exutil.By("Verify egressIP was assigned back to egress node\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		// Test case OCP-66286
+		exutil.By("Remove dummy interface from egress node. \n")
+		removeDummyInterface(oc, egressNode, dummyNICName)
+
+		exutil.By("Verify egressIP was not assigned to egress node\n\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 0)
+
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:huirwang-High-66288-High-66287-egressIP will not failover to egress node which doesn't have the secodary nic. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		exutil.By("1 Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Require 2 worker nodes for this test, no enough worker nodes, skip the test!")
+		}
+		egressNode1 := nodeList.Items[0].Name
+		egressNode2 := nodeList.Items[1].Name
+
+		exutil.By("Apply EgressLabel Key for this test on one node.\n")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
+
+		exutil.By("Create one dummy interface on egress node.\n")
+		ipStackType := checkIPStackType(oc)
+		var egressIP, dummyIP string
+		dummyNICName := "dummy-66288"
+
+		if ipStackType == "ipv6single" {
+			dummyIP = ipv6Addr1
+			egressIP = ipv6eip1
+		} else {
+			dummyIP = ipv4Addr1
+			egressIP = ipv4eip1
+		}
+		defer removeDummyInterface(oc, egressNode1, dummyNICName)
+		addDummyInferface(oc, egressNode1, dummyIP, dummyNICName)
+
+		exutil.By("Create egressIP object.\n")
+		egressip1 := egressIPResource1{
+			name:          "egressip-66288",
+			template:      egressIP2Template,
+			egressIP1:     egressIP,
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		exutil.By("Verify egressIP was assigned to egress node.\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		exutil.By("Remove egress label from first egress node, add label to second node.\n")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
+
+		exutil.By("Verify egressIP was not assigned to second egress node\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 0)
+
+		if ipStackType == "ipv6single" {
+			addDummyInferface(oc, egressNode2, ipv6Addr2, dummyNICName)
+		} else {
+			addDummyInferface(oc, egressNode2, ipv4Addr2, dummyNICName)
+		}
+		defer removeDummyInterface(oc, egressNode2, dummyNICName)
+
+		exutil.By("Verify egressIP was assigned to second egress node\n")
+		o.Eventually(func() bool {
+			egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
+			return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == egressNode2
+		}, "300s", "10s").Should(o.BeTrue(), "egressIP was not migrated to second egress node after unlabel first egress node!!")
+
+		exutil.By("Remove egress label from second node, add label to first node.\n")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
+
+		exutil.By("Verify egressIP was assigned to first egress node again\n")
+		o.Eventually(func() bool {
+			egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
+			return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == egressNode1
+		}, "300s", "10s").Should(o.BeTrue(), "egressIP was not migrated back to first egress node after unlabel second egress node!!")
+
+		if ipStackType == "dualstack" {
+			exutil.By("Verify IPv6 in dualstack cluster.\n")
+			addIPtoInferface(oc, egressNode1, ipv6Addr1, dummyNICName)
+			egressip1.deleteEgressIPObject1(oc)
+			egressip1.egressIP1 = ipv6eip1
+			egressip1.createEgressIPObject2(oc)
+			verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+			exutil.By("Remove egress label from first egress node, add label to second node.\n")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel, "true")
+			e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
+
+			exutil.By("Verify egressIP was not assigned to second egress node\n")
+			verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 0)
+
+			exutil.By("Assign IPv6 address to the dummy interface on secondary NIC.\n")
+			addIPtoInferface(oc, egressNode2, ipv6Addr2, dummyNICName)
+
+			exutil.By("Verify egressIP was assigned to second egress node\n")
+			o.Eventually(func() bool {
+				egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
+				return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == egressNode2
+			}, "300s", "10s").Should(o.BeTrue(), "egressIP was not migrated to second egress node after unlabel first egress node!!")
+
+		}
+	})
 
 })

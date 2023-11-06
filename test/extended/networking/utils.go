@@ -2998,3 +2998,39 @@ func checkOVNKState(oc *exutil.CLI) {
 	o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
 
 }
+
+func addDummyInferface(oc *exutil.CLI, nodeName, IP, nicName string) {
+	e2e.Logf("Add a dummy interface %s on node %s \n", nicName, nodeName)
+	cmd := fmt.Sprintf("ip link a %s type dummy && ip link set dev %s up && ip a add %s dev %s && ip a show %s", nicName, nicName, IP, nicName, nicName)
+	output, debugNodeErr := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
+	o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+	e2e.Logf("The dummy interface was added. \n %s", output)
+
+}
+
+func addIPtoInferface(oc *exutil.CLI, nodeName, IP, nicName string) {
+	e2e.Logf("Add IP address %s to interface %s on node %s \n", IP, nicName, nodeName)
+	cmd := fmt.Sprintf("ip a show %s && ip a add %s dev %s", nicName, IP, nicName)
+	_, debugNodeErr := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
+	o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+}
+
+func delIPFromInferface(oc *exutil.CLI, nodeName, IP, nicName string) {
+	e2e.Logf("Remove IP address %s from interface %s on node %s \n", IP, nicName, nodeName)
+	cmd := fmt.Sprintf("ip a show %s && ip a del %s dev %s", nicName, IP, nicName)
+	_, debugNodeErr := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
+	o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+}
+
+func removeDummyInterface(oc *exutil.CLI, nodeName, nicName string) {
+	e2e.Logf("Remove a dummy interface %s on node %s \n", nicName, nodeName)
+	cmd := fmt.Sprintf("ip a show %s && ip link del %s ", nicName, nicName)
+	output, debugNodeErr := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
+	nicNotExistStr := fmt.Sprintf("Device \"%s\" does not exist", nicName)
+	if debugNodeErr != nil && strings.Contains(output, nicNotExistStr) {
+		e2e.Logf("The dummy interface %s does not exist on node %s ! \n", nicName, nodeName)
+		return
+	}
+	o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+	e2e.Logf("The dummy interface %s was removed from node %s ! \n", nicName, nodeName)
+}
