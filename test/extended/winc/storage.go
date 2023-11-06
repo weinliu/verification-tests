@@ -31,8 +31,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 
 	g.It("Smokerun-Author:jfrancoa-NonPreRelease-Longduration-Critical-66352-Windows workloads support CSI persistent storage [Serial]", func() {
 
-		// TODO: Add support for other providers. Only known vSphere driver installation steps
-		if iaasPlatform != "vsphere" {
+		// TODO: Add support for other providers. Only known vSphere and Azure driver installation steps
+		if iaasPlatform != "vsphere" && iaasPlatform != "azure" {
 			g.Skip(iaasPlatform + " is not implemented yet, skipping")
 		}
 
@@ -42,14 +42,22 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
 
-		g.By("Installing CSI Driver for Windows nodes")
-		defer uninstallWindowsCSIDriver(oc, iaasPlatform)
-		err := installWindowsCSIDriver(oc, iaasPlatform)
+		driverName := "vmware-vsphere-csi-driver-node-windows"
+		if iaasPlatform == "azure" {
+			driverName = "azure-file-csi-driver-node-windows"
+		}
+		dsInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", driverName, "-n", "openshift-cluster-csi-drivers", "--ignore-not-found").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(dsInfo, driverName) {
+			g.By("Installing CSI Driver for Windows nodes")
+			defer uninstallWindowsCSIDriver(oc, iaasPlatform)
+			err := installWindowsCSIDriver(oc, iaasPlatform)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		g.By("Create storageclass")
 		scName := "fast-66352"
-		manifestFile, err := exutil.GenerateManifestFile(oc, "winc", iaasPlatform+"_storageclass_csi.yaml", map[string]string{"<name>": scName})
+		manifestFile, err := exutil.GenerateManifestFile(oc, "winc", iaasPlatform+"_storageclass.yaml", map[string]string{"<name>": scName})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.Remove(manifestFile)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("storageclass", scName).Output()
@@ -63,7 +71,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 
 			g.By("Create Persistent Volume Claims")
 
-			manifestFile, err = exutil.GenerateManifestFile(oc, "winc", iaasPlatform+"_pvc.yaml", map[string]string{"<name>": pvc, "<namespace>": namespace, "<sc-name>": scName, "<size>": "500Mi"})
+			accessMode := "ReadWriteMany"
+			if iaasPlatform == "vsphere" {
+				accessMode = "ReadWriteOnce"
+			}
+			manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "pvc.yaml", map[string]string{"<name>": pvc, "<namespace>": namespace, "<sc-name>": scName, "<access-mode>": accessMode, "<size>": "500Mi"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer os.Remove(manifestFile)
 			defer deleteResource(oc, "pvc", pvc, namespace)
@@ -80,7 +92,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 
 			g.By(fmt.Sprintf("Create Windows deployment %v-%v with persistent volume %v", windowsWorkloads, pvc, pvc))
 			defer deleteResource(oc, "deployment", windowsWorkloads+"-"+pvc, namespace)
-			createWindowsWorkload(oc, namespace, "windows_web_server_pvc.yaml", map[string]string{"<id>": pvc, "<pvc-name>": pvc, "<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image"), "<node-selector>": "nodepvc: " + pvc}, false)
+			nodeSelector := ""
+			// if vsphere we need to make sure that each deployment lands in a different node
+			if iaasPlatform == "vsphere" {
+				nodeSelector = "nodepvc: " + pvc
+			}
+			createWindowsWorkload(oc, namespace, "windows_web_server_pvc.yaml", map[string]string{"<id>": pvc, "<pvc-name>": pvc, "<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image"), "<node-selector>": nodeSelector}, false)
 			// Wait for the workloads to be created. Not using the logic in createWindowsWokrload
 			// because the deployment name is different than win-webserver, as well as the number
 			// of replicas
@@ -97,7 +114,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 			csiDriverName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", "-n", namespace, pvName, "-o=jsonpath={.spec.csi.driver}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			cmd := "ls -r C:\\var\\lib\\kubelet\\plugins\\kubernetes.io\\csi\\" + csiDriverName
+			cmd := "ls -r C:\\var\\lib\\kubelet\\plugins\\kubernetes.io\\csi\\" + csiDriverName + "\\*\\globalmount"
 			msg, err := runPSCommand(bastionHost, winInternalIP[idx], cmd, privateKey, iaasPlatform)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// The volume created under the directory
@@ -122,7 +139,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check that service is available and the Web Server is serving content")
-			msgCmd, _ := exec.Command("bash", "-c", "curl "+hostIPArray[0]+":"+nodePort).Output()
+			var msgCmd []byte
+			if iaasPlatform == "vsphere" {
+				msgCmd, _ = exec.Command("bash", "-c", "curl "+hostIPArray[0]+":"+nodePort).Output()
+			} else {
+				externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads+"-"+pvc, namespace)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				msgCmd, _ = exec.Command("bash", "-c", "curl "+externalIP).Output()
+			}
 			o.Expect(string(msgCmd)).To(o.ContainSubstring("Windows Container Web Server"))
 
 			// Modify webserver html file stored in the volume for that deployment
@@ -133,7 +157,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Verify that the modification is available accessing the ClusterIP as well as other POD's IP")
-			msgCmd, _ = exec.Command("bash", "-c", "curl "+hostIPArray[0]+":"+nodePort).Output()
+			if iaasPlatform == "vsphere" {
+				msgCmd, _ = exec.Command("bash", "-c", "curl "+hostIPArray[0]+":"+nodePort).Output()
+			} else {
+				externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads+"-"+pvc, namespace)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				msgCmd, _ = exec.Command("bash", "-c", "curl "+externalIP).Output()
+			}
 			o.Expect(string(msgCmd)).To(o.ContainSubstring(modText))
 
 			command = []string{"-n", namespace, winPodNameArray[0], "--", "curl", winPodIPArray[1]}
