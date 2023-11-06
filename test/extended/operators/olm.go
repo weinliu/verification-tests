@@ -793,7 +793,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// since https://issues.redhat.com/browse/OCPBUGS-13369 closed as Wont'do. I remove the certification checking
 		// re1, _ := regexp.Compile("x509.*")
 		// since https://issues.redhat.com/browse/OCPBUGS-11370, add "bad certificate" checking for prometheus pods
-		re2, _ := regexp.Compile("TLS handshake error.*")
+		re2, _ := regexp.Compile("bad certificate")
 		prometheusLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/prometheus-operator-admission-webhook", "-n", "openshift-monitoring").Output()
 		if err != nil {
 			e2e.Failf("!!! Fail to get prometheus logs:%s", err)
