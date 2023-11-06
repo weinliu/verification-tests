@@ -6758,4 +6758,47 @@ spec:
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-68629-[Apiserver] Audit log files of apiservers should not have too permissive mode", func() {
+		directories := []string{
+			"/var/log/kube-apiserver/",
+			"/var/log/openshift-apiserver/",
+			"/var/log/oauth-apiserver/",
+		}
+
+		exutil.By("Get all master nodes.")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		for i, directory := range directories {
+			exutil.By(fmt.Sprintf("%v) Checking permissions for directory: %s\n", i+1, directory))
+			// Skip checking of hidden files
+			cmd := fmt.Sprintf(`find %s -type f ! -perm 600 ! -name ".*" -exec ls -l {} +`, directory)
+			for _, masterNode := range masterNodes {
+				e2e.Logf("Checking permissions for directory: %s on node %s", directory, masterNode)
+				masterNodeOutput, checkFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+				o.Expect(checkFileErr).NotTo(o.HaveOccurred())
+				lines := strings.Split(string(masterNodeOutput), "\n")
+				cleanedLines := make([]string, 0, len(lines))
+
+				for _, line := range lines {
+					cleanedLine := strings.TrimSpace(line)
+					if cleanedLine != "" {
+						cleanedLines = append(cleanedLines, cleanedLine)
+					}
+				}
+
+				// Iterate through the cleaned lines to check file permissions
+				for _, line := range cleanedLines {
+					if strings.Contains(line, "-rw-------.") {
+						e2e.Logf("Node %s has a file with valid permissions 600 in %s:\n %s\n", masterNode, directory, line)
+					} else {
+						e2e.Failf("Node %s has a file with invalid permissions in %s:\n %v", masterNode, directory, line)
+					}
+				}
+			}
+		}
+	})
 })
