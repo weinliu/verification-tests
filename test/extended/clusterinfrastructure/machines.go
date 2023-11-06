@@ -1,6 +1,7 @@
 package clusterinfrastructure
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -919,5 +920,44 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		securityGroups, err := awsClient.GetInstanceSecurityGroupIDs(instanceID)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(securityGroups).Should(o.ContainElement(sgID))
+	})
+
+	//author zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-33058-Implement defaulting machineset values for azure [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(credType, "Manual") {
+			g.Skip("Skip test on azure sts cluster")
+		}
+		mapiBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "mapi")
+		defaultMachinesetAzureTemplate := filepath.Join(mapiBaseDir, "default-machineset-azure.yaml")
+
+		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+		location, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		vnet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.vnet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		subnet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.subnet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		networkResourceGroup, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkResourceGroup}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defaultMachinesetAzure := defaultMachinesetAzureDescription{
+			name:                 "machineset-33058-default",
+			clustername:          clusterID,
+			template:             defaultMachinesetAzureTemplate,
+			location:             location,
+			vnet:                 vnet,
+			subnet:               subnet,
+			namespace:            machineAPINamespace,
+			networkResourceGroup: networkResourceGroup,
+		}
+		defer exutil.WaitForMachinesDisapper(oc, defaultMachinesetAzure.name)
+		defaultMachinesetAzure.createDefaultMachineSetOnAzure(oc)
+		defer defaultMachinesetAzure.deleteDefaultMachineSetOnAzure(oc)
 	})
 })
