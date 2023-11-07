@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				{"vmware-vsphere-csi-driver-webhook-secret", newDeployment(setDeploymentName("vmware-vsphere-csi-driver-webhook"), setDeploymentNamespace(csiOperatorNs), setDeploymentApplabel("app=vmware-vsphere-csi-driver-webhook"))}},
 			"csi.sharedresource.openshift.io": {{"shared-resource-csi-driver-webhook-serving-cert", newDeployment(setDeploymentName("shared-resource-csi-driver-webhook"), setDeploymentNamespace(csiOperatorNs), setDeploymentApplabel("name=shared-resource-csi-driver-webhook"))},
 				{"shared-resource-csi-driver-node-metrics-serving-cert", newDeployment(setDeploymentName("shared-resource-csi-driver-node"), setDeploymentNamespace(csiOperatorNs), setDeploymentApplabel("app=shared-resource-csi-driver-node"))}},
-			"diskplugin.csi.alibabacloud.com": {{"alibaba-disk-csi-driver-controller-metrics-serving-cert", newDeployment(setDeploymentName("alibaba-cloud-csi-driver-controller"), setDeploymentNamespace(csiOperatorNs), setDeploymentApplabel("app=alibaba-cloud-csi-driver-controller"))}},
+			"diskplugin.csi.alibabacloud.com": {{"alibaba-disk-csi-driver-controller-metrics-serving-cert", newDeployment(setDeploymentName("alibaba-disk-csi-driver-controller"), setDeploymentNamespace(csiOperatorNs), setDeploymentApplabel("app=alibaba-disk-csi-driver-controller"))}},
 
 			// The follow provisioners covered by other teams not our CI, only define them but not add to test list, will add to test list when it is needed
 			"cinder.csi.openstack.org":  {{"openstack-cinder-csi-driver-controller-metrics-serving-cert", newDeployment(setDeploymentName("openstack-cinder-csi-driver-controller"), setDeploymentNamespace(csiOperatorNs), setDeploymentApplabel("app=openstack-cinder-csi-driver-controller"))}},

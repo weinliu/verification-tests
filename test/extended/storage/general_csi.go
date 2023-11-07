@@ -4197,12 +4197,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		// Set the resource template for the scenario
 		var (
-			lesserVolSize, expectedOutput string
-			storageTeamBaseDir            = exutil.FixturePath("testdata", "storage")
-			storageClassTemplate          = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
-			pvcTemplate                   = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
-			storageClassParameters        = make(map[string]string)
-			extraParameters               = map[string]interface{}{
+			lesserVolSize          string
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			storageClassParameters = make(map[string]string)
+			extraParameters        = map[string]interface{}{
 				"parameters": storageClassParameters,
 			}
 		)
@@ -4219,7 +4219,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			if provisioner == "diskplugin.csi.alibabacloud.com" {
 				storageClassParameters["volumeSizeAutoAvailable"] = "false"
 				lesserVolSize = strconv.FormatInt(getRandomNum(1, 19), 10) + "Gi"
-				expectedOutput = "ErrorCode: Invalid"
 			} else {
 				//Need to add value for ibm
 				lesserVolSize = strconv.FormatInt(getRandomNum(1, 9), 10) + "Gi"
@@ -4239,9 +4238,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pvc.deleteAsAdmin(oc)
 
 			exutil.By("# Wait for the pvc reach to Pending and check for the expected output")
-			pvc.waitPvcStatusToTimer(oc, "Pending")
-			output, _ := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
-			o.Expect(output).To(o.ContainSubstring(expectedOutput))
+			o.Eventually(func() string {
+				pvc2Event, _ := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+				return pvc2Event
+			}, 60*time.Second, 10*time.Second).Should(o.And(
+				o.ContainSubstring("ProvisioningFailed"),
+				o.ContainSubstring("disk you needs at least 20GB size"),
+			))
+			pvc.checkStatusAsExpectedConsistently(oc, "Pending")
+			o.Expect(describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)).ShouldNot(o.ContainSubstring("Successfully provisioned volume"))
 
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
