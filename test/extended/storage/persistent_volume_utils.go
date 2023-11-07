@@ -212,7 +212,7 @@ func (pv *persistentVolume) generateParametersByVolumeKind() (pvExtraParameters 
 			"name": pv.secretName,
 		}
 		iscsiParameters := map[string]interface{}{
-			"targetPortal":      pv.iscsiServerIP + ":3260",
+			"targetPortal":      net.JoinHostPort(pv.iscsiServerIP, "3260"),
 			"iqn":               "iqn.2016-04.test.com:storage.target00",
 			"lun":               0,
 			"iface":             "default",

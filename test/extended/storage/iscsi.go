@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
 	"time"
@@ -144,7 +145,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("#. Create a pv with the storageclass")
 		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
-		pv.iscsiPortals = []string{svc.clusterIP + ":" + port}
+		pv.iscsiPortals = []string{net.JoinHostPort(svc.clusterIP, port)}
 		pv.create(oc)
 		defer pv.deleteAsAdmin(oc)
 
