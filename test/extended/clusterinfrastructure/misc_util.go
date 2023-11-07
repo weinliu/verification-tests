@@ -22,6 +22,18 @@ type defaultMachinesetAzureDescription struct {
 	networkResourceGroup string
 }
 
+type defaultMachinesetAwsDescription struct {
+	name                 string
+	namespace            string
+	template             string
+	clustername          string
+	amiID                string
+	availabilityZone     string
+	sgName               string
+	subnet               string
+	iamInstanceProfileID string
+}
+
 type pvcDescription struct {
 	storageSize string
 	template    string
@@ -38,7 +50,7 @@ func (pvc *pvcDescription) deletePvc(oc *exutil.CLI) error {
 }
 
 func (defaultMachinesetAzure *defaultMachinesetAzureDescription) createDefaultMachineSetOnAzure(oc *exutil.CLI) {
-	e2e.Logf("Creating gcpMachineSet ...")
+	e2e.Logf("Creating azureMachineSet ...")
 	if err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", defaultMachinesetAzure.template, "-p", "NAME="+defaultMachinesetAzure.name, "NAMESPACE="+machineAPINamespace, "CLUSTERNAME="+defaultMachinesetAzure.clustername, "LOCATION="+defaultMachinesetAzure.location, "VNET="+defaultMachinesetAzure.vnet, "SUBNET="+defaultMachinesetAzure.subnet, "NETWORKRG="+defaultMachinesetAzure.networkResourceGroup); err != nil {
 		defaultMachinesetAzure.deleteDefaultMachineSetOnAzure(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -47,9 +59,24 @@ func (defaultMachinesetAzure *defaultMachinesetAzureDescription) createDefaultMa
 	}
 }
 
+func (defaultMachinesetAws *defaultMachinesetAwsDescription) createDefaultMachineSetOnAws(oc *exutil.CLI) {
+	e2e.Logf("Creating awsMachineSet ...")
+	if err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", defaultMachinesetAws.template, "-p", "NAME="+defaultMachinesetAws.name, "NAMESPACE="+machineAPINamespace, "CLUSTERNAME="+defaultMachinesetAws.clustername, "AMIID="+defaultMachinesetAws.amiID, "AVAILABILITYZONE="+defaultMachinesetAws.availabilityZone, "SGNAME="+defaultMachinesetAws.sgName, "SUBNET="+defaultMachinesetAws.subnet, "IAMINSTANCEPROFILEID="+defaultMachinesetAws.iamInstanceProfileID); err != nil {
+		defaultMachinesetAws.deleteDefaultMachineSetOnAws(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		waitForDefaultMachinesRunning(oc, 1, defaultMachinesetAws.name)
+	}
+}
+
 func (defaultMachinesetAzure *defaultMachinesetAzureDescription) deleteDefaultMachineSetOnAzure(oc *exutil.CLI) error {
-	e2e.Logf("Deleting gcpMachineSet ...")
+	e2e.Logf("Deleting azureMachineSet ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(mapiMachineset, defaultMachinesetAzure.name, "-n", machineAPINamespace).Execute()
+}
+
+func (defaultMachinesetAws *defaultMachinesetAwsDescription) deleteDefaultMachineSetOnAws(oc *exutil.CLI) error {
+	e2e.Logf("Deleting awsMachineSet ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(mapiMachineset, defaultMachinesetAws.name, "-n", machineAPINamespace).Execute()
 }
 
 // waitForDefaultMachinesRunning check if all the machines are Running in a MachineSet

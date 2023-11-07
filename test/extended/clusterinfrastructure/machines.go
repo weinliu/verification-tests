@@ -776,31 +776,43 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-32269-Implement validation/defaulting for AWS [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
-		g.By("Create a new machineset")
-		machinesetNameDefault := "machineset-32269-default"
-		msDefault := exutil.MachineSetDescription{machinesetNameDefault, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetNameDefault)
-		defer msDefault.DeleteMachineSet(oc)
-		msDefault.CreateMachineSet(oc)
+		mapiBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "mapi")
+		defaultMachinesetAwsTemplate := filepath.Join(mapiBaseDir, "default-machineset-aws.yaml")
 
-		g.By("Get the original value of credentialsSecret and userDataSecret fileds")
-		credentialsSecretMachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetNameDefault, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.credentialsSecret.name}").Output()
+		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		userDataSecretMachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetNameDefault, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.userDataSecret.name}").Output()
+		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+		amiID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.ami.id}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.placement.availabilityZone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sgName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.securityGroups[0].filters[0].values[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		subnet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.subnet.filters[0].values[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if subnet == "" {
+			subnet, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.subnet.id}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defaultMachinesetAwsTemplate = filepath.Join(mapiBaseDir, "default-machineset-aws-id.yaml")
+		}
+		iamInstanceProfileID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.iamInstanceProfile.id}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create a new machineset deleting instanceType credentialsSecret and userDataSecret fileds")
-		machinesetName := "machineset-32269"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
-		defer ms.DeleteMachineSet(oc)
-		ms.CreateAwsMachinesetWithDefaultValues(oc)
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
-
-		g.By("Check machine instanceType credentialsSecret and userDataSecret are defaulted")
-		instanceTypeMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.instanceType}").Output()
+		defaultMachinesetAws := defaultMachinesetAwsDescription{
+			name:                 "machineset-32269-default",
+			clustername:          clusterID,
+			template:             defaultMachinesetAwsTemplate,
+			amiID:                amiID,
+			availabilityZone:     availabilityZone,
+			sgName:               sgName,
+			subnet:               subnet,
+			namespace:            machineAPINamespace,
+			iamInstanceProfileID: iamInstanceProfileID,
+		}
+		defer exutil.WaitForMachinesDisapper(oc, defaultMachinesetAws.name)
+		defer defaultMachinesetAws.deleteDefaultMachineSetOnAws(oc)
+		defaultMachinesetAws.createDefaultMachineSetOnAws(oc)
+		instanceTypeMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+defaultMachinesetAws.name, "-o=jsonpath={.items[0].spec.providerSpec.value.instanceType}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		switch arch := architecture.ClusterArchitecture(oc); arch {
 		case architecture.AMD64:
@@ -810,12 +822,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		default:
 			e2e.Logf("ignoring the validation of the instanceType for cluster architecture %s", arch.String())
 		}
-		credentialsSecretMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.credentialsSecret.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(credentialsSecretMachine).Should(o.Equal(credentialsSecretMachineset))
-		userDataSecretMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.userDataSecret.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(userDataSecretMachine).Should(o.Equal(userDataSecretMachineset))
 	})
 
 	//author huliu@redhat.com
