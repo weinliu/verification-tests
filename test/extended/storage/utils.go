@@ -656,9 +656,10 @@ func getRandomNum(m int64, n int64) int64 {
 // Restore the credential of vSphere CSI driver
 func restoreVsphereCSIcredential(oc *exutil.CLI, pwdKey string, originPwd string) error {
 	e2e.Logf("****** Restore the credential of vSphere CSI driver and make sure the CSO recover healthy ******")
-	output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+originPwd+`"}}`).Output()
+	output, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+originPwd+`"}}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("patched"))
+	e2e.Logf("The vSphere CSI secret recovered")
 	vSphereDriverController.waitReady(oc.AsAdmin())
 	// Make sure the Cluster Storage Operator recover healthy
 	waitCSOhealthy(oc.AsAdmin())
@@ -685,11 +686,11 @@ func getCSOspecifiedStatusValue(oc *exutil.CLI, specifiedStatus string) (string,
 
 // Wait for Cluster Storage Operator specified status value as expected
 func waitCSOspecifiedStatusValueAsExpected(oc *exutil.CLI, specifiedStatus string, expectedValue string) {
-	pollErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+	pollErr := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		realValue, err := getCSOspecifiedStatusValue(oc, specifiedStatus)
 		if err != nil {
 			e2e.Logf("Get CSO \"%s\" status value failed of: \"%v\"", err)
-			return false, err
+			return false, nil
 		}
 		if realValue == expectedValue {
 			e2e.Logf("CSO \"%s\" status value become expected \"%s\"", specifiedStatus, expectedValue)
@@ -698,6 +699,14 @@ func waitCSOspecifiedStatusValueAsExpected(oc *exutil.CLI, specifiedStatus strin
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Waiting for CSO \"%s\" status value become expected \"%s\" timeout", specifiedStatus, expectedValue))
+}
+
+// checkCSOspecifiedStatusValueAsExpectedConsistently checks Cluster Storage Operator specified status value as expected consistently
+func checkCSOspecifiedStatusValueAsExpectedConsistently(oc *exutil.CLI, specifiedStatus string, expectedValue string) {
+	o.Consistently(func() string {
+		actualStatusValue, _ := getCSOspecifiedStatusValue(oc, specifiedStatus)
+		return actualStatusValue
+	}, 60*time.Second, 5*time.Second).Should(o.ContainSubstring(expectedValue))
 }
 
 // Check Cluster Storage Operator healthy
@@ -715,7 +724,7 @@ func checkCSOhealthy(oc *exutil.CLI) (bool, error) {
 
 // Wait for Cluster Storage Operator become healthy
 func waitCSOhealthy(oc *exutil.CLI) {
-	pollErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+	pollErr := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		healthyBool, err := checkCSOhealthy(oc)
 		if err != nil {
 			e2e.Logf("Get CSO status failed of: \"%v\"", err)

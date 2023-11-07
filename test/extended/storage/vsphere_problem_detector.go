@@ -302,7 +302,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("# Replace the origin credential of vSphere CSI driver to wrong")
 		invalidPwd := base64.StdEncoding.EncodeToString([]byte(getRandomString()))
-		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+invalidPwd+`"}}`).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+invalidPwd+`"}}`).Output()
 		// Restore the credential of vSphere CSI driver and make sure the CSO recover healthy by defer
 		defer restoreVsphereCSIcredential(oc, pwdKey, originPwd)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -312,11 +312,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("# Wait for the 'vsphere_csi_driver_error' metric report with correct content")
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_csi_driver_error", `data.result.0.metric.failure_reason`, "vsphere_connection_failed")
 
-		exutil.By("# Check the cluster could still upgrade and cluster storage operator not available")
+		exutil.By("# Check the cluster could be still upgradeable")
 		// Don't block upgrades if we can't connect to vcenter
 		// https://bugzilla.redhat.com/show_bug.cgi?id=2040880
-		waitCSOspecifiedStatusValueAsExpected(oc, "Upgradeable", "True")
 		waitCSOspecifiedStatusValueAsExpected(oc, "Available", "False")
+		checkCSOspecifiedStatusValueAsExpectedConsistently(oc, "Upgradeable", "True")
 	})
 
 	// author:wduan@redhat.com
