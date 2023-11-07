@@ -877,23 +877,22 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Author:qiowang-Medium-66174-Verify knmstate operator support for IPv6 single stack - ipv6 default route [Disruptive]", func() {
 		exutil.By("Check the platform if it is suitable for running the test")
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "oauth-openshift", "-n", "openshift-authentication").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
-			g.Skip("Skip this case since it needs another Nic to configure routes!")
-		}
+		platform := checkPlatform(oc)
 		ipStackType := checkIPStackType(oc)
-		if ipStackType != "ipv6single" {
-			g.Skip("Should be tested on IPv6 single stack platform, skipping!")
+		if ipStackType != "ipv6single" || !strings.Contains(platform, "baremetal") {
+			g.Skip("Should be tested on IPv6 single stack platform(IPI BM), skipping!")
 		}
 
 		var (
-			ifName      = "enp1s0"
 			destAddr    = "::/0"
 			nextHopAddr = "fd00:1101::1"
 		)
 		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		cmd := `nmcli dev | grep -v 'ovs' | egrep 'ethernet +connected' | awk '{print $1}'`
+		ifNameInfo, ifNameErr := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cmd)
+		o.Expect(ifNameErr).NotTo(o.HaveOccurred())
+		ifName := strings.Split(ifNameInfo, "\n")[0]
 
 		exutil.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -960,7 +959,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - status of enactments are updated")
 
 		exutil.By("2.5 Verify the default routes found in node network state")
-		routes, nnsRoutesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.routes.config[?(@.next-hop-interface=="`+ifName+`")]}`).Output()
+		routes, nnsRoutesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.routes.config[?(@.destination=="`+destAddr+`")]}`).Output()
 		o.Expect(nnsRoutesErr).NotTo(o.HaveOccurred())
 		o.Expect(routes).Should(o.ContainSubstring(routePolicy1.nexthopaddr))
 		o.Expect(routes).Should(o.ContainSubstring(routePolicy2.nexthopaddr))
@@ -1022,7 +1021,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - status of enactments are updated")
 
 		exutil.By("3.5 Verify the removed default routes cannot be found in node network state")
-		routes1, nnsRoutesErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.routes}`).Output()
+		routes1, nnsRoutesErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.routes.config[?(@.destination=="`+destAddr+`")]}`).Output()
 		o.Expect(nnsRoutesErr1).NotTo(o.HaveOccurred())
 		o.Expect(routes1).ShouldNot(o.ContainSubstring(routePolicy1.nexthopaddr))
 		o.Expect(routes1).ShouldNot(o.ContainSubstring(routePolicy2.nexthopaddr))
