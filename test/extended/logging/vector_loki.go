@@ -2001,7 +2001,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			queryAlertManagerForActiveAlerts(oc, token, false, "MyAppLogVolumeIsHigh", 5)
 		})
 
-		g.It("CPaasrunOnly-Author:kbharti-Critical-61435-Loki Operator - Validate AlertManager support for User-workload monitoring[Serial]", func() {
+		g.It("CPaasrunOnly-Author:kbharti-Medium-61435-Loki Operator - Validate AlertManager support for User-workload monitoring[Serial]", func() {
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj := oc.Namespace()
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
