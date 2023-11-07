@@ -205,25 +205,6 @@ func createAlbcRolePolicy(iamClient *iam.Client, infraID string, oidcArnPrefix s
 	return albcRoleArn
 }
 
-// create ALB Secret with Role ARN for STS cluster
-func createSecretWithRoleArn(oc *exutil.CLI, roleArn string, secretName string) {
-	ns := "aws-load-balancer-operator"
-	secretConfig := `
-[default]
-sts_regional_endpoints = regional
-role_arn = %s
-web_identity_token_file = /var/run/secrets/openshift/serviceaccount/token
-`
-	secretConfig = fmt.Sprintf(secretConfig, roleArn)
-	tmpFile := "/tmp/secret-alb-" + getRandomString() + ".cfg"
-	err := os.WriteFile(tmpFile, []byte(secretConfig), 0644)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	cmd := fmt.Sprintf(`--from-file=credentials=%v`, tmpFile)
-	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args(
-		"secret", "generic", secretName, cmd, "-n", ns).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
 // Remove ALB Operator role on STS cluster
 func deleteAlboRolePolicy(iamClient *iam.Client, infraID string) {
 	alboRoleName := infraID + "-albo-role"
@@ -242,9 +223,6 @@ func deleteAlbcRolePolicy(iamClient *iam.Client, infraID string) {
 
 // Prepare all roles and secrets for STS cluster
 func prepareAllForStsCluster(oc *exutil.CLI) {
-	alboSecretName := "aws-load-balancer-operator"
-	albcSecretName := "aws-load-balancer-controller-credentialsrequest-cluster"
-
 	infraID, _ := exutil.GetInfraID(oc)
 	oidcName := getOidc(oc)
 	iamClient := newIamClient()
@@ -253,9 +231,11 @@ func prepareAllForStsCluster(oc *exutil.CLI) {
 	oidcArnPrefix := "arn:aws:iam::" + account + ":oidc-provider/"
 
 	alboRoleArn := createAlboRolePolicy(iamClient, infraID, oidcArnPrefix, oidcName)
-	createSecretWithRoleArn(oc, alboRoleArn, alboSecretName)
+	err := os.Setenv("ALBO_ROLE_ARN", alboRoleArn)
+	o.Expect(err).NotTo(o.HaveOccurred())
 	albcRoleArn := createAlbcRolePolicy(iamClient, infraID, oidcArnPrefix, oidcName)
-	createSecretWithRoleArn(oc, albcRoleArn, albcSecretName)
+	err = os.Setenv("ALBC_ROLE_ARN", albcRoleArn)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Clear up all roles for STS cluster and namespace aws-load-balancer-operator
@@ -266,6 +246,8 @@ func clearUpAlbOnStsCluster(oc *exutil.CLI) {
 	deleteAlboRolePolicy(iamClient, infraID)
 	deleteAlbcRolePolicy(iamClient, infraID)
 
-	//delete all resources of aws-load-balancer-operator (only for STS cluster)
+	// delete all resources of aws-load-balancer-operator (only for STS cluster)
 	deleteNamespace(oc, ns)
+	// delete the credentialsrequest for ALB operator
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("credentialsrequest", "aws-load-balancer-operator", "-n", "openshift-cloud-credential-operator", "--ignore-not-found").Execute()
 }

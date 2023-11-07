@@ -1081,7 +1081,6 @@ func getOidc(oc *exutil.CLI) string {
 // this function create aws-load-balancer-operator
 func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "router", "awslb")
-	credentials := filepath.Join(buildPruningBaseDir, "credentialsrequest.yaml")
 	operatorGroup := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 	subscriptionSrcRedHat := filepath.Join(buildPruningBaseDir, "subscription-src-redhat.yaml")
 	subscriptionSrcQE := filepath.Join(buildPruningBaseDir, "subscription-src-qe.yaml")
@@ -1094,9 +1093,6 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	if exutil.IsSTSCluster(oc) {
 		e2e.Logf("This is STS cluster, create ALB operator and controller secrets via AWS SDK")
 		prepareAllForStsCluster(oc)
-	} else {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", credentials).Output()
-		e2e.Logf("err %v, msg %v", err, msg)
 	}
 
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroup).Output()
@@ -1110,6 +1106,10 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	} else {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscriptionSrcQE).Output()
 		e2e.Logf("err %v, msg %v", err, msg)
+	}
+
+	if exutil.IsSTSCluster(oc) {
+		patchAlboSubscriptionWithRoleArn(oc, ns)
 	}
 
 	// checking subscription status
@@ -1142,6 +1142,20 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 		e2e.Logf("The detailed output of CSV is: %v", output)
 	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
+}
+
+func patchAlboSubscriptionWithRoleArn(oc *exutil.CLI, ns string) {
+	e2e.Logf("patching the ALBO subcripton with Role ARN on STS cluster")
+	jsonPatch := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/config\",\"value\":{\"env\":[{\"name\":\"ROLEARN\",\"value\":%s}]}}]", os.Getenv("ALBO_ROLE_ARN"))
+	_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns, "sub/aws-load-balancer-operator", "-p", jsonPatch, "--type=json").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func patchAlbControllerWithRoleArn(oc *exutil.CLI, ns string) {
+	e2e.Logf("patching the ALB Controller with Role ARN on STS cluster")
+	jsonPatch := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/credentialsRequestConfig\",\"value\":{\"stsIAMRoleARN\":%s}}]", os.Getenv("ALBC_ROLE_ARN"))
+	_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns, "awsloadbalancercontroller/cluster", "-p", jsonPatch, "--type=json").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // this function check if the load balancer provisioned

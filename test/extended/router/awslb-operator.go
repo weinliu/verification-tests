@@ -39,7 +39,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: hongli@redhat.com
-	g.It("ROSA-OSD_CCS-NonHyperShiftHOST-ConnectedOnly-Author:hongli-High-51189-Support aws-load-balancer-operator [Serial]", func() {
+	g.It("ROSA-OSD_CCS-ConnectedOnly-Author:hongli-High-51189-Support aws-load-balancer-operator [Serial]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "awslb")
 			AWSLBController     = filepath.Join(buildPruningBaseDir, "awslbcontroller.yaml")
@@ -57,6 +57,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("awsloadbalancercontroller", operandCRName).Output()
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", AWSLBController).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		if exutil.IsSTSCluster(oc) {
+			patchAlbControllerWithRoleArn(oc, operatorNamespace)
+		}
 		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandPodLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the aws-load-balancer controller pod is not ready"))
 
