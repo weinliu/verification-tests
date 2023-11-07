@@ -45,6 +45,8 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		upgradeMachineConfigTemp2 = filepath.Join(buildPruningBaseDir, "custom-kubelet-test2.yaml")
 		systemreserveTemp         = filepath.Join(buildPruningBaseDir, "kubeletconfig-defaultsysres.yaml")
 		podLogLinkTemp            = filepath.Join(buildPruningBaseDir, "pod-loglink.yaml")
+		podDisruptionBudgetTemp   = filepath.Join(buildPruningBaseDir, "pod-disruption-budget.yaml")
+		genericDeploymentTemp     = filepath.Join(buildPruningBaseDir, "generic-deployment.yaml")
 
 		podLogLink65404 = podLogLinkDescription{
 			name:      "",
@@ -1029,6 +1031,54 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.By("Check crun is running")
 		checkCrun(oc)
 	})
+
+	//author: jfrancoa@redhat.com
+	//automates: https://issues.redhat.com/browse/OCPBUGS-15035
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:jfrancoa-Medium-67564-node's drain should block when PodDisruptionBudget minAvailable equals 100 percentage and selector is empty [Disruptive]", func() {
+		exutil.By("Create a deployment with 6 replicas")
+		deploy := NewDeployment("hello-openshift", oc.Namespace(), "6", genericDeploymentTemp)
+		defer deploy.delete(oc)
+		deploy.create(oc)
+		deploy.waitForCreation(oc, 5)
+
+		exutil.By("Create PodDisruptionBudget")
+		pdb := NewPDB("my-pdb", oc.Namespace(), "100%", podDisruptionBudgetTemp)
+		defer pdb.delete(oc)
+		pdb.create(oc)
+
+		worker := getSingleWorkerNode(oc)
+		exutil.By(fmt.Sprintf("Obtain the pods running on node %v", worker))
+
+		podsInWorker, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("pods", "-n", oc.Namespace(), "-o=jsonpath={.items[?(@.spec.nodeName=='"+worker+"')].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(strings.Split(podsInWorker, " "))).Should(o.BeNumerically(">", 0))
+
+		// if the pdb's status is false and reason InsufficientPods
+		// means that it's not possible to drain a node keeping the
+		// required minimum availability, therefore the drain operation
+		// should block.
+		exutil.By("Make sure that PDB's status is False")
+		pdbStatus, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("poddisruptionbudget", "my-pdb", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(pdbStatus, "False")).Should(o.BeTrue())
+
+		exutil.By(fmt.Sprintf("Drain the node %v", worker))
+		defer waitClusterOperatorAvailable(oc)
+		defer oc.WithoutNamespace().AsAdmin().Run("adm").Args("uncordon", worker).Execute()
+		// Try to drain the node (it should fail) due to the 100%'s PDB minAvailability
+		// as the draining is impossible to happen, if we don't pass a timeout value this
+		// command will wait forever, as default timeout is 0s, which means infinite.
+		out, err := oc.WithoutNamespace().AsAdmin().Run("adm").Args("drain", worker, "--ignore-daemonsets", "--delete-emptydir-data", "--timeout=30s").Output()
+		o.Expect(err).To(o.HaveOccurred(), "Drain operation should have been blocked but it wasn't")
+		o.Expect(strings.Contains(out, "Cannot evict pod as it would violate the pod's disruption budget")).Should(o.BeTrue())
+		o.Expect(strings.Contains(out, "There are pending nodes to be drained")).Should(o.BeTrue())
+
+		exutil.By("Verify that the pods were not drained from the node")
+		podsAfterDrain, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("pods", "-n", oc.Namespace(), "-o=jsonpath={.items[?(@.spec.nodeName=='"+worker+"')].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podsInWorker).Should(o.BeIdenticalTo(podsAfterDrain))
+	})
+
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {

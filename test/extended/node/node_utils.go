@@ -180,6 +180,21 @@ type podLogLinkDescription struct {
 	template  string
 }
 
+type podDisruptionBudget struct {
+	name         string
+	namespace    string
+	minAvailable string
+	template     string
+}
+
+type deployment struct {
+	name      string
+	namespace string
+	replicas  string
+	image     string
+	template  string
+}
+
 func (podLogLink *podLogLinkDescription) create(oc *exutil.CLI) {
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podLogLink.template, "-p", "NAME="+podLogLink.name, "NAMESPACE="+podLogLink.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -237,6 +252,62 @@ func (podNoWkloadCpu *podNoWkloadCpuDescription) create(oc *exutil.CLI) {
 
 func (podNoWkloadCpu *podNoWkloadCpuDescription) delete(oc *exutil.CLI) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podNoWkloadCpu.namespace, "pod", podNoWkloadCpu.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// deployment generator function (uses default image from template)
+func NewDeployment(name, namespace, replicas, template string) *deployment {
+	return &deployment{name, namespace, replicas, "", template}
+}
+
+// deployment generator function with image override
+func NewDeploymentWithImage(name, namespace, replicas, image, template string) *deployment {
+	return &deployment{name, namespace, replicas, image, template}
+}
+
+func (deployment *deployment) create(oc *exutil.CLI) {
+	imageArg := ""
+	if deployment.image != "" {
+		imageArg = "IMAGE=" + deployment.image
+	}
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployment.template, "-p", "NAME="+deployment.name, "NAMESPACE="+deployment.namespace, "REPLICAS="+deployment.replicas, imageArg)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// waits until all the pods in the created deployment are in Ready state
+func (deployment *deployment) waitForCreation(oc *exutil.CLI, timeoutMin int) {
+	err := wait.Poll(3*time.Second, time.Duration(timeoutMin)*time.Minute, func() (bool, error) {
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deployment.name, "-o=jsonpath={.status.readyReplicas}", "-n", deployment.namespace).Output()
+		if err != nil {
+			e2e.Logf("Command failed with error: %s .... there are no ready workloads", err)
+			return false, nil
+		}
+
+		if (msg == "" && deployment.replicas == "0") || msg == deployment.replicas {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create deployment %v in namespace %v", deployment.name, deployment.namespace))
+}
+
+func (deployment *deployment) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", deployment.namespace, "deployment", deployment.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// PDB generator function
+func NewPDB(name, namespace, minAvailable, template string) *podDisruptionBudget {
+	return &podDisruptionBudget{name, namespace, minAvailable, template}
+}
+
+func (pdb *podDisruptionBudget) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pdb.template, "-p", "NAME="+pdb.name, "NAMESPACE="+pdb.namespace, "MIN_AVAILABLE="+pdb.minAvailable)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (pdb *podDisruptionBudget) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", pdb.namespace, "poddisruptionbudget", pdb.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1309,6 +1380,24 @@ func checkConmonForAllNode(oc *exutil.CLI) {
 		e2e.Logf("conmon string is:\n %v\n", configStr)
 	}
 	exutil.AssertWaitPollNoErr(waitErr, "the conmon is not as expected!")
+}
+
+// waitClusterOperatorAvailable waits for all the Cluster Operator resources to be
+// in Available state. This generic function can be used either after draining a node
+// or after an upgrade.
+func waitClusterOperatorAvailable(oc *exutil.CLI) {
+
+	timeout := 120
+
+	waitErr := wait.Poll(10*time.Second, time.Duration(timeout)*time.Minute, func() (bool, error) {
+		availableCOStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Available\")].status}").Output()
+		if err != nil || strings.Contains(availableCOStatus, "False") {
+			e2e.Logf("Some Cluster Operator is still Unavailable")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Some cluster operator is still unavailable after %v seconds ...", timeout))
 }
 
 func checkUpgradeMachineConfig(oc *exutil.CLI) {
