@@ -97,7 +97,7 @@ func labelNameSpace(oc *exutil.CLI, namespace string, label string) {
 }
 
 func getSAToken(oc *exutil.CLI, account, ns string) string {
-	e2e.Logf("Getting a token assgined to specific serviceaccount from %s namespace...", ns)
+	e2e.Logf("Getting a token assigned to specific serviceaccount from %s namespace...", ns)
 	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", account, "-n", ns).Output()
 	if err != nil {
 		if strings.Contains(token, "unknown command") {
@@ -268,8 +268,8 @@ func checkAlertNotExist(oc *exutil.CLI, url, token, alertName string, timeout ti
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Target alert found: %s", alertName))
 }
 
-// check alertmanger config in the pod
-func checkAlertmangerConfig(oc *exutil.CLI, ns string, podName string, checkValue string, expectExist bool) {
+// check alertmanager config in the pod
+func checkAlertmanagerConfig(oc *exutil.CLI, ns string, podName string, checkValue string, expectExist bool) {
 	envCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "alertmanager", podName, "--", "bash", "-c", fmt.Sprintf(`cat /etc/alertmanager/config_out/alertmanager.env.yaml | grep '%s'`, checkValue)).Output()
 		if expectExist {

@@ -860,7 +860,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 
 			g.By("check the initial alertmanager configuration")
-			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "alertname = Watchdog", true)
+			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "alertname = Watchdog", true)
 
 			g.By("create&check alertmanagerconfig under openshift-monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", wechatConfig)
@@ -869,7 +869,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			o.Expect(output).To(o.ContainSubstring("wechat-config"))
 
 			g.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration (should not)")
-			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
+			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
 
 			g.By("delete the alertmanagerconfig/secret created under openshift-monitoring")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanagerconfig/config-example", "secret/wechat-config", "-n", "openshift-monitoring").Execute()
@@ -886,20 +886,20 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			o.Expect(output2).To(o.ContainSubstring("wechat-config"))
 
 			g.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration (should not)")
-			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
+			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
 
 			g.By("update the label to true")
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/user-monitoring=true", "--overwrite").Execute()
 
 			g.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration")
-			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", true)
+			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", true)
 
 			g.By("set enableUserAlertmanagerConfig to false")
 			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "cluster-monitoring-config", "-p", `{"data": {"config.yaml": "alertmanagerMain:\n enableUserAlertmanagerConfig: false\n"}}`, "--type=merge", "-n", "openshift-monitoring").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("the AlertmanagerConfig from user project is removed")
-			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
+			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
 		})
 
 		g.It("Author:tagao-Medium-49404-Medium-49176-Expose Authorization settings for remote write in the CMO configuration, Add the relabel config to all user-supplied remote_write configurations [Serial]", func() {
@@ -1120,7 +1120,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 			g.By("check AlertmanagerConfigs are take effect")
 			for _, pod := range strings.Fields(PodNames) {
-				checkAlertmangerConfig(oc, "openshift-user-workload-monitoring", pod, "api_url: http://wechatserver:8080/", true)
+				checkAlertmanagerConfig(oc, "openshift-user-workload-monitoring", pod, "api_url: http://wechatserver:8080/", true)
 			}
 
 			g.By("check logLevel is correctly set")
@@ -1577,7 +1577,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("configure alertmanager secret setting in user-workload-monitoring-config configmap")
 		createResourceFromYaml(oc, "openshift-user-workload-monitoring", alertmanagerSecretUwmCM)
 
-		g.By("check if the sercrets are mounted to UWM alertmanager pod")
+		g.By("check if the secrets are mounted to UWM alertmanager pod")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 		checkConfigInPod(oc, "openshift-user-workload-monitoring", "alertmanager-user-workload-0", "alertmanager", "ls /etc/alertmanager/secrets/", "test-secret")
 		checkConfigInPod(oc, "openshift-user-workload-monitoring", "alertmanager-user-workload-0", "alertmanager", "ls /etc/alertmanager/secrets/", "slack-api-token")
