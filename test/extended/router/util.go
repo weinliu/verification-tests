@@ -209,7 +209,12 @@ func waitForPodWithLabelAppear(oc *exutil.CLI, ns, label string) error {
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
 		podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
 		e2e.Logf("the pod list is %v", podList)
-		if err != nil || len(podList) < 1 {
+		// add check for OCPQE-17360: pod list is "No resources found in xxx namespace"
+		podFlag := 1
+		if strings.Contains(podList, "No resources found") {
+			podFlag = 0
+		}
+		if err != nil || len(podList) < 1 || podFlag == 0 {
 			e2e.Logf("failed to get pod: %v, retrying...", err)
 			return false, nil
 		}
