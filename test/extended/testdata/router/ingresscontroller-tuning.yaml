@@ -11,6 +11,7 @@ objects:
       headerBufferBytes: 16385
       headerBufferMaxRewriteBytes: 4097
       threadCount: 4
+      maxConnections: -1
     domain: ${DOMAIN}
     replicas: 1
     endpointPublishingStrategy:
