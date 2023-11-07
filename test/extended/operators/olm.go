@@ -5521,6 +5521,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	})
 
+	// It will cover test case: OCP-68521, author: bandrade@redhat.com
+	g.It("ConnectedOnly-Author:bandrade-Medium-68521-Check failureThreshold of redhat-operators catalog", func() {
+		architecture.SkipNonAmd64SingleArch(oc)
+		redhatOperators, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "redhat-operators", "-n", "openshift-marketplace").Output()
+		if err != nil && strings.Contains(redhatOperators, "not found") {
+			g.Skip("redhat-operators catalog does not exist in the cluster")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "10", ok, []string{"pods", "-n", "openshift-marketplace", "-l olm.catalogSource=redhat-operators", "-o=jsonpath='{..spec.containers[0].startupProbe.failureThreshold}'"}).check(oc)
+	})
+
 	// It will cover test case: OCP-24438, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-24438-check subscription CatalogSource Status", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
