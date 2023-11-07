@@ -84,6 +84,14 @@ func (r ocGetter) GetNamespace() string {
 	return r.namespace
 }
 
+// PrintDebugCommand prints the output of a "oc get $kind -n $namespace $name" command
+func (r ocGetter) PrintDebugCommand() error {
+	params := r.getCommonParams()
+	err := r.oc.WithoutNamespace().Run("get").Args(params...).Execute()
+
+	return err
+}
+
 // Get uses the CLI to retrieve the return value for this jsonpath
 func (r *ocGetter) Get(jsonPath string, extraParams ...string) (string, error) {
 	params := r.getCommonParams()

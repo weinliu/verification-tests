@@ -481,6 +481,16 @@ func CheckPlatform(oc *CLI) string {
 	return strings.ToLower(output)
 }
 
+// SkipTestIfNotSupportedPlatform skip the test if current platform matches one of the provided not supported platforms
+func SkipTestIfNotSupportedPlatform(oc *CLI, notsupported ...string) {
+	p := CheckPlatform(oc)
+	for _, nsp := range notsupported {
+		if strings.EqualFold(nsp, p) {
+			g.Skip("Skip this test scenario because it is not supported on the " + p + " platform")
+		}
+	}
+}
+
 // SkipTestIfSupportedPlatformNotMatched skip the test if supported platforms are not matched
 func SkipTestIfSupportedPlatformNotMatched(oc *CLI, supported ...string) {
 	var match bool

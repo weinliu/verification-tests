@@ -11,6 +11,7 @@ import (
 	expect "github.com/google/goexpect"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -718,7 +719,52 @@ func (n *Node) GetRHELVersion() (string, error) {
 	return rhelVersion, nil
 }
 
-// GetPools returns a list with all the MCPs matching this node's labels. An node can be in more than one pool.
+// GetPool returns the only pool owning this node
+func (n *Node) GetPrimaryPool() (*MachineConfigPool, error) {
+	allMCPs, err := NewMachineConfigPoolList(n.oc).GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	var primaryPool *MachineConfigPool
+	for _, item := range allMCPs {
+		pool := item
+		allNodes, err := pool.getSelectedNodes("")
+		if err != nil {
+			return nil, err
+		}
+
+		for _, node := range allNodes {
+			if node.GetName() != n.GetName() {
+				continue
+			}
+
+			// We use short circuit evaluation to set the primary pool:
+			// - If the pool is master, it will be the primary pool;
+			// - If the primary pool is nil (not set yet), we set the primary pool (either worker or custom);
+			// - If the primary pool is not nil, we overwrite it only if the primary pool is a worker.
+			if pool.IsMaster() || primaryPool == nil || primaryPool.IsWorker() {
+				primaryPool = &pool
+			} else if pool.IsCustom() && primaryPool != nil && primaryPool.IsCustom() {
+				// Error condition: the node belongs to 2 custom pools
+				return nil, fmt.Errorf("Forbidden configuration. The node %s belongs to 2 custom pools: %s and %s",
+					node.GetName(), primaryPool.GetName(), pool.GetName())
+			}
+		}
+	}
+
+	return primaryPool, nil
+}
+
+// GetPool returns the only pool owning this node and fails the test if any error happened
+func (n *Node) GetPrimaryPoolOrFail() *MachineConfigPool {
+	pool, err := n.GetPrimaryPool()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(),
+		"Error getting the pool that owns node %", n.GetName())
+	return pool
+}
+
+// GetPools returns a list with all the MCPs matching this node's labels. An node can be listed by n more than one pool.
 func (n *Node) GetPools() ([]MachineConfigPool, error) {
 	allPools, err := NewMachineConfigPoolList(n.oc).GetAll()
 	if err != nil {
@@ -728,7 +774,7 @@ func (n *Node) GetPools() ([]MachineConfigPool, error) {
 	nodePools := []MachineConfigPool{}
 	for _, mcp := range allPools {
 		// Get all nodes labeled for this pool
-		allNodes, err := mcp.getNodesWithLabels("")
+		allNodes, err := mcp.getSelectedNodes("")
 		if err != nil {
 			return nil, err
 		}
@@ -742,16 +788,16 @@ func (n *Node) GetPools() ([]MachineConfigPool, error) {
 	return nodePools, nil
 }
 
-// IsInPoolOrFail returns true if this node belongs to the given MCP. If an error happens it fails the test.
-func (n *Node) IsInPoolOrFail(mcp *MachineConfigPool) bool {
-	isInPool, err := n.IsInPool(mcp)
+// IsListedByPoolOrFail returns true if this node is listed by the MPC configured labels. If an error happens it fails the test.
+func (n *Node) IsListedByPoolOrFail(mcp *MachineConfigPool) bool {
+	isInPool, err := n.IsListedByPool(mcp)
 	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(),
 		"Cannot get the list of pools for node %s", n.GetName())
 	return isInPool
 }
 
-// IsInPool returns true if this node belongs to the given MCP.
-func (n *Node) IsInPool(mcp *MachineConfigPool) (bool, error) {
+// IsListedByPool returns true if this node is listed by the MCP configured labels.
+func (n *Node) IsListedByPool(mcp *MachineConfigPool) (bool, error) {
 	pools, err := n.GetPools()
 	if err != nil {
 		return false, err
@@ -810,6 +856,10 @@ func (n *Node) ExecIPTables(rules []string) error {
 
 	}
 	return nil
+}
+
+func (n *Node) GetArchitectureOrFail() architecture.Architecture {
+	return architecture.FromString(n.GetOrFail(`{.status.nodeInfo.architecture}`))
 }
 
 // GetAll returns a []Node list with all existing nodes

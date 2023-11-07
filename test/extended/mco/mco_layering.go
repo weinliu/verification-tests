@@ -730,15 +730,15 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
     rpm-ostree cleanup -m && \
     ostree container commit
 `, rpmName)
-			rtMcTemplate = "change-worker-kernel-argument.yaml"
+			rtMcTemplate = "set-realtime-kernel.yaml"
 			workerNode   = NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 			masterNode   = NewNodeList(oc).GetAllMasterNodesOrFail()[0]
 			wMcp         = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mMcp         = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		)
 
-		mMcp.SetWaitingTimeForRTKernel()
-		wMcp.SetWaitingTimeForRTKernel()
+		mMcp.SetWaitingTimeForKernelChange()
+		wMcp.SetWaitingTimeForKernelChange()
 		defer mMcp.waitForComplete()
 		defer wMcp.waitForComplete()
 

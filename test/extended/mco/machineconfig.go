@@ -74,7 +74,7 @@ func (mc *MachineConfig) create() {
 	if !mc.skipWaitForMcp {
 		mcp := NewMachineConfigPool(mc.oc, mc.pool)
 		if mc.GetKernelTypeSafe() != "" {
-			mcp.SetWaitingTimeForRTKernel() // Since we configure realtime kernel we wait longer for completion
+			mcp.SetWaitingTimeForKernelChange() // Since we configure a different kernel we wait longer for completion
 		}
 		mcp.waitForComplete()
 	}
@@ -90,7 +90,7 @@ func (mc *MachineConfig) deleteNoWait() error {
 func (mc *MachineConfig) delete() {
 	mcp := NewMachineConfigPool(mc.oc, mc.pool)
 	if mc.GetKernelTypeSafe() != "" {
-		mcp.SetWaitingTimeForRTKernel() // If the MC is configuring realtime kernel, we increase the waiting period
+		mcp.SetWaitingTimeForKernelChange() // If the MC is configuring a different kernel, we increase the waiting period
 	}
 
 	err := mc.oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", mc.name, "--ignore-not-found=true").Execute()

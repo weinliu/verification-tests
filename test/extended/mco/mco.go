@@ -168,6 +168,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			_, deletefailure := workerNode.DeleteLabel(infraLabel)
 			o.Expect(deletefailure).NotTo(o.HaveOccurred())
 			_ = workerNode.WaitForLabelRemoved(infraLabel)
+			if mcp.Exists() {
+				_ = mcp.WaitForMachineCount(0, 5*time.Minute)
+			}
 		}()
 		mcp.create()
 
@@ -221,10 +224,34 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				textToVerifyForNode: "PREEMPT_RT",
 				needBash:            true,
 			}
-			createMcAndVerifyMCValue(oc, "Kernel argument", "change-worker-kernel-argument", workerNode, textToVerify, "uname -a")
+			createMcAndVerifyMCValue(oc, "realtime kernel", "set-realtime-kernel", workerNode, textToVerify, "uname -a")
 		} else {
 			g.Skip("AWS or GCP platform is required to execute this test case as currently kernel real time argument is only supported by these platforms!")
 		}
+	})
+
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-67787-switch kernel type to 64k-pages for clusters with arm64 nodes [Disruptive]", func() {
+		architecture.SkipIfNoNodeWithArchitectures(oc.AsAdmin(), architecture.ARM64)
+		exutil.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
+
+		// If arm64 Compact/SNO we use master
+		// Else if possible we create a custom MCP if there are arm64 nodes in the worker pool
+		// Else if possible we use the first exsisting custom MCP with all its nodes using arm64
+		// Else master is arm64 we use master
+		// Else we fail the test
+		createdCustomPoolName := fmt.Sprintf("mco-test-%s", architecture.ARM64)
+		defer DeleteCustomMCP(oc.AsAdmin(), createdCustomPoolName)
+
+		mcp, nodes := GetPoolAndNodesForArchitectureOrFail(oc.AsAdmin(), createdCustomPoolName, architecture.ARM64, 1)
+		node := nodes[0]
+		logger.Infof("Using node %s from pool %s", node.GetName(), mcp.GetName())
+
+		textToVerify := TextToVerify{
+			textToVerifyForMC:   "64k-pages",
+			textToVerifyForNode: `\+64k\n65536`,
+			needBash:            true,
+		}
+		createMcAndVerifyMCValue(oc, "64k pages kernel", "set-64k-pages-kernel", node, textToVerify, "uname -r; getconf PAGESIZE")
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42364-add selinux kernel argument [Disruptive]", func() {
@@ -2161,7 +2188,7 @@ nulla pariatur.`
 
 		exutil.By("create machine config to enable RT kernel")
 		rtMcName := "50-realtime-kernel"
-		rtMcTemplate := "change-worker-kernel-argument.yaml"
+		rtMcTemplate := "set-realtime-kernel.yaml"
 		rtMc := NewMachineConfig(oc.AsAdmin(), rtMcName, MachineConfigPoolMaster).SetMCOTemplate(rtMcTemplate)
 		// TODO: When we extract the "mcp.waitForComplete" from the "create" and "delete" methods, we need to take into account that if
 		// we are configuring a rt-kernel we need to wait longer.
@@ -3693,10 +3720,10 @@ func checkNodeDegraded(mcp *MachineConfigPool, expectedNDMessage, expectedNDReas
 	logger.Infof("OK!\n")
 }
 
-func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, workerNode Node, textToVerify TextToVerify, cmd ...string) {
+func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, node Node, textToVerify TextToVerify, cmd ...string) {
 	exutil.By(fmt.Sprintf("Create new MC to add the %s", stepText))
 	mcTemplate := mcName + ".yaml"
-	mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
+	mc := NewMachineConfig(oc.AsAdmin(), mcName, node.GetPrimaryPoolOrFail().GetName()).SetMCOTemplate(mcTemplate)
 	defer mc.delete()
 	// TODO: When we extract the "mcp.waitForComplete" from the "create" method, we need to take into account that if
 	// we are configuring a rt-kernel we need to wait longer.
@@ -3712,11 +3739,11 @@ func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, workerNod
 	exutil.By(fmt.Sprintf("Check %s in the machine config daemon", stepText))
 	var podOut string
 	if textToVerify.needBash {
-		podOut, err = exutil.RemoteShPodWithBash(oc, MachineConfigNamespace, workerNode.GetMachineConfigDaemon(), cmd...)
+		podOut, err = exutil.RemoteShPodWithBash(oc, MachineConfigNamespace, node.GetMachineConfigDaemon(), cmd...)
 	} else if textToVerify.needChroot {
-		podOut, err = exutil.RemoteShPodWithChroot(oc, MachineConfigNamespace, workerNode.GetMachineConfigDaemon(), cmd...)
+		podOut, err = exutil.RemoteShPodWithChroot(oc, MachineConfigNamespace, node.GetMachineConfigDaemon(), cmd...)
 	} else {
-		podOut, err = exutil.RemoteShPod(oc, MachineConfigNamespace, workerNode.GetMachineConfigDaemon(), cmd...)
+		podOut, err = exutil.RemoteShPod(oc, MachineConfigNamespace, node.GetMachineConfigDaemon(), cmd...)
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(podOut).Should(o.MatchRegexp(textToVerify.textToVerifyForNode))

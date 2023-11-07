@@ -1040,3 +1040,13 @@ func GetAPIServerInternalURI(oc *exutil.CLI) (string, error) {
 
 	return regexp.MustCompile(`^https*:\/\/(.*):\d+$`).ReplaceAllString(strings.TrimSpace(apiServerInternalURI), `$1`), nil
 }
+
+// IsCompactOrSNOCluster returns true if the current cluster is a Compact cluster or a SNO cluster
+func IsCompactOrSNOCluster(oc *exutil.CLI) bool {
+	var (
+		wMcp    = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mcpList = NewMachineConfigPoolList(oc.AsAdmin())
+	)
+
+	return wMcp.IsEmpty() && len(mcpList.GetAllOrFail()) == 2
+}

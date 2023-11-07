@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -12,12 +14,23 @@ import (
 type Architecture int
 
 const (
-	AMD64 Architecture = iota
+	NodeArchitectureLabel              = "kubernetes.io/arch"
+	AMD64                 Architecture = iota
 	ARM64
 	PPC64LE
 	S390X
 	MULTI
 )
+
+// SkipIfNoNodeWithArchitectures skip the test if the cluster is one of the given architectures
+func SkipIfNoNodeWithArchitectures(oc *exutil.CLI, architectures ...Architecture) {
+	if sets.New(
+		GetAvailableArchitecturesSet(oc)...).IsSuperset(
+		sets.New(architectures...)) {
+		return
+	}
+	g.Skip(fmt.Sprintf("Skip for no nodes with requested architectures"))
+}
 
 // SkipArchitectures skip the test if the cluster is one of the given architectures
 func SkipArchitectures(oc *exutil.CLI, architectures ...Architecture) (architecture Architecture) {

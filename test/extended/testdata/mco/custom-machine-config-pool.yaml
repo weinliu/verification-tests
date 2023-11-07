@@ -13,6 +13,6 @@ objects:
           - { key: machineconfiguration.openshift.io/role, operator: In, values: [ worker,"${NAME}" ] }
       nodeSelector:
         matchLabels:
-          node-role.kubernetes.io/infra: ""
+          node-role.kubernetes.io/${NAME}: ""
 parameters:
   - name: NAME

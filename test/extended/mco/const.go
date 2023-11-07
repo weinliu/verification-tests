@@ -92,6 +92,10 @@ const (
 	GCPPlatform = "gcp"
 	// AzurePlatform value used to identify azure infrastructure
 	AzurePlatform = "azure"
+	// NonePlatform value used to identify a None Platform value
+	NonePlatform = "none"
+	// BaremetalPlatform value used to identify baremetal infrastructure
+	BaremetalPlatform = "baremetal"
 
 	// ExpirationDokerfileLabel Expiration label in Dockerfile
 	ExpirationDokerfileLabel = `LABEL maintainer="mco-qe-team" quay.expires-after=2h`
@@ -105,8 +109,8 @@ const (
 	// DefaultMinutesWaitingPerNode is the  number of minutes per node that the MCPs will wait to become updated
 	DefaultMinutesWaitingPerNode = 10
 
-	// RTKernelIncWait exta minutes that MCPs will wait per node if we use a rt-kernel configuration
-	RTKernelIncWait = 5
+	// KernelChangeIncWait exta minutes that MCPs will wait per node if we change the kernel in a configuration
+	KernelChangeIncWait = 5
 
 	// ImageRegistryCertificatesDir is the path were the image registry certificates will be stored in a node. Example: /etc/docker/certs.d/mycertname/ca.crt
 	ImageRegistryCertificatesDir = "/etc/docker/certs.d"
