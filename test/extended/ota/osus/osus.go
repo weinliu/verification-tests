@@ -1,6 +1,7 @@
 package osus
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	arch "github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -61,7 +63,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=name=updateservice-operator", "-n", oc.Namespace()).Output()
 			if err != nil || strings.Contains(output, "No resources found") {
-				e2e.Logf("error: %v; output: %w", err, output)
+				e2e.Logf("error: %v; output: %s", err, output)
 				return false, nil
 			}
 			return true, nil
@@ -72,7 +74,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=name=updateservice-operator", "-n", oc.Namespace(), "-o=jsonpath={.items[0].status.phase}").Output()
 			if err != nil || strings.Compare(status, "Running") != 0 {
-				e2e.Logf("error: %v; status: %w", err, status)
+				e2e.Logf("error: %v; status: %s", err, status)
 				return false, nil
 			}
 			return true, nil
@@ -95,7 +97,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("all", "-n", oc.Namespace()).Output()
 			if err != nil || !strings.Contains(output, "No resources found") {
-				e2e.Logf("error: %v; output: %w", err, output)
+				e2e.Logf("error: %v; output: %s", err, output)
 				return false, nil
 			}
 			return true, nil
@@ -291,7 +293,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
 			runningPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
 			if err != nil || len(strings.Fields(runningPodName)) != us.replicas {
-				e2e.Logf("error: %v; running pod: %w", err, runningPodName)
+				e2e.Logf("error: %v; running pod: %s", err, runningPodName)
 				return false, nil
 			}
 			return true, nil
@@ -312,7 +314,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
 			runningPodNamePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
 			if err != nil || strings.Contains(runningPodNamePost, runningPodNamePre) {
-				e2e.Logf("error: %v; running pod after update image: %w; while running pod before update image: %s", err, runningPodNamePost, runningPodNamePre)
+				e2e.Logf("error: %v; running pod after update image: %s; while running pod before update image: %s", err, runningPodNamePost, runningPodNamePre)
 				return false, nil
 			}
 			return true, nil
@@ -323,5 +325,136 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		graphDataImagePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", runningPodNamePost, "-n", us.namespace, "-o=jsonpath={.spec.initContainers[].image}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(graphDataImagePost).To(o.ContainSubstring("1.1"))
+	})
+
+	//author: jiajliu@redhat.com
+	g.It("Longduration-NonPreRelease-ConnectedOnly-VMonly-Author:jiajliu-High-52586-Updateservice pod should pull the latest graphDataImage instead of existed old one [Disruptive]", func() {
+		tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
+		defer os.RemoveAll(tempDataDir)
+		err := os.MkdirAll(tempDataDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.GetPullSec(oc, tempDataDir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		authFile := tempDataDir + "/.dockerconfigjson"
+
+		podmanCLI := container.NewPodmanCLI()
+		graphdataRepo := "quay.io/openshift-qe-optional-operators/graph-data"
+		graphdataOld := graphdataRepo + ":1.0"
+		graphdataNew := graphdataRepo + ":1.1"
+
+		usTemp := exutil.FixturePath("testdata", "ota", "osus", "updateservice.yaml")
+		us := updateService{
+			name:      "us52586",
+			namespace: oc.Namespace(),
+			template:  usTemp,
+			graphdata: graphdataRepo + ":latest",
+			releases:  "quay.io/openshift-release-dev/ocp-release",
+			replicas:  1,
+		}
+		g.By("Tag image graph-data:1.0 with latest and push the image")
+		output, err := podmanCLI.Run("pull").Args(graphdataOld, "--tls-verify=false", "--authfile", authFile).Output()
+		defer podmanCLI.RemoveImage(graphdataOld)
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to pull image: %s", output)
+
+		output, err = podmanCLI.Run("tag").Args(graphdataOld, us.graphdata).Output()
+		defer podmanCLI.RemoveImage(us.graphdata)
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to tag image: %s", output)
+
+		output, err = podmanCLI.Run("push").Args(us.graphdata, "--tls-verify=false", "--authfile", authFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to push image: %s", output)
+
+		g.By("Install OSUS instance with graph-data:latest")
+		defer uninstallOSUSApp(oc)
+		err = installOSUSAppOC(oc, us)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Waiting for osus instance pod rolling to expected replicas...")
+		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+			runningPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+			if err != nil || len(strings.Fields(runningPodName)) != us.replicas {
+				e2e.Logf("error: %v; running pod: %s", err, runningPodName)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod is not rolling to expected replicas")
+		runningPodNamePre, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Check imagePullPolicy...")
+		graphDataImagePolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", runningPodNamePre, "-n", us.namespace, "-o=jsonpath={.spec.initContainers[].imagePullPolicy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(graphDataImagePolicy).To(o.Equal("Always"), "Unexpected imagePullPolicy: %v", graphDataImagePolicy)
+
+		nodeNamePre, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", us.namespace, runningPodNamePre, "-o=jsonpath={.spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		graphDataImageIDPre, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", runningPodNamePre, "-n", us.namespace, "-o=jsonpath={.status.initContainerStatuses[].imageID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Cordon worker nodes without osus instance pod scheduled")
+		nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer func() {
+			for _, node := range strings.Fields(nodes) {
+				if node == nodeNamePre {
+					continue
+				}
+				oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", node).Execute()
+				err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+					nodeReady, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
+					if err != nil || nodeReady != "True" {
+						e2e.Logf("error: %v; node %s status: %s", err, node, nodeReady)
+						return false, nil
+					}
+					return true, nil
+				})
+				exutil.AssertWaitPollNoErr(err, "fail to uncordon node!")
+			}
+		}()
+
+		for _, node := range strings.Fields(nodes) {
+			if node == nodeNamePre {
+				continue
+			}
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", node).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred(), "fail to cordon node %s: %v", node, err)
+		}
+
+		g.By("Tag image graph-data:1.1 with latest and push the image")
+		output, err = podmanCLI.Run("pull").Args(graphdataNew, "--tls-verify=false", "--authfile", authFile).Output()
+		defer podmanCLI.RemoveImage(graphdataNew)
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to pull image: %s", output)
+
+		output, err = podmanCLI.Run("tag").Args(graphdataNew, us.graphdata).Output()
+		defer podmanCLI.RemoveImage(us.graphdata)
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to tag image: %s", output)
+
+		output, err = podmanCLI.Run("push").Args(us.graphdata, "--tls-verify=false", "--authfile", authFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to push image: %s", output)
+
+		e2e.Logf("Waiting for osus instance pod rolling...")
+		err = wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
+			runningPodNamePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+			if err != nil || strings.Contains(runningPodNamePost, runningPodNamePre) {
+				e2e.Logf("error: %v; running pod after update image: %s; while running pod before retag image: %s", err, runningPodNamePost, runningPodNamePre)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod is not rolling successfully after retag image")
+
+		runningPodNamePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Check osus instance pod is not rescheduled...")
+		nodeNamePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", us.namespace, runningPodNamePost, "-o=jsonpath={.spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeNamePost).To(o.Equal(nodeNamePre), "osus instance pod rescheduled from node %v to node %s unexpectedly", nodeNamePre, nodeNamePost)
+
+		e2e.Logf("Check osus instance pod image updated...")
+		graphDataImageIDPost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", runningPodNamePost, "-n", us.namespace, "-o=jsonpath={.status.initContainerStatuses[].imageID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(graphDataImageIDPost).NotTo(o.Equal(graphDataImageIDPre), "fail to update osus instance pod image")
 	})
 })
