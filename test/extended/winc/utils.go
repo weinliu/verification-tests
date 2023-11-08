@@ -1253,4 +1253,54 @@ func uninstallWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
 	}
 
 	return nil
+
+}
+
+func getWMCOTimestamp(oc *exutil.CLI) string {
+	wmcoID, err := getWorkloadsNames(oc, wmcoDeployment, wmcoNamespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	wmcoTime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", wmcoID[0], "-n", wmcoNamespace, "-o=jsonpath={.status.startTime}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return wmcoTime
+}
+
+func checkWMCORestarted(oc *exutil.CLI, startTime string) {
+	poolErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		actualWMCOTime := getWMCOTimestamp(oc)
+		if startTime == actualWMCOTime {
+			e2e.Logf("WMCO did not restart yet, waiting...")
+			return false, nil
+		}
+		return checkWorkloadCreated(oc, wmcoDeployment, wmcoNamespace, 1), nil
+	})
+	if poolErr != nil {
+		e2e.Failf("Error restarting WMCO up to 3 minutes ...")
+	}
+}
+
+func getEnvVarProxyMap(oc *exutil.CLI, replacement ...map[string]string) map[string]interface{} {
+	clusterEnvVars := make(map[string]interface{})
+
+	if replacement == nil {
+		clusterEnvVars["HTTPS_PROXY"] = getClusterProxy(oc, "status.httpsProxy")
+		clusterEnvVars["HTTP_PROXY"] = getClusterProxy(oc, "status.httpProxy")
+		clusterEnvVars["NO_PROXY"] = getClusterProxy(oc, "status.noProxy")
+	} else {
+		for _, m := range replacement {
+			for key, value := range m {
+				clusterEnvVars[key] = getClusterProxy(oc, value)
+			}
+		}
+	}
+	return clusterEnvVars
+}
+
+func checkProxyVarsExistsOnWindowsNode(oc *exutil.CLI, winInternalIP []string, wicdProxies map[string]interface{}, bastionHost string, privKey string, iaasPlatform string) {
+	for _, winhost := range winInternalIP {
+		for key, proxy := range wicdProxies {
+			e2e.Logf(fmt.Sprintf("Check %v proxy exist on worker %v", key, winhost))
+			msg, _ := runPSCommand(bastionHost, winhost, fmt.Sprintf("get-childitem -Path env: |  Where-Object -Property Name -eq %v | Format-List Value", key), privKey, iaasPlatform)
+			o.Expect(compileEnvVars(msg)).Should(o.ContainSubstring(fmt.Sprint(proxy)), "Failed to check %v proxy is running on winworker %v", key, winhost)
+		}
+	}
 }

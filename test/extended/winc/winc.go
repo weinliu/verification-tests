@@ -1571,16 +1571,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	g.It("Smokerun-Author:rrasouli-Critical-65980-[node-proxy]-Cluster-wide proxy acceptance test", func() {
 
-		// here we are checking whether cluster proxy is configured at all, otherwise skip the test
+		// checking whether cluster proxy is configured at all, otherwise skip the test
 		if !isProxy(oc) {
 			g.Skip("Cluster proxy not detected, skipping")
 		}
 
 		// here we are creating a new cluster proxy map that contains similar keys as in WICD
-		clusterEnvVars := make(map[string]interface{})
-		clusterEnvVars["HTTPS_PROXY"] = getClusterProxy(oc, "status.httpsProxy")
-		clusterEnvVars["HTTP_PROXY"] = getClusterProxy(oc, "status.httpProxy")
-		clusterEnvVars["NO_PROXY"] = getClusterProxy(oc, "status.noProxy")
+		clusterEnvVars := getEnvVarProxyMap(oc)
 
 		// here we retrieve the proxy env vars from WICD CM
 		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
@@ -1596,17 +1593,85 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check if proxy exists on all Windows worker")
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		winInternalIP := getWindowsInternalIPs(oc)
-		for _, winhost := range winInternalIP {
-			for key, proxy := range wicdProxies {
-				e2e.Logf(fmt.Sprintf("Check %v proxy exist on worker %v", key, winhost))
-				msg, _ := runPSCommand(bastionHost, winhost, fmt.Sprintf("get-childitem -Path env: |  Where-Object -Property Name -eq %v | Format-List Value", key), privateKey, iaasPlatform)
-				o.Expect(compileEnvVars(msg)).Should(o.ContainSubstring(fmt.Sprint(proxy)), "Failed to check %v proxy is running on winworker %v", key, winhost)
-			}
-		}
+		checkProxyVarsExistsOnWindowsNode(oc, winInternalIP, wicdProxies, bastionHost, privateKey, iaasPlatform)
 		// verify that trusted-ca ConfigMap exists in the cluster
 		g.By("Ensure that trusted-ca exists")
 		_, err = popItemFromList(oc, "cm", proxyCAConfigMap, wmcoNamespace)
 		e2e.ExpectNoError(err, "Couldn't find trusted-ca configmap")
+
+		defer func() {
+			// restoring environment files
+			proxyVarsFile, err := exutil.GenerateManifestFile(
+				oc, "winc", "proxy_vars.yaml",
+				map[string]string{"<http_proxy>": clusterEnvVars["HTTP_PROXY"].(string)},
+				map[string]string{"<https_proxy>": clusterEnvVars["HTTPS_PROXY"].(string)},
+			)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer os.Remove(proxyVarsFile)
+			oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", proxyVarsFile).Output()
+			// rebooting instance references should appear
+			waitUntilWMCOStatusChanged(oc, "rebooting instance")
+			waitWindowsNodesReady(oc, 2, 6*time.Minute)
+		}()
+
+		// remove here trustedCA
+		g.By("remove proxy trusted CA")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("proxy/cluster", "--type=json", "-p", `[{"op": "replace", "path": "/spec/trustedCA/name", "value": ""}]`).Execute()
+		if err != nil {
+			e2e.Failf("It should not be possible to modify ConfigMap %v, error print is %v", trustedCACM, err)
+		}
+		// remove noProxy vars and check invoked on each Windows nodes
+		g.By("remove no_proxy vars and check invoked on each Windows nodes")
+		timeNoProxy := getWMCOTimestamp(oc)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("proxy/cluster", "--type=json", "-p", `[{"op": "remove", "path": "/spec/noProxy", "value": "noProxy"}]`).Execute()
+		if err != nil {
+			e2e.Failf("It should not be possible to modify ConfigMap %v, error print is %v", trustedCACM, err)
+		}
+		// rebooting instance references should appear
+		checkWMCORestarted(oc, timeNoProxy)
+		waitUntilWMCOStatusChanged(oc, "rebooting instance")
+		time.Sleep(20 * time.Second)
+		waitWindowsNodesReady(oc, 2, 6*time.Minute)
+
+		g.By("remove https_proxy vars and check invoked on each Windows nodes")
+		testNoHttpsClusterEnvVars := getEnvVarProxyMap(oc, map[string]string{"NO_PROXY": "status.noProxy", "HTTP_PROXY": "status.httpProxy"})
+		timeNoHttps := getWMCOTimestamp(oc)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("proxy/cluster", "--type=json", "-p", `[{"op": "remove", "path": "/spec/httpsProxy", "value": "httpsProxy"}]`).Execute()
+		if err != nil {
+			e2e.Failf("It should not be possible to modify ConfigMap %v, error print is %v", trustedCACM, err)
+		}
+		// rebooting instance references should appear
+		time.Sleep(20 * time.Second)
+		checkWMCORestarted(oc, timeNoHttps)
+		waitUntilWMCOStatusChanged(oc, "rebooting instance")
+		waitWindowsNodesReady(oc, 2, 6*time.Minute)
+		// for stability purpose we need this sleep waiting WMCO to copy all proxy vars
+		time.Sleep(60 * time.Second)
+		wicdPayload, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.environmentVars}").Output()
+		if wicdPayload == "" {
+			e2e.Failf("WMCO did not copy proxy variables properly")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		wicdProxies = getPayloadMap(wicdPayload)
+		if !compareMaps(testNoHttpsClusterEnvVars, wicdProxies) {
+			e2e.Failf("Cluster proxy settings are not equal to WICD proxy settings, https proxy was not removed from WICD CM")
+		}
+		checkProxyVarsExistsOnWindowsNode(oc, winInternalIP, wicdProxies, bastionHost, privateKey, iaasPlatform)
+		// remove http_proxy vars as well and check invoked on each Windows nodes
+		g.By("remove https_proxy vars and check invoked on each Windows nodes")
+		timeNoHttp := getWMCOTimestamp(oc)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("proxy/cluster", "--type=json", "-p", `[{"op": "remove", "path": "/spec/httpProxy", "value": "httpProxy"}]`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// rebooting instance references should appear
+		time.Sleep(20 * time.Second)
+		checkWMCORestarted(oc, timeNoHttp)
+		waitUntilWMCOStatusChanged(oc, "rebooting instance")
+		waitWindowsNodesReady(oc, 2, 6*time.Minute)
+		wicdPayload, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.environmentVars}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		wicdProxies = getPayloadMap(wicdPayload)
+		checkProxyVarsExistsOnWindowsNode(oc, winInternalIP, wicdProxies, bastionHost, privateKey, iaasPlatform)
 	})
 
 	g.It("Smokerun-Author:rrasouli-Critical-66670-[node-proxy]-Cluster-wide proxy trusted-ca configmap tests [Serial][Disruptive]", func() {
@@ -1620,13 +1685,21 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		noProxy := getClusterProxy(oc, "spec.noProxy")
 
 		g.By("add another record to cluster proxy, example.com to no-proxy")
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("proxy/cluster", "--type=json", "-p",
-			"[{\"op\": \"add\", \"path\":\"/spec/noProxy\", \"value\":\""+noProxy+"\"}]").Execute()
+		// before patching the cluster we determine WMCO start time
+
+		defer func() {
+			lastTime := getWMCOTimestamp(oc)
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("proxy/cluster", "--type=json", "-p",
+				"[{\"op\": \"add\", \"path\":\"/spec/noProxy\", \"value\":\""+noProxy+"\"}]").Execute()
+			checkWMCORestarted(oc, lastTime)
+		}()
+		wmcoStartTime := getWMCOTimestamp(oc)
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("proxy/cluster", "--type=json", "-p",
 			"[{\"op\": \"add\", \"path\":\"/spec/noProxy\", \"value\":\""+noProxy+",example.com\"}]").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// wait here for WMCO to restart and copy the env vars
-		time.Sleep(120 * time.Second)
+		checkWMCORestarted(oc, wmcoStartTime)
+		time.Sleep(60 * time.Second)
 
 		g.By("verify that newly added noProxy record exist on WICD Windows Services")
 		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
