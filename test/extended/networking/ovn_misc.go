@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -262,6 +263,104 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("HTTP/1.1 200 OK"))
 	})
+
+	// author: jechen@redhat.com
+	g.It("Longduration-NonPreRelease-Author:jechen-High-68418-Same name pod can be recreated on new node and still work on OVN cluster. [Disruptive]", func() {
+
+		// This is for customer bug: https://issues.redhat.com/browse/OCPBUGS-18681
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		kubeletKillerPodTemplate := filepath.Join(buildPruningBaseDir, "kubelet-killer-pod-template.yaml")
+
+		exutil.By("1. Create a new machineset, get the new node created\n")
+		exutil.SkipConditionally(oc)
+		machinesetName := "machineset-68418"
+		ms := exutil.MachineSetDescription{machinesetName, 1}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		o.Expect(len(machineName)).ShouldNot(o.Equal(0))
+		nodeName := exutil.GetNodeNameFromMachine(oc, machineName[0])
+		e2e.Logf("Get nodeName: %v", nodeName)
+
+		exutil.By("2. Create kubelet-killer pod on the node\n")
+		kkPod := kubeletKillerPod{
+			name:      "kubelet-killer-68418",
+			namespace: "openshift-machine-api",
+			nodename:  nodeName,
+			template:  kubeletKillerPodTemplate,
+		}
+		kkPod.createKubeletKillerPodOnNode(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "kubelet-killer-68418", "-n", kkPod.namespace, "--ignore-not-found=true").Execute()
+
+		// After Kubelet-killer pod is created, it kills the node it resides on, kubelet-killer pod quickly transitioned into pending phase and stays in pending phase after its node becomes NotReady
+		podStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", kkPod.name, "-n", kkPod.namespace, "-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("kkPod status:%v", podStatus)
+		o.Expect(regexp.MatchString("Pending", podStatus)).Should(o.BeTrue())
+
+		// node is expected to be in NotReady state after kubelet killer pod kills its kubelet
+		checkNodeStatus(oc, nodeName, "NotReady")
+
+		exutil.By("3. Delete the node and its machineset, and delete the kubelet-killer pod\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("machines.machine.openshift.io", machineName[0], "-n", "openshift-machine-api").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Verify the machineset is deleted
+		ms.DeleteMachineSet(oc)
+		exutil.WaitForMachinesRunning(oc, 0, machinesetName)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "kubelet-killer-68418", "-n", kkPod.namespace, "--ignore-not-found=true").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Recreate the machineset, get the newer node created\n")
+		ms2 := exutil.MachineSetDescription{machinesetName, 1}
+		defer ms2.DeleteMachineSet(oc)
+		ms2.CreateMachineSet(oc)
+
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		machineName = exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		o.Expect(len(machineName)).ShouldNot(o.Equal(0))
+		newNodeName := exutil.GetNodeNameFromMachine(oc, machineName[0])
+
+		exutil.By("5. Recreate kubelet-killer pod with same pod name on the newer node\n")
+		kkPod2 := kubeletKillerPod{
+			name:      "kubelet-killer-68418",
+			namespace: "openshift-machine-api",
+			nodename:  newNodeName,
+			template:  kubeletKillerPodTemplate,
+		}
+		kkPod2.createKubeletKillerPodOnNode(oc)
+
+		// After Kubelet-killer pod2 is created, it kills the node it resides on, kubelet-killer pod quickly transitioned into pending phase and stays in pending phase after its node becomes NotReady
+		podStatus, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", kkPod2.name, "-n", kkPod2.namespace, "-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("kkPod2 status:%v", podStatus)
+		o.Expect(regexp.MatchString("Pending", podStatus)).Should(o.BeTrue())
+
+		// Verify kubelet-killer pod was able to be recreated and does it job of killing the node
+		checkNodeStatus(oc, newNodeName, "NotReady")
+
+		exutil.By("6. Verify ErrorAddingLogicalPort or FailedCreateSandBox events are not generated when pod is recreated\n")
+		podDescribe, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", kkPod2.name, "-n", kkPod2.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(regexp.MatchString("ErrorAddingLogicalPort", podDescribe)).Should(o.BeFalse())
+		o.Expect(regexp.MatchString("FailedCreatedPodSandBox", podDescribe)).Should(o.BeFalse())
+
+		exutil.By("7. Cleanup after test: delete the node and its machineset, then delete the kubelet-killer pod\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("machines.machine.openshift.io", machineName[0], "-n", "openshift-machine-api").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Verify the machineset is deleted
+		ms.DeleteMachineSet(oc)
+		exutil.WaitForMachinesRunning(oc, 0, machinesetName)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "kubelet-killer-68418", "-n", kkPod.namespace, "--ignore-not-found=true").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN Kubevirt hypershift", func() {

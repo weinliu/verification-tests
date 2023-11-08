@@ -245,6 +245,13 @@ type migrationDetails struct {
 	virtualmachinesintance string
 }
 
+type kubeletKillerPod struct {
+	name      string
+	namespace string
+	nodename  string
+	template  string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -3033,4 +3040,16 @@ func removeDummyInterface(oc *exutil.CLI, nodeName, nicName string) {
 	}
 	o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
 	e2e.Logf("The dummy interface %s was removed from node %s ! \n", nicName, nodeName)
+}
+
+func (kkPod *kubeletKillerPod) createKubeletKillerPodOnNode(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", kkPod.template, "-p", "NAME="+kkPod.name, "NAMESPACE="+kkPod.namespace, "NODENAME="+kkPod.nodename)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create Kubelet-Killer pod %v", kkPod.name))
 }
