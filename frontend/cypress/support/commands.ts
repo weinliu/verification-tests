@@ -11,6 +11,7 @@ declare global {
             hasWindowsNode();
             isEdgeCluster();
             isAWSSTSCluster();
+            isPlatformSuitableForNMState();
         }
     }
 }
@@ -120,4 +121,16 @@ Cypress.Commands.add("isAWSSTSCluster", (credentialMOde: string, infraPlatform: 
     cy.log('Not STS cluster, skip!');
     return cy.wrap(false);
   }
+});
+
+Cypress.Commands.add("isPlatformSuitableForNMState", () => {
+  cy.exec(`oc get infrastructure cluster -o jsonpath={.spec.platformSpec.type} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
+    if( result.stdout == 'BareMetal' || result.stdout == 'None' || result.stdout == 'VSphere' || result.stdout == 'OpenStack'){
+      cy.log("Testing on baremetal/vsphere/openstack.");
+      return cy.wrap(true);
+    } else {
+      cy.log("Skipping for unsupported platform, not baremetal/vsphere/openstack!");
+      return cy.wrap(false);
+    }
+  });
 });
