@@ -34,7 +34,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokiDir         = exutil.FixturePath("testdata", "netobserv", "loki")
 		networkingDir   = exutil.FixturePath("testdata", "netobserv", "networking")
 		subscriptionDir = exutil.FixturePath("testdata", "netobserv", "subscription")
-		flowFixturePath = filePath.Join(baseDir, "flowcollector_v1beta1_template.yaml")
+		flowFixturePath = filePath.Join(baseDir, "flowcollector_v1beta2_template.yaml")
 
 		// Operator namespace object
 		OperatorNS = OperatorNamespace{
