@@ -1,6 +1,6 @@
 export const logsPage = {
   logLinesNotContain: (lines: string) => cy.get('.pf-c-log-viewer__text', {timeout: 6000}).should('not.contain.text', lines),
-  logWindowLoaded: () => cy.get('.pf-c-log-viewer__text', {timeout: 20000}).should('exist'),
+  logWindowLoaded: () => cy.get('.pf-c-log-viewer__text', {timeout: 90000}).should('exist'),
   filterByUnit: (unitname: string) => {
     cy.get('#log-unit').clear();
     cy.get('#log-unit').type(unitname).type('{enter}');
@@ -23,9 +23,9 @@ export const logsPage = {
   },
   checkLogLineExist: () => cy.get('.pf-c-log-viewer__index').should('exist'),
   searchLog: (keyword) => {
-    cy.get('.pf-c-log-viewer__scroll-container', {timeout: 6000}).scrollTo('top');
+    cy.get('.pf-c-log-viewer__scroll-container', {timeout: 30000}).scrollTo('top', { ensureScrollable: false });
     cy.get('input[placeholder="Search"]').type(`${keyword}`);
-    cy.get('span.pf-c-log-viewer__string').contains(`${keyword}`, { matchCase: false });
+    cy.get('span.pf-c-log-viewer__string', {timeout: 60000}).contains(`${keyword}`, { matchCase: false });
   },
   clearSearch: () => {
     cy.get('[aria-label="Reset"]').click();

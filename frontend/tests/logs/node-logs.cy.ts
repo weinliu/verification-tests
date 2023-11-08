@@ -1,14 +1,19 @@
 import { detailsPage } from '../../upstream/views/details-page';
 import { listPage  } from '../../upstream/views/list-page';
 import { logsPage } from '../../views/logs';
+import { guidedTour } from '../../upstream/views/guided-tour';
+import { testName } from '../../upstream/support';
 
 describe('node logs related features', () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    guidedTour.close();
+    cy.exec(`oc new-project ${testName}`);
   });
 
   after(() => {
+    cy.exec(`oc delete project ${testName}`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
@@ -41,17 +46,8 @@ describe('node logs related features', () => {
     logsPage.logLinesNotContain('crio');    
   });
   it('(OCP-46636,yanpzhan) Support for search and line number in pod/node log', {tags: ['e2e','admin']}, () => {
-    cy.visit('/k8s/ns/openshift-console/pods');
-    listPage.rows.shouldBeLoaded();
-    listPage.rows.clickFirstLinkInFirstRow();
-    detailsPage.isLoaded();
-    detailsPage.selectTab('Logs');
-    logsPage.logWindowLoaded();
-    logsPage.checkLogLineExist();
-    logsPage.searchLog('cookies');
-    logsPage.clearSearch();
-    logsPage.searchLog('cookies');
-
+    cy.exec(`oc create -f ./fixtures/pods/pod-with-white-space-logs.yaml -n ${testName}`);
+    //search log on node log page
     cy.visit('/k8s/cluster/nodes');
     listPage.rows.shouldBeLoaded();
     listPage.rows.clickFirstLinkInFirstRow();
@@ -59,8 +55,15 @@ describe('node logs related features', () => {
     detailsPage.selectTab('Logs');
     logsPage.logWindowLoaded();
     logsPage.checkLogLineExist();
-    logsPage.searchLog('error');
+    logsPage.searchLog('pod');
     logsPage.clearSearch();
-    logsPage.searchLog('error');
+    logsPage.searchLog('pod');
+    //search log on pod log page
+    cy.visit(`/k8s/ns/${testName}/pods/example/logs`);
+    logsPage.selectContainer('container2');
+    logsPage.logWindowLoaded();
+    logsPage.checkLogLineExist();
+    cy.wait(5000);
+    logsPage.searchLog('Log');
   });
 })
