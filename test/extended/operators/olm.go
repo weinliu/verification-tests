@@ -11632,7 +11632,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	})
 
 	// author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-High-34181-can add conversion webhooks for singleton operators", func() {
+	g.It("ConnectedOnly-Author:xzha-High-34181-can add conversion webhooks for singleton operators [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
