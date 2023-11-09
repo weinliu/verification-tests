@@ -179,8 +179,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	g.It("Author:tagao-Medium-48432-Allow OpenShift users to configure request logging for Thanos Querier query endpoint", func() {
 		g.By("check thanos-querier pods are normal and able to see the request.logging-config setting")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "thanos-querier", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
-		o.Expect(output).To(o.ContainSubstring(`request.logging-config`))
+		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"thanos-query\")].args}"
+		checkYamlconfig(oc, "openshift-monitoring", "deploy", "thanos-querier", cmd, "request.logging-config", true)
 
 		//thanos-querier pod name will changed when cm modified, pods may not restart yet during the first check
 		g.By("double confirm thanos-querier pods are ready")
@@ -1440,7 +1440,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check netdev Collector is enabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.netdev"))
 
 		g.By("check netdev metrics in prometheus k8s pod")
@@ -1454,7 +1454,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="netdev"}'`, token, `"result":[]`, 3*uwmLoadTime)
 
 		g.By("check netdev in daemonset")
-		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output2).To(o.ContainSubstring("--no-collector.netdev"))
 	})
 
@@ -1469,7 +1469,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check cpufreq Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.cpufreq"))
 
 		g.By("check cpufreq metrics in prometheus k8s pod, should not have related metrics")
@@ -1483,7 +1483,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="cpufreq"}'`, token, `"collector":"cpufreq"`, 3*uwmLoadTime)
 
 		g.By("check cpufreq in daemonset")
-		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output2).To(o.ContainSubstring("--collector.cpufreq"))
 	})
 
@@ -1498,7 +1498,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check tcpstat Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.tcpstat"))
 
 		g.By("check tcpstat metrics in prometheus k8s pod, should not have related metrics")
@@ -1512,7 +1512,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="tcpstat"}'`, token, `"collector":"tcpstat"`, 3*uwmLoadTime)
 
 		g.By("check tcpstat in daemonset")
-		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output2).To(o.ContainSubstring("--collector.tcpstat"))
 	})
 
@@ -1527,7 +1527,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check buddyinfo Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.buddyinfo"))
 
 		g.By("check buddyinfo metrics in prometheus k8s pod, should not have related metrics")
@@ -1541,7 +1541,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="buddyinfo"}'`, token, `"collector":"buddyinfo"`, 3*uwmLoadTime)
 
 		g.By("check buddyinfo in daemonset")
-		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output2).To(o.ContainSubstring("--collector.buddyinfo"))
 	})
 
@@ -1674,7 +1674,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check ksmd Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.ksmd"))
 
 		g.By("check ksmd metrics in prometheus k8s pod, should not have related metrics")
@@ -1688,7 +1688,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="ksmd"}'`, token, `"collector":"ksmd"`, 3*uwmLoadTime)
 
 		g.By("check ksmd in daemonset")
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers}", "-n", "openshift-monitoring").Output()
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.ksmd"))
 	})
 
