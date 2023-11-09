@@ -9103,6 +9103,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		if err != nil {
 			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath-as-json={.spec}")
 			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath-as-json={.status}")
+			getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "-o=jsonpath-as-json={..spec}")
 		}
 		exutil.AssertWaitPollNoErr(err, "no install plan for nginx-operator.v1.0.1")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "nginx-operator.v1.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
