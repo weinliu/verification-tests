@@ -12,7 +12,7 @@ describe("(OCP-67725, memodi) NETOBSERV Client Performances", { browser: 'chrome
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // sepcify --env noo_release=upstream to run tests 
+        // specify --env noo_release=upstream to run tests 
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -101,7 +101,6 @@ describe("(OCP-67725, memodi) NETOBSERV Client Performances", { browser: 'chrome
 
     after("suite", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.logout()
-
+        cy.uiLogout()
     })
 })

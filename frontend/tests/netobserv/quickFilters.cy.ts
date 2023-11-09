@@ -25,7 +25,7 @@ describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, fu
         // create test server and client pods
         cy.adminCLI('oc create -f ./fixtures/netobserv/test-server-client.yaml')
 
-        // sepcify --env noo_release=upstream to run tests 
+        // specify --env noo_release=upstream to run tests 
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -92,6 +92,6 @@ describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, fu
     after("all tests", function () {
         cy.adminCLI('oc delete -f ./fixtures/netobserv/test-server-client.yaml')
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.logout()
+        cy.uiLogout()
     })
 })

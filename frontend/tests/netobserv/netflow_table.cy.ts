@@ -17,7 +17,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // sepcify --env noo_release=upstream to run tests 
+        // specify --env noo_release=upstream to run tests 
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -440,7 +440,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
         })
 
-        it("(OCP-8125, aramesha)should verify DSCP column", function () {
+        it("(OCP-68125, aramesha)should verify DSCP column", function () {
             //Check DSCP column
             cy.byTestID("show-view-options-button").should('exist').click()
             netflowPage.stopAutoRefresh()
@@ -477,7 +477,6 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
 
     after("delete flowcollector and NetObs Operator", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.logout()
-
+        cy.uiLogout()
     })
 })

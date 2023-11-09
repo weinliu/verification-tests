@@ -9,7 +9,7 @@ describe('(OCP-60701 NETOBSERV) Connection tracking test', { tags: ['NETOBSERV']
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // sepcify --env noo_release=upstream to run tests 
+        // specify --env noo_release=upstream to run tests 
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -80,6 +80,6 @@ describe('(OCP-60701 NETOBSERV) Connection tracking test', { tags: ['NETOBSERV']
     after("delete flowcollector and NetObs Operator", function () {
         Operator.deleteFlowCollector()
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.logout()
+        cy.uiLogout()
     })
 })

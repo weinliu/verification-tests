@@ -10,7 +10,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
 
         cy.switchPerspective('Administrator');
 
-        // sepcify --env noo_release=upstream to run tests 
+        // specify --env noo_release=upstream to run tests 
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -155,6 +155,6 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
 
     after("after all tests are done", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.logout()
+        cy.uiLogout()
     })
 })

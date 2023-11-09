@@ -13,7 +13,7 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
 
-        // sepcify --env noo_release=upstream to run tests 
+        // specify --env noo_release=upstream to run tests 
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -76,7 +76,6 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
 
     after("delete flowcollector and NetObs Operator", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.logout()
+        cy.uiLogout()
     })
-
 })

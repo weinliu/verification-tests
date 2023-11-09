@@ -26,7 +26,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // sepcify --env noo_catalog_src=upstream to run tests 
+        // specify --env noo_release=upstream to run tests 
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -312,6 +312,6 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
 
     after("after all tests are done", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.logout()
+        cy.uiLogout()
     })
 })
