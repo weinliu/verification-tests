@@ -15,5 +15,5 @@ spec:
   recommend:
   - machineConfigLabels:
       machineconfiguration.openshift.io/role: "worker-rt"
-    priority: 25
+    priority: 18
     profile: openshift-realtime

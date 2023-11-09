@@ -13,5 +13,5 @@ spec:
   recommend:
   - match:
     - label: worker-stuck
-    priority: 20
+    priority: 18
     profile: openshift-profile-stuck

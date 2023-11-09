@@ -23,7 +23,7 @@ objects:
       recommend:
       - match:
         - label: tuned.openshift.io/default-irq-smp-affinity
-        priority: 20
+        priority: 18
         profile: ${TUNED_NAME}
 parameters:
 - name: TUNED_NAME

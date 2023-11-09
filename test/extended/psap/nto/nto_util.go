@@ -93,7 +93,7 @@ func assertIfTunedProfileApplied(oc *exutil.CLI, namespace string, tunedNodeName
 		appliedStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
 		tunedProfile, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
 		if err1 != nil || err2 != nil || strings.Contains(appliedStatus, "False") || strings.Contains(appliedStatus, "Unknown") || tunedProfile != tunedName {
-			e2e.Logf("failed to apply custom profile to nodes, the status is %s and profile is %s, check again", appliedStatus, tunedProfile)
+			e2e.Logf("failed to apply profile to nodes, the status is %s and profile is %s, check again", appliedStatus, tunedProfile)
 		}
 		return strings.Contains(appliedStatus, "True") && tunedProfile == tunedName
 	}, 15*time.Second, time.Second).Should(o.BeTrue())
@@ -1032,4 +1032,31 @@ func getFirstWorkerMachinesetName(oc *exutil.CLI) string {
 	}
 	e2e.Logf("machinesetName is %v in getFirstWorkerMachinesetName", machinesetName)
 	return machinesetName
+}
+
+func getFirstMasterNodeName(oc *exutil.CLI) string {
+	var firstMasterNodeName string
+	masterNodeNamesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l node-role.kubernetes.io/control-plane=", `-ojsonpath='{.items[*].status.addresses[?(@.type=="Hostname")].address}'`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(masterNodeNamesStr).NotTo(o.BeEmpty())
+	masterNodeNames := strings.Trim(masterNodeNamesStr, "'")
+	masterNodeNamesArray := strings.Split(masterNodeNames, " ")
+
+	if len(masterNodeNamesArray) > 0 {
+		firstMasterNodeName = masterNodeNamesArray[0]
+
+	}
+	return firstMasterNodeName
+}
+
+func getDefaultProfileNameOnMaster(oc *exutil.CLI, masterNodeName string) string {
+
+	var defaultProfileName string
+
+	defaultProfileName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-cluster-node-tuning-operator", "profiles.tuned.openshift.io", masterNodeName, "-ojsonpath={.status.tunedProfile}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(defaultProfileName).NotTo(o.BeEmpty())
+
+	e2e.Logf("defaultProfileName is %v on %v ", defaultProfileName, masterNodeName)
+	return defaultProfileName
 }

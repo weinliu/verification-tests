@@ -28,7 +28,7 @@ objects:
       - match:
         - label: tuned
           value: ips
-        priority: 20
+        priority: 18
         profile: ips-host
 parameters:
 - name: SYSCTLPARM1

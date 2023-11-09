@@ -56,5 +56,5 @@ objects:
       recommend:
       - machineConfigLabels:
           machineconfiguration.openshift.io/role: "master"
-        priority: 30
+        priority: 18
         profile: openshift-node-performance-hp-performanceprofile

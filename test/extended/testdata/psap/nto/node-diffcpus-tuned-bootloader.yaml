@@ -15,5 +15,5 @@ spec:
   recommend:
   - machineConfigLabels:
       machineconfiguration.openshift.io/role: "worker-diffcpus"
-    priority: 20
+    priority: 18
     profile: openshift-bootcmdline-cpu

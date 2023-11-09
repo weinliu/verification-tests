@@ -206,6 +206,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		is3Master := exutil.Is3MasterNoDedicatedWorkerNode(oc)
 		var profileCheck string
 
+		masterNodeName := getFirstMasterNodeName(oc)
+		defaultMasterProfileName := getDefaultProfileNameOnMaster(oc, masterNodeName)
+
 		g.By("Create logging namespace")
 		oc.SetupProject()
 		loggingNamespace := oc.Namespace()
@@ -245,7 +248,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if isSNO || is3Master {
 			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(profileCheck).To(o.Equal("openshift-control-plane"))
+			o.Expect(profileCheck).To(o.Equal(defaultMasterProfileName))
 		} else {
 			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -367,10 +370,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(renderCheck).NotTo(o.ContainSubstring("nf-conntrack-max"))
 
 		if isSNO || is3Master {
-			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-control-plane")
+			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, defaultMasterProfileName)
 			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(profileCheck).To(o.Equal("openshift-control-plane"))
+			o.Expect(profileCheck).To(o.Equal(defaultMasterProfileName))
 		} else {
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node")
 			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -692,6 +695,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			sysctlvalue: "142214",
 		}
 
+		masterNodeName := getFirstMasterNodeName(oc)
+		defaultMasterProfileName := getDefaultProfileNameOnMaster(oc, masterNodeName)
+
 		oc.SetupProject()
 		ntoTestNS := oc.Namespace()
 
@@ -720,10 +726,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Get the tuned pod name in the same node as nginx app
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
-
-		//Get NTO operator pod name
-		ntoOperatorPod, err := getNTOPodName(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Label pod nginx with tuned.openshift.io/elasticsearch=
 		g.By("Label nginx pod as tuned.openshift.io/elasticsearch=")
@@ -762,17 +764,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Check if restore to default profile.
 		isSNO := exutil.IsSNOCluster(oc)
 		if isSNO || is3CPNoWorker {
-			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-control-plane")
-			assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "openshift-control-plane")
-			g.By("Assert static tuning from profile 'openshift-control-plane' applied in tuned pod log")
-			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `static tuning from profile 'openshift-control-plane' applied|active and recommended profile \(openshift-control-plane\) match`)
-
+			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, defaultMasterProfileName)
+			g.By("Assert default profile applied in tuned pod log")
+			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, "'"+defaultMasterProfileName+"' applied|("+defaultMasterProfileName+") match")
 			profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(profileCheck).To(o.Equal("openshift-control-plane"))
+			o.Expect(profileCheck).To(o.Equal(defaultMasterProfileName))
 		} else {
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node")
-			g.By("Assert static tuning from profile 'openshift-node' applied in tuned pod log")
+			g.By("Assert profile 'openshift-node' applied in tuned pod log")
 			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `static tuning from profile 'openshift-node' applied|active and recommended profile \(openshift-node\) match`)
 			profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -809,9 +809,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		oc.SetupProject()
 		ntoTestNS := oc.Namespace()
 
+		//First choice to use [tests] image, the image mirrored by default in disconnected cluster
+		//if don't have [tests] image in some environment, we can use hello-openshift as image
+		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
+		// AppImageName := exutil.GetImagestreamImageName(oc, "tests")
+		// if len(AppImageName) == 0 {
+		AppImageName := "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
+		// }
+
 		//Create a nginx web application pod
 		g.By("Create a nginx web pod in nto temp namespace")
-		exutil.ApplyOperatorResourceByYaml(oc, ntoTestNS, podNginxFile)
+		exutil.ApplyNsResourceFromTemplate(oc, ntoTestNS, "--ignore-unknown-parameters=true", "-f", podNginxFile, "-p", "IMAGENAME="+AppImageName)
 
 		//Check if nginx pod is ready
 		exutil.AssertPodToBeReady(oc, "nginx", ntoTestNS)
@@ -825,10 +833,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//To reset tuned pod log, forcily to delete tuned pod
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", tunedPodName, "-n", ntoNamespace, "--ignore-not-found=true").Execute()
-
-		//Get NTO operator pod name
-		ntoOperatorPod, err := getNTOPodName(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Label pod nginx with tuned.openshift.io/elasticsearch=
 		g.By("Label nginx pod as tuned.openshift.io/elasticsearch=")
@@ -855,10 +859,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).To(o.ContainSubstring("user-max-net-namespaces"))
 
-		//Verify nto operator logs
-		g.By("Check NTO operator pod logs to confirm if user-max-net-namespaces applied")
-		assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "user-max-net-namespaces")
-
+		//Verify nto tuned logs
+		g.By("Check NTO tuned pod logs to confirm if user-max-net-namespaces applied")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `user-max-net-namespaces applied|\(user-max-net-namespaces\) match`)
 		//Verify if debug is false by CR setting
 		g.By("Check node profile debug settings, it should be debug: false")
 		isEnableDebug = assertDebugSettings(oc, tunedNodeName, ntoNamespace, "false")
@@ -886,8 +889,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).To(o.ContainSubstring("user-max-net-namespaces"))
 
-		//Verify nto operator logs
-		assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "user-max-net-namespaces")
+		//Verify nto tuned logs
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `user-max-net-namespaces applied|\(user-max-net-namespaces\) match`)
 
 		//Verify if debug was enabled by CR setting
 		g.By("Check if the debug is true in node profile, the expected result should be true")
@@ -1738,13 +1741,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("NonPreRelease-Longduration-Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
 		// test requires NTO to be installed
 		is3CPNoWorker := exutil.Is3MasterNoDedicatedWorkerNode(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 
-		if !isNTO || is3CPNoWorker {
+		if !isNTO || is3CPNoWorker || isSNO {
 			g.Skip("NTO is not installed or No need to test on compact cluster - skipping test ...")
 		}
 
 		//Use the last worker node as labeled node
-		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
+		tunedNodeName, err = exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("The tuned node name is: \n%v", tunedNodeName)
@@ -2422,6 +2426,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		isSNO := exutil.IsSNOCluster(oc)
 		is3Master := exutil.Is3MasterNoDedicatedWorkerNode(oc)
+		masterNodeName := getFirstMasterNodeName(oc)
+		defaultMasterProfileName := getDefaultProfileNameOnMaster(oc, masterNodeName)
 
 		//NTO will provides two default tuned, one is openshift-control-plane, another is openshift-node
 		g.By("Check the default tuned profile list per nodes")
@@ -2429,7 +2435,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileOutput).NotTo(o.BeEmpty())
 		if isSNO || is3Master {
-			o.Expect(profileOutput).To(o.ContainSubstring("openshift-control-plane"))
+			o.Expect(profileOutput).To(o.ContainSubstring(defaultMasterProfileName))
 		} else {
 			o.Expect(profileOutput).To(o.ContainSubstring("openshift-control-plane"))
 			o.Expect(profileOutput).To(o.ContainSubstring("openshift-node"))

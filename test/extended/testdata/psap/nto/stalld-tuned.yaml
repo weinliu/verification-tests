@@ -24,7 +24,7 @@ objects:
     recommend:
     - match:
       - label: node-role.kubernetes.io/worker-stalld
-      priority: 20
+      priority: 18
       profile: openshift-stalld
 parameters:
 - name: STALLD_STATUS

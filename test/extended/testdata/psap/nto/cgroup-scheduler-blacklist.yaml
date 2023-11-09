@@ -21,7 +21,7 @@ objects:
       recommend:
       - match:
         - label: tuned-scheduler-node
-        priority: 20
+        priority: 18
         profile: ${PROFILE_NAME}
         operand:
           debug: false

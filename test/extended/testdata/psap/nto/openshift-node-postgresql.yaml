@@ -13,5 +13,5 @@ spec:
   recommend:
   - match:
     - label: tuned.openshift.io/openshift-node-postgresql
-    priority: 20
+    priority: 18
     profile: openshift-node-postgresql

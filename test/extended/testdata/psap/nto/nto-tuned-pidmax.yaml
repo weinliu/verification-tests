@@ -17,5 +17,5 @@ spec:
  - match:
    - label: node-role.kubernetes.io/worker-tuning
      value: ""
-   priority: 20
+   priority: 18
    profile: tuning-pidmax

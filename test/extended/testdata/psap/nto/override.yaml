@@ -20,7 +20,7 @@ objects:
       recommend:
       - match:
         - label: tuned.openshift.io/override
-        priority: 20
+        priority: 18
         profile: override
         operand:
           tunedConfig:
