@@ -218,9 +218,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		//create peer pods secret and peer pods cm
 		if kataconfig.enablePeerPods {
 			msg, err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateAws)
-			if err != nil && err.Error() == "AWS credentials not found" {
-				err = fmt.Errorf("AWS credentials not found") // Generate a custom error
-				e2e.Failf("AWS credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
+			if err != nil && err.Error() == "Cloud Credentials not found" {
+				err = fmt.Errorf("Cloud Credentials not found") // Generate a custom error
+				e2e.Failf("Cloud Credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
 			}
 			//	msg, err = createApplyPeerPodConfigMap(oc, cloudPlatform, ppParam, opNamespace, ppConfigMapName, ppConfigMapTemplate)
 			//	if err != nil {
