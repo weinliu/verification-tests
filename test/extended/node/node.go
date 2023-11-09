@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,8 +46,10 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		upgradeMachineConfigTemp2 = filepath.Join(buildPruningBaseDir, "custom-kubelet-test2.yaml")
 		systemreserveTemp         = filepath.Join(buildPruningBaseDir, "kubeletconfig-defaultsysres.yaml")
 		podLogLinkTemp            = filepath.Join(buildPruningBaseDir, "pod-loglink.yaml")
-		podDisruptionBudgetTemp   = filepath.Join(buildPruningBaseDir, "pod-disruption-budget.yaml")
-		genericDeploymentTemp     = filepath.Join(buildPruningBaseDir, "generic-deployment.yaml")
+		livenessProbeTemp         = filepath.Join(buildPruningBaseDir, "livenessProbe-terminationPeriod.yaml")
+
+		podDisruptionBudgetTemp = filepath.Join(buildPruningBaseDir, "pod-disruption-budget.yaml")
+		genericDeploymentTemp   = filepath.Join(buildPruningBaseDir, "generic-deployment.yaml")
 
 		podLogLink65404 = podLogLinkDescription{
 			name:      "",
@@ -1032,6 +1035,59 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		checkCrun(oc)
 	})
 
+	g.It("Author:minmli-High-68184-container_network metrics should keep reporting after container restart", func() {
+		livenessProbeTermP68184 := liveProbeTermPeriod{
+			name:                  "liveness-probe",
+			namespace:             oc.Namespace(),
+			terminationgrace:      60,
+			probeterminationgrace: 10,
+			template:              livenessProbeTemp,
+		}
+
+		exutil.By("Create a pod")
+		defer livenessProbeTermP68184.delete(oc)
+		livenessProbeTermP68184.create(oc)
+
+		exutil.By("Check pod status")
+		err := podStatus(oc, livenessProbeTermP68184.namespace, livenessProbeTermP68184.name)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		exutil.By("Check the container_network* metrics report well")
+		podNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", livenessProbeTermP68184.name, "-o=jsonpath={.spec.nodeName}", "-n", livenessProbeTermP68184.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var cmdOut1 string
+		var cmdOut2 string
+		waitErr := wait.Poll(30*time.Second, 1*time.Minute, func() (bool, error) {
+			cmd1 := fmt.Sprintf(`oc get --raw /api/v1/nodes/%v/proxy/metrics/cadvisor  | grep container_network_transmit | grep %v`, podNode, livenessProbeTermP68184.name)
+			cmdOut1, err := exec.Command("bash", "-c", cmd1).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(string(cmdOut1), "container_network_transmit_bytes_total") && strings.Contains(string(cmdOut1), "container_network_transmit_errors_total") && strings.Contains(string(cmdOut1), "container_network_transmit_packets_dropped_total") && strings.Contains(string(cmdOut1), "container_network_transmit_packets_total") {
+				e2e.Logf("\ncontainer_network* metrics report well after pod start")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("check metrics failed after pod start! Metric result is: \n %v \n", cmdOut1))
+
+		exutil.By("Check the container_network* metrics still report after container restart")
+		waitErr = wait.Poll(80*time.Second, 5*time.Minute, func() (bool, error) {
+			restartCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", livenessProbeTermP68184.name, "-o=jsonpath={.status.containerStatuses[0].restartCount}", "-n", livenessProbeTermP68184.namespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("restartCount is :%v", restartCount)
+			o.Expect(strconv.Atoi(restartCount)).Should(o.BeNumerically(">=", 1), "error: the pod restart time < 1")
+
+			cmd2 := fmt.Sprintf(`oc get --raw /api/v1/nodes/%v/proxy/metrics/cadvisor  | grep container_network_transmit | grep %v`, podNode, livenessProbeTermP68184.name)
+			cmdOut2, err := exec.Command("bash", "-c", cmd2).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(string(cmdOut2), "container_network_transmit_bytes_total") && strings.Contains(string(cmdOut2), "container_network_transmit_errors_total") && strings.Contains(string(cmdOut2), "container_network_transmit_packets_dropped_total") && strings.Contains(string(cmdOut2), "container_network_transmit_packets_total") {
+				e2e.Logf("\ncontainer_network* metrics report well after pod restart")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("check metrics failed after pod restart! Metric result is: \n %v \n", cmdOut2))
+	})
+
 	//author: jfrancoa@redhat.com
 	//automates: https://issues.redhat.com/browse/OCPBUGS-15035
 	g.It("NonHyperShiftHOST-NonPreRelease-Author:jfrancoa-Medium-67564-node's drain should block when PodDisruptionBudget minAvailable equals 100 percentage and selector is empty [Disruptive]", func() {
@@ -1078,7 +1134,6 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podsInWorker).Should(o.BeIdenticalTo(podsAfterDrain))
 	})
-
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {
