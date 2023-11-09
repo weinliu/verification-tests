@@ -6760,7 +6760,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-68629-[Apiserver] Audit log files of apiservers should not have too permissive mode", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-68629-[Apiserver] Audit log files of apiservers should not have too permissive mode", func() {
 		directories := []string{
 			"/var/log/kube-apiserver/",
 			"/var/log/openshift-apiserver/",
