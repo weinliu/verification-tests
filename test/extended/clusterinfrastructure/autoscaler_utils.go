@@ -70,7 +70,12 @@ func (machineAutoscaler *machineAutoscalerDescription) deleteMachineAutoscaler(o
 
 func (workLoad *workLoadDescription) createWorkLoad(oc *exutil.CLI) {
 	e2e.Logf("Creating workLoad ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", workLoad.template, "-p", "NAME="+workLoad.name, "NAMESPACE="+workLoad.namespace, "ARCH="+workLoad.arch.String(), "CPU="+workLoad.cpu)
+	var err error
+	if strings.Contains(workLoad.template, "affinity") {
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", workLoad.template, "-p", "NAME="+workLoad.name, "NAMESPACE="+workLoad.namespace, "ARCH="+workLoad.arch.String(), "CPU="+workLoad.cpu)
+	} else {
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", workLoad.template, "-p", "NAME="+workLoad.name, "NAMESPACE="+workLoad.namespace)
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
