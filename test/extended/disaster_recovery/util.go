@@ -122,7 +122,7 @@ func waitForOperatorRestart(oc *exutil.CLI, operatorName string) {
 	exutil.AssertWaitPollNoErr(err, "clusteroperator is not Progressing")
 
 	g.By("Wait for the operator to rollout")
-	err = wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
+	err = wait.Poll(60*time.Second, 1500*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", operatorName).Output()
 		if err != nil {
 			e2e.Logf("Fail to get clusteroperator %s, error: %s. Trying again", operatorName, err)

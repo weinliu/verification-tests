@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +29,9 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		iaasPlatform = strings.ToLower(output)
+		if strings.Contains(iaasPlatform, "baremetal") || strings.Contains(iaasPlatform, "none") {
+			g.Skip("IAAS platform: " + iaasPlatform + " is not supported yet for DR - skipping test ...")
+		}
 	})
 
 	// author: yinzhou@redhat.com
@@ -377,6 +382,42 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		output, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterN, []string{"-q"}, "/usr/local/bin/cluster-restore.sh", "/home/core/assets/backup")
 		o.Expect(strings.Contains(output, "Backup appears corrupted. Aborting!")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "non-zero exit code")).To(o.BeTrue())
+	})
+
+	// author: skundu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:skundu-Critical-68658-CEO prevents member deletion during revision rollout. [Disruptive]", func() {
+		g.By("Test for case OCP-68658 - CEO prevents member deletion during revision rollout.")
+
+		var (
+			mhcName      = "control-plane-health-68658"
+			nameSpace    = "openshift-machine-api"
+			maxUnhealthy = 1
+		)
+
+		g.By("1. Create MachineHealthCheck")
+		baseDir := exutil.FixturePath("testdata", "etcd")
+		pvcTemplate := filepath.Join(baseDir, "dr_mhc.yaml")
+		params := []string{"-f", pvcTemplate, "-p", "NAME=" + mhcName, "NAMESPACE=" + nameSpace, "MAXUNHEALTHY=" + strconv.Itoa(maxUnhealthy)}
+		defer oc.AsAdmin().Run("delete").Args("mhc", mhcName, "-n", nameSpace).Execute()
+		exutil.CreateNsResourceFromTemplate(oc, nameSpace, params...)
+
+		g.By("2. Verify MachineHealthCheck")
+		mhcMaxUnhealthy, errStatus := oc.AsAdmin().Run("get").Args("-n", nameSpace, "mhc", "-o", "jsonpath={.spec.maxUnhealthy}").Output()
+		o.Expect(errStatus).NotTo(o.HaveOccurred())
+		if mhcMaxUnhealthy != strconv.Itoa(maxUnhealthy) {
+			e2e.Failf("Failed to verify mhc newly created MHC %v", mhcName)
+		}
+
+		g.By("3. Get all the master nodes")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		masterNodeCount := len(masterNodeList)
+		g.By("4. Stop the kubelet service on one of the master nodes")
+		_, _ = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodeList[0], []string{"-q"}, "systemctl", "stop", "kubelet")
+		g.By("5. Ensure etcd oprator goes into degraded state and eventually recovers from it.")
+		waitForOperatorRestart(oc, "etcd")
+		waitforDesiredMachineCount(oc, masterNodeCount)
+		g.By("6. Check kube-apiserver oprator status")
+		checkOperator(oc, "kube-apiserver")
 	})
 
 })
