@@ -479,7 +479,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53146-Medium-54663-CLO Loki Integration-CLF works when send log to default-- vector[Serial]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Medium-54663-CLO Loki Integration-CLF works when send log to default-- vector[Serial]", func() {
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -490,13 +490,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
-				name:          "loki-53146",
+				name:          "loki-54663",
 				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   s,
-				storageSecret: "storage-secret-53146",
+				storageSecret: "storage-secret-54663",
 				storageClass:  sc,
-				bucketName:    "logging-loki-53146-" + getInfrastructureName(oc),
+				bucketName:    "logging-loki-54663" + getInfrastructureName(oc),
 				template:      lokiStackTemplate,
 			}
 			defer ls.removeObjectStorage(oc)
