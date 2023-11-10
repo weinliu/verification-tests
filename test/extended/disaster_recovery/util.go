@@ -304,3 +304,14 @@ func waitForDesiredStateOfCR(oc *exutil.CLI, desiredState string) {
 	})
 	exutil.AssertWaitPollNoErr(err, "sorry the CR is not in desired state")
 }
+
+// Checks whether cluster operator is healthy.
+func IsCOHealthy(oc *exutil.CLI, operatorName string) bool {
+	output, err := oc.AsAdmin().Run("get").Args("clusteroperator", operatorName).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
+		e2e.Logf("clusteroperator %s is abnormal", operatorName)
+		return false
+	}
+	return true
+}

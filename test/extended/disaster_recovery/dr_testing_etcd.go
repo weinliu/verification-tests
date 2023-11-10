@@ -32,6 +32,12 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		if strings.Contains(iaasPlatform, "baremetal") || strings.Contains(iaasPlatform, "none") {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not supported yet for DR - skipping test ...")
 		}
+		if !IsCOHealthy(oc, "etcd") {
+			g.Skip("PreCheck : etcd operator is degraded. Hence skipping the test.")
+		}
+		if !IsCOHealthy(oc, "kube-apiserver") {
+			g.Skip("PreCheck : kube-apiserver operator is degraded. Hence skipping the test.")
+		}
 	})
 
 	// author: yinzhou@redhat.com
