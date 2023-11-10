@@ -1421,3 +1421,63 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 
 	return msg, err
 }
+
+func checkLabeledPodsExpectedRunning(oc *exutil.CLI, resNs, label, expectedRunning string) (msg string, err error) {
+	// the inputs are strings to be consistant with other check....() functions.  This is also what the oc command returns
+	var (
+		resType  = "pod"
+		jsonpath = "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}"
+		podList  []string
+		podName  string
+		number   int
+		failMsg  []string
+	)
+
+	podList, err = exutil.GetAllPodsWithLabel(oc, resNs, label)
+	if err != nil || len(podList) == 0 {
+		e2e.Failf("Could not get pod names with %v label: %v %v", label, podList, err)
+	}
+	number, err = strconv.Atoi(expectedRunning)
+	if number != len(podList) || err != nil {
+		e2e.Failf("ERROR: Number of pods %v does not match %v expected pods: %v %v", number, expectedRunning, msg, err)
+	}
+
+	for _, podName = range podList {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resType, podName, "-n", resNs, jsonpath).Output()
+		if err != nil || strings.ToLower(msg) != "true" {
+			failMsg = append(failMsg, fmt.Sprintf("ERROR: %v is not ready: %v %v", podName, msg, err))
+		}
+	}
+	if len(failMsg) != 0 {
+		e2e.Failf("%v pods are not ready: %v", len(failMsg), failMsg)
+	}
+	err = nil
+	msg = fmt.Sprintf("All %v pods ready %v)", expectedRunning, podList)
+	return msg, err
+}
+
+func checkResourceJsonpathMatch(oc *exutil.CLI, resType, resName, resNs, jsonPath1, jsonPath2 string) (expectedMatch, msg string, err error) {
+	// the inputs are strings to be consistant with other check....() functions.  This is also what the oc command returns
+	var (
+		duration time.Duration = 300
+		interval time.Duration = 10
+	)
+
+	msg, err = checkResourceExists(oc, resType, resName, resNs, duration, interval)
+
+	expectedMatch, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resType, resName, "-n", resNs, jsonPath1).Output()
+	if err != nil || expectedMatch == "" {
+		e2e.Failf("ERROR: could not get %v from %v %v: %v %v", jsonPath1, resType, resName, expectedMatch, err)
+	}
+
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resType, resName, "-n", resNs, jsonPath2).Output()
+	if err != nil || msg == "" {
+		e2e.Failf("ERROR: could not get %v from %v %v: %v %v", jsonPath2, resType, resName, msg, err)
+	}
+	if expectedMatch != msg {
+		e2e.Failf("ERROR: %v (%) does not match %v (%v)", jsonPath1, expectedMatch, jsonPath2, msg)
+	}
+	err = nil
+	msg = fmt.Sprintf("%v (%v) == %v (%v)", jsonPath1, expectedMatch, jsonPath2, msg)
+	return expectedMatch, msg, err
+}

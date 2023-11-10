@@ -1514,4 +1514,50 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		//TODO: test IO
 	})
 
+	g.It("Author:tbuskey-High-66554-Check and verify control plane pods and other components", func() {
+
+		var (
+			duration time.Duration = 300
+			interval time.Duration = 10
+		)
+
+		testControlPod := func(resType, resName, desiredCountJsonPath, actualCountJsonPath, podLabel string) {
+			// Check the resource Type for desired count by looking at the jsonpath
+			// Check the actual count at this jsonpath
+			// Wait until the actual count == desired count then set expectedPods to the actual count
+			// Verify count of "Running" pods with podLabel matches expectedPods
+			expectedPods, msg, err := checkResourceJsonpathMatch(oc, resType, resName, subscription.namespace, desiredCountJsonPath, actualCountJsonPath)
+			if err != nil || msg == "" {
+				e2e.Logf("%v does not match %v in %v %v %v %v", desiredCountJsonPath, actualCountJsonPath, resName, resType, msg, err)
+			}
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			msg, err = checkLabeledPodsExpectedRunning(oc, subscription.namespace, podLabel, expectedPods)
+			if err != nil || msg == "" {
+				e2e.Logf("Could not find pods labeled %v %v %v", podLabel, msg, err)
+			}
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		testControlPod("deployment", "controller-manager", "-o=jsonpath={.spec.replicas}", "-o=jsonpath={.status.readyReplicas}", "control-plane=controller-manager")
+		testControlPod("daemonset", "openshift-sandboxed-containers-monitor", "-o=jsonpath={.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name=openshift-sandboxed-containers-monitor")
+
+		if kataconfig.enablePeerPods {
+			testControlPod("deployment", "peer-pods-webhook", "-o=jsonpath={.spec.replicas}", "-o=jsonpath={.status.readyReplicas}", "app=peer-pods-webhook")
+			testControlPod("daemonset", "peerpodconfig-ctrl-caa-daemon", "-o=jsonpath={.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name=peerpodconfig-ctrl-caa-daemon")
+
+			// Check for the peer pod RuntimeClass
+			msg, err := checkResourceExists(oc, "RuntimeClass", ppRuntimeClass, subscription.namespace, duration, interval)
+			if err != nil || msg == "" {
+				e2e.Logf("Could not find %v in RuntimeClass %v %v", ppRuntimeClass, msg, err)
+			}
+
+			// and kata RuntimeClass
+			msg, err = checkResourceExists(oc, "RuntimeClass", "kata", subscription.namespace, duration, interval)
+			if err != nil || msg == "" {
+				e2e.Logf("Could not find kata in RuntimeClass %v %v", msg, err)
+			}
+		}
+	})
+
 })
