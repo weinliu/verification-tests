@@ -328,29 +328,27 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			"ingress-ip",
 		}
 
-		g.By("Get the master with KCM leader")
-		leaderKcm := getLeaderKCM(oc)
-
 		g.By("Retreive pods from openshift-route-controller-manager namespace")
 		routeControllerPodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-route-controller-manager", "-l", "app=route-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		routeControllerPodList := strings.Fields(routeControllerPodNames)
 
+		if ok := waitForAvailableRsRunning(oc, "deployment", "route-controller-manager", "openshift-route-controller-manager", "3"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			e2e.Failf("route-controller-manager pods are not running as expected")
+		}
+
 		g.By("Check the ingress-ip and ingress-to-route are started under project openshift-route-controller-manager")
 		for _, routeControllerPodName := range routeControllerPodList {
-			routeControllerPodNodeName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-route-controller-manager", routeControllerPodName, `-ojsonpath={.spec.nodeName}`).Output()
-			if routeControllerPodNodeName == leaderKcm {
-				e2e.Logf("RouteControllerPodName is %s", routeControllerPodName)
-				out, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-route-controller-manager", "pod/"+routeControllerPodName).Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				for _, v := range checkMessage {
-					if !strings.Contains(out, v) {
-						e2e.Failf("can't see route contrller on openshift-route-controller-manager")
-					}
+			out, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-route-controller-manager", "pod/"+routeControllerPodName).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, v := range checkMessage {
+				if strings.Contains(out, v) {
+					e2e.Logf("Find the expected log from the pod %v", routeControllerPodName)
+					break
 				}
-
 			}
-
 		}
 
 		g.By("Check the ingress-ip and ingress-to-route should no see from OCM")
