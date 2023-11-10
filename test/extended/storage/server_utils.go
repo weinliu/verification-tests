@@ -97,6 +97,13 @@ func newIscsiServer(opts ...iscsiServerOption) iscsiServer {
 
 // Install the specified iSCSI Server on cluster
 func (iscsi *iscsiServer) install(oc *exutil.CLI) {
+	if exutil.IsDefaultNodeSelectorEnabled(oc) {
+		if iscsi.deploy.namespace == "" {
+			iscsi.deploy.namespace = oc.Namespace()
+		}
+		exutil.AddAnnotationsToSpecificResource(oc, "ns/"+iscsi.deploy.namespace, "", `openshift.io/node-selector=`)
+		defer exutil.RemoveAnnotationFromSpecificResource(oc, "ns/"+iscsi.deploy.namespace, "", `openshift.io/node-selector`)
+	}
 	iscsi.deploy.create(oc)
 	iscsi.deploy.waitReady(oc)
 	iscsi.svc.create(oc)
