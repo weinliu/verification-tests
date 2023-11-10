@@ -1802,6 +1802,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(strings.Contains(warningOutput2, "the image is a manifest list and contains multiple images - use --filter-by-os to select from")).To(o.BeTrue())
 	})
+
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-68405-oc process works well for cross-namespace template", func() {
 		g.By("Create new namespace")
@@ -1827,6 +1828,54 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		out, err := oc.AsAdmin().Run("whoami").Args("").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(out, "system:admin")).To(o.BeTrue())
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-11147-Show RC information and indicate bad secrets reference in oc status", func() {
+		if checkOpenshiftSamples(oc) {
+			g.Skip("Can't find the cluster operator openshift-samples, skip it.")
+		}
+
+		// Skip the test if baselinecaps is set to v4.13 or v4.14
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") || isBaselineCapsSet(oc, "v4.11") {
+			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+		g.By("Create new namespace")
+		oc.SetupProject()
+		workloadsBaseDir := exutil.FixturePath("testdata", "workloads")
+		rcFile := filepath.Join(workloadsBaseDir, "only-rc.yaml")
+		templateFile := filepath.Join(workloadsBaseDir, "application-template-stibuild-with-mount-secret.json")
+		rcSecretFile := filepath.Join(workloadsBaseDir, "rc-match-service.yaml")
+
+		g.By("Check standalone RC info is dispalyed in oc status output")
+		err := oc.Run("create").Args("-f", rcFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _, err := oc.Run("status").Args().Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "rc/stdalonerc")).To(o.BeTrue())
+		output, _, err = oc.Run("status").Args("--suggest").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "rc/stdalonerc is attempting to mount a missing secret secret/mysecret")).To(o.BeTrue())
+		err = oc.Run("delete").Args("-f", rcFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check DC info when has missing/bad secret reference")
+		err = oc.Run("create").Args("-f", templateFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("new-app").Args("--template=ruby-helloworld-sample").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _, err = oc.Run("status").Args("--suggest").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "dc/frontend is attempting to mount a missing secret secret/my-secret")).To(o.BeTrue())
+
+		g.By("Show RCs for services in oc status")
+		err = oc.Run("create").Args("-f", rcSecretFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _, err = oc.Run("status").Args("--suggest").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "svc/database")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "  rc/rcmatchse runs")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "    rc/rcmatchse created")).To(o.BeTrue())
 	})
 })
 
