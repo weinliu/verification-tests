@@ -200,7 +200,7 @@ func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, 
 
 	}
 	machinesetName := name
-	if iaasPlatform == "vsphere" || iaasPlatform == "nutanix" && name == "windows" {
+	if (iaasPlatform == "vsphere" || iaasPlatform == "nutanix") && name == "windows" {
 		machinesetName = "winworker"
 	}
 	if iaasPlatform == "aws" || iaasPlatform == "gcp" {
