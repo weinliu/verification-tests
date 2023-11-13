@@ -2,11 +2,12 @@ package router
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -42,7 +43,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: hongli@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:hongli-High-48138-Support External DNS on AWS platform", func() {
+	g.It("ConnectedOnly-ROSA-OSD_CCS-Author:hongli-High-48138-Support External DNS on AWS platform", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "extdns")
 			sampleAWS           = filepath.Join(buildPruningBaseDir, "sample-aws-rt.yaml")
@@ -87,7 +88,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: hongli@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:hongli-High-48139-Support External DNS on Azure DNS provider", func() {
+	g.It("ConnectedOnly-ARO-Author:hongli-High-48139-Support External DNS on Azure DNS provider", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "extdns")
 			sampleAzure         = filepath.Join(buildPruningBaseDir, "sample-azure-rt.yaml")
@@ -139,7 +140,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: hongli@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:hongli-High-48140-Support External DNS on GCP DNS provider", func() {
+	g.It("ConnectedOnly-Author:hongli-High-48140-Support External DNS on GCP DNS provider", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "extdns")
 			sampleGCP           = filepath.Join(buildPruningBaseDir, "sample-gcp-svc.yaml")
