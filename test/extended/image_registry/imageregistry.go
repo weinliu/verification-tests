@@ -4422,4 +4422,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			e2e.Failf("The import-mode is wrong, shoule be PreserveOriginal mode")
 		}
 	})
+
+	g.It("Author:wewang-Medium-68732-image registry should use ibmcos object storage on IPI-IBM cluster", func() {
+		g.By("Check platforms")
+		exutil.SkipIfPlatformTypeNot(oc, "IBMCloud")
+		g.By("Check if image registry managementState is Managed")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.managementState}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.Equal("Managed"))
+		g.By("Check if image registry used ibmcos object storage")
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.storage.ibmcos}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("bucket"))
+	})
 })
