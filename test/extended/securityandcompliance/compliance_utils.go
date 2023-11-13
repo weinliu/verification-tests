@@ -1096,3 +1096,37 @@ func skipEtcdEncryptionOn(oc *exutil.CLI) {
 		g.Skip(fmt.Sprintf("EncryptionType %s is not aescbc, SKIP!", encryptionType))
 	}
 }
+
+// skip cluster when apiserver encryption type is eqauls to aescbc as enable/disable encryption is destructive and time consuming
+func skipEtcdEncryptionOff(oc *exutil.CLI) {
+	encryptionType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if encryptionType != "aescbc" && encryptionType != "aesgcm" {
+		g.Skip(fmt.Sprintf("ETCD encryption disabled, SKIP!", encryptionType))
+	}
+}
+
+func checkInstructionNotEmpty(oc *exutil.CLI, namespace string, ssbName string, exemptRuleList []string) {
+	ccrs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", namespace, "-l", "compliance.openshift.io/suite="+ssbName,
+		"-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	ccrList := strings.Fields(ccrs)
+	for _, ccr := range ccrList {
+		if !IsContainStr(exemptRuleList, ccr) {
+			instruction, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", ccr, "-n", namespace, "-o=jsonpath={.instructions}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if instruction == "" {
+				e2e.Failf("This ccr '%v' do not have any instruction", ccr)
+			}
+		}
+	}
+}
+
+func IsContainStr(items []string, item string) bool {
+	for _, eachItem := range items {
+		if eachItem == item {
+			return true
+		}
+	}
+	return false
+}
