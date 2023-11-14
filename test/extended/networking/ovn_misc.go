@@ -2,6 +2,7 @@ package networking
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"path/filepath"
 	"regexp"
@@ -360,7 +361,51 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
+	// author: asood@redhat.com
+	// https://issues.redhat.com/browse/OCPBUGS-4825
+	g.It("Author:asood-Medium-66047-Verify allocated IP address of the pod on a specific node with completed status when delete is released in OVN DB", func() {
+		var (
+			buildPruningBaseDir      = exutil.FixturePath("testdata", "networking")
+			completedPodNodeTemplate = filepath.Join(buildPruningBaseDir, "completed-pod-specific-node-template.yaml")
+		)
 
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeList.Items)).NotTo(o.BeEquivalentTo(0))
+
+		exutil.By("Get namespace")
+		ns := oc.Namespace()
+
+		exutil.By("Create pods with completed status")
+		for i := 0; i < 50; i++ {
+			podns := pingPodResourceNode{
+				name:      "completed-pod-" + strconv.Itoa(i),
+				namespace: ns,
+				nodename:  nodeList.Items[0].Name,
+				template:  completedPodNodeTemplate,
+			}
+			podns.createPingPodNode(oc)
+		}
+		exutil.By("Count all the pods with completed status")
+		allPods, getPodErr := exutil.GetAllPodsWithLabel(oc, ns, "name=completed-pod")
+		o.Expect(getPodErr).NotTo(o.HaveOccurred())
+		o.Expect(len(allPods)).To(o.BeEquivalentTo(50))
+		// Allow the last pod IP to be released before checking NB DB
+		time.Sleep(10 * time.Second)
+
+		exutil.By("Verify there are no IP in NB DB for the completed pods")
+		ovnKNodePod, ovnkNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeList.Items[0].Name)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+		getCmd := fmt.Sprintf("ovn-nbctl show | grep '%s' | wc -l", ns)
+		getCount, getCmdErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", getCmd)
+		o.Expect(getCmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strconv.Atoi(getCount)).To(o.BeEquivalentTo(0))
+
+		exutil.By("Delete all the pods with completed status")
+		_, delPodErr := oc.AsAdmin().Run("delete").Args("pod", "-l", "name=completed-pod", "-n", ns).Output()
+		o.Expect(delPodErr).NotTo(o.HaveOccurred())
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN Kubevirt hypershift", func() {
