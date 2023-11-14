@@ -52,6 +52,16 @@ func (idps IDPList) IsExist(idpName string) (existed bool) {
 	return
 }
 
+// Get specified machinepool by IDP NAME
+func (idps IDPList) Idp(idpName string) (idp IDP) {
+	for _, idp := range idps.IDPs {
+		if idp.Name == idpName {
+			return idp
+		}
+	}
+	return
+}
+
 // Create idp
 func (c *idpService) CreateIDP(clusterID string, flags ...string) (bytes.Buffer, error) {
 	combflags := append([]string{"-c", clusterID}, flags...)

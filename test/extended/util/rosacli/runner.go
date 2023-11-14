@@ -153,8 +153,12 @@ func (r *runner) Run() (bytes.Buffer, error) {
 			err = fmt.Errorf("executing failed: %s", output.String())
 			return output, err
 		}
+		if r.sensitive {
+			logger.Infof("Running command: rosa %s", strings.Join(cmdElements[:2], " "))
+		} else {
+			logger.Infof("Running command: rosa %s", strings.Join(cmdElements, " "))
+		}
 
-		logger.Infof("Running command: rosa %s", strings.Join(cmdElements, " "))
 		output.Reset()
 		cmd := exec.Command(rosacmd, cmdElements...)
 		cmd.Stdout = &output

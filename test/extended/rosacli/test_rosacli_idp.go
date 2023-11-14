@@ -2,6 +2,7 @@ package rosacli
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -285,6 +286,110 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(err).To(o.BeNil())
 		for k := range idp {
 			o.Expect(idpTab.IsExist(idp[k].name)).To(o.BeTrue())
+		}
+	})
+
+	g.It("Author:yuwan-Critical-49137-Create/Delete the HTPasswd IDPs by the rosacli command [Serial]", func() {
+		var (
+			idpType            = "htpasswd"
+			idpNames           = []string{"htpasswdn1", "htpasswdn2", "htpasswdn3"}
+			singleUserName     string
+			singleUserPasswd   string
+			multipleuserPasswd []string
+		)
+		rosaClient := rosacli.NewClient()
+		idpService := rosaClient.IDP
+
+		rosaSensitiveClient := rosacli.NewClient()
+		rosaSensitiveClient.Runner.Sensitive(true)
+		idpServiceSensitive := rosaSensitiveClient.IDP
+
+		g.By("Create admin")
+		output, err := rosaSensitiveClient.User.CreateAdmin(clusterID)
+		o.Expect(err).To(o.BeNil())
+		textData := rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Admin account has been added"))
+		defer func() {
+			g.By("Delete admin")
+			output, err = rosaSensitiveClient.User.DeleteAdmin(clusterID)
+			o.Expect(err).To(o.BeNil())
+			textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
+			o.Expect(textData).Should(o.ContainSubstring("Admin user 'cluster-admin' has been deleted"))
+		}()
+
+		g.By("Create one htpasswd idp with multiple users")
+		_, singleUserName, singleUserPasswd, err = generateHtpasswdPair("user1", "pass1")
+		o.Expect(err).To(o.BeNil())
+		output, err = idpServiceSensitive.CreateIDP(
+			clusterID,
+			"--type", idpType,
+			"--name", idpNames[0],
+			"--username", singleUserName,
+			"--password", singleUserPasswd,
+			"-y")
+		o.Expect(err).To(o.BeNil())
+		defer func() {
+			g.By("Delete idp")
+			output, err = idpService.DeleteIDP(clusterID, idpNames[0])
+			o.Expect(err).To(o.BeNil())
+			textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
+			o.Expect(textData).Should(o.ContainSubstring("Successfully deleted identity provider '%s' from cluster '%s'", idpNames[0], clusterID))
+		}()
+		textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idpNames[0]))
+		o.Expect(textData).Should(o.ContainSubstring("To log in to the console, open"))
+		o.Expect(textData).Should(o.ContainSubstring("and click on '%s'", idpNames[0]))
+
+		g.By("Create one htpasswd idp with single users")
+		multipleuserPasswd, err = generateMultipleHtpasswdPairs(2)
+		o.Expect(err).To(o.BeNil())
+		output, err = idpServiceSensitive.CreateIDP(
+			clusterID,
+			"--type", idpType,
+			"--name", idpNames[1],
+			"--users", strings.Join(multipleuserPasswd, ","),
+			"-y")
+		o.Expect(err).To(o.BeNil())
+		defer func() {
+			g.By("Delete idp")
+			output, err = idpService.DeleteIDP(clusterID, idpNames[1])
+			o.Expect(err).To(o.BeNil())
+		}()
+		textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idpNames[1]))
+		o.Expect(textData).Should(o.ContainSubstring("To log in to the console, open"))
+		o.Expect(textData).Should(o.ContainSubstring("and click on '%s'", idpNames[1]))
+
+		g.By("Create one htpasswd idp with multiple users from the file")
+		multipleuserPasswd, err = generateMultipleHtpasswdPairs(3)
+		o.Expect(err).To(o.BeNil())
+		location, err := createFileWithContent("htpasswdfile", strings.Join(multipleuserPasswd, "\n"))
+		o.Expect(err).To(o.BeNil())
+		defer os.RemoveAll(location)
+		output, err = idpServiceSensitive.CreateIDP(
+			clusterID,
+			"--type", idpType,
+			"--name", idpNames[2],
+			"--from-file", location,
+			"-y")
+		o.Expect(err).To(o.BeNil())
+		defer func() {
+			g.By("Delete idp")
+			output, err = idpService.DeleteIDP(clusterID, idpNames[2])
+			o.Expect(err).To(o.BeNil())
+		}()
+		textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idpNames[2]))
+		o.Expect(textData).Should(o.ContainSubstring("To log in to the console, open"))
+		o.Expect(textData).Should(o.ContainSubstring("and click on '%s'", idpNames[2]))
+
+		g.By("List IDP")
+		idpTab, _, err := idpService.ListIDP(clusterID)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(idpTab.IsExist("cluster-admin")).To(o.BeTrue())
+		for _, v := range idpNames {
+			o.Expect(idpTab.Idp(v).Type).To(o.Equal("HTPasswd"))
+			o.Expect(idpTab.Idp(v).AuthURL).To(o.Equal(""))
 		}
 	})
 })

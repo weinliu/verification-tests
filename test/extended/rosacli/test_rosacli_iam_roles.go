@@ -20,7 +20,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 	var (
 		accountRolePrefixesNeedCleanup  = make([]string, 0)
 		operatorRolePrefixedNeedCleanup = make([]string, 0)
-		permissionsBoundaryPolicyName   = "sdqePBN"
 		rosaClient                      *rosacli.Client
 		ocmResourceService              rosacli.OCMResourceService
 	)
@@ -46,12 +45,13 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		}()
 
 		var (
-			userRolePrefixB = "prefixB"
-			userRolePrefixH = "prefixH"
-			userRolePrefixC = "prefixC"
-			path            = "/fd/sd/"
-			versionH        = "4.13"
-			versionC        = "4.12"
+			userRolePrefixB               = "prefixB"
+			userRolePrefixH               = "prefixH"
+			userRolePrefixC               = "prefixC"
+			path                          = "/fd/sd/"
+			versionH                      = "4.13"
+			versionC                      = "4.12"
+			permissionsBoundaryPolicyName = "permissionB43070"
 		)
 
 		var policyDocument = `{
@@ -81,7 +81,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 				}
 				return true, nil
 			})
-			exutil.AssertWaitPollNoErr(err, "can not delete policy in 200s")
+			exutil.AssertWaitPollNoErr(err, "can not delete policy in 320s")
 		}()
 
 		whoamiOutput, err := ocmResourceService.Whoami()
@@ -215,6 +215,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 				}
 			}
 		}()
+
 		var (
 			oidcPrivodeIDFromOutputMessage  string
 			oidcPrivodeARNFromOutputMessage string
@@ -226,8 +227,9 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 			managedOIDCConfigID             string
 			hostedCPInstallerRoleArn        string
 			ClassicInstallerRoleArn         string
+			accountRolePrefix               string
+			permissionsBoundaryPolicyName   = "permissionB60971"
 		)
-
 		var policyDocument = `{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -242,7 +244,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		  }`
 
 		g.By("Create boundry policy")
-		rosaClient.Runner.Format("json")
 		iamClient := exutil.NewIAMClient()
 		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
 		o.Expect(err).To(o.BeNil())
@@ -258,12 +259,28 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 			exutil.AssertWaitPollNoErr(err, "can not delete policy in 200s")
 		}()
 
-		g.By("Get the installer role arn")
+		g.By("Create account-roles for testing")
+		rand.Seed(time.Now().UnixNano())
+		accountRolePrefix = fmt.Sprintf("QEAuto-accr60971-%s", time.Now().UTC().Format("20060102"))
+		_, err = ocmResourceService.CreateAccountRole("--mode", "auto",
+			"--prefix", accountRolePrefix,
+			"--permissions-boundary", permissionsBoundaryArn,
+			"-y")
+		o.Expect(err).To(o.BeNil())
 
-		hostedCPInstallerRoleArn, err = getInstallerRoleArn(true)
+		defer func() {
+			g.By("Cleanup created account-roles")
+			_, err := ocmResourceService.DeleteAccountRole("--mode", "auto",
+				"--prefix", accountRolePrefix,
+				"-y")
+			o.Expect(err).To(o.BeNil())
+		}()
+
+		g.By("Get the installer role arn")
+		accountRoleList, _, err := ocmResourceService.ListAccountRole()
 		o.Expect(err).To(o.BeNil())
-		ClassicInstallerRoleArn, err = getInstallerRoleArn(false)
-		o.Expect(err).To(o.BeNil())
+		ClassicInstallerRoleArn = accountRoleList.InstallerRole(accountRolePrefix, false).RoleArn
+		hostedCPInstallerRoleArn = accountRoleList.InstallerRole(accountRolePrefix, true).RoleArn
 
 		g.By("Create managed oidc-config in auto mode")
 		output, err := ocmResourceService.CreateOIDCConfig("--mode", "auto", "-y")
@@ -597,6 +614,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 			notExistedOcmroleocmRoleArn                   string
 			ocmroleArnInWrongFormat                       string
 			foundOcmrole                                  rosacli.OCMRole
+			path                                          = "/aa/bb/"
 		)
 		rosaClient := rosacli.NewClient()
 		ocmResourceService := rosaClient.OCMResource
@@ -640,6 +658,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		g.By("Create an ocm-role")
 		output, err = ocmResourceService.CreateOCMRole("--mode", "auto",
 			"--prefix", ocmrolePrefix,
+			"--path", path,
 			"-y")
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
@@ -694,5 +713,100 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		o.Expect(err).NotTo(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Expected a valid ocm role ARN to link to a current organization"))
+	})
+
+	g.It("Author:yuwan-High-52419-User can create/link/unlink/delete user-role in auto mode via rosacli by command [Serial]", func() {
+		var (
+			userrolePrefix                string
+			ocmAccountUsername            string
+			foundUserRole                 rosacli.UserRole
+			permissionsBoundaryPolicyName = "sdqePBN4userrole"
+			path                          = "/aa/bb/"
+		)
+		var policyDocument = `{
+			"Version": "2012-10-17",
+			"Statement": [
+			  {
+				"Effect": "Allow",
+				"Action": [
+				  "ec2:DescribeTags"
+				],
+				"Resource": "*"
+			  }
+			]
+		  }`
+
+		rosaClient := rosacli.NewClient()
+		ocmResourceService := rosaClient.OCMResource
+		rosaClient.Runner.Format("json")
+		whoamiOutput, err := ocmResourceService.Whoami()
+		o.Expect(err).To(o.BeNil())
+		rosaClient.Runner.CloseFormat()
+		whoamiData := ocmResourceService.ReflectAccountsInfo(whoamiOutput)
+		ocmAccountUsername = whoamiData.OCMAccountUsername
+		rand.Seed(time.Now().UnixNano())
+		userrolePrefix = fmt.Sprintf("QEAuto-userr-%s-52419", time.Now().UTC().Format("20060102"))
+
+		g.By("Create boundry policy")
+		rosaClient.Runner.Format("json")
+		iamClient := exutil.NewIAMClient()
+		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
+		o.Expect(err).To(o.BeNil())
+		defer func() {
+			err := wait.Poll(20*time.Second, 320*time.Second, func() (bool, error) {
+				err := iamClient.DeletePolicy(permissionsBoundaryArn)
+				if err != nil {
+					logger.Errorf("it met err %v when delete policy %s", err, permissionsBoundaryArn)
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "can not delete policy in 320s")
+		}()
+
+		g.By("Create an user-role")
+		output, err := ocmResourceService.CreateUserRole(
+			"--mode", "auto",
+			"--prefix", userrolePrefix,
+			"--path", path,
+			"-y")
+		o.Expect(err).To(o.BeNil())
+		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Created role"))
+		o.Expect(textData).Should(o.ContainSubstring("Successfully linked role"))
+		defer func() {
+			g.By("Delete user-role")
+			output, err = ocmResourceService.DeleteUserRole("--mode", "auto",
+				"--role-arn", foundUserRole.RoleArn,
+				"-y")
+
+			o.Expect(err).To(o.BeNil())
+			textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+			o.Expect(textData).Should(o.ContainSubstring("Successfully deleted the user role"))
+		}()
+
+		g.By("Get the ocm-role info")
+		userRoleList, output, err := ocmResourceService.ListUserRole()
+		o.Expect(err).To(o.BeNil())
+		foundUserRole = userRoleList.UserRole(userrolePrefix, ocmAccountUsername)
+		o.Expect(foundUserRole).ToNot(o.BeNil())
+
+		g.By("Get the user-role info")
+		userRoleList, output, err = ocmResourceService.ListUserRole()
+		o.Expect(err).To(o.BeNil())
+		foundUserRole = userRoleList.UserRole(userrolePrefix, ocmAccountUsername)
+		o.Expect(foundUserRole.Linded).To(o.Equal("Yes"))
+
+		g.By("Unlink user-role")
+		output, err = ocmResourceService.UnlinkUserRole("--role-arn", foundUserRole.RoleArn, "-y")
+		o.Expect(err).To(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Successfully unlinked role"))
+
+		g.By("Get the user-role info")
+		userRoleList, output, err = ocmResourceService.ListUserRole()
+		o.Expect(err).To(o.BeNil())
+		foundUserRole = userRoleList.UserRole(userrolePrefix, ocmAccountUsername)
+		o.Expect(foundUserRole.Linded).To(o.Equal("No"))
 	})
 })

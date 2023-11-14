@@ -1,9 +1,13 @@
 package rosacli
 
 import (
+	"fmt"
+	"math/rand"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
@@ -157,4 +161,57 @@ func removeStringElementFromArray(slice []string, element string) []string {
 		}
 	}
 	return newSlice
+}
+
+// Write string to a file
+func createFileWithContent(filename string, content string) (string, error) {
+	err := os.WriteFile(filename, []byte(content), 0644)
+	if err != nil {
+		logger.Errorf("Failed to write to file: %s", err)
+		return "", err
+	}
+	absPath, err := os.Getwd()
+	if err != nil {
+		logger.Errorf("Failed to get absolute path: %s", err)
+	}
+	fileAbsPath := absPath + "/" + filename
+	return fileAbsPath, err
+}
+
+// Generate random string
+func generateRandomString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	rand.Seed(time.Now().UnixNano())
+
+	s := make([]byte, n)
+	for i := range s {
+		s[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(s)
+}
+
+// Generate htpasspwd key value pair, return with a string
+func generateHtpasswdPair(user string, pass string) (string, string, string, error) {
+	generateCMD := fmt.Sprintf("htpasswd -Bbn %s %s", user, pass)
+	output, err := exec.Command("bash", "-c", generateCMD).Output()
+	htpasswdPair := strings.TrimSpace(string(output))
+	parts := strings.SplitN(htpasswdPair, ":", 2)
+	if err != nil {
+		logger.Errorf("Fail to generate htpasswd file: %v", err)
+		return "", "", "", err
+	}
+	return htpasswdPair, parts[0], parts[1], nil
+}
+
+// generate Htpasswd user-password Pairs
+func generateMultipleHtpasswdPairs(pairNum int) ([]string, error) {
+	multipleuserPasswd := []string{}
+	for i := 0; i < pairNum; i++ {
+		userPasswdPair, _, _, err := generateHtpasswdPair(generateRandomString(6), generateRandomString(6))
+		if err != nil {
+			return multipleuserPasswd, err
+		}
+		multipleuserPasswd = append(multipleuserPasswd, userPasswdPair)
+	}
+	return multipleuserPasswd, nil
 }

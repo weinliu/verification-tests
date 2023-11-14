@@ -1,7 +1,10 @@
 package rosacli
 
 import (
+	"fmt"
+	"math/rand"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -15,16 +18,17 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 		clusterID                string
 		oidcConfigIDsNeedToClean []string
 		installerRoleArn         string
+		hostedCP                 bool
+		err                      error
 	)
 
 	g.BeforeEach(func() {
 		g.By("Get the installer role arn")
 		clusterID = getClusterIDENVExisted()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
-		hostedCP, err := isHostedCPCluster(clusterID)
+		hostedCP, err = isHostedCPCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
-		installerRoleArn, err = getInstallerRoleArn(hostedCP)
-		o.Expect(err).To(o.BeNil())
+
 	})
 
 	g.It("Author:yuwan-High-57570-Create/List/Delete BYO oidc config in auto mode via rosacli [Serial]", func() {
@@ -59,9 +63,31 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 			notExistedOODCConfigID = "notexistedoidcconfigid111"
 			unmanagedOIDCConfigID  string
 			managedOIDCConfigID    string
+			accountRolePrefix      string
 		)
 		rosaClient := rosacli.NewClient()
 		ocmResourceService := rosaClient.OCMResource
+		g.By("Create account-roles for testing")
+		rand.Seed(time.Now().UnixNano())
+		accountRolePrefix = fmt.Sprintf("QEAuto-accr60971-%s", time.Now().UTC().Format("20060102"))
+		_, err := ocmResourceService.CreateAccountRole("--mode", "auto",
+			"--prefix", accountRolePrefix,
+			"-y")
+		o.Expect(err).To(o.BeNil())
+
+		defer func() {
+			g.By("Cleanup created account-roles")
+			_, err := ocmResourceService.DeleteAccountRole("--mode", "auto",
+				"--prefix", accountRolePrefix,
+				"-y")
+			o.Expect(err).To(o.BeNil())
+		}()
+
+		g.By("Get the installer role arn")
+		accountRoleList, _, err := ocmResourceService.ListAccountRole()
+		o.Expect(err).To(o.BeNil())
+		installerRoleArn = accountRoleList.InstallerRole(accountRolePrefix, hostedCP).RoleArn
+
 		g.By("Create managed=false oidc config in auto mode")
 		output, err := ocmResourceService.CreateOIDCConfig("--mode", "auto",
 			"--prefix", oidcConfigPrefix,

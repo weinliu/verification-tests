@@ -276,10 +276,30 @@ func (ors *ocmResourceService) ListAccountRole() (AccountRoleList, bytes.Buffer,
 
 // Get specified account roles by prefix
 func (arl AccountRoleList) AccountRoles(prefix string) (accountRoles []AccountRole) {
-
 	for _, roleItme := range arl.AccountRoleList {
 		if strings.Contains(roleItme.RoleName, prefix) {
 			accountRoles = append(accountRoles, roleItme)
+		}
+	}
+	return
+}
+func (arl AccountRoleList) InstallerRole(prefix string, hostedcp bool) (accountRole AccountRole) {
+	roleType := RoleTypeSuffixMap["Installer"]
+	if hostedcp {
+		roleType = "HCP-ROSA-" + roleType
+	}
+	for _, roleItme := range arl.AccountRoleList {
+		// if hostedcp && strings.Contains(lines[i], "-HCP-ROSA-Installer-Role") {
+		// 	return lines[i], nil
+		// }
+		// if !hostedcp && !strings.Contains(lines[i], "-ROSA-Installer-Role") && strings.Contains(lines[i], "-Installer-Role") {
+		// 	return lines[i], nil
+		// }
+		if hostedcp && strings.Contains(roleItme.RoleName, prefix) && strings.Contains(roleItme.RoleName, roleType) {
+			return roleItme
+		}
+		if !hostedcp && strings.Contains(roleItme.RoleName, prefix) && strings.Contains(roleItme.RoleName, roleType) && !strings.Contains(roleItme.RoleName, "HCP-ROSA-") {
+			return roleItme
 		}
 	}
 	return
