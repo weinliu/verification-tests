@@ -187,7 +187,7 @@ func GetRandomMachineSetName(oc *CLI) string {
 	if len(machinesetNames) == 0 {
 		g.Skip("Skip this test scenario because there are no linux machinesets in this cluster")
 	}
-	return machinesetNames[0]
+	return machinesetNames[rand.Int31n(int32(len(machinesetNames)))]
 }
 
 // GetRandomMachineSetNameByArch get a random MachineSet name by arch
@@ -197,7 +197,7 @@ func GetRandomMachineSetNameByArch(oc *CLI, arch string) string {
 	if len(machinesetNames) == 0 {
 		g.Skip(fmt.Sprintf("Skip this test scenario because there are no linux/%s machinesets in this cluster", arch))
 	}
-	return machinesetNames[0]
+	return machinesetNames[rand.Int31n(int32(len(machinesetNames)))]
 }
 
 // GetMachineSetReplicas get MachineSet replicas
