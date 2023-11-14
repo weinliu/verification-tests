@@ -212,7 +212,11 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			logger.Infof("%s does not exist. We don't take it into account", userCABundleConfigMap)
 		}
 
-		certContent += proxyConfigMap.GetDataValueOrFail(certFileName)
+		// OCPQE-17800 only merge the cert contents when trusted CA in proxy/cluster is not cm/user-ca-bundle
+		if proxyConfigMap.GetName() != userCABundleConfigMap.GetName() {
+			certContent += proxyConfigMap.GetDataValueOrFail(certFileName)
+		}
+
 		EventuallyFileExistsInNode(userCABundleCertFile, certContent, mcp.GetNodesOrFail()[0], "3m", "20s")
 
 		logger.Infof("OK!\n")
