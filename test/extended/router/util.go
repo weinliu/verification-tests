@@ -1522,3 +1522,20 @@ func checkIPStackType(oc *exutil.CLI) string {
 	}
 	return ""
 }
+
+// based on the orignal yaml file, this function is used to add some extra parameters behind the specified parameter, the return is the new file name
+func addExtraParametersToYamlFile(originalFile, flagPara, AddedContent string) string {
+	filePath, _ := filepath.Split(originalFile)
+	newFile := filePath + getRandomString()
+	originalFileContent, err := os.ReadFile(originalFile)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	newFileContent := ""
+	for _, line := range strings.Split(string(originalFileContent), "\n") {
+		newFileContent = newFileContent + line + "\n"
+		if strings.Contains(line, flagPara) {
+			newFileContent = newFileContent + AddedContent
+		}
+	}
+	os.WriteFile(newFile, []byte(newFileContent), 0644)
+	return newFile
+}

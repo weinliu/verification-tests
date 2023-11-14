@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -260,71 +261,72 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-NonPreRelease-Longduration-High-50662-Make ROUTER_BACKEND_CHECK_INTERVAL Configurable", func() {
-		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			ingctrl             = ingressControllerDescription{
-				name:      "ocp50662",
-				namespace: "openshift-ingress-operator",
-				domain:    "",
-				template:  customTemp,
-			}
-		)
+	g.It("Author:shudili-High-50662-Make ROUTER_BACKEND_CHECK_INTERVAL Configurable", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		baseTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		extraParas := "    tuningOptions:\n      healthCheckInterval: 20s\n"
+		customTemp1 := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp1)
+		extraParas = "    tuningOptions:\n      healthCheckInterval: 100m\n"
+		customTemp2 := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp2)
+		ingctrl1 := ingressControllerDescription{
+			name:      "ocp50662one",
+			namespace: "openshift-ingress-operator",
+			domain:    "",
+			template:  customTemp1,
+		}
+		ingctrl2 := ingressControllerDescription{
+			name:      "ocp50662two",
+			namespace: "openshift-ingress-operator",
+			domain:    "",
+			template:  customTemp2,
+		}
+		ingctrlResource1 := "ingresscontrollers/" + ingctrl1.name
+		ingctrlResource2 := "ingresscontrollers/" + ingctrl2.name
 
-		g.By("Create an custom ingresscontroller for testing ROUTER_BACKEND_CHECK_INTERVAL")
+		exutil.By("Create two custom ICs for testing ROUTER_BACKEND_CHECK_INTERVAL")
 		baseDomain := getBaseDomain(oc)
-		ingctrl.domain = ingctrl.name + "." + baseDomain
-		defer ingctrl.delete(oc)
-		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ingctrl1.domain = ingctrl1.name + "." + baseDomain
+		ingctrl2.domain = ingctrl2.name + "." + baseDomain
+		defer ingctrl1.delete(oc)
+		ingctrl1.create(oc)
+		defer ingctrl2.delete(oc)
+		ingctrl2.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
 
-		g.By("Patch tuningOptions/healthCheckInterval 20s to the ingress-controller")
-		healthCheckInterval := "20s"
-		ingctrlResource := "ingresscontrollers/" + ingctrl.name
-		podname := getRouterPod(oc, ingctrl.name)
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+healthCheckInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod of IC ocp50662one, which should be 20s")
+		podname1 := getRouterPod(oc, ingctrl1.name)
+		hciSearch := readRouterPodEnv(oc, podname1, "ROUTER_BACKEND_CHECK_INTERVAL")
+		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=20s"))
 
-		g.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which should be " + healthCheckInterval)
-		podname = getRouterPod(oc, ingctrl.name)
-		hciSearch := readRouterPodEnv(oc, podname, "ROUTER_BACKEND_CHECK_INTERVAL")
-		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=" + healthCheckInterval))
+		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod of IC ocp50662two, which should be 100m")
+		podname2 := getRouterPod(oc, ingctrl2.name)
+		hciSearch = readRouterPodEnv(oc, podname2, "ROUTER_BACKEND_CHECK_INTERVAL")
+		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=100m"))
 
-		g.By("Patch tuningOptions/healthCheckInterval with max 2147483647ms to the ingress-controller")
-		healthCheckInterval = "2147483647ms"
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+healthCheckInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
-
-		g.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which should be " + healthCheckInterval)
-		podname = getRouterPod(oc, ingctrl.name)
-		hciSearch = readRouterPodEnv(oc, podname, "ROUTER_BACKEND_CHECK_INTERVAL")
-		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=" + healthCheckInterval))
-
-		g.By("Patch tuningOptions/healthCheckInterval with other valid unit for exmpale minute 100m to the ingress-controller")
-		healthCheckInterval = "100m"
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+healthCheckInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
-
-		g.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which should be " + healthCheckInterval)
-		podname = getRouterPod(oc, ingctrl.name)
-		hciSearch = readRouterPodEnv(oc, podname, "ROUTER_BACKEND_CHECK_INTERVAL")
-		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=" + healthCheckInterval))
-
-		g.By("Patch tuningOptions/healthCheckInterval with 0s to the ingress-controller, expect to set it to default 5s")
+		exutil.By("Patch tuningOptions/healthCheckInterval with max 2147483647ms to IC ocp50662one, while tuningOptions/healthCheckInterval 0s to the IC ocp50662two")
+		healthCheckInterval := "2147483647ms"
+		patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+healthCheckInterval+"\"}}}")
 		healthCheckInterval = "0s"
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+healthCheckInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		patchResourceAsAdmin(oc, ingctrl2.namespace, ingctrlResource2, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+healthCheckInterval+"\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname1)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname1))
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname2)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname2))
 
-		g.By("Try to find the ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which shouldn't be seen by default")
-		podname = getRouterPod(oc, ingctrl.name)
+		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod of IC ocp50662one, which should be 2147483647ms")
+		podname1 = getRouterPod(oc, ingctrl1.name)
+		hciSearch = readRouterPodEnv(oc, podname1, "ROUTER_BACKEND_CHECK_INTERVAL")
+		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=2147483647ms"))
+
+		exutil.By("Try to find the ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which shouldn't be seen by default")
+		podname2 = getRouterPod(oc, ingctrl2.name)
 		cmd := fmt.Sprintf("/usr/bin/env | grep %s", "ROUTER_BACKEND_CHECK_INTERVAL")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname2, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
