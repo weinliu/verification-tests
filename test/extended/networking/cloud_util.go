@@ -924,8 +924,11 @@ func nslookDomainName(domainName string) string {
 	ips, err := net.LookupIP(domainName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, ip := range ips {
-		return ip.String()
+		if ip.To4() != nil {
+			return ip.String()
+		}
 	}
+	e2e.Logf("There is no IPv4 address for destination domain %s", domainName)
 	return ""
 }
 
