@@ -42,15 +42,23 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
-		architecture.SkipNonAmd64SingleArch(oc)
+		archtype := getArchitectureType(oc)
 		machinesetName := "machineset-45377"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with acceleratedNetworking: true")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"acceleratedNetworking":true,"vmSize":"STANDARD_D4S_V3"}}}}}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		switch archtype {
+		case "amd64":
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"acceleratedNetworking":true,"vmSize":"Standard_D2s_v3"}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		case "arm64":
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"acceleratedNetworking":true,"vmSize":"Standard_D8ps_v5"}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		default:
+			e2e.Logf("Couldn't get architecture type")
+		}
 
 		//test when set acceleratedNetworking: true, machine running needs nearly 9 minutes. so change the method timeout as 10 minutes.
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
@@ -67,15 +75,24 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
-		architecture.SkipNonAmd64SingleArch(oc)
+		archtype := getArchitectureType(oc)
 		machinesetName := "machineset-46967"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with Ephemeral OS Disks - OS cache placement")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"Standard_D4s_v3","osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},"managedDisk":{"storageAccountType":""}}}}}}}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		switch archtype {
+		case "amd64":
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"Standard_D2s_v3","osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},"managedDisk":{"storageAccountType":""}}}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		case "arm64":
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"Standard_D2plds_v5","osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},"managedDisk":{"storageAccountType":""}}}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		default:
+			e2e.Logf("Couldn't get the architecture type")
+
+		}
 
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 
