@@ -98,6 +98,69 @@ describe('knmstate operator console plugin related features', () => {
     cy.byTestID(pName).should('not.exist');
   });
 
+  it('(OCP-64982,qiowang) Create NNCP for adding bond on web console(from form)', {tags: ['e2e','admin']}, function () {
+    cy.log("1. Create NNCP");
+    let pName = "pname-64982";
+    let nncpTest: intPolicy = {
+        intName: "bond001",
+        intState: "Up",
+        intType: "Bond",
+        ipv4Enable: true,
+        ip: "",
+        prefixLen: "",
+        disAutoDNS: true,
+        disAutoRoutes: true,
+        disAutoGW: true,
+        port: "",
+        br_stpEnable: false,
+        bond_cpMacFrom: "",
+        bond_aggrMode: "802.3ad",
+        action: "",
+    };
+    let nncps: intPolicy[] = [];
+    nncps.push(nncpTest);
+    nncpPage.creatNNCPFromForm(pName, 'testBond123', nncps);
+
+    cy.log("2. Check NNCP status");
+    cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+    cy.get(`[data-test-rows="resource-row"]`).contains(pName).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains(" "+this.nodeList.length+" Available", {timeout: 30000});
+    });
+
+    cy.log("3. Check NNS");
+    nnsPage.goToNNS();
+    for (let i = 0; i < this.nodeList.length; i++) {
+      cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+        cy.get('td[id="network-interface"]').contains("bond").click();
+      });
+      cy.get('div[role="dialog"]').contains(nncpTest.intName).should('exist');
+      cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+    };
+
+    cy.log("4. Edit NNCP");
+    nncpTest.action = "editOld";
+    nncpTest.intState = "Absent";
+    nncpPage.editNNCPFromForm(pName, 'testBond123', nncps);
+
+    cy.log("5. Check NNCP status again");
+    cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+    cy.get(`[data-test-rows="resource-row"]`).contains(pName).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains(" "+this.nodeList.length+" Available", {timeout: 30000});
+    });
+
+    cy.log("6. Check NNS again");
+    nnsPage.goToNNS();
+    for (let i = 0; i < this.nodeList.length; i++) {
+      cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+        cy.get('td[id="network-interface"]').contains("bond").should('not.exist');
+      });
+    };
+
+    cy.log("7. Delete NNCP");
+    nncpPage.deleteNNCP(pName);
+    cy.byTestID(pName).should('not.exist');
+  });
+
   after(() => {
     knmstateUtils.deleteNMStateInstace();
     knmstateUtils.uninstall();
