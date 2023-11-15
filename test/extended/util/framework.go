@@ -967,20 +967,36 @@ func CheckBuildCancelled(b *buildv1.Build) bool {
 // WaitForServiceAccount waits until the named service account gets fully
 // provisioned
 func WaitForServiceAccount(c corev1client.ServiceAccountInterface, name string) error {
+	countOutput := -1
+	// add Logf for better debug, but it will possible generate many logs because of 100 millisecond
+	// so, add countOutput so that it output log every 100 times (10s)
 	waitFn := func() (bool, error) {
+		countOutput++
 		sc, err := c.Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			// If we can't access the service accounts, let's wait till the controller
 			// create it.
 			if errors.IsNotFound(err) || errors.IsForbidden(err) {
+				if countOutput%100 == 0 {
+					e2e.Logf("Waiting for service account %q to be available: %v (will retry) ...", name, err)
+				}
 				return false, nil
 			}
-			return false, err
+			return false, fmt.Errorf("failed to get service account %q: %v", name, err)
 		}
+		secretNames := []string{}
+		var hasDockercfg bool
 		for _, s := range sc.Secrets {
 			if strings.Contains(s.Name, "dockercfg") {
-				return true, nil
+				hasDockercfg = true
 			}
+			secretNames = append(secretNames, s.Name)
+		}
+		if hasDockercfg {
+			return true, nil
+		}
+		if countOutput%100 == 0 {
+			e2e.Logf("Waiting for service account %q secrets (%s) to include dockercfg ...", name, strings.Join(secretNames, ","))
 		}
 		return false, nil
 	}
