@@ -319,8 +319,16 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	// author: tagao@redhat.com
 	g.It("ConnectedOnly-Author:tagao-Medium-55696-add telemeter alert TelemeterClientFailures", func() {
+		g.By("check telemetry prometheusrule exists")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "telemetry", "-n", "openshift-monitoring").Output()
+		// Error from server (NotFound): prometheusrules.monitoring.coreos.com "telemetry" not found
+		if strings.Contains(output, `"telemetry" not found`) {
+			e2e.Logf("output: %s", output)
+			g.Skip("this env does not have telemetry prometheusrule, skip the case")
+		}
+
 		g.By("check TelemeterClientFailures alert is added")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "telemetry", "-ojsonpath={.spec.groups}", "-n", "openshift-monitoring").Output()
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "telemetry", "-ojsonpath={.spec.groups}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("TelemeterClientFailures"))
 	})
 
