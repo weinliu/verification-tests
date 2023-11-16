@@ -9,7 +9,6 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
-	"strconv"
 	"strings"
 	"time"
 
@@ -113,14 +112,17 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		rodods.createrunOnceDurationOverride(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "runoncedurationoverride", "-n", kubeNamespace, "-o=jsonpath={.status.numberReady}").Output()
+		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			outputReady, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "runoncedurationoverride", "-n", kubeNamespace, "-o=jsonpath={.status.numberReady}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			outputDesired, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "runoncedurationoverride", "-n", kubeNamespace, "-o=jsonpath={.status.desiredNumberScheduled}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if err != nil {
 				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString(strconv.Itoa(deamonsetPods), output); matched {
-				e2e.Logf("daemonset pods are up:\n%s", output)
+			if outputReady == outputDesired {
+				e2e.Logf("daemonset pods are up:\n%s %s", outputReady, outputDesired)
 				return true, nil
 			}
 			return false, nil
@@ -164,6 +166,9 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Admission label has not been applied correctly")
+
+		// Debug code adding sleep for sometime to determine if the issue is with timing or RODO
+		time.Sleep(30 * time.Second)
 
 		// Create pods with Restart & OnFailure Policy
 		podFileList := []string{podWithRestartPolicy, podWithOnFailurePolicy}
@@ -239,14 +244,17 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		rodods.createrunOnceDurationOverride(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "runoncedurationoverride", "-n", kubeNamespace, "-o=jsonpath={.status.numberReady}").Output()
+		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			outputReady, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "runoncedurationoverride", "-n", kubeNamespace, "-o=jsonpath={.status.numberReady}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			outputDesired, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "runoncedurationoverride", "-n", kubeNamespace, "-o=jsonpath={.status.desiredNumberScheduled}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if err != nil {
 				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString(strconv.Itoa(deamonsetPods), output); matched {
-				e2e.Logf("daemonset pods are up:\n%s", output)
+			if outputReady == outputDesired {
+				e2e.Logf("daemonset pods are up:\n%s %s", outputReady, outputDesired)
 				return true, nil
 			}
 			return false, nil
@@ -286,6 +294,9 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Admission label has not been applied correctly")
+
+		// Debug code adding sleep for sometime to determine if the issue is with timing or RODO
+		time.Sleep(30 * time.Second)
 
 		// Verify that activeDeadLineSeconds value is set as the min value of pod.spec.ActiveDeadLineSeconds & RODO activeDeadLineSeconds
 		createPodADSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", podWithActiveDeadLineSeconds, "-n", oc.Namespace()).Execute()
@@ -340,18 +351,24 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 
 		// Verify ds pods are running fine after patching the runoncedurationoverride operator
 		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "runoncedurationoverride", "-n", kubeNamespace, "-o=jsonpath={.status.updatedNumberScheduled}").Output()
+			outputReady, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "runoncedurationoverride", "-n", kubeNamespace, "-o=jsonpath={.status.numberReady}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			outputDesired, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "runoncedurationoverride", "-n", kubeNamespace, "-o=jsonpath={.status.desiredNumberScheduled}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if err != nil {
 				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString(strconv.Itoa(deamonsetPods), output); matched {
-				e2e.Logf("daemonset pods are up:\n%s", output)
+			if outputReady == outputDesired {
+				e2e.Logf("daemonset pods are up:\n%s %s", outputReady, outputDesired)
 				return true, nil
 			}
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Expected number of daemonset pods are not ready")
+
+		// Debug code adding sleep for sometime to determine if the issue is with timing or RODO
+		time.Sleep(30 * time.Second)
 
 		createPodADSGOErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", podWithAdsGreaterThanOperator, "-n", oc.Namespace()).Execute()
 		o.Expect(createPodADSGOErr).NotTo(o.HaveOccurred())
