@@ -2,19 +2,19 @@ package apiserverauth
 
 import (
 	"fmt"
-	g "github.com/onsi/ginkgo/v2"
-	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/util/wait"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-auth] CFE", func() {
@@ -24,8 +24,6 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
-		// TODO: need update code once https://issues.redhat.com/browse/MULTIARCH-3670 is done.
-		architecture.SkipNonAmd64SingleArch(oc)
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
 		if strings.Contains(output, "NotFound") {
 			g.Skip("Skip since catalogsource/qe-app-registry is not installed")

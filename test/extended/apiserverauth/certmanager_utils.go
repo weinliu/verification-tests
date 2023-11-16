@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"github.com/tidwall/gjson"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -13,12 +12,34 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blang/semver"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"github.com/tidwall/gjson"
+
+	"gopkg.in/yaml.v3"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
+)
+
+type subscription struct {
+	Spec subscriptionSpec `yaml:"spec"`
+}
+
+type subscriptionSpec struct {
+	Channel         string `yaml:"channel"`
+	Name            string `yaml:"name"`
+	Source          string `yaml:"source"`
+	SourceNamespace string `yaml:"sourceNamespace"`
+}
+
+const (
+	// MinMultiArchSupportedVersion is the minimum version to support multi-arch
+	MinMultiArchSupportedVersion = "1.13.0"
 )
 
 // Get the cloud provider type of the test environment
@@ -116,6 +137,22 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	e2e.Logf("err %v, msg %v", err, msg)
 
 	subscriptionFile := filepath.Join(buildPruningBaseDir, "subscription.yaml")
+	f, err := ioutil.ReadFile(subscriptionFile)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var sub subscription
+	err = yaml.Unmarshal(f, &sub)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// skip non-amd64 arch for unsupported version
+	currentVersion, _ := semver.Parse(getCurrentCSVDescVersion(oc, sub.Spec.SourceNamespace, sub.Spec.Source, sub.Spec.Name, sub.Spec.Channel))
+	e2e.Logf("current csv desc version: %s", currentVersion)
+	minVersion, _ := semver.Parse(MinMultiArchSupportedVersion)
+	if currentVersion.Compare(minVersion) == -1 {
+		e2e.Logf("currentVersion(%s) < minVersion(%s), skip non-amd64 arch for unsupported version", currentVersion, minVersion)
+		architecture.SkipNonAmd64SingleArch(oc)
+	}
+
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscriptionFile).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 
@@ -264,4 +301,11 @@ func skipIfRouteUnreachable(oc *exutil.CLI) {
 	} else if !httpReachable && httpsReachable {
 		e2e.Failf("HTTPS reachable but HTTP unreachable. Marking case failed to signal router or installer problem. HTTP response error: %s", httpErr)
 	}
+}
+
+// Get current CSV described version from PackageManifest before creating Subscription
+func getCurrentCSVDescVersion(oc *exutil.CLI, sourceNamespace string, source string, subscriptionName string, channelName string) string {
+	ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sourceNamespace, "-l", "catalog="+source, "--field-selector", "metadata.name="+subscriptionName, "-o=jsonpath={.items[0].status.channels[?(@.name=='"+channelName+"')].currentCSVDesc.version}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return ver
 }
