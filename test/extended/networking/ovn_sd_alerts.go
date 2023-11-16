@@ -130,31 +130,26 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("Author:qiowang-Medium-53999-OVN-K alerts for ovn controller disconnection", func() {
-		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "networking-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
-		o.Expect(NameErr).NotTo(o.HaveOccurred())
-		e2e.Logf("The alertName is %v", alertName)
-		o.Expect(alertName).To(o.ContainSubstring("OVNKubernetesControllerDisconnectedSouthboundDatabase"))
-
-		alertSeverity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "networking-rules", `-o=jsonpath={.spec.groups[*].rules[?(@.alert=="OVNKubernetesControllerDisconnectedSouthboundDatabase")].labels.severity}`).Output()
-		o.Expect(severityErr).NotTo(o.HaveOccurred())
-		e2e.Logf("alertSeverity of OVNKubernetesControllerDisconnectedSouthboundDatabase is %v", alertSeverity)
+		alertSeverity, alertExpr, runBook := getOVNAlertNetworkingRules(oc, "OVNKubernetesControllerDisconnectedSouthboundDatabase")
 		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
+		o.Expect(alertExpr).To(o.ContainSubstring("max_over_time(ovn_controller_southbound_database_connected[5m]) == 0"))
+		o.Expect(runBook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/OVNKubernetesControllerDisconnectedSouthboundDatabase.md"))
 	})
 
 	g.It("Author:qiowang-Medium-60705-Verify alert OVNKubernetesNodeOVSOverflowKernel", func() {
-		alertSeverity, alertExpr := getOVNAlertNetworkingRules(oc, "OVNKubernetesNodeOVSOverflowKernel")
+		alertSeverity, alertExpr, _ := getOVNAlertNetworkingRules(oc, "OVNKubernetesNodeOVSOverflowKernel")
 		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
 		o.Expect(alertExpr).To(o.ContainSubstring("increase(ovs_vswitchd_dp_flows_lookup_lost[5m]) > 0"))
 	})
 
 	g.It("Author:qiowang-Medium-60706-Verify alert OVNKubernetesNodeOVSOverflowUserspace", func() {
-		alertSeverity, alertExpr := getOVNAlertNetworkingRules(oc, "OVNKubernetesNodeOVSOverflowUserspace")
+		alertSeverity, alertExpr, _ := getOVNAlertNetworkingRules(oc, "OVNKubernetesNodeOVSOverflowUserspace")
 		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
 		o.Expect(alertExpr).To(o.ContainSubstring("increase(ovs_vswitchd_netlink_overflow[5m]) > 0"))
 	})
 
 	g.It("Author:qiowang-Medium-60709-Verify alert OVNKubernetesResourceRetryFailure", func() {
-		alertSeverity, alertExpr := getOVNAlertNetworkingRules(oc, "OVNKubernetesResourceRetryFailure")
+		alertSeverity, alertExpr, _ := getOVNAlertNetworkingRules(oc, "OVNKubernetesResourceRetryFailure")
 		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
 		o.Expect(alertExpr).To(o.ContainSubstring("increase(ovnkube_resource_retry_failures_total[10m]) > 0"))
 	})
