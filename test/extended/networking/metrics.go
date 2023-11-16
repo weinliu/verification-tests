@@ -500,7 +500,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
-	g.It("NonPreRelease-Longduration-Author:qiowang-Medium-53969-Verify OVN controller SB DB connection status metric works [Disruptive] [Slow]", func() {
+	g.It("Author:qiowang-Medium-53969-Verify OVN controller SB DB connection status metric works [Disruptive]", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
@@ -510,31 +510,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			namespace  = "openshift-ovn-kubernetes"
 			metricName = "ovn_controller_southbound_database_connected"
 		)
-		ipStackType := checkIPStackType(oc)
-		var iptablesCmdList []string
-		if ipStackType == "dualstack" {
-			iptablesCmdList = []string{"iptables", "ip6tables"}
-		} else if ipStackType == "ipv6single" {
-			iptablesCmdList = []string{"ip6tables"}
-		} else {
-			iptablesCmdList = []string{"iptables"}
-		}
 		nodes, getNodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o", "jsonpath='{.items[*].metadata.name}'").Output()
 		nodeName := strings.Split(strings.Trim(nodes, "'"), " ")[0]
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		podName, getPodNameErr := exutil.GetPodName(oc, namespace, "app=ovnkube-node", nodeName)
 		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
 		o.Expect(podName).NotTo(o.BeEmpty())
-		// check if the cluster is hypershift hosted cluster
-		// if yes, will drop tcp packets with dport 443 to disconnected to SB DB
-		var dport string
-		podDesc, descPoderr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", namespace, "pod", podName).Output()
-		o.Expect(descPoderr).NotTo(o.HaveOccurred())
-		if strings.Contains(podDesc, "ovnkube-sbdb-clusters-hypershift-ci") {
-			dport = "443"
-		} else {
-			dport = "9642"
-		}
 
 		exutil.By("1. Restart pod " + podName + " in " + namespace + " to make the pod logs clear")
 		delPodErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podName, "-n", namespace, "--ignore-not-found=true").Execute()
@@ -557,16 +538,25 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		})
 		exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
 
-		exutil.By("3. Configure iptables to block connection from the worker node ovn controller to SB DB")
-		for _, iptablesCmd := range iptablesCmdList {
-			_, cfgErr := exutil.DebugNodeWithChroot(oc, nodeName, iptablesCmd, "-A", "OUTPUT", "-p", "tcp", "--dport", dport, "-j", "DROP")
-			defer exutil.DebugNodeWithChroot(oc, nodeName, iptablesCmd, "-D", "OUTPUT", "-p", "tcp", "--dport", dport, "-j", "DROP")
-			o.Expect(cfgErr).NotTo(o.HaveOccurred())
-		}
+		exutil.By("3. remove ovnsb_db.sock and restart ovn controller process to disconnect socket from ovn controller to SB DB")
+		defer func() {
+			deferErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podName, "-n", namespace, "--ignore-not-found=true").Execute()
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			podName, getPodNameErr = exutil.GetPodName(oc, namespace, "app=ovnkube-node", nodeName)
+			o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
+			o.Expect(podName).NotTo(o.BeEmpty())
+			waitPodReady(oc, namespace, podName)
+		}()
+		_, rmErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "ovn-controller", podName, "--", "rm", "-f", "/var/run/ovn/ovnsb_db.sock").Output()
+		o.Expect(rmErr).NotTo(o.HaveOccurred())
+		getPid, getErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "ovn-controller", podName, "--", "cat", "/var/run/ovn/ovn-controller.pid").Output()
+		o.Expect(getErr).NotTo(o.HaveOccurred())
+		pid := strings.Split(getPid, "\n")[0]
+		_, killErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "ovn-controller", podName, "--", "kill", "-9", pid).Output()
+		o.Expect(killErr).NotTo(o.HaveOccurred())
 
 		exutil.By("4. Waiting for ovn controller disconnected to SB DB")
-		logs, getLogErr := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "ovn-controller", podName, "\"connection dropped\"")
-		e2e.Logf("The log is : %s", logs)
+		_, getLogErr := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "ovn-controller", podName, "\"/var/run/ovn/ovnsb_db.sock: continuing to reconnect in the background\"")
 		o.Expect(getLogErr).NotTo(o.HaveOccurred())
 
 		exutil.By("5. Get the metrics of " + metricName + " when ovn controller disconnected to SB DB")
