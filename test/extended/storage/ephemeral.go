@@ -362,9 +362,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			return msg
 		}, 180*time.Second, 10*time.Second).Should(o.ContainSubstring("Pod ephemeral local storage usage exceeds the total limit of containers " + strconv.FormatInt(podEphemeralStorageTotalLimits, 10) + "Gi."))
 		// ResourceQuota usage should update after pod is evicted by kubelet
-		o.Eventually(ephemeralStorageResourceQuota.GetValueByJSONPath(oc, `{.status.used.requests\.ephemeral-storage}`),
+		o.Eventually(ephemeralStorageResourceQuota.PollGetValueByJSONPath(oc, `{.status.used.requests\.ephemeral-storage}`),
 			180*time.Second, 10*time.Second).Should(o.Equal("0"))
-		o.Eventually(ephemeralStorageResourceQuota.GetValueByJSONPath(oc, `{.status.used.limits\.ephemeral-storage}`),
+		o.Eventually(ephemeralStorageResourceQuota.PollGetValueByJSONPath(oc, `{.status.used.limits\.ephemeral-storage}`),
 			180*time.Second, 10*time.Second).Should(o.Equal("0"))
 	})
 

@@ -68,6 +68,13 @@ func (rq *ResourceQuota) GetValueByJSONPath(oc *exutil.CLI, jsonPath string) str
 	return output
 }
 
+// PollGetValueByJSONPath gets the specified JSONPath value of the ResourceQuota satisfy the Eventually check
+func (rq *ResourceQuota) PollGetValueByJSONPath(oc *exutil.CLI, jsonPath string) func() string {
+	return func() string {
+		return rq.GetValueByJSONPath(oc, jsonPath)
+	}
+}
+
 // PriorityClass struct definition
 type PriorityClass struct {
 	name        string
