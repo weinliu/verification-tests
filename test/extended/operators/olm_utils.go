@@ -1156,16 +1156,6 @@ func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, pres
 
 }
 
-// the method is to check the presence of the resource with longer.
-// asAdmin means if taking admin to check it
-// withoutNamespace means if take WithoutNamespace() to check it.
-// present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
-func isPresentResourceLonger(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, present bool, parameters ...string) bool {
-
-	return checkPresent(oc, 4, 200, asAdmin, withoutNamespace, present, parameters...)
-
-}
-
 // the method is basic method to check the presence of the resource
 // asAdmin means if taking admin to check it
 // withoutNamespace means if take WithoutNamespace() to check it.

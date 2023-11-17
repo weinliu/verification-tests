@@ -165,9 +165,9 @@ func (bd *bundleDeploymentDescription) assertChildResourceRemoved(oc *exutil.CLI
 	for _, child := range childResources {
 		for _, name := range child.names {
 			if child.ns == "" {
-				o.Expect(isPresentResourceLonger(oc, asAdmin, withoutNamespace, notPresent, child.kind, name)).To(o.BeTrue())
+				o.Expect(checkPresent(oc, 4, 200, asAdmin, withoutNamespace, notPresent, child.kind, name)).To(o.BeTrue())
 			} else {
-				o.Expect(isPresentResourceLonger(oc, asAdmin, withNamespace, notPresent, child.kind, name, "-n", child.ns)).To(o.BeTrue())
+				o.Expect(checkPresent(oc, 4, 200, asAdmin, withoutNamespace, notPresent, child.kind, name, "-n", child.ns)).To(o.BeTrue())
 			}
 		}
 	}

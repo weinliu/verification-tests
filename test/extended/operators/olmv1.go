@@ -21,7 +21,6 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68903-BundleDeployment Health resource unhealthy pod api crd ds", func() {
-		exutil.SkipForSNOCluster(oc)
 
 		var (
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
@@ -89,7 +88,6 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68936-BundleDeployment Health resource healthy and install fail", func() {
-		exutil.SkipForSNOCluster(oc)
 
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -161,7 +159,6 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68937-BundleDeployment Health resource unhealthy ss rs unspport", func() {
-		exutil.SkipForSNOCluster(oc)
 
 		var (
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
