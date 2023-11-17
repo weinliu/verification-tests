@@ -1,13 +1,17 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/tidwall/gjson"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -125,6 +129,19 @@ func SkipNoCapabilities(oc *CLI, capability string) {
 // so, the OLM case and optioinal operator case can not run on such cluster.
 func SkipNoOLMCore(oc *CLI) {
 	SkipNoCapabilities(oc, "OperatorLifecycleManager")
+}
+
+// IsTechPreviewNoUpgrade checks if a cluster is a TechPreviewNoUpgrade cluster
+func IsTechPreviewNoUpgrade(oc *CLI) bool {
+	featureGate, err := oc.AdminConfigClient().ConfigV1().FeatureGates().Get(context.Background(), "cluster", metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false
+		}
+		o.Expect(err).NotTo(o.HaveOccurred(), "could not retrieve feature-gate: %v", err)
+	}
+
+	return featureGate.Spec.FeatureSet == configv1.TechPreviewNoUpgrade
 }
 
 // GetAWSClusterRegion returns AWS region of the cluster

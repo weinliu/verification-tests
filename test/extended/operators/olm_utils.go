@@ -1151,8 +1151,28 @@ func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 // withoutNamespace means if take WithoutNamespace() to check it.
 // present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
 func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, present bool, parameters ...string) bool {
+
+	return checkPresent(oc, 3, 70, asAdmin, withoutNamespace, present, parameters...)
+
+}
+
+// the method is to check the presence of the resource with longer.
+// asAdmin means if taking admin to check it
+// withoutNamespace means if take WithoutNamespace() to check it.
+// present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
+func isPresentResourceLonger(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, present bool, parameters ...string) bool {
+
+	return checkPresent(oc, 4, 200, asAdmin, withoutNamespace, present, parameters...)
+
+}
+
+// the method is basic method to check the presence of the resource
+// asAdmin means if taking admin to check it
+// withoutNamespace means if take WithoutNamespace() to check it.
+// present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
+func checkPresent(oc *exutil.CLI, intervalSec int, durationSec int, asAdmin bool, withoutNamespace bool, present bool, parameters ...string) bool {
 	parameters = append(parameters, "--ignore-not-found")
-	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 70*time.Second, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), time.Duration(intervalSec)*time.Second, time.Duration(durationSec)*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("the get error is %v, and try next", err)
@@ -1166,10 +1186,7 @@ func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, pres
 		}
 		return false, nil
 	})
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // the method is to patch one resource
@@ -1311,7 +1328,7 @@ func removeResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, paramet
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 4*time.Second, 160*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil && (strings.Contains(output, "NotFound") || strings.Contains(output, "No resources found")) {
 			e2e.Logf("the resource is delete successfully")
