@@ -23,7 +23,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 	var (
 		oc                = exutil.NewCLI("kata", exutil.KubeConfigPath())
-		opNamespace       = "openshift-sandboxed-containers-operator"
 		testDataDir       = exutil.FixturePath("testdata", "kata")
 		kcTemplate        = filepath.Join(testDataDir, "kataconfig.yaml")
 		defaultDeployment = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
@@ -31,7 +30,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		subTemplate       = filepath.Join(testDataDir, "subscription_template.yaml")
 		nsFile            = filepath.Join(testDataDir, "namespace.yaml")
 		ogFile            = filepath.Join(testDataDir, "operatorgroup.yaml")
-		mustGatherImage   = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
 		icspName          = "kata-brew-registry"
 		icspFile          = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
 		testrunInitial    TestrunConfigmap
@@ -39,13 +37,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		clusterVersion    string
 		ocpMajorVer       string
 		ocpMinorVer       string
-		operatorVer       = "1.3.0"
 		workload          = "have securityContext"
-		podRunState       = "Running"
-		featureLabel      = "feature.node.kubernetes.io/runtime.kata=true"
-		workerLabel       = "node-role.kubernetes.io/worker"
-		kataocLabel       = "node-role.kubernetes.io/kata-oc"
-		customLabel       = "custom-label=test"
 		testrunExists     = false
 		ppParam           PeerpodParam
 		ppRuntimeClass    = "kata-remote"
@@ -84,7 +76,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		channel:            subscription.channel,
 		icspNeeded:         false,
 		mustgatherImage:    mustGatherImage,
-		eligibility:        false,
+		eligibility:        kataconfig.eligibility,
 		labelSingleNode:    false,
 		eligibleSingleNode: false,
 		runtimeClassName:   kataconfig.runtimeClassName,
@@ -119,57 +111,29 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		g.By(fmt.Sprintf("The current platform is %v. OCP %v.%v: %v\n Workloads %v", cloudPlatform, ocpMajorVer, ocpMinorVer, clusterVersion, workload))
 
 		// check if there is a CM override
-		testrunInitial, _, _ = getTestRunConfigmap(oc, testrunDefault, "default", "osc-config")
-		if testrunInitial.exists { // then override
+		testrunInitial, _ = getTestRunConfigmap(oc, testrunDefault, "default", "osc-config")
+		if testrunInitial.exists { // then override, testrunInitial got the defaults anyway
 			testrunExists = true
-			subscription.catalogSourceName = testrunInitial.catalogSourceName
-			subscription.channel = testrunInitial.channel
-			mustGatherImage = testrunInitial.mustgatherImage
-			operatorVer = testrunInitial.operatorVer
-			kataconfig.eligibility = testrunInitial.eligibility
-			kataconfig.runtimeClassName = testrunInitial.runtimeClassName
-			kataconfig.enablePeerPods = testrunInitial.enablePeerPods
-			e2e.Logf("cm osc-config found: %v", testrunInitial)
-			testrunDefault = testrunInitial // incorporate any changes into default
 		}
 
 		// check if there are environment variable overrides
-		testrun, _ = getTestRunEnvVars("OSCS", testrunDefault)
+		testrun, _ = getTestRunEnvVars("OSCS", testrunInitial)
 		// change subscription to match testrun.  env options override default and CM values
 		if testrun.exists {
 			testrunExists = true
 			testrunInitial = testrun
-			subscription.catalogSourceName = testrunInitial.catalogSourceName
-			subscription.channel = testrunInitial.channel
-			operatorVer = testrunInitial.operatorVer
-			mustGatherImage = testrunInitial.mustgatherImage
-			kataconfig.eligibility = testrunInitial.eligibility
-			kataconfig.runtimeClassName = testrunInitial.runtimeClassName
-			kataconfig.enablePeerPods = testrunInitial.enablePeerPods
 			e2e.Logf("environment OSCS found: %v", testrunInitial)
 		}
+		//override defaults if there were:
+		subscription.catalogSourceName = testrunInitial.catalogSourceName
+		subscription.channel = testrunInitial.channel
+		kataconfig.eligibility = testrunInitial.eligibility
+		kataconfig.runtimeClassName = testrunInitial.runtimeClassName
+		kataconfig.enablePeerPods = testrunInitial.enablePeerPods
 
-		// ensure ns is installed and install if not
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", subscription.namespace, "--no-headers").Output()
-		if err != nil || strings.Contains(msg, "Error from server (NotFound)") {
-			msg, err = oc.AsAdmin().Run("apply").Args("-f", nsFile).Output()
-			if err != nil {
-				e2e.Logf("namespace issue %v %v", msg, err)
-			} else {
-				g.By("(0.1) Created namespace " + msg)
-			}
-		}
+		ensureNamespaceIsInstalled(oc, subscription, nsFile)
 
-		// ensure og is installed and install if not
-		msg, err = oc.AsAdmin().Run("get").Args("og", "-n", subscription.namespace, "--no-headers").Output()
-		if err != nil || strings.Contains(msg, "No resources found in") {
-			msg, err = oc.AsAdmin().Run("apply").Args("-f", ogFile, "-n", subscription.namespace).Output()
-			if err != nil {
-				e2e.Logf("og issue %v %v", msg, err)
-			} else {
-				g.By("(0.2) Created operatorgroup " + msg)
-			}
-		}
+		ensureOperatorGroupIsInstalled(oc, subscription, ogFile)
 
 		// We need the testrun values from the CM or env further down even if OSC is already installed
 		if checkKataInstalled(oc, subscription, kataconfig.name) {
@@ -181,7 +145,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		if testrunInitial.icspNeeded {
 			e2e.Logf("An ICSP is being applied to allow %v to work", testrunInitial.mustgatherImage)
-			msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
+			msg, err = applyImageContentSourcePolicy(oc, icspFile, icspName)
 			if err != nil || msg == "" {
 				logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP %v", icspName), msg, err)
 			}
@@ -191,29 +155,10 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
 		if kataconfig.eligibility {
-			e2e.Logf("Label worker nodes for eligibility feature")
-			if testrunInitial.eligibleSingleNode {
-				node, err := exutil.GetFirstWorkerNode(oc)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				LabelNode(oc, node, featureLabel)
-			} else {
-				labelSelectedNodes(oc, workerLabel, featureLabel)
-			}
+			labelEligibleNodes(oc, testrunInitial)
 		}
 
-		e2e.Logf("check and label nodes (or single node for custom label)")
-		nodeCustomList := exutil.GetNodeListByLabel(oc, customLabel)
-		if len(nodeCustomList) > 0 {
-			e2e.Logf("labeled nodes found %v", nodeCustomList)
-		} else {
-			if testrunInitial.labelSingleNode {
-				node, err := exutil.GetFirstWorkerNode(oc)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				LabelNode(oc, node, customLabel)
-			} else {
-				labelSelectedNodes(oc, workerLabel, customLabel)
-			}
-		}
+		checkAndLabelCustomNodes(oc, testrunInitial)
 
 		//create peer pods secret and peer pods cm
 		if kataconfig.enablePeerPods {
@@ -905,8 +850,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		g.By("run must-gather")
 		defer os.RemoveAll(mustgatherDir)
-		logFile, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", subscription.namespace, "must-gather", "--image="+mustGatherImage, "--dest-dir="+mustgatherDir).OutputToFile(mustgatherLog)
-		e2e.Logf("created mustgather from image %v in %v logged to %v,%v %v", mustGatherImage, mustgatherDir, mustgatherLog, logFile, err)
+		logFile, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", subscription.namespace, "must-gather", "--image="+testrunInitial.mustgatherImage, "--dest-dir="+mustgatherDir).OutputToFile(mustgatherLog)
+		e2e.Logf("created mustgather from image %v in %v logged to %v,%v %v", testrunInitial.mustgatherImage, mustgatherDir, mustgatherLog, logFile, err)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("look in " + mustgatherDir)
@@ -1085,7 +1030,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		// start with testrunInitial, not testrunDefault
 		g.By("Checking for configmap " + cmName)
-		testrunUpgrade, _, err = getTestRunConfigmap(oc, testrunInitial, cmNs, cmName)
+		testrunUpgrade, err = getTestRunConfigmap(oc, testrunInitial, cmNs, cmName)
 
 		g.By("Checking for OSCU environment vars") // env options override default and CM values
 		testrun, msg = getTestRunEnvVars("OSCU", testrunInitial)
@@ -1102,7 +1047,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				msg = fmt.Sprintf("Installing ImageContentSourcePolicy to allow %v to work", testrunUpgrade.mustgatherImage)
 				g.By(msg)
 				// apply icsp.  Do not delete or pods can get ImagePullBackoff
-				msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
+				msg, err = applyImageContentSourcePolicy(oc, icspFile, icspName)
 				if err != nil || msg == "" {
 					logErrorAndFail(oc, "Error: applying ICSP", msg, err)
 				}

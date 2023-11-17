@@ -81,10 +81,43 @@ type PeerpodParam struct {
 }
 
 var (
-	snooze     time.Duration = 2400
-	kataSnooze time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
-	podSnooze  time.Duration = 600  // Peer Pods take longer than 2 minutes
+	snooze          time.Duration = 2400
+	kataSnooze      time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
+	podSnooze       time.Duration = 600  // Peer Pods take longer than 2 minutes
+	operatorVer                   = "1.3.0"
+	opNamespace                   = "openshift-sandboxed-containers-operator"
+	mustGatherImage               = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
+	podRunState                   = "Running"
+	featureLabel                  = "feature.node.kubernetes.io/runtime.kata=true"
+	workerLabel                   = "node-role.kubernetes.io/worker"
+	kataocLabel                   = "node-role.kubernetes.io/kata-oc"
+	customLabel                   = "custom-label=test"
 )
+
+func ensureNamespaceIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, nsFile string) {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", sub.namespace, "--no-headers").Output()
+	if err != nil || strings.Contains(msg, "Error from server (NotFound)") {
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", nsFile).Output()
+		if err != nil {
+			e2e.Logf("namespace issue %v %v", msg, err)
+		} else {
+			g.By("(0.1) Created namespace " + msg)
+		}
+	}
+}
+
+func ensureOperatorGroupIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, ogFile string) {
+	msg, err := oc.AsAdmin().Run("get").Args("og", "-n", sub.namespace, "--no-headers").Output()
+	if err != nil || strings.Contains(msg, "No resources found in") {
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", ogFile, "-n", sub.namespace).Output()
+		if err != nil {
+			e2e.Logf("og issue %v %v", msg, err)
+		} else {
+			g.By("(0.2) Created operatorgroup " + msg)
+		}
+	}
+
+}
 
 // author: tbuskey@redhat.com,abhbaner@redhat.com
 func subscribeFromTemplate(oc *exutil.CLI, sub SubscriptionDescription, subTemplate string) (msg string, err error) {
@@ -383,7 +416,7 @@ func waitForNodesInDebug(oc *exutil.CLI, opNamespace string) (msg string, err er
 }
 
 // author: tbuskey@redhat.com
-func imageContentSourcePolicy(oc *exutil.CLI, icspFile, icspName string) (msg string, err error) {
+func applyImageContentSourcePolicy(oc *exutil.CLI, icspFile, icspName string) (msg string, err error) {
 	g.By("Applying ImageContentSourcePolicy")
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", icspFile).Output()
 	if err != nil {
@@ -427,22 +460,22 @@ func deleteDeployment(oc *exutil.CLI, deployNs, deployName string) bool {
 	return deleteKataResource(oc, "deploy", deployNs, deployName)
 }
 
-func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, cmName string) (testrun TestrunConfigmap, msg string, err error) {
+func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, cmName string) (testrun TestrunConfigmap, err error) {
 	// set defaults
 	testrun = testrunDefault
 	testrun.exists = false
 
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
 	if err != nil {
 		e2e.Logf("Configmap is not found: msg %v err: %v", msg, err)
 	} else {
 		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName, "-o", "jsonpath={.data}").Output()
 		if err != nil {
 			e2e.Failf("Configmap %v has error, no .data: %v %v", cmName, configmapData, err)
-			return testrun, msg, err
+			return testrun, err
 		}
 		testrun.exists = true
-		e2e.Logf("configmap Data is:\n%v", configmapData)
+		e2e.Logf("configmap file %v found. Data is:\n%v", cmName, configmapData)
 		if gjson.Get(configmapData, "catalogsourcename").Exists() {
 			testrun.catalogSourceName = gjson.Get(configmapData, "catalogsourcename").String()
 		}
@@ -486,7 +519,7 @@ func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, 
 			testrun.enablePeerPods = gjson.Get(configmapData, "enablePeerPods").Bool()
 		}
 	}
-	return testrun, msg, err
+	return testrun, err
 }
 
 func getClusterVersion(oc *exutil.CLI) (clusterVersion, ocpMajorVer, ocpMinorVer string) {
@@ -619,7 +652,7 @@ func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testr
 
 	val = os.Getenv(envPrefix + "ELIGIBILITY")
 	if val != "" {
-		testrunEnv.eligibility, err = strconv.ParseBool(msg)
+		testrunEnv.eligibility, err = strconv.ParseBool(val)
 		if err != nil {
 			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ELIGIBILITY")
 		}
@@ -628,7 +661,7 @@ func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testr
 
 	val = os.Getenv(envPrefix + "ELIGIBLESINGLENODE")
 	if val != "" {
-		testrunEnv.eligibleSingleNode, err = strconv.ParseBool(msg)
+		testrunEnv.eligibleSingleNode, err = strconv.ParseBool(val)
 		if err != nil {
 			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ELIGIBLESINGLENODE")
 		}
@@ -637,7 +670,7 @@ func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testr
 
 	val = os.Getenv(envPrefix + "LABELSINGLENODE")
 	if val != "" {
-		testrunEnv.labelSingleNode, err = strconv.ParseBool(msg)
+		testrunEnv.labelSingleNode, err = strconv.ParseBool(val)
 		if err != nil {
 			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"LABELSINGLENODE")
 		}
@@ -645,6 +678,34 @@ func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testr
 	}
 
 	return testrunEnv, msg
+}
+
+func checkAndLabelCustomNodes(oc *exutil.CLI, testrun TestrunConfigmap) {
+	e2e.Logf("check and label nodes (or single node for custom label)")
+	nodeCustomList := exutil.GetNodeListByLabel(oc, customLabel)
+	if len(nodeCustomList) > 0 {
+		e2e.Logf("labeled nodes found %v", nodeCustomList)
+	} else {
+		if testrun.labelSingleNode {
+			node, err := exutil.GetFirstWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			LabelNode(oc, node, customLabel)
+		} else {
+			labelSelectedNodes(oc, workerLabel, customLabel)
+		}
+	}
+
+}
+
+func labelEligibleNodes(oc *exutil.CLI, testrun TestrunConfigmap) {
+	e2e.Logf("Label worker nodes for eligibility feature")
+	if testrun.eligibleSingleNode {
+		node, err := exutil.GetFirstWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		LabelNode(oc, node, featureLabel)
+	} else {
+		labelSelectedNodes(oc, workerLabel, featureLabel)
+	}
 }
 
 func labelSelectedNodes(oc *exutil.CLI, selectorLabel, customLabel string) {
