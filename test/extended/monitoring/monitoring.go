@@ -548,6 +548,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Low-68958-node_exporter shouldn't collect metrics for Calico Virtual NICs", func() {
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("should not see metrics for Calico Virtual NICs")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_network_info{device=~"cali.*"}'`, token, "\"result\":[]", uwmLoadTime)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
