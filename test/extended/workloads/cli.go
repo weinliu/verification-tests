@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"io/ioutil"
+	"net/http"
 
 	"os"
 	"os/exec"
@@ -1882,6 +1883,83 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(strings.Contains(output, "svc/database")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "  rc/rcmatchse runs")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "    rc/rcmatchse created")).To(o.BeTrue())
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-11202-Use oc explain to see detailed documentation of resources", func() {
+		g.By("Check if baremetal cluster")
+		iaasPlatform := exutil.CheckPlatform(oc)
+		if iaasPlatform == "baremetal" {
+			e2e.Logf("Cluster is: %s", iaasPlatform)
+			g.Skip("For baremetal cluster , this is something wrong for proxy setting, so skip it for temp!")
+		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "nutanix", "ibmcloud", "alicloud")
+		out, err := oc.Run("explain").Args("po").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "Pod is a collection of containers")).To(o.BeTrue())
+		out, err = oc.Run("explain").Args("pods.spec.containers").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "securityContext")).To(o.BeTrue())
+		err = oc.Run("explain").Args("rc.spec.selector").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("explain").Args("none-exist").Execute()
+		o.Expect(err).Should(o.HaveOccurred())
+		err = oc.Run("explain").Args("rc,no").Execute()
+		o.Expect(err).Should(o.HaveOccurred())
+		out, err = oc.Run("explain").Args("dc.apiVersion").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		contextOutList := strings.Fields(strings.ReplaceAll(out, "\n\n", "\n"))
+		docResource := contextOutList[len(contextOutList)-1]
+		e2e.Logf("The detailed documentation resource url is %v", docResource)
+		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			resp, err := http.Get(docResource)
+			if err != nil {
+				e2e.Logf("Err Occurred: %v, try next time", err)
+				return false, nil
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 || resp.StatusCode == 302 {
+				e2e.Logf("Could get the detailed documentation of resources url")
+				return true, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Failed to get assert the detailed document resource url")
+	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-21115-Use kubelet explain to see detailed documentation of resources", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "nutanix", "ibmcloud", "alicloud")
+		out, err := oc.WithKubectl().Run("explain").Args("po").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "Pod is a collection of containers")).To(o.BeTrue())
+		out, err = oc.WithKubectl().Run("explain").Args("pods.spec.containers").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(out, "securityContext")).To(o.BeTrue())
+		err = oc.WithKubectl().Run("explain").Args("rc.spec.selector").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithKubectl().Run("explain").Args("none-exist").Execute()
+		o.Expect(err).Should(o.HaveOccurred())
+		err = oc.WithKubectl().Run("explain").Args("rc,no").Execute()
+		o.Expect(err).Should(o.HaveOccurred())
+		out, err = oc.WithKubectl().Run("explain").Args("dc.apiVersion").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		contextOutList := strings.Fields(strings.ReplaceAll(out, "\n\n", "\n"))
+		docResource := contextOutList[len(contextOutList)-1]
+		e2e.Logf("The detailed documentation resource url is %v", docResource)
+		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			resp, err := http.Get(docResource)
+			if err != nil {
+				e2e.Logf("Err Occurred: %v, try next time", err)
+				return false, nil
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 || resp.StatusCode == 302 {
+				e2e.Logf("Could get the detailed documentation of resources url")
+				return true, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Failed to get assert the detailed document resource url")
 	})
 })
 
