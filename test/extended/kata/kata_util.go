@@ -84,7 +84,7 @@ var (
 	snooze          time.Duration = 2400
 	kataSnooze      time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
 	podSnooze       time.Duration = 600  // Peer Pods take longer than 2 minutes
-	operatorVer                   = "1.3.0"
+	defaultOpVer                  = "1.3.0"
 	opNamespace                   = "openshift-sandboxed-containers-operator"
 	mustGatherImage               = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
 	podRunState                   = "Running"

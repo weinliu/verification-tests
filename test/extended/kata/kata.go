@@ -71,7 +71,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	// if you change this, modify both getTestRunConfigmap() and getTestRunEnvVars()
 	testrunDefault := TestrunConfigmap{
 		exists:             false,
-		operatorVer:        operatorVer,
+		operatorVer:        defaultOpVer,
 		catalogSourceName:  subscription.catalogSourceName,
 		channel:            subscription.channel,
 		icspNeeded:         false,
@@ -252,9 +252,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(csvVersion).NotTo(o.BeEmpty())
-		cleanVer := strings.Split(operatorVer, "-")
+		cleanVer := strings.Split(testrunInitial.operatorVer, "-")
 		if csvVersion != cleanVer[0] {
-			e2e.Logf("Error: expecting %v but CSV has %v", operatorVer, csvVersion)
+			e2e.Logf("Error: expecting %v but CSV has %v", testrunInitial.operatorVer, csvVersion)
 		}
 		o.Expect(csvVersion).To(o.Equal(cleanVer[0]))
 
