@@ -1577,7 +1577,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-54406-Medium-54407-Medium-11564-oc rsh should work behind authenticated proxy [Serial]", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-54406-Medium-54407-Medium-11564-oc rsh should work behind authenticated proxy [Serial][Flaky]", func() {
 		g.By("Create new namespace")
 		oc.SetupProject()
 		ns54406 := oc.Namespace()
