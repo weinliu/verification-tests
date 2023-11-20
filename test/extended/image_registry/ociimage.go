@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 
 		g.By("Tag the image to internal registry")
 		oc.SetupProject()
-		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("--source=docker", ociImage, "35998-image:latest", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("--import-mode=PreserveOriginal", "--source=docker", ociImage, "35998-image:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check if new imagestreamtag created")
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "35998-image", "latest")
