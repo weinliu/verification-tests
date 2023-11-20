@@ -40,7 +40,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.BeforeEach(func() {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		iaasPlatform = strings.ToLower(output)
-		zone, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 		var err error
 		privateKey, err = exutil.GetPrivateKey()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -259,7 +258,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-42047"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-
+		zone := getAvailabilityZone(oc)
 		machinesetName := getWindowsMachineSetName(oc, "winc", iaasPlatform, zone)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
 
@@ -302,6 +301,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 		// we assume 2 Windows Nodes created with the default server 2019 image, here we create new server
 		namespace := "winc-37096"
+		zone := getAvailabilityZone(oc)
 		machinesetName := getWindowsMachineSetName(oc, "winsecond", iaasPlatform, zone)
 		machinesetMultiOSFileName := iaasPlatform + "_windows_machineset.yaml"
 		err := configureMachineset(oc, iaasPlatform, "winsecond", machinesetMultiOSFileName, getConfigMapData(oc, "secondary_windows_image"))
@@ -340,6 +340,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42496-byoh-Configure Windows instance with DNS [Slow] [Disruptive]", func() {
+		zone := getAvailabilityZone(oc)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
 		defer deleteResource(oc, "configmap", "windows-instances", wmcoNamespace, "--ignore-not-found")
 		defer deleteResource(oc, exutil.MapiMachineset, byohMachineSetName, mcoNamespace)
@@ -371,6 +372,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42484-byoh-Configure Windows instance with IP [Slow][Disruptive]", func() {
 		namespace := "winc-42484"
+		zone := getAvailabilityZone(oc)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
 		defer waitWindowsNodesReady(oc, 2, 15*time.Minute)
 		defer deleteResource(oc, exutil.MapiMachineset, byohMachineSetName, mcoNamespace)
@@ -402,6 +404,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42516-byoh-Configure a Windows instance with both IP and DNS [Slow][Disruptive]", func() {
 		namespace := "winc-42516"
+		zone := getAvailabilityZone(oc)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
 		defer waitWindowsNodesReady(oc, 2, 15*time.Minute)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
@@ -476,6 +479,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		g.By("Scale up the MachineSet")
 		e2e.Logf("Scalling up the Windows node to 3")
+		zone := getAvailabilityZone(oc)
 		windowsMachineSetName := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
 		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
 		scaleWindowsMachineSet(oc, windowsMachineSetName, 15, 3, false)
@@ -735,6 +739,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 
 		g.By("Creating Windows machineset with 1")
+		zone := getAvailabilityZone(oc)
 		machinesetName := getWindowsMachineSetName(oc, "winc", iaasPlatform, zone)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
 		setMachineset(oc, iaasPlatform, getConfigMapData(oc, "primary_windows_image"))
@@ -823,6 +828,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
 
 		g.By("Scale up the MachineSet")
+		zone := getAvailabilityZone(oc)
 		windowsMachineSetName := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
 		defer waitWindowsNodesReady(oc, 2, time.Second*1000)
 		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
@@ -975,6 +981,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author: rrasouli@redhat.com refactored:v1
 	g.It("Smokerun-Author:rrasouli-Critical-48873-Add description OpenShift managed to Openshift services", func() {
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+		zone := getAvailabilityZone(oc)
 		// use config map to fetch the actual Windows version
 		machineset := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
 		address := fetchAddress(oc, "InternalIP", machineset)
@@ -1039,6 +1046,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 		g.By("Scale down nodes")
 		defer waitWindowsNodesReady(oc, 2, time.Second*3000)
+		zone := getAvailabilityZone(oc)
 		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 20, 2, false)
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 5, 0, false)
 		g.By("Test endpoints IP are deleted after scalling down")
@@ -1255,6 +1263,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		g.By("Scalling machines to 3")
 		defer waitWindowsNodesReady(oc, 2, time.Second*1000)
+		zone := getAvailabilityZone(oc)
 		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 18, 2, false)
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 18, 3, false)
 		// Wait for the added node to be in Ready state, otherwise workloads won't get
@@ -1381,6 +1390,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 		g.By("Scalling down the machineset to 1")
 		// defer
+		zone := getAvailabilityZone(oc)
 		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 45, 2, false)
 		defer waitWindowsNodesReady(oc, 2, 3000*time.Second)
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 18, 1, false)
@@ -1419,6 +1429,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author rrasouli@redhat.com
 	g.It("Longduration-Author:rrasouli-NonPreRelease-Medium-44099-Secure Windows workers username annotation [Disruptive]", func() {
 		g.By(" Creating new BYOH node ")
+		zone := getAvailabilityZone(oc)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
 
 		defer waitWindowsNodesReady(oc, 2, 3000*time.Second)
@@ -1494,6 +1505,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Longduration-Author:jfrancoa-NonPreRelease-Medium-37086-Install wmco in a namespace other than recommended [Disruptive]", func() {
 
 		customNamespace := "winc-namespace-test"
+		zone := getAvailabilityZone(oc)
 
 		g.By("Scalling down the machineset to 0")
 		defer waitWindowsNodesReady(oc, 2, 3000*time.Second)

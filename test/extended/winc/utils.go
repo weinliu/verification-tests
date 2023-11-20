@@ -41,7 +41,6 @@ var (
 	wicdConfigMap      = "windows-services"
 	iaasPlatform       string
 	trustedCACM        = "trusted-ca"
-	zone               string
 	nutanix_proxy_host = "10.0.77.69"
 	vsphere_bastion    = "10.0.76.163"
 	// Bastion user used for Nutanix and vSphere IBMC
@@ -179,7 +178,7 @@ func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, 
 	// Using SHARED_DIR env var to know if the test runs on Prow or Jenkins
 	val, prow := os.LookupEnv("SHARED_DIR")
 	if prow && val != "" {
-		machineSets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets", "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.name}").Output()
+		machineSets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets", "-n", mcoNamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, ms := range strings.Split(machineSets, " ") {
 			if strings.Contains(ms, "winworker") {
@@ -460,19 +459,17 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, machineSetName string, fi
 	if iaasPlatform == "aws" {
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		if err != nil {
-			e2e.Logf("Using default AWS region: us-east-2")
-			region = "us-east-2"
+			region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].spec.providerSpec.value.placement.region}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Could not fetch region from the existing machineset")
 		}
-		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
-		if err != nil {
-			e2e.Logf("Using default AWS zone: us-east-2a")
-			zone = "us-east-2a"
-		}
+		zone := getAvailabilityZone(oc)
+		subnet := getAWSSubnetID(oc)
 		manifestFile, err := exutil.GenerateManifestFile(
 			oc, "winc", fileName, map[string]string{"<name>": machineSetName},
 			map[string]string{"<infrastructureID>": infrastructureID},
 			map[string]string{"<region>": region}, map[string]string{"<zone>": zone},
 			map[string]string{"<windows_image_with_container_runtime_installed>": imageID},
+			map[string]string{"<subnet>": subnet},
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.Remove(manifestFile)
@@ -1303,4 +1300,22 @@ func checkProxyVarsExistsOnWindowsNode(oc *exutil.CLI, winInternalIP []string, w
 			o.Expect(compileEnvVars(msg)).Should(o.ContainSubstring(fmt.Sprint(proxy)), "Failed to check %v proxy is running on winworker %v", key, winhost)
 		}
 	}
+}
+
+func getAvailabilityZone(oc *exutil.CLI) string {
+	zone := ""
+	if iaasPlatform == "aws" {
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].spec.providerSpec.value.placement.availabilityZone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Could not fetch Zone from the existing machineset")
+		return string(zone)
+	}
+	zone, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+	return string(zone)
+}
+
+func getAWSSubnetID(oc *exutil.CLI) string {
+	subnet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].spec.providerSpec.value.subnet.id}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Could not fetch subnet from the existing machineset")
+
+	return string(subnet)
 }

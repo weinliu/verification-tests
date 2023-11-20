@@ -50,10 +50,7 @@ spec:
                   values:
                     - <infrastructureID>-worker-sg
           subnet:
-            filters:
-              - name: tag:Name
-                values:
-                  - <infrastructureID>-private-<zone>
+            id: <subnet>
           tags:
             - name: kubernetes.io/cluster/<infrastructureID>
               value: owned
