@@ -185,11 +185,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("2) check if the packageserver CSV's securityContext config reback")
-		allowPrivilegeEscalation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.install.spec.deployments[0].spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if allowPrivilegeEscalation != "false" {
-			e2e.Failf("The packageserver CSV was not reset, allowPrivilegeEscalation is %s", allowPrivilegeEscalation)
-		}
+		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			allowPrivilegeEscalation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.install.spec.deployments[0].spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation}").Output()
+			if err != nil {
+				return false, nil
+			}
+			if allowPrivilegeEscalation != "false" {
+				// save output, so comment it
+				// e2e.Logf("The packageserver CSV was not reset, allowPrivilegeEscalation is %s", allowPrivilegeEscalation)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The packageserver CSV was not reset, allowPrivilegeEscalation still is true after 60s!")
 		runAsNonRoot, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.install.spec.deployments[0].spec.template.spec.securityContext.runAsNonRoot}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if runAsNonRoot != "true" {
