@@ -531,10 +531,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			e2e.Failf("fail to delete the catalogsource SA:%s", cs.name)
 		}
 		exutil.By("3, check if SA is recreated")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
-		if err != nil {
-			e2e.Failf("fail to recreate the catalogsource SA:%s", cs.name)
-		}
+		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
+			if err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to recreate the catalogsource SA %s after 60s!", cs.name))
 	})
 
 	// author: jiazha@redhat.com
