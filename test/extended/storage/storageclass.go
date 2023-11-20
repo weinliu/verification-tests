@@ -217,7 +217,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}, 60*time.Second, 10*time.Second).Should(o.And(
 			o.ContainSubstring("Pending"),
 			o.ContainSubstring("ExternalProvisioning"),
-			o.ContainSubstring("waiting for a volume to be created, either by external provisioner \"invalid.csi.provisioner.com\" or manually created by system administrator"),
+			o.ContainSubstring("Waiting for a volume to be created either by the external provisioner 'invalid.csi.provisioner.com' or manually by the system administrator"),
 		))
 		o.Expect(describePersistentVolumeClaim(oc, pvc1.namespace, pvc1.name)).ShouldNot(o.ContainSubstring("Successfully provisioned volume"))
 
