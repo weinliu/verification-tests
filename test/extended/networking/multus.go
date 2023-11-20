@@ -193,4 +193,94 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(routeErr).NotTo(o.HaveOccurred())
 		o.Expect(routeLog).To(o.ContainSubstring("default via 172.19.55.99 dev net1"))
 	})
+
+	// author: weliang@redhat.com
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-66876-Support Dual Stack IP assignment for whereabouts CNI/IPAM", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			dualstackNADTemplate   = filepath.Join(buildPruningBaseDir, "multus/dualstack-NAD-template.yaml")
+			multihomingPodTemplate = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			nadName                = "dualstack"
+		)
+
+		exutil.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has fewer than two nodes")
+		}
+
+		exutil.By("Get the name of namespace")
+		ns1 := oc.Namespace()
+
+		exutil.By("Create a custom resource network-attach-defintion in the test namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nadName, "-n", ns1).Execute()
+		nad1ns1 := dualstackNAD{
+			nadname:        nadName,
+			namespace:      ns1,
+			plugintype:     "macvlan",
+			mode:           "bridge",
+			ipamtype:       "whereabouts",
+			ipv4range:      "192.168.10.0/24",
+			ipv6range:      "fd00:dead:beef:10::/64",
+			ipv4rangestart: "",
+			ipv4rangeend:   "",
+			ipv6rangestart: "",
+			ipv6rangeend:   "",
+			template:       dualstackNADTemplate,
+		}
+		nad1ns1.createDualstackNAD(oc)
+
+		exutil.By("Check if the network-attach-defintion is created")
+		if checkNAD(oc, ns1, nadName) {
+			e2e.Logf("The correct network-attach-defintion: %v is created!", nadName)
+		} else {
+			e2e.Failf("The correct network-attach-defintion: %v is not created!", nadName)
+		}
+
+		exutil.By("Create 1st pod consuming above network-attach-defintion in ns1")
+		pod1 := testMultihomingPod{
+			name:       "dualstack-pod-1",
+			namespace:  ns1,
+			podlabel:   "dualstack-pod1",
+			nadname:    nadName,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod1.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns1, "name=dualstack-pod1")).NotTo(o.HaveOccurred())
+
+		exutil.By("Create 2nd pod consuming above network-attach-defintion in ns1")
+		pod2 := testMultihomingPod{
+			name:       "dualstack-pod-2",
+			namespace:  ns1,
+			podlabel:   "dualstack-pod2",
+			nadname:    nadName,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod2.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns1, "name=dualstack-pod2")).NotTo(o.HaveOccurred())
+
+		exutil.By("Get two pods' name")
+		podList, podListErr := exutil.GetAllPods(oc, ns1)
+		o.Expect(podListErr).NotTo(o.HaveOccurred())
+		o.Expect(len(podList)).Should(o.Equal(2))
+
+		exutil.By("Get IPs of the pod1ns1's secondary interface in first namespace.")
+		pod1ns1IPv4, pod1ns1IPv6 := getPodMultiNetwork(oc, ns1, podList[0])
+		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns1IPv4)
+		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns1IPv6)
+
+		exutil.By("Get IPs of the pod2ns1's secondary interface in first namespace.")
+		pod2ns1IPv4, pod2ns1IPv6 := getPodMultiNetwork(oc, ns1, podList[1])
+		e2e.Logf("The v4 address of pod2ns1is: %v", pod2ns1IPv4)
+		e2e.Logf("The v6 address of pod2ns1is: %v", pod2ns1IPv6)
+
+		g.By("Both ipv4 and ipv6 curl should pass between two pods")
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[0], pod2ns1IPv4, pod2ns1IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[1], pod1ns1IPv4, pod1ns1IPv6)
+	})
 })

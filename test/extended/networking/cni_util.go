@@ -68,6 +68,21 @@ type multihomingIPBlock struct {
 	template  string
 }
 
+type dualstackNAD struct {
+	nadname        string
+	namespace      string
+	plugintype     string
+	mode           string
+	ipamtype       string
+	ipv4range      string
+	ipv6range      string
+	ipv4rangestart string
+	ipv4rangeend   string
+	ipv6rangestart string
+	ipv6rangeend   string
+	template       string
+}
+
 func (nad *multihomingNAD) createMultihomingNAD(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NAMESPACE="+nad.namespace, "NADNAME="+nad.nadname, "SUBNETS="+nad.subnets, "NSWITHNADNAME="+nad.nswithnadname, "EXCLUDESUBNETS="+nad.excludeSubnets, "TOPOLOGY="+nad.topology)
@@ -337,4 +352,16 @@ func getPodMultiNetworkFail(oc *exutil.CLI, namespace string, podName string) {
 	o.Expect(ipv4Err).To(o.HaveOccurred())
 	_, ipv6Err := e2eoutput.RunHostCmd(namespace, podName, cmd2)
 	o.Expect(ipv6Err).To(o.HaveOccurred())
+}
+
+func (nad *dualstackNAD) createDualstackNAD(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NADNAME="+nad.nadname, "NAMESPACE="+nad.namespace, "PLUGINTYPE="+nad.plugintype, "MODE="+nad.mode, "IPAMTYPE="+nad.ipamtype, "IPV4RANGE="+nad.ipv4range, "IPV6RANGE="+nad.ipv6range, "IPV4RANGESTART="+nad.ipv4rangestart, "IPV4RANGEEND="+nad.ipv4rangeend, "IPV6RANGESTART="+nad.ipv6rangestart, "IPV6RANGEEND="+nad.ipv6rangeend)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to net attach definition %v", nad.nadname))
 }
