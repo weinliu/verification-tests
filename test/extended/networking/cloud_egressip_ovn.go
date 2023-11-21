@@ -3114,6 +3114,120 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		}, "300s", "10s").Should(o.BeTrue(), "egressIP was not migrated to second egress node after unlabel first egress node!!")
 	})
 
+	// author: huirwang@redhat.com
+	g.It("ROSA-ConnectedOnly-Author:huirwang-High-68965-EgressIP works for podSelector and namespaceSelector.", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+		egressLabel := "k8s.ovn.org/egress-assignable="
+
+		workers, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workers) < 1 {
+			g.Skip("Worker nodes number is less than 1, skip the test!")
+		}
+
+		egressWorkers, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", egressLabel, "-o", "jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodes := strings.Split(egressWorkers, " ")
+		var egressNodes []string
+		for _, node := range nodes {
+			if node != "" {
+				egressNodes = append(egressNodes, node)
+			}
+		}
+
+		if len(egressNodes) < 1 {
+			e2e.Logf("This case is for ROSA which has egress label added to machinepool in Day 0 Setup.")
+			g.Skip("Skip the tests as the environment doesn't fulfill the requirement.")
+		}
+
+		exutil.By("Get the temporary namespace")
+		ns := oc.Namespace()
+
+		exutil.By("Create an egressip object for namespaceSelector.")
+		freeIPs := findFreeIPs(oc, egressNodes[0], 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
+		egressip1 := egressIPResource1{
+			name:      "egressip-68965-ns",
+			template:  egressIPTemplate,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		egressip1.createEgressIPObject1(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/"+egressip1.name, "-p", "{\"spec\":{\"egressIPs\":[\""+freeIPs[0]+"\"]}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
+
+		exutil.By("Create tcpdump sniffer Daemonset.")
+		primaryInf, infErr := getSnifPhyInf(oc, egressNodes[0])
+		o.Expect(infErr).NotTo(o.HaveOccurred())
+		dstHost := nslookDomainName("ifconfig.me")
+		defer deleteTcpdumpDS(oc, "tcpdump-68965", ns)
+		tcpdumpDS, snifErr := createSnifferDaemonset(oc, ns, "tcpdump-47163", "k8s.ovn.org/egress-assignable", "", dstHost, primaryInf, 80)
+		o.Expect(snifErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Apply label to namespace")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name=test").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name-").Output()
+
+		exutil.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		defer pod1.deletePingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("Check source IP is EgressIP")
+		egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps[0]["egressIP"], dstHost, ns, tcpdumpDS.name, true)
+		o.Expect(egressErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Setup second egressIP object.")
+		egressip1.deleteEgressIPObject1(oc)
+		egressip2 := egressIPResource1{
+			name:          "egressip-68965-pod",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[1],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "purple",
+		}
+		egressip2.createEgressIPObject2(oc)
+		defer egressip2.deleteEgressIPObject1(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip2.name, 1)
+
+		exutil.By("Create second pod ")
+		pod2 := pingPodResource{
+			name:      "hello-pod-2",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod2.createPingPod(oc)
+		defer pod2.deletePingPod(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		exutil.By("Apply label to namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Apply label to pod")
+		err = exutil.LabelPod(oc, ns, pod2.name, "color=purple")
+		defer exutil.LabelPod(oc, ns, pod2.name, "color-")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check source IP is EgressIP")
+		egressErr = verifyEgressIPinTCPDump(oc, pod2.name, pod2.namespace, freeIPs[1], dstHost, ns, tcpdumpDS.name, true)
+		o.Expect(egressErr).NotTo(o.HaveOccurred())
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
