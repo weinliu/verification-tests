@@ -1,6 +1,7 @@
 package workloads
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-apps] Workloads", func() {
@@ -625,6 +627,43 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("check PodDisruptionBudgetLimit alert")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PodDisruptionBudgetLimit"}'`, token, "pdb26247", 600)
+	})
+	// author: yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-67765-Make sure rolling update logic to exclude unsetting nodes [Serial]", func() {
+		if exutil.IsSNOCluster(oc) {
+			g.Skip("It is sno cluster, so skip it")
+		}
+
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns67765 := oc.Namespace()
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		daemonSetYaml := filepath.Join(buildPruningBaseDir, "daemonset-origin.yaml")
+		daemonSetUpdateYaml := filepath.Join(buildPruningBaseDir, "daemonset-update.yaml")
+
+		g.By("Set taint for the first node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", nodeList.Items[0].Name, "dedicated:NoSchedule-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", nodeList.Items[0].Name, "dedicated=special-user:NoSchedule").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Create the daemonset with toleration")
+		err = oc.Run("create").Args("-f", daemonSetYaml, "-n", ns67765).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check the daemonset should be deployed to all work nodes")
+		waitForDaemonsetPodsToBeReady(oc, ns67765, "hello-openshift")
+		daemonsetRunningNum := getDaemonsetDesiredNum(oc, ns67765, "hello-openshift")
+		o.Expect(daemonsetRunningNum).To(o.Equal(len(nodeList.Items)))
+
+		g.By("Update the daemonset with non-exist works toleration")
+		err = oc.Run("replace").Args("-f", daemonSetUpdateYaml, "-n", ns67765).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the deamomset should be deployed to all exist work nodes")
+		waitForDaemonsetPodsToBeReady(oc, ns67765, "hello-openshift")
+		daemonsetRunningNumNew := getDaemonsetDesiredNum(oc, ns67765, "hello-openshift")
+		o.Expect(daemonsetRunningNumNew).To(o.Equal(len(nodeList.Items) - 1))
 	})
 
 })
