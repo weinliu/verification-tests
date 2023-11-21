@@ -57,11 +57,17 @@ func newUPIbaremetalInstance(oc *exutil.CLI, nodeName string, buildid string, ip
 }
 
 func (upi *UPIInstance) GetInstanceID() (string, error) {
-	instanceID, err := upi.upiObj.GetUPIbaremetalInstance(upi.buildid, upi.nodeName)
-	if err == nil {
-		return instanceID, nil
-	}
-	return "", err
+	var instanceID string
+	var err error
+	errVmId := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		instanceID, err = upi.upiObj.GetUPIbaremetalInstance(upi.buildid, upi.nodeName)
+		if err == nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errVmId, fmt.Sprintf("Failed to get VM instance ID for node: %s, error: %s", upi.nodeName, err))
+	return instanceID, err
 }
 
 func (upi *UPIInstance) Start() error {
