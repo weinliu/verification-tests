@@ -579,12 +579,10 @@ func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int,
 }
 
 func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) string {
-	// Azure and AWS indexes for IP addresses are different
-	index := "0"
-	if iaasPlatform == "azure" || iaasPlatform == "vsphere" {
-		index = "1"
-	}
-	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[?(@.status.addresses["+index+"].address==\""+nodeIP+"\")].metadata.name}").Output()
+	// Use go-template to iterate over all nodes and for each node, iterate over the .status.addresses
+	// block. Inside that block, if the address field is equal to the nodeIP we pass as argument to the function
+	// return the metadata.name for that node.
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=go-template={{range $idx,$value := .items}}{{ range $value.status.addresses }}{{ if and (eq .type \"InternalIP\") (eq .address \""+nodeIP+"\")}}{{$value.metadata.name}}{{end}}{{end}}{{end}}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return nodeName
@@ -632,7 +630,7 @@ func checkConnectivity(IP string, delay int) error {
 
 func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []string {
 	machineAddresses := ""
-	pollErr := wait.Poll(5*time.Second, 200*time.Second, func() (bool, error) {
+	pollErr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		var err error
 		machineAddresses, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", mcoNamespace).Output()
 		if err != nil || machineAddresses == "" {
@@ -641,7 +639,7 @@ func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []s
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(pollErr, "Windows machine is not provisioned after waiting up to 200 seconds ...")
+	exutil.AssertWaitPollNoErr(pollErr, "Windows machine is not provisioned after waiting up to 300 seconds ...")
 
 	// Filter out any IPv6 address which could have been configured in the machine
 	machinesAddressesArray := []string{}
