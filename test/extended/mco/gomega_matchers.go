@@ -87,6 +87,11 @@ func (matcher *conditionMatcher) NegatedFailureMessage(actual interface{}) (mess
 	return message
 }
 
+// HaveConditionField returns the gomega matcher to check if a resource's given condition field is matching the expected value
+func HaveConditionField(conditionType, conditionField string, expected interface{}) types.GomegaMatcher {
+	return &conditionMatcher{conditionType: conditionType, field: conditionField, expected: expected}
+}
+
 // HaveNodeDegradedMessage returns the gomega matcher to check if a resource is reporting the given degraded message
 func HaveNodeDegradedMessage(expected interface{}) types.GomegaMatcher {
 	return &conditionMatcher{conditionType: "NodeDegraded", field: "message", expected: expected}

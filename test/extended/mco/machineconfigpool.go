@@ -359,15 +359,35 @@ func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
 	return mcp.GetNodesByLabel("")
 }
 
+// GetNodesWithoutArchitecture returns a list of nodes that belong to this pool and do NOT use the given architectures
+func (mcp *MachineConfigPool) GetNodesWithoutArchitecture(arch architecture.Architecture, archs ...architecture.Architecture) ([]Node, error) {
+	archsList := arch.String()
+	for _, itemArch := range archs {
+		archsList = archsList + "," + itemArch.String()
+	}
+	return mcp.GetNodesByLabel(fmt.Sprintf(`%s notin (%s)`, architecture.NodeArchitectureLabel, archsList))
+}
+
+// GetNodesWithoutArchitectureOrFail returns a list of nodes that belong to this pool and do NOT use the given architectures. It fails the test if any error happens
+func (mcp *MachineConfigPool) GetNodesWithoutArchitectureOrFail(arch architecture.Architecture, archs ...architecture.Architecture) []Node {
+	nodes, err := mcp.GetNodesWithoutArchitecture(arch)
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "In MCP %s. Cannot get the nodes NOT using architectures %s", mcp.GetName(), append(archs, arch))
+	return nodes
+}
+
 // GetNodesByArchitecture returns a list of nodes that belong to this pool and use the given architecture
-func (mcp *MachineConfigPool) GetNodesByArchitecture(arch architecture.Architecture) ([]Node, error) {
-	return mcp.GetNodesByLabel(fmt.Sprintf(`%s=%s`, architecture.NodeArchitectureLabel, arch))
+func (mcp *MachineConfigPool) GetNodesByArchitecture(arch architecture.Architecture, archs ...architecture.Architecture) ([]Node, error) {
+	archsList := arch.String()
+	for _, itemArch := range archs {
+		archsList = archsList + "," + itemArch.String()
+	}
+	return mcp.GetNodesByLabel(fmt.Sprintf(`%s in (%s)`, architecture.NodeArchitectureLabel, archsList))
 }
 
 // GetNodesByArchitecture returns a list of nodes that belong to this pool and use the given architecture. It fails the test if any error happens
-func (mcp *MachineConfigPool) GetNodesByArchitectureOrFail(arch architecture.Architecture) []Node {
+func (mcp *MachineConfigPool) GetNodesByArchitectureOrFail(arch architecture.Architecture, archs ...architecture.Architecture) []Node {
 	nodes, err := mcp.GetNodesByArchitecture(arch)
-	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Cannot get the nodes with architecture %s in %s MCP", arch, mcp.GetName())
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "In MCP %s. Cannot get the nodes using architectures %s", mcp.GetName(), append(archs, arch))
 	return nodes
 }
 
@@ -725,13 +745,25 @@ func (mcp *MachineConfigPool) GetCertsExpiry() ([]CertExpiry, error) {
 	return certsExp, nil
 }
 
-// GetArchitectures returns the list of architectures that the nodes in this pool are using, if there is any error it fails the test
-func (mcp *MachineConfigPool) GetArchitecturesOrFail() []architecture.Architecture {
+// GetArchitectures returns the list of architectures that the nodes in this pool are using
+func (mcp *MachineConfigPool) GetArchitectures() ([]architecture.Architecture, error) {
 	archs := []architecture.Architecture{}
-	for _, node := range mcp.GetNodesOrFail() {
+	nodes, err := mcp.GetNodes()
+	if err != nil {
+		return archs, err
+	}
+
+	for _, node := range nodes {
 		archs = append(archs, node.GetArchitectureOrFail())
 	}
 
+	return archs, nil
+}
+
+// GetArchitecturesOrFail returns the list of architectures that the nodes in this pool are using, if there is any error it fails the test
+func (mcp *MachineConfigPool) GetArchitecturesOrFail() []architecture.Architecture {
+	archs, err := mcp.GetArchitectures()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting the architectures used by nodes in MCP %s", mcp.GetName())
 	return archs
 }
 
@@ -996,4 +1028,38 @@ func GetPoolAndNodesForArchitectureOrFail(oc *exutil.CLI, createMCPName string, 
 
 	e2e.Failf("Something went wrong. There is no suitable pool to execute the test case using architecture %s", arch)
 	return nil, nil
+}
+
+// GetPoolAndNodesForNoArchitectureOrFail returns a MCP in this order of priority:
+// 1) The master pool if it is a arm64 compact/SNO cluster.
+// 2) First pool that is not master and contains any node NOT using the given architecture
+func GetPoolWithArchDifferentFromOrFail(oc *exutil.CLI, arch architecture.Architecture) *MachineConfigPool {
+	var (
+		mcpList = NewMachineConfigPoolList(oc)
+		mMcp    = NewMachineConfigPool(oc, MachineConfigPoolMaster)
+	)
+
+	mcpList.PrintDebugCommand()
+
+	// we check if there is an already existing pool with all its nodes using the requested architecture
+	for _, pool := range mcpList.GetAllOrFail() {
+		if pool.IsMaster() {
+			continue
+		}
+
+		// If there isn't a node with the requested architecture in the worker pool,
+		// but there is a custom pool where all nodes have this architecture
+		if !pool.IsEmpty() && len(pool.GetNodesWithoutArchitectureOrFail(arch)) > 0 {
+			logger.Infof("Using pool %s", pool.GetName())
+			return &pool
+		}
+	}
+
+	// It includes compact and SNO
+	if len(mMcp.GetNodesWithoutArchitectureOrFail(arch)) > 0 {
+		return mMcp
+	}
+
+	e2e.Failf("Something went wrong. There is no suitable pool to execute the test case. There is no pool with nodes using  an architecture different from %s", arch)
+	return nil
 }

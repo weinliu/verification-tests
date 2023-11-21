@@ -165,23 +165,6 @@ func getGoVersion(component, commitID string) (float64, error) {
 	return strconv.ParseFloat(strings.TrimSuffix(goVersion, "\n"), 64)
 }
 
-func getStatusCondition(oc *exutil.CLI, resource, ctype string) (map[string]interface{}, error) {
-	jsonstr, ocerr := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-o", "jsonpath='{.status.conditions[?(@.type==\""+ctype+"\")]}'").Output()
-	if ocerr != nil {
-		return nil, ocerr
-	}
-	logger.Infof("condition info of %v-%v : %v", resource, ctype, jsonstr)
-	jsonstr = strings.Trim(jsonstr, "'")
-	jsonbytes := []byte(jsonstr)
-	var datamap map[string]interface{}
-	jsonerr := json.Unmarshal(jsonbytes, &datamap)
-	if jsonerr != nil {
-		return nil, jsonerr
-	}
-	logger.Infof("umarshalled json: %v", datamap)
-	return datamap, jsonerr
-}
-
 func containsMultipleStrings(sourceString string, expectedStrings []string) bool {
 	o.Expect(sourceString).NotTo(o.BeEmpty())
 	o.Expect(expectedStrings).NotTo(o.BeEmpty())

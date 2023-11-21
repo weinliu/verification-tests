@@ -2791,11 +2791,11 @@ nulla pariatur.`
 
 		exutil.By("Patch the master-fips MC and set fips=false")
 		mMc.Patch("merge", `{"spec":{"fips": false}}`)
-		checkNodeDegraded(mMcp, expectedNDMessage, expectedNDReason, 1)
+		checkDegraded(mMcp, expectedNDMessage, expectedNDReason, "NodeDegraded", 1)
 
 		exutil.By("Try to disasble FIPS in worker pool")
 		wMc.Patch("merge", `{"spec":{"fips": false}}`)
-		checkNodeDegraded(wMcp, expectedNDMessage, expectedNDReason, 1)
+		checkDegraded(wMcp, expectedNDMessage, expectedNDReason, "NodeDegraded", 1)
 
 	})
 
@@ -3653,69 +3653,91 @@ nulla pariatur.`
 			logger.Infof("OK!\n")
 		}
 	})
+
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-67788-kernel type 64k-pages is not supported on non-arm64 nodes [Disruptive]", func() {
+		var (
+			mcName = "mco-tc-67788-invalid-64k-pages-kernel"
+
+			expectedNDMessage = `64k-pages is only supported for aarch64 architecture"`
+			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+		)
+
+		architecture.SkipArchitectures(oc.AsAdmin(), architecture.ARM64)
+		mcp := GetPoolWithArchDifferentFromOrFail(oc.AsAdmin(), architecture.ARM64)
+
+		exutil.By("Create a MC with invalid 64k-pages kernel")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate("set-64k-pages-kernel.yaml")
+		mc.skipWaitForMcp = true
+
+		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
+	})
 })
 
-// validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason
+// validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
 func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expectedNDMessage, expectedNDReason string) {
-	defer mcp.RecoverFromDegraded()
-	defer mc.deleteNoWait()
+	defer func() {
+		o.Expect(mcp.RecoverFromDegraded()).To(o.Succeed(), "The MCP could not be recovered from Degraded status")
+	}()
+	defer o.Eventually(mc.deleteNoWait).Should(o.Succeed(), "Could not delete the offending MC")
 	mc.create()
 	logger.Infof("OK!\n")
 
-	checkNodeDegraded(mcp, expectedNDMessage, expectedNDReason, 2)
+	checkDegraded(mcp, expectedNDMessage, expectedNDReason, "NodeDegraded", 2)
 }
 
-func checkNodeDegraded(mcp *MachineConfigPool, expectedNDMessage, expectedNDReason string, offset int) {
+// validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to RenderDegraded error matching expectedNDMessage, expectedNDReason
+func validateMcpRenderDegraded(mc *MachineConfig, mcp *MachineConfigPool, expectedNDMessage, expectedNDReason string) {
+	defer o.Eventually(mcp, "5m", "20s").ShouldNot(BeDegraded(), "The MCP was not recovered from Degraded status after deleting the offending MC")
+	defer o.Eventually(mc.deleteNoWait).Should(o.Succeed(), "Could not delete the offending MC")
+	mc.create()
+	logger.Infof("OK!\n")
+
+	checkDegraded(mcp, expectedNDMessage, expectedNDReason, "RenderDegraded", 2)
+}
+
+func checkDegraded(mcp *MachineConfigPool, expectedNDMessage, expectedNDReason, degradedConditionType string, offset int) {
 	oc := mcp.oc
+	expectedNumDegradedMachines := 0
+	if degradedConditionType == "NodeDegraded" {
+		expectedNumDegradedMachines = 1
+	}
 
 	exutil.By("Wait until MCP becomes degraded")
-	o.EventuallyWithOffset(offset, mcp.pollDegradedStatus(), "10m", "30s").Should(o.Equal("True"),
+	o.EventuallyWithOffset(offset, mcp, fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "30s").Should(BeDegraded(),
 		"The '%s' MCP should become degraded when we try to create an invalid MC, but it didn't.", mcp.GetName())
-	o.EventuallyWithOffset(offset, mcp.pollDegradedMachineCount(), "5m", "30s").Should(o.Equal("1"),
+	o.EventuallyWithOffset(offset, mcp.getDegradedMachineCount, "5m", "30s").Should(o.Equal(expectedNumDegradedMachines),
 		"The '%s' MCP should report '1' degraded machine count, but it doesn't.", mcp.GetName())
 
 	logger.Infof("OK!\n")
 
 	exutil.By("Validate the reported error")
-	nodeDegradedCondition := mcp.GetConditionByType("NodeDegraded")
+	degradedCondition := mcp.GetConditionByType(degradedConditionType)
 
-	nodeDegradedConditionJSON := JSON(nodeDegradedCondition)
+	o.ExpectWithOffset(offset, mcp).Should(HaveConditionField(degradedConditionType, "status", o.Equal("True")),
+		"'worker' MCP should report degraded status in the %s condition: %s", degradedConditionType, degradedCondition)
 
-	nodeDegradedStatus := nodeDegradedConditionJSON.Get("status").ToString()
-	nodeDegradedMessage := nodeDegradedConditionJSON.Get("message").ToString()
-	nodeDegradedReason := nodeDegradedConditionJSON.Get("reason").ToString()
+	o.ExpectWithOffset(offset, mcp).Should(HaveConditionField(degradedConditionType, "message", o.MatchRegexp(expectedNDMessage)),
+		"'worker' MCP is not reporting the expected message in the %s condition: %s", degradedConditionType, degradedCondition)
 
-	o.ExpectWithOffset(offset, nodeDegradedStatus).Should(o.Equal("True"),
-		"'worker' MCP should report degraded status in the NodeDegraded condition: %s", nodeDegradedCondition)
-	o.ExpectWithOffset(offset, nodeDegradedMessage).Should(o.MatchRegexp(expectedNDMessage),
-		"'worker' MCP is not reporting the expected message in the NodeDegraded condition: %s", nodeDegradedCondition)
-	o.ExpectWithOffset(offset, nodeDegradedReason).Should(o.MatchRegexp(expectedNDReason),
-		"'worker' MCP is not reporting the expected reason in the NodeDegraded condition: %s", nodeDegradedCondition)
+	o.ExpectWithOffset(offset, mcp).Should(HaveConditionField(degradedConditionType, "reason", o.MatchRegexp(expectedNDReason)),
+		"'worker' MCP is not reporting the expected reason in the NodeDegraded condition: %s", degradedConditionType, degradedCondition)
 	logger.Infof("OK!\n")
 
-	//
 	exutil.By("Get co machine config to verify status and reason for Upgradeable type")
-	var mcDataMap map[string]interface{}
 
-	// If the degraded node is true, then co/machine-config should not be upgradeable
+	// If the pool is degraded, then co/machine-config should not be upgradeable
 	// It's unlikely, but it can happen that the MCP is degraded, but the CO has not been already updated with the right error message.
 	// So we need to poll for the right reason
-	o.EventuallyWithOffset(offset, func() string {
-		var err error
-		mcDataMap, err = getStatusCondition(oc, "co/machine-config", "Upgradeable")
-		if err != nil {
-			return ""
-		}
-		return mcDataMap["reason"].(string)
-	}, "5m", "10s").Should(o.Equal("DegradedPool"),
-		"co/machine-config Upgradeable condition reason is not the expected one: %s", mcDataMap)
+	mco := NewResource(oc, "co", "machine-config")
+	o.EventuallyWithOffset(offset, mco, "5m", "10s").Should(HaveConditionField("Upgradeable", "reason", o.Equal("DegradedPool")),
+		"co/machine-config Upgradeable condition reason is not the expected one: %s", mco.GetConditionByType("Upgradeable"))
 
-	o.ExpectWithOffset(offset, mcDataMap["status"].(string)).Should(
-		o.Equal("False"),
-		"co/machine-config Upgradeable condition status is not the expected one: %s", mcDataMap)
-	o.ExpectWithOffset(offset, mcDataMap["message"].(string)).Should(
-		o.ContainSubstring("One or more machine config pools are degraded, please see `oc get mcp` for further details and resolve before upgrading"),
-		"co/machine-config Upgradeable condition message is not the expected one: %s", mcDataMap)
+	o.EventuallyWithOffset(offset, mco, "5m", "10s").Should(HaveConditionField("Upgradeable", "status", o.Equal("False")),
+		"co/machine-config Upgradeable condition status is not the expected one: %s", mco.GetConditionByType("Upgradeable"))
+
+	expectedMessage := "One or more machine config pools are degraded, please see `oc get mcp` for further details and resolve before upgrading"
+	o.EventuallyWithOffset(offset, mco, "5m", "10s").Should(HaveConditionField("Upgradeable", "message", o.ContainSubstring(expectedMessage)),
+		"co/machine-config Upgradeable condition message is not the expected one: %s", mco.GetConditionByType("Upgradeable"))
 
 	logger.Infof("OK!\n")
 }
@@ -3816,26 +3838,19 @@ func skipTestIfImageContentSourcePolicyExists(oc *exutil.CLI) {
 }
 
 func createMcAndVerifyIgnitionVersion(oc *exutil.CLI, stepText, mcName, ignitionVersion string) {
+	var (
+		mcTemplate        = "change-worker-ign-version.yaml"
+		wMcp              = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		expectedRDMessage = `parsing Ignition config failed: (unknown|invalid) version\. Supported spec versions: 2\.2, 3\.0, 3\.1, 3\.2, 3\.3, 3\.4$`
+		expectedRDReason  = "^$" // empty string
+	)
 	exutil.By(fmt.Sprintf("Create machine config with %s", stepText))
-	mcTemplate := "change-worker-ign-version.yaml"
+
 	mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
 	mc.parameters = []string{"IGNITION_VERSION=" + ignitionVersion}
-	defer mc.delete()
-	mc.create()
+	mc.skipWaitForMcp = true
 
-	exutil.By("Get mcp/worker status to check whether it is degraded")
-	mcpDataMap, err := getStatusCondition(oc, "mcp/worker", "RenderDegraded")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(mcpDataMap).NotTo(o.BeNil())
-	o.Expect(mcpDataMap["status"].(string)).Should(o.Equal("True"))
-	o.Expect(mcpDataMap["message"].(string)).Should(o.MatchRegexp(`parsing Ignition config failed: (unknown|invalid) version\. Supported spec versions: 2\.2, 3\.0, 3\.1, 3\.2, 3\.3, 3\.4$`))
-
-	exutil.By("Get co machine config to verify status and reason for Upgradeable type")
-	mcDataMap, err := getStatusCondition(oc, "co/machine-config", "Upgradeable")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(mcDataMap).NotTo(o.BeNil())
-	o.Expect(mcDataMap["status"].(string)).Should(o.Equal("False"))
-	o.Expect(mcDataMap["message"].(string)).Should(o.ContainSubstring("One or more machine config pools are degraded, please see `oc get mcp` for further details and resolve before upgrading"))
+	validateMcpRenderDegraded(mc, wMcp, expectedRDMessage, expectedRDReason)
 }
 
 // verifyRenderedMcs verifies that the resources provided in the parameter "allRes" have created a
