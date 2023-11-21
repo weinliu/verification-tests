@@ -12395,7 +12395,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		defer quayCLI.DeleteTag(strings.Replace(imagetagdc, "quay.io/", "", 1))
 		output, err = podmanCLI.Run("push").Args(imagetagdc).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
 
 		exutil.By("create namespace and catsrc")
 		itName := g.CurrentSpecReport().FullText()
@@ -12467,7 +12467,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		defer quayCLI.DeleteTag(strings.Replace(indexImageTag, "quay.io/", "", 1))
 		output, err = podmanCLI.Run("push").Args(indexImageTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
 
 		exutil.By("create namespace and catsrc")
 		itName := g.CurrentSpecReport().FullText()

@@ -41,8 +41,8 @@ func buildPushOperatorImage(architecture architecture.Architecture, tmpPath, ima
 	o.Expect(output).To(o.ContainSubstring("Successfully"))
 
 	waitErr := wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
-		output, _ := podmanCLI.Run("push").Args(imageTag).Output()
-		if strings.Contains(output, "Storing signatures") {
+		imagePushOutput, _ := podmanCLI.Run("push").Args(imageTag).Output()
+		if strings.Contains(imagePushOutput, "Writing manifest to image destination") {
 			return true, nil
 		}
 		return false, nil

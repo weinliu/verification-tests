@@ -3214,7 +3214,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("Successfully"))
 		output, err = podmanCLI.Run("push").Args(imageTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
 
 		exutil.By("step: Deploy the operator")
 		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
@@ -3579,7 +3579,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		waitErr = wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
 			output, _ = podmanCLI.Run("push").Args(bundleImage).Output()
-			if strings.Contains(output, "Storing signatures") {
+			if strings.Contains(output, "Writing manifest to image destination") {
 				return true, nil
 			}
 			return false, nil
@@ -3781,7 +3781,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		waitErr = wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
 			output, _ = podmanCLI.Run("push").Args(bundleImage).Output()
-			if strings.Contains(output, "Storing signatures") {
+			if strings.Contains(output, "Writing manifest to image destination") {
 				return true, nil
 			}
 			return false, nil
@@ -3991,7 +3991,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		waitErr = wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
 			output, _ = podmanCLI.Run("push").Args(bundleImage).Output()
-			if strings.Contains(output, "Storing signatures") {
+			if strings.Contains(output, "Writing manifest to image destination") {
 				return true, nil
 			}
 			return false, nil
