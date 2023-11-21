@@ -102,8 +102,17 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	g.It("ARO-Author:yinzhou-Medium-62956-oc adm node-logs works for nodes logs api", func() {
-		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--unit=kubelet", "-o", "short").Output()
+		windowNodeList, err := exutil.GetAllNodesbyOSType(oc, "windows")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(windowNodeList) < 1 {
+			e2e.Logf("No windows nodes support to test output")
+			_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--unit=kubelet", "-o", "short").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			e2e.Logf("With windows nodes not support to test output")
+			_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--unit=kubelet").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--unit=kubelet", "-g", "crio").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role", "worker", "--since=-5m", "--until=-1m").Output()
