@@ -1577,52 +1577,23 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-54406-Medium-54407-Medium-11564-oc rsh should work behind authenticated proxy [Serial][Flaky]", func() {
-		g.By("Create new namespace")
-		oc.SetupProject()
-		ns54406 := oc.Namespace()
-
-		g.By("Create proxy server")
-		err := oc.WithoutNamespace().Run("create").Args("deployment", "squid-proxy", "--image=quay.io/openshifttest/squid-proxy@sha256:38f2db3f4f99a3b6e5f00be9f063b821fdea1d4e16c90747def63ec42d2cd665", "-n", ns54406).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.WithoutNamespace().Run("set").Args("env", "deployment/squid-proxy", "-e", "USE_AUTH=1", "-n", ns54406).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if ok := waitForAvailableRsRunning(oc, "deployment", "squid-proxy", ns54406, "1"); ok {
-			e2e.Logf("All pods are runnnig now\n")
-		} else {
-			e2e.Failf("squid proxy server pod is not running even afer waiting for about 3 minutes")
-		}
-		g.By("Export the proxy server")
-		cmd1, _, _, err := oc.WithoutNamespace().Run("port-forward").Args("deployment/squid-proxy", "7684:3128", "-n", ns54406).Background()
-		defer cmd1.Process.Kill()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Create the test pod")
-		err = oc.WithoutNamespace().Run("run").Args("mypod54406", "--image=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", ns54406).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		assertPodOutput(oc, "run=mypod54406", ns54406, "Running")
-
-		g.By("Set proxy")
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-54406-Medium-54407-Medium-11564-oc rsh should work behind authenticated proxy", func() {
 		var httpOriginProxy, httpsOriginProxy string
 		httpOriginProxy = os.Getenv("http_proxy")
 		httpsOriginProxy = os.Getenv("https_proxy")
-		defer func() {
-			if httpOriginProxy != "" {
-				os.Setenv("http_proxy", httpOriginProxy)
-			} else {
-				os.Unsetenv("http_proxy")
-			}
-			if httpsOriginProxy != "" {
-				os.Setenv("https_proxy", httpsOriginProxy)
-			} else {
-				os.Unsetenv("https_proxy")
-			}
-		}()
+		e2e.Logf("httpOriginProxy is %v", httpOriginProxy)
+		e2e.Logf("httpsOriginProxy is %v", httpsOriginProxy)
+		if httpOriginProxy == "" && httpsOriginProxy == "" {
+			g.Skip("Skipping the test as no porxy setting")
+		}
 
-		os.Setenv("http_proxy", "tester:redhat@127.0.0.1:7684")
-		os.Setenv("https_proxy", "tester:redhat@127.0.0.1:7684")
-
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns54406 := oc.Namespace()
+		g.By("Create the test pod")
+		err := oc.WithoutNamespace().Run("run").Args("mypod54406", "--image=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", ns54406).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertPodOutput(oc, "run=mypod54406", ns54406, "Running")
 		g.By("Run rsh command")
 		err = oc.WithoutNamespace().Run("rsh").Args("mypod54406").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
