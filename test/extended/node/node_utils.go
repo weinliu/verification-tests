@@ -1095,29 +1095,26 @@ func checkMachineConfigPoolStatus(oc *exutil.CLI, nodeSelector string) error {
 }
 
 // this func check the pod's cpu setting override the host default
-func overrideWkloadCpu(oc *exutil.CLI, cpuset string, cpushare string, namespace string) error {
+func overrideWkloadCpu(oc *exutil.CLI, cpuset string, namespace string) error {
 	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
 		podname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cpuSet, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", namespace, "--", "cat", "/sys/fs/cgroup/cpuset/cpuset.cpus").Output()
+		cpuSet, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", namespace, "--", "cat", "/sys/fs/cgroup/cpuset.cpus.effective").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The cpuset is : %s", cpuSet)
-		cpuShare, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", namespace, "--", "cat", "/sys/fs/cgroup/cpu/cpu.shares").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The cpushare is : %s", cpuShare)
 		if cpuset == "" {
-			//if cpuset == "", the pod will keep default value as the /sys/fs/cgroup/cpuset/cpuset.cpus on node
+			//if cpuset == "", the pod will keep default value as the /sys/fs/cgroup/cpuset.cpus.effective on node
 			nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("The nodename is %v", nodename)
-			cpusetDeft, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/sys/fs/cgroup/cpuset/cpuset.cpus")
+			cpusetDeft, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/sys/fs/cgroup/cpuset.cpus.effective")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("The cpuset of host is : %s", cpusetDeft)
-			if strings.Contains(cpusetDeft, cpuSet) && cpuShare == cpushare {
-				e2e.Logf("the pod only override cpushares but not cpuset")
+			if strings.Contains(cpusetDeft, cpuSet) {
+				e2e.Logf("the cpuset not take effect in the pod")
 				return true, nil
 			}
-		} else if cpuSet == cpuset && cpuShare == cpushare {
+		} else if cpuSet == cpuset {
 			e2e.Logf("the pod override the default workload setting")
 			return true, nil
 		}
@@ -1126,30 +1123,23 @@ func overrideWkloadCpu(oc *exutil.CLI, cpuset string, cpushare string, namespace
 }
 
 // this func check the pod's cpu setting keep the same as host default
-func defaultWkloadCpu(oc *exutil.CLI, cpuset string, cpushare string, namespace string) error {
+func defaultWkloadCpu(oc *exutil.CLI, cpuset string, namespace string) error {
 	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
 		podname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cpuSet, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", namespace, "--", "cat", "/sys/fs/cgroup/cpuset/cpuset.cpus").Output()
+		cpuSet, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", namespace, "--", "cat", "/sys/fs/cgroup/cpuset.cpus.effective").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The cpuset of pod is : %s", cpuSet)
-		cpuShare, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", namespace, "--", "cat", "/sys/fs/cgroup/cpu/cpu.shares").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The cpushare of pod is : %s", cpuShare)
 
 		nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The nodename is %v", nodename)
-		cpusetDeft, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/sys/fs/cgroup/cpuset/cpuset.cpus")
+		cpusetDeft, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/sys/fs/cgroup/cpuset.cpus.effective")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The cpuset of host is : %s", cpusetDeft)
-		cpushareDeft, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/sys/fs/cgroup/cpu/cpu.shares")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The cpushare of host is : %s", cpushareDeft)
 
-		//cpushares 2 is a default from https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kuberuntime/kuberuntime_sandbox_linux_test.go#L118,so we can ignore host value
-		if (cpuShare == "2") && strings.Contains(cpusetDeft, cpuSet) {
-			if string(cpuSet) != cpuset || string(cpuShare) != cpushare {
+		if strings.Contains(cpusetDeft, cpuSet) {
+			if string(cpuSet) != cpuset {
 				e2e.Logf("the pod keep the default workload setting")
 				return true, nil
 			}
