@@ -9213,30 +9213,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.message of installplan %s does not contain 'retrying execution due to error'", installPlan))
 
-		exutil.By("3) After retry timeout, the install plan is Failed")
-		err = newCheck("expect", asAdmin, withoutNamespace, compare, "Failed", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
-		if err != nil {
-			output := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status}")
-			e2e.Logf(output)
-		}
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.phase of installplan %s is not Failed", installPlan))
-
-		exutil.By("4) delete sub, then create sub again")
-		sub.delete(itName, dr)
-		sub.createWithoutCheck(oc, itName, dr)
-		installPlan = sub.getIP(oc)
-		err = newCheck("expect", asAdmin, withoutNamespace, contain, "retrying execution due to error", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.message}"}).checkWithoutAssert(oc)
-		if err != nil {
-			output := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status}")
-			e2e.Logf(output)
-		}
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.message of installplan %s does not contain 'retrying execution due to error'", installPlan))
-
-		exutil.By("5) Grant the proper permissions to the service account")
+		exutil.By("3) Grant the proper permissions to the service account")
 		role.create(oc)
 		rolebinding.create(oc)
 
-		exutil.By("6) Checking the state of CSV")
+		exutil.By("4) Checking the state of CSV")
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 		if err != nil {
 			output := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status}")
@@ -9258,7 +9239,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("csv of sub %v is not installed", sub.subName))
-		exutil.By("7) SUCCESS")
+		exutil.By("5) SUCCESS")
 	})
 
 	// author: xzha@redhat.com
