@@ -10,7 +10,11 @@ objects:
       namespace: ${NAMESPACE}
     spec:
       region: ${REGION}
+      controlPlaneEndpoint:
+        host: ${HOST}
+        port: 6443
 parameters:
 - name: NAME
 - name: NAMESPACE
 - name: REGION
+- name: HOST

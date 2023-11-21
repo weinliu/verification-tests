@@ -24,6 +24,7 @@ type awsClusterDescription struct {
 	name      string
 	namespace string
 	region    string
+	host      string
 	template  string
 }
 
@@ -95,7 +96,7 @@ func (cluster *clusterDescription) createCluster(oc *exutil.CLI) {
 
 func (awsCluster *awsClusterDescription) createAWSCluster(oc *exutil.CLI) {
 	e2e.Logf("Creating awsCluster ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsCluster.template, "-p", "NAME="+awsCluster.name, "NAMESPACE="+clusterAPINamespace, "REGION="+awsCluster.region)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsCluster.template, "-p", "NAME="+awsCluster.name, "NAMESPACE="+clusterAPINamespace, "REGION="+awsCluster.region, "HOST="+awsCluster.host)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -182,4 +183,19 @@ func waitForCapiMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetNam
 	})
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 16 minutes ...", machineNumber))
 	e2e.Logf("All machines are Running ...")
+}
+
+// waitForCapiMachinesDisapper check if all the machines are Dissappered in a MachineSet
+func waitForCapiMachinesDisapper(oc *exutil.CLI, machineSetName string) {
+	e2e.Logf("Waiting for the machines Dissapper ...")
+	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
+		machineNames, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "cluster.x-k8s.io/set-name="+machineSetName, "-n", clusterAPINamespace).Output()
+		if machineNames != "" {
+			e2e.Logf(" Still have machines are not Disappered yet and waiting up to 1 minutes ...")
+			return false, nil
+		}
+		e2e.Logf("All machines are Disappered")
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Wait machine disappear failed.")
 }

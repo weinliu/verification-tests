@@ -3,6 +3,7 @@ package clusterinfrastructure
 import (
 	"io/ioutil"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -17,6 +18,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		iaasPlatform               string
 		clusterID                  string
 		region                     string
+		host                       string
 		profile                    string
 		instanceType               string
 		zone                       string
@@ -52,6 +54,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "aws":
 			region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			apiServerInternalURI, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.apiServerInternalURI}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			start := strings.Index(apiServerInternalURI, "://")
+			end := strings.LastIndex(apiServerInternalURI, ":")
+			host = apiServerInternalURI[start+3 : end]
 			randomMachinesetName := exutil.GetRandomMachineSetName(oc)
 			profile, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.iamInstanceProfile.id}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -102,6 +109,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		awscluster = awsClusterDescription{
 			name:     clusterID,
 			region:   region,
+			host:     host,
 			template: awsClusterTemplate,
 		}
 		gcpcluster = gcpClusterDescription{
@@ -172,6 +180,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		awsMachineTemplate.createAWSMachineTemplate(oc)
 
 		capiMachineSetAWS.name = "capi-machineset-51071"
+		defer waitForCapiMachinesDisapper(oc, capiMachineSetAWS.name)
 		defer capiMachineSetAWS.deleteCapiMachineSet(oc)
 		capiMachineSetAWS.createCapiMachineSet(oc)
 	})
@@ -190,6 +199,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		gcpMachineTemplate.createGCPMachineTemplate(oc)
 
 		capiMachineSetgcp.name = "capi-machineset-53100"
+		defer waitForCapiMachinesDisapper(oc, capiMachineSetgcp.name)
 		defer capiMachineSetgcp.deleteCapiMachineSetgcp(oc)
 		capiMachineSetgcp.createCapiMachineSetgcp(oc)
 
