@@ -70,6 +70,14 @@ type ingressDescription struct {
 	template    string
 }
 
+type webServerRcDescription struct {
+	podLabelName      string
+	secSvcLabelName   string
+	unsecSvcLabelName string
+	template          string
+	namespace         string
+}
+
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -143,6 +151,15 @@ func (rut *routeDescription) create(oc *exutil.CLI) {
 func (ing *ingressDescription) create(oc *exutil.CLI) {
 	err := createResourceToNsFromTemplate(oc, ing.namespace, "--ignore-unknown-parameters=true", "-f", ing.template, "-p", "NAME="+ing.name, "NAMESPACE="+ing.namespace, "DOMAIN="+ing.domain, "SERVICE_NAME="+ing.serviceName)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (websrvrc *webServerRcDescription) create(oc *exutil.CLI) {
+	err := createResourceToNsFromTemplate(oc, websrvrc.namespace, "--ignore-unknown-parameters=true", "-f", websrvrc.template, "-p", "PodLabelName="+websrvrc.podLabelName, "SecSvcLabelName="+websrvrc.secSvcLabelName, "UnsecSvcLabelName="+websrvrc.unsecSvcLabelName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (websrvrc *webServerRcDescription) delete(oc *exutil.CLI) error {
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", websrvrc.namespace, "--ignore-not-found", "ReplicationController", websrvrc.podLabelName).Execute()
 }
 
 // parse the yaml file to json.
