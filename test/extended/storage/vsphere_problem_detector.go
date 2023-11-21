@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -362,4 +363,40 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_zonal_volumes_total", `data.result.0.value.1`, interfaceToString(initCountInt))
 	})
+
+	// author: pewang@redhat.com
+	// https://issues.redhat.com/browse/STOR-1446
+	// OCP-68767-[Cluster-Storage-Operator] should restart vsphere-problem-detector-operator Pods if vsphere-problem-detector-serving-cert changed [Disruptive]
+	g.It("NonHyperShiftHOST-Author:pewang-High-68767-[Cluster-Storage-Operator] should restart vsphere-problem-detector-operator Pods if vsphere-problem-detector-serving-cert changed [Disruptive]", func() {
+		// Set the resource template for the scenario
+		var (
+			clusterStorageOperatorNs = "openshift-cluster-storage-operator"
+			servingSecretName        = "vsphere-problem-detector-serving-cert"
+		)
+
+		exutil.By("# Get the origin vsphere-problem-detector-operator pod name")
+		vSphereDetectorOperator.replicasno = vSphereDetectorOperator.getReplicasNum(oc.AsAdmin())
+		originPodList := vSphereDetectorOperator.getPodList(oc.AsAdmin())
+		resourceVersionOri, resourceVersionOriErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("deployment", vSphereDetectorOperator.name, "-n", vSphereDetectorOperator.namespace, "-o=jsonpath={.metadata.resourceVersion}").Output()
+		o.Expect(resourceVersionOriErr).ShouldNot(o.HaveOccurred())
+
+		exutil.By("# Delete the vsphere-problem-detector-serving-cert secret and wait vsphere-problem-detector-operator ready again ")
+		// The secret will added back by the service-ca-operator
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", clusterStorageOperatorNs, "secret/"+servingSecretName).Execute()).NotTo(o.HaveOccurred())
+
+		o.Eventually(func() string {
+			resourceVersionNew, resourceVersionNewErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("deployment", vSphereDetectorOperator.name, "-n", vSphereDetectorOperator.namespace, "-o=jsonpath={.metadata.resourceVersion}").Output()
+			o.Expect(resourceVersionNewErr).ShouldNot(o.HaveOccurred())
+			return resourceVersionNew
+		}, 120*time.Second, 5*time.Second).ShouldNot(o.Equal(resourceVersionOri))
+
+		vSphereDetectorOperator.waitReady(oc.AsAdmin())
+		waitCSOhealthy(oc.AsAdmin())
+		newPodList := vSphereDetectorOperator.getPodList(oc.AsAdmin())
+
+		exutil.By("# Check pods are different with original pods")
+		o.Expect(len(sliceIntersect(originPodList, newPodList))).Should(o.Equal(0))
+
+	})
+
 })
