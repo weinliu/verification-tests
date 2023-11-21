@@ -1198,7 +1198,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				name:         "worker-compliancesuite" + getRandomString(),
 				namespace:    "",
 				scanname:     "worker-scan" + getRandomString(),
-				profile:      "xccdf_org.ssgproject.content_profile_cis-node",
+				profile:      "xccdf_org.ssgproject.content_profile_cis",
 				content:      "ssg-ocp4-ds.xml",
 				contentImage: "ghcr.io/complianceascode/k8scontent:latest",
 				nodeSelector: "wscan",
