@@ -22,17 +22,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-45499-mapi_current_pending_csr should reflect real pending CSR count [Flaky]", func() {
-		g.By("Check the pending csr count")
-		csrStatuses, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csr", "-o=jsonpath={.items[*].status.conditions[0].type}").Output()
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-45499-mapi_current_pending_csr should reflect real pending CSR count", func() {
+		g.By("Check the MAPI pending csr count, metric only fires if there are MAPI specific CSRs pending")
+		csrsName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csr", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		csrStatusList := strings.Split(csrStatuses, " ")
 		pending := 0
-		for _, status := range csrStatusList {
-			if status == "Pending" {
+		for _, csrName := range strings.Split(csrsName, " ") {
+			csr, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csr", csrName).Output()
+			if strings.Contains(csr, "Pending") && (strings.Contains(csr, "system:serviceaccount:openshift-machine-config-operator:node-bootstrapper") || strings.Contains(csr, "system:node:")) {
 				pending++
 			}
 		}
+
 		g.By("Get machine-approver-controller pod name")
 		machineApproverPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", machineApproverNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
