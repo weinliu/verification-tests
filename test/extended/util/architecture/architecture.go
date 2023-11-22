@@ -14,12 +14,15 @@ import (
 type Architecture int
 
 const (
-	NodeArchitectureLabel              = "kubernetes.io/arch"
-	AMD64                 Architecture = iota
+	AMD64 Architecture = iota
 	ARM64
 	PPC64LE
 	S390X
 	MULTI
+)
+
+const (
+	NodeArchitectureLabel = "kubernetes.io/arch"
 )
 
 // SkipIfNoNodeWithArchitectures skip the test if the cluster is one of the given architectures
