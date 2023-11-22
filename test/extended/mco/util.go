@@ -689,12 +689,43 @@ func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
 
 // skipTestIfBaselineCapabilitySetIsNone skips the test cases if no enabledCapabilities found in resource clusterversion
 func skipTestIfBaselineCapabilitySetIsNone(oc *exutil.CLI) {
-	exists := NewResource(oc.AsAdmin(), "clusterversion", "version").GetOrFail(`{.status.capabilities.enabledCapabilities}`)
-	if exists == "" {
+	if isBaselineCapabilitySetNone(oc) {
 		// i.e. enabledCapabilities not found, skip the test
 		g.Skip("Skip this test because enabledCapabilities not found in resource clusterversion")
 	}
+}
 
+// isBaselineCapabilitySetNone check value of enabledCapabilities in clusterversion, return true if it is empty or does not exist
+func isBaselineCapabilitySetNone(oc *exutil.CLI) bool {
+	return len(getEnabledCapabilities(oc)) == 0
+}
+
+// getEnabledCapabilities get enabled capability list, the invoker can check expected capability is enabled or not
+func getEnabledCapabilities(oc *exutil.CLI) []interface{} {
+	jsonStr := NewResource(oc.AsAdmin(), "clusterversion", "version").GetOrFail(`{.status.capabilities.enabledCapabilities}`)
+	logger.Infof("enabled capabilities: %s", jsonStr)
+	enabledCapabilities := make([]interface{}, 0)
+	jsonData := JSON(jsonStr)
+	if jsonData.Exists() {
+		enabledCapabilities = jsonData.ToList()
+	}
+
+	return enabledCapabilities
+}
+
+// IsCapabilityEnabled check whether capability is in enabledCapabilities
+func IsCapabilityEnabled(oc *exutil.CLI, capability string) bool {
+	enabledCapabilities := getEnabledCapabilities(oc)
+	enabled := false
+	for _, ec := range enabledCapabilities {
+		if ec == capability {
+			enabled = true
+			break
+		}
+	}
+	logger.Infof("Capability [%s] is enabled: %v", capability, enabled)
+
+	return enabled
 }
 
 // GetCurrentTestPolarionIDNumber inspects the name of the test case and return the number of the polarion ID linked to this automated test case. It returns an empty string if no ID found.

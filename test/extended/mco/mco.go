@@ -3671,6 +3671,21 @@ nulla pariatur.`
 
 		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
 	})
+
+	g.It("Author:rioliu-NonPreRelease-Critical-68695-MCO should not be degraded when image-registry is not installed [Serial]", func() {
+
+		// for cluster setup, we need to use upi-on-aws + baselineCapabilitySet: None, because ipi needs known capability `machine-api`
+		exutil.By("check whether capability ImageRegistry is enabled, if yes, skip the test")
+		if IsCapabilityEnabled(oc, "ImageRegistry") {
+			g.Skip("image registry is installed, skip this test")
+		}
+
+		exutil.By("check operator status, it should not be degraded")
+		mco := NewResource(oc.AsAdmin(), "co", "machine-config")
+		o.Expect(mco).ShouldNot(BeDegraded(),
+			"co/machine-config Degraded condition status is not the expected one: %s", mco.GetConditionByType("Degraded"))
+	})
+
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
