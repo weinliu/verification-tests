@@ -78,6 +78,9 @@ type PeerpodParam struct {
 	CLOUD_PROVIDER       string
 	AZURE_REGION         string
 	AZURE_RESOURCE_GROUP string
+	AZURE_INSTANCE_SIZE  string
+	AZURE_NSG_ID         string
+	AZURE_SUBNET_ID      string
 }
 
 var (
@@ -1159,6 +1162,15 @@ func parseAWSCIConfigMapData(configmapData string) (PeerpodParam, error) {
 	if gjson.Get(configmapData, "AWS_SG_IDS").Exists() {
 		ppParam.AWS_SG_IDS = gjson.Get(configmapData, "AWS_SG_IDS").String()
 	}
+	if gjson.Get(configmapData, "VXLAN_PORT").Exists() {
+		ppParam.VXLAN_PORT = gjson.Get(configmapData, "VXLAN_PORT").String()
+	}
+	if gjson.Get(configmapData, "PODVM_INSTANCE_TYPE").Exists() {
+		ppParam.PODVM_INSTANCE_TYPE = gjson.Get(configmapData, "PODVM_INSTANCE_TYPE").String()
+	}
+	if gjson.Get(configmapData, "PROXY_TIMEOUT").Exists() {
+		ppParam.PROXY_TIMEOUT = gjson.Get(configmapData, "PROXY_TIMEOUT").String()
+	}
 
 	return ppParam, nil
 }
@@ -1171,6 +1183,21 @@ func parseAzureCIConfigMapData(configmapData string) (PeerpodParam, error) {
 	}
 	if gjson.Get(configmapData, "AZURE_RESOURCE_GROUP").Exists() {
 		ppParam.AZURE_RESOURCE_GROUP = gjson.Get(configmapData, "AZURE_RESOURCE_GROUP").String()
+	}
+	if gjson.Get(configmapData, "VXLAN_PORT").Exists() {
+		ppParam.VXLAN_PORT = gjson.Get(configmapData, "VXLAN_PORT").String()
+	}
+	if gjson.Get(configmapData, "AZURE_INSTANCE_SIZE").Exists() {
+		ppParam.AZURE_INSTANCE_SIZE = gjson.Get(configmapData, "AZURE_INSTANCE_SIZE").String()
+	}
+	if gjson.Get(configmapData, "AZURE_SUBNET_ID").Exists() {
+		ppParam.AZURE_SUBNET_ID = gjson.Get(configmapData, "AZURE_SUBNET_ID").String()
+	}
+	if gjson.Get(configmapData, "AZURE_NSG_ID").Exists() {
+		ppParam.AZURE_NSG_ID = gjson.Get(configmapData, "AZURE_NSG_ID").String()
+	}
+	if gjson.Get(configmapData, "PROXY_TIMEOUT").Exists() {
+		ppParam.PROXY_TIMEOUT = gjson.Get(configmapData, "PROXY_TIMEOUT").String()
 	}
 
 	return ppParam, nil
@@ -1421,66 +1448,92 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 		configFile string
 	)
 
-	// Check if the cm already exist
-	g.By("Checking if peer-pods-cm exists")
+	// Check if the secrets already exist
+	g.By("Checking if peer-pods-secret exists")
 	msg, err = checkPeerPodConfigMap(oc, opNamespace, provider, ppConfigMapName)
 	if err == nil && msg == "" {
-		e2e.Logf("peer-pods-secret cm - skipping creating it")
+		e2e.Logf("peer-pods-cm exists - skipping creating it")
 		return msg, err
 	} else if err != nil {
 		e2e.Logf("**** peer-pods-cm not found on the cluster - proceeding to create it****")
 	}
 
-	// Check if provider is correct
-	if provider == "aws" || provider == "azure" {
-		ppParam.CLOUD_PROVIDER = provider
-	} else {
-		msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
-		return msg, fmt.Errorf("%v", msg)
-	}
-
 	//Read params from peerpods-param-cm and store in ppParam struct
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName).Output()
 	if err != nil {
-		e2e.Logf("peerpods-param-cm Configmap created by QE CI  not found: msg %v err: %v", msg, err)
+		e2e.Logf("%v Configmap created by QE CI not found: msg %v err: %v", ciCmName, msg, err)
 	} else {
 		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-o=jsonpath={.data}").Output()
 		if err != nil {
-			e2e.Failf("peerpods-param-cm Configmap created by QE CI %v has error, no .data: %v %v", ciCmName, configmapData, err)
+			e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciCmName, configmapData, err)
 		}
 
 		e2e.Logf("configmap Data is:\n%v", configmapData)
-		if gjson.Get(configmapData, "VXLAN_PORT").Exists() {
-			ppParam.VXLAN_PORT = gjson.Get(configmapData, "VXLAN_PORT").String()
+		ppParam, err := parseCIPpConfigMapData(provider, configmapData)
+		if err != nil {
+			return msg, err
 		}
-		if gjson.Get(configmapData, "PODVM_INSTANCE_TYPE").Exists() {
-			ppParam.PODVM_INSTANCE_TYPE = gjson.Get(configmapData, "PODVM_INSTANCE_TYPE").String()
+
+		// Create peer-pods-cm file
+		if provider == "aws" {
+			configFile, err = createAWSPeerPodsConfigMap(oc, ppParam, ppConfigMapTemplate)
+		} else if provider == "azure" {
+			configFile, err = createAzurePeerPodsConfigMap(oc, ppParam, ppConfigMapTemplate)
+		} else {
+			msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
+			return msg, fmt.Errorf("%v", msg)
 		}
-		if gjson.Get(configmapData, "PROXY_TIMEOUT").Exists() {
-			ppParam.PROXY_TIMEOUT = gjson.Get(configmapData, "PROXY_TIMEOUT").String()
+
+		if err != nil {
+			return msg, err
+		}
+
+		// Apply peer-pods-cm file
+		g.By("(Apply peer-pods-cm file)")
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+		if err != nil {
+			return fmt.Sprintf("Error: applying peer-pods-cm %v failed: %v %v", configFile, msg, err), err
 		}
 	}
 
+	return msg, err
+}
+
+func createAWSPeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfigMapTemplate string) (string, error) {
 	g.By("Create peer-pods-cm file")
 
-	// Processing configmap template and create  " <randomstring>peer-pods-cm.json"
-	configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate, "-p", "CLOUD_PROVIDER="+ppParam.CLOUD_PROVIDER, "VXLAN_PORT="+ppParam.VXLAN_PORT, "PODVM_INSTANCE_TYPE="+ppParam.PODVM_INSTANCE_TYPE,
+	// Processing configmap template and create " <randomstring>peer-pods-cm.json"
+	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
+		"-p", "CLOUD_PROVIDER="+ppParam.CLOUD_PROVIDER, "VXLAN_PORT="+ppParam.VXLAN_PORT, "PODVM_INSTANCE_TYPE="+ppParam.PODVM_INSTANCE_TYPE,
 		"PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
 
 	if configFile != "" {
 		osStatMsg, configFileExists := os.Stat(configFile)
 		if configFileExists != nil {
-			e2e.Logf("issue creating peer-pods-cm file %s, err: %v , msg: %v' , osStatMsg: %v", configFile, err, msg, osStatMsg)
+			e2e.Logf("issue creating peer-pods-cm file %s, err: %v , osStatMsg: %v", configFile, err, osStatMsg)
 		}
 	}
 
-	g.By("(Apply peer-pods-cm  file")
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
-	if err != nil {
-		e2e.Logf("Error: applying peer-pods-cm %v failed: %v %v", configFile, msg, err)
+	return configFile, err
+}
+
+func createAzurePeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfigMapTemplate string) (string, error) {
+	g.By("Create peer-pods-cm file")
+
+	// Processing configmap template and create " <randomstring>peer-pods-cm.json"
+	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
+		"-p", "CLOUD_PROVIDER="+ppParam.CLOUD_PROVIDER, "VXLAN_PORT="+ppParam.VXLAN_PORT,
+		"AZURE_INSTANCE_SIZE="+ppParam.AZURE_INSTANCE_SIZE, "AZURE_SUBNET_ID="+ppParam.AZURE_SUBNET_ID,
+		"AZURE_NSG_ID="+ppParam.AZURE_NSG_ID, "PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
+
+	if configFile != "" {
+		osStatMsg, configFileExists := os.Stat(configFile)
+		if configFileExists != nil {
+			e2e.Logf("issue creating peer-pods-cm file %s, err: %v , osStatMsg: %v", configFile, err, osStatMsg)
+		}
 	}
 
-	return msg, err
+	return configFile, err
 }
 
 func checkLabeledPodsExpectedRunning(oc *exutil.CLI, resNs, label, expectedRunning string) (msg string, err error) {

@@ -1,0 +1,40 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: peer-pods-cm-template
+objects:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: "${NAME}"
+      namespace: "${NAMESPACE}"
+    data:
+      CLOUD_PROVIDER: "${CLOUD_PROVIDER}"
+      VXLAN_PORT: "${VXLAN_PORT}"
+      AZURE_INSTANCE_SIZE: "${AZURE_INSTANCE_SIZE}"
+      AZURE_SUBNET_ID: "${AZURE_SUBNET_ID}" 
+      AZURE_NSG_ID: "${AZURE_NSG_ID}" 
+      PROXY_TIMEOUT: "${PROXY_TIMEOUT}"
+  
+parameters:
+  - name: NAME
+    value: "peer-pods-cm"
+  - name: NAMESPACE
+    value: "openshift-sandboxed-containers-operator"
+  - name: CLOUD_PROVIDER
+    value: ""
+  - name: VXLAN_PORT 
+    value: ""
+  - name: AZURE_INSTANCE_SIZE
+    value: ""
+  - name: AZURE_SUBNET_ID
+    value: ""
+  - name: AZURE_NSG_ID
+    value: ""        
+  - name: PROXY_TIMEOUT
+    value: ""
+        
+
+
+# oc process --ignore-unknown-parameters=true -f $L/peer-pod-secret-aws.yaml -p AWS_ACCESS_KEY_ID="" CLOUD_SECRET="" 
+# This is for Jenkins/end user to create a configmap and apply it to your cluster
