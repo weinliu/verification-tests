@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 
 	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
@@ -211,6 +212,67 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 		healthUnspport.assertHealthy(oc, "true")
 		healthUnspport.delete(oc, healthUnspportChild)
 
+	})
+
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-Author:xzha-High-68821-OLMv1 Supports Version Ranges during Installation", func() {
+		var (
+			baseDir                               = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate                       = filepath.Join(baseDir, "catalog.yaml")
+			operatorTemplate                      = filepath.Join(baseDir, "operator.yaml")
+			operatorWithoutChannelTemplate        = filepath.Join(baseDir, "operatorWithoutChannel.yaml")
+			operatorWithoutChannelVersionTemplate = filepath.Join(baseDir, "operatorWithoutChannelVersion.yaml")
+			catalog                               = catalogDescription{
+				name:     "catalog-68821",
+				imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm68821",
+				template: catalogTemplate,
+			}
+			operator = operatorDescription{
+				name:        "operator-68821",
+				packageName: "nginx68821",
+				channel:     "candidate-v0.0",
+				version:     ">=0.0.1",
+				template:    operatorTemplate,
+			}
+		)
+		exutil.By("create catalog")
+		defer catalog.delete(oc)
+		catalog.create(oc)
+
+		exutil.By("create operator with channel candidate-v0.0, version >=0.0.1")
+		defer operator.delete(oc)
+		operator.create(oc)
+		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v0.0.3"))
+		operator.delete(oc)
+
+		exutil.By("create operator with channel candidate-v1.0, version 1.0.x")
+		operator.channel = "candidate-v1.0"
+		operator.version = "1.0.x"
+		operator.create(oc)
+		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		operator.delete(oc)
+
+		exutil.By("create operator with channel empty, version >=0.0.1 !=1.1.0 <1.1.2")
+		operator.channel = ""
+		operator.version = ">=0.0.1 !=1.1.0 <1.1.2"
+		operator.template = operatorWithoutChannelTemplate
+		operator.create(oc)
+		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		operator.delete(oc)
+
+		exutil.By("create operator with channel empty, version empty")
+		operator.channel = ""
+		operator.version = ""
+		operator.template = operatorWithoutChannelVersionTemplate
+		operator.create(oc)
+		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v1.1.0"))
+		operator.delete(oc)
+
+		exutil.By("create operator with invalid version")
+		operator.version = "!1.0.1"
+		operator.template = operatorTemplate
+		err := operator.createWithoutCheck(oc)
+		o.Expect(err).To(o.HaveOccurred())
 	})
 
 	// var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())

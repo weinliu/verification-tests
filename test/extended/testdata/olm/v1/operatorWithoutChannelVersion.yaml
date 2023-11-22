@@ -1,0 +1,14 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: operator-without-channel-version-template
+objects:
+- apiVersion: operators.operatorframework.io/v1alpha1
+  kind: Operator
+  metadata:
+    name: "${NAME}"
+  spec:
+    packageName: "${PACKAGE}"
+parameters:
+- name: NAME
+- name: PACKAGE

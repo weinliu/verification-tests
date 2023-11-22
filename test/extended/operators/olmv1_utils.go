@@ -229,3 +229,203 @@ func getField(oc *exutil.CLI, allowEmpty bool, asAdmin bool, withoutNamespace bo
 	e2e.Logf("$oc get %v, the returned resource:%v", parameters, result)
 	return result, errWait
 }
+
+type operatorDescription struct {
+	name                    string
+	packageName             string
+	channel                 string
+	version                 string
+	upgradeConstraintPolicy string
+	template                string
+	installedBundleResource string
+	resolvedBundleResource  string
+}
+
+func (operator *operatorDescription) create(oc *exutil.CLI) {
+	e2e.Logf("=========create operator %v=========", operator.name)
+	err := operator.createWithoutCheck(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	operator.waitOperatorCondition(oc, "Resolved", "True", 0)
+	operator.waitOperatorCondition(oc, "Installed", "True", 0)
+	operator.getBundleResource(oc)
+}
+
+func (operator *operatorDescription) createWithoutCheck(oc *exutil.CLI) error {
+	e2e.Logf("=========createWithoutCheck operator %v=========", operator.name)
+	paremeters := []string{"--ignore-unknown-parameters=true", "-f", operator.template, "-p"}
+	if len(operator.name) > 0 {
+		paremeters = append(paremeters, "NAME="+operator.name)
+	}
+	if len(operator.packageName) > 0 {
+		paremeters = append(paremeters, "PACKAGE="+operator.packageName)
+	}
+	if len(operator.channel) > 0 {
+		paremeters = append(paremeters, "CHANNEL="+operator.channel)
+	}
+	if len(operator.version) > 0 {
+		paremeters = append(paremeters, "VERSION="+operator.version)
+	}
+	if len(operator.upgradeConstraintPolicy) > 0 {
+		paremeters = append(paremeters, "POLICY="+operator.upgradeConstraintPolicy)
+	}
+	err := applyResourceFromTemplate(oc, paremeters...)
+	return err
+}
+
+func (operator *operatorDescription) waitOperatorCondition(oc *exutil.CLI, conditionType string, status string, consistentTime int) {
+	e2e.Logf("========= check operator %v %s status is %s =========", operator.name, conditionType, status)
+	jsonpath := fmt.Sprintf(`jsonpath={.status.conditions[?(@.type=="%s")].status}`, conditionType)
+	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+		output, err := getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o", jsonpath)
+		if err != nil {
+			e2e.Logf("output is %v, error is %v, and try next", output, err)
+			return false, nil
+		}
+		if !strings.Contains(strings.ToLower(output), strings.ToLower(status)) {
+			e2e.Logf("status is %v, not %v, and try next", output, status)
+			return false, nil
+		}
+		return true, nil
+	})
+	if errWait != nil {
+		getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o=jsonpath-as-json={.status}")
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("operator %s status is not %s", conditionType, status))
+	}
+	if consistentTime != 0 {
+		e2e.Logf("make sure operator %s status is %s consistently for %ds", conditionType, status, consistentTime)
+		o.Consistently(func() string {
+			output, _ := getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o", jsonpath)
+			return strings.ToLower(output)
+		}, time.Duration(consistentTime)*time.Second, 5*time.Second).Should(o.ContainSubstring(strings.ToLower(status)),
+			"operator %s status is not %s", conditionType, status)
+	}
+}
+
+func (operator *operatorDescription) getBundleResource(oc *exutil.CLI) {
+	e2e.Logf("=========get operator %v BundleResource =========", operator.name)
+
+	installedBundleResource, err := getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o", "jsonpath={.status.installedBundleResource}")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	operator.installedBundleResource = installedBundleResource
+
+	resolvedBundleResource, err := getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o", "jsonpath={.status.resolvedBundleResource}")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	operator.resolvedBundleResource = resolvedBundleResource
+}
+
+func (operator *operatorDescription) deleteWithoutCheck(oc *exutil.CLI) {
+	e2e.Logf("=========deleteWithoutCheck operator %v=========", operator.name)
+	removeResource(oc, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name)
+}
+
+func (operator *operatorDescription) delete(oc *exutil.CLI) {
+	e2e.Logf("=========delete operator %v=========", operator.name)
+	operator.deleteWithoutCheck(oc)
+	//add check later
+}
+
+type catalogDescription struct {
+	name       string
+	pullSecret string
+	typeName   string
+	imageref   string
+	contentURL string
+	status     string
+	template   string
+}
+
+func (catalog *catalogDescription) create(oc *exutil.CLI) {
+	e2e.Logf("=========create catalog %v=========", catalog.name)
+	err := catalog.createWithoutCheck(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	catalog.waitCatalogStatus(oc, "Unpacked", 0)
+	catalog.getcontentURL(oc)
+}
+
+func (catalog *catalogDescription) createWithoutCheck(oc *exutil.CLI) error {
+	paremeters := []string{"--ignore-unknown-parameters=true", "-f", catalog.template, "-p"}
+	if len(catalog.name) > 0 {
+		paremeters = append(paremeters, "NAME="+catalog.name)
+	}
+	if len(catalog.pullSecret) > 0 {
+		paremeters = append(paremeters, "SECRET="+catalog.pullSecret)
+	}
+	if len(catalog.typeName) > 0 {
+		paremeters = append(paremeters, "TYPE="+catalog.typeName)
+	}
+	if len(catalog.imageref) > 0 {
+		paremeters = append(paremeters, "IMAGE="+catalog.imageref)
+	}
+	err := applyResourceFromTemplate(oc, paremeters...)
+	return err
+}
+
+func (catalog *catalogDescription) waitCatalogStatus(oc *exutil.CLI, status string, consistentTime int) {
+	e2e.Logf("========= check catalog %v status is %s =========", catalog.name, status)
+	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+		output, err := getField(oc, false, asAdmin, withoutNamespace, "catalog", catalog.name, "-o", "jsonpath={.status.phase}")
+		if err != nil {
+			e2e.Logf("output is %v, error is %v, and try next", output, err)
+			return false, nil
+		}
+		if !strings.Contains(strings.ToLower(output), strings.ToLower(status)) {
+			e2e.Logf("status is %v, not %v, and try next", output, status)
+			catalog.status = output
+			return false, nil
+		}
+		return true, nil
+	})
+	if errWait != nil {
+		getField(oc, false, asAdmin, withoutNamespace, "catalog", catalog.name, "-o=jsonpath-as-json={.status}")
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("catalog status is not %s", status))
+	}
+	if consistentTime != 0 {
+		e2e.Logf("make sure catalog %s status is %s consistently for %ds", catalog.name, status, consistentTime)
+		o.Consistently(func() string {
+			output, _ := getField(oc, false, asAdmin, withoutNamespace, "catalog", catalog.name, "-o", "jsonpath={.status.phase}")
+			return strings.ToLower(output)
+		}, time.Duration(consistentTime)*time.Second, 5*time.Second).Should(o.ContainSubstring(strings.ToLower(status)),
+			"catalog %s status is not %s", catalog.name, status)
+	}
+}
+
+func (catalog *catalogDescription) getcontentURL(oc *exutil.CLI) {
+	e2e.Logf("=========get catalog %v contentURL =========", catalog.name)
+	route, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "catalogd-catalogserver", "-n", "openshift-catalogd", "-o=jsonpath={.spec.host}").Output()
+	if err != nil && !strings.Contains(route, "NotFound") {
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	if route == "" || err != nil {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("expose").Args("service", "catalogd-catalogserver", "-n", "openshift-catalogd").Output()
+		e2e.Logf("output is %v, error is %v", output, err)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+			route, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "catalogd-catalogserver", "-n", "openshift-catalogd", "-o=jsonpath={.spec.host}").Output()
+			if err != nil {
+				e2e.Logf("output is %v, error is %v, and try next", route, err)
+				return false, nil
+			}
+			if route == "" {
+				e2e.Logf("route is empty")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "get route catalogd-catalogserver failed")
+	}
+	o.Expect(route).To(o.ContainSubstring("catalogd-catalogserver-openshift-catalogd"))
+	contentURL, err := getField(oc, false, asAdmin, withoutNamespace, "catalog", catalog.name, "-o", "jsonpath={.status.contentURL}")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	catalog.contentURL = strings.Replace(contentURL, "catalogd-catalogserver.openshift-catalogd.svc", route, 1)
+	e2e.Logf("catalog contentURL is %s", catalog.contentURL)
+}
+
+func (catalog *catalogDescription) deleteWithoutCheck(oc *exutil.CLI) {
+	e2e.Logf("=========deleteWithoutCheck catalog %v=========", catalog.name)
+	removeResource(oc, asAdmin, withoutNamespace, "catalog", catalog.name)
+}
+
+func (catalog *catalogDescription) delete(oc *exutil.CLI) {
+	e2e.Logf("=========delete catalog %v=========", catalog.name)
+	catalog.deleteWithoutCheck(oc)
+	//add check later
+}
