@@ -3,6 +3,8 @@ kind: MachineSet
 metadata:
   labels:
     machine.openshift.io/cluster-api-cluster: <infrastructureID>
+    machine.openshift.io/cluster-api-machine-role: worker
+    machine.openshift.io/cluster-api-machine-type: worker
   name: <name>
   namespace: openshift-machine-api
 spec:
@@ -19,7 +21,7 @@ spec:
         machine.openshift.io/cluster-api-machine-type: worker
         machine.openshift.io/cluster-api-machineset: <name>
         machine.openshift.io/os-id: Windows
-        windowsmachineconfig.openshift.io/ignore: true
+        windowsmachineconfig.openshift.io/ignore: "true"
     spec:
       lifecycleHooks: {}
       metadata:
@@ -51,5 +53,3 @@ spec:
             name: windows-user-data
           vcpuSockets: 4
           vcpusPerSocket: 1
-
-          
