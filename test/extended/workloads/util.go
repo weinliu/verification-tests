@@ -1708,3 +1708,10 @@ func getClusterRegion(oc *exutil.CLI) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return region
 }
+
+func getOCPerKubeConf(oc *exutil.CLI, guestClusterKubeconfig string) *exutil.CLI {
+	if guestClusterKubeconfig == "" {
+		return oc
+	}
+	return oc.AsGuestKubeconf()
+}

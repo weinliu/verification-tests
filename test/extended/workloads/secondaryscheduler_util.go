@@ -113,7 +113,7 @@ func (secschu *secondaryScheduler) createSecondaryScheduler(oc *exutil.CLI) {
 
 func (deploypws *deployPodWithScheduler) createPodWithScheduler(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploypws.template, "-p", "DNAME="+deploypws.pName, "NAMESPACE="+deploypws.namespace, "SCHEDULERNAME="+deploypws.schedulerName)
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploypws.template, "-p", "DNAME="+deploypws.pName, "NAMESPACE="+deploypws.namespace, "SCHEDULERNAME="+deploypws.schedulerName)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -125,7 +125,7 @@ func (deploypws *deployPodWithScheduler) createPodWithScheduler(oc *exutil.CLI) 
 
 func (deploypwos *deployPodWithOutScheduler) createPodWithOutScheduler(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploypwos.template, "-p", "DNAME="+deploypwos.pName, "NAMESPACE="+deploypwos.namespace)
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploypwos.template, "-p", "DNAME="+deploypwos.pName, "NAMESPACE="+deploypwos.namespace)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil

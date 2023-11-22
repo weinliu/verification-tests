@@ -9,7 +9,6 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
-	"os"
 	"strings"
 	"time"
 
@@ -33,7 +32,6 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		secschu                  secondaryScheduler
 		ssImage                  string
 		guestClusterKubeconfig   string
-		kubeconfigFile           string
 	)
 
 	g.BeforeEach(func() {
@@ -62,14 +60,11 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		// Get secheduler Image
 		ssImage, guestClusterKubeconfig = getSchedulerImageHypershiftCluster(oc)
 		if guestClusterKubeconfig != "" {
-			ssImage, guestClusterKubeconfig = getSchedulerImageHypershiftCluster(oc)
-			e2e.Logf("SSImageHypershift is %s", ssImage)
+			ssImage, guestClusterKubeconfig = getSchedulerImageHypershiftCluster(getOCPerKubeConf(oc, guestClusterKubeconfig))
 			e2e.Logf("GuestClusterkubeconfig is %s", guestClusterKubeconfig)
 			oc.SetGuestKubeconf(guestClusterKubeconfig)
 		} else {
-			kubeconfigFile = os.Getenv("KUBECONFIG")
-			oc.SetGuestKubeconf(kubeconfigFile)
-			ssImage = getSchedulerImage(oc.AsGuestKubeconf())
+			ssImage = getSchedulerImage(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		}
 
 		secschu = secondaryScheduler{
@@ -82,53 +77,53 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		// Skip case on arm64 cluster
-		architecture.SkipNonAmd64SingleArch(oc)
+		architecture.SkipNonAmd64SingleArch(getOCPerKubeConf(oc, guestClusterKubeconfig))
 
 		// Skip case on multi-arch cluster
-		architecture.SkipArchitectures(oc, architecture.MULTI)
+		architecture.SkipArchitectures(getOCPerKubeConf(oc, guestClusterKubeconfig), architecture.MULTI)
 
 		// Skip the test if no qe-app-registry catalog is present
-		skipMissingCatalogsource(oc)
+		skipMissingCatalogsource(getOCPerKubeConf(oc, guestClusterKubeconfig))
 
 	})
 
 	// author: knarra@redhat.com
-	g.It("HyperShiftMGMT-ROSA-OSD_CCS-ARO-Author:knarra-Critical-48916-Critical-48917-Install seconday scheduler operator via a deployment & verify user is able to schedule pod using secondary-scheduler [Serial][Flaky]", func() {
+	g.It("HyperShiftMGMT-ROSA-OSD_CCS-ARO-Author:knarra-Critical-48916-Critical-48917-Install seconday scheduler operator via a deployment & verify user is able to schedule pod using secondary-scheduler [Serial]", func() {
 		secondarySchedPodT := filepath.Join(buildPruningBaseDir, "deployPodWithScheduler.yaml")
 		schedPodWithOutSchedT := filepath.Join(buildPruningBaseDir, "deployPodWithOutScheduler.yaml")
 
 		g.By("Create the secondary-scheduler namespace")
-		defer oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
-		err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
+		defer getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the operatorgroup")
-		defer og.deleteOperatorGroup(oc.AsGuestKubeconf())
-		og.createOperatorGroup(oc.AsGuestKubeconf())
+		defer og.deleteOperatorGroup(getOCPerKubeConf(oc, guestClusterKubeconfig))
+		og.createOperatorGroup(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the subscription")
-		defer sub.deleteSubscription(oc.AsGuestKubeconf())
-		sub.createSubscription(oc.AsGuestKubeconf())
+		defer sub.deleteSubscription(getOCPerKubeConf(oc, guestClusterKubeconfig))
+		sub.createSubscription(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait for the secondary scheduler operator pod running")
-		if ok := waitForAvailableRsRunning(oc.AsGuestKubeconf(), "deploy", "secondary-scheduler-operator", kubeNamespace, "1"); ok {
+		if ok := waitForAvailableRsRunning(getOCPerKubeConf(oc, guestClusterKubeconfig), "deploy", "secondary-scheduler-operator", kubeNamespace, "1"); ok {
 			e2e.Logf("SecondarySchedulerOperator operator runnnig now\n")
 		}
 
 		// Create secondary scheduler configmap
 		g.By("create secondary scheduler configmap")
-		createConfigErr := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("create").Args("-f", secondarySchedulerConfig).Execute()
+		createConfigErr := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("create").Args("-f", secondarySchedulerConfig).Execute()
 		o.Expect(createConfigErr).NotTo(o.HaveOccurred())
 
 		g.By("Create secondary scheduler cluster")
-		defer oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("delete").Args("SecondaryScheduler", "--all", "-n", kubeNamespace).Execute()
-		secschu.createSecondaryScheduler(oc)
+		defer getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("delete").Args("SecondaryScheduler", "--all", "-n", kubeNamespace).Execute()
+		secschu.createSecondaryScheduler(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("deployment", "secondary-scheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			output, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("deployment", "secondary-scheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
 			if err != nil {
 				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
 				return false, nil
@@ -141,18 +136,21 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
 		g.By("Check the secondary scheduler run well")
-		checkAvailable(oc.AsGuestKubeconf(), "deploy", "secondary-scheduler", kubeNamespace, "1")
+		checkAvailable(getOCPerKubeConf(oc, guestClusterKubeconfig), "deploy", "secondary-scheduler", kubeNamespace, "1")
 		g.By("Validate that right version of secondary-scheduler is running")
-		ssCsvOutput, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("csv", "-n", kubeNamespace).Output()
+		ssCsvOutput, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", kubeNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(ssCsvOutput, "secondaryscheduleroperator.v1.1.1")).To(o.BeTrue())
+		o.Expect(strings.Contains(ssCsvOutput, "secondaryscheduleroperator.v1.2.1")).To(o.BeTrue())
 
 		// Create test project
 		// Create test project
 		g.By("Create a new project test-sso-48916")
-		defer oc.AsAdmin().AsGuestKubeconf().Run("delete").Args("ns", "test-sso-48916").Execute()
-		err = oc.AsAdmin().AsGuestKubeconf().Run("create").Args("ns", "test-sso-48916").Execute()
+		defer getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("delete").Args("ns", "test-sso-48916").Execute()
+		err = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("create").Args("ns", "test-sso-48916").Execute()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		g.By("Set namespace privileged")
+		exutil.SetNamespacePrivileged(getOCPerKubeConf(oc, guestClusterKubeconfig), "test-sso-48916")
 
 		secondarySchedPod := deployPodWithScheduler{
 			pName:         "p48917-ss",
@@ -177,38 +175,38 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		// Create and validate pods to make sure they are created by specified schedulers
 
 		g.By("Create pod so that it is scheduled via secondary-scheduler")
-		secondarySchedPod.createPodWithScheduler(oc.AsGuestKubeconf())
+		secondarySchedPod.createPodWithScheduler(getOCPerKubeConf(oc, guestClusterKubeconfig))
 
 		// Check pod status
-		checkPodStatus(oc.AsGuestKubeconf(), "app=p48917-ss", "test-sso-48916", "Running")
+		checkPodStatus(getOCPerKubeConf(oc, guestClusterKubeconfig), "app=p48917-ss", "test-sso-48916", "Running")
 
 		g.By("Validate that pod has been created via secondary-scheduler")
-		ssPodOutput, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("pod", "p48917-ss", "-n", oc.Namespace(), "-o=jsonpath={.spec.schedulerName}").Output()
+		ssPodOutput, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("pod", "p48917-ss", "-n", "test-sso-48916", "-o=jsonpath={.spec.schedulerName}").Output()
 		e2e.Logf("ssPodOutput is:\n%s", ssPodOutput)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(ssPodOutput, "secondary-scheduler")).To(o.BeTrue())
 
 		g.By("Create pod so that it is scheduled via default-scheduler")
-		defaultSchedPod.createPodWithScheduler(oc.AsGuestKubeconf())
+		defaultSchedPod.createPodWithScheduler(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Check pod status
-		checkPodStatus(oc.AsGuestKubeconf(), "app=p48917-ds", "test-sso-48916", "Running")
+		checkPodStatus(getOCPerKubeConf(oc, guestClusterKubeconfig), "app=p48917-ds", "test-sso-48916", "Running")
 
 		g.By("Validate that pod has been created via default-scheduler")
-		dsPodOutput, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("pod", "p48917-ds", "-n", "test-sso-48916", "-o=jsonpath={.spec.schedulerName}").Output()
+		dsPodOutput, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("pod", "p48917-ds", "-n", "test-sso-48916", "-o=jsonpath={.spec.schedulerName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(dsPodOutput, "default-scheduler")).To(o.BeTrue())
 
 		g.By("Create pod so that it is scheduled via default-scheduler")
-		podWithOutSched.createPodWithOutScheduler(oc.AsGuestKubeconf())
+		podWithOutSched.createPodWithOutScheduler(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Check pod status
-		checkPodStatus(oc.AsGuestKubeconf(), "app=p48917-wos", "test-sso-48916", "Running")
+		checkPodStatus(getOCPerKubeConf(oc, guestClusterKubeconfig), "app=p48917-wos", "test-sso-48916", "Running")
 
 		g.By("Validate that pod has been created via default-scheduler")
-		podWosOutput, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("pod", "p48917-wos", "-n", "test-sso-48916", "-o=jsonpath={.spec.schedulerName}").Output()
+		podWosOutput, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("pod", "p48917-wos", "-n", "test-sso-48916", "-o=jsonpath={.spec.schedulerName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(podWosOutput, "default-scheduler")).To(o.BeTrue())
 	})
