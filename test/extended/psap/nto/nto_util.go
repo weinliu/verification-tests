@@ -225,17 +225,15 @@ func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, tunedNodeName, sysc
 	for i := 0; i < nodeListSize; i++ {
 		//output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
 		stdOut, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
-		conntrackMax := regexpstr.FindString(stdOut)
-		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
+		actualSysctlKeyValue := regexpstr.FindString(stdOut)
+		e2e.Logf("The actual value is %v on %v", actualSysctlKeyValue, nodeList[i])
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if nodeList[i] == tunedNodeName {
-			o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+		if nodeList[i] != tunedNodeName && len(defaultvalue) == 0 {
+			e2e.Logf("The expected value of %v shouldn't be %v on %v", sysctlparm, specifiedvalue, nodeList[i])
+			o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 		} else {
-			if len(defaultvalue) == 0 {
-				o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
-			} else {
-				o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + defaultvalue))
-			}
+			e2e.Logf("The expected value of %v should be %v on %v", sysctlparm, specifiedvalue, nodeList[i])
+			o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 		}
 	}
 }
@@ -1020,13 +1018,22 @@ func isROSAHostedCluster(oc *exutil.CLI) bool {
 
 func getFirstWorkerMachinesetName(oc *exutil.CLI) string {
 
-	var machinesetName string
+	var (
+		machinesetName    string
+		machinesetNameStr string
+	)
 	machinesetList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-machine-api", "machineset", "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	workerMachineSetReg := regexp.MustCompile(".*worker.*")
 	workerMachineSets := workerMachineSetReg.FindAllString(machinesetList, -1)
 	if len(workerMachineSets) > 0 {
-		machinesetNameStr := workerMachineSets[0]
+		for i := 0; i < len(workerMachineSets); i++ {
+			//Skip windows worker node
+			if !strings.Contains(workerMachineSets[i], "windows") {
+				machinesetNameStr = workerMachineSets[i]
+				break
+			}
+		}
 		machinesetNameArr := strings.Split(machinesetNameStr, "/")
 		machinesetName = machinesetNameArr[1]
 	}

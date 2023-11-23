@@ -398,7 +398,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		// test requires NTO to be installed
 		isSNO := exutil.IsSNOCluster(oc)
-		if !isNTO || isSNO {
+		isOneMasterwithNWorker := exutil.IsOneMasterWithNWorkerNodes(oc)
+		if !isNTO || isSNO || isOneMasterwithNWorker {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
@@ -723,6 +724,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Get the node name in the same node as nginx app
 		tunedNodeName, err := exutil.GetPodNodeName(oc, ntoTestNS, "nginx")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("tunedNodeName is %v", tunedNodeName)
 
 		//Get the tuned pod name in the same node as nginx app
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
@@ -741,6 +743,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).To(o.ContainSubstring("user-max-mnt-namespaces"))
 
+		g.By("Check if new profile  user-max-mnt-namespaces applied to labeled node")
 		//Verify if the new profile is applied
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "user-max-mnt-namespaces")
 		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -758,12 +761,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Compare if the value user.max_mnt_namespaces in on node with labeled pod, should be 142214")
 		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "user.max_mnt_namespaces", "", "142214")
 
-		g.By("Delete custom profile")
+		g.By("Delete custom tuned profile user.max_mnt_namespaces")
 		ntoRes.delete(oc)
 
 		//Check if restore to default profile.
 		isSNO := exutil.IsSNOCluster(oc)
 		if isSNO || is3CPNoWorker {
+			g.By("The cluster is SNO or Compact Cluster")
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, defaultMasterProfileName)
 			g.By("Assert default profile applied in tuned pod log")
 			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, "'"+defaultMasterProfileName+"' applied|("+defaultMasterProfileName+") match")
@@ -771,6 +775,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(profileCheck).To(o.Equal(defaultMasterProfileName))
 		} else {
+			g.By("The cluster is regular OCP Cluster")
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node")
 			g.By("Assert profile 'openshift-node' applied in tuned pod log")
 			assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `static tuning from profile 'openshift-node' applied|active and recommended profile \(openshift-node\) match`)

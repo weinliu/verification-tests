@@ -736,19 +736,39 @@ func AssertIfNodePoolUpdatingConfigByName(oc *CLI, nodePoolName string, timeDura
 
 // IsSNOCluster will check if OCP is a single node cluster
 func IsSNOCluster(oc *CLI) bool {
+	//Only 1 master, 1 worker node and with the same hostname.
+	masterNodes, _ := GetClusterNodesBy(oc, "master")
+	workerNodes, _ := GetClusterNodesBy(oc, "worker")
+	if len(masterNodes) == 1 && len(workerNodes) == 1 && masterNodes[0] == workerNodes[0] {
+		return true
+	}
+	return false
+}
 
+func IsOneMasterWithNWorkerNodes(oc *CLI) bool {
+
+	//Skip one master with 1-N worker nodes senario
 	topologyTypeStdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "-ojsonpath={.items[*].status.infrastructureTopology}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(topologyTypeStdOut).NotTo(o.BeEmpty())
 	topologyType := strings.ToLower(topologyTypeStdOut)
 
-	//Skip one master with 1-N worker nodes senario
+	masterNodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-oname").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(masterNodes).NotTo(o.BeEmpty())
+	masterNodesArr := strings.Split(masterNodes, "\n")
+
 	workerNodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(workerNodes).NotTo(o.BeEmpty())
 	workerNodesArr := strings.Split(workerNodes, "\n")
 	workerNums := len(workerNodesArr)
-	return topologyType == "singlereplica" && workerNums == 1
+
+	if workerNodesArr[0] == masterNodesArr[0] {
+		return topologyType == "singlereplica" && workerNums > 1
+	} else {
+		return topologyType == "singlereplica" && workerNums >= 1
+	}
 }
 
 // CheckAllNodepoolReadyByHostedClusterName used for checking if all nodepool is ready
