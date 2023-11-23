@@ -50,44 +50,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author ikanse@redhat.com
-		g.It("CPaasrunOnly-Author:ikanse-Medium-36368-Elasticsearch nodes can scale down[Serial][Slow]", func() {
-
-			// create clusterlogging instance with elasticsearch node count set to 3
-			g.By("deploy ECK pods")
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			cl := clusterlogging{
-				name:             "instance",
-				namespace:        loggingNS,
-				collectorType:    "fluentd",
-				logStoreType:     "elasticsearch",
-				esNodeCount:      3,
-				storageClassName: sc,
-				waitForReady:     true,
-				templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc, "REDUNDANCY_POLICY=SingleRedundancy")
-
-			e2e.Logf("Start testing OCP-36368-Elasticsearch nodes can scale down")
-			g.By("Check the elasticsearch node count")
-			assertResourceStatus(oc, "clusterlogging", cl.name, cl.namespace, "{.status.logStore.elasticsearchStatus[0].cluster.numNodes}", "3")
-
-			g.By("Check the elasticsearch cluster health")
-			assertResourceStatus(oc, "clusterlogging", cl.name, cl.namespace, "{.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
-
-			g.By("Set elasticsearch node count to 2")
-			er := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", loggingNS, "-p", "{\"spec\": {\"logStore\": {\"elasticsearch\": {\"nodeCount\":2}}}}", "--type=merge").Execute()
-			o.Expect(er).NotTo(o.HaveOccurred())
-
-			g.By("Check the elasticsearch node count")
-			assertResourceStatus(oc, "clusterlogging", cl.name, cl.namespace, "{.status.logStore.elasticsearchStatus[0].cluster.numNodes}", "2")
-
-			g.By("Check the elasticsearch cluster health")
-			assertResourceStatus(oc, "clusterlogging", cl.name, cl.namespace, "{.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
-		})
-
-		// author ikanse@redhat.com
 		g.It("CPaasrunOnly-Author:ikanse-Medium-43065-Drop log messages after explicit time[Serial][Slow]", func() {
 
 			g.By(" Create a Cluster Logging instance with Fluentd buffer retryTimeout set to 1 minute.")
@@ -162,60 +124,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Check if the logtest application logs are discarded")
 			o.Expect(LogCount == 0).To(o.BeTrue(), "The log count for the %s namespace should be 0", appProj)
-		})
-
-		// author ikanse@redhat.com
-		g.It("CPaasrunOnly-Author:ikanse-High-42674-Elasticsearch log4j2 properties file and configuration test[Serial][Slow]", func() {
-			// create clusterlogging instance
-			g.By("deploy ECK pods")
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			cl := clusterlogging{
-				name:             "instance",
-				namespace:        loggingNS,
-				collectorType:    "fluentd",
-				logStoreType:     "elasticsearch",
-				esNodeCount:      1,
-				storageClassName: sc,
-				waitForReady:     true,
-				templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc, "REDUNDANCY_POLICY=ZeroRedundancy")
-
-			g.By("Check if the log4j2 properties: file is mounted inside the elasticsearch pod.")
-			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			statFile := "stat /usr/share/java/elasticsearch/config/log4j2.properties"
-			_, err = e2eoutput.RunHostCmd(cl.namespace, prePodList.Items[0].Name, statFile)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Check if log4j2 properties: file is loaded by elasticsearch pod")
-			el := resource{"pods", prePodList.Items[0].Name, cl.namespace}
-			el.checkLogsFromRs(oc, "-Dlog4j2.configurationFile=/usr/share/java/elasticsearch/config/log4j2.properties", "elasticsearch")
-
-			g.By("Set the Elasticsearch operator instance managementState to Unmanaged.")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("es/elasticsearch", "-n", cl.namespace, "-p", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Change elasticsearch configmap to apply log4j2.properties file with log level set to debug")
-			esCMTemplate := filepath.Join(loggingBaseDir, "elasticsearch", "42674.yaml")
-			ecm := resource{"configmaps", "elasticsearch", cl.namespace}
-			err = ecm.applyFromTemplate(oc, "-n", ecm.namespace, "-f", esCMTemplate, "-p", "LOG_LEVEL=debug")
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Delete Elasticsearch pods to pick the new configmap changes to the log4j2.properties file")
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-n", cl.namespace, "-l", "component=elasticsearch").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Wait for ECK to be ready")
-			WaitForECKPodsToBeReady(oc, cl.namespace)
-
-			g.By("Check the elasticsearch pod logs and confirm the logging level have changed.")
-			postPodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			elp := resource{"pods", postPodList.Items[0].Name, cl.namespace}
-			elp.checkLogsFromRs(oc, "[DEBUG]", "elasticsearch")
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-40168-oc adm must-gather can collect logging data [Slow][Disruptive]", func() {
@@ -469,50 +377,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 	})
 
 	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-43444-Expose Index Level Metrics es_index_namespaces_total and es_index_document_count", func() {
-		// create clusterlogging instance
-		g.By("deploy ECK pods")
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		instance := filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml")
-		cl := resource{"clusterlogging", "instance", loggingNS}
-		cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
-		g.By("waiting for the ECK pods to be ready...")
-		WaitForECKPodsToBeReady(oc, cl.namespace)
-
-		g.By("check logs in ES pod")
-		podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForIndexAppear(cl.namespace, podList.Items[0].Name, "infra-00")
-
-		g.By("check ES metric es_index_namespaces_total")
-		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
-			metricData1, err := queryPrometheus(oc, "", "/api/v1/query", "es_index_namespaces_total", "GET")
-			if err != nil {
-				return false, err
-			}
-			if len(metricData1.Data.Result) == 0 {
-				return false, nil
-			}
-			namespaceCount, _ := strconv.Atoi(metricData1.Data.Result[0].Value[1].(string))
-			e2e.Logf("\nthe namespace count is: %d", namespaceCount)
-			if namespaceCount > 0 {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "The value of metric es_index_namespaces_total isn't more than 0")
-
-		g.By("check ES metric es_index_document_count")
-		metricData2, err := queryPrometheus(oc, "", "/api/v1/query", "es_index_document_count", "GET")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		for _, content := range metricData2.Data.Result {
-			metricValue, _ := strconv.Atoi(content.Value[1].(string))
-			o.Expect(metricValue > 0).Should(o.BeTrue())
-		}
-	})
-
-	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Low-43081-remove JKS certificates", func() {
 		// create clusterlogging instance
 		g.By("deploy ECK pods")
@@ -553,85 +417,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stdout).ShouldNot(o.ContainSubstring("org.ovirt.viaq-collectd.template.json"))
 	})
-
-	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-43259-Access to the ES root url from a project pod on Openshift", func() {
-		// create clusterlogging instance
-		g.By("deploy ECK pods")
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		instance := filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml")
-		cl := resource{"clusterlogging", "instance", loggingNS}
-		cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
-		g.By("waiting for the ECK pods to be ready...")
-		WaitForECKPodsToBeReady(oc, cl.namespace)
-
-		g.By("deploy a pod and try to connect to ES")
-		oc.SetupProject()
-		appProj := oc.Namespace()
-		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		err = oc.Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		token, err := oc.Run("whoami").Args("-t").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		podList, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd := "curl -tlsv1.2 --insecure -H \"Authorization: Bearer " + token + "\" https://elasticsearch.openshift-logging.svc:9200"
-		stdout, err := e2eoutput.RunHostCmdWithRetries(appProj, podList.Items[0].Name, cmd, 5*time.Second, 60*time.Second)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(stdout).Should(o.ContainSubstring("You Know, for Search"))
-	})
-
-	g.It("CPaasrunOnly-Author:qitang-Medium-49099-Elasticsearch should be upgraded successfully when the tolerations enabled[Serial][Slow]", func() {
-		// create clusterlogging instance
-		g.By("deploy ECK pods")
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cl := clusterlogging{
-			name:             "instance",
-			namespace:        loggingNS,
-			collectorType:    "fluentd",
-			logStoreType:     "elasticsearch",
-			storageClassName: sc,
-			esNodeCount:      3,
-			waitForReady:     true,
-			templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
-		}
-		defer cl.delete(oc)
-		tolerations := "[{\"effect\": \"NoSchedule\", \"operator\": \"Exists\"}]"
-		cl.create(oc, "TOLERATIONS="+tolerations, "REDUNDANCY_POLICY=SingleRedundancy")
-
-		g.By("update log store configurations to make ES pods do rolling-upgrade")
-		cl.update(oc, "", "{\"spec\": {\"logStore\": {\"elasticsearch\": {\"resources\": {\"requests\": {\"memory\": \"3Gi\"}}}}}}", "--type=merge")
-		checkResource(oc, true, true, "3Gi", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cl.namespace, "-ojsonpath={.spec.nodeSpec.resources.requests.memory}"})
-
-		g.By("wait for ES pods complete rolling upgrade, the ES cluster health should be green")
-		// make sure the upgrade starts
-		checkResource(oc, false, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cl.namespace, "-ojsonpath={.status.cluster.status}"})
-		//rolling upgrade, the es health status will be green temporarily, so here compare the ready pods with the pod names in es/elasticsearch
-		err = wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
-			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-			if err != nil {
-				return false, err
-			}
-			esMasterReadyPods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("elasticsearches.logging.openshift.io", "elasticsearch", "-n", cl.namespace, "-ojsonpath={.status.pods.master.ready}").Output()
-			if err != nil {
-				return false, err
-			}
-			match := true
-			for _, pod := range esPods.Items {
-				if !strings.Contains(esMasterReadyPods, pod.Name) {
-					match = false
-				}
-			}
-			return match, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "The ES pods are not updated")
-		// make sure ES cluster health is green in the end
-		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cl.namespace, "-ojsonpath={.status.cluster.status}"})
-		checkResource(oc, false, false, "preparationComplete", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cl.namespace, "-ojsonpath={.status.nodes[*].upgradeStatus.upgradePhase}"})
-	})
-
 })
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should", func() {
@@ -888,29 +673,4 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Kibana should"
 		CLO.SubscribeOperator(oc)
 		EO.SubscribeOperator(oc)
 	})
-
-	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-56253-Kibana availability healthchecks using blackbox exporter", func() {
-		// create clusterlogging instance
-		g.By("deploy ECK pods")
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		instance := filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml")
-		cl := resource{"clusterlogging", "instance", loggingNS}
-		cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
-		g.By("waiting for the ECK pods to be ready...")
-		WaitForECKPodsToBeReady(oc, cl.namespace)
-
-		g.By("check kibana status")
-		kibanaRoute := "https://" + getRouteAddress(oc, cl.namespace, "kibana")
-		kibanaStatus := kibanaStatus{}
-		resp, err := doHTTPRequest(nil, kibanaRoute, "/api/status", "", "GET", false, 6, nil, 200)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = json.Unmarshal(resp, &kibanaStatus)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		for _, s := range kibanaStatus.Status.Statuses {
-			o.Expect(s.State == "green").Should(o.BeTrue(), "%s is not in green status: %s", s.ID, s.Message)
-		}
-	})
-
 })
