@@ -558,70 +558,69 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-NonPreRelease-Longduration-High-53605-Expose a Configurable Reload Interval in HAproxy", func() {
-		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			ingctrl             = ingressControllerDescription{
-				name:      "ocp53605",
-				namespace: "openshift-ingress-operator",
-				domain:    "",
-				template:  customTemp,
-			}
-		)
+	g.It("Author:shudili-High-53605-Expose a Configurable Reload Interval in HAproxy", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		baseTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		extraParas := "    tuningOptions:\n      reloadInterval: 15s\n"
+		customTemp1 := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp1)
+		extraParas = "    tuningOptions:\n      reloadInterval: 120s\n"
+		customTemp2 := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp2)
+		ingctrl1 := ingressControllerDescription{
+			name:      "ocp53605one",
+			namespace: "openshift-ingress-operator",
+			domain:    "",
+			template:  customTemp1,
+		}
+		ingctrl2 := ingressControllerDescription{
+			name:      "ocp53605two",
+			namespace: "openshift-ingress-operator",
+			domain:    "",
+			template:  customTemp2,
+		}
+		ingctrlResource1 := "ingresscontrollers/" + ingctrl1.name
+		ingctrlResource2 := "ingresscontrollers/" + ingctrl2.name
 
-		g.By("Create an custom ingresscontroller for testing router reload interval")
+		exutil.By("Create two custom ICs for testing router reload interval")
 		baseDomain := getBaseDomain(oc)
-		ingctrl.domain = ingctrl.name + "." + baseDomain
-		defer ingctrl.delete(oc)
-		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ingctrl1.domain = ingctrl1.name + "." + baseDomain
+		ingctrl2.domain = ingctrl2.name + "." + baseDomain
+		defer ingctrl1.delete(oc)
+		ingctrl1.create(oc)
+		defer ingctrl2.delete(oc)
+		ingctrl2.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
 
-		g.By("Patch tuningOptions/reloadInterval 15s to the ingress-controller")
-		reloadInterval := "15s"
-		ingctrlResource := "ingresscontrollers/" + ingctrl.name
-		podname := getRouterPod(oc, ingctrl.name)
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+reloadInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605one, which should be 15s")
+		podname1 := getRouterPod(oc, ingctrl1.name)
+		riSearch := readRouterPodEnv(oc, podname1, "RELOAD_INTERVAL")
+		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=15s"))
 
-		g.By("Check RELOAD_INTERVAL env in a route pod which should be " + reloadInterval)
-		podname = getRouterPod(oc, ingctrl.name)
-		riSearch := readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
-		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=" + reloadInterval))
-
-		g.By("Patch tuningOptions/reloadInterval with max 120s to the ingress-controller")
-		reloadInterval = "120s"
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+reloadInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
-
-		g.By("Check RELOAD_INTERVAL env in a route pod which should be 2m")
-		podname = getRouterPod(oc, ingctrl.name)
-		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
+		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605one, which should be 2m")
+		podname2 := getRouterPod(oc, ingctrl2.name)
+		riSearch = readRouterPodEnv(oc, podname2, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=2m"))
 
-		g.By("Patch tuningOptions/reloadInterval with other valid unit m, for exmpale 1m to the ingress-controller")
-		reloadInterval = "1m"
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+reloadInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		exutil.By("Patch tuningOptions/reloadInterval with other valid unit m, for exmpale 1m to IC ocp53605one, while patch it with 0s to IC ocp53605two")
+		patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \"1m\"}}}")
+		patchResourceAsAdmin(oc, ingctrl2.namespace, ingctrlResource2, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \"0s\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname1)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname1))
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname2)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname2))
 
-		g.By("Check RELOAD_INTERVAL env in a route pod which should be " + reloadInterval)
-		podname = getRouterPod(oc, ingctrl.name)
-		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
-		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=" + reloadInterval))
+		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605one which should be 1m")
+		podname1 = getRouterPod(oc, ingctrl1.name)
+		riSearch = readRouterPodEnv(oc, podname1, "RELOAD_INTERVAL")
+		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=1m"))
 
-		g.By("Patch tuningOptions/reloadInterval with 0s to the ingress-controller, expect to set it to default 5s")
-		reloadInterval = "0s"
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+reloadInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
-
-		g.By("Try to find the RELOAD_INTERVAL env in a route pod which is the default 5s")
-		podname = getRouterPod(oc, ingctrl.name)
-		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
+		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605two, which is the default 5s")
+		podname2 = getRouterPod(oc, ingctrl2.name)
+		riSearch = readRouterPodEnv(oc, podname2, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=5s"))
 	})
 
