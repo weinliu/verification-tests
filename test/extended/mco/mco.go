@@ -3686,6 +3686,40 @@ nulla pariatur.`
 			"co/machine-config Degraded condition status is not the expected one: %s", mco.GetConditionByType("Degraded"))
 	})
 
+	g.It("Author:rioliu-NonPreRelease-High-68687-HostToContainer propagation in MCD [Serial]", func() {
+
+		platform := exutil.CheckPlatform(oc)
+		assertFunc := func(gm o.Gomega, mountPropagations string) {
+			logger.Infof("mountPropagations:\n %s", mountPropagations)
+			for _, mp := range strings.Split(mountPropagations, " ") {
+				gm.Expect(mp).Should(o.Equal("HostToContainer"), "mountPropagation value is not expected [%s]", mp)
+			}
+		}
+
+		exutil.By("Check mountPropagation for the pods under mco namespace")
+		mountPropagations := NewNamespacedResourceList(oc, "pod", MachineConfigNamespace).GetOrFail(`{.items[*].spec.containers[*].volumeMounts[?(@.mountPath=="/rootfs")].mountPropagation}`)
+		o.Eventually(assertFunc).WithArguments(mountPropagations).Should(o.Succeed())
+
+		if ns, ok := OnPremPlatforms[platform]; ok {
+			exutil.By(fmt.Sprintf("Check mountPropagation for the pods on platform %s", platform))
+			mountPropagations = NewNamespacedResourceList(oc, "pod", ns).GetOrFail(`{.items[*].spec.containers[*].volumeMounts[*].mountPropagation}`)
+			o.Eventually(assertFunc).WithArguments(mountPropagations).Should(o.Succeed())
+		}
+
+		if platform == GCPPlatform || platform == AzurePlatform || platform == AlibabaCloudPlatform {
+			exutil.By("Check mountPropagation for the apiserver-watcher pods under openshift-kube-apiserver namespace")
+			pods, err := NewNamespacedResourceList(oc, "pod", "openshift-kube-apiserver").GetAll()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Get pod list under ns/openshift-kube-apiserver failed")
+			for _, pod := range pods {
+				if strings.HasPrefix(pod.GetName(), "apiserver-watcher") {
+					mountPropagations = pod.GetOrFail(`{.spec.containers[*].volumeMounts[?(@.mountPath=="/rootfs")].mountPropagation}`)
+					o.Eventually(assertFunc).WithArguments(mountPropagations).Should(o.Succeed())
+				}
+			}
+
+		}
+	})
+
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason

@@ -96,6 +96,18 @@ const (
 	NonePlatform = "none"
 	// BaremetalPlatform value used to identify baremetal infrastructure
 	BaremetalPlatform = "baremetal"
+	// KniPlatform value used to identify KNI infrastructure
+	KniPlatform = "kni"
+	// NutanixPlatform value used to identify Nutanix infrastructure
+	NutanixPlatform = "nutanix"
+	// OpenstackPlatform value used to identify Openstack infrastructure
+	OpenstackPlatform = "openstack"
+	// OvirtPlatform value used to identify Ovirt infrastructure
+	OvirtPlatform = "ovirt"
+	// VspherePlatform value used to identify Vsphere infrastructure
+	VspherePlatform = "vsphere"
+	// AlibabaCloudPlatform value used to identify AlibabaCloud infrastructure
+	AlibabaCloudPlatform = "alibabacloud"
 
 	// ExpirationDokerfileLabel Expiration label in Dockerfile
 	ExpirationDokerfileLabel = `LABEL maintainer="mco-qe-team" quay.expires-after=2h`
@@ -140,4 +152,16 @@ const (
 	IgnitionSecurePort = 22623
 	// InsecurePort is the port to serve ignition configs w/o tls
 	IgnitionInsecurePort = 22624
+)
+
+var (
+	// OnPremPlatforms describes all the on-prem platforms
+	OnPremPlatforms = map[string]string{
+		NonePlatform:      "openshift-infra",
+		KniPlatform:       "openshift-kni-infra",
+		NutanixPlatform:   "openshift-nutanix-infra",
+		OpenstackPlatform: "openshift-openstack-infra",
+		OvirtPlatform:     "openshift-ovirt-infra",
+		VspherePlatform:   "openshift-vsphere-infra",
+	}
 )
