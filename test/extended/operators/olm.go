@@ -12762,6 +12762,14 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	// Test case: OCP-30674, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-30674-complete operator upgrades automatically based on SemVer without setting default channel", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipForSNOCluster(oc)
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildIndexBaseDir   = exutil.FixturePath("testdata", "olm")
