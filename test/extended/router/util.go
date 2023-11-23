@@ -725,6 +725,13 @@ func ensureDNSRollingUpdateDone(oc *exutil.CLI) {
 	ensureClusterOperatorNormal(oc, "dns", 5, 300)
 }
 
+// this function is to get all linux nodes on which coredns pods can land, for windows nodes, there won't be any coredns pods on them
+func getAllLinuxNodes(oc *exutil.CLI) string {
+	allLinuxNodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=linux", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return allLinuxNodes
+}
+
 // patch the dns.operator/default with the original value
 func restoreDNSOperatorDefault(oc *exutil.CLI) {
 	podList := getAllDNSPodsNames(oc)
@@ -740,9 +747,8 @@ func restoreDNSOperatorDefault(oc *exutil.CLI) {
 		e2e.Logf("skip the Progressing check step.")
 	} else {
 		// check if each node has a dns pod
-		allNodes := fetchJSONPathValue(oc, "default", "nodes", ".items[*].metadata.labels.kubernetes\\.io/hostname")
 		landedNodes, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=jsonpath={.items[*].spec.nodeName}").Output()
-		if len(allNodes) == len(landedNodes) {
+		if len(getAllLinuxNodes(oc)) == len(landedNodes) {
 			waitAllCorefilesUpdated(oc, attrList)
 		} else {
 			// after reset to default, the number of dns pods will be increased
@@ -754,10 +760,9 @@ func restoreDNSOperatorDefault(oc *exutil.CLI) {
 }
 
 func waitAllDNSPodsAppear(oc *exutil.CLI) {
-	allNodes := fetchJSONPathValue(oc, "default", "nodes", ".items[*].metadata.labels.kubernetes\\.io/hostname")
-	landedNodes, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=jsonpath={.items[*].spec.nodeName}").Output()
-	for _, nodeName := range strings.Split(allNodes, " ") {
+	for _, nodeName := range strings.Split(getAllLinuxNodes(oc), " ") {
 		waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			landedNodes, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=jsonpath={.items[*].spec.nodeName}").Output()
 			if strings.Contains(landedNodes, nodeName) {
 				return true, nil
 			}
