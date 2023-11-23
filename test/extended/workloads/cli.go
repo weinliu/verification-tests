@@ -1093,87 +1093,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	})
 
-})
-
-var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
-	defer g.GinkgoRecover()
-
-	var (
-		oc = exutil.NewCLIWithoutNamespace("default")
-	)
-
-	// author: knarra@redhat.com
-	g.It("MicroShiftOnly-Author:knarra-Critical-60924-Critical-60929-Verify sos report -l lists enabled microshift plugins and Verify running sos report -p microshift collects microshift related information [Serial]", func() {
-
-		g.By("Get microshift node")
-		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
-		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
-		o.Expect(masterNodes).NotTo(o.BeEmpty())
-
-		g.By("List all the available plugins for microshift")
-		pluginList, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report -l")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Available plugins for microshift is: %v", string(pluginList))
-		if err != nil {
-			e2e.Failf("Error occured during listing of microshift plugins: %v", err.Error())
-		}
-		o.Expect(strings.Contains(pluginList, "microshift")).To(o.BeTrue())
-		o.Expect(strings.Contains(pluginList, "microshift_ovn")).To(o.BeTrue())
-
-		g.By("Verify running sos report -p works fine")
-		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch --clean --all-logs --profile microshift")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
-		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport")).To(o.BeTrue())
-
-		// Code to extract the sosreport & it's name
-		extractSosReportName := strings.Split(sosreportStatus, "Your sosreport has been generated and saved in")
-		sosreportNames := strings.Split(extractSosReportName[1], "\n")
-		sosreportName := strings.Split(sosreportNames[1], "/")
-		sosreportnameaExtraction := strings.Split(sosreportName[3], "-obfuscated")
-		e2e.Logf("sosreportnameaExtraction is %v", sosreportnameaExtraction)
-		if err != nil {
-			e2e.Failf("Error occured running with microshift profile: %v", err.Error())
-		}
-		defer exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "rm -rf /tmp/test60929")
-		extrattarCmd := fmt.Sprintf(`
-cat > /tmp/extracttarfile.sh << EOF
-mkdir /tmp/test60929
-sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
-
-		g.By("Execute the /tmp/extracttarfile.sh to extract the generated sosreport")
-		_, executeConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", extrattarCmd)
-		o.Expect(executeConfigErr).NotTo(o.HaveOccurred())
-		_, err = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sh -x /tmp/extracttarfile.sh")
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Read sos.txt from the extracted sos report & verify it ran commands related to `oc adm inspect` & `ovs-appctl`")
-		readSOSTextCmd := fmt.Sprintf(`cat /tmp/test60929/%v/sos_reports/sos.txt`, sosreportnameaExtraction[0])
-		outputFromExtractedSosText, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", readSOSTextCmd)
-		e2e.Logf("outputfromextractedsostext is %v", outputFromExtractedSosText)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(outputFromExtractedSosText, "oc adm inspect")).To(o.BeTrue())
-		o.Expect(strings.Contains(outputFromExtractedSosText, "ovs-appctl -t /var/run/ovn/ovn-controller.*.ctl ct-zone-list")).To(o.BeTrue())
-	})
-
-	// author: knarra@redhat.com
-	g.It("MicroShiftOnly-Author:knarra-High-60930-Verify running sos report collect microshift related information [Serial]", func() {
-		g.By("Get microshift node")
-		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
-		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
-		o.Expect(masterNodes).NotTo(o.BeEmpty())
-
-		g.By("Verify running sos report collects microshift related information")
-		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("sosreport status is: %v", string(sosreportStatus))
-		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
-		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport")).To(o.BeTrue())
-		if err != nil {
-			e2e.Failf("Error occured running with sos report: %v", err.Error())
-		}
-
-	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Critical-63002-oc new-app propagate containerPort information to the deployment if import-mode is PreserveOriginal", func() {
 		g.By("create new namespace")
@@ -1517,6 +1436,88 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		} else {
 			g.Skip("Build and DeploymentConfig have been enabled as part of additional caps, so skipping")
 		}
+	})
+
+})
+
+var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc = exutil.NewCLIWithoutNamespace("default")
+	)
+
+	// author: knarra@redhat.com
+	g.It("MicroShiftOnly-Author:knarra-Critical-60924-Critical-60929-Verify sos report -l lists enabled microshift plugins and Verify running sos report -p microshift collects microshift related information [Serial]", func() {
+
+		g.By("Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("List all the available plugins for microshift")
+		pluginList, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report -l")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Available plugins for microshift is: %v", string(pluginList))
+		if err != nil {
+			e2e.Failf("Error occured during listing of microshift plugins: %v", err.Error())
+		}
+		o.Expect(strings.Contains(pluginList, "microshift")).To(o.BeTrue())
+		o.Expect(strings.Contains(pluginList, "microshift_ovn")).To(o.BeTrue())
+
+		g.By("Verify running sos report -p works fine")
+		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch --clean --all-logs --profile microshift")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
+		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport")).To(o.BeTrue())
+
+		// Code to extract the sosreport & it's name
+		extractSosReportName := strings.Split(sosreportStatus, "Your sosreport has been generated and saved in")
+		sosreportNames := strings.Split(extractSosReportName[1], "\n")
+		sosreportName := strings.Split(sosreportNames[1], "/")
+		sosreportnameaExtraction := strings.Split(sosreportName[3], "-obfuscated")
+		e2e.Logf("sosreportnameaExtraction is %v", sosreportnameaExtraction)
+		if err != nil {
+			e2e.Failf("Error occured running with microshift profile: %v", err.Error())
+		}
+		defer exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "rm -rf /tmp/test60929")
+		extrattarCmd := fmt.Sprintf(`
+cat > /tmp/extracttarfile.sh << EOF
+mkdir /tmp/test60929
+sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
+
+		g.By("Execute the /tmp/extracttarfile.sh to extract the generated sosreport")
+		_, executeConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", extrattarCmd)
+		o.Expect(executeConfigErr).NotTo(o.HaveOccurred())
+		_, err = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sh -x /tmp/extracttarfile.sh")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Read sos.txt from the extracted sos report & verify it ran commands related to `oc adm inspect` & `ovs-appctl`")
+		readSOSTextCmd := fmt.Sprintf(`cat /tmp/test60929/%v/sos_reports/sos.txt`, sosreportnameaExtraction[0])
+		outputFromExtractedSosText, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", readSOSTextCmd)
+		e2e.Logf("outputfromextractedsostext is %v", outputFromExtractedSosText)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(outputFromExtractedSosText, "oc adm inspect")).To(o.BeTrue())
+		o.Expect(strings.Contains(outputFromExtractedSosText, "ovs-appctl -t /var/run/ovn/ovn-controller.*.ctl ct-zone-list")).To(o.BeTrue())
+	})
+
+	// author: knarra@redhat.com
+	g.It("MicroShiftOnly-Author:knarra-High-60930-Verify running sos report collect microshift related information [Serial]", func() {
+		g.By("Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("Verify running sos report collects microshift related information")
+		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("sosreport status is: %v", string(sosreportStatus))
+		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
+		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport")).To(o.BeTrue())
+		if err != nil {
+			e2e.Failf("Error occured running with sos report: %v", err.Error())
+		}
+
 	})
 
 })
