@@ -1595,3 +1595,26 @@ func checkResourceJsonpathMatch(oc *exutil.CLI, resType, resName, resNs, jsonPat
 	msg = fmt.Sprintf("%v (%v) == %v (%v)", jsonPath1, expectedMatch, jsonPath2, msg)
 	return expectedMatch, msg, err
 }
+
+func clusterHasEnabledFIPS(oc *exutil.CLI, subscriptionNamespace string) bool {
+	// check that the 1st control-plane node is in FIPS mode
+	nodeControlList, err := exutil.GetClusterNodesBy(oc, "control-plane")
+	if err != nil || len(nodeControlList) == 0 {
+		e2e.Logf("Could not get list of control nodes to check FIPS: %v %v", nodeControlList, err)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(len(nodeControlList)).NotTo(o.Equal(0))
+
+	fipsModeStatus, err := oc.AsAdmin().Run("debug").Args("-n", subscriptionNamespace, "node/"+nodeControlList[0], "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+	if err != nil || fipsModeStatus == "" {
+		e2e.Logf("ERROR checking %v: %v %v", nodeControlList[0], fipsModeStatus, err)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(fipsModeStatus).NotTo(o.BeEmpty())
+
+	if strings.Contains(fipsModeStatus, "FIPS mode is enabled.") {
+		return true
+	} else {
+		return false
+	}
+}

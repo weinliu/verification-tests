@@ -1513,10 +1513,10 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 	})
 
-	g.It("Author:tbuskey-High-68945-Check FIPS on peer pods", func() {
+	g.It("Author:tbuskey-High-68945-Check FIPS on pods", func() {
 
-		if !kataconfig.enablePeerPods {
-			g.Skip("68945 FIPS check is only for peerpods")
+		if !clusterHasEnabledFIPS(oc, subscription.namespace) {
+			g.Skip("The cluster does not have FIPS enabled")
 		}
 
 		oc.SetupProject()
@@ -1531,15 +1531,21 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		// check that the podvm booted with fips
-		msg, err = oc.AsAdmin().Run("rsh").Args("-T", "-n", podNamespace, "cat /proc/cmdline").Output()
-		if err != nil || !strings.Contains(msg, "fips=1") {
-			e2e.Logf("%v did not boot with fips enabled:", podName, msg, err)
+		podCmdline, podCmdlineErr := oc.AsAdmin().Run("rsh").Args("-T", "-n", podNamespace, podName, "cat", "/proc/cmdline").Output()
+		if podCmdlineErr != nil || !strings.Contains(podCmdline, "fips=1") {
+			e2e.Logf("%v did not boot with fips enabled:%v %v", podName, podCmdline, podCmdlineErr)
 		}
 
 		// check that podvm has fips enabled
-		msg, err = oc.AsAdmin().Run("rsh").Args("-T", "-n", podNamespace, "cat /proc/sys/crypto/fips_enabled").Output()
-		if err != nil || msg != "1" {
-			e2e.Logf("%v does not have fips_enabled:", podName, msg, err)
+		podFipsEnabled, podFipsEnabledErr := oc.AsAdmin().Run("rsh").Args("-T", "-n", podNamespace, podName, "cat", "/proc/sys/crypto/fips_enabled").Output()
+		if podFipsEnabledErr != nil || podFipsEnabled != "1" {
+			e2e.Logf("%v does not have fips_enabled: %v %v", podName, podFipsEnabled, podFipsEnabledErr)
 		}
+
+		o.Expect(podCmdlineErr).NotTo(o.HaveOccurred())
+		o.Expect(podCmdline).To(o.ContainSubstring("fips=1"))
+		o.Expect(podFipsEnabledErr).NotTo(o.HaveOccurred())
+		o.Expect(podFipsEnabled == "1")
+
 	})
 })
