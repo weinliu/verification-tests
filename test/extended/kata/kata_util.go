@@ -862,9 +862,9 @@ func checkPeerPodConfigMap(oc *exutil.CLI, opNamespace, provider, ppConfigMapNam
 
 	switch provider {
 	case "azure":
-		providerVars = append(providerVars, "CLOUD_PROVIDER", "AZURE_IMAGE_ID", "AZURE_INSTANCE_SIZE", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "AZURE_INSTANCE_SIZE", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT")
 	case "aws":
-		providerVars = append(providerVars, "CLOUD_PROVIDER", "PODVM_AMI_ID", "PODVM_INSTANCE_TYPE", "VXLAN_PORT")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "PODVM_INSTANCE_TYPE", "VXLAN_PORT")
 	case "libvirt":
 		providerVars = append(providerVars, "CLOUD_PROVIDER")
 	default:
