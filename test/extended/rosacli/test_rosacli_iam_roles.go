@@ -55,17 +55,17 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		)
 
 		var policyDocument = `{
-			"Version": "2012-10-17",
-			"Statement": [
-			  {
-				"Effect": "Allow",
-				"Action": [
-				  "ec2:DescribeTags"
-				],
-				"Resource": "*"
-			  }
-			]
-		  }`
+                        "Version": "2012-10-17",
+                        "Statement": [
+                          {
+                                "Effect": "Allow",
+                                "Action": [
+                                  "ec2:DescribeTags"
+                                ],
+                                "Resource": "*"
+                          }
+                        ]
+                  }`
 
 		g.By("Create boundry policy")
 		rosaClient.Runner.Format("json")
@@ -231,17 +231,17 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 			permissionsBoundaryPolicyName   = "permissionB60971"
 		)
 		var policyDocument = `{
-			"Version": "2012-10-17",
-			"Statement": [
-			  {
-				"Effect": "Allow",
-				"Action": [
-				  "ec2:DescribeTags"
-				],
-				"Resource": "*"
-			  }
-			]
-		  }`
+                        "Version": "2012-10-17",
+                        "Statement": [
+                          {
+                                "Effect": "Allow",
+                                "Action": [
+                                  "ec2:DescribeTags"
+                                ],
+                                "Resource": "*"
+                          }
+                        ]
+                  }`
 
 		g.By("Create boundry policy")
 		iamClient := exutil.NewIAMClient()
@@ -627,6 +627,20 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		rand.Seed(time.Now().UnixNano())
 		ocmrolePrefix = fmt.Sprintf("QEAuto-ocmr-%s-46187", time.Now().UTC().Format("20060102"))
 
+		defer func() {
+			g.By("Delete ocm-role")
+			ocmRoleList, _, err := ocmResourceService.ListOCMRole()
+			o.Expect(err).To(o.BeNil())
+			foundOcmrole := ocmRoleList.OCMRole(ocmrolePrefix, ocmOrganizationExternalID)
+			output, err := ocmResourceService.DeleteOCMRole("--mode", "auto",
+				"--role-arn", foundOcmrole.RoleArn,
+				"-y")
+
+			o.Expect(err).To(o.BeNil())
+			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+			o.Expect(textData).Should(o.ContainSubstring("Successfully deleted the OCM role"))
+		}()
+
 		g.By("Create an ocm-role with invalid mode")
 		output, err := ocmResourceService.CreateOCMRole("--mode", "invalidamode",
 			"--prefix", ocmrolePrefix,
@@ -667,20 +681,10 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 
 		g.By("Get the ocm-role info")
 		ocmRoleList, output, err := ocmResourceService.ListOCMRole()
+		o.Expect(output).ToNot(o.BeNil())
 		o.Expect(err).To(o.BeNil())
 		foundOcmrole = ocmRoleList.OCMRole(ocmrolePrefix, ocmOrganizationExternalID)
 		o.Expect(foundOcmrole).ToNot(o.BeNil())
-
-		defer func() {
-			g.By("Delete ocm-role")
-			output, err = ocmResourceService.DeleteOCMRole("--mode", "auto",
-				"--role-arn", foundOcmrole.RoleArn,
-				"-y")
-
-			o.Expect(err).To(o.BeNil())
-			textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(textData).Should(o.ContainSubstring("Successfully deleted the OCM role"))
-		}()
 
 		g.By("Unlink ocm-role with not-exist role")
 		notExistedOcmroleocmRoleArn = "arn:aws:iam::301721915996:role/notexistuserrolearn"
@@ -704,6 +708,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 
 		g.By("Get the ocm-role info")
 		ocmRoleList, output, err = ocmResourceService.ListOCMRole()
+		o.Expect(output).ToNot(o.BeNil())
 		o.Expect(err).To(o.BeNil())
 		foundOcmrole = ocmRoleList.OCMRole(ocmrolePrefix, ocmOrganizationExternalID)
 		o.Expect(foundOcmrole.Linded).To(o.Equal("No"))
@@ -724,17 +729,17 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 			path                          = "/aa/bb/"
 		)
 		var policyDocument = `{
-			"Version": "2012-10-17",
-			"Statement": [
-			  {
-				"Effect": "Allow",
-				"Action": [
-				  "ec2:DescribeTags"
-				],
-				"Resource": "*"
-			  }
-			]
-		  }`
+                        "Version": "2012-10-17",
+                        "Statement": [
+                          {
+                                "Effect": "Allow",
+                                "Action": [
+                                  "ec2:DescribeTags"
+                                ],
+                                "Resource": "*"
+                          }
+                        ]
+                  }`
 
 		rosaClient := rosacli.NewClient()
 		ocmResourceService := rosaClient.OCMResource
