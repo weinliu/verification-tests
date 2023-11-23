@@ -1197,7 +1197,7 @@ func getOauthAudit(mustgatherDir string) []string {
 	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to read the must-gather dir")
 	dataDir := ""
 	for _, fileD := range filesUnderGather {
-		if matched, _ := regexp.MatchString("openshift", fileD.Name()); matched {
+		if fileD.IsDir() {
 			dataDir = fileD.Name()
 		}
 
