@@ -31,10 +31,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	g.BeforeEach(func() {
 		// skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
-		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-		if strings.Contains(output, "NotFound") {
-			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
-		}
+
 		// CredentialReqeust needs to be provioned by Cloud automatically
 		modeInCloudCredential, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("cloudcredential", "cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 		if modeInCloudCredential == "Manual" {
@@ -53,7 +50,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			routeName           = "canary"
 		)
 
-		g.By("Ensure the case is runnable on the cluster")
+		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		baseDomain, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.baseDomain}").Output()
 		if !strings.Contains(baseDomain, "qe.devcluster.openshift.com") {
@@ -61,7 +58,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		}
 		createExternalDNSOperator(oc)
 
-		g.By("Create CR ExternalDNS sample-aws-rt and ensure operand pod is ready")
+		exutil.By("Create CR ExternalDNS sample-aws-rt and ensure operand pod is ready")
 		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
@@ -75,13 +72,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, recordsReadyLog)
 
-		g.By("Add label to canary route, ensure ExternalDNS added the record")
+		exutil.By("Add label to canary route, ensure ExternalDNS added the record")
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, delLabel, "--overwrite").Output()
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, addLabel).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Desired change: CREATE external-dns-canary-openshift-ingress-canary")
 
-		g.By("Remove label from the canary route, ensure ExternalDNS deleted the record")
+		exutil.By("Remove label from the canary route, ensure ExternalDNS deleted the record")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, delLabel, "--overwrite").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Desired change: DELETE external-dns-canary-openshift-ingress-canary")
@@ -98,7 +95,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			routeName           = "canary"
 		)
 
-		g.By("Ensure the case is runnable on the cluster")
+		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")
 		zoneID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.privateZone.id}").Output()
 		if !strings.Contains(zoneID, "openshift") {
@@ -106,7 +103,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		}
 		createExternalDNSOperator(oc)
 
-		g.By("Create CR ExternalDNS sample-azure-svc with invalid zone ID")
+		exutil.By("Create CR ExternalDNS sample-azure-svc with invalid zone ID")
 		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
@@ -118,7 +115,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Found 0 Azure DNS zone")
 		operandPod := getPodName(oc, operatorNamespace, operandLabel)
 
-		g.By("Patch externaldns with valid privateZone ID and wait until new operand pod ready")
+		exutil.By("Patch externaldns with valid privateZone ID and wait until new operand pod ready")
 		patchStr := "[{\"op\":\"replace\",\"path\":\"/spec/zones/0\",\"value\":" + zoneID + "}]"
 		patchGlobalResourceAsAdmin(oc, "externaldnses.externaldns.olm.openshift.io/"+crName, patchStr)
 		err = waitForResourceToDisappear(oc, operatorNamespace, "pod/"+operandPod[0])
@@ -127,13 +124,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Found 1 Azure Private DNS zone")
 
-		g.By("Add label to canary route, ensure ExternalDNS added the record")
+		exutil.By("Add label to canary route, ensure ExternalDNS added the record")
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, delLabel, "--overwrite").Output()
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, addLabel).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Updating TXT record named 'external-dns-canary")
 
-		g.By("Remove label from the canary route, ensure ExternalDNS deleted the record")
+		exutil.By("Remove label from the canary route, ensure ExternalDNS deleted the record")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, delLabel, "--overwrite").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Deleting TXT record named 'external-dns-canary")
@@ -150,7 +147,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			serviceName         = "ingress-canary"
 		)
 
-		g.By("Ensure the case is runnable on the cluster")
+		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "GCP")
 		zoneID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.privateZone.id}").Output()
 		if !strings.Contains(zoneID, "private") {
@@ -159,7 +156,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createExternalDNSOperator(oc)
 		baseDomain := getBaseDomain(oc)
 
-		g.By("Create CR ExternalDNS sample-gcp-svc and ensure operand pod is ready")
+		exutil.By("Create CR ExternalDNS sample-gcp-svc and ensure operand pod is ready")
 		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
@@ -171,7 +168,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "No zones found in the project")
 		operandPod := getPodName(oc, operatorNamespace, operandLabel)
 
-		g.By("Patch externaldns with valid privateZone ID and wait until new operand pod ready")
+		exutil.By("Patch externaldns with valid privateZone ID and wait until new operand pod ready")
 		patchStr := "[{\"op\":\"replace\",\"path\":\"/spec/source/fqdnTemplate/0\",\"value\":'{{.Name}}." + baseDomain + "'},{\"op\":\"replace\",\"path\":\"/spec/zones/0\",\"value\":" + zoneID + "}]"
 		patchGlobalResourceAsAdmin(oc, "externaldnses.externaldns.olm.openshift.io/"+crName, patchStr)
 		waitErr = waitForResourceToDisappear(oc, operatorNamespace, "pod/"+operandPod[0])
@@ -180,13 +177,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, recordsReadyLog)
 
-		g.By("Add label to canary service, ensure ExternalDNS added the record")
+		exutil.By("Add label to canary service, ensure ExternalDNS added the record")
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", serviceNamespace, "service", serviceName, delLabel, "--overwrite").Output()
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", serviceNamespace, "service", serviceName, addLabel).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Add records: external-dns-ingress-canary")
 
-		g.By("Remove label from the canary service, ensure ExternalDNS deleted the record")
+		exutil.By("Remove label from the canary service, ensure ExternalDNS deleted the record")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", serviceNamespace, "service", serviceName, delLabel, "--overwrite").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Del records: external-dns-ingress-canary")

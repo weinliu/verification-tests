@@ -1039,6 +1039,16 @@ func createExternalDNSOperator(oc *exutil.CLI) {
 	e2e.Logf("err %v, msg %v", err, msg)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroup).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
+
+	// Deciding subscription need to be taken from which catalog
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+	if strings.Contains(output, "NotFound") {
+		e2e.Logf("Warning: catalogsource/qe-app-registry is not installed, using redhat-operators instead")
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's/qe-app-registry/redhat-operators/g' %s`, subscription)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 
