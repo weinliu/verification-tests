@@ -666,6 +666,41 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(daemonsetRunningNumNew).To(o.Equal(len(nodeList.Items) - 1))
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-69072-Infinite PODs loop creation with NodeAffinity status [Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		project69072Yaml := filepath.Join(buildPruningBaseDir, "project-69072.yaml")
+		deployment69072Yaml := filepath.Join(buildPruningBaseDir, "deployment-69072.yaml")
+
+		g.By("Create new namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", "infinite-pod-creation-69072").Execute()
+		projectCreationErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", project69072Yaml).Execute()
+		o.Expect(projectCreationErr).NotTo(o.HaveOccurred())
+
+		g.By("Create deployment")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", "infinite-pod-creation-69072").Execute()
+		deploymentCreationErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deployment69072Yaml, "-n", "infinite-pod-creation-69072").Execute()
+		o.Expect(deploymentCreationErr).NotTo(o.HaveOccurred())
+
+		g.By("Verify that pods created by deployment are running")
+		checkPodStatus(oc, "app=infinite-pod-creation-69072", "infinite-pod-creation-69072", "Running")
+
+		g.By("Retreive master node name from the cluster")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("Patch the deployment with the node name other than worker node")
+		patchOptions := fmt.Sprintf(`{"spec":{"template":{"spec":{"nodeName": "%s"}}}}`, masterNodes[0])
+		_, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", "-n", "infinite-pod-creation-69072", "infinite-pod-creation-69072", "--type=merge", "-p", patchOptions).Output()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		g.By("Verify that no pods with status NodeAffinity present")
+		podStatusOutput, podOutErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "infinite-pod-creation-69072").Output()
+		o.Expect(podOutErr).NotTo(o.HaveOccurred())
+		o.Expect(podStatusOutput).NotTo(o.ContainSubstring("NodeAffinity"))
+	})
+
 })
 
 var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
