@@ -2,7 +2,10 @@ package operators
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os"
@@ -1575,4 +1578,57 @@ func CreateCatalog(oc *exutil.CLI, catalogName, indexImage, catalogTemplate stri
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	}
+}
+
+func getCertRotation(oc *exutil.CLI, secretName, namespace string) (certsLastUpdated, certsRotateAt time.Time) {
+	var certsEncoding string
+	var err error
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+		certsEncoding, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", namespace, "-o=jsonpath={.data}").Output()
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Fail to get the certsEncoding, certsEncoding:%v, error:%v", certsEncoding, err))
+
+	certs, err := base64.StdEncoding.DecodeString(gjson.Get(certsEncoding, `tls\.crt`).String())
+	if err != nil {
+		e2e.Failf("Fail to get the certs:%v, error:%v", certs, err)
+	}
+	block, _ := pem.Decode(certs)
+	if block == nil {
+		e2e.Failf("failed to parse certificate PEM")
+	}
+	dates, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		e2e.Failf("Fail to parse certificate:\n%v, error:%v", string(certs), err)
+	}
+
+	notBefore := dates.NotBefore
+	notAfter := dates.NotAfter
+	duration, _ := time.ParseDuration("5m")
+	if !notBefore.Add(duration).Equal(notAfter) {
+		e2e.Failf("the duration is incorrect, notBefore:%v, notAfter:%v", notBefore, notAfter)
+	}
+	g.By("rotation will be 1 minutes earlier than expiration")
+	certsLastUpdadString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.certsLastUpdated}").Output()
+	if err != nil {
+		e2e.Failf("Fail to get certsLastUpdated, error:%v", err)
+	}
+	certsRotateAtString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.certsRotateAt}").Output()
+	if err != nil {
+		e2e.Failf("Fail to get certsRotateAt, error:%v", err)
+	}
+	duration2, _ := time.ParseDuration("4m")
+	certsLastUpdated, _ = time.Parse(time.RFC3339, certsLastUpdadString)
+	certsRotateAt, _ = time.Parse(time.RFC3339, certsRotateAtString)
+	// certsLastUpdated:2022-08-23 08:59:45
+	// certsRotateAt:2022-08-23 09:03:44
+	// due to https://issues.redhat.com/browse/OCPBUGS-444, there is a 1s difference, so here check if seconds difference in 3s.
+	secondsDifference := certsLastUpdated.Add(duration2).Sub(certsRotateAt).Seconds()
+	if secondsDifference > 3 || secondsDifference < -3 {
+		e2e.Failf("the certsRotateAt beyond 3s than expected, certsLastUpdated:%v, certsRotateAt:%v", certsLastUpdated, certsRotateAt)
+	}
+	return certsLastUpdated, certsRotateAt
 }

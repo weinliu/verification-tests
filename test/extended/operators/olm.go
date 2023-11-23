@@ -41,6 +41,76 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
+	g.It("NonPreRelease-Longduration-ConnectedOnly-Author:jiazha-Medium-53771-The certificate relating to operator-lifecycle-manager-packageserver isn't rotated after expired [Disruptive]", func() {
+		var image string
+		customOLMImage := "quay.io/olmqe/operator-framework-olm:cert-rotation-auto"
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion", "version", "-p", "{\"spec\": {\"overrides\":[{\"kind\": \"Deployment\", \"name\": \"olm-operator\", \"namespace\": \"openshift-operator-lifecycle-manager\", \"unmanaged\": false, \"group\": \"apps\"}]}}", "--type=merge").Output()
+			if err != nil {
+				e2e.Failf("Fail to put OLM into a managed state, error:%v", err)
+			}
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+				image, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].spec.containers[0].image}").Output()
+				olmPhase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].status.phase}").Output()
+				packagePhase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=packageserver", "-o=jsonpath={.items[0].status.phase}").Output()
+				e2e.Logf("olm-operator image: %s, phase:%v", image, olmPhase)
+				if image != customOLMImage && olmPhase == "Running" && packagePhase == "Running" {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("OLM pod image(%s) didn't recover after 180s", image))
+		}()
+		exutil.By("1, put OLM into an unmanaged state")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion", "version", "-p", "{\"spec\": {\"overrides\":[{\"kind\": \"Deployment\", \"name\": \"olm-operator\", \"namespace\": \"openshift-operator-lifecycle-manager\", \"unmanaged\": true, \"group\": \"apps\"}]}}", "--type=merge").Output()
+		if err != nil {
+			e2e.Failf("Fail to put OLM into an unmanaged state, error:%v", err)
+		}
+		exutil.By("2, patch the OLM operator deployment to utilize a custom version which issues certificates that expire faster")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", "olm-operator", "-p", fmt.Sprintf("{\"spec\": {\"template\": {\"spec\": {\"containers\": [{\"name\": \"olm-operator\", \"image\": \"%s\"}]}}}}", customOLMImage), "-n", "openshift-operator-lifecycle-manager").Output()
+		if err != nil {
+			e2e.Failf("Fail to patch the OLM operator deployment, error:%v", err)
+		}
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+			image, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].spec.containers[0].image}").Output()
+			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].status.phase}").Output()
+			e2e.Logf("olm-operator image: %s, phase:%v", image, phase)
+			if image == customOLMImage && phase == "Running" {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the olm-operator pod image(%s) not updated after 180s", image))
+		exutil.By("3, delete the existing packageserver cert to initiate the creation of a new one")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "packageserver-service-cert", "-n", "openshift-operator-lifecycle-manager").Output()
+		if err != nil {
+			e2e.Failf("Fail to delete the existing packageserver cert, error:%v", err)
+		}
+		exutil.By("4, check that the cert has the faster expiration date as expected")
+		certsLastUpdad0, certsRotateAt0 := getCertRotation(oc, "packageserver-service-cert", "openshift-operator-lifecycle-manager")
+		exutil.By("4-1, waiting 5 mins here until the expiration time, and check again if there is a new certificate that has been created.")
+		time.Sleep(4 * time.Minute)
+		var certsLastUpdad1, certsRotateAt1 time.Time
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+			certsLastUpdad1, certsRotateAt1 = getCertRotation(oc, "packageserver-service-cert", "openshift-operator-lifecycle-manager")
+			if certsLastUpdad0.Equal(certsLastUpdad1) && certsRotateAt0.Equal(certsRotateAt1) {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The rotation time Not changed! Before: certsLastUpdad:%v, certsRotateAt:%v\n After: certsLastUpdad:%v, certsRotateAt:%v\n", certsLastUpdad0, certsRotateAt0, certsLastUpdad1, certsRotateAt1))
+		exutil.By("5, recreate the packageserver pods, and check if the cert is rotated")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=packageserver").Output()
+		if err != nil {
+			e2e.Failf("Fail to delete packageserver pods, error:%v", err)
+		}
+		certsLastUpdad2, certsRotateAt2 := getCertRotation(oc, "packageserver-service-cert", "openshift-operator-lifecycle-manager")
+		if !certsLastUpdad1.Equal(certsLastUpdad2) || !certsRotateAt1.Equal(certsRotateAt2) {
+			e2e.Failf("The rotation time changed! Before: certsLastUpdad:%v, certsRotateAt:%v\n After: certsLastUpdad:%v, certsRotateAt:%v\n", certsLastUpdad1, certsRotateAt1, certsLastUpdad2, certsRotateAt2)
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-Medium-68681-pods with no 'controller: true' ownerReferences", func() {
 		defaultCatalogSources := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		exutil.By("1) check default catalog sources' pods if labeled with controller: true")
