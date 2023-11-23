@@ -19,7 +19,7 @@ objects:
             email: ${CLUSTERID}-w@openshift-qe.iam.gserviceaccount.com
             scopes:
             - https://www.googleapis.com/auth/cloud-platform
-          subnet: ${CLUSTERID}-worker-subnet
+          subnet: ${SUBNETWORK}
           additionalNetworkTags:
           - ${CLUSTERID}-worker
 
@@ -29,3 +29,4 @@ parameters:
 - name: IMAGE
 - name: MACHINETYPE
 - name: CLUSTERID
+- name: SUBNETWORK

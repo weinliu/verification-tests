@@ -28,6 +28,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		sgName                     string
 		image                      string
 		machineType                string
+		network                    string
+		subnetwork                 string
 		capiBaseDir                string
 		clusterTemplate            string
 		awsClusterTemplate         string
@@ -54,11 +56,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "aws":
 			region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			apiServerInternalURI, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.apiServerInternalURI}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			start := strings.Index(apiServerInternalURI, "://")
-			end := strings.LastIndex(apiServerInternalURI, ":")
-			host = apiServerInternalURI[start+3 : end]
 			randomMachinesetName := exutil.GetRandomMachineSetName(oc)
 			profile, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.iamInstanceProfile.id}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -84,11 +81,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			machineType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.machineType}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			network, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].network}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			subnetwork, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].subnetwork}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 		default:
 			g.Skip("IAAS platform is " + iaasPlatform + " which is NOT supported cluster api ...")
 		}
 		clusterID, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		apiServerInternalURI, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.apiServerInternalURI}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		start := strings.Index(apiServerInternalURI, "://")
+		end := strings.LastIndex(apiServerInternalURI, ":")
+		host = apiServerInternalURI[start+3 : end]
 
 		capiBaseDir = exutil.FixturePath("testdata", "clusterinfrastructure", "capi")
 		clusterTemplate = filepath.Join(capiBaseDir, "cluster.yaml")
@@ -115,6 +121,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		gcpcluster = gcpClusterDescription{
 			name:     clusterID,
 			region:   region,
+			host:     host,
+			network:  network,
 			template: gcpClusterTemplate,
 		}
 		awsMachineTemplate = awsMachineTemplateDescription{
@@ -133,6 +141,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			region:      region,
 			image:       image,
 			machineType: machineType,
+			subnetwork:  subnetwork,
 			clusterID:   clusterID,
 			template:    gcpMachineTemplateTemplate,
 		}
@@ -199,7 +208,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		gcpMachineTemplate.createGCPMachineTemplate(oc)
 
 		capiMachineSetgcp.name = "capi-machineset-53100"
-		defer waitForCapiMachinesDisapper(oc, capiMachineSetgcp.name)
+		defer waitForCapiMachinesDisappergcp(oc, capiMachineSetgcp.name)
 		defer capiMachineSetgcp.deleteCapiMachineSetgcp(oc)
 		capiMachineSetgcp.createCapiMachineSetgcp(oc)
 

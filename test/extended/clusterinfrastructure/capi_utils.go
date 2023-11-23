@@ -3,6 +3,7 @@ package clusterinfrastructure
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -32,6 +33,8 @@ type gcpClusterDescription struct {
 	name      string
 	namespace string
 	region    string
+	host      string
+	network   string
 	template  string
 }
 
@@ -55,6 +58,7 @@ type gcpMachineTemplateDescription struct {
 	image       string
 	machineType string
 	clusterID   string
+	subnetwork  string
 	template    string
 }
 
@@ -107,7 +111,7 @@ func (awsCluster *awsClusterDescription) deleteAWSCluster(oc *exutil.CLI) error 
 
 func (gcpCluster *gcpClusterDescription) createGCPCluster(oc *exutil.CLI) {
 	e2e.Logf("Creating gcpCluster ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpCluster.template, "-p", "NAME="+gcpCluster.name, "NAMESPACE="+clusterAPINamespace, "REGION="+gcpCluster.region)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpCluster.template, "-p", "NAME="+gcpCluster.name, "NAMESPACE="+clusterAPINamespace, "REGION="+gcpCluster.region, "HOST="+gcpCluster.host, "NETWORK="+gcpCluster.network)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -129,7 +133,7 @@ func (awsMachineTemplate *awsMachineTemplateDescription) deleteAWSMachineTemplat
 
 func (gcpMachineTemplate *gcpMachineTemplateDescription) createGCPMachineTemplate(oc *exutil.CLI) {
 	e2e.Logf("Creating gcpMachineTemplate ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpMachineTemplate.template, "-p", "NAME="+gcpMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "IMAGE="+gcpMachineTemplate.image, "REGION="+gcpMachineTemplate.region, "CLUSTERID="+gcpMachineTemplate.clusterID, "MACHINETYPE="+gcpMachineTemplate.machineType)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpMachineTemplate.template, "-p", "NAME="+gcpMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "IMAGE="+gcpMachineTemplate.image, "REGION="+gcpMachineTemplate.region, "CLUSTERID="+gcpMachineTemplate.clusterID, "MACHINETYPE="+gcpMachineTemplate.machineType, "SUBNETWORK="+gcpMachineTemplate.subnetwork)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -191,6 +195,21 @@ func waitForCapiMachinesDisapper(oc *exutil.CLI, machineSetName string) {
 	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
 		machineNames, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "cluster.x-k8s.io/set-name="+machineSetName, "-n", clusterAPINamespace).Output()
 		if machineNames != "" {
+			e2e.Logf(" Still have machines are not Disappered yet and waiting up to 1 minutes ...")
+			return false, nil
+		}
+		e2e.Logf("All machines are Disappered")
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Wait machine disappear failed.")
+}
+
+// waitForCapiMachinesDisappergcp check if all the machines are Dissappered in a MachineSet
+func waitForCapiMachinesDisappergcp(oc *exutil.CLI, machineSetName string) {
+	e2e.Logf("Waiting for the machines Dissapper ...")
+	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
+		machineNames, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", clusterAPINamespace).Output()
+		if strings.Contains(machineNames, machineSetName) {
 			e2e.Logf(" Still have machines are not Disappered yet and waiting up to 1 minutes ...")
 			return false, nil
 		}

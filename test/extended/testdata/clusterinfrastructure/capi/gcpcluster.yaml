@@ -12,8 +12,13 @@ objects:
       region: ${REGION}
       project: openshift-qe
       network:
-        name: ${NAME}-network
+        name: ${NETWORK}
+      controlPlaneEndpoint:
+        host: ${HOST}
+        port: 6443
 parameters:
 - name: NAME
 - name: NAMESPACE
 - name: REGION
+- name: NETWORK
+- name: HOST
