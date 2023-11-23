@@ -135,6 +135,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 				changeInstanceType = "c2d-standard-4"
 				backupInstanceType = "n2d-standard-4"
 			}
+			if getArchitectureType(oc) == "arm64" {
+				changeInstanceType = "t2a-standard-8"
+				backupInstanceType = "t2a-standard-4"
+			}
 			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}"
 			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`
 			patchstrSuffix = `"}}}}}}}`
@@ -295,6 +299,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			if confidentialCompute == "Enabled" {
 				changeInstanceType = "c2d-standard-4"
 				backupInstanceType = "n2d-standard-4"
+			}
+			if getArchitectureType(oc) == "arm64" {
+				changeInstanceType = "t2a-standard-8"
+				backupInstanceType = "t2a-standard-4"
 			}
 			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}"
 			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`
