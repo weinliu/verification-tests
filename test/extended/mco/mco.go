@@ -3720,6 +3720,29 @@ nulla pariatur.`
 		}
 	})
 
+	g.It("Author:sregidor-NonPreRelease-Medium-69091-MCO skips reboot when configuration matches during node bootstrap pivot [Serial]", func() {
+		var (
+			MachineConfigDaemonFirstbootService = "machine-config-daemon-firstboot.service"
+		)
+
+		if !IsInstalledWithAssistedInstallerOrFail(oc.AsAdmin()) {
+			g.Skip("This test can only be executed in clusters installed with assisted-installer. This cluster was not installed using assisted-installer.")
+		}
+
+		exutil.By("Check that the first reboot is skipped")
+		coreOsNode := NewNodeList(oc.AsAdmin()).GetAllCoreOsNodesOrFail()[0]
+
+		logger.Infof("Using node %s", coreOsNode.GetName())
+		o.Eventually(coreOsNode.GetJournalLogs, "30s", "10s").WithArguments("-u", MachineConfigDaemonFirstbootService).
+			Should(o.And(
+				o.ContainSubstring("Starting Machine Config Daemon Firstboot"),
+				o.Not(o.ContainSubstring(`Changes queued for next boot. Run "systemctl reboot" to start a reboot`)),
+				o.Not(o.ContainSubstring(`initiating reboot`)),
+			),
+				"The %s service should have skipped the first reboot, but it didn't", MachineConfigDaemonFirstbootService)
+
+		exutil.By("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason

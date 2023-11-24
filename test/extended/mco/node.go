@@ -858,8 +858,15 @@ func (n *Node) ExecIPTables(rules []string) error {
 	return nil
 }
 
+// GetArchitectureOrFail get the architecture used in the node and fail the test if any error happens while doing it
 func (n *Node) GetArchitectureOrFail() architecture.Architecture {
 	return architecture.FromString(n.GetOrFail(`{.status.nodeInfo.architecture}`))
+}
+
+// GetJournalLogs returns the journal logs
+func (n *Node) GetJournalLogs(args ...string) (string, error) {
+	cmd := []string{"journalctl", "-o", "with-unit"}
+	return n.DebugNodeWithChroot(append(cmd, args...)...)
 }
 
 // GetAll returns a []Node list with all existing nodes

@@ -1064,3 +1064,22 @@ func IsCompactOrSNOCluster(oc *exutil.CLI) bool {
 
 	return wMcp.IsEmpty() && len(mcpList.GetAllOrFail()) == 2
 }
+
+// IsInstalledWithAssistedInstaller returns true if the assisted-installer was involved in the installation of the cluster. If any error happens, it fails the test.
+//
+//	Remember that the agent installer is using assisted-installer for the installation too.
+func IsInstalledWithAssistedInstallerOrFail(oc *exutil.CLI) bool {
+	logger.Infof("Checking if the cluster was installed using assisted-installer")
+
+	podsList := NewNamespacedResourceList(oc, "pods", "assisted-installer")
+	podsList.ByLabel("app=assisted-installer-controller")
+
+	podsList.PrintDebugCommand()
+
+	pods, err := podsList.GetAll()
+	if err != nil {
+		e2e.Failf("Error checking if the cluster was installed with assisted-installer: %s", err)
+	}
+
+	return len(pods) > 0
+}
