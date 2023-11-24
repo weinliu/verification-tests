@@ -1095,7 +1095,7 @@ func createApplyPeerPodSecrets(oc *exutil.CLI, provider string, ppParam PeerpodP
 	if err != nil {
 		e2e.Logf("%v Configmap created by QE CI not found: msg %v err: %v", ciCmName, msg, err)
 	} else {
-		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-o=jsonpath={.data}").Output()
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n default", "-o=jsonpath={.data}").Output()
 		if err != nil {
 			e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciCmName, configmapData, err)
 		}
@@ -1211,7 +1211,7 @@ func createAWSPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretName,
 	)
 
 	// Read peerpods-param-secret to fetch the keys
-	secretString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", ciSecretName, "-o=jsonpath={.data.aws}").Output()
+	secretString, err := oc.AsAdmin().Run("get").Args("secret", ciSecretName, "-n default", "-o=jsonpath={.data.aws}").Output()
 
 	if err != nil || secretString == "" {
 		e2e.Logf("Error: %v CI provided peer pods secret data empty", err)
@@ -1290,7 +1290,7 @@ func createAzurePeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretNam
 	)
 
 	// Read peerpods-param-secret to fetch the keys
-	secretString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", ciSecretName, "-o=jsonpath={.data.azure}").Output()
+	secretString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", ciSecretName, "-n default", "-o=jsonpath={.data.azure}").Output()
 
 	if err != nil || secretString == "" {
 		e2e.Logf("Error: %v CI provided peer pods secret data empty", err)
@@ -1451,7 +1451,7 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 	// Check if the secrets already exist
 	g.By("Checking if peer-pods-secret exists")
 	msg, err = checkPeerPodConfigMap(oc, opNamespace, provider, ppConfigMapName)
-	if err == nil && msg == "" {
+	if err == nil {
 		e2e.Logf("peer-pods-cm exists - skipping creating it")
 		return msg, err
 	} else if err != nil {
@@ -1463,7 +1463,7 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 	if err != nil {
 		e2e.Logf("%v Configmap created by QE CI not found: msg %v err: %v", ciCmName, msg, err)
 	} else {
-		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-o=jsonpath={.data}").Output()
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n default", "-o=jsonpath={.data}").Output()
 		if err != nil {
 			e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciCmName, configmapData, err)
 		}
@@ -1504,7 +1504,7 @@ func createAWSPeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfigMa
 
 	// Processing configmap template and create " <randomstring>peer-pods-cm.json"
 	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
-		"-p", "CLOUD_PROVIDER="+ppParam.CLOUD_PROVIDER, "VXLAN_PORT="+ppParam.VXLAN_PORT, "PODVM_INSTANCE_TYPE="+ppParam.PODVM_INSTANCE_TYPE,
+		"-p", "VXLAN_PORT="+ppParam.VXLAN_PORT, "PODVM_INSTANCE_TYPE="+ppParam.PODVM_INSTANCE_TYPE,
 		"PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
 
 	if configFile != "" {
@@ -1522,7 +1522,7 @@ func createAzurePeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfig
 
 	// Processing configmap template and create " <randomstring>peer-pods-cm.json"
 	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
-		"-p", "CLOUD_PROVIDER="+ppParam.CLOUD_PROVIDER, "VXLAN_PORT="+ppParam.VXLAN_PORT,
+		"-p", "VXLAN_PORT="+ppParam.VXLAN_PORT,
 		"AZURE_INSTANCE_SIZE="+ppParam.AZURE_INSTANCE_SIZE, "AZURE_SUBNET_ID="+ppParam.AZURE_SUBNET_ID,
 		"AZURE_NSG_ID="+ppParam.AZURE_NSG_ID, "PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
 

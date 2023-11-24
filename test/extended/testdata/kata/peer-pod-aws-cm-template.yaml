@@ -9,7 +9,7 @@ objects:
       name: "${NAME}"
       namespace: "${NAMESPACE}"
     data:
-      CLOUD_PROVIDER: "${CLOUD_PROVIDER}"
+      CLOUD_PROVIDER: "aws"
       VXLAN_PORT: "${VXLAN_PORT}"
       PODVM_INSTANCE_TYPE: "${PODVM_INSTANCE_TYPE}"
       PROXY_TIMEOUT: "${PROXY_TIMEOUT}"
@@ -19,8 +19,6 @@ parameters:
     value: "peer-pods-cm"
   - name: NAMESPACE
     value: "openshift-sandboxed-containers-operator"
-  - name: CLOUD_PROVIDER
-    value: ""
   - name: VXLAN_PORT 
     value: ""
   - name: PODVM_INSTANCE_TYPE

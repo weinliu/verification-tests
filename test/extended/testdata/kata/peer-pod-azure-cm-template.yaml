@@ -9,20 +9,19 @@ objects:
       name: "${NAME}"
       namespace: "${NAMESPACE}"
     data:
-      CLOUD_PROVIDER: "${CLOUD_PROVIDER}"
+      CLOUD_PROVIDER: "azure"
       VXLAN_PORT: "${VXLAN_PORT}"
       AZURE_INSTANCE_SIZE: "${AZURE_INSTANCE_SIZE}"
       AZURE_SUBNET_ID: "${AZURE_SUBNET_ID}" 
       AZURE_NSG_ID: "${AZURE_NSG_ID}" 
       PROXY_TIMEOUT: "${PROXY_TIMEOUT}"
+      DISABLECVM: "true"
   
 parameters:
   - name: NAME
     value: "peer-pods-cm"
   - name: NAMESPACE
     value: "openshift-sandboxed-containers-operator"
-  - name: CLOUD_PROVIDER
-    value: ""
   - name: VXLAN_PORT 
     value: ""
   - name: AZURE_INSTANCE_SIZE
