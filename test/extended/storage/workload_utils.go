@@ -965,10 +965,22 @@ func (dep *deployment) scaleReplicas(oc *exutil.CLI, replicasno string) {
 	dep.replicasno = replicasno
 }
 
-// Restart the Deployment by scale down to '0' and then scale up to origin number
+// GetSpecifiedJSONPathValue gets the specified jsonpath value of the Deployment
+func (dep *deployment) getSpecifiedJSONPathValue(oc *exutil.CLI, jsonPath string) string {
+	value, getValueErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", dep.name, "-n", dep.namespace, "-o", fmt.Sprintf("jsonpath=%s", jsonPath)).Output()
+	o.Expect(getValueErr).NotTo(o.HaveOccurred())
+	e2e.Logf(`Deployment/%s jsonPath->"%s" value is %s`, dep.name, jsonPath, value)
+	return value
+}
+
+// Restart the Deployment by rollout restart
 func (dep *deployment) restart(oc *exutil.CLI) {
+	resourceVersionOri := dep.getSpecifiedJSONPathValue(oc, "{.metadata.resourceVersion}")
 	err := oc.WithoutNamespace().Run("rollout").Args("-n", dep.namespace, "restart", "deployment", dep.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Eventually(func() string {
+		return dep.getSpecifiedJSONPathValue(oc, "{.metadata.resourceVersion}")
+	}, defaultMaxWaitingTime, defaultMaxWaitingTime/defaultIterationTimes).ShouldNot(o.Equal(resourceVersionOri), "The deploymet resourceVersion doesn't update")
 	dep.waitReady(oc)
 	e2e.Logf("deployment/%s in namespace %s restart successfully", dep.name, dep.namespace)
 }
