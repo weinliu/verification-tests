@@ -4,6 +4,7 @@ declare global {
     namespace Cypress {
         interface Chainable<Subject> {
             switchPerspective(perspective: string);
+	    uiLogin();
             uiLogout();
             cliLogin();
             cliLogout();
@@ -31,7 +32,7 @@ Cypress.Commands.add("switchPerspective", (perspective: string) => {
     nav.sidenav.switcher.shouldHaveText(perspective);
 });
 
-/* Save for debuggin upstream login change
+// to avoid influence from upstream login change
 Cypress.Commands.add('uiLogin', (provider: string, username: string, password: string)=> {
   cy.clearCookie('openshift-session-token');
   cy.visit('/');
@@ -44,6 +45,9 @@ Cypress.Commands.add('uiLogin', (provider: string, username: string, password: s
   cy.get('body').then(($body) => {
     if ($body.text().includes(provider)) {
       cy.contains(provider).should('be.visible').click();
+    }else{
+      //using the last idp
+      cy.get('li.idp').last().click();
     }
   });
   cy.get('#inputUsername').type(username);
@@ -53,7 +57,7 @@ Cypress.Commands.add('uiLogin', (provider: string, username: string, password: s
     .should('be.visible');
   })
   cy.visit('/');
-}); */
+}); 
 
 Cypress.Commands.add('uiLogout', () => {
   cy.window().then((win: any) => {
@@ -84,7 +88,10 @@ Cypress.Commands.add("cliLogout", () => {
 
 Cypress.Commands.add("adminCLI", (command: string) => {
   cy.log(`Run admin command: ${command}`)
-  cy.exec(`${command} --kubeconfig ${kubeconfig}`)
+  cy.exec(`${command} --kubeconfig ${kubeconfig}`, { failOnNonZeroExit: false }).then(result => {
+    cy.log(result.stderr);
+    cy.log(result.stdout);
+  });
 });
 
 const hasWindowsNode = () :boolean => {
