@@ -240,6 +240,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		}
 	})
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-Low-51093-oc-mirror init", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("the cluster do not has all pull-secret for public registry")
+		}
 		g.By("Set podman registry config")
 		dirname := "/tmp/case51093"
 		err := os.MkdirAll(dirname, 0755)

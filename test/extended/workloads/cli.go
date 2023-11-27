@@ -878,6 +878,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-51018-oc adm release extract support manifest list", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("the cluster do not has all pull-secret for public registry")
+		}
 		extractTmpDirName := "/tmp/case51018"
 		err := os.MkdirAll(extractTmpDirName, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())

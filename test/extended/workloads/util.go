@@ -1715,3 +1715,22 @@ func getOCPerKubeConf(oc *exutil.CLI, guestClusterKubeconfig string) *exutil.CLI
 	}
 	return oc.AsGuestKubeconf()
 }
+
+func assertPullSecret(oc *exutil.CLI) bool {
+	dirName := "/tmp/" + exutil.GetRandomString()
+	err := os.MkdirAll(dirName, 0o755)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer os.RemoveAll(dirName)
+	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to", dirName, "--confirm").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	oauthFilePath := dirName + "/.dockerconfigjson"
+	secretContent, err := exec.Command("bash", "-c", fmt.Sprintf("cat %v", oauthFilePath)).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if matched, _ := regexp.MatchString("registry.ci.openshift.org", string(secretContent)); !matched {
+		return false
+	} else {
+		return true
+	}
+
+}
