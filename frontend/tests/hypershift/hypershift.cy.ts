@@ -3,7 +3,7 @@ import { sideNav } from '../../views/nav';
 import { crds } from '../../views/crds';
 describe('Check on hypershift provisined cluster', () => {
   before(() => {
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
   it('(OCP-50740,yanpzhan) Remove manchine related resources for HyperShift Provisioned Clusters', {tags: ['HyperShiftGUEST','admin']}, () => {
