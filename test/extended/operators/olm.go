@@ -5727,6 +5727,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover part of test case: OCP-21404, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-21404-csv will be RequirementsNotMet after role rule is delete[Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipForSNOCluster(oc)
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6450,6 +6458,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-37263, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-37263-Subscription stays in UpgradePending but InstallPlan not installing [Slow]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipForSNOCluster(oc)
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -11364,9 +11380,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			}
 		)
 
+		exutil.SkipForSNOCluster(oc)
+		platform := exutil.CheckPlatform(oc)
 		proxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(exutil.CheckPlatform(oc), "openstack") || proxy != "" {
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("it is not supported")
 		}
 
