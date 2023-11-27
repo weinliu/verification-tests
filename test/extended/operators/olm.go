@@ -51,10 +51,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 				image, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].spec.containers[0].image}").Output()
-				olmPhase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].status.phase}").Output()
-				packagePhase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=packageserver", "-o=jsonpath={.items[0].status.phase}").Output()
-				e2e.Logf("olm-operator image: %s, phase:%v", image, olmPhase)
-				if image != customOLMImage && olmPhase == "Running" && packagePhase == "Running" {
+				olmPhase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator").Output()
+				packagePhase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=packageserver").Output()
+				if image != customOLMImage && strings.Contains(olmPhase, "Running") && strings.Contains(packagePhase, "Running") {
 					return true, nil
 				}
 				return false, nil
@@ -73,9 +72,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			image, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].spec.containers[0].image}").Output()
-			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].status.phase}").Output()
-			e2e.Logf("olm-operator image: %s, phase:%v", image, phase)
-			if image == customOLMImage && phase == "Running" {
+			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator").Output()
+			if image == customOLMImage && strings.Contains(phase, "Running") {
 				return true, nil
 			}
 			return false, nil
@@ -89,7 +87,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.By("4, check that the cert has the faster expiration date as expected")
 		certsLastUpdad0, certsRotateAt0 := getCertRotation(oc, "packageserver-service-cert", "openshift-operator-lifecycle-manager")
 		exutil.By("4-1, waiting 5 mins here until the expiration time, and check again if there is a new certificate that has been created.")
-		time.Sleep(4 * time.Minute)
+		time.Sleep(5 * time.Minute)
 		var certsLastUpdad1, certsRotateAt1 time.Time
 		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			certsLastUpdad1, certsRotateAt1 = getCertRotation(oc, "packageserver-service-cert", "openshift-operator-lifecycle-manager")

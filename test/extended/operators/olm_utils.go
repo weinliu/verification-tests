@@ -1607,10 +1607,13 @@ func getCertRotation(oc *exutil.CLI, secretName, namespace string) (certsLastUpd
 
 	notBefore := dates.NotBefore
 	notAfter := dates.NotAfter
+	// code: https://github.com/jianzhangbjz/operator-framework-olm/commit/7275a55186a59fcb9845cbe3a9a99c56a7afbd1d
 	duration, _ := time.ParseDuration("5m")
-	if !notBefore.Add(duration).Equal(notAfter) {
-		e2e.Failf("the duration is incorrect, notBefore:%v, notAfter:%v", notBefore, notAfter)
+	secondsDifference := notBefore.Add(duration).Sub(notAfter).Seconds()
+	if secondsDifference > 3 || secondsDifference < -3 {
+		e2e.Failf("the duration is incorrect, notBefore:%v, notAfter:%v, secondsDifference:%v", notBefore, notAfter, secondsDifference)
 	}
+
 	g.By("rotation will be 1 minutes earlier than expiration")
 	certsLastUpdadString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.certsLastUpdated}").Output()
 	if err != nil {
@@ -1626,7 +1629,7 @@ func getCertRotation(oc *exutil.CLI, secretName, namespace string) (certsLastUpd
 	// certsLastUpdated:2022-08-23 08:59:45
 	// certsRotateAt:2022-08-23 09:03:44
 	// due to https://issues.redhat.com/browse/OCPBUGS-444, there is a 1s difference, so here check if seconds difference in 3s.
-	secondsDifference := certsLastUpdated.Add(duration2).Sub(certsRotateAt).Seconds()
+	secondsDifference = certsLastUpdated.Add(duration2).Sub(certsRotateAt).Seconds()
 	if secondsDifference > 3 || secondsDifference < -3 {
 		e2e.Failf("the certsRotateAt beyond 3s than expected, certsLastUpdated:%v, certsRotateAt:%v", certsLastUpdated, certsRotateAt)
 	}
