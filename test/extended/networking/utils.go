@@ -3056,3 +3056,16 @@ func (kkPod *kubeletKillerPod) createKubeletKillerPodOnNode(oc *exutil.CLI) {
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create Kubelet-Killer pod %v", kkPod.name))
 }
+
+func getNodeNameByIPv4(oc *exutil.CLI, nodeIPv4 string) (nodeName string) {
+	nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, node := range nodeList.Items {
+		_, IPv4 := getNodeIP(oc, node.Name)
+		if IPv4 == nodeIPv4 {
+			nodeName = node.Name
+			break
+		}
+	}
+	return nodeName
+}

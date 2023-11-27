@@ -2,7 +2,10 @@ package networking
 
 import (
 	"context"
+	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -46,5 +49,263 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(out).To(o.ContainSubstring(`ipsec_encapsulation="true"`))
 		}
 
+	})
+})
+
+var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc           = exutil.NewCLI("networking-ipsec-ns", exutil.KubeConfigPath())
+		leftPublicIP string
+		ipsecTunnel  string
+		rightIP      string
+		leftIP       string
+		rightNode    string
+	)
+	g.BeforeEach(func() {
+		platform := exutil.CheckPlatform(oc)
+		networkType := checkNetworkType(oc)
+		e2e.Logf("\nThe platform is %v,  networkType is %v\n", platform, networkType)
+		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "none")) || !strings.Contains(networkType, "ovn") {
+			g.Skip("Test cases should be run on GCP/BBM cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		}
+
+		switch platform {
+		case "gcp":
+			infraID, err := exutil.GetInfraID(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			leftPublicIP, err = getIntSvcExternalIPFromGcp(oc, infraID)
+			if leftPublicIP == "" || err != nil {
+				g.Skip("There is no int-svc bastion host in the cluster, skip the ipsec NS test cases.")
+			} else {
+				ipsecTunnel = "worker1-VM"
+				rightIP = "10.0.128.2"
+				leftIP = "10.0.0.2"
+			}
+		case "none":
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+			if err != nil || !(strings.Contains(msg, "bm2-zzhao")) {
+				g.Skip("This case needs to be run local BBM cluster or gcp, skip other platforms!!!")
+			}
+			ipsecTunnel = "pluto-62-VM"
+			rightIP = "10.73.116.62"
+			leftIP = "10.1.98.217"
+			leftPublicIP = leftIP
+		}
+
+		// As not the all gcp with int-svc have the ipsec NS enabled, still need to filter the ipsec NS enabled or not
+		rightNode = getNodeNameByIPv4(oc, rightIP)
+		if rightNode == "" {
+			g.Skip(fmt.Sprintf("There is no worker node with IPSEC rightIP %v, skip the testing.", rightIP))
+		}
+
+		// Check if ipsec.service existing or not
+		statusCmd := fmt.Sprintf("systemctl status ipsec.service")
+		_, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", statusCmd)
+		if ipsecErr != nil {
+			g.Skip("No ipsec service installed on nodes, skip IPSEC NS tests!")
+		}
+
+		cmd := fmt.Sprintf("systemctl restart ipsec.service && sleep 5 && ipsec auto --up " + ipsecTunnel)
+		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
+		if ipsecErr != nil || !strings.Contains(ipsecStatus, "established") {
+			e2e.Logf("IPSEC status: \n%s", ipsecStatus)
+			g.Skip("IPSEC NS was not enabled on this cluster, skip ipsec NS tests!")
+
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-67472-Transport tunnel can be setup for IPSEC NS, [Disruptive]", func() {
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		cmd := "ipsec whack --trafficstatus"
+		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
+		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
+		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
+		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdErr := cmdTcpdump.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"), cmdOutput.String())
+
+		exutil.By("Start tcpdump on ipsec right node again")
+		tcpdumpCmd2 := fmt.Sprintf("timeout 60s tcpdump -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump2, cmdOutput2, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd2).Background()
+		defer cmdTcpdump2.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Checking ssh between worker node and external host encrypted by ESP")
+		time.Sleep(5 * time.Second)
+		result, timeoutTestErr := accessEgressNodeFromIntSvcInstanceOnGCP(leftPublicIP, rightIP)
+		o.Expect(timeoutTestErr).NotTo(o.HaveOccurred())
+		o.Expect(result).To(o.Equal("0"))
+		cmdErr = cmdTcpdump2.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		e2e.Logf(cmdOutput2.String())
+		o.Expect(cmdOutput2.String()).To(o.ContainSubstring("ESP"), cmdOutput2.String())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-67473-Service nodeport can be accessed with ESP encrypted, [Disruptive]", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+		)
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		cmd := "ipsec whack --trafficstatus"
+		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
+		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
+		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+
+		g.By("Create a namespace")
+		ns1 := oc.Namespace()
+		g.By("create 1st hello pod in ns1")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  rightNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns1, pod1.name)
+
+		g.By("Create a test service which is in front of the above pods")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns1,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "NodePort",
+			ipFamilyPolicy:        "",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              genericServiceTemplate,
+		}
+		svc.ipFamilyPolicy = "SingleStack"
+		svc.createServiceFromParams(oc)
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Checking the traffic is encrypted by ESP when curl NodePort service from external host")
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns1, "test-service", "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		curlCmd := fmt.Sprintf("curl %s:%s &", rightIP, nodePort)
+		time.Sleep(5 * time.Second)
+		err = sshRunCmd(leftPublicIP, "core", curlCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdErr := cmdTcpdump.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"), cmdOutput.String())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-Medium-67474-IPsec tunnel can be up after restart ipsec service,  [Disruptive]", func() {
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		cmd := "ipsec whack --trafficstatus"
+		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
+		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
+		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+
+		exutil.By("Restart ipsec service on right node")
+		ns := oc.Namespace()
+		cmd2 := "systemctl restart ipsec.service"
+		_, ipsecErr = exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd2)
+		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify ipsec session was established between worker node and external host again!")
+		ipsecStatus, ipsecErr = exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
+		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
+		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+
+		exutil.By("Start tcpdump for ipsec on right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, ns)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
+		time.Sleep(5 * time.Second)
+		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
+		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdErr := cmdTcpdump.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"), cmdOutput.String())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-67475-Be able to access hostnetwork pod with traffic encrypted,  [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			hostPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-hostnetwork-specific-node-template.yaml")
+		)
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		cmd := "ipsec whack --trafficstatus"
+		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
+		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
+		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+
+		g.By("Create a namespace")
+		ns1 := oc.Namespace()
+		//Required for hostnetwork pod
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-group", "privileged", "system:serviceaccounts:"+ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("create a hostnetwork pod in ns1")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  rightNode,
+			template:  hostPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns1, pod1.name)
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Checking the traffic is encrypted by ESP when curl hostpod from external host")
+		time.Sleep(5 * time.Second)
+		curlCmd := fmt.Sprintf("curl %s:%s &", rightIP, "8080")
+		err = sshRunCmd(leftPublicIP, "core", curlCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdErr := cmdTcpdump.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"), cmdOutput.String())
 	})
 })
