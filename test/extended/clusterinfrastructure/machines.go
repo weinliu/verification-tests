@@ -244,22 +244,29 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
+		//check supported zone for gpu
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if !strings.Contains(zone, "us-central1-") {
+			g.Skip("not valid zone for GPU machines")
+		}
 		g.By("Update machineset with GPU")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","onHostMaintenance":"Terminate","restartPolicy":"Always"}}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{ "gpus": [ { "count": 1,"type": "nvidia-tesla-p100" }],"machineType":"n1-standard-1", "zone":"us-central1-c", "onHostMaintenance":"Terminate","restartPolicy":"Always"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with GPU")
-		machineType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.machineType}").Output()
+		gpuType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.gpus[0].type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		onHostMaintenance, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.onHostMaintenance}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		restartPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.restartPolicy}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		e2e.Logf("machineType:%s, onHostMaintenance:%s, restartPolicy:%s", machineType, onHostMaintenance, restartPolicy)
-		o.Expect(strings.Contains(machineType, "a2-highgpu-1g") && strings.Contains(onHostMaintenance, "Terminate") && strings.Contains(restartPolicy, "Always")).To(o.BeTrue())
+		e2e.Logf("gpuType:%s, onHostMaintenance:%s, restartPolicy:%s", gpuType, onHostMaintenance, restartPolicy)
+		o.Expect(strings.Contains(gpuType, "nvidia-tesla-p100") && strings.Contains(onHostMaintenance, "Terminate") && strings.Contains(restartPolicy, "Always")).To(o.BeTrue())
 	})
 
 	// author: zhsun@redhat.com
