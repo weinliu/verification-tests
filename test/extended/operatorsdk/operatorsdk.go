@@ -3609,7 +3609,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 		}()
 
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@"+indexImageDigest, "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@"+indexImageDigest, "-n", ns, "--timeout", "5m", "--security-context-config=restricted", "--decompression-image", "quay.io/olmqe/busybox@sha256:e39d9c8ac4963d0b00a5af08678757b44c35ea8eb6be0cdfbeb1282e7f7e6003").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
@@ -3812,7 +3812,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 		}()
 
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@"+indexImageDigest, "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@"+indexImageDigest, "-n", ns, "--timeout", "5m", "--security-context-config=restricted", "--decompression-image", "quay.io/olmqe/busybox@sha256:e39d9c8ac4963d0b00a5af08678757b44c35ea8eb6be0cdfbeb1282e7f7e6003").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
@@ -4021,7 +4021,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 		}()
 
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@"+indexImageDigest, "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@"+indexImageDigest, "-n", ns, "--timeout", "5m", "--security-context-config=restricted", "--decompression-image", "quay.io/olmqe/busybox@sha256:e39d9c8ac4963d0b00a5af08678757b44c35ea8eb6be0cdfbeb1282e7f7e6003").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
