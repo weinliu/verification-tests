@@ -3758,7 +3758,23 @@ nulla pariatur.`
 				o.Not(o.ContainSubstring(`initiating reboot`)),
 			),
 				"The %s service should have skipped the first reboot, but it didn't", MachineConfigDaemonFirstbootService)
+		exutil.By("OK!\n")
+	})
 
+	g.It("Author:sregidor-NonPreRelease-High-68736-machine config server supports bootstrap with IR certs [Serial]", func() {
+		var (
+			mcsBinary              = "/usr/bin/machine-config-server"
+			bootstrapSubCmd        = "bootstrap"
+			expectedBootstrapHelp  = "--bootstrap-certs stringArray   a certificate bundle formatted in a string array with the format key=value,key=value"
+			controllerPodName, err = NewController(oc.AsAdmin()).GetPodName()
+		)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the MCO controller pod to check the bootstrap-certs flag in machine-config-server")
+
+		exutil.By(fmt.Sprintf("Check that the bootstrap-certs flag is present in the command: %s %s -h", mcsBinary, bootstrapSubCmd))
+		o.Eventually(exutil.RemoteShPod, "2m", "20s").
+			WithArguments(oc.AsAdmin(), MachineConfigNamespace, controllerPodName, mcsBinary, bootstrapSubCmd, "-h").
+			Should(o.ContainSubstring(expectedBootstrapHelp),
+				"The --bootstrap-certs flag is not available in the machine-config-server binary")
 		exutil.By("OK!\n")
 	})
 })
