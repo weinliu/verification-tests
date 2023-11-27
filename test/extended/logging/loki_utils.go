@@ -499,7 +499,11 @@ func (l lokiStack) deployLokiStack(oc *exutil.CLI, optionalParameters ...string)
 	} else {
 		storage = l.storageType
 	}
-	parameters := []string{"-f", l.template, "-n", l.namespace, "-p", "NAME=" + l.name, "NAMESPACE=" + l.namespace, "SIZE=" + l.tSize, "SECRET_NAME=" + l.storageSecret, "STORAGE_TYPE=" + storage, "STORAGE_CLASS=" + l.storageClass}
+	lokistackTemplate := l.template
+	if GetIPVersionStackType(oc) == "ipv6single" {
+		lokistackTemplate = strings.Replace(l.template, ".yaml", "-ipv6.yaml", -1)
+	}
+	parameters := []string{"-f", lokistackTemplate, "-n", l.namespace, "-p", "NAME=" + l.name, "NAMESPACE=" + l.namespace, "SIZE=" + l.tSize, "SECRET_NAME=" + l.storageSecret, "STORAGE_TYPE=" + storage, "STORAGE_CLASS=" + l.storageClass}
 	if len(optionalParameters) != 0 {
 		parameters = append(parameters, optionalParameters...)
 	}
