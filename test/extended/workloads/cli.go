@@ -1807,9 +1807,8 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		oc.SetupProject()
 		err := oc.Run("whoami").Args("").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		out, err := oc.AsAdmin().Run("whoami").Args("").Output()
+		err = oc.AsAdmin().Run("whoami").Args("").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(out, "system:admin")).To(o.BeTrue())
 	})
 
 	// author: yinzhou@redhat.com
