@@ -626,7 +626,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
-			_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dry-run").Output()
+			_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 			if err != nil {
 				e2e.Logf("the err:%v, and try next round", err)
 				return false, nil
@@ -634,19 +634,14 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Image mirror failed with error %s", err))
-		_, err = oc.WithoutNamespace().Run("image").Args("mirror", "-f", "oc-mirror-workspace/mapping.txt", "--insecure").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Use oc-mirror with registry.conf")
-		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+secondSerInfo.serviceName, "--dest-skip-tls", "--oci-registries-config", registryConfig).Output()
+		logOut, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociConfig, "docker://"+secondSerInfo.serviceName, "--dest-skip-tls", "--oci-registries-config", registryConfig, "--source-use-http", "--source-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Make sure data forword from local registry")
-		logOut, err := oc.Run("logs").Args("deploy/registry", "--tail=50").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(logOut, "http.request.method=GET")).To(o.BeTrue())
+		o.Expect(strings.Contains(logOut, serInfo.serviceName)).To(o.BeTrue())
 
 		g.By("Checkpoint for 62694")
+		defer os.RemoveAll("mirror_seq1_000000.tar")
 		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", digestConfig, "file://").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()

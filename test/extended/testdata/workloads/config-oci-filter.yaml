@@ -9,5 +9,3 @@ mirror:
   - catalog: oci:///tmp/case60601/redhat-operator-index
     packages:
     - name: elasticsearch-operator
-      channels:
-      - name: stable
