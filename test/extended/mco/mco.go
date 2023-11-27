@@ -3720,6 +3720,24 @@ nulla pariatur.`
 		}
 	})
 
+	g.It("Author:rioliu-NonPreRelease-Medium-68688-kubeconfig must have 600 permissions in all nodes [Serial]", func() {
+		var (
+			filePath = "/etc/kubernetes/kubeconfig"
+		)
+
+		exutil.By(fmt.Sprintf("Check file permission of %s on all nodes, 0600 is expected", filePath))
+		nodes, err := NewNodeList(oc.AsAdmin()).GetAllLinux()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Get all cluster nodes failed")
+		for _, node := range nodes {
+			logger.Infof("Checking file permission of %s on node %s", filePath, node.GetName())
+			file := NewRemoteFile(node, filePath)
+			o.Expect(file.Stat()).NotTo(o.HaveOccurred(), "stat cmd is failed on node %s", node.GetName())
+			o.Expect(file.GetNpermissions()).Should(o.Equal("0600"), "file permission is not expected %s", file.GetNpermissions())
+			logger.Infof("File permission is expected")
+		}
+
+	})
+
 	g.It("Author:sregidor-NonPreRelease-Medium-69091-MCO skips reboot when configuration matches during node bootstrap pivot [Serial]", func() {
 		var (
 			MachineConfigDaemonFirstbootService = "machine-config-daemon-firstboot.service"

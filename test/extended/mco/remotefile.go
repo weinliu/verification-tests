@@ -40,22 +40,30 @@ func NewRemoteFile(node Node, fullPath string) *RemoteFile {
 
 // Fetch gets the file information from the node
 func (rf *RemoteFile) Fetch() error {
+	err := rf.Stat()
+	if err != nil {
+		return err
+	}
+
+	if !rf.IsDirectory() {
+		err = rf.fetchTextContent()
+	} else {
+		logger.Debugf("Remote file %s is a directory. Skipping fetch content", rf.GetName())
+	}
+
+	return err
+}
+
+// Stat get file properties only
+func (rf *RemoteFile) Stat() error {
+
 	stdout, stderr, err := rf.node.DebugNodeWithChrootStd("stat", statFormat, rf.fullPath)
 	if err != nil {
 		logger.Errorf("Could not fetch the remote file %s. Stderr: %s", rf.fullPath, stderr)
 		return err
 	}
 
-	err = rf.digest(stdout)
-	if err != nil {
-		return err
-	}
-	if !rf.IsDirectory() {
-		err = rf.fetchTextContent()
-	} else {
-		logger.Debugf("Remote file %s is a directory. Skipping fetch content", rf.GetName())
-	}
-	return err
+	return rf.digest(stdout)
 }
 
 func (rf *RemoteFile) fetchTextContent() error {
