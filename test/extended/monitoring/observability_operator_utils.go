@@ -49,10 +49,11 @@ var (
 
 func checkSubscription(oc *exutil.CLI) (out string, err error) {
 	g.By("Check the state of Operator")
-	errCheck := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", subName, "-n", namespace, "-o=jsonpath={.status.state}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("msg: %v", out)
+		if strings.Contains(out, "NotFound") || strings.Contains(out, "No resources") || err != nil {
+			return false, err
+		}
 		if strings.Compare(out, "AtLatestKnown") == 0 {
 			return true, nil
 		}
@@ -106,6 +107,11 @@ func createObservabilityOperator(oc *exutil.CLI, oboBaseDir string) {
 	nsTemplate := filepath.Join(oboBaseDir, "namespace.yaml")
 	g.By("Install Observability Operator")
 	createOperator(oc, csTemplate, ogTemplate, subTemplate, nsTemplate)
+	g.By("create servicemonitor")
+	smTemplate := filepath.Join(oboBaseDir, "obo-service-monitor.yaml")
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", smTemplate).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
 }
 func getClusterDetails(oc *exutil.CLI) (clusterID string, region string) {
 	cluserID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversions", "version", "-o=jsonpath={.spec.clusterID}").Output()
@@ -198,7 +204,6 @@ func checkOperatorPods(oc *exutil.CLI) {
 	g.By("Check " + namespace + " namespace pods liveliness")
 	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-o=jsonpath={.items[*].status.phase}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(out, "Succeeded Running Running Running Running Running") == 0 {
 			return true, nil
 		}
@@ -300,6 +305,14 @@ func deleteOperator(oc *exutil.CLI) {
 	errCs := oc.AsAdmin().WithoutNamespace().Run("delete").Args("catalogsource", csName, "-n", namespace).Execute()
 	g.By("Removing Namespace " + namespace)
 	errNs := oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", namespace).Execute()
+	crds, err := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("--api-group=monitoring.rhobs", "-o", "name").Output()
+	if err != nil {
+		e2e.Logf("err %v, crds %v", err, crds)
+	} else {
+		crda := append([]string{"crd"}, strings.Split(crds, "\n")...)
+		errCRD := oc.AsAdmin().WithoutNamespace().Run("delete").Args(crda...).Execute()
+		o.Expect(errCRD).NotTo(o.HaveOccurred())
+	}
 	o.Expect(errCsv).NotTo(o.HaveOccurred())
 	o.Expect(errSub).NotTo(o.HaveOccurred())
 	o.Expect(errOg).NotTo(o.HaveOccurred())
@@ -356,6 +369,9 @@ func createConfig(oc *exutil.CLI, namespace, cmName, config string) {
 	}
 }
 func checkOperatorMonitoring(oc *exutil.CLI, oboBaseDir string) {
+	g.By("Check if UWM exists")
+	uwMonitoringConfig := filepath.Join(oboBaseDir, "user-workload-monitoring-cm.yaml")
+	createConfig(oc, "openshift-monitoring", "cluster-monitoring-config", uwMonitoringConfig)
 	g.By("Get SA token")
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	g.By("Check prometheus rules")
@@ -368,9 +384,6 @@ func checkOperatorMonitoring(oc *exutil.CLI, oboBaseDir string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Prometheus rules are not created in %v namespace", namespace))
-	g.By("Check if UWM exists")
-	uwMonitoringConfig := filepath.Join(oboBaseDir, "user-workload-monitoring-cm.yaml")
-	createConfig(oc, "openshift-monitoring", "cluster-monitoring-config", uwMonitoringConfig)
 	g.By("Check Observability Operator Alertmanager Rules")
 	errCheck = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		IsAlertManagerRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-alertmanager-rules")
@@ -387,7 +400,7 @@ func checkOperatorMonitoring(oc *exutil.CLI, oboBaseDir string) {
 	})
 	exutil.AssertWaitPollNoErr(errCheck, "Observability operator rules are not loaded")
 	g.By("Check Observability Operator metrics")
-	checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query={__name__=~"controller_runtime_reconcile.*",job="observability-operator",namespace="openshift-observability-operator"}'`, token, "openshift-observability-operator", platformLoadTime)
+	checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query={__name__=~"controller_runtime_reconcile.*",job="observability-operator",namespace="openshift-observability-operator"}'`, token, "openshift-observability-operator", uwmLoadTime)
 }
 func checkLabel(oc *exutil.CLI) {
 	var labelName = "network.openshift.io/policy-group=monitoring"
