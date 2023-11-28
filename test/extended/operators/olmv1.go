@@ -1,11 +1,16 @@
 package operators
 
 import (
+	"context"
 	"path/filepath"
+	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-operators] OLM v1 should", func() {
@@ -242,14 +247,14 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 		exutil.By("create operator with channel candidate-v0.0, version >=0.0.1")
 		defer operator.delete(oc)
 		operator.create(oc)
-		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v0.0.3"))
+		o.Expect(operator.resolvedBundleResource).To(o.ContainSubstring("v0.0.3"))
 		operator.delete(oc)
 
 		exutil.By("create operator with channel candidate-v1.0, version 1.0.x")
 		operator.channel = "candidate-v1.0"
 		operator.version = "1.0.x"
 		operator.create(oc)
-		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		o.Expect(operator.resolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
 		operator.delete(oc)
 
 		exutil.By("create operator with channel empty, version >=0.0.1 !=1.1.0 <1.1.2")
@@ -257,7 +262,7 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 		operator.version = ">=0.0.1 !=1.1.0 <1.1.2"
 		operator.template = operatorWithoutChannelTemplate
 		operator.create(oc)
-		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		o.Expect(operator.resolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
 		operator.delete(oc)
 
 		exutil.By("create operator with channel empty, version empty")
@@ -265,7 +270,7 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 		operator.version = ""
 		operator.template = operatorWithoutChannelVersionTemplate
 		operator.create(oc)
-		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v1.1.0"))
+		o.Expect(operator.resolvedBundleResource).To(o.ContainSubstring("v1.1.0"))
 		operator.delete(oc)
 
 		exutil.By("create operator with invalid version")
@@ -273,6 +278,65 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 		operator.template = operatorTemplate
 		err := operator.createWithoutCheck(oc)
 		o.Expect(err).To(o.HaveOccurred())
+	})
+
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-Author:xzha-Medium-69196-OLMv1 Supports Version Ranges during operator upgrade", func() {
+		var (
+			baseDir          = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate  = filepath.Join(baseDir, "catalog.yaml")
+			operatorTemplate = filepath.Join(baseDir, "operator.yaml")
+			catalog          = catalogDescription{
+				name:     "catalog-69196",
+				imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69196",
+				template: catalogTemplate,
+			}
+			operator = operatorDescription{
+				name:        "operator-69196",
+				packageName: "nginx69196",
+				channel:     "candidate-v1.0",
+				version:     "1.0.1",
+				template:    operatorTemplate,
+			}
+		)
+		exutil.By("create catalog")
+		defer catalog.delete(oc)
+		catalog.create(oc)
+
+		exutil.By("create operator with channel candidate-v1.0, version 1.0.1")
+		defer operator.delete(oc)
+		operator.create(oc)
+		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v1.0.1"))
+
+		exutil.By("update version to be >=1.0.1")
+		operator.patch(oc, `{"spec":{"version":">=1.0.1"}}`)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			resolvedBundleResource, _ := getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o", "jsonpath={.status.resolvedBundleResource}")
+			if !strings.Contains(resolvedBundleResource, "v1.0.2") {
+				e2e.Logf("operator.resolvedBundleResource is %s, not v1.0.2, and try next", resolvedBundleResource)
+				return false, nil
+			}
+			return true, nil
+		})
+		if errWait != nil {
+			getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o=jsonpath-as-json={.status}")
+			exutil.AssertWaitPollNoErr(errWait, "operator resolvedBundleResource is not v1.0.2")
+		}
+
+		exutil.By("update channel to be candidate-v1.1")
+		operator.patch(oc, `{"spec":{"channel":"candidate-v1.1"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			resolvedBundleResource, _ := getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o", "jsonpath={.status.resolvedBundleResource}")
+			if !strings.Contains(resolvedBundleResource, "v1.1.0") {
+				e2e.Logf("operator.resolvedBundleResource is %s, not v1.1.0, and try next", resolvedBundleResource)
+				return false, nil
+			}
+			return true, nil
+		})
+		if errWait != nil {
+			getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o=jsonpath-as-json={.status}")
+			exutil.AssertWaitPollNoErr(errWait, "operator resolvedBundleResource is not v1.1.0")
+		}
 	})
 
 	// var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())

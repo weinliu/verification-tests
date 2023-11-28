@@ -313,6 +313,10 @@ func (operator *operatorDescription) getBundleResource(oc *exutil.CLI) {
 	operator.resolvedBundleResource = resolvedBundleResource
 }
 
+func (operator *operatorDescription) patch(oc *exutil.CLI, patch string) {
+	patchResource(oc, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "--type", "merge", "-p", patch)
+}
+
 func (operator *operatorDescription) deleteWithoutCheck(oc *exutil.CLI) {
 	e2e.Logf("=========deleteWithoutCheck operator %v=========", operator.name)
 	removeResource(oc, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name)
