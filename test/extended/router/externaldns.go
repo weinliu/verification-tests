@@ -53,9 +53,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		baseDomain, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.baseDomain}").Output()
-		if !strings.Contains(baseDomain, "qe.devcluster.openshift.com") {
-			g.Skip("Skip since the DNS base domain is not matched")
-		}
 		createExternalDNSOperator(oc)
 
 		exutil.By("Create CR ExternalDNS sample-aws-rt and ensure operand pod is ready")
