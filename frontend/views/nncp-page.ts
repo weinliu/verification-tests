@@ -58,7 +58,14 @@ export const nncpPage = {
             };
         };
     },
-    creatNNCPFromForm: (policyName, desc, intPolicyList:Array<intPolicy>) => {
+    cfgSelector:(selectorKey, selectorVal) => {
+        cy.get('#apply-nncp-selector').check();
+        cy.byButtonText('Add Label').click();
+        cy.get('#label-0-key-input').clear().type(selectorKey);
+        if (selectorVal) { cy.get('#label-0-value-input').clear().type(selectorVal); };
+        cy.get('button[type="submit"]').contains('Save').click();
+    },
+    creatNNCPFromForm: (policyName, desc, intPolicyList:Array<intPolicy>, selectorKey?, selectorVal?) => {
         nncpPage.goToNNCP();
         cy.byTestID('item-create').click();
         cy.byTestID('list-page-create-dropdown-item-form').click();
@@ -73,6 +80,9 @@ export const nncpPage = {
             };
             let policy = intPolicyList[i];
             nncpPage.addPolicy(policy);
+        };
+        if (selectorKey) {
+            nncpPage.cfgSelector(selectorKey, selectorVal);
         };
         cy.get('button[form="create-policy-form"]').click();
     },

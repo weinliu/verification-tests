@@ -25,16 +25,19 @@ describe('knmstate operator console plugin related features', () => {
     cy.exec("oc get node --no-headers | awk '{print $1}'", {failOnNonZeroExit: false}).then(result => {
       cy.wrap(result.stdout.split('\n')).as('nodeList');
     });
+    cy.exec("oc get node -l node-role.kubernetes.io/worker --no-headers | awk '{print $1}'", {failOnNonZeroExit: false}).then(result1 => {
+      cy.wrap(result1.stdout.split('\n')).as('workerList');
+    });
   });
 
-  it('(OCP-64784,qiowang) Verify NMState cosole plugin operator installation(GUI)', {tags: ['e2e','admin']}, () => {
+  it('(OCP-64784,qiowang) Verify NMState cosole plugin operator installation(GUI)', {tags: ['e2e','admin','@smoke']}, () => {
     nncpPage.goToNNCP();
     cy.byLegacyTestID('resource-title').contains('NodeNetworkConfigurationPolicy');
     nnsPage.goToNNS();
     cy.byLegacyTestID('resource-title').contains('NodeNetworkState');
   });
 
-  it('(OCP-64981,qiowang) Create NNCP for adding bridge on web console(from form)', {tags: ['e2e','admin']}, function () {
+  it('(OCP-64981,qiowang) Create NNCP for adding bridge on web console(from form)', {tags: ['e2e','admin','@smoke']}, function () {
     cy.log("1. Create NNCP");
     let pName = "pname-64981";
     let nncpTest: intPolicy = {
@@ -88,8 +91,18 @@ describe('knmstate operator console plugin related features', () => {
     cy.log("6. Check NNS again");
     nnsPage.goToNNS();
     for (let i = 0; i < this.nodeList.length; i++) {
-      cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
-        cy.get('td[id="network-interface"]').contains("linux-bridge").should('not.exist');
+      cy.exec(`oc debug node/${this.nodeList[i]} -- chroot /host bash -c nmcli -f TYPE dev | grep bridge | grep -v ovs`, {failOnNonZeroExit: false}).then(result => {
+        if(result.stdout.includes('bridge')){
+          cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+            cy.get('td[id="network-interface"]').contains("linux-bridge").click();
+          });
+          cy.get('div[role="dialog"]').contains(nncpTest.intName).should('not.exist');
+          cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+        } else {
+          cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+            cy.get('td[id="network-interface"]').contains("linux-bridge").should('not.exist');
+          });
+        };
       });
     };
     
@@ -98,7 +111,7 @@ describe('knmstate operator console plugin related features', () => {
     cy.byTestID(pName).should('not.exist');
   });
 
-  it('(OCP-64982,qiowang) Create NNCP for adding bond on web console(from form)', {tags: ['e2e','admin']}, function () {
+  it('(OCP-64982,qiowang) Create NNCP for adding bond on web console(from form)', {tags: ['e2e','admin','@smoke']}, function () {
     cy.log("1. Create NNCP");
     let pName = "pname-64982";
     let nncpTest: intPolicy = {
@@ -151,8 +164,104 @@ describe('knmstate operator console plugin related features', () => {
     cy.log("6. Check NNS again");
     nnsPage.goToNNS();
     for (let i = 0; i < this.nodeList.length; i++) {
-      cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
-        cy.get('td[id="network-interface"]').contains("bond").should('not.exist');
+      cy.exec(`oc debug node/${this.nodeList[i]} -- chroot /host bash -c nmcli -f TYPE dev | grep bond`, {failOnNonZeroExit: false}).then(result => {
+        if(result.stdout.includes('bond')){
+          cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+            cy.get('td[id="network-interface"]').contains("bond").click();
+          });
+          cy.get('div[role="dialog"]').contains(nncpTest.intName).should('not.exist');
+          cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+        } else {
+          cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+            cy.get('td[id="network-interface"]').contains("bond").should('not.exist');
+          });
+        };
+      });
+    };
+
+    cy.log("7. Delete NNCP");
+    nncpPage.deleteNNCP(pName);
+    cy.byTestID(pName).should('not.exist');
+  });
+
+  it('(OCP-64820,qiowang) Verify can configure node selector on web console(from form)', {tags: ['e2e','admin','@smoke']}, function () {
+    cy.log("1. Create NNCP with node selector");
+    let pName = "pname-64820";
+    let nncpTest: intPolicy = {
+        intName: "bridge02",
+        intState: "Up",
+        intType: "Bridge",
+        ipv4Enable: false,
+        ip: "",
+        prefixLen: "",
+        disAutoDNS: false,
+        disAutoRoutes: false,
+        disAutoGW: false,
+        port: "",
+        br_stpEnable: false,
+        bond_cpMacFrom: "",
+        bond_aggrMode: "",
+        action: "",
+    };
+    let nncps: intPolicy[] = [];
+    nncps.push(nncpTest);
+    nncpPage.creatNNCPFromForm(pName, "testNodeSelector123", nncps, "node-role.kubernetes.io/worker", "");
+
+    cy.log("2. Check NNCP status");
+    cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+    cy.get(`[data-test-rows="resource-row"]`).contains(pName).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains(" "+this.workerList.length+" Available", {timeout: 30000});
+    });
+
+    cy.log("3. Check NNS, only configured on the selected node");
+    nnsPage.goToNNS();
+    for (let i = 0; i < this.nodeList.length; i++) {
+      let isFind = false;
+      for (let j = 0; j < this.workerList.length; j++) {
+        if (this.nodeList[i] == this.workerList[j]) {
+          isFind = true;
+          break;
+        };
+      };
+      if (isFind) {
+        cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+          cy.get('td[id="network-interface"]').contains("linux-bridge").click();
+        });
+        cy.get('div[role="dialog"]').contains(nncpTest.intName).should('exist');
+        cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+      } else {
+        cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+          cy.get('td[id="network-interface"]').contains("linux-bridge").should('not.exist');
+        });
+      };
+    };
+
+    cy.log("4. Edit NNCP to remove the interface");
+    nncpTest.action = "editOld";
+    nncpTest.intState = "Absent";
+    nncpPage.editNNCPFromForm(pName, 'testNodeSelector123', nncps);
+
+    cy.log("5. Check NNCP status again");
+    cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+    cy.get(`[data-test-rows="resource-row"]`).contains(pName).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains(" "+this.workerList.length+" Available", {timeout: 30000});
+    });
+
+    cy.log("6. Check NNS again");
+    nnsPage.goToNNS();
+    for (let i = 0; i < this.nodeList.length; i++) {
+      cy.exec(`oc debug node/${this.nodeList[i]} -- chroot /host bash -c nmcli -f TYPE dev | grep bridge | grep -v ovs`, {failOnNonZeroExit: false}).then(result => {
+        if(result.stdout.includes('bridge')){
+          cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+            cy.get('td[id="network-interface"]').contains("linux-bridge").click();
+          });
+          cy.get('div[role="dialog"]').contains(nncpTest.intName).should('not.exist');
+          cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+        } else {
+          cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+            cy.get('td[id="network-interface"]').contains("linux-bridge").should('not.exist');
+          });
+        };
       });
     };
 
