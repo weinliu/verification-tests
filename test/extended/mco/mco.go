@@ -2679,7 +2679,7 @@ nulla pariatur.`
 
 		exutil.By("Validate the content")
 		rf := NewRemoteFile(workerNode, "/etc/systemd/system/"+svcName)
-		rferr := rf.Fetch()
+		rferr := rf.Stat()
 		o.Expect(rferr).NotTo(o.HaveOccurred())
 		o.Expect(rf.GetSymLink()).Should(o.Equal(fmt.Sprintf("'/etc/systemd/system/%s' -> '/dev/null'", svcName)),
 			"The service is masked, so service's file should be a link to /dev/null")
