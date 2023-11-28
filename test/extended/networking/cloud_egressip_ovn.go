@@ -2084,7 +2084,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		})
 		exutil.AssertWaitPollNoErr(podsErr, fmt.Sprintf("The pods were not scaled to the expected number!"))
 		testPodName := getPodName(oc, ns1, "name=test-pods")
-		_, testPodIPv4 := getPodIP(oc, ns1, testPodName[0])
+		testPodIP1, _ := getPodIP(oc, ns1, testPodName[0])
+		e2e.Logf("testPodIP1: %v", testPodIP1)
 		testPodNode, err := exutil.GetPodNodeName(oc, ns1, testPodName[0])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("test pod %s is on node %s", testPodName, testPodNode)
@@ -2100,7 +2101,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 				return false, nil
 			}
 			e2e.Logf(lspOutput)
-			if strings.Contains(lspOutput, testPodIPv4) && strings.Count(lspOutput, "100 ") == 1 {
+			if strings.Contains(lspOutput, testPodIP1) && strings.Count(lspOutput, "100 ") == 1 {
 				return true, nil
 			}
 			return false, nil
@@ -2116,7 +2117,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 				return false, nil
 			}
 			e2e.Logf(snatOutput)
-			if strings.Contains(snatOutput, testPodIPv4) && strings.Count(snatOutput, egressip1.name) == 1 {
+			if strings.Contains(snatOutput, testPodIP1) && strings.Count(snatOutput, egressip1.name) == 1 {
 				e2e.Logf("The snat for egressip is as expected!")
 				return true, nil
 			}
