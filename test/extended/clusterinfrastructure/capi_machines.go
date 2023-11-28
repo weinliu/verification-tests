@@ -46,6 +46,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		gcpMachineTemplate         gcpMachineTemplateDescription
 		capiMachineSetAWS          capiMachineSetAWSDescription
 		capiMachineSetgcp          capiMachineSetgcpDescription
+		clusterNotInCapi           clusterDescriptionNotInCapi
 	)
 
 	g.BeforeEach(func() {
@@ -112,6 +113,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			name:     clusterID,
 			template: clusterTemplate,
 		}
+		clusterNotInCapi = clusterDescriptionNotInCapi{
+			name:      clusterID,
+			namespace: "openshift-machine-api",
+			template:  clusterTemplate,
+		}
 		awscluster = awsClusterDescription{
 			name:     clusterID,
 			region:   region,
@@ -162,10 +168,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		switch iaasPlatform {
 		case "aws":
 			cluster.kind = "AWSCluster"
+			clusterNotInCapi.kind = "AWSCluster"
 			capiMachineSetAWS.kind = "AWSMachineTemplate"
 			capiMachineSetAWS.machineTemplateName = awsMachineTemplate.name
 		case "gcp":
 			cluster.kind = "GCPCluster"
+			clusterNotInCapi.kind = "GCPCluster"
 			capiMachineSetgcp.kind = "GCPMachineTemplate"
 			capiMachineSetgcp.machineTemplateName = gcpMachineTemplate.name
 			capiMachineSetgcp.failureDomain = zone
@@ -261,5 +269,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Shouldn't allow to delete infrastructureprovider")
 		infrastructureproviderDelete, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("infrastructureprovider", "--all", "-n", clusterAPINamespace).Output()
 		o.Expect(infrastructureproviderDelete).To(o.ContainSubstring("deletion of infrastructure provider is not allowed"))
+	})
+
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-high-69188-[CAPI] cluster object can be deleted in non-cluster-api namespace [Disruptive]", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
+		skipForCAPINotExist(oc)
+		iaasPlatform = exutil.CheckPlatform(oc)
+		g.By("Create cluster object in namespace other than openshift-cluster-api")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("cluster", clusterNotInCapi.name, "-n", clusterNotInCapi.namespace).Execute()
+		clusterNotInCapi.createClusterNotInCapiNamespace(oc)
+		g.By("Deleting cluster object in namespace other than openshift-cluster-api, should be successful")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("cluster", clusterNotInCapi.name, "-n", clusterNotInCapi.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 })

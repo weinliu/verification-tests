@@ -21,6 +21,13 @@ type clusterDescription struct {
 	template  string
 }
 
+type clusterDescriptionNotInCapi struct {
+	name      string
+	namespace string
+	kind      string
+	template  string
+}
+
 type awsClusterDescription struct {
 	name      string
 	namespace string
@@ -95,6 +102,12 @@ func skipForCAPINotExist(oc *exutil.CLI) {
 func (cluster *clusterDescription) createCluster(oc *exutil.CLI) {
 	e2e.Logf("Creating cluster ...")
 	err := applyResourceFromTemplate(oc, "-f", cluster.template, "-p", "NAME="+cluster.name, "NAMESPACE="+clusterAPINamespace, "KIND="+cluster.kind)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (clusterNotInCapi *clusterDescriptionNotInCapi) createClusterNotInCapiNamespace(oc *exutil.CLI) {
+	e2e.Logf("Creating cluster in namepsace not openshift-cluster-api ...")
+	err := applyResourceFromTemplate(oc, "-f", clusterNotInCapi.template, "-p", "NAME="+clusterNotInCapi.name, "NAMESPACE="+clusterNotInCapi.namespace, "KIND="+clusterNotInCapi.kind)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
