@@ -14,12 +14,12 @@ func getImagestreamImageName(oc *exutil.CLI, imagestreamName string) string {
 	var imageName string
 	imageName = ""
 
-	//Ignore NotFound error, it will return a empty string, then use another image in ocperf.go if the image doesn't exit
+	// Ignore NotFound error, it will return a empty string, then use another image in ocperf.go if the image doesn't exit
 	imageRepos, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("is", imagestreamName, "-n", "openshift", "-ojsonpath={.status.dockerImageRepository}").Output()
 	if !strings.Contains(imageRepos, "NotFound") {
 		imageTags, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("is", imagestreamName, "-n", "openshift", "-ojsonpath={.status.tags[*].tag}").Output()
 		imageTagList := strings.Split(imageTags, " ")
-		//Because some image stream tag is broken, we need to find which image is available in disconnected cluster.
+		// Because some image stream tag is broken, we need to find which image is available in disconnected cluster.
 		for i := 0; i < len(imageTagList); i++ {
 			jsonathStr := fmt.Sprintf(`-ojsonpath='{.status.tags[%v].conditions[?(@.status=="False")]}{.status.tags[%v].tag}'`, i, i)
 			stdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is", imagestreamName, "-n", "openshift", jsonathStr).Output()

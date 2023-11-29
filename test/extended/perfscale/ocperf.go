@@ -35,11 +35,32 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 		isSNO = exutil.IsSNOCluster(oc)
 	})
 
-	// author: kkulkarni@redhat.com
+	// author: liqcui@redhat.com
 	g.It("Longduration-Author:liqcui-Medium-22140-Create multiple projects and time various oc commands durations[Slow][Serial]", func() {
 
 		if isSNO {
 			g.Skip("Skip Testing on SNO ...")
+		}
+
+		var (
+			metricName        string
+			metricValueBefore int
+			metricValueAfter  int
+		)
+
+		mo, err := exutil.NewPrometheusMonitor(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		masterNodeNames, err := exutil.GetClusterNodesBy(oc, "control-plane")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(masterNodeNames).NotTo(o.BeEmpty())
+
+		for i := 0; i < len(masterNodeNames); i++ {
+			metricString := fmt.Sprintf(`container_memory_rss{container="kube-apiserver",namespace="openshift-kube-apiserver",node="%s"}`, masterNodeNames[i])
+			tagQueryParams := exutil.MonitorInstantQueryParams{Query: metricString}
+			metric4MemRSS := mo.InstantQueryWithRetry(tagQueryParams, 15)
+			metricName, metricValueBefore = exutil.ExtractSpecifiedValueFromMetricData4MemRSS(oc, metric4MemRSS)
+			e2e.Logf("The value of %s is %d on [%s].", metricName, metricValueBefore, masterNodeNames[i])
 		}
 
 		//First choice to use [tests] image, the image mirrored by default in disconnected cluster
@@ -106,6 +127,20 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		deleteDuration := time.Since(start).Seconds()
+
+		for i := 0; i < len(masterNodeNames); i++ {
+			metricString := fmt.Sprintf(`container_memory_rss{container="kube-apiserver",namespace="openshift-kube-apiserver",node="%s"}`, masterNodeNames[i])
+			tagQueryParams := exutil.MonitorInstantQueryParams{Query: metricString}
+			metric4MemRSS := mo.InstantQueryWithRetry(tagQueryParams, 15)
+			metricName, metricValueAfter = exutil.ExtractSpecifiedValueFromMetricData4MemRSS(oc, metric4MemRSS)
+			e2e.Logf("The value of %s is %d on [%s].", metricName, metricValueAfter, masterNodeNames[i])
+			if metricValueAfter > metricValueBefore {
+				e2e.Logf("The value of %s increased from %d to %d on [%s].", metricName, metricValueBefore, metricValueAfter, masterNodeNames[i])
+			}
+			//Lower than 2.5GB=2.5X1024X1024X1024=2684354560
+			o.Expect(metricValueAfter).To(o.BeNumerically("<=", 2684354560))
+		}
+
 		e2e.Logf("Duration for deleting %d projects and 1 deploymentConfig in each of those is %.2f seconds", projectCount, deleteDuration)
 		// all values in BeNumerically are "Expected" and "Threshold" numbers
 		// Expected derived by running this program 5 times against 4.8.0-0.nightly-2021-10-20-155651 and taking median

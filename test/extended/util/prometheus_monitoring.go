@@ -1,9 +1,14 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
+	o "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -193,4 +198,56 @@ func GetSAToken(oc *CLI) (string, error) {
 	}
 
 	return token, err
+}
+
+// InstantQueryWithRetry passes QueryParams to InstantQuery and polls it until it succeeds or times out.
+func (mo *Monitor) InstantQueryWithRetry(queryParams MonitorInstantQueryParams, timeDurationSec int) string {
+	var res string
+	var err error
+	err = wait.Poll(time.Duration(timeDurationSec/5)*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+		res, err = mo.InstantQuery(queryParams)
+		if err != nil {
+			e2e.Logf("Error sending InstantQuery: %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	AssertWaitPollNoErr(err, fmt.Sprintf("Timed out polling for metric %s", queryParams.Query))
+	return res
+}
+
+type ContainerMemoryRSSType struct {
+	Data struct {
+		Result []struct {
+			Metric struct {
+				MetricName string `json:"__name__"`
+				Container  string `json:"container"`
+				Endpoint   string `json:"endpoint"`
+				ID         string `json:"id"`
+				Image      string `json:"image"`
+				Instance   string `json:"instance"`
+				Job        string `json:"job"`
+				MetricPath string `json:"metrics_path"`
+				Name       string `json:"name"`
+				Namespace  string `json:"namespace"`
+				Node       string `json:"node"`
+				Pod        string `json:"pod"`
+				Service    string `json:"service"`
+			} `json:"metric"`
+			Value []interface{} `json:"value"`
+		} `json:"result"`
+		ResultType string `json:"resultType"`
+	} `json:"data"`
+	Status string `json:"status"`
+}
+
+// ExtractSpecifiedValueFromMetricData4MemRSS extracts the value of the container_memory_rss metric from the result of a Prometheus query
+func ExtractSpecifiedValueFromMetricData4MemRSS(oc *CLI, metricResult string) (string, int) {
+	var ramMetricsInfo ContainerMemoryRSSType
+	jsonErr := json.Unmarshal([]byte(metricResult), &ramMetricsInfo)
+	o.Expect(jsonErr).NotTo(o.HaveOccurred())
+	e2e.Logf("Node: [%v], Pod Name: [%v], Status: [%v], Metric Name: [%v], Value: [%v]", ramMetricsInfo.Data.Result[0].Metric.Node, ramMetricsInfo.Data.Result[0].Metric.Pod, ramMetricsInfo.Status, ramMetricsInfo.Data.Result[0].Metric.MetricName, ramMetricsInfo.Data.Result[0].Value[1])
+	metricValue, err := strconv.Atoi(ramMetricsInfo.Data.Result[0].Value[1].(string))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return ramMetricsInfo.Data.Result[0].Metric.MetricName, metricValue
 }
