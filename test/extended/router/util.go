@@ -735,28 +735,31 @@ func getAllLinuxNodes(oc *exutil.CLI) string {
 // patch the dns.operator/default with the original value
 func restoreDNSOperatorDefault(oc *exutil.CLI) {
 	podList := getAllDNSPodsNames(oc)
-	attrList := getAllCorefilesStat(oc, podList)
+	// add isDnsPodOnAllLinuxNodes check for the node selector cases: OCP-41049 and OCP-41050, if a linux node hasn't a dns pod, need remove all dns pods immediately after patch the dns operator to default
+	linuxNodes := getAllLinuxNodes(oc)
+	isDnsPodOnAllLinuxNodes := true
+	if len(podList) < len(strings.Split(linuxNodes, " ")) {
+		isDnsPodOnAllLinuxNodes = false
+	}
 	// the json value might be different in different version
 	jsonPatch := "[{\"op\":\"replace\", \"path\":\"/spec\", \"value\":{\"cache\":{\"negativeTTL\":\"0s\",\"positiveTTL\":\"0s\"},\"logLevel\":\"Normal\",\"nodePlacement\":{},\"operatorLogLevel\":\"Normal\",\"upstreamResolvers\":{\"policy\":\"Sequential\",\"protocolStrategy\": \"\",\"transportConfig\":{},\"upstreams\":[{\"port\":53,\"type\":\"SystemResolvConf\"}]}}}]"
 	e2e.Logf("restore(patch) dns.operator/default with original settings.")
 	output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("dns.operator/default", "-p", jsonPatch, "--type=json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
+	// if a linux node hasn't a dns pod, need remove all dns pods immediately after patch the dns operator to default
 	// patched but got "no change" that means no DNS rolling update, shouldn't goto Progressing
-	if strings.Contains(output, "no change") {
+	if !isDnsPodOnAllLinuxNodes {
+		delAllDNSPods(oc)
+		waitAllDNSPodsAppear(oc)
+		ensureClusterOperatorNormal(oc, "dns", 2, 120)
+	} else if strings.Contains(output, "no change") {
 		e2e.Logf("skip the Progressing check step.")
 	} else {
-		// check if each node has a dns pod
-		landedNodes, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=jsonpath={.items[*].spec.nodeName}").Output()
-		if len(getAllLinuxNodes(oc)) == len(landedNodes) {
-			waitAllCorefilesUpdated(oc, attrList)
-		} else {
-			// after reset to default, the number of dns pods will be increased
-			delAllDNSPods(oc)
-			waitAllDNSPodsAppear(oc)
-		}
+		attrList := getAllCorefilesStat(oc, podList)
+		waitAllCorefilesUpdated(oc, attrList)
+		ensureClusterOperatorNormal(oc, "dns", 5, 300)
 	}
-	ensureClusterOperatorNormal(oc, "dns", 5, 300)
 }
 
 func waitAllDNSPodsAppear(oc *exutil.CLI) {
