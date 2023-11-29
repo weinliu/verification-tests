@@ -311,9 +311,9 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Waiting for osus instance pod rolling...")
-		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.Poll(60*time.Second, 600*time.Second, func() (bool, error) {
 			runningPodNamePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
-			if err != nil || strings.Contains(runningPodNamePost, runningPodNamePre) {
+			if err != nil || len(strings.Fields(runningPodNamePost)) != us.replicas || strings.Contains(runningPodNamePost, runningPodNamePre) {
 				e2e.Logf("error: %v; running pod after update image: %s; while running pod before update image: %s", err, runningPodNamePost, runningPodNamePre)
 				return false, nil
 			}
