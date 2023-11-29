@@ -336,15 +336,15 @@ func (deploypts *deploypodtopologyspread) createPodTopologySpread(oc *exutil.CLI
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create %v", deploypts.dName))
 }
 
-func checkDeschedulerMetrics(oc *exutil.CLI, strategyname string, metricName string) {
+func checkDeschedulerMetrics(oc *exutil.CLI, strategyname string, metricName string, podName string) {
 	olmToken, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	checkPodStatus(oc, "statefulset.kubernetes.io/pod-name=prometheus-k8s-0", "openshift-monitoring", "Running")
+	endpointIP, epGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-kube-descheduler-operator", "endpoints", "metrics", "-o", fmt.Sprintf(`jsonpath={.subsets[*].addresses[*].ip}`)).Output()
+	o.Expect(epGetErr).NotTo(o.HaveOccurred())
+	metricsUrl := fmt.Sprintf(`https://%v:10258/metrics`, string(endpointIP))
 	err = wait.Poll(6*time.Second, 180*time.Second, func() (bool, error) {
-		output, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="+metricName).Outputs()
-		// Adding code for debugging the case
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-kube-descheduler-operator", podName, "-c", "openshift-descheduler", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), metricsUrl).Output()
 		if err != nil {
-			e2e.Logf("output from prometheus is\n", output)
 			e2e.Logf("Can't get descheduler metrics, error: %s. Trying again", err)
 			return false, nil
 		}
@@ -354,7 +354,7 @@ func checkDeschedulerMetrics(oc *exutil.CLI, strategyname string, metricName str
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get metric %s via prometheus", strategyname))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get metric %s via metrics endpoint of descheduler", strategyname))
 }
 
 // SkipMissingCatalogsource mean to skip test when catalogsource/qe-app-registry not available

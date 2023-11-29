@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		// Check descheduler_build_info from prometheus
-		checkDeschedulerMetrics(oc, "DeschedulerVersion", "descheduler_build_info")
+		checkDeschedulerMetrics(oc, "DeschedulerVersion", "descheduler_build_info", podName)
 
 		// Create test project
 		g.By("Create test project")
@@ -222,7 +222,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		defer func() {
 			e2e.Logf("Restoring descheduler mode back to Predictive")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kubedescheduler run well")
@@ -322,8 +322,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect PDB  metrics from prometheus
 		g.By("Checking PDB metrics from prometheus")
-		checkDeschedulerMetrics(oc, `"result":"error"`, "descheduler_pods_evicted")
-		checkDeschedulerMetrics(oc, "RemoveDuplicates", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, `result="error"`, "descheduler_pods_evicted", podName)
+		checkDeschedulerMetrics(oc, "RemoveDuplicates", "descheduler_pods_evicted", podName)
 
 	})
 
@@ -490,7 +490,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		defer func() {
 			e2e.Logf("Restoring descheduler mode back to Predictive")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kubedescheduler run well")
@@ -575,7 +575,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect NodeAffinity  metrics from prometheus
 		g.By("Checking NodeAffinity metrics from prometheus")
-		checkDeschedulerMetrics(oc, "RemovePodsViolatingNodeAffinity", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "RemovePodsViolatingNodeAffinity", "descheduler_pods_evicted", podName)
 
 		// Test for RemovePodsViolatingNodeTaints
 
@@ -594,7 +594,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect NodeTaint  metrics from prometheus
 		g.By("Checking NodeTaint metrics from prometheus")
-		checkDeschedulerMetrics(oc, "RemovePodsViolatingNodeTaints", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "RemovePodsViolatingNodeTaints", "descheduler_pods_evicted", podName)
 
 		// Performing cleanup for NodeTaint
 		g.By("Remove the taint from the node")
@@ -648,7 +648,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect InterPodAntiAffinity  metrics from prometheus
 		g.By("Checking InterPodAntiAffinity metrics from prometheus")
-		checkDeschedulerMetrics(oc, "RemovePodsViolatingInterPodAntiAffinity", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "RemovePodsViolatingInterPodAntiAffinity", "descheduler_pods_evicted", podName)
 
 		// Perform cleanup so that next case will be executed
 		g.By("Performing cleanup to execute 40055")
@@ -701,7 +701,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect RemoveDuplicatePods metrics from prometheus
 		g.By("Checking RemoveDuplicatePods metrics from prometheus")
-		checkDeschedulerMetrics(oc, "RemoveDuplicates", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "RemoveDuplicates", "descheduler_pods_evicted", podName)
 
 		// Delete deployment from the namespace
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", testdp.dName, "-n", testdp.namespace).Execute()
@@ -776,7 +776,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect PodTopologySpread metrics from prometheus
 		g.By("Checking PodTopologySpread metrics from prometheus")
-		checkDeschedulerMetrics(oc, "RemovePodsViolatingTopologySpreadConstraint", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "RemovePodsViolatingTopologySpreadConstraint", "descheduler_pods_evicted", podName)
 
 	})
 
@@ -870,7 +870,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		defer func() {
 			e2e.Logf("Restoring descheduler mode back to Predictive")
-			err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kubedescheduler run well")
@@ -983,7 +983,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect SoftTopologyAndDuplicate metrics from prometheus
 		g.By("Checking SoftTopologyAndDuplicate metrics from prometheus")
-		checkDeschedulerMetrics(oc.AsGuestKubeconf(), "RemovePodsViolatingTopologySpreadConstraint", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc.AsGuestKubeconf(), "RemovePodsViolatingTopologySpreadConstraint", "descheduler_pods_evicted", podName)
 
 		if guestClusterKube == "" || guestClusterKube == "null" {
 			defer func() {
@@ -1191,7 +1191,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect PodLifetime metrics from prometheus
 		g.By("Checking PodLifetime metrics from prometheus")
-		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted", podName)
 
 		// Test descheduler automatic mode
 		g.By("Set descheduler mode to Automatic")
@@ -1203,7 +1203,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		defer func() {
 			e2e.Logf("Restoring descheduler mode back to Predictive")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kubedescheduler run well")
@@ -1247,7 +1247,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect PodLifetime metrics from prometheus
 		g.By("Checking PodLifetime metrics from prometheus")
-		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted", podName)
 	})
 
 	// author: knarra@redhat.com
@@ -1399,7 +1399,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		defer func() {
 			patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
 			e2e.Logf("Restoring descheduler mode back to Predictive")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kubedescheduler run well")
@@ -1586,14 +1586,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect PodLifetime metrics from prometheus
 		g.By("Checking PodLifetime metrics from prometheus")
-		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted", podName)
 
 		// Test descheduler automatic mode
 		g.By("Set descheduler mode to Automatic")
 		defer func() {
 			patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
 			e2e.Logf("Restoring descheduler mode back to Predictive")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kubedescheduler run well")
@@ -1628,11 +1628,11 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect PodLifetime metrics from prometheus
 		g.By("Checking PodLifetime metrics from prometheus")
-		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted", podName)
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:knarra-High-53058-Descheduler-Validate exclude namespace filtering	[Slow][Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:knarra-High-53058-Descheduler-Validate exclude namespace filtering [Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -1781,7 +1781,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		defer func() {
 			patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
 			e2e.Logf("Restoring descheduler mode back to Predictive")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kubedescheduler run well")
@@ -1986,14 +1986,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect PodLifetime metrics from prometheus
 		g.By("Checking PodLifetime metrics from prometheus")
-		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted", podName)
 
 		// Test descheduler automatic mode
 		g.By("Set descheduler mode to Automatic")
 		defer func() {
 			patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
 			e2e.Logf("Restoring descheduler mode back to Predictive")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kubedescheduler run well")
@@ -2045,7 +2045,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect PodLifetime metrics from prometheus
 		g.By("Checking PodLifetime metrics from prometheus")
-		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted", podName)
 	})
 
 	// author: yinzhou@redhat.com
