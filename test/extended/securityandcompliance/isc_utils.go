@@ -439,6 +439,23 @@ func SkipMissingCatalogsource(oc *exutil.CLI) {
 	}
 }
 
+// skipMissingCatalogsources mean to skip test when catalogsources qe-app-registry and redhat-operators not available
+
+func (sub *subscriptionDescription) skipMissingCatalogsources(oc *exutil.CLI) {
+	output, errQeReg := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+	if errQeReg != nil && strings.Contains(output, "NotFound") {
+		output, errRed := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "redhat-operators").Output()
+		if errRed != nil && strings.Contains(output, "NotFound") {
+			g.Skip("Skip since catalogsources not available")
+		} else {
+			o.Expect(errRed).NotTo(o.HaveOccurred())
+		}
+		sub.catalogSourceName = "redhat-operators"
+	} else {
+		o.Expect(errQeReg).NotTo(o.HaveOccurred())
+	}
+}
+
 // SkipMissingDefaultSC mean to skip test when default storageclass is not available
 func SkipMissingDefaultSC(oc *exutil.CLI) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o=jsonpath={.items[?(@.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class==\"true\")].metadata.name}", "-n", oc.Namespace()).Output()

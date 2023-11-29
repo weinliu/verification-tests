@@ -39,7 +39,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		exutil.SkipNoOLMCore(oc)
 
 		g.By("Skip test when missingcatalogsource, ARM64, or SkipHetegenous !!!")
-		SkipMissingCatalogsource(oc)
 		SkipMissingRhcosWorkers(oc)
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 
@@ -91,6 +90,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 			template:  podModifyTemplate,
 		}
 
+		sub.skipMissingCatalogsources(oc)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 	})

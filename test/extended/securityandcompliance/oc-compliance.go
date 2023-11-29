@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 
 		g.By("Skip test when precondition not meet !!!")
 		exutil.SkipNoOLMCore(oc)
-		SkipMissingCatalogsource(oc)
+		subD.skipMissingCatalogsources(oc)
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 		SkipMissingDefaultSC(oc)
 		SkipMissingRhcosWorkers(oc)

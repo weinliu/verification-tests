@@ -96,7 +96,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		}
 
 		exutil.SkipNoOLMCore(oc)
-		SkipMissingCatalogsource(oc)
+		subD.skipMissingCatalogsources(oc)
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 		SkipClustersWithRhelNodes(oc)
 
