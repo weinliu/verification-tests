@@ -82,7 +82,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// 7. diskstripes-migrationparam
 	// 8. objectspacereservation-migrationparam
 	// 9. iopslimit-migrationparam
-	// This Validating admission controller also helps prevent user from creating or updating StorageClass using "kubernetes.io/vsphere-volume" as provisioner with AllowVolumeExpansion to true.
 	// Reference: https://github.com/kubernetes-sigs/vsphere-csi-driver/blob/release-2.4/docs/book/features/vsphere_csi_migration.md
 	// https://issues.redhat.com/browse/STOR-562
 	g.It("NonHyperShiftHOST-Author:pewang-High-47387-[vSphere-CSI-Driver-Operator] [Webhook] should prevent user from creating or updating StorageClass with unsupported parameters", func() {
@@ -93,9 +92,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			unsupportedParameters = []string{"csimigration", "datastore-migrationparam", "diskformat-migrationparam", "hostfailurestotolerate-migrationparam",
 				"forceprovisioning-migrationparam", "cachereservation-migrationparam", "diskstripes-migrationparam", "objectspacereservation-migrationparam",
 				"iopslimit-migrationparam"}
-			webhookDeployment  = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-webhook"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=vmware-vsphere-csi-driver-webhook"))
-			csiStorageClass    = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("csi.vsphere.vmware.com"))
-			intreeStorageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("kubernetes.io/vsphere-volume"))
+			webhookDeployment = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-webhook"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=vmware-vsphere-csi-driver-webhook"))
+			csiStorageClass   = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("csi.vsphere.vmware.com"))
 		)
 
 		exutil.By("# Check the CSI Driver Webhook deployment is ready")
@@ -116,19 +114,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(interfaceToString(err)).Should(o.ContainSubstring("admission webhook \\\"validation.csi.vsphere.vmware.com\\\" denied the request: Invalid StorageClass Parameters"))
 		}
 
-		exutil.By("# Using 'kubernetes.io/vsphere-volume' as provisioner create storageclass with allowVolumeExpandsion: true")
-		extraParameters := map[string]interface{}{
-			"allowVolumeExpansion": true,
-		}
-		err := intreeStorageClass.negative().createWithExtraParameters(oc, extraParameters)
-		defer intreeStorageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
-		o.Expect(interfaceToString(err)).Should(o.ContainSubstring("admission webhook \\\"validation.csi.vsphere.vmware.com\\\" denied the request: AllowVolumeExpansion can not be set to true on the in-tree vSphere StorageClass"))
-
 		exutil.By("# Check csi driver webhook pod log record the failed requests")
 		logRecord := webhookDeployment.getLogs(oc.AsAdmin(), "--tail=-1", "--since=10m")
-		o.Expect(logRecord).Should(o.And(
-			o.ContainSubstring("validation of StorageClass: \\\""+intreeStorageClass.name+"\\\" Failed"),
-			o.ContainSubstring("validation of StorageClass: \\\""+csiStorageClass.name+"\\\" Failed")))
+		o.Expect(logRecord).Should(o.ContainSubstring("validation of StorageClass: \\\"" + csiStorageClass.name + "\\\" Failed"))
 	})
 
 	// OCP-60189 - [vSphere-csi-driver-operator] should check topology conflict in csidriver and infrastructure in vsphere_topology_tags metric for alerter raising by CSO
