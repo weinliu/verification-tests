@@ -379,24 +379,24 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: shudili@redhat.com
 	g.It("Author:shudili-High-50926-Support a Configurable ROUTER_MAX_CONNECTIONS in HAproxy", func() {
-		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-tuning.yaml")
-			ingctrl             = ingressControllerDescription{
-				name:      "ocp50926",
-				namespace: "openshift-ingress-operator",
-				domain:    "",
-				template:  customTemp,
-			}
-			ingctrlResource = "ingresscontrollers/" + ingctrl.name
-		)
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		baseTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		extraParas := "    tuningOptions:\n      maxConnections: 2000\n"
+		customTemp1 := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp1)
+		ingctrl := ingressControllerDescription{
+			name:      "ocp50926",
+			namespace: "openshift-ingress-operator",
+			domain:    "",
+			template:  customTemp1,
+		}
+		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 
-		exutil.By("Create a custom IC, and then patch tuningOptions/maxConnections 2000 to it")
+		exutil.By("Create a custom ICs for testing router reload interval")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"maxConnections\": 2000}}}")
 		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
 
@@ -409,8 +409,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		maxConnCfg := readRouterPodData(oc, podname, "cat haproxy.config", "maxconn")
 		o.Expect(maxConnCfg).To(o.ContainSubstring("maxconn 2000"))
 
-		exutil.By("Patch tuningOptions/maxConnections with max 2000000 to the ingress-controller ocp50926")
-		podname = getRouterPod(oc, ingctrl.name)
+		exutil.By("Patch tuningOptions/maxConnections with max 2000000 to IC ocp50926")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"maxConnections\": 2000000}}}")
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
