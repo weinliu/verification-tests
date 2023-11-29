@@ -131,6 +131,21 @@ func SkipNoOLMCore(oc *CLI) {
 	SkipNoCapabilities(oc, "OperatorLifecycleManager")
 }
 
+// SkipNoBuild skip the test if the cluster has no Build component
+func SkipNoBuild(oc *CLI) {
+	SkipNoCapabilities(oc, "Build")
+}
+
+// SkipNoDeploymentConfig skip the test if the cluster has no DeploymentConfig component
+func SkipNoDeploymentConfig(oc *CLI) {
+	SkipNoCapabilities(oc, "DeploymentConfig")
+}
+
+// SkipNoImageRegistry skip the test if the cluster has no ImageRegistry component
+func SkipNoImageRegistry(oc *CLI) {
+	SkipNoCapabilities(oc, "ImageRegistry")
+}
+
 // IsTechPreviewNoUpgrade checks if a cluster is a TechPreviewNoUpgrade cluster
 func IsTechPreviewNoUpgrade(oc *CLI) bool {
 	featureGate, err := oc.AdminConfigClient().ConfigV1().FeatureGates().Get(context.Background(), "cluster", metav1.GetOptions{})

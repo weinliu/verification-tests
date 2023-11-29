@@ -48,6 +48,7 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
+	configv1 "github.com/openshift/api/config/v1"
 	oauthv1 "github.com/openshift/api/oauth/v1"
 	projectv1 "github.com/openshift/api/project/v1"
 	userv1 "github.com/openshift/api/user/v1"
@@ -323,12 +324,39 @@ func (c *CLI) SetupProject() {
 	// TODO: some of them not even using the constants
 	DefaultServiceAccounts := []string{
 		"default",
-		"deployer",
-		"builder",
+	}
+	shouldCheckSecret := false
+	clusterVersion, err := c.AdminConfigClient().ConfigV1().ClusterVersions().Get(context.Background(), "version", metav1.GetOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	checkCapability := func(capabilities []configv1.ClusterVersionCapability, checked configv1.ClusterVersionCapability) bool {
+		for _, capability := range capabilities {
+			if capability == checked {
+				return true
+			}
+		}
+		return false
+	}
+	if clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
+		clusterVersion.Status.Capabilities.EnabledCapabilities == nil ||
+		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityBuild) ||
+		checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityBuild) {
+		DefaultServiceAccounts = append(DefaultServiceAccounts, "builder")
+	}
+	if clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
+		clusterVersion.Status.Capabilities.EnabledCapabilities == nil ||
+		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityDeploymentConfig) ||
+		checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityDeploymentConfig) {
+		DefaultServiceAccounts = append(DefaultServiceAccounts, "deployer")
+	}
+	if clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
+		clusterVersion.Status.Capabilities.EnabledCapabilities == nil ||
+		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityImageRegistry) ||
+		checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityImageRegistry) {
+		shouldCheckSecret = true
 	}
 	for _, sa := range DefaultServiceAccounts {
 		e2e.Logf("Waiting for ServiceAccount %q to be provisioned...", sa)
-		err = WaitForServiceAccount(c.KubeClient().CoreV1().ServiceAccounts(newNamespace), sa)
+		err = WaitForServiceAccount(c.KubeClient().CoreV1().ServiceAccounts(newNamespace), sa, shouldCheckSecret)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 

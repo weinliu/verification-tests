@@ -966,7 +966,7 @@ func CheckBuildCancelled(b *buildv1.Build) bool {
 
 // WaitForServiceAccount waits until the named service account gets fully
 // provisioned
-func WaitForServiceAccount(c corev1client.ServiceAccountInterface, name string) error {
+func WaitForServiceAccount(c corev1client.ServiceAccountInterface, name string, checkSecret bool) error {
 	countOutput := -1
 	// add Logf for better debug, but it will possible generate many logs because of 100 millisecond
 	// so, add countOutput so that it output log every 100 times (10s)
@@ -992,7 +992,7 @@ func WaitForServiceAccount(c corev1client.ServiceAccountInterface, name string) 
 			}
 			secretNames = append(secretNames, s.Name)
 		}
-		if hasDockercfg {
+		if hasDockercfg || !checkSecret {
 			return true, nil
 		}
 		if countOutput%100 == 0 {
