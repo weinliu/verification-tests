@@ -493,6 +493,117 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		o.Expect(strings.Contains(textData, "There is no cluster with identifier or name")).Should(o.BeTrue())
 
 	})
+
+	g.It("Author:yuwan-High-57441-Upgrade account-roles with the managed policies should be forbidden [Serial]", func() {
+		defer func() {
+			g.By("Cleanup created account-roles in high level of the test case")
+			if len(accountRolePrefixesNeedCleanup) > 0 {
+				for _, v := range accountRolePrefixesNeedCleanup {
+					_, err := ocmResourceService.DeleteAccountRole("--mode", "auto",
+						"--prefix", v,
+						"-y")
+					o.Expect(err).To(o.BeNil())
+				}
+			}
+		}()
+		var (
+			accrolePrefix = "accrolep57441"
+			path          = "/aa/vv/"
+			modes         = []string{"auto", "manual"}
+		)
+
+		g.By("Create hosted-cp account-roles")
+		output, err := ocmResourceService.CreateAccountRole("--mode", "auto",
+			"--prefix", accrolePrefix,
+			"--path", path,
+			"--hosted-cp",
+			"-y")
+		o.Expect(err).To(o.BeNil())
+		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, accrolePrefix)
+		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).Should(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+
+		g.By("Upgrade managed account-roles")
+		for _, mode := range modes {
+			output, err := ocmResourceService.UpgradeAccountRole(
+				"--prefix", accrolePrefix,
+				"--hosted-cp",
+				"--mode", mode,
+				"-y",
+			)
+			o.Expect(err).To(o.BeNil())
+			o.Expect(strings.Contains(output.String(), "have attached managed policies. An upgrade isn't needed")).Should(o.BeTrue())
+		}
+
+		g.By("Delete account-roles")
+		output, err = ocmResourceService.DeleteAccountRole("--mode", "auto",
+			"--prefix", accrolePrefix,
+			"--hosted-cp",
+			"-y")
+
+		o.Expect(err).To(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(strings.Contains(textData, "Successfully deleted the hosted CP account roles")).Should(o.BeTrue())
+
+		g.By("List account-roles to check they are deleted")
+		accountRoleList, _, err := ocmResourceService.ListAccountRole()
+		o.Expect(err).To(o.BeNil())
+		o.Expect(len(accountRoleList.AccountRoles(accrolePrefix))).To(o.Equal(0))
+	})
+
+	g.It("NonPreRelease-Author:yuwan-High-62083-Delete account-roles with --hosted-cp and --classic [Serial]", func() {
+		defer func() {
+			g.By("Cleanup created account-roles in high level of the test case")
+			if len(accountRolePrefixesNeedCleanup) > 0 {
+				for _, v := range accountRolePrefixesNeedCleanup {
+					_, err := ocmResourceService.DeleteAccountRole("--mode", "auto",
+						"--prefix", v,
+						"-y")
+
+					o.Expect(err).To(o.BeNil())
+				}
+			}
+		}()
+
+		var accrolePrefix = "accrolep62083"
+
+		g.By("Create advanced account-roles of both hosted-cp and classic")
+		output, err := ocmResourceService.CreateAccountRole("--mode", "auto",
+			"--prefix", accrolePrefix,
+			"-y")
+		o.Expect(err).To(o.BeNil())
+
+		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, accrolePrefix)
+		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(strings.Contains(textData, "Creating classic account roles")).Should(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).Should(o.BeTrue())
+		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+
+		g.By("Delete account-roles with --classic flag")
+		output, err = ocmResourceService.DeleteAccountRole("--mode", "auto",
+			"--prefix", accrolePrefix,
+			"--classic",
+			"-y")
+		o.Expect(err).To(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(strings.Contains(textData, "Successfully deleted the classic account roles")).Should(o.BeTrue())
+
+		g.By("Delete account-roles with --hosted-cp flag")
+		output, err = ocmResourceService.DeleteAccountRole("--mode", "auto",
+			"--prefix", accrolePrefix,
+			"--hosted-cp",
+			"-y",
+		)
+		o.Expect(err).To(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(strings.Contains(textData, "Successfully deleted the hosted CP account roles")).Should(o.BeTrue())
+
+		g.By("List account-roles to check they are deleted")
+		accountRoleList, _, err := ocmResourceService.ListAccountRole()
+		o.Expect(err).To(o.BeNil())
+		o.Expect(len(accountRoleList.AccountRoles(accrolePrefix))).To(o.Equal(0))
+	})
 })
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing", func() {
@@ -615,6 +726,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 			ocmroleArnInWrongFormat                       string
 			foundOcmrole                                  rosacli.OCMRole
 			path                                          = "/aa/bb/"
+			ocmRoleList                                   rosacli.OCMRoleList
+			ocmRoleNeedRecoved                            rosacli.OCMRole
 		)
 		rosaClient := rosacli.NewClient()
 		ocmResourceService := rosaClient.OCMResource
@@ -627,6 +740,23 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		rand.Seed(time.Now().UnixNano())
 		ocmrolePrefix = fmt.Sprintf("QEAuto-ocmr-%s-46187", time.Now().UTC().Format("20060102"))
 
+		g.By("Check linked ocm role then unlink it")
+		ocmRoleList, _, err = ocmResourceService.ListOCMRole()
+		ocmRoleNeedRecoved = ocmRoleList.FindLinkedOCMRole()
+		o.Expect(err).To(o.BeNil())
+		if (ocmRoleNeedRecoved != rosacli.OCMRole{}) {
+			output, err := ocmResourceService.UnlinkOCMRole("--role-arn", ocmRoleNeedRecoved.RoleArn, "-y")
+			o.Expect(err).To(o.BeNil())
+			o.Expect(output.String()).Should(o.ContainSubstring("Successfully unlinked role"))
+			defer func() {
+				g.By("Link the ocm-role to recover the original status")
+				if (ocmRoleNeedRecoved != rosacli.OCMRole{}) {
+					output, err := ocmResourceService.LinkOCMRole("--role-arn", ocmRoleNeedRecoved.RoleArn, "-y")
+					o.Expect(err).To(o.BeNil())
+					o.Expect(output.String()).Should(o.ContainSubstring("Successfully linked role"))
+				}
+			}()
+		}
 		defer func() {
 			g.By("Delete ocm-role")
 			ocmRoleList, _, err := ocmResourceService.ListOCMRole()
@@ -680,7 +810,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 		o.Expect(textData).Should(o.ContainSubstring("Successfully linked role"))
 
 		g.By("Get the ocm-role info")
-		ocmRoleList, output, err := ocmResourceService.ListOCMRole()
+		ocmRoleList, output, err = ocmResourceService.ListOCMRole()
 		o.Expect(output).ToNot(o.BeNil())
 		o.Expect(err).To(o.BeNil())
 		foundOcmrole = ocmRoleList.OCMRole(ocmrolePrefix, ocmOrganizationExternalID)

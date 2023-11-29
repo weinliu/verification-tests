@@ -37,6 +37,7 @@ type OCMResourceService interface {
 	UnlinkOCMRole(flags ...string) (bytes.Buffer, error)
 	CreateOCMRole(flags ...string) (bytes.Buffer, error)
 	ReflectOCMRoleList(result bytes.Buffer) (orl OCMRoleList, err error)
+	UpgradeAccountRole(flags ...string) (bytes.Buffer, error)
 
 	ListOIDCConfig() (OIDCConfigList, bytes.Buffer, error)
 	DeleteOIDCConfig(flags ...string) (bytes.Buffer, error)
@@ -283,6 +284,14 @@ func (arl AccountRoleList) AccountRoles(prefix string) (accountRoles []AccountRo
 	}
 	return
 }
+
+// run `rosa upgrade account-roles` command
+func (ors *ocmResourceService) UpgradeAccountRole(flags ...string) (bytes.Buffer, error) {
+	upgradeAccountRole := ors.Client.Runner
+	upgradeAccountRole = upgradeAccountRole.Cmd("upgrade", "account-roles").CmdFlags(flags...)
+	return upgradeAccountRole.Run()
+}
+
 func (arl AccountRoleList) InstallerRole(prefix string, hostedcp bool) (accountRole AccountRole) {
 	roleType := RoleTypeSuffixMap["Installer"]
 	if hostedcp {
@@ -367,6 +376,17 @@ func (url OCMRoleList) OCMRole(prefix string, ocmOrganizationExternalID string) 
 	for _, roleItme := range url.OCMRoleList {
 		if roleItme.RoleName == ocmRoleName {
 			logger.Infof("Find the ocm Role %s ~", ocmRoleName)
+			return roleItme
+		}
+	}
+	return
+}
+
+// Get the ocm-role which is linked to org
+func (url OCMRoleList) FindLinkedOCMRole() (userRoles OCMRole) {
+	for _, roleItme := range url.OCMRoleList {
+		if roleItme.Linded == "Yes" {
+			logger.Infof("Find one linked ocm Role %s ~", roleItme.RoleName)
 			return roleItme
 		}
 	}

@@ -285,7 +285,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		idpTab, _, err := idpService.ListIDP(clusterID)
 		o.Expect(err).To(o.BeNil())
 		for k := range idp {
-			o.Expect(idpTab.IsExist(idp[k].name)).To(o.BeTrue())
+			o.Expect(idpTab.IsExist(idp[k].name)).To(o.BeTrue(), "the idp %s is not in output", idp[k].name)
 		}
 	})
 

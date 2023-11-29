@@ -173,6 +173,15 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(strings.Contains(textData, "installer-role-arn param is not supported for managed OIDC config")).Should(o.BeTrue())
 
+		g.By("Validation the raw-files and managed at the same time")
+		output, err = ocmResourceService.CreateOIDCConfig(
+			"--mode", "auto",
+			"--raw-files",
+			"-y")
+		o.Expect(err).NotTo(o.BeNil())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(strings.Contains(textData, "--raw-files param is not supported alongside --mode param")).Should(o.BeTrue())
+
 		g.By("Validate the oidc-config deletion with no-existed oidc config id in auto mode")
 		output, err = ocmResourceService.DeleteOIDCConfig(
 			"--mode", "auto",
