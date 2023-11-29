@@ -1330,42 +1330,37 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 	g.It("Author:vvoronko-High-63121-Peerpods-cluster-limit [Serial]", func() {
 
+		//TODO edge case: check no podvms are up in the air somehow others test will fail
 		if !kataconfig.enablePeerPods {
 			g.Skip("63121 podvm limit test is only for peer pods")
 		}
 
 		oc.SetupProject()
 
-		restoreLimit, err := oc.AsAdmin().Run("get").Args("peerpodconfig", "-n", opNamespace, "-o=jsonpath={.items[].spec.limit}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Default podvm limit is %v", restoreLimit)
-
 		var (
 			podNs           = oc.Namespace()
 			deployName      = "dep-63121-" + getRandomString()
-			podvmLimit      = "2"
 			podIntLimit     = 2
-			podvmInit       = "{\"spec\":{\"limit\":\"" + podvmLimit + "\"}}"
-			podvmnRestore   = "{\"spec\":{\"limit\":\"" + restoreLimit + "\"}}"
+			defaultLimit    = "10"
 			kataNodesAmount = len(exutil.GetNodeListByLabel(oc, kataocLabel))
 			msg             string
+			cleanupRequired = true
 		)
 
-		g.By("patching podvm limit to expected value")
-		msg, err = oc.AsAdmin().Run("patch").Args("peerpodconfig", "peerpodconfig-openshift", "-n", opNamespace, "--type", "merge", "--patch", podvmInit).Output()
-		if err != nil {
-			e2e.Logf("Could not patch podvm limit %v %v", msg, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			if cleanupRequired {
+				e2e.Logf("Cleanup required, restoring to default %v", defaultLimit)
+				patchPeerPodLimit(oc, opNamespace, defaultLimit)
+			}
+		}()
 
-		msg, err = oc.AsAdmin().Run("get").Args("peerpodconfig", "-n", opNamespace, "-o=jsonpath={.items[].spec.limit}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Current podvm limit is %v", msg)
-		o.Expect(msg == podvmLimit).To(o.BeTrue())
+		patchPeerPodLimit(oc, opNamespace, strconv.Itoa(podIntLimit))
 
 		g.By("Create deployment config from template")
 		initReplicas := strconv.Itoa(podIntLimit * kataNodesAmount)
-		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "REPLICAS="+initReplicas, "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment,
+			"-p", "NAME="+deployName, "-p", "REPLICAS="+initReplicas,
+			"-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
 		if err != nil {
 			e2e.Logf("Could not create deployment configFile %v %v", configFile, err)
 		}
@@ -1384,7 +1379,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		e2e.Logf("Deployment has initially %v pods", msg)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg == initReplicas).To(o.BeTrue())
+		o.Expect(msg).To(o.Equal(initReplicas))
 
 		extraReplicas := strconv.Itoa((podIntLimit + 1) * kataNodesAmount)
 		g.By(fmt.Sprintf("Scaling deployment from %v to %v", initReplicas, extraReplicas))
@@ -1406,24 +1401,16 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for %v additional pending pods %v %v", extraPods, msg, err))
 
 		msg, err = oc.AsAdmin().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
-		o.Expect(msg == initReplicas).To(o.BeTrue())
+		o.Expect(msg).To(o.Equal(initReplicas))
 
 		g.By("restore podvm limit")
-		msg, err = oc.AsAdmin().Run("patch").Args("peerpodconfig", "peerpodconfig-openshift", "-n", opNamespace, "--type", "merge", "--patch", podvmnRestore).Output()
-		if err != nil {
-			e2e.Logf("Could not patch podvm limit %v %v", msg, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		msg, err = oc.AsAdmin().Run("get").Args("peerpodconfig", "-n", opNamespace, "-o=jsonpath={.items[].spec.limit}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Restored podvm limit is %v", msg)
-		o.Expect(msg == restoreLimit).To(o.BeTrue())
+		patchPeerPodLimit(oc, opNamespace, defaultLimit)
+		cleanupRequired = false
 
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Deployment has %v running pods after patching the limit", msg)
-		o.Expect(msg == extraReplicas).To(o.BeTrue())
+		o.Expect(msg).To(o.Equal(extraReplicas))
 
 		g.By("SUCCESSS - deployment peer pods podvm limit - finished successfully")
 	})
