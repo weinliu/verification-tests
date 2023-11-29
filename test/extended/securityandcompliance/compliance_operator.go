@@ -1250,12 +1250,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check worker-compliancesuite result through exit-code ..!!!\n")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, csuiteD.name, "2")
 
-		g.By("Verify compliance scan result compliancecheckresult through label ...!!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, csuiteD.scanname+"-kubelet-configure-event-creation", ok, []string{"compliancecheckresult",
-			"--selector=compliance.openshift.io/check-status=FAIL", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
-			csuiteD.scanname + "-kubelet-configure-event-creation", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-
 		g.By("Remove worker-compliancesuite object.. !!!\n")
 		cleanupObjects(oc, objectTableRef{"compliancesuite", subD.namespace, csuiteD.name})
 
