@@ -75,6 +75,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		skipTestIfSpotWorkers(oc)
 		archtype := getArchitectureType(oc)
 		machinesetName := "machineset-46967"
 		ms := exutil.MachineSetDescription{machinesetName, 0}

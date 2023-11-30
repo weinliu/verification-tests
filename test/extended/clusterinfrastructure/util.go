@@ -2,8 +2,11 @@ package clusterinfrastructure
 
 import (
 	"math/rand"
+	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -45,4 +48,12 @@ func getRandomString() string {
 		buffer[index] = chars[seed.Intn(len(chars))]
 	}
 	return string(buffer)
+}
+
+func skipTestIfSpotWorkers(oc *exutil.CLI) {
+	machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(strings.Split(machine, "")) != 0 {
+		g.Skip("This case cannot be tested using spot instance!")
+	}
 }
