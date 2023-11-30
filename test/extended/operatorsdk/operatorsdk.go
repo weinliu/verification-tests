@@ -4818,4 +4818,152 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("ConnectedOnly-VMonly-Author:jitli-High-69005-helm operator recoilne the different namespaces", func() {
+		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
+		imageTag := "quay.io/olmqe/nginx-operator-base:v" + ocpversion + "-69005" + getRandomString()
+		nsSystem := "system-69005-" + getRandomString()
+		nsOperator := "nginx-operator-69005-system"
+
+		tmpBasePath := "/tmp/ocp-69005-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "nginx-operator-69005")
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		defer func() {
+			quayCLI := container.NewQuayCLI()
+			quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+		}()
+
+		exutil.By("init Helm Based Operators")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=helm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next: define a resource with"))
+
+		exutil.By("Create API.")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "demo", "--version", "v1", "--kind", "Nginx69005").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("nginx"))
+
+		if !upstream {
+			dockerFile := filepath.Join(tmpPath, "Dockerfile")
+			content := getContent(dockerFile)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-helm-operator:v" + ocpversion))
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator:v"+ocpversion)
+
+			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+			content = getContent(managerAuthProxyPatch)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+		}
+
+		exutil.By("modify namespace")
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/name: system/name: %s/g' `grep -rl \"name: system\" %s`", nsSystem, tmpPath)).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: system/namespace: %s/g'  `grep -rl \"namespace: system\" %s`", nsSystem, tmpPath)).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: nginx-operator-69005-system/namespace: %s/g'  `grep -rl \"namespace: nginx-operator-system\" %s`", nsOperator, tmpPath)).Output()
+
+		exutil.By("build and Push the operator image")
+		tokenDir := "/tmp/ocp-69005" + getRandomString()
+		err = os.MkdirAll(tokenDir, os.ModePerm)
+		defer os.RemoveAll(tokenDir)
+		if err != nil {
+			e2e.Failf("fail to create the token folder:%s", tokenDir)
+		}
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster auth %v", err)
+		}
+		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
+
+		defer func() {
+			exutil.By("run make undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("Edit manager.yaml to add the multiple namespaces")
+		managerFilePath := filepath.Join(tmpPath, "config", "manager", "manager.yaml")
+		replaceContent(managerFilePath, "name: manager", "name: manager\n        env:\n          - name: \"WATCH_NAMESPACE\"\n            value: default,nginx-operator-69005-system")
+
+		exutil.By("Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/nginx-operator-69005-controller-manager created"))
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "nginx-operator-69005-controller-manager") {
+					e2e.Logf("found pod nginx-operator-69005-controller-manager")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod nginx-operator-69005-controller-manager is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod nginx-operator-69005-controller-manager is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if err != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, "No nginx-operator-69005-controller-manager")
+
+		exutil.By("Check the namespaces watching")
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+		podLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(podName, "-n", nsOperator, "--limit-bytes", "50000").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podLogs).To(o.ContainSubstring("multiple"))
+
+		exutil.By("run make undeploy")
+		_, err = makeCLI.Run("undeploy").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Edit manager.yaml to add the single namespaces")
+		managerFilePath = filepath.Join(tmpPath, "config", "manager", "manager.yaml")
+		replaceContent(managerFilePath, "default,nginx-operator-69005-system", "nginx-operator-69005-system")
+
+		exutil.By("Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/nginx-operator-69005-controller-manager created"))
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "nginx-operator-69005-controller-manager") {
+					e2e.Logf("found pod nginx-operator-69005-controller-manager")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod nginx-operator-69005-controller-manager is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod nginx-operator-69005-controller-manager is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if err != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, "No nginx-operator-69005-controller-manager")
+
+		exutil.By("Check the namespaces watching")
+		podName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+		podLogs, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(podName, "-n", nsOperator, "--limit-bytes", "50000").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podLogs).To(o.ContainSubstring("single"))
+
+	})
+
 })
