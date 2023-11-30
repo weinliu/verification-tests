@@ -505,8 +505,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if region != "us-east-2" {
-			g.Skip("Region is " + region + ", skip this test scenario because this case is only supported on us-east-2 region")
+		if region != "us-east-1" && region != "us-east-2" {
+			g.Skip("Region is " + region + ", skip this test scenario because we only created kms key in us-east-1/us-east-2 region")
 		}
 
 		g.By("Create a new machineset")
@@ -517,14 +517,21 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset with KMS keys")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"blockDevices": [{"ebs":{"encrypted":true,"iops":0,"kmsKey":{"arn":"arn:aws:kms:us-east-2:301721915996:key/c228ef83-df2c-4151-84c4-d9f39f39a972"},"volumeSize":120,"volumeType":"gp2"}}]}}}}}}`, "--type=merge").Execute()
+		var key string
+		switch region {
+		case "us-east-1":
+			key = "arn:aws:kms:us-east-1:301721915996:key/c471ec83-cfaf-41a2-9241-d9e99c4da344"
+		case "us-east-2":
+			key = "arn:aws:kms:us-east-2:301721915996:key/c228ef83-df2c-4151-84c4-d9f39f39a972"
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"blockDevices": [{"ebs":{"encrypted":true,"iops":0,"kmsKey":{"arn":"`+key+`"},"volumeSize":120,"volumeType":"gp2"}}]}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with KMS keys")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.blockDevices[0].ebs.kmsKey.arn}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(out).Should(o.ContainSubstring("arn:aws:kms:us-east-2"))
+		o.Expect(out).Should(o.ContainSubstring("arn:aws:kms"))
 	})
 
 	// author: zhsun@redhat.com
