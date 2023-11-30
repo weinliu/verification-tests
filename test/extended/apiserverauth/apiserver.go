@@ -6801,4 +6801,114 @@ spec:
 			}
 		}
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-ConnectedOnly-Author:rgangwar-Medium-68400-[Apiserver] Do not generate image pull secrets for internal registry when internal registry is disabled[Slow][Disruptive]", func() {
+		var (
+			namespace    = "ocp-68400"
+			secretOutput string
+			dockerOutput string
+			currentStep  = 2
+		)
+
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
+
+		exutil.By("1. Check Image registry's enabled")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry.operator.openshift.io/cluster", "-o", `jsonpath='{.spec.managementState}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Managed") {
+			exutil.By(fmt.Sprintf("%v. Create serviceAccount test-a", currentStep))
+			err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "test-a", "-n", namespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By(fmt.Sprintf("%v. Check if Token and Dockercfg Secrets of SA test-a are created.", currentStep+1))
+			secretOutput = getResourceToBeReady(oc, asAdmin, withoutNamespace, "secrets", "-n", namespace, "-o", "jsonpath='{range .items[*]}{.metadata.name}{\" \"}'")
+			o.Expect(string(secretOutput)).To(o.ContainSubstring("test-a-dockercfg-"))
+			o.Expect(string(secretOutput)).To(o.ContainSubstring("test-a-token-"))
+
+			exutil.By(fmt.Sprintf("%v. Disable the Internal Image Registry", currentStep+2))
+			defer func() {
+				exutil.By("Recovering Internal image registry")
+				output, err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if strings.Contains(output, "patched (no change)") {
+					e2e.Logf("No changes to the internal image registry.")
+				} else {
+					exutil.By("Waiting KAS and Image registry reboot after the Internal Image Registry was enabled")
+					e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
+					expectedStatus := map[string]string{"Progressing": "True"}
+					err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
+					exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+					e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
+					expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+					err = waitCoBecomes(oc, "kube-apiserver", 1500, expectedStatus)
+					exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
+					err = waitCoBecomes(oc, "image-registry", 100, expectedStatus)
+					exutil.AssertWaitPollNoErr(err, "image-registry operator is not becomes available in 100 seconds")
+				}
+			}()
+			err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By(fmt.Sprintf("%v. Waiting KAS and Image registry reboot after the Internal Image Registry was disabled", currentStep+3))
+			e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+			e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "kube-apiserver", 1500, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
+			err = waitCoBecomes(oc, "image-registry", 100, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "image-registry operator is not becomes available in 100 seconds")
+
+			exutil.By(fmt.Sprintf("%v. Check if Token and Dockercfg Secrets of SA test-a are removed", currentStep+4))
+			secretOutput, err = getResource(oc, asAdmin, withoutNamespace, "secrets", "-n", namespace, "-o", `jsonpath={range .items[*]}{.metadata.name}`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(secretOutput).Should(o.BeEmpty())
+			dockerOutput, err = getResource(oc, asAdmin, withoutNamespace, "sa", "test-a", "-n", namespace, "-o", `jsonpath='{.secrets[*].name}'`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(dockerOutput).ShouldNot(o.ContainSubstring("dockercfg"))
+			currentStep = currentStep + 5
+		}
+
+		exutil.By(fmt.Sprintf("%v. Create serviceAccount test-b", currentStep))
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "test-b", "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("%v. Check if Token and Dockercfg Secrets of SA test-b are created.", currentStep+1))
+		secretOutput, err = getResource(oc, asAdmin, withoutNamespace, "secrets", "-n", namespace, "-o", `jsonpath={range .items[*]}{.metadata.name}`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(secretOutput).Should(o.BeEmpty())
+		dockerOutput, err = getResource(oc, asAdmin, withoutNamespace, "sa", "test-b", "-n", namespace, "-o", `jsonpath='{.secrets[*].name}'`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(dockerOutput).ShouldNot(o.ContainSubstring("dockercfg"))
+
+		exutil.By(fmt.Sprintf("%v. Create new token and dockercfg secrets from any content for SA test-b", currentStep+2))
+		newSecretErr := oc.Run("create").Args("-n", namespace, "secret", "generic", "test-b-dockercfg-ocp68400", "--from-literal=username=myuser", "--from-literal=password=mypassword").NotShowInfo().Execute()
+		o.Expect(newSecretErr).NotTo(o.HaveOccurred())
+		newSecretErr = oc.Run("create").Args("-n", namespace, "secret", "generic", "test-b-token-ocp68400", "--from-literal=username=myuser", "--from-literal=password=mypassword").NotShowInfo().Execute()
+		o.Expect(newSecretErr).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("%v. Check if Token and Dockercfg Secrets of SA test-b are not removed", currentStep+3))
+		secretOutput = getResourceToBeReady(oc, asAdmin, withoutNamespace, "secrets", "-n", namespace, "-o", "jsonpath='{range .items[*]}{.metadata.name}'")
+		o.Expect(string(secretOutput)).To(o.ContainSubstring("test-b-dockercfg-ocp68400"))
+		o.Expect(string(secretOutput)).To(o.ContainSubstring("test-b-token-ocp68400"))
+
+		exutil.By(fmt.Sprintf("%v. Check if Token and Dockercfg Secrets of SA test-b should not have serviceAccount references", currentStep+4))
+		secretOutput, err = getResource(oc, asAdmin, withoutNamespace, "secret", "test-b-token-ocp68400", "-n", namespace, "-o", `jsonpath={.metadata.annotations.kubernetes\.io/service-account\.name}`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(secretOutput).Should(o.BeEmpty())
+		secretOutput, err = getResource(oc, asAdmin, withoutNamespace, "secret", "test-b-dockercfg-ocp68400", "-n", namespace, "-o", `jsonpath={.metadata.annotations.kubernetes\.io/service-account\.name}`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(secretOutput).Should(o.BeEmpty())
+
+		exutil.By(fmt.Sprintf("%v. Pull image from public registry after disabling internal registry", currentStep+5))
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("registry.access.redhat.com/ubi8/httpd-24", "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podName := getPodsList(oc.AsAdmin(), namespace)
+		exutil.AssertPodToBeReady(oc, podName[0], namespace)
+	})
 })
