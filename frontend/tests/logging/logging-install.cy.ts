@@ -25,7 +25,7 @@ describe('Logging related features', () => {
 
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout;
+    cy.uiLogout();
   });
 
   it('(OCP-22558,gkarager) Deploy cluster-logging operator via web console', {tags: ['e2e','admin']}, () => {

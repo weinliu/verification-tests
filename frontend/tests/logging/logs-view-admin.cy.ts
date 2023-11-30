@@ -1,6 +1,7 @@
 import { catalogSource, logUtils } from "../../views/logging-utils";
 import { LokiUtils } from "views/logging-loki-utils";
 import { TestIds } from "../../views/logs-view-page";
+import { dashboard, graphSelector } from "views/dashboards-page"
 
 describe('Logging view on the openshift console', () => {
   const Logs_Page_URL = '/monitoring/logs';
@@ -56,9 +57,22 @@ describe('Logging view on the openshift console', () => {
       expect(output.stderr).not.contain('Error');
     })
 
+    // Create LogFileMetricExporter
+    cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} process -f ./fixtures/logging/lfme.yaml -n ${CLO.namespace} | oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} apply -f -`, {failOnNonZeroExit: false})
+    .then(output => {
+      expect(output.stderr).not.contain('Error');
+    })
+
     logUtils.waitforPodReady(CLO.namespace, 'component=collector');
     logUtils.waitforPodReady(CLO.namespace, 'app.kubernetes.io/name=logging-view-plugin');
     logUtils.waitforPodReady(CLO.namespace, 'app.kubernetes.io/name=lokistack');
+    logUtils.waitforPodReady(CLO.namespace, 'component=logfilesmetricexporter');
+
+    // Verify that below metric is exposed when LFME is created
+    dashboard.visitDashboard('grafana-dashboard-cluster-logging');
+    cy.byLegacyTestID('panel-produced-logs').should('exist').within(() => {
+      cy.byTestID('top-producing-containers-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+    });
   });
 
   after(() => {
@@ -67,8 +81,9 @@ describe('Logging view on the openshift console', () => {
     LokiUtils.removeObjectStorage(LokiStack.bucketName);
     logUtils.removeLokistack(LokiStack.name, CLO.namespace)
     logUtils.removeClusterLogging(CLO.namespace)
+    cy.exec(`oc delete lfme/instance -n ${CLO.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false});
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout;
+    cy.uiLogout();
   });
 
   it('(OCP-53324,gkarager) disable query executors when the query is empty', {tags: ['e2e','admin']}, () => {
