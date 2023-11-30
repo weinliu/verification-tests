@@ -316,9 +316,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// Test case exec with featuregate enabled TechPreviewNoUpgrade
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-60581-[Storageclass] Pending pvc will be bound after there is a default storageclass created [Serial]", func() {
 
-		if !isTechPreviewNoUpgrade(oc) {
-			g.Skip("Skip for featuregate set as TechPreviewNoUpgrade")
-		}
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
 			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
@@ -375,17 +372,31 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 		storageClass.provisioner = provisioner
-		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner))
-		sc.create(oc)
-		defer sc.deleteAsAdmin(oc)
-		setSpecifiedStorageClassAsDefault(oc, sc.name)
+
+		if provisioner == "efs.csi.aws.com" {
+			fsid := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner))
+			efsExtra := map[string]string{
+				"provisioningMode": "efs-ap",
+				"fileSystemId":     fsid,
+				"directoryPerms":   "700",
+			}
+			extraParameters := map[string]interface{}{
+				"parameters": efsExtra,
+			}
+			storageClass.createWithExtraParameters(oc, extraParameters)
+		} else {
+
+			storageClass.create(oc)
+		}
+		defer storageClass.deleteAsAdmin(oc)
+		setSpecifiedStorageClassAsDefault(oc, storageClass.name)
 
 		exutil.By("Waiting for pod status is Running")
 		pvc.waitStatusAsExpected(oc, "Bound")
 		pod.waitReady(oc)
 
 		exutil.By("Check the PV's storageclass should be newly create storageclass")
-		o.Expect(getScNamesFromSpecifiedPv(oc, pvc.getVolumeName(oc))).To(o.Equal(sc.name))
+		o.Expect(getScNamesFromSpecifiedPv(oc, pvc.getVolumeName(oc))).To(o.Equal(storageClass.name))
 
 	})
 
