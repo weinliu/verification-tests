@@ -1935,6 +1935,33 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "Failed to get assert the detailed document resource url")
 	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Low-54411-Low-21060-kubectl exec should work behind authenticated proxy", func() {
+		var httpOriginProxy, httpsOriginProxy string
+		httpOriginProxy = os.Getenv("http_proxy")
+		httpsOriginProxy = os.Getenv("https_proxy")
+		e2e.Logf("httpOriginProxy is %v", httpOriginProxy)
+		e2e.Logf("httpsOriginProxy is %v", httpsOriginProxy)
+		if httpOriginProxy == "" && httpsOriginProxy == "" {
+			g.Skip("Skipping the test as no porxy setting")
+		}
+
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns54406 := oc.Namespace()
+		g.By("Create the test pod")
+		err := oc.WithoutNamespace().Run("run").Args("mypod54406", "--image=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", ns54406).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertPodOutput(oc, "run=mypod54406", ns54406, "Running")
+		g.By("Run exec command")
+		err = oc.WithKubectl().Run("exec").Args("mypod54406", "--", "date").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Run port-forward command")
+		defer exec.Command("kill", "-9", `lsof -t -i:40035`).Output()
+		cmd2, _, _, err := oc.WithKubectl().Run("port-forward").Args("mypod54406", "40035:8081").Background()
+		defer cmd2.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
 
 // ClientVersion ...
