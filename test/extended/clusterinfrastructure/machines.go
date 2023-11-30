@@ -239,6 +239,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-44977-Machine with GPU is supported on gcp [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		architecture.SkipArchitectures(oc, architecture.ARM64)
+
 		g.By("Create a new machineset")
 		machinesetName := "machineset-44977"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
