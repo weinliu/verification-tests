@@ -360,7 +360,7 @@ func checkDeschedulerMetrics(oc *exutil.CLI, strategyname string, metricName str
 // SkipMissingCatalogsource mean to skip test when catalogsource/qe-app-registry not available
 func skipMissingCatalogsource(oc *exutil.CLI) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-	if strings.Contains(output, "NotFound") {
+	if strings.Contains(output, "NotFound") || strings.Contains(output, "doesn't have a resource type \"catalogsource\"") {
 		g.Skip("Skip since catalogsource/qe-app-registry not available")
 	}
 }
