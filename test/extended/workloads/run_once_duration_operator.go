@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		sub                      rodoSubscription
 		og                       rodoOperatorgroup
 		rodods                   runOnceDurationOverride
-		deamonsetPods            int
+		dsPodString              string
 	)
 
 	g.BeforeEach(func() {
@@ -59,10 +59,10 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 			template:              runOnceDurationOverrideT,
 		}
 		// Set expected number of Daemon set pods if cluster is SNO vs normal
-		deamonsetPods = 3
+		dsPodString = "Running Running Running"
 
 		if isSNOCluster(oc) {
-			deamonsetPods = 1
+			dsPodString = "Running"
 		}
 
 		// Skip case on arm64 cluster
@@ -129,16 +129,22 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		})
 		exutil.AssertWaitPollNoErr(err, "Expected number of daemonset pods are not ready")
 
-		g.By("Check the daemonset pods are running well inside openshift-run-once-duration-override-operator")
-		rodoPodName, rodoPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-run-once-duration-override-operator", "-l=runoncedurationoverride=true", `-ojsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
-		o.Expect(rodoPodError).NotTo(o.HaveOccurred())
-
-		rodoPodNames := strings.Fields(rodoPodName)
-		if len(rodoPodNames) != deamonsetPods {
-			e2e.Failf("All rodo pods inside openshift-run-once-duration-override-operator namespace are not running fine")
-		}
-
 		g.By("Validate that right version of RODO  is running")
+		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			rodoDSStatus, rodoPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-run-once-duration-override-operator", "-l=runoncedurationoverride=true", "-ojsonpath='{.items[*].status.phase}'").Output()
+			if rodoPodError != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString(dsPodString, rodoDSStatus); !matched {
+				e2e.Logf("All the ds pods are not still in running state, retrying  %s", rodoDSStatus)
+				return false, nil
+			}
+			e2e.Logf("All the ds pods are running %s", rodoDSStatus)
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "All rodo pods are not still running after 3 minutes")
+
 		rodoCsvOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", kubeNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.0.1")).To(o.BeTrue())
@@ -159,7 +165,6 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 				e2e.Logf("err: %v, and try next round...", err.Error())
 				return false, nil
 			}
-			e2e.Logf("Namespace label output is :%v", output)
 			if strings.Contains(output, "runoncedurationoverrides.admission.runoncedurationoverride.openshift.io") {
 				return true, nil
 			}
@@ -262,13 +267,20 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		exutil.AssertWaitPollNoErr(err, "Expected number of daemonset pods are not ready")
 
 		g.By("Check the daemonset pods are running well inside openshift-run-once-duration-override-operator")
-		rodoPodName, rodoPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-run-once-duration-override-operator", "-l=runoncedurationoverride=true", `-ojsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
-		o.Expect(rodoPodError).NotTo(o.HaveOccurred())
-
-		rodoPodNames := strings.Fields(rodoPodName)
-		if len(rodoPodNames) != deamonsetPods {
-			e2e.Failf("All rodo pods inside openshift-run-once-duration-override-operator namespace are not running fine")
-		}
+		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			rodoDSStatus, rodoPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-run-once-duration-override-operator", "-l=runoncedurationoverride=true", "-ojsonpath='{.items[*].status.phase}'").Output()
+			if rodoPodError != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString(dsPodString, rodoDSStatus); !matched {
+				e2e.Logf("All the ds pods are not still in running state, retrying  %s", rodoDSStatus)
+				return false, nil
+			}
+			e2e.Logf("All the ds pods are running %s", rodoDSStatus)
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "All rodo pods are not still running after 3 minutes")
 
 		// Create test project
 		g.By("Create test project")
@@ -312,9 +324,6 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 			}
 			if matched, _ := regexp.MatchString("60", activeDeadLineSeconds); !matched {
 				e2e.Logf("ActiveDeadLineSeconds was not set as the min value between pod & RODO, retrying\n")
-				checkPodStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace()).Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				e2e.Logf("Priting user created pods to see if they have been scheduled %s", checkPodStatus)
 				return false, nil
 			}
 			e2e.Logf("ActiveDeadLineSeconds was set as %s which is the min value between pod & RODO", activeDeadLineSeconds)
@@ -329,7 +338,6 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 				e2e.Logf("err: %v, and try next round...", err.Error())
 				return false, nil
 			}
-			e2e.Logf("the result of pod:%v", output)
 			if strings.Contains(output, "Failed") {
 				return true, nil
 			}
@@ -339,6 +347,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 
 		checkMessage, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "podwithactivedeadlineseconds62690", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 		if matched, _ := regexp.MatchString("DeadlineExceeded", checkMessage); !matched {
 			e2e.Failf("Pod podwithactivedeadlineseconds62690 has not gone into error state even after reaching activeDeadLineSeconds\n")
 		}

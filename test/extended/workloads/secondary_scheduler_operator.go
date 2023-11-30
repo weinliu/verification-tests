@@ -58,10 +58,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		// Get secheduler Image
-		ssImage, guestClusterKubeconfig = getSchedulerImageHypershiftCluster(oc)
+		guestClusterName, guestClusterKubeconfig, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
 		if guestClusterKubeconfig != "" {
-			ssImage, guestClusterKubeconfig = getSchedulerImageHypershiftCluster(getOCPerKubeConf(oc, guestClusterKubeconfig))
-			e2e.Logf("GuestClusterkubeconfig is %s", guestClusterKubeconfig)
+			hostedClusterNS := hostedClusterName + "-" + guestClusterName
+			e2e.Logf("hostedClusterNS is %s", hostedClusterNS)
+			schedulerPodNameHypershift, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", hostedClusterNS, "-l=app=kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(schedulerPodNameHypershift).NotTo(o.BeEmpty())
+			ssImage, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", hostedClusterNS, schedulerPodNameHypershift, "-o", "yaml", "-o=jsonpath={.spec.containers[0].image}").Output()
 			oc.SetGuestKubeconf(guestClusterKubeconfig)
 		} else {
 			ssImage = getSchedulerImage(getOCPerKubeConf(oc, guestClusterKubeconfig))

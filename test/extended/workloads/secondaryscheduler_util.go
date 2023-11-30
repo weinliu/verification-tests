@@ -142,18 +142,3 @@ func getSchedulerImage(oc *exutil.CLI) string {
 	schedulerImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-kube-scheduler", schedulerPodName, "-o", "yaml", "-o=jsonpath={.spec.containers[0].image}").Output()
 	return schedulerImage
 }
-
-func getSchedulerImageHypershiftCluster(oc *exutil.CLI) (string, string) {
-	guestClusterName, guestClusterKubeconfigFile, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
-	if guestClusterKubeconfigFile != "" {
-		hostedClusterNS := hostedClusterName + "-" + guestClusterName
-		e2e.Logf("hostedClusterNS is %s", hostedClusterNS)
-		schedulerPodNameHypershift, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", hostedClusterNS, "-l=app=kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(schedulerPodNameHypershift).NotTo(o.BeEmpty())
-		schedulerImageHypershift, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", hostedClusterNS, schedulerPodNameHypershift, "-o", "yaml", "-o=jsonpath={.spec.containers[0].image}").Output()
-		return schedulerImageHypershift, guestClusterKubeconfigFile
-	} else {
-		return "", ""
-	}
-}
