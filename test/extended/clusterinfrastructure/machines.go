@@ -551,13 +551,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer ms2.DeleteMachineSet(oc)
 		ms2.CreateMachineSet(oc)
 
-		resourceGroupName, rgerr := exutil.GetAzureCredentialFromCluster(oc)
-		o.Expect(rgerr).NotTo(o.HaveOccurred())
-		session, sessErr := exutil.NewAzureSessionFromEnv()
-		o.Expect(sessErr).NotTo(o.HaveOccurred())
-		storageAccount, instanceErr := exutil.GetAzureStorageAccount(session, resourceGroupName)
-		o.Expect(instanceErr).NotTo(o.HaveOccurred())
-
+		storageAccount, _, err1 := exutil.GetAzureStorageAccountFromCluster(oc)
+		o.Expect(err1).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://`+storageAccount+`.blob.core.windows.net/"}}}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
