@@ -23,6 +23,8 @@ const (
 		`Links: (?P<links>\d+)\n` +
 		`SymLink: (?P<symlink>.*)\n` +
 		`Selinux: (?P<selinux>.*)` // When parsing an "oc debug" command output, remember that the "utils" function will always trim the latest spaces and newlines
+	startCat = "{{[[!\n"
+	endCat   = "\n!]]}}"
 )
 
 // RemoteFile handles files located remotely in a node
@@ -30,7 +32,7 @@ type RemoteFile struct {
 	node     Node
 	fullPath string
 	statData map[string]string
-	content  []byte
+	content  string
 }
 
 // NewRemoteFile creates a new instance of RemoteFile
@@ -67,22 +69,16 @@ func (rf *RemoteFile) Stat() error {
 }
 
 func (rf *RemoteFile) fetchTextContent() error {
-
-	tmpFile := filepath.Join(e2e.TestContext.OutputDir, fmt.Sprintf("fetch-%s", exutil.GetRandomString()))
-
-	err := rf.node.CopyToLocal(rf.fullPath, tmpFile)
+	output, err := rf.node.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("echo -n '%s'; cat %s; echo '%s'", startCat, rf.fullPath, endCat))
 	if err != nil {
-		logger.Errorf("Could not fetch the content of the remote file %s. Error: %s", rf.fullPath, err)
 		return err
 	}
 
-	content, err := os.ReadFile(tmpFile)
-	if err != nil {
-		logger.Errorf("Could not read the fetched content from tmp file  %s. Error: %s", tmpFile, err)
-		return err
-	}
-
-	rf.content = content
+	// Split by first occurrence of startCat and last occurrence of endCat
+	tmpcontent := strings.SplitN(output, startCat, 2)[1]
+	// take into account that "cat" introduces a newline at the end
+	lastIndex := strings.LastIndex(tmpcontent, endCat)
+	rf.content = fmt.Sprintf(tmpcontent[:lastIndex])
 
 	logger.Debugf("remote file %s content is:\n%s", rf.fullPath, rf.content)
 
@@ -131,7 +127,7 @@ func (rf *RemoteFile) PushNewContent(newContent []byte) error {
 
 // GetTextContent return the content of the text file. If the file contains binary data this method cannot be used to retrieve the file's content
 func (rf *RemoteFile) GetTextContent() string {
-	return string(rf.content)
+	return rf.content
 }
 
 // Diggest the output of the 'stat' command using the 'statFormat' format. And stores the parsed information inside the 'statData' map
