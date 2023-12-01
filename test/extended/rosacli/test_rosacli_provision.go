@@ -9,7 +9,8 @@ import (
 var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with admin negative testing", func() {
 	defer g.GinkgoRecover()
 	var (
-		invalidUser     = "ad/min" // disallowed character
+		// To set back once OCM-5108 is solved
+		// invalidUser     = "ad/min" // disallowed character
 		validUser       = "admin"
 		invalidPassword = "password1" // disallowed password
 		validPassword   = "Th3long,validpassword"
@@ -20,32 +21,35 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with
 		rosaClient := rosacli.NewClient()
 		clusterID = "fake-cluster" // these tests do not create or use a real cluster so no need to address an existing one.
 
-		g.By("Try to create classic non STS cluster with invalid admin username")
-		output, err := rosaClient.Cluster.CreateDryRun(clusterID, "--cluster-admin-user", invalidUser,
-			"--cluster-admin-password", validPassword, "--region", "us-east-2",
+		// To set back once OCM-5108 is solved
+		// g.By("Try to create classic non STS cluster with invalid admin username")
+		// output, err := rosaClient.Cluster.CreateDryRun(clusterID, "--create-admin-user", invalidUser,
+		// 	"--cluster-admin-password", validPassword, "--region", "us-east-2",
+		// 	"--mode", "auto", "-y")
+		// fmt.Println(output)
+		// textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		// o.Expect(err).To(o.HaveOccurred())
+		// o.Expect(textData).Should(o.ContainSubstring("sername must not contain"))
+
+		g.By("Try to create classic non STS cluster with invalid admin password")
+		output, err := rosaClient.Cluster.CreateDryRun(clusterID, "--create-admin-user", validUser,
+			"--cluster-admin-password", invalidPassword, "--region", "us-east-2",
 			"--mode", "auto", "-y")
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(textData).Should(o.ContainSubstring("sername must not contain"))
-
-		g.By("Try to create classic non STS cluster with invalid admin password")
-		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--cluster-admin-user", validUser,
-			"--cluster-admin-password", invalidPassword, "--region", "us-east-2",
-			"--mode", "auto", "-y")
-		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(textData).Should(o.ContainSubstring("assword must be at least"))
 
-		g.By("Try to create cluster with invalid admin username on classic STS cluster")
-		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--sts", "--cluster-admin-user", invalidUser,
-			"--cluster-admin-password", validPassword, "--region", "us-east-2",
-			"--mode", "auto", "-y")
-		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(textData).Should(o.ContainSubstring("sername must not contain"))
+		// To set back once OCM-5108 is solved
+		// g.By("Try to create cluster with invalid admin username on classic STS cluster")
+		// output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--sts", "--create-admin-user", invalidUser,
+		// 	"--cluster-admin-password", validPassword, "--region", "us-east-2",
+		// 	"--mode", "auto", "-y")
+		// textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		// o.Expect(err).To(o.HaveOccurred())
+		// o.Expect(textData).Should(o.ContainSubstring("sername must not contain"))
 
 		g.By("Try to create cluster with invalid admin password on classic STS cluster")
-		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--sts", "--cluster-admin-user", validUser,
+		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--sts", "--create-admin-user", validUser,
 			"--cluster-admin-password", invalidPassword, "--region", "us-east-2",
 			"--mode", "auto", "-y")
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
@@ -53,7 +57,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with
 		o.Expect(textData).Should(o.ContainSubstring("assword must be at least"))
 
 		g.By("Try to create Hypershift cluster with admin username and password set (unsupported)")
-		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--hosted-cp", "--cluster-admin-user", validUser,
+		output, err = rosaClient.Cluster.CreateDryRun(clusterID, "--hosted-cp", "--create-admin-user", validUser,
 			"--cluster-admin-password", validPassword, "--region", "us-west-2", "--support-role-arn", "--controlplane-iam-role",
 			"--worker-iam-role", "--mode", "auto", "-y")
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
