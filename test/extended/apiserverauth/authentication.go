@@ -846,26 +846,15 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ConnectedOnly-Author:yinzhou-Medium-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy[Disruptive]", func() {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
-		output = re.ReplaceAllString(output, "")
-		path := "/tmp/scc_restricted_10662.yaml"
-		defer os.Remove(path)
-		err = ioutil.WriteFile(path, []byte(output), 0o644)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer func() {
-			g.By("Restoring the restricted SCC before exiting the scenario")
-			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", path).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
-		patchPath := `[{"op": "replace", "path": "/runAsUser/type", "value": "MustRunAsNonRoot"}]`
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "--type=json", "-p", patchPath).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
+	g.It("ConnectedOnly-Author:yinzhou-Medium-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy", func() {
 		oc.SetupProject()
 		namespace := oc.Namespace()
+		username := oc.Username()
+
+		// "nonroot-v2" SCC has "MustRunAsNonRoot" as the RunAsUserStrategy, assigning it to the user
+		defer oc.AsAdmin().Run("adm", "policy").Args("remove-scc-from-user", "nonroot-v2", username).Execute()
+		err := oc.AsAdmin().Run("adm", "policy").Args("add-scc-to-user", "nonroot-v2", username).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		baseDir := exutil.FixturePath("testdata", "apiserverauth")
 		podTemplate := filepath.Join(baseDir, "pod-scc-runAsUser.yaml")
@@ -877,7 +866,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 		g.By("Create new pod without runAsUser specified and the pod's image is built to run as USER 0 by default")
 		// Below image is built to run as USER 0 by default. This can be checked either by "podman inspect <image> | grep User" or "podman run <image> whoami"
-		err = oc.Run("run").Args("pod10662-3", "--image", image).Execute()
+		err = oc.Run("run").Args("pod10662-3", "--image", image, `--overrides={"spec":{"securityContext":{"fsGroup":1001}}}`).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check status of pod without runAsUser specified and the pod's image is built to run as USER 0 by default")
@@ -899,7 +888,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		pod1 := exutil.Pod{Name: "pod10662-2", Namespace: namespace, Template: podTemplate, Parameters: []string{"IMAGE=" + image, "USERID=97777"}}
 		pod1.Create(oc)
 		g.By("Check status of pod with runAsUser != 0")
-		output, err = oc.Run("get").Args("pod/pod10662-2", "-n", namespace, "-o=jsonpath=-o=jsonpath={.status.phase}").Output()
+		output, err := oc.Run("get").Args("pod/pod10662-2", "-o=jsonpath=-o=jsonpath={.status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Running"))
 	})
