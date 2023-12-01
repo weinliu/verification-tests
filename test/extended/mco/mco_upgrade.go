@@ -95,20 +95,21 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 	g.It("NonHyperShiftHOST-Author:sregidor-PreChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update [Disruptive]", func() {
 		var (
 			kcName     = "mco-tc-62154-kubeletconfig"
-			kcTemplate = generateTemplateAbsolutePath("change-maxpods-kubelet-config.yaml")
+			kcTemplate = generateTemplateAbsolutePath("generic-kubelet-config.yaml")
 			crName     = "mco-tc-62154-crconfig"
 			crTemplate = generateTemplateAbsolutePath("generic-container-runtime-config.yaml")
 
-			crConfig = `{"pidsLimit": 2048}`
+			kubeletConfig = `{"podsPerCore": 100}`
+			crConfig      = `{"pidsLimit": 2048}`
 		)
 
 		if len(wMcp.GetNodesOrFail()) == 0 {
 			g.Skip("Worker pool has 0 nodes configured.")
 		}
 
-		exutil.By("create kubelet config to add 500 max pods")
+		exutil.By("create kubelet config to add max 100 pods per core")
 		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
-		kc.create()
+		kc.create("-p", "KUBELETCONFIG="+kubeletConfig)
 
 		exutil.By("create ContainerRuntimeConfig")
 		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
@@ -123,7 +124,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 		var (
 			kcName     = "mco-tc-62154-kubeletconfig"
-			kcTemplate = generateTemplateAbsolutePath("change-maxpods-kubelet-config.yaml")
+			kcTemplate = generateTemplateAbsolutePath("generic-kubelet-config.yaml")
 			crName     = "mco-tc-62154-crconfig"
 			crTemplate = generateTemplateAbsolutePath("generic-container-runtime-config.yaml")
 
@@ -159,7 +160,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		o.Expect(config.Fetch()).To(o.Succeed(),
 			"Could not get the current kubelet config in node %s", worker.GetName())
 
-		o.Expect(config.GetTextContent()).To(o.ContainSubstring(`"maxPods": 500`),
+		o.Expect(config.GetTextContent()).To(o.ContainSubstring(`"podsPerCore": 100`),
 			"The kubelet configuration is not the expected one.")
 
 		exutil.By("check controller versions")

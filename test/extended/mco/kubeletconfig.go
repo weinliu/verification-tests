@@ -28,8 +28,11 @@ func NewKubeletConfigList(oc *exutil.CLI) *KubeletConfigList {
 	return &KubeletConfigList{*NewResourceList(oc, "KubeletConfig")}
 }
 
-func (kc *KubeletConfig) create() {
-	exutil.CreateClusterResourceFromTemplate(kc.oc, "--ignore-unknown-parameters=true", "-f", kc.template, "-p", "NAME="+kc.name)
+func (kc *KubeletConfig) create(parameters ...string) {
+	allParams := []string{"--ignore-unknown-parameters=true", "-f", kc.template,
+		"-p", "NAME=" + kc.name}
+	allParams = append(allParams, parameters...)
+	exutil.CreateClusterResourceFromTemplate(kc.oc, allParams...)
 }
 
 func (kc KubeletConfig) waitUntilSuccess(timeout string) {
