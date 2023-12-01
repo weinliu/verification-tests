@@ -23,16 +23,6 @@ export const Operator = {
             }
         })
     },
-    enableFLPMetrics: () => {
-        // this will need to change once NETOBSERV-1284 is fixed.
-        cy.get('#root_spec_processor_accordion-toggle').click()
-        cy.get('#root_spec_processor_metrics_accordion-toggle').click()
-        cy.get('#root_spec_processor_metrics_ignoreTags_accordion-toggle').should('exist').click()
-        cy.enableFLPMetric("namespaces-flows")
-        cy.enableFLPMetric("workloads-flows")
-        cy.enableFLPMetric("nodes-flows")
-        cy.enableFLPMetric("namespaces")
-    },
     visitFlowcollector: () => {
         // this assumes Loki is already deployed in netobserv NS
         cy.visit('k8s/ns/openshift-netobserv-operator/operators.coreos.com~v1alpha1~ClusterServiceVersion')
@@ -69,7 +59,6 @@ export const Operator = {
                     Operator.enablePacketDrop()
                 }
                 Operator.configureLoki(namespace)
-                Operator.enableFLPMetrics()
                 cy.get('#root_spec_namespace').clear().type(namespace)
                 if (parameters == "Conversations") {
                     Operator.enableConversations()
@@ -112,6 +101,7 @@ export const Operator = {
         cy.get('#root_spec_loki_monolithic_url').clear().type(`http://loki.${namespace}.svc:3100/`)
     },
     enableConversations: () => {
+        cy.get('#root_spec_processor_accordion-toggle').click()
         cy.get('#root_spec_processor_logTypes').click().then(moreOpts => {
             cy.contains("FLOWS").should('exist')
             cy.contains("ENDED_CONVERSATIONS").should('exist')

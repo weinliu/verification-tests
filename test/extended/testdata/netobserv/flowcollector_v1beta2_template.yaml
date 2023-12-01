@@ -1,7 +1,7 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: FlowCollector-template
+  name: flowcollector-template
 objects:
   - apiVersion: flows.netobserv.io/v1beta2
     kind: FlowCollector
@@ -31,8 +31,6 @@ objects:
           excludeInterfaces: ["lo"]
           logLevel: info
           privileged: "${{EBPFPrivileged}}"
-          enablePktDrop: "${{PacketDropEnable}}"
-          enableDNSTracking: "${{DNSTrackingEnable}}"
           resources:
             requests:
               memory: 50Mi
@@ -50,9 +48,6 @@ objects:
             port: 9102
             tls:
               type: "${MetricServerTLSType}"
-          ignoreTags:
-            - egress
-            - packets
           disablealerts: []
         dropUnusedFields: true
         resources:
@@ -158,10 +153,6 @@ parameters:
   - name: EBPFCacheActiveTimeout
     value: 15s
   - name: EBPFPrivileged
-    value: "false"
-  - name: PacketDropEnable
-    value: "false"
-  - name: DNSTrackingEnable
     value: "false"
   - name: MetricServerTLSType
     value: "AUTO"

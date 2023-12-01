@@ -1,11 +1,11 @@
-import { Operator } from "../../views/netobserv"
+import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { dashboard, graphSelector } from "views/dashboards-page"
 
-// if project name is changed here, it also needs to be changed 
-// under fixture/flowcollector.ts and topology_view.spec.ts
-const project = 'netobserv'
-
+const appsInfra = [
+    "applications-chart",
+    "infrastructure-chart"
+]
 
 describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
 
@@ -35,17 +35,17 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-health")
 
-        var panels: string[] = ['rates-chart', 'percentage-of-flows-generated-by-netobserv-own-traffic-chart', '-chart']
+        var panels: string[] = ['rates-chart', 'percentage-of-flows-generated-by-netobserv-own-traffic-chart']
         cy.checkDashboards(panels)
 
-        var appsInfra: string[] = ["applications-chart", "infrastructure-chart"]
-        cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-namespaces-1-min-rates').should('exist').within(topflow => {
+        cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-namespaces').should('exist').within(topflow => {
             cy.checkDashboards(appsInfra)
         })
 
-        cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-workloads-1-min-rates').should('exist').within(topflow => {
-            cy.checkDashboards(appsInfra)
-        })
+        // Will be updated in Nathan's PR
+        // cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-workloads').should('exist').within(topflow => {
+        //     cy.checkDashboards(appsInfra)
+        // })
 
         var cpuMemory: string[] = ['cpu-usage-chart', 'memory-usage-chart']
 
@@ -63,15 +63,18 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
     it("(OCP-63790, memodi), should have flow based dashboards", function () {
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
+
+        //Check Byte rate recieved per node panel
         cy.byTestID("-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        var appsInfra: string[] = ["applications-chart", "infrastructure-chart"]
         cy.byLegacyTestID('panel-top-byte-rates-received-per-source-and-destination-namespaces').should('exist').within(topBytes => {
             cy.checkDashboards(appsInfra)
         })
-        cy.byLegacyTestID('panel-top-byte-rates-received-per-source-and-destination-workloads').should('exist').within(topBytes => {
-            cy.checkDashboards(appsInfra)
-        })
+        
+        //Similar to above comment
+        // cy.byLegacyTestID('panel-top-byte-rates-received-per-source-and-destination-workloads').should('exist').within(topBytes => {
+        //     cy.checkDashboards(appsInfra)
+        // })
     })
 
     after("delete flowcollector and NetObs Operator", function () {

@@ -1,6 +1,7 @@
 
 export const netflowPage = {
     visit: () => {
+        cy.clearLocalStorage()
         cy.intercept('**/backend/api/loki/flow/metrics*').as('call1')
         cy.visit('/netflow-traffic')
         // wait for all calls to complete before checking due to bug
@@ -128,6 +129,9 @@ export namespace topologySelectors {
 export namespace overviewSelectors {
     export const mPanels = '#view-options-dropdown > ul > section:nth-child(1) > ul > li > a'
     export const panelsModal = '.modal-content'
+    export const resetDefault = 'panels-reset-button'
+    export const save = 'panels-save-button'
+    export const cancel = 'panels-cancel-button'
     export const typeDrop = 'type-dropdown'
     export const scopeDrop = 'scope-dropdown'
     export const truncateDrop = 'truncate-dropdown'

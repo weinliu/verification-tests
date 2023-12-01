@@ -74,7 +74,6 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
         })
 
         it("(OCP-50532, memodi) should validate netflow table features", { tags: ['e2e', 'admin'] }, function () {
-
             cy.byTestID(genSelectors.timeDrop).then(btn => {
                 expect(btn).to.exist
                 cy.wrap(btn).click().then(drop => {
@@ -180,25 +179,24 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.byTestID('view-options-button').click()
             cy.get(colSelectors.mColumns).click().then(col => {
                 cy.get(colSelectors.columnsModal).should('be.visible')
+                cy.get('#K8S_OwnerObject').check()
+                cy.get('#AddrPort').check()
+
+                cy.get('#Mac').should('exist').check()
+                cy.get('#FlowDirection').should('exist').check()
+                //ICMP related columns
+                cy.get('#IcmpType').should('exist').check()
+                cy.get('#IcmpCode').should('exist').check()
+
+                // source columns 
+                cy.get('#SrcK8S_HostIP').check()
+                cy.get('#SrcK8S_Namespace[type="checkbox"]').uncheck()
+
+                // dest columns
+                cy.get('#DstK8S_HostIP').check()
+
+                cy.byTestID(colSelectors.save).click()
             })
-            cy.get('#K8S_OwnerObject').check()
-            cy.get('#AddrPort').check()
-
-            cy.get('#Mac').should('exist').check()
-            cy.get('#Proto').should('exist').check()
-            cy.get('#FlowDirection').should('exist').check()
-            //ICMP related columns
-            cy.get('#IcmpType').should('exist').check()
-            cy.get('#IcmpCode').should('exist').check()
-
-            // source columns 
-            cy.get('#SrcK8S_HostIP').check()
-            cy.get('#SrcK8S_Namespace[type="checkbox"]').uncheck()
-
-            // dest columns
-            cy.get('#DstK8S_HostIP').check()
-
-            cy.byTestID(colSelectors.save).click()
             cy.reload()
 
             cy.byTestID('table-composable').should('exist').within(() => {
@@ -440,19 +438,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
         })
 
-        it("(OCP-68125, aramesha)should verify DSCP column", function () {
-            //Check DSCP column
-            cy.byTestID("show-view-options-button").should('exist').click()
-            netflowPage.stopAutoRefresh()
-            cy.byTestID('view-options-button').click()
-            cy.get(colSelectors.mColumns).click().then(col => {
-                cy.get(colSelectors.columnsModal).should('be.visible')
-            })
-
-            cy.get('#Dscp').check()
-            cy.byTestID(colSelectors.save).click()
-            cy.reload()
-
+        it("(OCP-68125, aramesha)should verify DSCP column is enbaled by default", function () {
             cy.byTestID('table-composable').should('exist').within(() => {
                 cy.get(colSelectors.DSCP).should('exist')
             })
@@ -464,10 +450,6 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.byTestID('dscp').click()
             cy.byTestID('autocomplete-search').type('0' + '{enter}')
             cy.get('#filters div.custom-chip > p').should('contain.text', 'Standard')
-
-            // restore defaults
-            cy.byTestID('view-options-button').click()
-            cy.get(colSelectors.mColumns).click().byTestID(colSelectors.resetDefault).click().byTestID(colSelectors.save).click()
         })
     })
 

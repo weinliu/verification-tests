@@ -38,6 +38,8 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
         })
 
         it("(OCP-66141, aramesha) Verify packetDrop panels", { tags: ['e2e', 'admin'] }, function () {
+            netflowPage.stopAutoRefresh()
+
             //check if PacketDrop default panels are visible
             cy.checkPanel(overviewSelectors.defaultPacketDropPanels)
             cy.checkPanelsNum(7);
@@ -55,15 +57,16 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
             cy.checkPanel(overviewSelectors.allPacketDropPanels)
 
             //restore default panels and check if visible on console
-            cy.openPanelsModal();
-            cy.get(overviewSelectors.panelsModal).contains('Restore default panels').click();
-            cy.get(overviewSelectors.panelsModal).contains('Save').click();
+            cy.byTestID('view-options-button').click()
+            cy.get(overviewSelectors.mPanels).click().byTestID(overviewSelectors.resetDefault).click().byTestID(overviewSelectors.save).click()
             netflowPage.waitForLokiQuery()
             cy.checkPanel(overviewSelectors.defaultPacketDropPanels)
             cy.checkPanelsNum(7);
         })
 
         it("(OCP-66141, aramesha) Verify packetDrop Query Options filters", { tags: ['e2e', 'admin'] }, function () {
+            netflowPage.stopAutoRefresh()
+
             cy.get('#tabs-container li:nth-child(2)').click()
             cy.byTestID("table-composable").should('exist')
             

@@ -7,4 +7,4 @@ spec:
   - dscp: 59
     podSelector:
       matchLabels:
-        app: flowlogs-pipeline
+        app: client-dscp

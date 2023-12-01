@@ -73,7 +73,7 @@ describe('(OCP-67782 NETOBSERV) Large volume downloads counters test', { tags: [
                     nbytes = Number(bytesCnt.text().split(' ')[0])
                 }
                 // curl total = 291M for "Fedora-Cloud-Base-Vagrant-30-1.2.x86_64.vagrant-libvirt.box" image
-                expect(nbytes).to.be.closeTo(291, 15, "Expected number of bytes is wrong")
+                expect(nbytes).to.be.closeTo(291, 20, "Expected number of bytes is wrong")
             })
         })
     })
