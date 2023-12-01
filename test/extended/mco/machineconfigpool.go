@@ -957,17 +957,19 @@ func DeleteCustomMCP(oc *exutil.CLI, name string) error {
 		return err
 	}
 
-	err = mcp.Delete()
-	if err != nil {
-		logger.Errorf("The %s MCP could not be deleted", mcp.GetName())
-		return err
-	}
-
+	// Wait for worker MCP to be updated before removing the custom pool
+	// in order to make sure that no node has any annotation pointing to resources that depend on the custom pool that we want to delete
 	wMcp := NewMachineConfigPool(oc, MachineConfigPoolWorker)
 	err = wMcp.WaitForUpdatedStatus()
 	if err != nil {
 		logger.Errorf("The worker MCP was not ready after removing the custom pool")
 		wMcp.PrintDebugCommand()
+		return err
+	}
+
+	err = mcp.Delete()
+	if err != nil {
+		logger.Errorf("The %s MCP could not be deleted", mcp.GetName())
 		return err
 	}
 

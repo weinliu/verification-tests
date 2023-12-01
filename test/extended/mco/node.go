@@ -547,6 +547,12 @@ func (n *Node) IsRealTimeKernel() (bool, error) {
 	return n.IsKernelArgEnabled("PREEMPT_RT")
 }
 
+// Is64kPagesKernel returns true if the node is using a 64k-pages kernel
+func (n *Node) Is64kPagesKernel() (bool, error) {
+	// we can use the IsKernelArgEnabled to check the 64k-pages kernel
+	return n.IsKernelArgEnabled("+64k")
+}
+
 // InstallRpm installs the rpm in the node using rpm-ostree command
 func (n *Node) InstallRpm(rpmName string) (string, error) {
 	logger.Infof("Installing rpm '%s' in node  %s", rpmName, n.GetName())

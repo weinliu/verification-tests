@@ -1,13 +1,17 @@
 package mco
 
 import (
+	"encoding/base32"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+
+	"github.com/google/uuid"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
@@ -19,6 +23,7 @@ import (
 type OsImageBuilder struct {
 	oc           *exutil.CLI
 	architecture architecture.Architecture
+	baseImage,
 	osImage,
 	dockerFileCommands, // Full docker file but the "FROM basOsImage..." that will be calculated
 	dockerConfig,
@@ -28,6 +33,8 @@ type OsImageBuilder struct {
 }
 
 func (b *OsImageBuilder) prepareEnvironment() error {
+	var err error
+
 	if b.dockerConfig == "" {
 		logger.Infof("No docker config file was provided to the osImage builder. Generating a new docker config file")
 		exutil.By("Extract pull-secret")
@@ -44,12 +51,21 @@ func (b *OsImageBuilder) prepareEnvironment() error {
 	b.architecture = architecture.ClusterArchitecture(b.oc)
 	logger.Infof("Building using architecture: %s", b.architecture)
 
+	b.baseImage, err = getImageFromReleaseInfo(b.oc.AsAdmin(), LayeringBaseImageReleaseInfo, b.dockerConfig)
+	if err != nil {
+		return fmt.Errorf("Error getting the base image to build new osImages. Error: %s", err)
+	}
+
 	if b.UseInternalRegistry {
 		if err := b.preparePushToInternalRegistry(); err != nil {
 			return err
 		}
 	} else if b.osImage == "" {
-		b.osImage = getLayeringTestImageRepository()
+		uniqueTag, err := generateUniqueTag(b.oc.AsAdmin(), b.baseImage)
+		if err != nil {
+			return err
+		}
+		b.osImage = getLayeringTestImageRepository(uniqueTag)
 	}
 	logger.Infof("Building image: %s", b.osImage)
 
@@ -121,7 +137,12 @@ func (b *OsImageBuilder) preparePushToInternalRegistry() error {
 	}
 	logger.Infof("Current internal registry route: %s", internalRegistryURL)
 
-	b.osImage = fmt.Sprintf("%s/%s/%s", internalRegistryURL, layeringTestsTmpNamespace, "layering")
+	uniqueTag, err := generateUniqueTag(b.oc.AsAdmin(), b.baseImage)
+	if err != nil {
+		return err
+	}
+
+	b.osImage = fmt.Sprintf("%s/%s/%s:%s", internalRegistryURL, MachineConfigNamespace, "layering", uniqueTag)
 	logger.Infof("Using image: %s", b.osImage)
 
 	logger.Infof("Loging as registry admin to internal registry")
@@ -161,14 +182,10 @@ func (b *OsImageBuilder) CleanUp() error {
 
 func (b *OsImageBuilder) buildImage() error {
 	exutil.By("Build image locally")
-	baseImage, err := getImageFromReleaseInfo(b.oc.AsAdmin(), LayeringBaseImageReleaseInfo, b.dockerConfig)
-	if err != nil {
-		return fmt.Errorf("Error getting the base image to build new osImages. Error: %s", err)
-	}
 
-	logger.Infof("Base image: %s\n", baseImage)
+	logger.Infof("Base image: %s\n", b.baseImage)
 
-	dockerFile := "FROM " + baseImage + "\n" + b.dockerFileCommands + "\n" + ExpirationDokerfileLabel
+	dockerFile := "FROM " + b.baseImage + "\n" + b.dockerFileCommands + "\n" + ExpirationDockerfileLabel
 	logger.Infof(" Using Dockerfile:\n%s", dockerFile)
 
 	buildDir, err := prepareDockerfileDirectory(b.tmpDir, dockerFile)
@@ -303,18 +320,41 @@ func getImageFromReleaseInfo(oc *exutil.CLI, imageName, dockerConfigFile string)
 	return stdout, nil
 }
 
-func getLayeringTestImageRepository() string {
+func getLayeringTestImageRepository(defaultTag string) string {
 	layeringImageRepo, exists := os.LookupEnv(EnvVarLayeringTestImageRepository)
 
 	if !exists {
 		layeringImageRepo = DefaultLayeringQuayRepository
 	}
 
-	// If the tag is not specified we calculate a random one: polarionID+tmp+3randomchars
-	if !strings.Contains(layeringImageRepo, ":") {
-		tag := GetCurrentTestPolarionIDNumber() + "tmp" + exutil.GetRandomString()[:3]
-		layeringImageRepo = layeringImageRepo + ":" + tag
+	// If no tag is provided for the image, we add one
+	if !strings.Contains(layeringImageRepo, ":") && defaultTag != "" {
+		layeringImageRepo = layeringImageRepo + ":" + defaultTag
 	}
 
 	return layeringImageRepo
+}
+
+func generateUniqueTag(oc *exutil.CLI, baseImage string) (string, error) {
+	var encoding = base32.NewEncoding("abcdefghijklmnopqrstuvwxyz234567")
+
+	baseImageSlice := strings.Split(baseImage, "@")
+	if len(baseImageSlice) != 2 {
+		return "", fmt.Errorf("The name of the base image %s is not properly formatted as a diggested image", baseImage)
+	}
+	rhelCoreosDigest := baseImageSlice[1]
+
+	clusterName, err := exutil.GetInfraID(oc)
+	if err != nil {
+		return "", nil
+	}
+
+	testCaseID := GetCurrentTestPolarionIDNumber()
+
+	s := fmt.Sprintf("%s%s%s", rhelCoreosDigest, clusterName, uuid.NewString())
+	uniqueTag := fmt.Sprintf("%s-%s", testCaseID,
+		strings.TrimRight(encoding.EncodeToString(fnv.New64().Sum([]byte(s))), "=")[:(127-len(testCaseID))])
+
+	logger.Infof("Using unique tag %s", uniqueTag)
+	return uniqueTag, nil
 }

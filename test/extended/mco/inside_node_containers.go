@@ -17,6 +17,7 @@ import (
 type OsImageBuilderInNode struct {
 	node         Node
 	architecture architecture.Architecture
+	baseImage,
 	osImage,
 	dockerFileCommands, // Full docker file but the "FROM basOsImage..." that will be calculated
 	dockerConfig,
@@ -29,6 +30,8 @@ type OsImageBuilderInNode struct {
 }
 
 func (b *OsImageBuilderInNode) prepareEnvironment() error {
+	var err error
+
 	if b.dockerConfig == "" {
 		logger.Infof("No docker config file was provided to the osImage builder. Generating a new docker config file")
 		exutil.By("Extract pull-secret")
@@ -46,7 +49,7 @@ func (b *OsImageBuilderInNode) prepareEnvironment() error {
 	logger.Infof("Building using architecture: %s", b.architecture)
 
 	b.remoteTmpDir = filepath.Join("/root", e2e.TestContext.OutputDir, fmt.Sprintf("mco-test-%s", exutil.GetRandomString()))
-	_, err := b.node.DebugNodeWithChroot("mkdir", "-p", b.remoteTmpDir)
+	_, err = b.node.DebugNodeWithChroot("mkdir", "-p", b.remoteTmpDir)
 	if err != nil {
 		return fmt.Errorf("Error creating tmp dir %s in node %s. Error: %s", b.remoteTmpDir, b.node.GetName(), err)
 	}
@@ -69,16 +72,30 @@ func (b *OsImageBuilderInNode) prepareEnvironment() error {
 		return cpErr
 	}
 
+	b.baseImage, err = getImageFromReleaseInfo(b.node.oc.AsAdmin(), LayeringBaseImageReleaseInfo, b.dockerConfig)
+	if err != nil {
+		return fmt.Errorf("Error getting the base image to build new osImages. Error: %s", err)
+	}
+
+	uniqueTag, err := generateUniqueTag(b.node.oc.AsAdmin(), b.baseImage)
+	if err != nil {
+		return err
+	}
+
 	if b.UseInternalRegistry {
 		// The images must be created inside the MCO namespace or MCO will not have permissions to pull them
-		b.osImage = fmt.Sprintf("%s/%s/%s", InternalRegistrySvcURL, MachineConfigNamespace, "layering")
+		b.osImage = fmt.Sprintf("%s/%s/%s:%s", InternalRegistrySvcURL, MachineConfigNamespace, "layering", uniqueTag)
 		if err := b.preparePushToInternalRegistry(); err != nil {
 			return err
 		}
 	} else if b.osImage == "" {
-		b.osImage = getLayeringTestImageRepository()
+		b.osImage = getLayeringTestImageRepository(uniqueTag)
 	}
 	logger.Infof("Building image: %s", b.osImage)
+
+	if b.tmpDir == "" {
+		b.tmpDir = e2e.TestContext.OutputDir
+	}
 
 	logger.Infof("OK!\n")
 
@@ -152,15 +169,11 @@ func (b *OsImageBuilderInNode) CleanUp() error {
 
 func (b *OsImageBuilderInNode) buildImage() error {
 	exutil.By("Get base osImage locally")
-	baseImage, err := getImageFromReleaseInfo(b.node.oc.AsAdmin(), LayeringBaseImageReleaseInfo, b.dockerConfig)
-	if err != nil {
-		return fmt.Errorf("Error getting the base image to build new osImages. Error: %s", err)
-	}
 
-	logger.Infof("Base image: %s\n", baseImage)
+	logger.Infof("Base image: %s\n", b.baseImage)
 
 	exutil.By("Prepare remote dockerFile directory")
-	dockerFile := "FROM " + baseImage + "\n" + b.dockerFileCommands + "\n" + ExpirationDokerfileLabel
+	dockerFile := "FROM " + b.baseImage + "\n" + b.dockerFileCommands + "\n" + ExpirationDockerfileLabel
 	logger.Infof(" Using Dockerfile:\n%s", dockerFile)
 
 	localBuildDir, err := prepareDockerfileDirectory(b.tmpDir, dockerFile)

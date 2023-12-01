@@ -1155,6 +1155,112 @@ RUN touch %s
 			"The file %s included in the osImage should exist in the node %s, but it does not", osImageNewFilePath, node.GetName())
 		logger.Infof("OK\n")
 	})
+
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-67789-Configure 64k-pages kerneltype while using a custom osImage [Disruptive]", func() {
+		var (
+			mcTemplate64k      = "set-64k-pages-kernel.yaml"
+			rpmName            = "zsh"
+			dockerFileCommands = fmt.Sprintf(`
+RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
+    rpm-ostree install %s && \
+    rpm-ostree cleanup -m && \
+    ostree container commit
+`, rpmName)
+		)
+
+		architecture.SkipIfNoNodeWithArchitectures(oc.AsAdmin(), architecture.ARM64)
+		exutil.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
+
+		createdCustomPoolName := fmt.Sprintf("mco-test-%s", architecture.ARM64)
+		defer DeleteCustomMCP(oc.AsAdmin(), createdCustomPoolName)
+
+		mcp, nodes := GetPoolAndNodesForArchitectureOrFail(oc.AsAdmin(), createdCustomPoolName, architecture.ARM64, 1)
+		node := nodes[0]
+
+		// Create a MC to use 64k-pages kernel
+		exutil.By("Create machine config to enable 64k-pages kernel")
+		mcName64k := fmt.Sprintf("tc-67789-64k-pages-kernel-%s", mcp.GetName())
+		mc64k := NewMachineConfig(oc.AsAdmin(), mcName64k, mcp.GetName()).SetMCOTemplate(mcTemplate64k)
+
+		defer mc64k.delete()
+		mc64k.create()
+		logger.Infof("OK!\n")
+
+		// Check that 64k-pages kernel is active
+		exutil.By("Check 64k-pages kernel")
+		o.Expect(node.Is64kPagesKernel()).Should(o.BeTrue(),
+			"Kernel is not 64k-pages kernel in node %s", node.GetName())
+		logger.Infof("OK!\n")
+
+		// Build the new osImage
+		exutil.By("Build a custom osImage")
+		osImageBuilder := OsImageBuilderInNode{node: node, dockerFileCommands: dockerFileCommands}
+		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error creating the new osImage")
+		logger.Infof("OK\n")
+
+		// Create a MC to apply the config
+		exutil.By("Create a MC to deploy the new osImage")
+		layeringMcName := fmt.Sprintf("tc-67789-layering-64kpages-%s", mcp.GetName())
+		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, mcp.GetName())
+		layeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+
+		defer layeringMC.deleteNoWait()
+		layeringMC.create()
+		logger.Infof("OK!\n")
+
+		// Check that the expected (zsh+64k-pages kernel) rpms are installed
+		exutil.By("Check that all the expected rpms are installed")
+		o.Expect(
+			node.RpmIsInstalled(rpmName),
+		).To(o.BeTrue(),
+			"Error. %s rpm is not installed after changing the osImage in node %s.", rpmName, node.GetName())
+
+		o.Expect(
+			node.GetRpmOstreeStatus(false),
+		).Should(o.And(
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-64k-core"),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-64k-modules"),
+			o.MatchRegexp("(?s)LayeredPackages:.*kernel-64k-modules-extra"),
+			o.MatchRegexp("(?s)RemovedBasePackages:.*kernel-core"),
+			o.MatchRegexp("(?s)RemovedBasePackages:.*kernel-modules"),
+			o.MatchRegexp("(?s)RemovedBasePackages:.*kernel "),
+			o.MatchRegexp("(?s)RemovedBasePackages:.*kernel-modules-extra")),
+			"rpm-ostree status is not reporting the kernel layered packages properly")
+		logger.Infof("OK\n")
+
+		// Check that 64k-pages kernel is active
+		exutil.By("Check 64k-pages kernel")
+		o.Expect(node.Is64kPagesKernel()).Should(o.BeTrue(),
+			"Kernel is not 64k-pages kernel in node %s", node.GetName())
+		logger.Infof("OK!\n")
+
+		// Delete 64k-pages config
+		exutil.By("Delete the 64k-pages kernel MC")
+		mc64k.delete()
+		logger.Infof("OK!\n")
+
+		// Check that 64k-pages kernel is not installed anymore
+		exutil.By("Check that 64k-pages kernel is not installed anymore")
+		o.Expect(node.Is64kPagesKernel()).Should(o.BeFalse(),
+			"Huge pages kernel should not be installed anymore in node %s", node.GetName())
+		logger.Infof("OK!\n")
+
+		// Check zsh rpm is installed
+		exutil.By("Check that the zsh rpm is still installed after we removed the 64k-pages kernel")
+		o.Expect(node.RpmIsInstalled(rpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in node %s.", rpmName, node.GetName())
+
+		o.Expect(
+			node.GetRpmOstreeStatus(false),
+		).ShouldNot(o.And(
+			o.ContainSubstring("LayeredPackages"),
+			o.ContainSubstring("RemovedBasePackages")),
+			"rpm-ostree status is not reporting the layered packages properly in node %s", node.GetName())
+		logger.Infof("OK\n")
+	})
 })
 
 // oc: the CLI

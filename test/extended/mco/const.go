@@ -109,8 +109,8 @@ const (
 	// AlibabaCloudPlatform value used to identify AlibabaCloud infrastructure
 	AlibabaCloudPlatform = "alibabacloud"
 
-	// ExpirationDokerfileLabel Expiration label in Dockerfile
-	ExpirationDokerfileLabel = `LABEL maintainer="mco-qe-team" quay.expires-after=2h`
+	// ExpirationDockerfileLabel Expiration label in Dockerfile
+	ExpirationDockerfileLabel = `LABEL maintainer="mco-qe-team" quay.expires-after=2h`
 
 	layeringTestsTmpNamespace   = "layering-tests-imagestreams"
 	layeringRegistryAdminSAName = "test-registry-sa"
