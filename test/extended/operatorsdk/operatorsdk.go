@@ -4966,4 +4966,45 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jitli-Medium-69118-Run bundle init image choosable [Serial]", func() {
+
+		skipOnProxyCluster(oc)
+		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
+		defer func() {
+			output, err := operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
+			if err != nil {
+				e2e.Logf(output)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		exutil.By("Run bundle")
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		exutil.By("Check the default init image")
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("pod", "quay-io-olmqe-upgradeoperator-bundle-v0-1", "-o=jsonpath={.spec.initContainers[*].image}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("docker.io/library/busybox:1.36.0"))
+
+		output, err = operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Customize the initialization image to run the bundle")
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted", "--decompression-image", "quay.io/olmqe/busybox:latest").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		exutil.By("Check the custom init image")
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("pod", "quay-io-olmqe-upgradeoperator-bundle-v0-1", "-o=jsonpath={.spec.initContainers[*].image}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("quay.io/olmqe/busybox:latest"))
+
+	})
+
 })
