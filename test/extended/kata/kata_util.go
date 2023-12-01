@@ -1623,21 +1623,25 @@ func patchPeerPodLimit(oc *exutil.CLI, opNamespace, newLimit string) {
 	patchLimit := "{\"spec\":{\"limit\":\"" + newLimit + "\"}}"
 	msg, err := oc.AsAdmin().Run("patch").Args("peerpodconfig", "peerpodconfig-openshift", "-n",
 		opNamespace, "--type", "merge", "--patch", patchLimit).Output()
-	if err != nil {
-		e2e.Logf("Could not patch podvm limit to %v\n error: %v %v", newLimit, msg, err)
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
+
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not patch podvm limit to %v\n error: %v %v", newLimit, msg, err))
+
 	currentLimit := getPeerPodLimit(oc, opNamespace)
 	o.Expect(currentLimit).To(o.Equal(newLimit))
+
+	//check node untill the new value is propagated
+	jsonpath := "-o=jsonpath='{.status.allocatable.kata\\.peerpods\\.io/vm}'"
+	nodeName, _ := exutil.GetFirstWorkerNode(oc)
+	nodeLimit, _ := checkResourceJsonpath(oc, "node", nodeName, opNamespace, jsonpath, newLimit, 30*time.Second, 5*time.Second)
+
+	e2e.Logf("node podvm limit is %v", nodeLimit)
+	o.Expect(strings.Trim(nodeLimit, "'")).To(o.Equal(newLimit))
 }
 
 func getPeerPodLimit(oc *exutil.CLI, opNamespace string) (podLimit string) {
 	jsonpathLimit := "-o=jsonpath={.spec.limit}"
 	podLimit, err := oc.AsAdmin().Run("get").Args("peerpodconfig", "peerpodconfig-openshift", "-n", opNamespace, jsonpathLimit).Output()
-	if err != nil {
-		e2e.Logf("Could not find %v in %v\n Error: %v", jsonpathLimit, "peerpodconfig-openshift", err)
-	}
-	e2e.Logf("CURRENT podvm limit is %v", podLimit)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not find %v in %v\n Error: %v", jsonpathLimit, "peerpodconfig-openshift", err))
+	e2e.Logf("peerpodconfig podvm limit is %v", podLimit)
 	return podLimit
 }
