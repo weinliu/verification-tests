@@ -1365,7 +1365,7 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-63742-High-62896-EgressNetworkPolicy DNS resolution should fall back to TCP for truncated responses,updating egressnetworkpolicy should delete the old version egressnetworkpolicy.", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-63742-High-62896-Medium-49154-EgressNetworkPolicy DNS resolution should fall back to TCP for truncated responses,updating egressnetworkpolicy should delete the old version egressnetworkpolicy.", func() {
 		// From customer bugs
 		// https://issues.redhat.com/browse/OCPBUGS-12435
 		// https://issues.redhat.com/browse/OCPBUGS-11887
@@ -1415,6 +1415,17 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 			}
 			return result
 		}, 30*time.Second, 10*time.Second).ShouldNot(o.BeTrue())
+
+		// Add coverage for OCP-49154 which is from customer bug https://bugzilla.redhat.com/show_bug.cgi?id=2040338
+		exutil.By("Remove egressnetworkpolicy in foreground.")
+		errDel := oc.AsAdmin().Run("delete").Args("--cascade=foreground", "egressnetworkpolicy", egressNetworkpolicy.name, "-n", ns).Execute()
+		o.Expect(errDel).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify egressnetworkpolicy was removed.")
+		output, errGet := oc.AsAdmin().Run("get").Args("egressnetworkpolicy", "-n", ns).Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "No resources found")).Should(o.BeTrue())
+
 	})
 
 	// author: huirwang@redhat.com
