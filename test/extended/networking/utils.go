@@ -3069,3 +3069,25 @@ func getNodeNameByIPv4(oc *exutil.CLI, nodeIPv4 string) (nodeName string) {
 	}
 	return nodeName
 }
+
+// patch resource in specific namespace, this is useful when patching resource to hosted cluster that is in "-n clusters" namespace
+func patchResourceAsAdminNS(oc *exutil.CLI, ns, resource, patch string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "-p", patch, "--type=merge", "-n", ns).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// get proxy IP and port of hosted cluster
+func getProxyIPandPortOnHostedCluster(oc *exutil.CLI, hostedClusterName, namespace string) (string, string) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", hostedClusterName, "-n", namespace, "-o=jsonpath={.spec.configuration.proxy.httpProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(output) != 0 {
+		//match out the proxy IP
+		re := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
+		proxyIP := re.FindAllString(output, -1)[0]
+		proxyPort := strings.Split(output, ":")[2]
+		e2e.Logf("proxy IP is %s, proxy port is %s", proxyIP, proxyPort)
+		return proxyIP, proxyPort
+	} else {
+		return "", ""
+	}
+}
