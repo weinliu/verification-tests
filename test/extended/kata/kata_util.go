@@ -216,21 +216,23 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 	msg, err = waitForKataconfig(oc, kataconf.name, sub.namespace)
 	return msg, err
 }
-
-// author: abhbaner@redhat.com
-func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName, runtimeClassName string) string {
+func createKataPodAnnotated(oc *exutil.CLI, podNs, template, basePodName, runtimeClassName string, annotations map[string]string) string {
 	var (
-		msg        string
 		err        error
 		newPodName string
 		configFile string
 	)
 
-	newPodName = getRandomString() + commonPodName
-	configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", commonPod, "-p", "NAME="+newPodName, "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "Pod-common.json")
+	newPodName = getRandomString() + basePodName
+	configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", template, "-p", "NAME="+newPodName,
+		"-p", "MEMORY="+annotations["MEMORY"], "-p", "CPU="+annotations["CPU"], "-p",
+		"INSTANCESIZE="+annotations["INSTANCESIZE"], "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "Pod-common.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
+	return createKataPodFromTemplate(oc, podNs, newPodName, configFile, runtimeClassName)
+}
 
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+func createKataPodFromTemplate(oc *exutil.CLI, podNs, newPodName, configFile, runtimeClassName string) string {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
 	if msg == "" || err != nil {
 		e2e.Logf("Could not apply configFile %v: %v %v", configFile, msg, err)
 	}
@@ -251,6 +253,21 @@ func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName, runtimeClass
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(msg).To(o.ContainSubstring(runtimeClassName))
 	return newPodName
+}
+
+// author: abhbaner@redhat.com
+func createKataPod(oc *exutil.CLI, podNs, commonPod, basePodName, runtimeClassName string) string {
+	var (
+		err        error
+		newPodName string
+		configFile string
+	)
+
+	newPodName = getRandomString() + basePodName
+	configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", commonPod, "-p",
+		"NAME="+newPodName, "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "Pod-common.json")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return createKataPodFromTemplate(oc, podNs, newPodName, configFile, runtimeClassName)
 }
 
 func deleteKataResource(oc *exutil.CLI, res, resNs, resName string) bool {
@@ -1463,7 +1480,7 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 	if err != nil {
 		e2e.Logf("%v Configmap created by QE CI not found: msg %v err: %v", ciCmName, msg, err)
 	} else {
-		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n default", "-o=jsonpath={.data}").Output()
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-o=jsonpath={.data}").Output()
 		if err != nil {
 			e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciCmName, configmapData, err)
 		}
@@ -1522,9 +1539,9 @@ func createAzurePeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfig
 
 	// Processing configmap template and create " <randomstring>peer-pods-cm.json"
 	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
-		"-p", "VXLAN_PORT="+ppParam.VXLAN_PORT,
-		"AZURE_INSTANCE_SIZE="+ppParam.AZURE_INSTANCE_SIZE, "AZURE_SUBNET_ID="+ppParam.AZURE_SUBNET_ID,
-		"AZURE_NSG_ID="+ppParam.AZURE_NSG_ID, "PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
+		"-p", "VXLAN_PORT="+ppParam.VXLAN_PORT, "AZURE_INSTANCE_SIZE="+ppParam.AZURE_INSTANCE_SIZE,
+		"AZURE_SUBNET_ID="+ppParam.AZURE_SUBNET_ID, "AZURE_NSG_ID="+ppParam.AZURE_NSG_ID,
+		"PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
 
 	if configFile != "" {
 		osStatMsg, configFileExists := os.Stat(configFile)
@@ -1644,4 +1661,12 @@ func getPeerPodLimit(oc *exutil.CLI, opNamespace string) (podLimit string) {
 	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not find %v in %v\n Error: %v", jsonpathLimit, "peerpodconfig-openshift", err))
 	e2e.Logf("peerpodconfig podvm limit is %v", podLimit)
 	return podLimit
+}
+
+func getPeerPodMetadataInstanceType(oc *exutil.CLI, opNamespace, podName, provider string) (string, error) {
+	metadataCurl := map[string]string{
+		"aws":   "curl -s http://169.254.169.254/latest/meta-data/instance-type",
+		"azure": "curl -s -H Metadata:true --noproxy \"*\" \"http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2023-07-01&format=text\"",
+	}
+	return oc.AsAdmin().Run("rsh").Args("-T", "-n", opNamespace, podName, "bash", "-c", metadataCurl[provider]).Output()
 }

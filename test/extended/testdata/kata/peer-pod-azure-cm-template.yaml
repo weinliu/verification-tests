@@ -12,10 +12,11 @@ objects:
       CLOUD_PROVIDER: "azure"
       VXLAN_PORT: "${VXLAN_PORT}"
       AZURE_INSTANCE_SIZE: "${AZURE_INSTANCE_SIZE}"
+      AZURE_INSTANCE_SIZES: "Standard_B2als_v2,Standard_B2as_v2,Standard_D2as_v5,Standard_B4als_v2,Standard_D4as_v5,Standard_D8as_v5"
       AZURE_SUBNET_ID: "${AZURE_SUBNET_ID}" 
       AZURE_NSG_ID: "${AZURE_NSG_ID}" 
       PROXY_TIMEOUT: "${PROXY_TIMEOUT}"
-      DISABLECVM: "true"
+      DISABLECVM: "${DISABLECVM}"
   
 parameters:
   - name: NAME
@@ -25,13 +26,15 @@ parameters:
   - name: VXLAN_PORT 
     value: ""
   - name: AZURE_INSTANCE_SIZE
-    value: ""
+    value: "Standard_B2als_v2"
   - name: AZURE_SUBNET_ID
     value: ""
   - name: AZURE_NSG_ID
     value: ""        
   - name: PROXY_TIMEOUT
     value: ""
+  - name: DISABLECVM
+    value: "true"
         
 
 

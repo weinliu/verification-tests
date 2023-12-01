@@ -1,0 +1,47 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: common-pod-template
+objects:
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      annotations:
+        io.katacontainers.config.hypervisor.default_memory: "${MEMORY}"
+        io.katacontainers.config.hypervisor.default_vcpus: "${CPU}"
+        io.katacontainers.config.hypervisor.machine_type: "${INSTANCESIZE}"
+
+      labels:
+        app: httpd
+      name: "${NAME}"
+    spec:
+      runtimeClassName: "${RUNTIMECLASSNAME}"
+      containers:
+        - image: "${IMAGE}"
+          imagePullPolicy: IfNotPresent
+          name: "${NAME}"
+          ports:
+            - containerPort: ${{PORT}}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+
+parameters:
+  - name: MEMORY
+    value: "256"
+  - name: CPU
+    value: "1"
+  - name: INSTANCESIZE
+    value: ""
+  - name: NAME
+  - name: RUNTIMECLASSNAME
+    value: "kata-remote"
+  - name: IMAGE
+    value: "registry.redhat.io/rhscl/httpd-24-rhel7"
+  - name: PORT
+    value: "8080"

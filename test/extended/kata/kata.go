@@ -47,6 +47,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		ppConfigMapTemplate      string
 		ppAWSConfigMapTemplate   = filepath.Join(testDataDir, "peer-pod-aws-cm-template.yaml")
 		ppAzureConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-azure-cm-template.yaml")
+		peerpodAnnotated         = filepath.Join(testDataDir, "pod-annotations-template.yaml")
 	)
 
 	subscription := SubscriptionDescription{
@@ -165,7 +166,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		//create peer pods secret and peer pods cm
 		if kataconfig.enablePeerPods {
 			msg, err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateAws)
-			if err != nil && err.Error() == "Cloud Credentials not found" {
+			if err != nil {
 				err = fmt.Errorf("Cloud Credentials not found") // Generate a custom error
 				e2e.Failf("Cloud Credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
 			}
@@ -1535,4 +1536,83 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(podFipsEnabled == "1")
 
 	})
+
+	g.It("Author:vvoronko-High-68930-deploy peerpod with type annotation", func() {
+
+		oc.SetupProject()
+
+		var (
+			basePodName = "-example-68930"
+			podNs       = oc.Namespace()
+			annotations = map[string]string{
+				"MEMORY":       "256",
+				"CPU":          "0",
+				"INSTANCESIZE": "",
+			}
+			instanceSize = map[string]string{
+				"aws":   "t3.xlarge",
+				"azure": "Standard_D4as_v5",
+			}
+		)
+
+		provider := getCloudProvider(oc)
+
+		val, ok := instanceSize[provider]
+
+		if !(kataconfig.enablePeerPods && ok) {
+			g.Skip("68930-deploy peerpod with type annotation supported only for kata-remote on AWS and AZURE")
+		}
+		annotations["INSTANCESIZE"] = val
+
+		g.By("Deploying pod with kata runtime and verify it")
+		podName := createKataPodAnnotated(oc, podNs, peerpodAnnotated, basePodName, kataconfig.runtimeClassName, annotations)
+		defer deleteKataResource(oc, "pod", podNs, podName)
+
+		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
+		e2e.Logf("Podvm with required instance type %v was launched as %v", instanceSize[provider], actualSize)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(actualSize).To(o.Equal(instanceSize[provider]))
+
+		g.By("SUCCESS - Podvm with required instance type was launched")
+	})
+
+	g.It("Author:vvoronko-High-69018-deploy peerpod with default vcpu and memory", func() {
+
+		oc.SetupProject()
+
+		var (
+			basePodName = "-example-69018"
+			podNs       = oc.Namespace()
+			annotations = map[string]string{
+				"MEMORY":       "6000",
+				"CPU":          "2",
+				"INSTANCESIZE": "",
+			}
+			instanceSize = map[string]string{
+				"aws":   "t3.large",
+				"azure": "Standard_D2as_v5",
+			}
+		)
+
+		provider := getCloudProvider(oc)
+
+		val, ok := instanceSize[provider]
+
+		if !(kataconfig.enablePeerPods && ok) {
+			g.Skip("69018-deploy peerpod with type annotation not supported on " + provider)
+		}
+		annotations["INSTANCESIZE"] = val
+
+		g.By("Deploying pod with kata runtime and verify it")
+		podName := createKataPodAnnotated(oc, podNs, peerpodAnnotated, basePodName, kataconfig.runtimeClassName, annotations)
+		defer deleteKataResource(oc, "pod", podNs, podName)
+
+		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
+		e2e.Logf("Podvm with required instance type %v was launched as %v", instanceSize[provider], actualSize)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(actualSize).To(o.Equal(instanceSize[provider]))
+
+		g.By("SUCCESS - Podvm with required instance type was launched")
+	})
+
 })

@@ -12,6 +12,7 @@ objects:
       CLOUD_PROVIDER: "aws"
       VXLAN_PORT: "${VXLAN_PORT}"
       PODVM_INSTANCE_TYPE: "${PODVM_INSTANCE_TYPE}"
+      PODVM_INSTANCE_TYPES: "t3.small,t3.medium,t3.large,t3.xlarge,t3.2xlarge"
       PROXY_TIMEOUT: "${PROXY_TIMEOUT}"
   
 parameters:
@@ -22,7 +23,7 @@ parameters:
   - name: VXLAN_PORT 
     value: ""
   - name: PODVM_INSTANCE_TYPE
-    value: ""
+    value: "t3.medium"
   - name: PROXY_TIMEOUT
     value: ""
 
