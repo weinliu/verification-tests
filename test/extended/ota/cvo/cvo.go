@@ -175,12 +175,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Set invalid baselineCapabilitySet")
 		cmdOut, err := changeCap(oc, true, "Invalid")
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"v4.12\", \"v4.13\", \"v4.14\", \"vCurrent\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"v4.12\", \"v4.13\", \"v4.14\", \"v4.15\", \"vCurrent\""))
 
 		g.By("Set invalid additionalEnabledCapabilities")
 		cmdOut, err = changeCap(oc, false, []string{"Invalid"})
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\", \"CSISnapshot\", \"NodeTuning\", \"MachineAPI\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\", \"CSISnapshot\", \"NodeTuning\", \"MachineAPI\", \"Build\", \"DeploymentConfig\", \"ImageRegistry\", \"OperatorLifecycleManager\""))
 	})
 
 	//author: yanyang@redhat.com
