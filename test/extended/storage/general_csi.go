@@ -4539,7 +4539,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://issues.redhat.com/browse/OCPBU-13
 	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-60598-High-60599-[CSI-Driver] [BYOK] Pre-defined storageclass and user defined storageclass should provision volumes as expected", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 
 		if len(supportProvisioners) == 0 {
@@ -4573,6 +4573,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 						"ebs.csi.aws.com":       "{.parameters.kmsKeyId}",
 						"disk.csi.azure.com":    "{.parameters.diskEncryptionSetID}",
 						"pd.csi.storage.gke.io": "{.parameters.disk-encryption-kms-key}",
+						"vpc.block.csi.ibm.io":  "{.parameters.encryptionKey}",
 					}
 				)
 
@@ -4608,6 +4609,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 					e2e.Logf("The backend check step is under developing")
 				case "azure":
 					e2e.Logf("The backend check step is under developing")
+				case "ibmcloud":
+					e2e.Logf("The backend check step is under developing")
 				default:
 					e2e.Logf("Unsupported platform: %s", cloudProvider)
 				}
@@ -4633,6 +4636,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 					e2e.Logf("The backend check step is under developing")
 				case "azure":
 					e2e.Logf("The backend check step is under developing")
+				case "ibmcloud":
+					e2e.Logf("The backend check step is under developing")
 				default:
 					e2e.Logf("Unsupported platform: %s", cloudProvider)
 				}
@@ -4645,7 +4650,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-60600 - [BYOK] Pre-defined default storageclass should react properly when removing/update the user-managed encryption key in ClusterCSIDriver
 	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-60600-[CSI-Driver] [BYOK] Pre-defined default storageclass should react properly when removing/update the user-managed encryption key in ClusterCSIDriver [Disruptive]", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 
 		if len(supportProvisioners) == 0 {
@@ -4668,6 +4673,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 						"ebs.csi.aws.com":       "{.parameters.kmsKeyId}",
 						"disk.csi.azure.com":    "{.parameters.diskEncryptionSetID}",
 						"pd.csi.storage.gke.io": "{.parameters.disk-encryption-kms-key}",
+						"vpc.block.csi.ibm.io":  "{.parameters.encryptionKey}",
 					}
 				)
 

@@ -1076,6 +1076,8 @@ func getByokKeyIDFromClusterCSIDriver(oc *exutil.CLI, driverProvisioner string) 
 		name := gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.gcp.kmsKey.name`).String()
 		projectID := gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.gcp.kmsKey.projectID`).String()
 		keyID = "projects/" + projectID + "/locations/" + location + "/keyRings/" + keyRing + "/cryptoKeys/" + name
+	case "ibmcloud":
+		keyID = gjson.Get(clustercsidriverJSONContent, `spec.driverConfig.ibmcloud.encryptionKeyCRN`).String()
 	default:
 		return keyID
 	}
