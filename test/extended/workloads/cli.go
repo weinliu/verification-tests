@@ -1860,7 +1860,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-11202-Use oc explain to see detailed documentation of resources", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Low-11202-Use oc explain to see detailed documentation of resources", func() {
 		g.By("Check if baremetal cluster")
 		iaasPlatform := exutil.CheckPlatform(oc)
 		if iaasPlatform == "baremetal" {
@@ -1901,7 +1901,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		exutil.AssertWaitPollNoErr(err, "Failed to get assert the detailed document resource url")
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-21115-Use kubelet explain to see detailed documentation of resources", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Low-21115-Use kubelet explain to see detailed documentation of resources", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "nutanix", "ibmcloud", "alicloud")
 		out, err := oc.WithKubectl().Run("explain").Args("po").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
