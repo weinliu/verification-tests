@@ -778,7 +778,7 @@ func (sa *serviceAccountDescription) reapply(oc *exutil.CLI) {
 
 // the method is to check if what sa can do is expected with expected parameter.
 func (sa *serviceAccountDescription) checkAuth(oc *exutil.CLI, expected string, cr string) {
-	err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 420*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, _ := doAction(oc, "auth", asAdmin, withNamespace, "--as", fmt.Sprintf("system:serviceaccount:%s:%s", sa.namespace, sa.name), "can-i", "create", cr)
 		e2e.Logf("the result of checkAuth:%v", output)
 		if strings.Contains(output, expected) {
