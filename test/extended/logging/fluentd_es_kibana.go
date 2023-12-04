@@ -29,6 +29,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	g.Context("Cluster Logging Instance tests", func() {
 
 		g.BeforeEach(func() {
+			if isFipsEnabled(oc) {
+				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
+			}
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO and EO")
 			CLO := SubscriptionObjects{
@@ -347,78 +350,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 })
 
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch should", func() {
-	defer g.GinkgoRecover()
-
-	var (
-		oc             = exutil.NewCLI("logging-es-"+getRandomString(), exutil.KubeConfigPath())
-		loggingBaseDir string
-	)
-
-	g.BeforeEach(func() {
-		loggingBaseDir = exutil.FixturePath("testdata", "logging")
-		g.By("deploy CLO and EO")
-		CLO := SubscriptionObjects{
-			OperatorName:  "cluster-logging-operator",
-			Namespace:     cloNS,
-			PackageName:   "cluster-logging",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-		}
-		EO := SubscriptionObjects{
-			OperatorName:  "elasticsearch-operator",
-			Namespace:     eoNS,
-			PackageName:   "elasticsearch-operator",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-		}
-		CLO.SubscribeOperator(oc)
-		EO.SubscribeOperator(oc)
-	})
-
-	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Low-43081-remove JKS certificates", func() {
-		// create clusterlogging instance
-		g.By("deploy ECK pods")
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		instance := filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml")
-		cl := resource{"clusterlogging", "instance", loggingNS}
-		cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
-		g.By("waiting for the ECK pods to be ready...")
-		WaitForECKPodsToBeReady(oc, cl.namespace)
-
-		g.By("check certificates in ES")
-		podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd := "ls /etc/elasticsearch/secret/"
-		stdout, err := e2eoutput.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(stdout).ShouldNot(o.ContainSubstring("admin.jks"))
-	})
-
-	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-42943-remove template org.ovirt.viaq-collectd.template.json", func() {
-		// create clusterlogging instance
-		g.By("deploy ECK pods")
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		instance := filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml")
-		cl := resource{"clusterlogging", "instance", loggingNS}
-		cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
-		g.By("waiting for the ECK pods to be ready...")
-		WaitForECKPodsToBeReady(oc, cl.namespace)
-
-		g.By("check templates in ES")
-		podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd := "ls /usr/share/elasticsearch/index_templates/"
-		stdout, err := e2eoutput.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(stdout).ShouldNot(o.ContainSubstring("org.ovirt.viaq-collectd.template.json"))
-	})
-})
-
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should", func() {
 	defer g.GinkgoRecover()
 
@@ -428,6 +359,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 	)
 
 	g.BeforeEach(func() {
+		if isFipsEnabled(oc) {
+			g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
+		}
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 		g.By("deploy CLO and EO")
 		CLO := SubscriptionObjects{
@@ -643,34 +577,4 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 
 	})
 
-})
-
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Kibana should", func() {
-	defer g.GinkgoRecover()
-
-	var (
-		oc             = exutil.NewCLI("logging-kibana-"+getRandomString(), exutil.KubeConfigPath())
-		loggingBaseDir string
-	)
-
-	g.BeforeEach(func() {
-		loggingBaseDir = exutil.FixturePath("testdata", "logging")
-		g.By("deploy CLO and EO")
-		CLO := SubscriptionObjects{
-			OperatorName:  "cluster-logging-operator",
-			Namespace:     cloNS,
-			PackageName:   "cluster-logging",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-		}
-		EO := SubscriptionObjects{
-			OperatorName:  "elasticsearch-operator",
-			Namespace:     eoNS,
-			PackageName:   "elasticsearch-operator",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-		}
-		CLO.SubscribeOperator(oc)
-		EO.SubscribeOperator(oc)
-	})
 })
