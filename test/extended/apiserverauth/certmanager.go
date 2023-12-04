@@ -157,11 +157,10 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	// author: geliu@redhat.com
 	// This case contains three Polarion cases: 62063, 63325, and 63486. The root case is 62063.
 	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-High-62063-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
-		if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
 			g.Skip("Skipping Private clusters that are behind some proxy and can't be directly reachable from externally.")
 		}
-		// TODO: Un-skip vsphere once port 80 issue is fixed.
-		exutil.SkipIfPlatformType(oc, "openstack, vsphere")
+		exutil.SkipIfPlatformType(oc, "openstack")
 		skipIfRouteUnreachable(oc)
 
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()

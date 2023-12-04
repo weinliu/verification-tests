@@ -226,11 +226,10 @@ func createIssuers(oc *exutil.CLI) {
 
 // create certificate
 func createCertificate(oc *exutil.CLI) {
-	if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
 		g.Skip("Skipping Private clusters that are behind some proxy and can't be directly reachable from externally.")
 	}
-	// TODO: Un-skip vsphere once port 80 issue is fixed.
-	exutil.SkipIfPlatformType(oc, "openstack, vsphere")
+	exutil.SkipIfPlatformType(oc, "openstack")
 	skipIfRouteUnreachable(oc)
 
 	e2e.Logf("As the normal user, create certificate.")
