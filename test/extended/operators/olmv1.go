@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	olmv1util "github.com/openshift/openshift-tests-private/test/extended/util/olmv1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -31,64 +32,64 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 		var (
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
 			basicBdPlainImageTemplate = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
-			unhealthyPod              = bundleDeploymentDescription{
-				bdName:       "68903-pod-unhealthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-podunhealthy",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			unhealthyPod              = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-pod-unhealthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-podunhealthy",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
-			unhealthyPodChild = []childResource{
-				{kind: "namespace", ns: ""},
+			unhealthyPodChild = []olmv1util.ChildResource{
+				{Kind: "namespace", Ns: ""},
 			}
-			unhealthyApiservice = bundleDeploymentDescription{
-				bdName:       "68903-apis-unhealthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-apisunhealthy",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			unhealthyApiservice = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-apis-unhealthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-apisunhealthy",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
-			unhealthyApiserviceChild = []childResource{
-				{kind: "APIService", ns: ""},
+			unhealthyApiserviceChild = []olmv1util.ChildResource{
+				{Kind: "APIService", Ns: ""},
 			}
-			unhealthyCRD = bundleDeploymentDescription{
-				bdName:       "68903-crd-unhealthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-crdunhealthy",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			unhealthyCRD = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-crd-unhealthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-crdunhealthy",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
-			unhealthyDS = bundleDeploymentDescription{
-				bdName:       "68903-ds-unhealthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-dsunhealthy",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			unhealthyDS = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-ds-unhealthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-dsunhealthy",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
-			unhealthyDSChild = []childResource{
-				{kind: "namespace", ns: ""},
+			unhealthyDSChild = []olmv1util.ChildResource{
+				{Kind: "namespace", Ns: ""},
 			}
 		)
 
-		exutil.By("create unhealthy pod")
-		defer unhealthyPod.deleteWithoutCheck(oc)
-		unhealthyPod.createWithoutCheck(oc)
-		unhealthyPod.assertHealthyWithConsistent(oc, "false")
-		unhealthyPod.delete(oc, unhealthyPodChild)
+		exutil.By("Create unhealthy pod")
+		defer unhealthyPod.DeleteWithoutCheck(oc)
+		unhealthyPod.CreateWithoutCheck(oc)
+		unhealthyPod.AssertHealthyWithConsistent(oc, "false")
+		unhealthyPod.Delete(oc, unhealthyPodChild)
 
-		exutil.By("create unhealthy APIService")
-		defer unhealthyApiservice.deleteWithoutCheck(oc)
-		unhealthyApiservice.createWithoutCheck(oc)
-		unhealthyApiservice.assertHealthyWithConsistent(oc, "false")
-		unhealthyApiservice.delete(oc, unhealthyApiserviceChild)
+		exutil.By("Create unhealthy APIService")
+		defer unhealthyApiservice.DeleteWithoutCheck(oc)
+		unhealthyApiservice.CreateWithoutCheck(oc)
+		unhealthyApiservice.AssertHealthyWithConsistent(oc, "false")
+		unhealthyApiservice.Delete(oc, unhealthyApiserviceChild)
 
-		exutil.By("create unhealthy CRD")
-		defer unhealthyCRD.deleteWithoutCheck(oc)
-		unhealthyCRD.createWithoutCheck(oc)
-		unhealthyCRD.assertHealthyWithConsistent(oc, "false")
-		unhealthyCRD.deleteWithoutCheck(oc)
+		exutil.By("Create unhealthy CRD")
+		defer unhealthyCRD.DeleteWithoutCheck(oc)
+		unhealthyCRD.CreateWithoutCheck(oc)
+		unhealthyCRD.AssertHealthyWithConsistent(oc, "false")
+		unhealthyCRD.DeleteWithoutCheck(oc)
 
-		exutil.By("create unhealthy DS")
-		defer unhealthyDS.deleteWithoutCheck(oc)
-		unhealthyDS.createWithoutCheck(oc)
-		unhealthyDS.assertHealthyWithConsistent(oc, "false")
-		unhealthyDS.delete(oc, unhealthyDSChild)
+		exutil.By("Create unhealthy DS")
+		defer unhealthyDS.DeleteWithoutCheck(oc)
+		unhealthyDS.CreateWithoutCheck(oc)
+		unhealthyDS.AssertHealthyWithConsistent(oc, "false")
+		unhealthyDS.Delete(oc, unhealthyDSChild)
 
 	})
 
@@ -99,67 +100,67 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			basicBdPlainImageTemplate    = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
 			basicBdRegistryImageTemplate = filepath.Join(baseDir, "basic-bd-registry-image.yaml")
-			healthBd                     = bundleDeploymentDescription{
-				bdName:       "68903-healthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-healthy",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			healthBd                     = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-healthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-healthy",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
-			healthChild = []childResource{
-				{kind: "CustomResourceDefinition", ns: ""},
-				{kind: "pod", ns: "olmv1-68903-healthy"},
-				{kind: "APIService", ns: ""},
-				{kind: "namespace", ns: ""},
+			healthChild = []olmv1util.ChildResource{
+				{Kind: "CustomResourceDefinition", Ns: ""},
+				{Kind: "pod", Ns: "olmv1-68903-healthy"},
+				{Kind: "APIService", Ns: ""},
+				{Kind: "namespace", Ns: ""},
 			}
-			unhealthyDp = bundleDeploymentDescription{
-				bdName:       "68903-deployment-unhealthy",
-				address:      "quay.io/olmqe/olmv1bundle:registry-68903-deployunhealthy",
-				activeBundle: "",
-				template:     basicBdRegistryImageTemplate,
+			unhealthyDp = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-deployment-unhealthy",
+				Address:      "quay.io/olmqe/olmv1bundle:registry-68903-deployunhealthy",
+				ActiveBundle: "",
+				Template:     basicBdRegistryImageTemplate,
 			}
-			unhealthyDpChild = []childResource{
-				{kind: "CustomResourceDefinition", ns: ""},
-				{kind: "namespace", ns: ""},
+			unhealthyDpChild = []olmv1util.ChildResource{
+				{Kind: "CustomResourceDefinition", Ns: ""},
+				{Kind: "namespace", Ns: ""},
 			}
-			unhealthyRC = bundleDeploymentDescription{
-				bdName:       "68903-rc-unhealthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-rcunhealth",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			unhealthyRC = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-rc-unhealthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-rcunhealth",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
-			unhealthyRCChild = []childResource{
-				{kind: "namespace", ns: ""},
+			unhealthyRCChild = []olmv1util.ChildResource{
+				{Kind: "namespace", Ns: ""},
 			}
-			unhealthyInstall = bundleDeploymentDescription{
-				bdName:       "68903-install-unhealthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-installunhealthy",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			unhealthyInstall = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-install-unhealthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-installunhealthy",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
 		)
 
-		exutil.By("create health bundledeployment")
-		defer healthBd.deleteWithoutCheck(oc)
-		healthBd.create(oc)
-		healthBd.delete(oc, healthChild)
+		exutil.By("Create health bundledeployment")
+		defer healthBd.DeleteWithoutCheck(oc)
+		healthBd.Create(oc)
+		healthBd.Delete(oc, healthChild)
 
-		exutil.By("create unhealthy deployment")
-		defer unhealthyDp.deleteWithoutCheck(oc)
-		unhealthyDp.createWithoutCheck(oc)
-		unhealthyDp.assertHealthyWithConsistent(oc, "false")
-		unhealthyDp.delete(oc, unhealthyDpChild)
+		exutil.By("Create unhealthy deployment")
+		defer unhealthyDp.DeleteWithoutCheck(oc)
+		unhealthyDp.CreateWithoutCheck(oc)
+		unhealthyDp.AssertHealthyWithConsistent(oc, "false")
+		unhealthyDp.Delete(oc, unhealthyDpChild)
 
-		exutil.By("create unhealthy RC")
-		defer unhealthyRC.deleteWithoutCheck(oc)
-		unhealthyRC.createWithoutCheck(oc)
-		unhealthyRC.assertHealthy(oc, "true") // here is possible issue
-		unhealthyRC.delete(oc, unhealthyRCChild)
+		exutil.By("Create unhealthy RC")
+		defer unhealthyRC.DeleteWithoutCheck(oc)
+		unhealthyRC.CreateWithoutCheck(oc)
+		unhealthyRC.AssertHealthy(oc, "true") // here is possible issue
+		unhealthyRC.Delete(oc, unhealthyRCChild)
 
 		exutil.By("install fails")
-		defer unhealthyInstall.deleteWithoutCheck(oc)
-		unhealthyInstall.createWithoutCheck(oc)
-		unhealthyInstall.assertHealthyWithConsistent(oc, "false")
-		unhealthyInstall.deleteWithoutCheck(oc)
+		defer unhealthyInstall.DeleteWithoutCheck(oc)
+		unhealthyInstall.CreateWithoutCheck(oc)
+		unhealthyInstall.AssertHealthyWithConsistent(oc, "false")
+		unhealthyInstall.DeleteWithoutCheck(oc)
 
 	})
 
@@ -169,53 +170,53 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 		var (
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
 			basicBdPlainImageTemplate = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
-			unhealthySS               = bundleDeploymentDescription{
-				bdName:       "68903-ss-unhealthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-ssunhealthy",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			unhealthySS               = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-ss-unhealthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-ssunhealthy",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
-			unhealthySSChild = []childResource{
-				{kind: "namespace", ns: ""},
+			unhealthySSChild = []olmv1util.ChildResource{
+				{Kind: "namespace", Ns: ""},
 			}
-			unhealthyRS = bundleDeploymentDescription{
-				bdName:       "68903-rs-unhealthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-rsunhealthy",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			unhealthyRS = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-rs-unhealthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-rsunhealthy",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
-			unhealthyRSChild = []childResource{
-				{kind: "namespace", ns: ""},
+			unhealthyRSChild = []olmv1util.ChildResource{
+				{Kind: "namespace", Ns: ""},
 			}
 
-			healthUnspport = bundleDeploymentDescription{
-				bdName:       "68903-unspport-healthy",
-				address:      "quay.io/olmqe/olmv1bundle:plain-68903-unsupporthealthy",
-				activeBundle: "",
-				template:     basicBdPlainImageTemplate,
+			healthUnspport = olmv1util.BundleDeploymentDescription{
+				BdName:       "68903-unspport-healthy",
+				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-unsupporthealthy",
+				ActiveBundle: "",
+				Template:     basicBdPlainImageTemplate,
 			}
-			healthUnspportChild = []childResource{
-				{kind: "namespace", ns: ""},
+			healthUnspportChild = []olmv1util.ChildResource{
+				{Kind: "namespace", Ns: ""},
 			}
 		)
 
-		exutil.By("create unhealthy SS")
-		defer unhealthySS.deleteWithoutCheck(oc)
-		unhealthySS.createWithoutCheck(oc)
-		unhealthySS.assertHealthyWithConsistent(oc, "false")
-		unhealthySS.delete(oc, unhealthySSChild)
+		exutil.By("Create unhealthy SS")
+		defer unhealthySS.DeleteWithoutCheck(oc)
+		unhealthySS.CreateWithoutCheck(oc)
+		unhealthySS.AssertHealthyWithConsistent(oc, "false")
+		unhealthySS.Delete(oc, unhealthySSChild)
 
-		exutil.By("create unhealthy RS")
-		defer unhealthyRS.deleteWithoutCheck(oc)
-		unhealthyRS.createWithoutCheck(oc)
-		unhealthyRS.assertHealthyWithConsistent(oc, "false")
-		unhealthyRS.delete(oc, unhealthyRSChild)
+		exutil.By("Create unhealthy RS")
+		defer unhealthyRS.DeleteWithoutCheck(oc)
+		unhealthyRS.CreateWithoutCheck(oc)
+		unhealthyRS.AssertHealthyWithConsistent(oc, "false")
+		unhealthyRS.Delete(oc, unhealthyRSChild)
 
 		exutil.By("unsupport health")
-		defer healthUnspport.deleteWithoutCheck(oc)
-		healthUnspport.createWithoutCheck(oc)
-		healthUnspport.assertHealthy(oc, "true")
-		healthUnspport.delete(oc, healthUnspportChild)
+		defer healthUnspport.DeleteWithoutCheck(oc)
+		healthUnspport.CreateWithoutCheck(oc)
+		healthUnspport.AssertHealthy(oc, "true")
+		healthUnspport.Delete(oc, healthUnspportChild)
 
 	})
 
@@ -227,56 +228,56 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 			operatorTemplate                      = filepath.Join(baseDir, "operator.yaml")
 			operatorWithoutChannelTemplate        = filepath.Join(baseDir, "operatorWithoutChannel.yaml")
 			operatorWithoutChannelVersionTemplate = filepath.Join(baseDir, "operatorWithoutChannelVersion.yaml")
-			catalog                               = catalogDescription{
-				name:     "catalog-68821",
-				imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm68821",
-				template: catalogTemplate,
+			catalog                               = olmv1util.CatalogDescription{
+				Name:     "catalog-68821",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm68821",
+				Template: catalogTemplate,
 			}
-			operator = operatorDescription{
-				name:        "operator-68821",
-				packageName: "nginx68821",
-				channel:     "candidate-v0.0",
-				version:     ">=0.0.1",
-				template:    operatorTemplate,
+			operator = olmv1util.OperatorDescription{
+				Name:        "operator-68821",
+				PackageName: "nginx68821",
+				Channel:     "candidate-v0.0",
+				Version:     ">=0.0.1",
+				Template:    operatorTemplate,
 			}
 		)
-		exutil.By("create catalog")
-		defer catalog.delete(oc)
-		catalog.create(oc)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
 
-		exutil.By("create operator with channel candidate-v0.0, version >=0.0.1")
-		defer operator.delete(oc)
-		operator.create(oc)
-		o.Expect(operator.resolvedBundleResource).To(o.ContainSubstring("v0.0.3"))
-		operator.delete(oc)
+		exutil.By("Create operator with channel candidate-v0.0, version >=0.0.1")
+		defer operator.Delete(oc)
+		operator.Create(oc)
+		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v0.0.3"))
+		operator.Delete(oc)
 
-		exutil.By("create operator with channel candidate-v1.0, version 1.0.x")
-		operator.channel = "candidate-v1.0"
-		operator.version = "1.0.x"
-		operator.create(oc)
-		o.Expect(operator.resolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
-		operator.delete(oc)
+		exutil.By("Create operator with channel candidate-v1.0, version 1.0.x")
+		operator.Channel = "candidate-v1.0"
+		operator.Version = "1.0.x"
+		operator.Create(oc)
+		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		operator.Delete(oc)
 
-		exutil.By("create operator with channel empty, version >=0.0.1 !=1.1.0 <1.1.2")
-		operator.channel = ""
-		operator.version = ">=0.0.1 !=1.1.0 <1.1.2"
-		operator.template = operatorWithoutChannelTemplate
-		operator.create(oc)
-		o.Expect(operator.resolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
-		operator.delete(oc)
+		exutil.By("Create operator with channel empty, version >=0.0.1 !=1.1.0 <1.1.2")
+		operator.Channel = ""
+		operator.Version = ">=0.0.1 !=1.1.0 <1.1.2"
+		operator.Template = operatorWithoutChannelTemplate
+		operator.Create(oc)
+		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		operator.Delete(oc)
 
-		exutil.By("create operator with channel empty, version empty")
-		operator.channel = ""
-		operator.version = ""
-		operator.template = operatorWithoutChannelVersionTemplate
-		operator.create(oc)
-		o.Expect(operator.resolvedBundleResource).To(o.ContainSubstring("v1.1.0"))
-		operator.delete(oc)
+		exutil.By("Create operator with channel empty, version empty")
+		operator.Channel = ""
+		operator.Version = ""
+		operator.Template = operatorWithoutChannelVersionTemplate
+		operator.Create(oc)
+		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v1.1.0"))
+		operator.Delete(oc)
 
-		exutil.By("create operator with invalid version")
-		operator.version = "!1.0.1"
-		operator.template = operatorTemplate
-		err := operator.createWithoutCheck(oc)
+		exutil.By("Create operator with invalid version")
+		operator.Version = "!1.0.1"
+		operator.Template = operatorTemplate
+		err := operator.CreateWithoutCheck(oc)
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
@@ -286,32 +287,32 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 			baseDir          = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate  = filepath.Join(baseDir, "catalog.yaml")
 			operatorTemplate = filepath.Join(baseDir, "operator.yaml")
-			catalog          = catalogDescription{
-				name:     "catalog-69196",
-				imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69196",
-				template: catalogTemplate,
+			catalog          = olmv1util.CatalogDescription{
+				Name:     "catalog-69196",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69196",
+				Template: catalogTemplate,
 			}
-			operator = operatorDescription{
-				name:        "operator-69196",
-				packageName: "nginx69196",
-				channel:     "candidate-v1.0",
-				version:     "1.0.1",
-				template:    operatorTemplate,
+			operator = olmv1util.OperatorDescription{
+				Name:        "operator-69196",
+				PackageName: "nginx69196",
+				Channel:     "candidate-v1.0",
+				Version:     "1.0.1",
+				Template:    operatorTemplate,
 			}
 		)
-		exutil.By("create catalog")
-		defer catalog.delete(oc)
-		catalog.create(oc)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
 
-		exutil.By("create operator with channel candidate-v1.0, version 1.0.1")
-		defer operator.delete(oc)
-		operator.create(oc)
-		o.Expect(operator.installedBundleResource).To(o.ContainSubstring("v1.0.1"))
+		exutil.By("Create operator with channel candidate-v1.0, version 1.0.1")
+		defer operator.Delete(oc)
+		operator.Create(oc)
+		o.Expect(operator.InstalledBundleResource).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("update version to be >=1.0.1")
-		operator.patch(oc, `{"spec":{"version":">=1.0.1"}}`)
+		operator.Patch(oc, `{"spec":{"version":">=1.0.1"}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundleResource, _ := getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o", "jsonpath={.status.resolvedBundleResource}")
+			resolvedBundleResource, _ := olmv1util.GetNoEmpty(oc, "operator.operators.operatorframework.io", operator.Name, "-o", "jsonpath={.status.resolvedBundleResource}")
 			if !strings.Contains(resolvedBundleResource, "v1.0.2") {
 				e2e.Logf("operator.resolvedBundleResource is %s, not v1.0.2, and try next", resolvedBundleResource)
 				return false, nil
@@ -319,14 +320,14 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 			return true, nil
 		})
 		if errWait != nil {
-			getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o=jsonpath-as-json={.status}")
+			olmv1util.GetNoEmpty(oc, "operator.operators.operatorframework.io", operator.Name, "-o=jsonpath-as-json={.status}")
 			exutil.AssertWaitPollNoErr(errWait, "operator resolvedBundleResource is not v1.0.2")
 		}
 
 		exutil.By("update channel to be candidate-v1.1")
-		operator.patch(oc, `{"spec":{"channel":"candidate-v1.1"}}`)
+		operator.Patch(oc, `{"spec":{"channel":"candidate-v1.1"}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundleResource, _ := getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o", "jsonpath={.status.resolvedBundleResource}")
+			resolvedBundleResource, _ := olmv1util.GetNoEmpty(oc, "operator.operators.operatorframework.io", operator.Name, "-o", "jsonpath={.status.resolvedBundleResource}")
 			if !strings.Contains(resolvedBundleResource, "v1.1.0") {
 				e2e.Logf("operator.resolvedBundleResource is %s, not v1.1.0, and try next", resolvedBundleResource)
 				return false, nil
@@ -334,7 +335,7 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 			return true, nil
 		})
 		if errWait != nil {
-			getField(oc, false, asAdmin, withoutNamespace, "operator.operators.operatorframework.io", operator.name, "-o=jsonpath-as-json={.status}")
+			olmv1util.GetNoEmpty(oc, "operator.operators.operatorframework.io", operator.Name, "-o=jsonpath-as-json={.status}")
 			exutil.AssertWaitPollNoErr(errWait, "operator resolvedBundleResource is not v1.1.0")
 		}
 	})
