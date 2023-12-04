@@ -337,21 +337,21 @@ func (c *CLI) SetupProject() {
 		return false
 	}
 	if clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
-		clusterVersion.Status.Capabilities.EnabledCapabilities == nil ||
 		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityBuild) ||
-		checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityBuild) {
+		(clusterVersion.Status.Capabilities.EnabledCapabilities != nil &&
+			checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityBuild)) {
 		DefaultServiceAccounts = append(DefaultServiceAccounts, "builder")
 	}
 	if clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
-		clusterVersion.Status.Capabilities.EnabledCapabilities == nil ||
 		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityDeploymentConfig) ||
-		checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityDeploymentConfig) {
+		(clusterVersion.Status.Capabilities.EnabledCapabilities != nil &&
+			checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityDeploymentConfig)) {
 		DefaultServiceAccounts = append(DefaultServiceAccounts, "deployer")
 	}
 	if clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
-		clusterVersion.Status.Capabilities.EnabledCapabilities == nil ||
 		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityImageRegistry) ||
-		checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityImageRegistry) {
+		(clusterVersion.Status.Capabilities.EnabledCapabilities != nil &&
+			checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityImageRegistry)) {
 		shouldCheckSecret = true
 	}
 	for _, sa := range DefaultServiceAccounts {
