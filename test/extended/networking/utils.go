@@ -1026,10 +1026,10 @@ func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
 // get CLuster Manager's leader info
 func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType string) string {
 	if networkType == "ovnkubernetes" {
-		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
-		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
-		o.Expect(nodeName).NotTo(o.BeEmpty())
-		podName, getPodNameErr := exutil.GetPodName(oc, namespace, cmName, nodeName)
+		linuxNodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(linuxNodeList).NotTo(o.BeEmpty())
+		podName, getPodNameErr := exutil.GetPodName(oc, namespace, cmName, linuxNodeList[0])
 		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
 		o.Expect(podName).NotTo(o.BeEmpty())
 		return podName
