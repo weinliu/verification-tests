@@ -192,7 +192,10 @@ func (mcp *MachineConfigPool) pollUpdatedStatus() func() string {
 }
 
 func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
-	var totalNodes int
+	var (
+		totalNodes   int
+		masterAdjust = 1.0
+	)
 
 	o.Eventually(func() int {
 		var err error
@@ -210,7 +213,11 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 		return 1
 	}
 
-	return totalNodes * mcp.MinutesWaitingPerNode
+	if mcp.IsMaster() {
+		masterAdjust = 1.3 // if the pool is the master pool, we wait an extra 30% time
+	}
+
+	return int(float64(totalNodes*mcp.MinutesWaitingPerNode) * masterAdjust)
 }
 
 // SetWaitingTimeForKernelChange increases the time that the MCP will wait for the update to be executed

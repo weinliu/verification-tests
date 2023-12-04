@@ -3719,6 +3719,66 @@ nulla pariatur.`
 
 		}
 	})
+	g.It("Author:sregidor-Longduration-NonPreRelease-Critical-67790-create MC with extensions, 64k-pages kernel type and kernel argument [Disruptive]", func() {
+
+		architecture.SkipIfNoNodeWithArchitectures(oc.AsAdmin(), architecture.ARM64)
+		exutil.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
+
+		// If arm64 Compact/SNO we use master
+		// Else if possible we create a custom MCP if there are arm64 nodes in the worker pool
+		// Else if possible we use the first exsisting custom MCP with all its nodes using arm64
+		// Else master is arm64 we use master
+		// Else we fail the test
+		createdCustomPoolName := fmt.Sprintf("mco-test-%s", architecture.ARM64)
+		defer DeleteCustomMCP(oc.AsAdmin(), createdCustomPoolName)
+
+		mcp, nodes := GetPoolAndNodesForArchitectureOrFail(oc.AsAdmin(), createdCustomPoolName, architecture.ARM64, 1)
+		node := nodes[0]
+		logger.Infof("Using node %s from pool %s", node.GetName(), mcp.GetName())
+
+		exutil.By("Create new MC to add the kernel arguments, kernel type and extension")
+		mcName := "change-worker-karg-ktype-extension"
+		mcTemplate := mcName + ".yaml"
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate(mcTemplate)
+		mc.parameters = []string{"KERNELTYPE=64k-pages"}
+		defer mc.delete()
+		mc.create()
+
+		exutil.By("Check kernel arguments, kernel type and extension on the created machine config")
+		o.Expect(
+			getMachineConfigDetails(oc, mc.name),
+		).Should(
+			o.And(
+				o.ContainSubstring("usbguard"),
+				o.ContainSubstring("z=10"),
+				o.ContainSubstring("64k-pages"),
+			),
+			"The new MC is not using the expected configuration")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check kernel type")
+		o.Expect(node.Is64kPagesKernel()).To(o.BeTrue(),
+			"The installed kernel is not the expected one")
+
+		o.Expect(
+			node.RpmIsInstalled("kernel-64k-core", "kernel-64k-modules-core", "kernel-64k-modules-extra", "kernel-64k-modules"),
+		).Should(o.BeTrue(),
+			"The installed kernel rpm packages are not the expected ones")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check installed extensions")
+		o.Expect(
+			node.RpmIsInstalled("usbguard"),
+		).Should(
+			o.BeTrue(),
+			"The usbguard extension rpm is not installed")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check kernel arguments")
+		o.Expect(node.IsKernelArgEnabled("z=10")).To(o.BeTrue(),
+			"The kernel arguments are not the expected ones")
+		logger.Infof("OK!\n")
+	})
 
 	g.It("Author:rioliu-NonPreRelease-Medium-68688-kubeconfig must have 600 permissions in all nodes [Serial]", func() {
 		var (

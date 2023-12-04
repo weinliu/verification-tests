@@ -15,9 +15,11 @@ objects:
           version: 3.2.0
       extensions:
         - usbguard
-      kernelType: realtime
+      kernelType: "${KERNELTYPE}"
       kernelArguments:
         - 'z=10'
 parameters:
   - name: NAME
   - name: POOL
+  - name: KERNELTYPE
+    value: realtime 
