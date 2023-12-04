@@ -248,7 +248,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		//check supported zone for gpu
-		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if !strings.Contains(zone, "us-central1-") {
