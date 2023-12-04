@@ -88,6 +88,14 @@ func (mc *MachineConfig) deleteNoWait() error {
 }
 
 func (mc *MachineConfig) delete() {
+	// This method waits a minimum of 1 minute for the MCP to be updated after the MC has been deleted.
+	// It is very expensive, since this method is deferred very often and in those cases the MC has been already deleted.
+	// In order to improve the performance we do nothing if the MC does not exist.
+	if !mc.Exists() {
+		logger.Infof("MachineConfig %s does not exist. We will not try to delete it.", mc.GetName())
+		return
+	}
+
 	mcp := NewMachineConfigPool(mc.oc, mc.pool)
 	if mc.GetKernelTypeSafe() != "" {
 		mcp.SetWaitingTimeForKernelChange() // If the MC is configuring a different kernel, we increase the waiting period
