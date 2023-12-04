@@ -1453,11 +1453,16 @@ func ProbeTerminatePeriod(oc *exutil.CLI, terminatePeriod int, probeterminatePer
 			if strings.Contains(time1, "m") {
 				time1Min = strings.Split(time1, "m")[0]
 				timeTemp = strings.Split(time1, "m")[1]
-				time1Sec = strings.Split(timeTemp, "s")[0]
 				time1MinInt, err = strconv.Atoi(time1Min)
 				o.Expect(err).NotTo(o.HaveOccurred())
-				time1SecInt, err = strconv.Atoi(time1Sec)
-				o.Expect(err).NotTo(o.HaveOccurred())
+				if strings.Contains(time1, "s") {
+					time1Sec = strings.Split(timeTemp, "s")[0]
+					time1SecInt, err = strconv.Atoi(time1Sec)
+					o.Expect(err).NotTo(o.HaveOccurred())
+				} else {
+					time1Sec = "0"
+					time1SecInt = 0
+				}
 			} else {
 				time1Sec = strings.Split(time1, "s")[0]
 				time1SecInt, err = strconv.Atoi(time1Sec)
@@ -1475,11 +1480,16 @@ func ProbeTerminatePeriod(oc *exutil.CLI, terminatePeriod int, probeterminatePer
 			if strings.Contains(time2, "m") {
 				time2Min = strings.Split(time2, "m")[0]
 				timeTemp = strings.Split(time2, "m")[1]
-				time2Sec = strings.Split(timeTemp, "s")[0]
 				time2MinInt, err = strconv.Atoi(time2Min)
 				o.Expect(err).NotTo(o.HaveOccurred())
-				time2SecInt, err = strconv.Atoi(time2Sec)
-				o.Expect(err).NotTo(o.HaveOccurred())
+				if strings.Contains(time2, "s") {
+					time2Sec = strings.Split(timeTemp, "s")[0]
+					time2SecInt, err = strconv.Atoi(time2Sec)
+					o.Expect(err).NotTo(o.HaveOccurred())
+				} else {
+					time2Sec = "0"
+					time2SecInt = 0
+				}
 			} else {
 				time2Sec = strings.Split(time2, "s")[0]
 				time2SecInt, err = strconv.Atoi(time2Sec)
