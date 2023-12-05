@@ -3837,6 +3837,26 @@ nulla pariatur.`
 				"The --bootstrap-certs flag is not available in the machine-config-server binary")
 		exutil.By("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonPreRelease-High-68682-daemon should not pull baremetalRuntimeCfg every time [Serial]", func() {
+		SkipIfNotOnPremPlatform(oc.AsAdmin())
+		resolvPrependerService := "on-prem-resolv-prepender.service"
+
+		nodes, err := NewNodeList(oc.AsAdmin()).GetAllLinux()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Could not get the list of Linux nodes")
+
+		for _, node := range nodes {
+			exutil.By(fmt.Sprintf("Check %s in node %s", resolvPrependerService, node.GetName()))
+
+			o.Eventually(node.GetJournalLogs, "5s", "1s").WithArguments("-u", resolvPrependerService).Should(
+				o.ContainSubstring("Image exists, no need to download"),
+				"%s should not try to download images more than once. Check OCPBUGS-18772.", resolvPrependerService,
+			)
+
+			logger.Infof("OK!\n")
+		}
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason

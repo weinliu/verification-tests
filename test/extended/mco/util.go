@@ -1083,3 +1083,19 @@ func IsInstalledWithAssistedInstallerOrFail(oc *exutil.CLI) bool {
 
 	return len(pods) > 0
 }
+
+func IsOnPremPlatform(platform string) bool {
+	switch platform {
+	case BaremetalPlatform, OvirtPlatform, OpenstackPlatform, VspherePlatform, NutanixPlatform:
+		return true
+	default:
+		return false
+	}
+}
+
+func SkipIfNotOnPremPlatform(oc *exutil.CLI) {
+	platform := exutil.CheckPlatform(oc)
+	if !IsOnPremPlatform(platform) {
+		g.Skip(fmt.Sprintf("Current platform: %s. This test can only be execute in OnPrem platforms.", platform))
+	}
+}
