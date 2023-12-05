@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-PreChkUpgrade-Author:jechen-High-63155-Pre Egress router redirect mode with multiple destinations should still be functional after upgrade.", func() {
+	g.It("ConnectedOnly-NonPreRelease-PreChkUpgrade-Author:jechen-High-63155-Pre Egress router redirect mode with multiple destinations should still be functional after upgrade.", func() {
 		ipStackType := checkIPStackType(oc)
 		exutil.By("Skip testing on ipv6 single stack cluster")
 		if ipStackType == "ipv6single" {
@@ -204,7 +204,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:80 with error:%v", svcIPv4, err))
 	})
 
-	g.It("ConnectedOnly-PstChkUpgrade-Author:jechen-High-63155-Pst Egress router redirect mode with multiple destinations should still be funcitonal after upgrade.", func() {
+	g.It("ConnectedOnly-NonPreRelease-PstChkUpgrade-Author:jechen-High-63155-Pst Egress router redirect mode with multiple destinations should still be funcitonal after upgrade.", func() {
 		ipStackType := checkIPStackType(oc)
 		exutil.By("Skip testing on ipv6 single stack cluster")
 		if ipStackType == "ipv6single" {

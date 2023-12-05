@@ -772,7 +772,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-PreChkUpgrade-Author:huirwang-High-62056-Check egressfirewall is functional post upgrade", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PreChkUpgrade-Author:huirwang-High-62056-Check egressfirewall is functional post upgrade", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			statefulSetHelloPod = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
@@ -819,7 +819,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-PstChkUpgrade-Author:huirwang-High-62056-Check egressfirewall is functional post upgrade", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PstChkUpgrade-Author:huirwang-High-62056-Check egressfirewall is functional post upgrade", func() {
 		ns := "62056-upgrade-ns"
 		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
 		if nsErr != nil {
@@ -1429,7 +1429,7 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-PreChkUpgrade-Author:huirwang-High-64761-Check egressnetworkpolicy is functional post upgrade", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PreChkUpgrade-Author:huirwang-High-64761-Check egressnetworkpolicy is functional post upgrade", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			statefulSetHelloPod = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
@@ -1469,7 +1469,7 @@ var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-PstChkUpgrade-Author:huirwang-High-64761-Check egressnetworkpolicy is functional post upgrade", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PstChkUpgrade-Author:huirwang-High-64761-Check egressnetworkpolicy is functional post upgrade", func() {
 		ns := "64761-upgrade-ns"
 		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
 		if nsErr != nil {
