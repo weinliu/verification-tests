@@ -639,6 +639,10 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		availablePods := snoPodCapacity - usedPods - reservePodCapacity
 		if workerNodeCount > 1 {
 			availablePods = availablePods * workerNodeCount
+			// Reduce the number pods in which workers create memory loads concurrently, avoid kubelet crash
+			if availablePods > 200 {
+				availablePods = int(availablePods / 2)
+			}
 		}
 		nsMax := int(availablePods / dn / r)
 		if nsMax > 0 {
