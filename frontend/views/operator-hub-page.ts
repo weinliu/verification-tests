@@ -261,6 +261,6 @@ export const Operand = {
 export const installedOperatorPage = {
   goToWithNS: (ns: string) => {
     cy.visit(`/k8s/ns/${ns}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
-    cy.get('[aria-label="Installed Operators"]').should('exist');
+    cy.contains('Installed Operators').should('exist');
   }
 }

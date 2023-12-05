@@ -13,6 +13,7 @@ declare global {
             isEdgeCluster();
             isAWSSTSCluster();
             isPlatformSuitableForNMState();
+	    isManagedCluster();
         }
     }
 }
@@ -120,8 +121,8 @@ Cypress.Commands.add("isEdgeCluster", () => {
       }
     });
 });
-Cypress.Commands.add("isAWSSTSCluster", (credentialMOde: string, infraPlatform: string, authIssuer: string) => {
-  if(credentialMOde == 'Manual' && infraPlatform == 'AWS' && authIssuer != ''){
+Cypress.Commands.add("isAWSSTSCluster", (credentialMode: string, infraPlatform: string, authIssuer: string) => {
+  if(credentialMode == 'Manual' && infraPlatform == 'AWS' && authIssuer != ''){
     cy.log('Testing on STS cluster!');
     return cy.wrap(true);
   }else{
@@ -140,4 +141,20 @@ Cypress.Commands.add("isPlatformSuitableForNMState", () => {
       return cy.wrap(false);
     }
   });
+});
+
+Cypress.Commands.add("isManagedCluster", () => {
+  let brand;
+  cy.window().then((win: any) => {
+    brand = win.SERVER_FLAGS.branding;
+    cy.log(`${brand}`);
+    if(brand == 'rosa' || brand == 'dedicated'){
+      cy.log('Testing on Rosa/OSD cluster!');
+      return cy.wrap(true);
+    } else {
+      cy.log('Not Rosa/OSD cluster. Skip!');
+      return cy.wrap(false);
+    }
+  });
+
 });

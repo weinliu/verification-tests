@@ -1,9 +1,21 @@
 import { listPage } from "upstream/views/list-page";
+import { guidedTour } from 'upstream/views/guided-tour';
 
 export const Pages = {
   gotoProjectsList: () => {
     cy.visit('/k8s/cluster/project.openshift.io~v1~Project');
     listPage.rows.shouldBeLoaded();
+  },
+  gotoProjectCreationPage: () => {
+    cy.visit('k8s/cluster/project.openshift.io~v1~Project');
+    cy.get('button[data-test="item-create"]').click();
+    cy.get('form[name="form"]').should('be.visible');
+  },
+  gotoOneProjectAcessTab: (namespace: string) => {
+    cy.switchPerspective('Developer');
+    cy.visit(`/project-details/ns/${namespace}/access`);
+    guidedTour.close();
+    cy.get('a[data-test-id="horizontal-link-Project access"]').should('be.visible');
   },
   gotoNamespacesList: () => {
     cy.visit('/k8s/cluster/core~v1~Namespace');
@@ -51,8 +63,15 @@ export const Pages = {
     cy.visit('/settings/cluster/clusteroperators');
     listPage.rows.shouldBeLoaded();
   },
+  gotoClusterDetailspage: () => {
+    cy.visit('settings/cluster');
+    cy.get('[data-test-id="horizontal-link-Details"]').should('be.visible');
+  },
   gotoCRDsList: () => {
     cy.visit('/k8s/cluster/apiextensions.k8s.io~v1~CustomResourceDefinition');
     listPage.rows.shouldBeLoaded();
+  },
+  gotoOneNetworkPolicyDetails: (namespace: string, npname: string) => {
+    cy.visit(`/k8s/ns/${namespace}/networkpolicies/${npname}`);
   }
 }
