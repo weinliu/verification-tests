@@ -6,11 +6,12 @@ type Client struct {
 	Parser *Parser
 
 	// services
-	Cluster     ClusterService
-	IDP         IDPService
-	OCMResource OCMResourceService
-	User        UserService
-	MachinePool MachinePoolService
+	Cluster       ClusterService
+	IDP           IDPService
+	OCMResource   OCMResourceService
+	User          UserService
+	MachinePool   MachinePoolService
+	KubeletConfig KubeletConfigService
 	// Addon AddonService
 	// IDP IDPService
 	// Network NetworkService
@@ -33,6 +34,7 @@ func NewClient() *Client {
 	client.OCMResource = &ocmResourceService{Client: client}
 	client.User = &userService{Client: client}
 	client.MachinePool = &machinepoolService{Client: client}
+	client.KubeletConfig = &kubeletConfigService{Client: client}
 
 	return client
 }
