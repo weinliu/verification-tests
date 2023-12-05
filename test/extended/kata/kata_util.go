@@ -1614,26 +1614,19 @@ func checkResourceJsonpathMatch(oc *exutil.CLI, resType, resName, resNs, jsonPat
 }
 
 func clusterHasEnabledFIPS(oc *exutil.CLI, subscriptionNamespace string) bool {
-	// check that the 1st control-plane node is in FIPS mode
-	nodeControlList, err := exutil.GetClusterNodesBy(oc, "control-plane")
-	if err != nil || len(nodeControlList) == 0 {
-		e2e.Logf("Could not get list of control nodes to check FIPS: %v %v", nodeControlList, err)
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(len(nodeControlList)).NotTo(o.Equal(0))
 
-	fipsModeStatus, err := oc.AsAdmin().Run("debug").Args("-n", subscriptionNamespace, "node/"+nodeControlList[0], "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
-	if err != nil || fipsModeStatus == "" {
-		e2e.Logf("ERROR checking %v: %v %v", nodeControlList[0], fipsModeStatus, err)
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(fipsModeStatus).NotTo(o.BeEmpty())
+	firstNode, err := exutil.GetFirstMasterNode(oc)
+	msgIfErr := fmt.Sprintf("ERROR Could not get first node to check FIPS '%v' %v", firstNode, err)
+	o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+	o.Expect(firstNode).NotTo(o.BeEmpty(), msgIfErr)
 
-	if strings.Contains(fipsModeStatus, "FIPS mode is enabled.") {
-		return true
-	} else {
-		return false
-	}
+	fipsModeStatus, err := oc.AsAdmin().Run("debug").Args("-n", subscriptionNamespace, "node/"+firstNode, "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+	msgIfErr = fmt.Sprintf("ERROR Could not check FIPS on node %v: '%v' %v", firstNode, fipsModeStatus, err)
+	o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+	o.Expect(fipsModeStatus).NotTo(o.BeEmpty(), msgIfErr)
+
+	// This will be true or false
+	return strings.Contains(fipsModeStatus, "FIPS mode is enabled.")
 }
 
 func patchPeerPodLimit(oc *exutil.CLI, opNamespace, newLimit string) {

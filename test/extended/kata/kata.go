@@ -1513,27 +1513,26 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		podName := createKataPod(oc, podNamespace, defaultPod, "pod68945", kataconfig.runtimeClassName)
 		defer deleteKataResource(oc, "pod", podNamespace, podName)
 		msg, err := checkResourceJsonpath(oc, "pod", podName, podNamespace, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
-		if err != nil {
-			e2e.Logf("ERROR: pod %v could not be installed: %v %v", podName, msg, err)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: pod %v could not be created: %v %v", podName, msg, err))
 
-		// check that the podvm booted with fips
+		msgIfErr := "ERROR: The cluster is in FIPS but pods are not"
+		// check that the pod(vm) booted with fips
 		podCmdline, podCmdlineErr := oc.AsAdmin().Run("rsh").Args("-T", "-n", podNamespace, podName, "cat", "/proc/cmdline").Output()
 		if podCmdlineErr != nil || !strings.Contains(podCmdline, "fips=1") {
-			e2e.Logf("%v did not boot with fips enabled:%v %v", podName, podCmdline, podCmdlineErr)
+			msgIfErr = fmt.Sprintf("%v\nERROR: %v did not boot with fips enabled:%v %v", msgIfErr, podName, podCmdline, podCmdlineErr)
 		}
 
-		// check that podvm has fips enabled
+		// check that pod(vm) has fips enabled
 		podFipsEnabled, podFipsEnabledErr := oc.AsAdmin().Run("rsh").Args("-T", "-n", podNamespace, podName, "cat", "/proc/sys/crypto/fips_enabled").Output()
 		if podFipsEnabledErr != nil || podFipsEnabled != "1" {
-			e2e.Logf("%v does not have fips_enabled: %v %v", podName, podFipsEnabled, podFipsEnabledErr)
+			msgIfErr = fmt.Sprintf("%v\nERROR: %v does not have fips_enabled: %v %v", msgIfErr, podName, podFipsEnabled, podFipsEnabledErr)
 		}
 
-		o.Expect(podCmdlineErr).NotTo(o.HaveOccurred())
-		o.Expect(podCmdline).To(o.ContainSubstring("fips=1"))
-		o.Expect(podFipsEnabledErr).NotTo(o.HaveOccurred())
-		o.Expect(podFipsEnabled == "1")
+		// fail with all possible debugging logs included
+		o.Expect(podCmdlineErr).NotTo(o.HaveOccurred(), msgIfErr)
+		o.Expect(podCmdline).To(o.ContainSubstring("fips=1"), msgIfErr)
+		o.Expect(podFipsEnabledErr).NotTo(o.HaveOccurred(), msgIfErr)
+		o.Expect(podFipsEnabled).To(o.Equal("1"), msgIfErr)
 
 	})
 
