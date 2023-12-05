@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -1794,6 +1795,138 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		listDupAclOutput, listErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", listDupACLCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listDupAclOutput).To(o.BeEmpty())
+	})
+
+	// author: asood@redhat.com
+	g.It("Author:asood-Medium-68660-Exposed route of the service should be accessible when allowing inbound traffic from any namespace network policy is created.", func() {
+		// https://issues.redhat.com/browse/OCPBUGS-14632
+		var (
+			buildPruningBaseDir             = exutil.FixturePath("testdata", "networking")
+			allowFromAllNSNetworkPolicyFile = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-all-namespaces.yaml")
+			pingPodTemplate                 = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			genericServiceTemplate          = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			serviceName                     = "test-service-68660"
+		)
+
+		exutil.By("Get namespace")
+		ns := oc.Namespace()
+
+		exutil.By("Create a hello pod in namspace")
+		podns := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		podns.createPingPod(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+		exutil.By("Create a test service which is in front of the above pod")
+		svc := genericServiceResource{
+			servicename:           serviceName,
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        "PreferDualStack",
+			internalTrafficPolicy: "Local",
+			externalTrafficPolicy: "",
+			template:              genericServiceTemplate,
+		}
+		svc.createServiceFromParams(oc)
+
+		exutil.By("Expose the service through a route")
+		err := oc.AsAdmin().WithoutNamespace().Run("expose").Args("svc", serviceName, "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		svcRoute, routeErr := oc.AsAdmin().Run("get").Args("route", serviceName, "-n", ns, "-o=jsonpath={.spec.host}").Output()
+		o.Expect(routeErr).NotTo(o.HaveOccurred())
+		o.Expect(svcRoute).ShouldNot(o.Equal(""))
+
+		exutil.By("Access the route before network policy creation")
+		routeCurlOutput, svcErr := exec.Command("bash", "-c", "curl -sI "+svcRoute).Output()
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(routeCurlOutput), "200 OK")).To(o.BeTrue())
+
+		exutil.By("Create a network policy in namespace")
+		createResourceFromFile(oc, ns, allowFromAllNSNetworkPolicyFile)
+		output, err := oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allow-from-all-namespaces"))
+
+		exutil.By("Access the route before network policy creation")
+		routeCurlOutput, svcErr = exec.Command("bash", "-c", "curl -sI "+svcRoute).Output()
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(routeCurlOutput), "200 OK")).To(o.BeTrue())
+
+	})
+
+	// author: asood@redhat.com
+	g.It("NonPreRelease-PreChkUpgrade-Author:asood-Critical-69236-Network policy in namespace that has long name is created successfully post upgrade", func() {
+		var (
+			testNs                       = "test-the-networkpolicy-with-a-62chars-62chars-long-namespace62"
+			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
+			allowSameNSNetworkPolicyFile = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-same-namespace.yaml")
+			pingPodTemplate              = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			helloStatefulsetFile         = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
+		)
+		exutil.By("Get namespace")
+		ns := oc.Namespace()
+
+		exutil.By("Create a hello pod in the namespace")
+		podns := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		podns.createPingPod(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		exutil.By("Create a namespace with a long name")
+		oc.CreateSpecifiedNamespaceAsAdmin(testNs)
+
+		exutil.By("Create a hello pod in namespace that has long name")
+		createResourceFromFile(oc, testNs, helloStatefulsetFile)
+		podErr := waitForPodWithLabelReady(oc, testNs, "app=hello")
+		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
+		helloPodName := getPodName(oc, testNs, "app=hello")[0]
+
+		exutil.By("Create a network policy in namespace")
+		createResourceFromFile(oc, testNs, allowSameNSNetworkPolicyFile)
+		output, err := oc.AsAdmin().Run("get").Args("networkpolicy", "-n", testNs).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allow-same-namespace"))
+
+		exutil.By("Verify the network policy in namespace with long name pre upgrade is functional ")
+		CurlPod2PodFail(oc, ns, "hello-pod", testNs, helloPodName)
+
+	})
+	g.It("NonPreRelease-PstChkUpgrade-Author:asood-Critical-69236-Network policy in namespace that has long name is created successfully post upgrade", func() {
+		var (
+			testNs              = "test-the-networkpolicy-with-a-62chars-62chars-long-namespace62"
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		)
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", testNs).Execute()
+		if nsErr != nil {
+			g.Skip("Skip the PstChkUpgrade test as test-the-networkpolicy-with-a-62chars-62chars-long-namespace62 namespace does not exist, PreChkUpgrade test did not run")
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testNs)
+		exutil.By("Get namespace")
+		ns := oc.Namespace()
+
+		exutil.By("Create a hello pod in the namespace")
+		podns := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		podns.createPingPod(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		exutil.By("Verify the network policy in namespace with long name post upgrade is functional ")
+		podErr := waitForPodWithLabelReady(oc, testNs, "app=hello")
+		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
+		helloPodName := getPodName(oc, testNs, "app=hello")[0]
+		CurlPod2PodFail(oc, ns, "hello-pod", testNs, helloPodName)
+
 	})
 
 })
