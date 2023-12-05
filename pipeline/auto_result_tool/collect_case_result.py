@@ -8,6 +8,7 @@ import argparse
 import json
 import logging
 import pprint
+import time
 from urllib3.exceptions import InsecureRequestWarning
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
@@ -71,6 +72,7 @@ class SummaryClient:
         self.sub_team = args.subteam
         self.parent_jira_issue = args.parent_jira
         self.sheet_name = args.sheet
+        self.skip_no_failure_cases = args.skip_no_failure_cases
         
         self.base_url = "https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com"
         self.launch_url = self.base_url +"/api/v1/prow/launch"
@@ -159,6 +161,7 @@ class SummaryClient:
                 link = self.ui_url+str(id)
                 name = ret["name"]
 
+                time.sleep(1)
                 self.logger.info("get result from: %s: %s %s", lanch_number, name, id)
                 lanch_number = lanch_number +1
                 item_url = self.item_url + "?filter.eq.launchId={0}&launchesLimit=0&page.size=400&page.page=1".format(id)
@@ -360,13 +363,38 @@ class SummaryClient:
             return dict()
         
 
+    def update_summary(self, summary_sheet, version, sheet_name):
+        if version == "4.15":
+            column_number = 8
+            column_str = "H"
+        elif version == "4.14":
+            column_number = 10
+            column_str = "J"
+        elif version == "4.13":
+            column_number = 12
+            column_str = "L"
+        else:
+            return
+        self.logger.debug("update_summary: version is %s", version)
+        values = summary_sheet.col_values(column_number)
+        index = len(values)+1
+        self.logger.debug("update %s to be %s", column_str+str(index), sheet_name.replace(self.version+"-", ""))
+        summary_sheet.update_acell(column_str+str(index),sheet_name.replace(self.version+"-", ""))
+        
     def write_e2e_google_sheet(self):
         self.get_prow_case_result()
         self.get_jenkins_case_result()
         spreadsheet_target = self.gclient.open_by_url(self.target_file)
         template = spreadsheet_target.worksheet("template")
-        worksheet_target = spreadsheet_target.duplicate_sheet(template.id)
-        worksheet_target.update_title(self.version+"-"+date.today().strftime("%Y%m%d"))
+        worksheet_target = spreadsheet_target.duplicate_sheet(template.id,1)
+        sheetName = self.version+"-"+date.today().strftime("%Y%m%d")
+        worksheet_target.update_title(sheetName)
+        worksheetTitle_list =[sheet.title for sheet in spreadsheet_target.worksheets()]
+        self.logger.info(worksheetTitle_list)
+        if "Monthly CI Pass Ratio Trend" in worksheetTitle_list:
+            self.logger.info("update Monthly CI Pass Ratio Trend")
+            summary = spreadsheet_target.worksheet("Monthly CI Pass Ratio Trend")
+            self.update_summary(summary, self.version, sheetName)
         sheet_update_content = []
         row = 32
         row_start = 33
@@ -414,10 +442,12 @@ class SummaryClient:
                     continue
             
             if failed == 0:
-                self.logger.debug("skip %s", case_number)
-                continue
-            else:
-                pass_ratio = float(passed)/(passed+failed)
+                if self.skip_no_failure_cases:
+                    self.logger.debug("skip %s", case_number)
+                    continue
+                if passed == 0:
+                    continue
+            pass_ratio = float(passed)/(passed+failed)
             row = row +1
             case_output = [case_number, case_name, author, subteam, passed, failed, pass_ratio, os.linesep.join(failed_jobs)]
             sheet_update_content.append(case_output)
@@ -476,12 +506,10 @@ class SummaryClient:
             pass_ratio = float(values_list[6].replace("%",""))
             if pass_ratio < 85:
                 self.logger.info("pass ratio is %f", pass_ratio)
-                comments = self.version+os.linesep+values_list[7]
+                comments = self.version+": pass ratio is "+pass_ratio+os.linesep+values_list[7]
                 jira_link = self.jiraManager.create_sub_task(self.parent_jira_issue, subtasks, caseid, case_title, author, comments)
                 worksheet.update_acell('J'+str(row_number), "https://issues.redhat.com/browse/"+jira_link)
         
-    
-      
     def collectResult(self):
         self.logger.info("Collect CI result")
         self.write_e2e_google_sheet()
@@ -523,12 +551,14 @@ Hi, @{author}
 """.format(author=auth_map[author], case=case_id, title=case_title, comments=comments)
         for substask in subtasks.keys():
             if case_id.lower() in subtasks[substask]["summary"].lower():
-                self.logger.info("add comments to %s", substask)
-                self.jira.add_comment(substask, description_str)
-                case_issue = self.jira.issue(substask)
                 if case_issue.fields.status.name in ['Closed']:
-                    self.jira.transition_issue(case_issue, transition='In Progress')
-                return substask            
+                    #self.jira.transition_issue(case_issue, transition='In Progress')
+                    self.logger.info("the ticket has been closed, create a new one")
+                else:
+                    self.logger.info("add comments to %s", substask)
+                    self.jira.add_comment(substask, description_str)
+                    case_issue = self.jira.issue(substask)
+                    return substask            
         self.logger.info("Create sub task for %s", case_id)
         if not case_id:
             return
@@ -561,6 +591,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--parent_jira", default="", required=False, help="the parent jira issue link")
     parser.add_argument("-jt", "--jira_token", default="", required=False, help="the jira token")
     parser.add_argument("--sheet", default="", required=False, help="the jira token")
+    parser.add_argument("--skip_no_failure_cases", dest='skip_no_failure_cases', default=False, action='store_true', help="skip cases whose pass ratio is 100%")
     
     args=parser.parse_args()
 
