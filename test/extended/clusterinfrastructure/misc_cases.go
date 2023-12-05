@@ -106,5 +106,23 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-Critical-69189-Cluster machine approver metrics should only be available via https", func() {
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-l", "app=machine-approver", "-n", "openshift-cluster-machine-approver").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(podName) == 0 {
+			g.Skip("Skip for no pod!")
+
+		}
+		url_http := "http://127.0.0.0:9191/metrics"
+		url_https := "https://127.0.0.0:9192/metrics"
+
+		curlOutputHttp, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cluster-machine-approver", "-i", "--", "curl", url_http).Output()
+		o.Expect(curlOutputHttp).To(o.ContainSubstring("Connection refused"))
+
+		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cluster-machine-approver", "-i", "--", "curl", url_https).Output()
+		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
+
+	})
 
 })
