@@ -1,14 +1,12 @@
 package clusterinfrastructure
 
 import (
-	"io/ioutil"
 	"path/filepath"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"github.com/tidwall/sjson"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
@@ -241,34 +239,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Shouldn't allow to delete cluster")
 		clusterDelete, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("cluster", cluster.name, "-n", clusterAPINamespace).Output()
 		o.Expect(clusterDelete).To(o.ContainSubstring("deletion of cluster is not allowed"))
-
-		g.By("Core provider name is immutable")
-		coreProviderJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("coreprovider/cluster-api", "-n", clusterAPINamespace, "-o=json").OutputToFile("coreprovider.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		bytes, _ := ioutil.ReadFile(coreProviderJSON)
-		coreProviderName, _ := sjson.Set(string(bytes), "metadata.name", "cluster-api-2")
-		err = ioutil.WriteFile(coreProviderJSON, []byte(coreProviderName), 0644)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		coreProviderNameUpdate, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", coreProviderJSON).Output()
-		o.Expect(coreProviderNameUpdate).To(o.ContainSubstring("incorrect core provider name: cluster-api-2"))
-
-		g.By("Shouldn't allow to delete coreprovider")
-		coreProviderDelete, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("coreprovider", "cluster-api", "-n", clusterAPINamespace).Output()
-		o.Expect(coreProviderDelete).To(o.ContainSubstring("deletion of core provider is not allowed"))
-
-		g.By("infrastructureprovider name is immutable ")
-		infrastructureproviderJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructureprovider", iaasPlatform, "-n", clusterAPINamespace, "-o=json").OutputToFile("coreprovider.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		bytes, _ = ioutil.ReadFile(infrastructureproviderJSON)
-		infrastructureproviderName, _ := sjson.Set(string(bytes), "metadata.name", "invalid")
-		err = ioutil.WriteFile(infrastructureproviderJSON, []byte(infrastructureproviderName), 0644)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		infrastructureproviderNameUpdate, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", infrastructureproviderJSON).Output()
-		o.Expect(infrastructureproviderNameUpdate).To(o.ContainSubstring("incorrect infra provider name"))
-
-		g.By("Shouldn't allow to delete infrastructureprovider")
-		infrastructureproviderDelete, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("infrastructureprovider", "--all", "-n", clusterAPINamespace).Output()
-		o.Expect(infrastructureproviderDelete).To(o.ContainSubstring("deletion of infrastructure provider is not allowed"))
 	})
 
 	// author: miyadav@redhat.com

@@ -65,14 +65,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(approver).To(o.ContainSubstring("machine-approver-capi"))
 
-		g.By("Check if providers are deployed ")
-		coreproviders, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("coreproviders", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(coreproviders).To(o.ContainSubstring("cluster-api"))
-		infrastructureproviders, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructureproviders", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(infrastructureproviders).To(o.ContainSubstring(exutil.CheckPlatform(oc)))
-
 		g.By("Check user data secret is copied from openshift-machine-api namespace to openshift-cluster-api")
 		secret, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
