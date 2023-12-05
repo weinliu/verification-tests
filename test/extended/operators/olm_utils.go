@@ -720,7 +720,7 @@ func (p *projectDescription) createwithCheck(oc *exutil.CLI, itName string, dr d
 // the method is to delete project with name if exist. and then create it with name, and back to project with targetNamespace
 func (p *projectDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
 	removeResource(oc, asAdmin, withoutNamespace, "project", p.name)
-	_, err := doAction(oc, "new-project", asAdmin, withoutNamespace, p.name)
+	_, err := doAction(oc, "new-project", asAdmin, withoutNamespace, p.name, "--skip-config-write")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	dr.getIr(itName).add(newResource(oc, "project", p.name, notRequireNS, ""))
 	_, err = doAction(oc, "project", asAdmin, withoutNamespace, p.targetNamespace)
