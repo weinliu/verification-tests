@@ -53,15 +53,22 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		baseDomain, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.baseDomain}").Output()
+		// this case cannot be executed on a shared vpc cluster
+		privateZoneIAMRole, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.platform.aws}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(privateZoneIAMRole, "privateZoneIAMRole") {
+			g.Skip("Skipping since this case will not run on a shared vpc cluster")
+		}
 		createExternalDNSOperator(oc)
 
 		exutil.By("Create CR ExternalDNS sample-aws-rt and ensure operand pod is ready")
 		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
+		// To avoid connection refused flake error, as the controller CR creation needs extra prepare time after the operator pod is ready
 		time.Sleep(3 * time.Second)
 		sedCmd := fmt.Sprintf(`sed -i 's/basedomain/%s/g' %s`, baseDomain, sampleAWS)
-		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAWS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -184,5 +191,65 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", serviceNamespace, "service", serviceName, delLabel, "--overwrite").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Del records: external-dns-ingress-canary")
+	})
+
+	// author: mjoseph@redhat.com
+	g.It("ConnectedOnly-ROSA-OSD_CCS-Author:mjoseph-Critical-68826-External DNS support for preexisting Route53 for Shared VPC clusters", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "extdns")
+			sampleAWSVPC        = filepath.Join(buildPruningBaseDir, "sample-aws-sharedvpc-rt.yaml")
+			crName              = "sample-aws-sharedvpc-rt"
+			operandLabel        = operandLabelKey + crName
+			routeNamespace      = "openshift-ingress-canary"
+			routeName           = "canary"
+		)
+
+		exutil.By("Ensure the case is runnable on the cluster")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		baseDomain, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.baseDomain}").Output()
+
+		// privateZoneIAMRole needs to be present for shared vpc cluster
+		privateZoneIAMRole, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.platform.aws.privateZoneIAMRole}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(privateZoneIAMRole, "arn:aws:iam::") {
+			g.Skip("Skip since this is not a shared vpc cluster")
+		}
+
+		exutil.By("1. Check the STS Role in the cluster")
+		output, ouputErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("CredentialsRequest/openshift-ingress", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.providerSpec.statementEntries[0].action}").Output()
+		o.Expect(ouputErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("sts:AssumeRole"))
+		// Getting the private zone id from dns config")
+		privateZoneId := fetchJSONPathValue(oc, "openshift-dns", "dns.config/cluster", ".spec.privateZone.id")
+
+		exutil.By("2. Create External DNS Operator in the cluster")
+		createExternalDNSOperator(oc)
+		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
+
+		exutil.By("3. Create CR ExternalDNS sample-aws-sharedvpc-rt and ensure operand pod is ready")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
+		// To avoid connection refused flake error, as the controller CR creation needs extra prepare time after the operator pod is ready
+		time.Sleep(3 * time.Second)
+		// Updating the yaml file with basedomin and ARN value
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's@basedomain@%s@g;s@privatezoneiamrole@%v@g' %s`, baseDomain, privateZoneIAMRole, sampleAWSVPC)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAWSVPC).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
+		ensureLogsContainString(oc, operatorNamespace, operandLabel, recordsReadyLog)
+
+		exutil.By("4. Add label to canary route, ensure ExternalDNS added the record")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, delLabel, "--overwrite").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, addLabel).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Desired change: CREATE canary-openshift-ingress-canary.apps."+baseDomain+" CNAME [Id: /hostedzone/"+privateZoneId+"]")
+
+		exutil.By("5. Remove label from the canary route, ensure ExternalDNS deleted the record")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, delLabel, "--overwrite").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Desired change: DELETE canary-openshift-ingress-canary.apps."+baseDomain+" CNAME [Id: /hostedzone/"+privateZoneId+"]")
 	})
 })
