@@ -1246,4 +1246,83 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		installOperatorFromCustomCS(oc, deschedulerSub, deschedulerOG, "openshift-kube-descheduler-operator", "descheduler-operator")
 	})
 
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-High-66869-Medium-66871-oc mirror could mirror and install operator for catalog redhat-marketplace-index [Serial]", func() {
+		g.By("Set registry config")
+		dirname := "/tmp/case66869"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Registry is %s", registry)
+		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
+			g.Skip("There is no public registry, skip.")
+		}
+
+		publicRegistry, _, _ := strings.Cut(registry, "/")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetConfig := filepath.Join(ocmirrorBaseDir, "config-66869.yaml")
+
+		defer os.RemoveAll("oc-mirror-workspace")
+		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetConfig, "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+		defer removeCSAndISCP(oc)
+		createCSAndISCP(oc, "cs-redhat-marketplace-index", "openshift-marketplace", "Running", 1)
+
+		crunchySub, crunchyOG := getOperatorInfo(oc, "crunchy-postgres-operator-rhmp", "marketoperatortest", "registry.redhat.io/redhat/redhat-marketplace-index:v4.14", "cs-redhat-marketplace-index")
+		defer removeOperatorFromCustomCS(oc, crunchySub, crunchyOG, "marketoperatortest")
+		installOperatorFromCustomCS(oc, crunchySub, crunchyOG, "marketoperatortest", "pgo")
+		operatorSub, operatorOG := getOperatorInfo(oc, "apicast-community-operator", "apicasttest", "registry.redhat.io/redhat/community-operator-index:v4.14", "cs-community-operator-index")
+		defer removeOperatorFromCustomCS(oc, operatorSub, operatorOG, "apicasttest")
+		installOperatorFromCustomCS(oc, operatorSub, operatorOG, "apicasttest", "apicast-operator-controller-manager-v2")
+	})
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-High-66870-oc mirror could mirror and install operator for catalog certified-operator-index [Serial]", func() {
+		g.By("Set registry config")
+		dirname := "/tmp/case66870"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Registry is %s", registry)
+		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
+			g.Skip("There is no public registry, skip.")
+		}
+
+		publicRegistry, _, _ := strings.Cut(registry, "/")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetConfig := filepath.Join(ocmirrorBaseDir, "config-66870.yaml")
+
+		defer os.RemoveAll("oc-mirror-workspace")
+		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetConfig, "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+		defer removeCSAndISCP(oc)
+		createCSAndISCP(oc, "cs-certified-operator-index", "openshift-marketplace", "Running", 1)
+		nvidiaSub, nvidiaOG := getOperatorInfo(oc, "nvidia-network-operator", "nvidia-network-operator", "registry.redhat.io/redhat/certified-operator-index:v4.14", "cs-certified-operator-index")
+		defer removeOperatorFromCustomCS(oc, nvidiaSub, nvidiaOG, "nvidia-network-operator")
+		installOperatorFromCustomCS(oc, nvidiaSub, nvidiaOG, "nvidia-network-operator", "nvidia-network-operator-controller-manager")
+	})
+
 })

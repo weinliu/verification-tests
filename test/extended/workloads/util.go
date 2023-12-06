@@ -1432,7 +1432,7 @@ func getOperatorInfo(oc *exutil.CLI, operatorName string, operatorNamespace stri
 	channelName := strings.ReplaceAll(string(channel), "\n", "")
 	e2e.Logf("the default name%v", channelName)
 
-	getstartingCSVCMD := fmt.Sprintf("oc-mirror list operators --catalog %s --package %s  |grep %s | awk '{print $3}' |awk 'END {print}'", catalogName, operatorName, channelName)
+	getstartingCSVCMD := fmt.Sprintf("oc-mirror list operators --catalog %s --package %s  |awk '{if($2~/^%s$/) print $3}'", catalogName, operatorName, channelName)
 	e2e.Logf("the csv name%v", getstartingCSVCMD)
 	startingCsv, err := exec.Command("bash", "-c", getstartingCSVCMD).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
