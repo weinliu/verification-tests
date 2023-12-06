@@ -161,6 +161,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-NonPreRelease-High-41185-The oc compliance controls command reports the compliance standards and controls that is benchmark fulfil for profiles [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		g.By("Check default profilebundles name and status.. !!!\n")
 		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")

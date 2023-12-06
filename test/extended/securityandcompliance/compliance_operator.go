@@ -147,6 +147,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Critical-27649-The ComplianceSuite reports the scan result as Compliant or Non-Compliant [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -258,6 +260,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-33398-The Compliance Operator supports to variables in tailored profile [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			tprofileD = tailoredProfileDescription{
 				name:         "rhcos-tailoredprofile",
@@ -298,6 +302,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-32840-The ComplianceSuite generates through ScanSetting CR [Serial][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			tprofileD = tailoredProfileDescription{
 				name:         "rhcos-tp",
@@ -382,6 +388,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33381-Verify the ComplianceSuite could be generated from Tailored profiles [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			tprofileD = tailoredProfileDescription{
 				name:         "rhcos-e8-tp",
@@ -445,6 +453,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-Medium-33611-Verify the tolerations could work for compliancescan when there is more than one taint on node [Disruptive]", func() {
 		skipForSingleNodeCluster(oc)
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var cscanD = complianceScanDescription{
 			name:         "example-compliancescan3" + getRandomString(),
@@ -570,6 +579,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33713-The ComplianceSuite reports the scan result as Error", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -611,6 +622,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("StagerunBoth-NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Critical-27705-The ComplianceScan reports the scan result Compliant or Non-Compliant", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			cscanD = complianceScanDescription{
@@ -679,6 +691,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-27762-The ComplianceScan reports the scan result Error", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			cscanD = complianceScanDescription{
@@ -719,6 +732,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:pdhamdhe-Medium-27968-Perform scan only on a subset of nodes using ComplianceScan object [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			cscanMD = complianceScanDescription{
 				name:         "master-scan" + getRandomString(),
@@ -752,6 +767,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-High-33230-The compliance-operator raw result storage size is configurable", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -830,6 +846,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-NonPreRelease-Longduration-ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Disruptive]", func() {
 		skipForSingleNodeCluster(oc)
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -940,6 +957,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:pdhamdhe-High-33610-Verify the tolerations could work for compliancescan [Disruptive]", func() {
 		skipForSingleNodeCluster(oc)
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			cscanD = complianceScanDescription{
@@ -1357,6 +1375,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-High-33418-Medium-44062-The ComplianceSuite performs the schedule scan through cron job and also verify the suitererunner resources are doubled [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -1425,6 +1445,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-NonPreRelease-Longduration-Medium-33456-The Compliance-Operator edits the scheduled cron job to scan from ComplianceSuite [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "example-compliancesuite1" + getRandomString(),
@@ -1489,6 +1511,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-33453-The Compliance Operator rotates the raw scan results [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -1583,6 +1607,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-High-33660-Verify the differences in nodes from the same role could be handled [Serial]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -1630,6 +1656,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-32814-High-45729-The compliance operator by default creates ProfileBundles and profiles", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		g.By("Check default profilebundles name and status.. !!!\n")
 		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
 		subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
@@ -1653,6 +1681,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33431-Verify compliance check result shows in ComplianceCheckResult label for compliancesuite", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -1704,6 +1733,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33435-Verify the compliance scan result shows in ComplianceCheckResult label for compliancescan", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			cscanD = complianceScanDescription{
@@ -1753,6 +1783,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33449-The compliance-operator raw results store in ARF format on a PVC", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -1812,6 +1843,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-37171-Check compliancesuite status when there are multiple rhcos4 profiles added in scansettingbinding object [Serial][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var ssb = scanSettingBindingDescription{
 			name:            "rhcos4" + getRandomString(),
 			namespace:       "",
@@ -1933,6 +1966,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-High-34928-access modes and Storage class are configurable through ComplianceSuite and ComplianceScan", func() {
 		SkipForIBMCloud(oc)
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -2014,6 +2048,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-40372-Use a separate SA for resultserver", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var csuiteMD = complianceSuiteDescription{
 			name:         "master-compliancesuite" + getRandomString(),
 			namespace:    "",
@@ -2098,6 +2134,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-High-33859-Verify if the profileparser enables to get content updates when the image digest updated [Serial][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			pb = profileBundleDescription{
 				name:         "test1",
@@ -2179,6 +2217,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-33578-Verify if the profileparser enables to get content updates when add a new ProfileBundle [Serial][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			pb = profileBundleDescription{
 				name:         "test1",
@@ -2268,6 +2308,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-High-33429-The Compliance Operator performs scan successfully on taint node without tolerations [Disruptive] [Slow]", func() {
 		skipForSingleNodeCluster(oc)
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var csuiteD = complianceSuiteDescription{
 			name:         "example-compliancesuite" + getRandomString(),
@@ -2350,6 +2391,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-High-41861-Verify fips mode checking rules are working as expected [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -3188,6 +3230,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-27967-High-33782-Medium-33711-Medium-47346-The ComplianceSuite performs scan on a subset of nodes with autoApplyRemediations enable and ComplianceCheckResult shows remediation rule result in details and also supports array of values for remediation [Disruptive][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -3334,6 +3378,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-Author:pdhamdhe-CPaasrunOnly-NonPreRelease-High-45421-Verify the scan scheduling option strict or not strict are configurable through scan objects [Disruptive][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  false,
@@ -3414,6 +3460,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Longduration-High-45692-Verify scan and manual fix work as expected for NERC CIP profiles with default scanSettings [Disruptive][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  false,
@@ -3591,6 +3639,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Low-43072-check the metrics and alerts are available for compliance_operator_compliance_scan_error_total [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var csuiteD = complianceSuiteDescription{
 			name:         "worker-compliancesuite" + getRandomString(),
 			namespace:    "",
@@ -3916,6 +3966,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-Author:xiyuan-Longduration-CPaasrunOnly-NonPreRelease-High-50518-Check remediation works for ocp4-high and ocp4-high-node profiles [Disruptive][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  true,
@@ -4815,6 +4867,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-61324-Low-61325-Check scans and instructions work for ocp4-stig, ocp4-stig-node and rhco4-stig profiles [Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		ssbNameOcpStig := "ocp4-stig-" + getRandomString()
 		ssbNameRhcosStig := "rhcos4-stig-" + getRandomString()
 		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbNameOcpStig},
@@ -4862,6 +4916,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		//skip cluster when apiserver encryption type is eqauls to aescbc as enable/disable encryption is destructive and time consuming
 		g.By("Check if cluster is Etcd Encryption On")
 		skipEtcdEncryptionOff(oc)
+
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
 			ss = scanSettingDescription{
@@ -4960,6 +5016,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-Author:xiyuan-Longduration-CPaasrunOnly-NonPreRelease-High-67355-Check remediation works for rhcos4-stig profile [Disruptive][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  true,
