@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/exp/slices"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -47,7 +49,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		ppConfigMapTemplate      string
 		ppAWSConfigMapTemplate   = filepath.Join(testDataDir, "peer-pod-aws-cm-template.yaml")
 		ppAzureConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-azure-cm-template.yaml")
-		peerpodAnnotated         = filepath.Join(testDataDir, "pod-annotations-template.yaml")
+		podAnnotatedTemplate     = filepath.Join(testDataDir, "pod-annotations-template.yaml")
 	)
 
 	subscription := SubscriptionDescription{
@@ -1564,7 +1566,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		annotations["INSTANCESIZE"] = val
 
 		g.By("Deploying pod with kata runtime and verify it")
-		podName := createKataPodAnnotated(oc, podNs, peerpodAnnotated, basePodName, kataconfig.runtimeClassName, annotations)
+		podName := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
 		defer deleteKataResource(oc, "pod", podNs, podName)
 
 		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
@@ -1603,7 +1605,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		annotations["INSTANCESIZE"] = val
 
 		g.By("Deploying pod with kata runtime and verify it")
-		podName := createKataPodAnnotated(oc, podNs, peerpodAnnotated, basePodName, kataconfig.runtimeClassName, annotations)
+		podName := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
 		defer deleteKataResource(oc, "pod", podNs, podName)
 
 		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
@@ -1612,6 +1614,45 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(actualSize).To(o.Equal(instanceSize[provider]))
 
 		g.By("SUCCESS - Podvm with required instance type was launched")
+	})
+
+	g.It("Author:vvoronko-High-69589-deploy kata with cpu and memory annotation", func() {
+
+		oc.SetupProject()
+
+		var (
+			basePodName = "-example-69589"
+			podNs       = oc.Namespace()
+			annotations = map[string]string{
+				"MEMORY":       "1234",
+				"CPU":          "2",
+				"INSTANCESIZE": "",
+			}
+			supportedProviders = []string{"azure", "gcp", "none"}
+			memoryOptions      = fmt.Sprintf("-m %vM", annotations["MEMORY"])
+		)
+
+		provider := getCloudProvider(oc)
+		if kataconfig.enablePeerPods || !slices.Contains(supportedProviders, provider) {
+			g.Skip("69589-deploy kata with type annotation supported only for kata runtime on platforms with nested virtualization enabled")
+		}
+
+		g.By("Deploying pod with kata runtime and verify it")
+		podName := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
+		defer deleteKataResource(oc, "pod", podNs, podName)
+
+		//check CPU available from the kata pod itself:
+		actualCPU, err := oc.AsAdmin().Run("rsh").Args("-T", "-n", podNs, podName, "bash", "-c", "nproc").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to rsh to pod to run 'nproc'"))
+		o.Expect(actualCPU).To(o.Equal(annotations["CPU"]))
+
+		//check MEMORY from the node running kata VM:
+		nodeName, _ := exutil.GetPodNodeName(oc, podNs, podName)
+		cmd := "ps -ef | grep uuid | grep -v grep"
+		vmFlags, err := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bin/sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed debug node to get qemu instance options"))
+		o.Expect(vmFlags).To(o.ContainSubstring(memoryOptions))
+		g.By("SUCCESS - KATA pod with required VM instance size was launched")
 	})
 
 })

@@ -1391,7 +1391,7 @@ func getCloudProvider(oc *exutil.CLI) string {
 		errMsg error
 		output string
 	)
-	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+	err := wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
 		output, errMsg = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		if errMsg != nil {
 			e2e.Logf("Get cloudProvider *failed with* :\"%v\",wait 5 seconds retry.", errMsg)
