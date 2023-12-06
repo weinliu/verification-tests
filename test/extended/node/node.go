@@ -1138,6 +1138,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 	var (
 		oc                        = exutil.NewCLI("keda-operator", exutil.KubeConfigPath())
 		cmaKedaControllerTemplate string
+		buildPruningBaseDir       = exutil.FixturePath("testdata", "node")
 	)
 	g.BeforeEach(func() {
 		// skip ARM64 arch
@@ -1189,6 +1190,71 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		log, err := exutil.GetSpecificPodLogs(oc, "openshift-keda", "", metricsApiserverPodName[0], "")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(log, "\"level\":\"Metadata\"")).Should(o.BeTrue())
+	})
+
+	// author: weinliu@redhat.com
+	g.It("Author:weinliu-Critical-52384-Automatically scaling pods based on Kafka Metrics[Serial][Slow]", func() {
+		var (
+			scaledObjectStatus string
+		)
+		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default52384.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		kafaksNs := "kafka-52384"
+		defer deleteProject(oc, kafaksNs)
+		createProject(oc, kafaksNs)
+		//Create kafak
+		exutil.By("Subscribe to AMQ operator")
+		defer removeAmqOperator(oc)
+		createAmqOperator(oc)
+		exutil.By("Test for case OCP-52384")
+		exutil.By("Create a Kafka instance")
+		kafka := filepath.Join(buildPruningBaseDir, "kafka-52384.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + kafka).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kafka).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a Kafka topic")
+		kafkaTopic := filepath.Join(buildPruningBaseDir, "kafka-topic-52384.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + kafkaTopic).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kafkaTopic).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Check if Kafka and Kafka topic are ready")
+		// Wait for Kafka and KafkaTopic to be ready
+		waitForKafkaReady(oc, "my-cluster", kafaksNs)
+		namespace := oc.Namespace()
+		exutil.By("Create a Kafka Comsumer")
+		kafkaComsumerDeployment := filepath.Join(buildPruningBaseDir, "kafka-comsumer-deployment-52384.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+kafkaComsumerDeployment, "-n", namespace).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+kafkaComsumerDeployment, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a scaledobjectc")
+		kafkaScaledobject := filepath.Join(buildPruningBaseDir, "kafka-scaledobject-52384.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+kafkaScaledobject, "-n", namespace).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+kafkaScaledobject, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a Kafka load")
+		kafkaLoad := filepath.Join(buildPruningBaseDir, "kafka-load-52384.yaml")
+		defer oc.AsAdmin().Run("delete").Args("jobs", "--field-selector", "status.successful=1", "-n", namespace).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+kafkaLoad, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check ScaledObject is up")
+		err = wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
+			scaledObjectStatus, _ = oc.AsAdmin().Run("get").Args("ScaledObject", "kafka-amqstreams-consumer-scaledobject", "-o=jsonpath={.status.health.s0-kafka-my-topic.status}", "-n", namespace).Output()
+			if scaledObjectStatus == "Happy" {
+				e2e.Logf("ScaledObject is up and working")
+				return true, nil
+			}
+			e2e.Logf("ScaledObject is not in working status, current status: %v", scaledObjectStatus)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "scaling failed")
+		exutil.By("Kafka scaling is up and ready")
 	})
 })
 

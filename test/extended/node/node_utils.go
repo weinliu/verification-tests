@@ -1815,3 +1815,101 @@ func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not available", name))
 }
+
+// Poll to wait for kafka to be ready
+func waitForKafkaReady(oc *exutil.CLI, kafkaName string, kafkaNS string) {
+	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+		command := []string{"kafka.kafka.strimzi.io", kafkaName, "-n", kafkaNS, `-o=jsonpath={.status.conditions[*].type}`}
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(command...).Output()
+		if err != nil {
+			e2e.Logf("kafka status ready error: %v", err)
+			return false, err
+		}
+		if output == "Ready" || output == "Warning Ready" || output == "Warning Warning Warning Warning Ready" {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource kafka/%s did not appear", kafkaName))
+}
+
+// Poll to wait for kafka Topic to be ready
+func waitForKafkaTopicReady(oc *exutil.CLI, kafkaTopicName string, kafkaTopicNS string) {
+	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+		command := []string{"kafkaTopic", kafkaTopicName, "-n", kafkaTopicNS, `-o=jsonpath='{.status.conditions[*].type}'`}
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(command...).Output()
+		if err != nil {
+			e2e.Logf("kafka Topic status ready error: %v", err)
+			return false, err
+		}
+		status := strings.Replace(output, "'", "", 2)
+		e2e.Logf("Waiting for kafka status %s", status)
+		if status == "Ready" {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource kafkaTopic/%s did not appear", kafkaTopicName))
+}
+
+// this function uninstall AMQ operator
+func removeAmqOperator(oc *exutil.CLI) {
+	operatorNamespace := "kafka-52384"
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", operatorNamespace, "sub", "amq-streams").Output()
+	if err != nil {
+		e2e.Logf("%v", msg)
+
+	}
+	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", operatorNamespace, "csv", "-l", "operators.coreos.com/amq-streams.openshift-operators").Execute()
+}
+
+// this function create AMQ operator
+func createAmqOperator(oc *exutil.CLI) {
+	buildPruningBaseDir := exutil.FixturePath("testdata", "node")
+	subscription := filepath.Join(buildPruningBaseDir, "amq-sub.yaml")
+	operatorNamespace := "kafka-52384"
+	operatorGroupFile := filepath.Join(buildPruningBaseDir, "amq-operatorgroup-52384.yaml")
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroupFile).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	// checking subscription status
+	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		subState, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "amq-streams", "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
+		//o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(subState, "AtLatestKnown") == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, "subscription amq-streams is not correct status")
+
+	// checking csv status
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "amq-streams", "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(csvName).NotTo(o.BeEmpty())
+	errCheck = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(csvState, "Succeeded") == 0 {
+			e2e.Logf("CSV check complete!!!")
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, "subscription amq-streams is not correct status")
+}
+func createProject(oc *exutil.CLI, namespace string) {
+	oc.CreateSpecifiedNamespaceAsAdmin(namespace)
+	/* turn off the automatic label synchronization required for PodSecurity admission
+	   set pods security profile to privileged. See
+	   https://kubernetes.io/docs/concepts/security/pod-security-admission/#pod-security-levels */
+	err := exutil.SetNamespacePrivileged(oc, namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// this function delete a workspace, we intend to do it after each test case run
+func deleteProject(oc *exutil.CLI, namespace string) {
+	oc.DeleteSpecifiedNamespaceAsAdmin(namespace)
+}
