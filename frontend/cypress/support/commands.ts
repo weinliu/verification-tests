@@ -89,10 +89,7 @@ Cypress.Commands.add("cliLogout", () => {
 
 Cypress.Commands.add("adminCLI", (command: string) => {
   cy.log(`Run admin command: ${command}`)
-  cy.exec(`${command} --kubeconfig ${kubeconfig}`, { failOnNonZeroExit: false }).then(result => {
-    cy.log(result.stderr);
-    cy.log(result.stdout);
-  });
+  cy.exec(`${command} --kubeconfig ${kubeconfig}`, { failOnNonZeroExit: false })
 });
 
 const hasWindowsNode = () :boolean => {
