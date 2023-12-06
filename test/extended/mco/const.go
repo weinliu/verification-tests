@@ -156,9 +156,9 @@ const (
 
 var (
 	// OnPremPlatforms describes all the on-prem platforms
+	// xref: https://github.com/openshift/machine-config-operator/blob/752667ba9dfcdefd12222ab422201fa3f9846aca/pkg/controller/template/render.go#L593
 	OnPremPlatforms = map[string]string{
-		NonePlatform:      "openshift-infra",
-		KniPlatform:       "openshift-kni-infra",
+		BaremetalPlatform: "openshift-kni-infra",
 		NutanixPlatform:   "openshift-nutanix-infra",
 		OpenstackPlatform: "openshift-openstack-infra",
 		OvirtPlatform:     "openshift-ovirt-infra",
