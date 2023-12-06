@@ -3857,6 +3857,76 @@ nulla pariatur.`
 			logger.Infof("OK!\n")
 		}
 	})
+
+	g.It("Author:sregidor-NonPreRelease-Medium-68686-MCD No invalid memory address or nil pointer dereference when kubeconfig file is not present in a node [Disruptive]", func() {
+		var (
+			node           = GetCompactCompatiblePool(oc.AsAdmin()).GetNodesOrFail()[0]
+			kubeconfig     = "/etc/kubernetes/kubeconfig"
+			kubeconfigBack = kubeconfig + ".back"
+		)
+		logger.Infof("Using node %s for testing", node.GetName())
+
+		defer func() {
+			logger.Infof("Starting defer logic")
+			_, err := node.DebugNodeWithChroot("mv", kubeconfigBack, kubeconfig)
+			if err != nil {
+				logger.Errorf("Error restoring the original kubeconfigfile: %s", err)
+			}
+
+			err = NewNamespacedResource(oc.AsAdmin(), "pod", MachineConfigNamespace, node.GetMachineConfigDaemon()).Delete()
+			if err != nil {
+				logger.Errorf("Error deleting the MCD pod to restore the original kubeconfigfile: %s", err)
+			}
+
+			exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
+			logger.Infof("Defer logic finished")
+
+		}()
+
+		exutil.By(fmt.Sprintf("Remove the %s file", kubeconfig))
+		_, err := node.DebugNodeWithChroot("mv", kubeconfig, kubeconfigBack)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error removing the file %s from node %s", kubeconfig, node.GetName())
+
+		logger.Infof("File %s was moved to %s", kubeconfig, kubeconfigBack)
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the MCDs pod")
+		mcdPodName := node.GetMachineConfigDaemon()
+		mcdPod := NewNamespacedResource(oc.AsAdmin(), "pod", MachineConfigNamespace, mcdPodName)
+		o.Expect(
+			mcdPod.Delete(),
+		).To(
+			o.Succeed(),
+			"Error deleting the MCD pod %s for node %s", mcdPod.GetName(), node.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the pod failed but did not panic")
+		logger.Infof("Check that the pod is failing")
+		o.Eventually(
+			node.GetMachineConfigDaemon, "2m", "10s",
+		).ShouldNot(
+			o.Equal(mcdPodName),
+			"A new MCD pod should be created after removing the old one, but no new MCD pod was created")
+
+		mcdPod = NewNamespacedResource(oc.AsAdmin(), "pod", MachineConfigNamespace, node.GetMachineConfigDaemon())
+		o.Eventually(
+			mcdPod.Get, "2m", "10s",
+		).WithArguments(`{.status.containerStatuses[?(@.name=="machine-config-daemon")].state.terminated}`).ShouldNot(o.Or(
+			o.BeEmpty(),
+			o.ContainSubstring("panic:"),
+		), "The new MCD pod should fail without panic because the file %s is not available", kubeconfig)
+
+		logger.Infof("Check pod logs to make sure that it did not panic")
+		o.Consistently(
+			node.GetMCDaemonLogs, "1m", "20s",
+		).WithArguments("").ShouldNot(
+			o.ContainSubstring("panic:"),
+			"The new MCD pod should not panic")
+
+		logger.Infof("OK!\n")
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
