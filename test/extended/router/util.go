@@ -1117,10 +1117,10 @@ func getOidc(oc *exutil.CLI) string {
 func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "router", "awslb")
 	operatorGroup := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-	subscriptionSrcRedHat := filepath.Join(buildPruningBaseDir, "subscription-src-redhat.yaml")
-	subscriptionSrcQE := filepath.Join(buildPruningBaseDir, "subscription-src-qe.yaml")
+	subscription := filepath.Join(buildPruningBaseDir, "subscription-src-qe.yaml")
 	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
 	ns := "aws-load-balancer-operator"
+	deployName := "deployment/aws-load-balancer-operator-controller-manager"
 
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", namespaceFile).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
@@ -1133,15 +1133,16 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroup).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 
+	// if qe-app-registry is not installed then replace the source to redhat-operators
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
 	if strings.Contains(output, "NotFound") {
 		e2e.Logf("Warning: catalogsource/qe-app-registry is not installed, using redhat-operators instead")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscriptionSrcRedHat).Output()
-		e2e.Logf("err %v, msg %v", err, msg)
-	} else {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscriptionSrcQE).Output()
-		e2e.Logf("err %v, msg %v", err, msg)
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's/qe-app-registry/redhat-operators/g' %s`, subscription)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	}
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
 
 	if exutil.IsSTSCluster(oc) {
 		patchAlboSubscriptionWithRoleArn(oc, ns)
@@ -1162,7 +1163,7 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "aws-load-balancer-operator", "-n", ns, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
-	errCheck = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+	errCheck = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", ns, "-o=jsonpath={.status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(csvState, "Succeeded") == 0 {
@@ -1171,10 +1172,10 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 		}
 		return false, nil
 	})
-	// output entire status of CSV for debugging
+	// output log of deployment/aws-load-balancer-operator-controller-manager for debugging
 	if errCheck != nil {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", ns, "-o=jsonpath={.status}").Output()
-		e2e.Logf("The detailed output of CSV is: %v", output)
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args(deployName, "-n", ns, "--tail=10").Output()
+		e2e.Logf("The logs of albo deployment: %v", output)
 	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
 }

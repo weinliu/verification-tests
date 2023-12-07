@@ -25,6 +25,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		// skip if us-gov region
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(region, "us-gov") {
+			g.Skip("Skipping for the aws cluster in us-gov region.")
+		}
+
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", operatorNamespace, "pod", "-l", operatorPodLabel).Output()
 		if !strings.Contains(output, "Running") {
 			createAWSLoadBalancerOperator(oc)
