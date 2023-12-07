@@ -12,6 +12,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 )
 
 var _ = g.Describe("[sig-hypershift] Hypershift", func() {
@@ -1104,5 +1105,98 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			CreateAWSNodePool()
 		o.Eventually(hc.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npName))
 
+	})
+
+	// author: heli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:heli-Critical-67278-Critical-69222-[HyperShiftINSTALL] Test embargoed cluster upgrades imperceptibly [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 67278 and 69222 are for AWS - skipping test ...")
+		}
+
+		caseID := "67278-69222"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Config AWS Bucket And install HyperShift operator")
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
+		region, err := getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          dir,
+			iaasPlatform: iaasPlatform,
+			installType:  PublicAndPrivate,
+			region:       region,
+			externalDNS:  true,
+		}
+
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		exutil.By("create HostedClusters")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName("hypershift-" + caseID).
+			withNodePoolReplicas(2).
+			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withEndpointAccess(PublicAndPrivate).
+			withExternalDnsDomain(HyperShiftExternalDNS).
+			withBaseDomain(HyperShiftExternalDNSBaseDomain).
+			withReleaseImage(release)
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
+		hcpNS := hostedCluster.namespace + "-" + hostedCluster.name
+
+		exutil.By("check hostedcluster nodes ready")
+		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
+		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+
+		exutil.By("ocp-69222 check hosted cluster only expost port 443")
+		o.Expect(doOcpReq(oc, OcpGet, true, "-n", hostedCluster.namespace, "hc", hostedCluster.name, `-o=jsonpath={.status.controlPlaneEndpoint.port}`)).Should(o.Equal("443"))
+		o.Expect(doOcpReq(oc, OcpGet, true, "-n", hcpNS, "service", "private-router", `-o=jsonpath={.spec.ports[?(@.targetPort=="https")].port}`)).Should(o.Equal("443"))
+		o.Expect(doOcpReq(oc, OcpGet, true, "-n", hcpNS, "service", "router", `-o=jsonpath={.spec.ports[?(@.targetPort=="https")].port}`)).Should(o.Equal("443"))
+
+		exutil.By("get management cluster cluster version and find the latest CI image")
+		hcpRelease := doOcpReq(oc, OcpGet, true, "-n", hostedCluster.namespace, "hc", hostedCluster.name, `-ojsonpath={.spec.release.image}`)
+		mgmtVersion, mgmtBuild, err := exutil.GetClusterVersion(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		e2e.Logf("hcp image is %s and mgmt cluster image is %s", hcpRelease, mgmtBuild)
+
+		ciImage, err := exutil.GetLatestImage(architecture.ClusterArchitecture(oc).String(), "ocp", mgmtVersion+".0-0.ci")
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		exutil.By("upgrade hcp to latest ci image by controlPlaneRelease")
+		doOcpReq(oc, OcpPatch, true, "-n", hostedCluster.namespace, "hc", hostedCluster.name, "--type=merge", fmt.Sprintf(`--patch={"spec": {"controlPlaneRelease": {"image":"%s"}}}`, ciImage))
+		o.Expect(doOcpReq(oc, OcpGet, true, "-n", hostedCluster.namespace, "hc", hostedCluster.name, `-o=jsonpath={.spec.controlPlaneRelease.image}`)).Should(o.ContainSubstring(ciImage))
+
+		exutil.By("check clusterversion operator in hcp is updated to ci image")
+		o.Eventually(func() bool {
+			images := doOcpReq(oc, OcpGet, true, "pod", "-n", hcpNS, "-lapp=cluster-version-operator", "--ignore-not-found", `-o=jsonpath={.items[*].spec.containers[*].image}`)
+			for _, image := range strings.Split(images, " ") {
+				if !strings.Contains(image, ciImage) {
+					return false
+				}
+			}
+			return true
+		}, LongTimeout, LongTimeout/20).Should(o.BeTrue(), "cluster version operator in hcp image not updated error")
+
+		o.Expect(doOcpReq(oc, OcpGet, true, "-n", hostedCluster.namespace, "hc", hostedCluster.name, `-o=jsonpath={.spec.release.image}`)).Should(o.ContainSubstring(hcpRelease))
+		o.Expect(doOcpReq(oc, OcpGet, true, "-n", hostedCluster.namespace, "hc", hostedCluster.name, `-o=jsonpath={.status.version.history[?(@.state=="Completed")].version}`)).Should(o.ContainSubstring(mgmtBuild))
+		o.Expect(doOcpReq(oc, OcpGet, true, "--kubeconfig="+hostedCluster.hostedClustersKubeconfigFile, "clusterversion", "version", `-o=jsonpath={.status.history[?(@.state=="Completed")].version}`)).Should(o.ContainSubstring(mgmtBuild))
+		o.Expect(doOcpReq(oc, OcpGet, true, "--kubeconfig="+hostedCluster.hostedClustersKubeconfigFile, "featuregate", "cluster", "--ignore-not-found", `-o=jsonpath={.status.featureGates[0].version}`)).Should(o.ContainSubstring(mgmtBuild))
+
+		exutil.By("create a new nodepool and check its version is still the old one")
+		npName := fmt.Sprintf("np-67278-%s", exutil.GetRandomString())
+		nodeCount := 1
+		defer hostedCluster.deleteNodePool(npName)
+		NewAWSNodePool(npName, hostedCluster.name, hostedCluster.namespace).WithNodeCount(&nodeCount).CreateAWSNodePool()
+		o.Eventually(hostedCluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout+DefaultTimeout, (LongTimeout+DefaultTimeout)/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npName))
+		o.Expect(doOcpReq(oc, OcpGet, true, "-n", hostedCluster.namespace, "nodepool", npName, "--ignore-not-found", `-o=jsonpath={.spec.release.image}`)).Should(o.ContainSubstring(hcpRelease))
 	})
 })
