@@ -2776,7 +2776,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		exutil.By("6) The install plan is Failed")
 		installPlan := sub.getIP(oc)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "forbidden", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.message}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "forbidden", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.message}"}).check(oc)
 
 		exutil.By("7) Grant the proper permissions to the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", saRoles, "-n", namespace).Output()
