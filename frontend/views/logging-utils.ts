@@ -1,7 +1,8 @@
 import { listPage } from "../upstream/views/list-page";
+import { operatorHubPage } from "./operator-hub-page";
 
 //If specific channel/catsrc needed for testing, export the values using CYPRESS_EXTRA_PARAM before running the logging tests
-//ex: export CYPRESS_EXTRA_PARAM='{"openshift-logging": {"cluster-logging": {"channel": "stable-5.8", "version" : "5.8.0", "source": "qe-app-registry"}, "elasticsearch-operator": {"channel": "stable-5.8", "version" : "5.8.0", "source": "qe-app-registry"}, "loki-operator": {"channel": "stable-5.8", "version" : "5.8.0", "source": "qe-app-registry"}}}'
+//ex: export CYPRESS_EXTRA_PARAM='{"openshift-logging": {"cluster-logging": {"channel": "stable-5.z", "version" : "5.z.z", "source": "qe-app-registry"}, "elasticsearch-operator": {"channel": "stable-5.z", "version" : "5.z.z", "source": "qe-app-registry"}, "loki-operator": {"channel": "stable-5.z", "version" : "5.z.z", "source": "qe-app-registry"}}}'
 const extraParam = JSON.stringify(Cypress.env("EXTRA_PARAM"))
 const loggingParam = (extraParam != undefined) ? JSON.parse(extraParam) : null;
 
@@ -56,7 +57,7 @@ export const catalogSource = {
 };
 
 export const logUtils = {
-  installOperator: (namespace, packageName, csName, channelName?, version?, enablePlugin?: boolean) => {
+  installOperator: (namespace, packageName, csName, channelName?, version?, enablePlugin?: boolean, operatorName?) => {
     cy.exec(`oc get csv -n ${namespace} -l operators.coreos.com/${packageName}.${namespace} -ojsonpath={.items[].status.phase} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false}).then(result => {
       if (result.stdout.includes("Succeeded")) {
         cy.log(`operator ${packageName} is installed in ${namespace} project`)
@@ -79,24 +80,26 @@ export const logUtils = {
       } else {
         cy.visit(`/operatorhub/subscribe?pkg=${packageName}&catalog=${csName}&catalogNamespace=openshift-marketplace&targetNamespace=undefined`);
         if (channelName){
-          if (Cypress.$(`[data-test="${channelName}-radio-input"]`).length > 0 ){
-            cy.get(`[data-test="${channelName}-radio-input"]`).click();
-          } else {
-            if (Cypress.$('#pf-select-toggle-id-16').length > 0) {
-              cy.get('#pf-select-toggle-id-16').click(); 
-              cy.get(`#${channelName}`).should('exist').click();
-            }
-          }
-        }
-        if (version){
-          if (Cypress.$('.co-operator-version__select').length > 0) {
-            cy.get('#pf-select-toggle-id-57').click();
-            if (Cypress.$(`#${version}`).length > 0 ) {
-              cy.get(`#${version}`).click();
-            } else {
-              cy.get('.pf-c-select__menu-item').first().click();
-            }
-          }
+          cy.exec(`oc get clusterversion version -ojsonpath={.status.desired.version} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`).then(versionText => { 
+            const versionRegex = /(\d+\.\d+)/;
+            cy.wrap(versionText.stdout).invoke('match', versionRegex).then((match) => { 
+              if (match) {
+                const extractedVersion = parseFloat(match[0]);
+                if (extractedVersion >= 4.14) {
+                  cy.get('[id^="pf-select-toggle-id-"]').eq(0).click();
+                  cy.get(`[id="${channelName}"`).click();
+                  if (version) {
+                      cy.get('[id^="pf-select-toggle-id-"]').eq(1).click();
+                      cy.get(`[id="${version}"`).click();
+                  }
+                } else {
+                  cy.get(`[data-test="${channelName}-radio-input"]`).should('exist').then(() => { 
+                    cy.get(`[data-test="${channelName}-radio-input"]`).click();
+                  })
+                }
+              }
+            })
+          })
         }
         cy.exec(`oc get ns ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false}).then(result => {
           if(result.stderr.includes('NotFound')){
@@ -109,7 +112,10 @@ export const logUtils = {
           cy.get('input[name="logging-view-plugin"][data-test="Enable-radio-input"]').click();
         }
         cy.get('[data-test="install-operator"]').click();
-        cy.contains('View Operator').should('be.visible');
+        if (operatorName) {
+          cy.visit(`/k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+          operatorHubPage.checkOperatorStatus(`${operatorName}`, 'Succeed');
+        }
       }
     })
   },

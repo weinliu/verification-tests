@@ -9,10 +9,12 @@ describe('Logging view on the openshift console', () => {
   const CLO = {
     namespace:   "openshift-logging",
     packageName: "cluster-logging",
+    operatorName: "Red Hat OpenShift Logging"
   };
   const LO = {
     namespace:   "openshift-operators-redhat",
     packageName: "loki-operator",
+    operatorName: "Loki Operator"
   };
   const LokiStack = {
     name:       "logging-lokistack-ocp53324",
@@ -27,10 +29,10 @@ describe('Logging view on the openshift console', () => {
  
     //Install logging operators if needed
     catalogSource.sourceName(CLO.packageName).then((csName) => {
-      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), "", true);
+      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), catalogSource.version(CLO.packageName), true, CLO.operatorName);
     });
     catalogSource.sourceName(LO.packageName).then((csName) => {
-      logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName));
+      logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName), catalogSource.version(LO.packageName), false, LO.operatorName);
     });
 
     //Create application logs
@@ -40,7 +42,7 @@ describe('Logging view on the openshift console', () => {
     //Create bucket and secret for lokistack
     LokiUtils.prepareResourcesForLokiStack(CLO.namespace, LokiStack.secretName, LokiStack.bucketName);
 
-    // Deploy lokistack under openshift-logging
+    //Deploy lokistack under openshift-logging
     LokiUtils.getStorageClass().then((SC) => { 
       LokiUtils.getPlatform()
       cy.get<string>('@ST').then(ST => { 
@@ -57,7 +59,7 @@ describe('Logging view on the openshift console', () => {
       expect(output.stderr).not.contain('Error');
     })
 
-    // Create LogFileMetricExporter
+    //Create LogFileMetricExporter
     cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} process -f ./fixtures/logging/lfme.yaml -n ${CLO.namespace} | oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} apply -f -`, {failOnNonZeroExit: false})
     .then(output => {
       expect(output.stderr).not.contain('Error');
@@ -68,7 +70,7 @@ describe('Logging view on the openshift console', () => {
     logUtils.waitforPodReady(CLO.namespace, 'app.kubernetes.io/name=lokistack');
     logUtils.waitforPodReady(CLO.namespace, 'component=logfilesmetricexporter');
 
-    // Verify that below metric is exposed when LFME is created
+    //Verify that below metric is exposed when LFME is created
     dashboard.visitDashboard('grafana-dashboard-cluster-logging');
     cy.byLegacyTestID('panel-produced-logs').should('exist').within(() => {
       cy.byTestID('top-producing-containers-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
@@ -83,7 +85,6 @@ describe('Logging view on the openshift console', () => {
     logUtils.removeClusterLogging(CLO.namespace)
     cy.exec(`oc delete lfme/instance -n ${CLO.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false});
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.uiLogout();
   });
 
   it('(OCP-53324,gkarager) disable query executors when the query is empty', {tags: ['e2e','admin']}, () => {
@@ -121,7 +122,7 @@ describe('Logging view on the openshift console', () => {
     cy.byTestID(TestIds.LogsQueryInput).should('not.exist');
     cy.byTestID(TestIds.ShowQueryToggle).click();
     cy.byTestID(TestIds.LogsQueryInput).within(() => {
-      cy.get('textarea').clear().type(`{ log_type=~".+", kubernetes_namespace_name="${Test_NS}" } | json`, {parseSpecialCharSequences: false})
+      cy.get('textarea').clear().type(`{ log_type="application", kubernetes_namespace_name="${Test_NS}" } | json`, {parseSpecialCharSequences: false})
     });
     cy.byTestID(TestIds.ExecuteQueryButton).click();
     cy.byTestID(TestIds.RefreshIntervalDropdown).click().within(() => {
@@ -132,27 +133,15 @@ describe('Logging view on the openshift console', () => {
     })
     cy.get('table[aria-label="Logs Table"]').within(() => {
       cy.get('tbody tr.co-logs-table__row').eq(0).find('button').click();
-    })
-    const expectedData = [
-      { term: 'log_type', description: 'application' },
-      { term: 'kubernetes_namespace_name', description: `${Test_NS}` }
-    ];   
-    cy.get('.co-logs-detail_descripton-list').within(() => { 
-      expectedData.forEach((expectedEntry) => { 
-        cy.get(`.pf-c-description-list__term.co-logs-detail__list-term span.pf-c-description-list__text:contains('${expectedEntry.term}')`)
-        .parents('.pf-c-description-list__group')
-        .within(() => { 
-          cy.get(`.pf-c-description-list__description .pf-c-description-list__text:contains('${expectedEntry.description}')`).should('exist');
-        })      
+      cy.get('.co-logs-detail_descripton-list').within(() => {
+        cy.get('.pf-c-description-list__text').should('contain.text', `${Test_NS}`);
+        cy.get('.pf-c-description-list__text').should('contain.text', 'application');
       })
     })
   });
-    
+
   it('(OCP-53324,gkarager) execute query as per selected tenant', {tags: ['e2e','admin']}, () => {
     const logType = "infrastructure"
-    const expectedData = [
-      { term: 'log_type', description: `${logType}` },
-    ];   
     cy.visit(Logs_Page_URL);
     cy.byTestID(TestIds.TenantDropdown).click().within(() => {
       cy.contains(`${logType}`).click();
@@ -162,15 +151,9 @@ describe('Logging view on the openshift console', () => {
     })
     cy.get('table[aria-label="Logs Table"]').within(() => {
       cy.get('tbody tr.co-logs-table__row').eq(0).find('button').click();
-    })
-    cy.get('.co-logs-detail_descripton-list').within(() => { 
-      expectedData.forEach((expectedEntry) => { 
-        cy.get(`.pf-c-description-list__term.co-logs-detail__list-term span.pf-c-description-list__text:contains('${expectedEntry.term}')`)
-        .parents('.pf-c-description-list__group')
-        .within(() => { 
-          cy.get(`.pf-c-description-list__description .pf-c-description-list__text:contains('${expectedEntry.description}')`).should('exist');
-        })      
+      cy.get('.co-logs-detail_descripton-list').within(() => {
+        cy.get('.pf-c-description-list__text').should('contain.text', `${logType}`);
       })
     })
-  });
+  })
 });

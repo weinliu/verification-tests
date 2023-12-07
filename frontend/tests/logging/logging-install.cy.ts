@@ -3,15 +3,18 @@ import { catalogSource, logUtils } from "../../views/logging-utils";
 describe('Logging related features', () => {
   const CLO = {
     namespace:   "openshift-logging",
-    packageName: "cluster-logging"
+    packageName: "cluster-logging",
+    operatorName: "Red Hat OpenShift Logging"
   };
   const EO = {
     namespace:   "openshift-operators-redhat",
-    packageName: "elasticsearch-operator"
+    packageName: "elasticsearch-operator",
+    operatorName: "OpenShift Elasticsearch Operator"
   };
   const LO = {
     namespace:   "openshift-operators-redhat",
-    packageName: "loki-operator"
+    packageName: "loki-operator",
+    operatorName: "Loki Operator"
   };
 
   before(() => {
@@ -25,27 +28,26 @@ describe('Logging related features', () => {
 
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.uiLogout();
   });
 
   it('(OCP-22558,gkarager) Deploy cluster-logging operator via web console', {tags: ['e2e','admin']}, () => {
     //Install the Cluster Logging Operator with console plungin
     catalogSource.sourceName(CLO.packageName).then((csName) => {
-      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), "", true);
+      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), catalogSource.version(CLO.packageName), true, CLO.operatorName);
     });
   });
 
   it('(OCP-24292,gkarager) Deploy elasticsearch-operator via Web Console', {tags: ['e2e','admin']}, () => {
     //Install the Elasticsearch Operator
     catalogSource.sourceName(EO.packageName).then((csName) => {
-      logUtils.installOperator(EO.namespace, EO.packageName, csName, catalogSource.channel(EO.packageName));
+      logUtils.installOperator(EO.namespace, EO.packageName, csName, catalogSource.channel(EO.packageName), catalogSource.version(EO.packageName), false, EO.operatorName);
     });
   });
 
   it('(gkarager) Deploy loki-operator via Web Console', {tags: ['e2e','admin']}, () => {
     //Install the Loki Operator
     catalogSource.sourceName(LO.packageName).then((csName) => {
-      logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName));
+      logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName), catalogSource.version(LO.packageName), false, LO.operatorName);
     });
   });
 });

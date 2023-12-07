@@ -4,14 +4,17 @@ describe('Logging related features', () => {
   const CLO = {
     namespace:   "openshift-logging",
     packageName: "cluster-logging",
+    operatorName: "Red Hat OpenShift Logging"
   };
   const EO = {
     namespace:   "openshift-operators-redhat",
     packageName: "elasticsearch-operator",
+    operatorName: "OpenShift Elasticsearch Operator"
   };
   const LO = {
     namespace:   "openshift-operators-redhat",
     packageName: "loki-operator",
+    operatorName: "Loki Operator"
   };
   const Test_NS = "cluster-logging-dashboard-test";
 
@@ -20,13 +23,13 @@ describe('Logging related features', () => {
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     // Install logging operators if needed
     catalogSource.sourceName(CLO.packageName).then((csName) => {
-      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), "", true);
+      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), catalogSource.version(CLO.packageName), true, CLO.operatorName);
     });
     catalogSource.sourceName(EO.packageName).then((csName) => {
-      logUtils.installOperator(EO.namespace, EO.packageName, csName, catalogSource.channel(EO.packageName));
+      logUtils.installOperator(EO.namespace, EO.packageName, csName, catalogSource.channel(EO.packageName), catalogSource.version(EO.packageName), false, EO.operatorName);
     });
     catalogSource.sourceName(LO.packageName).then((csName) => {
-      logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName));
+      logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName), catalogSource.version(LO.packageName), false, LO.operatorName);
     });
 
     cy.exec(`oc new-project ${Test_NS} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false});
