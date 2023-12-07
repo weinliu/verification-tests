@@ -305,7 +305,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		invalidPwd := base64.StdEncoding.EncodeToString([]byte(getRandomString()))
 		output, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+invalidPwd+`"}}`).Output()
 		// Restore the credential of vSphere CSI driver and make sure the CSO recover healthy by defer
-		defer restoreVsphereCSIcredential(oc, pwdKey, originPwd)
+		defer func() {
+			restoreVsphereCSIcredential(oc, pwdKey, originPwd)
+			// TODO: Remove the hardRestart steps after https://issues.redhat.com/browse/OCPBUGS-24421 fixed
+			vSphereDetectorOperator.hardRestart(oc.AsAdmin())
+			vSphereCSIDriverOperator.hardRestart(oc.AsAdmin())
+			waitCSOhealthy(oc)
+		}()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("patched"))
 		debugLogf("Replace the credential of vSphere CSI driver pwd to invalidPwd: \"%s\" succeed", invalidPwd)
@@ -313,11 +319,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("# Wait for the 'vsphere_csi_driver_error' metric report with correct content")
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_csi_driver_error", `data.result.0.metric.failure_reason`, "vsphere_connection_failed")
 
-		exutil.By("# Check the cluster could be still upgradeable")
+		exutil.By("# Check the cluster storage operator should be degrade")
 		// Don't block upgrades if we can't connect to vcenter
 		// https://bugzilla.redhat.com/show_bug.cgi?id=2040880
-		waitCSOspecifiedStatusValueAsExpected(oc, "Available", "False")
-		checkCSOspecifiedStatusValueAsExpectedConsistently(oc, "Upgradeable", "True")
+		// On 4.15+ clusters the cluster storage operator become "Upgradeable:False"
+		// Double check with developer, since cso degrade is always True so the Upgradeable status could be any
+		waitCSOspecifiedStatusValueAsExpected(oc, "Degraded", "True")
+		checkCSOspecifiedStatusValueAsExpectedConsistently(oc, "Degraded", "True")
 	})
 
 	// author:wduan@redhat.com

@@ -654,16 +654,13 @@ func getRandomNum(m int64, n int64) int64 {
 }
 
 // Restore the credential of vSphere CSI driver
-func restoreVsphereCSIcredential(oc *exutil.CLI, pwdKey string, originPwd string) error {
+func restoreVsphereCSIcredential(oc *exutil.CLI, pwdKey string, originPwd string) {
 	e2e.Logf("****** Restore the credential of vSphere CSI driver and make sure the CSO recover healthy ******")
 	output, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+originPwd+`"}}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("patched"))
 	e2e.Logf("The vSphere CSI secret recovered")
 	vSphereDriverController.waitReady(oc.AsAdmin())
-	// Make sure the Cluster Storage Operator recover healthy
-	waitCSOhealthy(oc.AsAdmin())
-	return nil
 }
 
 // Delete string list's specified string element

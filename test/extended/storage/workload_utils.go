@@ -34,6 +34,8 @@ var (
 		setDeploymentApplabel("name=vsphere-problem-detector-operator"))
 	vSphereDriverController = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"),
 		setDeploymentApplabel("app=vmware-vsphere-csi-driver-controller"), setDeploymentReplicasNumber("2"))
+	vSphereCSIDriverOperator = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-operator"), setDeploymentNamespace("openshift-cluster-csi-drivers"),
+		setDeploymentApplabel("name=vmware-vsphere-csi-driver-operator"), setDeploymentReplicasNumber("1"))
 	efsDriverController = newDeployment(setDeploymentName("aws-efs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"),
 		setDeploymentApplabel("app=aws-efs-csi-driver-controller"), setDeploymentReplicasNumber("2"))
 )
