@@ -25,6 +25,12 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+type ConfigMapPayload struct {
+	Data struct {
+		CaBundleCrt string `json:"ca-bundle.crt"`
+	} `json:"data"`
+}
+
 var (
 	mcoNamespace       = "openshift-machine-api"
 	wmcoNamespace      = "openshift-windows-machine-config-operator"
@@ -43,6 +49,7 @@ var (
 	trustedCACM        = "trusted-ca"
 	nutanix_proxy_host = "10.0.77.69"
 	vsphere_bastion    = "10.0.76.163"
+	wincTestCM         = "winc-test-config"
 	// Bastion user used for Nutanix and vSphere IBMC
 	sshProxyUser = "root"
 	svcs         = map[int]string{
@@ -75,9 +82,9 @@ func deleteProject(oc *exutil.CLI, namespace string) {
 	oc.DeleteSpecifiedNamespaceAsAdmin(namespace)
 }
 
-func getConfigMapData(oc *exutil.CLI, dataKey string) string {
-	dataValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "winc-test-config", "-o=jsonpath='{.data."+dataKey+"}'", "-n", defaultNamespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+func getConfigMapData(oc *exutil.CLI, cm string, dataKey string, namespace string) (dataValue string) {
+	dataValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cm, "-o=jsonpath='{.data."+dataKey+"}'", "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: get cm %v -o=jsonpath={.data.%v} failed:  %v %v", cm, dataKey, dataValue, err))
 	return dataValue
 }
 
@@ -213,7 +220,6 @@ func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, 
 
 	}
 	return machinesetName
-
 }
 
 func getWindowsHostNames(oc *exutil.CLI) []string {
@@ -235,7 +241,6 @@ func getWindowsInternalIPs(oc *exutil.CLI) []string {
 }
 
 func getSSHBastionHost(oc *exutil.CLI, iaasPlatform string) string {
-
 	if iaasPlatform == "vsphere" {
 		return vsphere_bastion
 	}
@@ -263,16 +268,27 @@ func getBastionSSHUser(iaasPlatform string) (user string) {
 	}
 	return "core"
 }
-
-func runPSCommand(bastionHost string, windowsHost string, command string, privateKey string, iaasPlatform string) (result string, err error) {
+func runPSCommand(bastionHost, windowsHost, command, privateKey, iaasPlatform string) (result string, err error) {
 	windowsUser := getAdministratorNameByPlatform(iaasPlatform)
 	bastionKey, err := exutil.GetPrivateKey()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get bastion private key with error %v", err)
+
+	// Ensure appropriate permissions for private keys
 	os.Chmod(bastionKey, 0600)
 	os.Chmod(privateKey, 0600)
+
+	// Quote the command properly
 	command = "\"" + command + "\""
-	cmd := "ssh -i " + privateKey + " -t -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i " + bastionKey + " -A -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %h:%p " + getBastionSSHUser(iaasPlatform) + "@" + bastionHost + "\" " + windowsUser + "@" + windowsHost + " 'powershell " + command + "'"
-	msg, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+
+	// Use proper formatting for the ssh command
+	sshCommand := fmt.Sprintf(
+		"ssh -i %s -T -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i %s -A -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %%h:%%p %s@%s\" %s@%s 'powershell %s'",
+		privateKey, bastionKey, getBastionSSHUser(iaasPlatform), bastionHost, windowsUser, windowsHost, command,
+	)
+
+	// Execute the command
+	msg, err := exec.Command("bash", "-c", sshCommand).CombinedOutput()
+
 	return string(msg), err
 }
 
@@ -295,7 +311,6 @@ func getWindowsNodesUptime(oc *exutil.CLI, privateKey string, iaasPlatform strin
 }
 
 func getWindowsNodeCurrentTime(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string) time.Time {
-
 	bastionHost := getSSHBastionHost(oc, iaasPlatform)
 	layout := "Monday January 2 2006 15:04:05 PM"
 	msg, err := runPSCommand(bastionHost, winHostIP, "date", privateKey, iaasPlatform)
@@ -307,7 +322,6 @@ func getWindowsNodeCurrentTime(oc *exutil.CLI, winHostIP string, privateKey stri
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return timeStamp
-
 }
 
 func createLinuxWorkload(oc *exutil.CLI, namespace string) {
@@ -575,7 +589,6 @@ func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int,
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Windows machine is not provisioned after waiting up to %v minutes ...", deadTime))
-
 }
 
 func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) string {
@@ -589,7 +602,6 @@ func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) strin
 }
 
 func runInBackground(ctx context.Context, cancel context.CancelFunc, check func(string, int) error, val string, delay int) {
-
 	// starting a goroutine that invokes the desired function in the background
 	go func() {
 		defer g.GinkgoRecover()
@@ -600,7 +612,6 @@ func runInBackground(ctx context.Context, cancel context.CancelFunc, check func(
 		}
 		// Invoke the function to perform the check
 		err := check(val, delay)
-
 		// If an error is returned, then cancel the context
 		// this will be checked if the context has been ended prematuraly
 		if err != nil {
@@ -612,7 +623,6 @@ func runInBackground(ctx context.Context, cancel context.CancelFunc, check func(
 }
 
 func checkConnectivity(IP string, delay int) error {
-
 	for {
 		// we need here a wait timeout before LB is ready
 		time.Sleep(time.Duration(delay) * time.Second)
@@ -864,7 +874,6 @@ func waitForCM(oc *exutil.CLI, cmName string, cmType string, namespace string) {
 		}
 		e2e.Logf("Configmap %v does not match expected %v", windowsCM, cmName)
 		return false, nil
-
 	})
 	if pollErr != nil {
 		e2e.Failf("Expected %v configmap %v not found after %v seconds ...", cmType, cmName, 180)
@@ -872,7 +881,6 @@ func waitForCM(oc *exutil.CLI, cmName string, cmType string, namespace string) {
 }
 
 func getServiceTimeStamp(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string, status string, serviceName string) time.Time {
-
 	bastionHost := getSSHBastionHost(oc, iaasPlatform)
 	layout := "Monday January 2 2006 15:04:05 PM"
 	cmd := fmt.Sprintf("(Get-EventLog -LogName \\\"System\\\" -Source \\\"Service Control Manager\\\" -EntryType \\\"Information\\\" -Message \\\"*%v service *%v*\\\" -Newest 1).TimeGenerated", serviceName, status)
@@ -885,13 +893,11 @@ func getServiceTimeStamp(oc *exutil.CLI, winHostIP string, privateKey string, ia
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return timeStamp
-
 }
 
 // getServiceProperty allows obtaining specific properties from a Windows service (https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-service#syntax)
 // by passing the desired property in the property parameter.
 func getServiceProperty(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string, serviceName string, property string) string {
-
 	bastionHost := getSSHBastionHost(oc, iaasPlatform)
 	cmd := fmt.Sprintf("Get-WmiObject win32_service | Where-Object { $_.Name -eq \\\"%v\\\" } | select -ExpandProperty \\\"%v\\\"", serviceName, property)
 	msg, err := runPSCommand(bastionHost, winHostIP, cmd, privateKey, iaasPlatform)
@@ -901,13 +907,11 @@ func getServiceProperty(oc *exutil.CLI, winHostIP string, privateKey string, iaa
 	e2e.Logf("Sevice %v %v: %v", serviceName, property, propertyFromOutput)
 
 	return propertyFromOutput
-
 }
 
 // setServiceState allows starting or stopping a Service
 // Allowed values for state: "start" | "stop"
 func setServiceState(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string, state string, serviceName string) {
-
 	if (state != "start") && (state != "stop") {
 		e2e.Failf("State %v can't be set for the service %v", state, serviceName)
 	}
@@ -934,13 +938,11 @@ func setServiceState(oc *exutil.CLI, winHostIP string, privateKey string, iaasPl
 				return true, nil
 			}
 			return false, nil
-
 		})
 		if pollErr != nil {
 			e2e.Failf("Service %v hasn't been set to %v state after %v seconds ...", serviceName, state, 60)
 		}
 	}
-
 }
 
 // This function tries to retrieve the values for the
@@ -972,7 +974,6 @@ func getMetricsFromCluster(oc *exutil.CLI, metric string) string {
 }
 
 func uninstallWMCO(oc *exutil.CLI, namespace string) {
-
 	defer func() {
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
 		// do not assert the above deletions, and depends on the finally getting deployment to assert the result.
@@ -988,7 +989,6 @@ func uninstallWMCO(oc *exutil.CLI, namespace string) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("subscription", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "-n", namespace, csvName).Execute()
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
-
 }
 
 func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey string) {
@@ -1032,7 +1032,6 @@ func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey str
 }
 
 func getContainerdVersion(oc *exutil.CLI, nodeIP string) string {
-
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeIP, "-o=jsonpath={.status.nodeInfo.containerRuntimeVersion}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	out := strings.Split(string(msg), "containerd://")
@@ -1041,7 +1040,6 @@ func getContainerdVersion(oc *exutil.CLI, nodeIP string) string {
 
 // this function return a search value after parsing it from a text file
 func getValueFromText(body []byte, searchVal string) string {
-
 	s := ""
 	lines := strings.Split(string(body), "\n")
 	for _, field := range lines {
@@ -1051,11 +1049,9 @@ func getValueFromText(body []byte, searchVal string) string {
 		}
 	}
 	return strings.TrimSpace(strings.Split(s, searchVal)[1])
-
 }
 
 func checkLogAfterTimeStamp(logOut string, expectedMsg string, timeStamp time.Time) bool {
-
 	dateLayout := "Monday January 2 2006"
 	layout := "15:04:05.000000"
 	splittedLog := strings.Split(logOut, "\n")
@@ -1200,7 +1196,6 @@ func downloadWindowsCSIDriver(oc *exutil.CLI, fileName, iaasPlatform string) err
 // installWindowsCSIDriver will download the manifests needed to install the CSI
 // driver in a specific provider (iaasPlatform) and create those resources from the manifest
 func installWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
-
 	tempFileName := "csi-driver-" + iaasPlatform + "-windows.yaml"
 	defer os.Remove(tempFileName)
 	err := downloadWindowsCSIDriver(oc, tempFileName, iaasPlatform)
@@ -1235,7 +1230,6 @@ func installWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
 // uninstallWindowsCSIDriver will download the manifests needed to install the CSI
 // driver in a specific provider (iaasPlatform) and delete those resources already created
 func uninstallWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
-
 	tempFileName := "csi-driver-" + iaasPlatform + "-windows.yaml"
 	defer os.Remove(tempFileName)
 	err := downloadWindowsCSIDriver(oc, tempFileName, iaasPlatform)
@@ -1248,7 +1242,6 @@ func uninstallWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
 	}
 
 	return nil
-
 }
 
 func getWMCOTimestamp(oc *exutil.CLI) string {
@@ -1316,4 +1309,63 @@ func getAWSSubnetID(oc *exutil.CLI) string {
 	o.Expect(err).NotTo(o.HaveOccurred(), "Could not fetch subnet from the existing machineset")
 
 	return string(subnet)
+}
+
+func readCertificateContent(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read certificate content: %v, with Error %v", content, err)
+	}
+	return string(content), nil
+}
+
+func checkUserCertificatesOnWindowsWorkers(oc *exutil.CLI, bastionHost string, commonName string, privateKey string, expectedNumOfCertificates int, iaasPlatform string) {
+	for _, winhost := range getWindowsInternalIPs(oc) {
+		e2e.Logf("Checking %d user certificate on worker %v", expectedNumOfCertificates, winhost)
+		cmd := fmt.Sprintf("(Get-ChildItem -Path Cert:\\LocalMachine\\Root | Where {$_.Subject -eq \\\"%s\\\"}).Count", commonName)
+		msg, err := runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
+		if err != nil {
+			e2e.Failf("Command output %v failed on node %v with error: %s ...", msg, winhost, err)
+		}
+
+		numOfCerts := 0
+		if msg != "" {
+			// Use regular expression to extract numeric value
+			msg = regexp.MustCompile(`\d+`).FindString(strconv.Itoa(expectedNumOfCertificates))
+			if msg == "" {
+				e2e.Failf("no numeric value found")
+			}
+			// Convert to integer
+			numOfCerts, err = strconv.Atoi(msg)
+			if err != nil {
+				e2e.Failf("Failed to convert to integer %d on node %v with error: %s ...", numOfCerts, winhost, err)
+			}
+		}
+		if numOfCerts != expectedNumOfCertificates {
+			e2e.Failf("Command failed on node %v found %d certificates expected %d ...", winhost, numOfCerts, expectedNumOfCertificates)
+		}
+	}
+}
+
+// this function compile a payload of certificates to JSON manner and patch to user-ca configmap
+func configureCertificateToJSONPatch(oc *exutil.CLI, payload, configmap, namespace string) {
+	// removing empty line here
+	payload = strings.Replace(payload, "\n\n", "\n", 1)
+	jsonPayload := fmt.Sprintf(`{"data":{"ca-bundle.crt":"%s"}}`, strings.ReplaceAll(payload, "\n", ""))
+	var configMapPayload ConfigMapPayload
+	err := json.Unmarshal([]byte(jsonPayload), &configMapPayload)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error unmarshalling JSON")
+
+	// Run the patch command
+	cmd := oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", configmap, "-n", namespace, "-p", jsonPayload)
+	output, err := cmd.Output()
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			// Extracting the stderr from the exit status
+			stderr := strings.TrimSpace(string(exitError.Stderr))
+			err = fmt.Errorf("%v. Error output: %s", err, stderr)
+		}
+
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error patching ConfigMap with combined data. Output:\n%s", output)
+	}
 }

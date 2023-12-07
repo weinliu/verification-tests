@@ -26,7 +26,7 @@ import (
 var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLIWithoutNamespace("default")
+	oc := exutil.NewCLIWithoutNamespace("default")
 
 	// Struct used to define a service in the windows-services
 	type Service struct {
@@ -235,7 +235,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-32273"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
 		externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
@@ -263,7 +263,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
 
 		g.By("Creating Windows machineset with 1")
-		setMachineset(oc, iaasPlatform, getConfigMapData(oc, "primary_windows_image"))
+		setMachineset(oc, iaasPlatform, getConfigMapData(oc, wincTestCM, "primary_windows_image", defaultNamespace))
 		waitForMachinesetReady(oc, machinesetName, 25, 1)
 
 		g.By("Creating cluster and machine autoscaller")
@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createWindowsAutoscaller(oc, machinesetName, namespace)
 
 		g.By("Creating Windows workloads")
-		createWindowsWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
+		createWindowsWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
 
 		if iaasPlatform == "gcp" || iaasPlatform == "vsphere" {
 			g.By("Scalling up the Windows workload to 4")
@@ -304,7 +304,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		zone := getAvailabilityZone(oc)
 		machinesetName := getWindowsMachineSetName(oc, "winsecond", iaasPlatform, zone)
 		machinesetMultiOSFileName := iaasPlatform + "_windows_machineset.yaml"
-		err := configureMachineset(oc, iaasPlatform, "winsecond", machinesetMultiOSFileName, getConfigMapData(oc, "secondary_windows_image"))
+		err := configureMachineset(oc, iaasPlatform, "winsecond", machinesetMultiOSFileName, getConfigMapData(oc, wincTestCM, "secondary_windows_image", defaultNamespace))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
 		// here we provision 1 webservers with a runtime class ID, up to 20 minutes due to pull image on AWS
@@ -320,7 +320,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		buildID, err := getWindowsBuildID(oc, nodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		replacement := map[string]string{
-			"<windows_container_image>": getConfigMapData(oc, "secondary_windows_container_image"),
+			"<windows_container_image>": getConfigMapData(oc, wincTestCM, "secondary_windows_container_image", defaultNamespace),
 			"<kernelID>":                buildID,
 		}
 		createWindowsWorkload(oc, namespace, "windows_webserver_secondary_os.yaml", replacement, true)
@@ -345,7 +345,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer deleteResource(oc, "configmap", "windows-instances", wmcoNamespace, "--ignore-not-found")
 		defer deleteResource(oc, exutil.MapiMachineset, byohMachineSetName, mcoNamespace)
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
-		address := setBYOH(oc, iaasPlatform, []string{"InternalDNS"}, byohMachineSetName, getConfigMapData(oc, "primary_windows_image"))
+		address := setBYOH(oc, iaasPlatform, []string{"InternalDNS"}, byohMachineSetName, getConfigMapData(oc, wincTestCM, "primary_windows_image", defaultNamespace))
 		// removing the config map
 		g.By("Delete the BYOH congigmap for node deconfiguration")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
@@ -366,7 +366,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			}
 		}
 		// TODO check network removal test
-
 	})
 
 	// author rrasouli@redhat.com
@@ -379,9 +378,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer deleteResource(oc, "configmap", "windows-instances", wmcoNamespace)
 		defer deleteProject(oc, namespace)
 
-		byohIP := setBYOH(oc, iaasPlatform, []string{"InternalIP"}, byohMachineSetName, getConfigMapData(oc, "primary_windows_image"))
+		byohIP := setBYOH(oc, iaasPlatform, []string{"InternalIP"}, byohMachineSetName, getConfigMapData(oc, wincTestCM, "primary_windows_image", defaultNamespace))
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
+		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -410,15 +409,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
 
-		setBYOH(oc, iaasPlatform, []string{"InternalIP", "InternalDNS"}, byohMachineSetName, getConfigMapData(oc, "primary_windows_image"))
+		setBYOH(oc, iaasPlatform, []string{"InternalIP", "InternalDNS"}, byohMachineSetName, getConfigMapData(oc, wincTestCM, "primary_windows_image", defaultNamespace))
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
+		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
-
 	})
 
 	// author rrasouli@redhat.com
@@ -426,7 +424,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-39451"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
 		createLinuxWorkload(oc, namespace)
 		g.By("Check access through clusterIP from Linux and Windows pods")
 		windowsClusterIP, err := getServiceClusterIP(oc, windowsWorkloads, namespace)
@@ -440,7 +438,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		e2e.Logf("windows cluster IP: " + windowsClusterIP)
 		e2e.Logf("Linux cluster IP: " + linuxClusterIP)
 
-		//we query the Linux ClusterIP by a windows pod
+		// we query the Linux ClusterIP by a windows pod
 		command := []string{"exec", "-n", namespace, winPodArray[0], "--", "curl", linuxClusterIP + ":8080"}
 
 		msg, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
@@ -512,7 +510,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-31276"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
 		createLinuxWorkload(oc, namespace)
 		// we scale the deployment to 5 windows pods
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
@@ -742,7 +740,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		zone := getAvailabilityZone(oc)
 		machinesetName := getWindowsMachineSetName(oc, "winc", iaasPlatform, zone)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
-		setMachineset(oc, iaasPlatform, getConfigMapData(oc, "primary_windows_image"))
+		setMachineset(oc, iaasPlatform, getConfigMapData(oc, wincTestCM, "primary_windows_image", defaultNamespace))
 
 		g.By("Check Windows machine should be in Provisioning phase and not reconciled without cloud-private-key and windows-user-data")
 		pollErr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
@@ -793,7 +791,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-37472"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
 		windowsHostName := getWindowsHostNames(oc)[0]
 		oc.AsAdmin().WithoutNamespace().Run("annotate").Args("node", windowsHostName, "windowsmachineconfig.openshift.io/version-").Output()
 
@@ -857,7 +855,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if !strings.Contains(msg, tVersion) {
 			e2e.Failf("Unmatching golang version")
 		}
-
 	})
 	// author: rrasouli@redhat.com
 	g.It("Smokerun-Author:rrasouli-High-38186-[wmco] Windows LB service [Slow]", func() {
@@ -871,7 +868,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
 		// fetching here the external IP
 		externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -905,7 +902,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			e2e.Failf("Failed to check Windows node have taint os=Windows:NoSchedule")
 		}
 		g.By("Check deployment without tolerations would not land on Windows nodes")
-		createWindowsWorkload(oc, namespace, "windows_web_server_no_taint.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, false)
+		createWindowsWorkload(oc, namespace, "windows_web_server_no_taint.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, false)
 		poolErr := wait.Poll(20*time.Second, 60*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l=app=win-webserver", "-o=jsonpath={.items[].status.conditions[].message}", "-n", namespace).Output()
 			if strings.Contains(msg, "had untolerated taint") {
@@ -954,7 +951,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// TODO replace to nano server image as soon as it supported
 		// change the powershell commands to pwsh.exe and in the windows_webserver_projected_volume change to pwsh.exe
 		image := "mcr.microsoft.com/windows/servercore:ltsc2019"
-		deployedImage := getConfigMapData(oc, "primary_windows_container_image")
+		deployedImage := getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)
 		if strings.Contains(deployedImage, "ltsc2022") {
 			image = "mcr.microsoft.com/windows/servercore:ltsc2022"
 		}
@@ -1001,7 +998,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	g.It("Longduration-Smokerun-Author:rrasouli-NonPreRelease-Critical-39858-Windows servicemonitor and endpoints check [Slow][Serial][Disruptive]", func() {
-
 		g.By("Get Endpoints and service monitor values")
 		// need to fetch service monitor age
 		serviceMonitorAge1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
@@ -1058,11 +1054,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	g.It("Smokerun-Author:jfrancoa-Critical-50924-Windows instances react to kubelet CA rotation [Disruptive]", func() {
-
+		const (
+			namespace = "openshift-kube-apiserver-operator"
+			configmap = "kube-apiserver-to-kubelet-client-ca"
+		)
 		// Retrieve previous certificate which will get rotated.
-		certToExpire, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
+		certToExpire := getConfigMapData(oc, configmap, "ca\\-bundle\\.crt", namespace)
 		g.By("Force the kubelet CA rotation")
 
 		initialCertNotBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
@@ -1088,16 +1085,15 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		// Force the expired certificate deletion from kubelet's client CA
 		// First we get the current content on kubelet's client CA
-		cmOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		cmOutput := getConfigMapData(oc, configmap, "ca\\-bundle\\.crt", namespace)
 		// Delete the expired certificate (stored at the beggining of test) by using ReplaceAll
 		formattedCertToExpire := strings.Trim(strings.TrimSpace(certToExpire), "'")
 		cmWithoutExpired := strings.ReplaceAll(cmOutput, formattedCertToExpire, "")
 		formattedcmWithoutExpired := strings.ReplaceAll(strings.Trim(strings.TrimSpace(cmWithoutExpired), "'"), "\n", "\\n")
 		// Patch the data.ca-bundle.crt field with the new config map content
 		// without the expired certificate
-		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", "kube-apiserver-to-kubelet-client-ca", "-n", "openshift-kube-apiserver-operator", "-p", `{"data":{"ca-bundle.crt": "`+formattedcmWithoutExpired+`"}}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", configmap, "-n", namespace, "-p", `{"data":{"ca-bundle.crt": "`+formattedcmWithoutExpired+`"}}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to patch configmap %s", configmap)
 
 		g.By("Verify kubelet client CA is updated in Windows workers")
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
@@ -1147,11 +1143,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				e2e.Failf("windows worker %v got restarted after CA rotation", ip)
 			}
 		}
-
 	})
 
 	g.It("Smokerun-Author:rrasouli-Medium-54711- [WICD] wmco services are running from ConfigMap", func() {
-
 		g.By("Check configmap services running on Windows workers")
 		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1169,11 +1163,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				o.Expect(msg).Should(o.ContainSubstring("Running"), "Failed to check %v service is running in %v: %s", svc.Name, winhost, msg)
 			}
 		}
-
 	})
 
 	g.It("Smokerun-Author:jfrancoa-Medium-50403-wmco creates and maintains Windows services ConfigMap [Disruptive]", func() {
-
 		g.By("Check service configmap exists")
 		wmcoLogVersion := getWMCOVersionFromLogs(oc)
 		cmVersionFromLog := "windows-services-" + wmcoLogVersion
@@ -1244,11 +1236,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// scaling WMCO pod back to 1
 		scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		waitForCM(oc, windowsServicesCM, wicdConfigMap, wmcoNamespace)
-
 	})
 
 	g.It("Longduration-Author:rrasouli-NonPreRelease-High-35707-Re-create Windows nodes not matching wmco version annotation [Slow][Serial][Disruptive]", func() {
-
 		// go routine parameters
 		var ctx context.Context
 		var cancel context.CancelFunc
@@ -1301,11 +1291,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				e2e.Logf("Ending checkConnectivity")
 			}
 		}
-
 	})
 
 	g.It("Author:jfrancoa-Medium-56354-Stop dependent services before stopping a service in WICD [Disruptive]", func() {
-
 		targetService := "containerd"
 
 		g.By("Check configmap services running on Windows workers")
@@ -1341,7 +1329,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author jfrancoa@redhat.com
 	g.It("Smokerun-Author:jfrancoa-Medium-38188-Get Windows instance/core number and CPU arch", func() {
-
 		winMetrics := []string{"cluster:node_instance_type_count:sum", "cluster:capacity_cpu_cores:sum"}
 
 		mon, err := exutil.NewPrometheusMonitor(oc.AsAdmin())
@@ -1378,7 +1365,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				"Prometheus metric %s does not match the value %s obtained from the cluster", metricValue, valueFromCluster)
 
 		}
-
 	})
 
 	// author rrasouli@redhat.com
@@ -1423,7 +1409,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// A delay waiting for machine upgrade to be completed
 		waitUntilWMCOStatusChanged(oc, "\"unhealthy\":0")
-
 	})
 
 	// author rrasouli@redhat.com
@@ -1436,7 +1421,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer waitForMachinesetReady(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 45, 2)
 		defer deleteResource(oc, exutil.MapiMachineset, byohMachineSetName, mcoNamespace, "--ignore-not-found")
 		defer deleteResource(oc, "configmap", "windows-instances", wmcoNamespace, "--ignore-not-found")
-		byohMachine := setBYOH(oc, iaasPlatform, []string{"InternalIP"}, byohMachineSetName, getConfigMapData(oc, "primary_windows_image"))
+		byohMachine := setBYOH(oc, iaasPlatform, []string{"InternalIP"}, byohMachineSetName, getConfigMapData(oc, wincTestCM, "primary_windows_image", defaultNamespace))
 		waitWindowsNodesReady(oc, 3, 1000*time.Second)
 		defer os.Remove("mykey")
 		defer os.Remove("mykey.pub")
@@ -1503,7 +1488,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author jfrancoa@redhat.com
 	g.It("Longduration-Author:jfrancoa-NonPreRelease-Medium-37086-Install wmco in a namespace other than recommended [Disruptive]", func() {
-
 		customNamespace := "winc-namespace-test"
 		zone := getAvailabilityZone(oc)
 
@@ -1533,7 +1517,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	g.It("Smokerun-Author:rrasouli-Medium-60814-Check containerd version is properly reported", func() {
-
 		// get the latest version hash from WMCO logs
 		versionHash := strings.Split(getWMCOVersionFromLogs(oc), "-")[1]
 		resp, err := http.Get("https://raw.githubusercontent.com/openshift/windows-machine-config-operator/" + versionHash + "/Makefile")
@@ -1552,11 +1535,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				e2e.Failf("Containerd version mismatch expected %s actual %s", submoduleContainerdVersion, getContainerdVersion(oc, winhost))
 			}
 		}
-
 	})
 
 	g.It("Author:jfrancoa-Medium-60944-WICD controller periodically reconciles state of Windows services [Disruptive]", func() {
-
 		targetService := "windows_exporter"
 
 		winInternalIP := getWindowsInternalIPs(oc)
@@ -1582,7 +1563,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	g.It("Smokerun-Author:rrasouli-Critical-65980-[node-proxy]-Cluster-wide proxy acceptance test", func() {
-
 		// checking whether cluster proxy is configured at all, otherwise skip the test
 		if !isProxy(oc) {
 			g.Skip("Cluster proxy not detected, skipping")
@@ -1687,7 +1667,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	g.It("Smokerun-Author:rrasouli-Critical-66670-[node-proxy]-Cluster-wide proxy trusted-ca configmap tests [Serial][Disruptive]", func() {
-
 		// verify with a boolean function isProxyEnabled - skip if not
 		if !isProxy(oc) {
 			g.Skip("Cluster proxy not detected, skipping")
@@ -1775,4 +1754,84 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		waitForCM(oc, trustedCACM, trustedCACM, wmcoNamespace)
 	})
 
+	g.It("Smokerun-Author:rrasouli-Critical-68320-[node-proxy]-Import custom CA certificates into Windows node system store [Serial][Disruptive]", func() {
+		// verify with a boolean function isProxyEnabled - skip if not
+		if !isProxy(oc) {
+			g.Skip("Cluster proxy not detected, skipping")
+		}
+
+		const (
+			name                        = "OCP-68320-custom"
+			validity                    = "3650"
+			caSubj                      = "/OU=openshift/CN=test-custom-self-cert-signer"
+			userSelfSignedCommonName    = "CN=test-custom-self-cert-signer, OU=openshift"
+			userInstalledCertCommonName = "CN=Installer-QE-CA, OU=Installer-QE, O=OCP, S=Beijing, C=CN"
+			namespace                   = "openshift-config"
+			configmap                   = "user-ca-bundle"
+		)
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+		g.By("Verify that user certificate installed on each Windows worker")
+		// Verify that user certificate is installed on each Windows worker before the change
+		checkUserCertificatesOnWindowsWorkers(oc, bastionHost, userInstalledCertCommonName, privateKey, 1, iaasPlatform)
+
+		g.By("Create a self-signed certificate and paste it to the content of the cm -n openshift-config user-ca-bundle")
+		keyPath := fmt.Sprintf("%s-ca.key", name)
+		crtPath := fmt.Sprintf("%s-ca.crt", name)
+		defer os.Remove(keyPath)
+		cmd := fmt.Sprintf("openssl genrsa -out %s-ca.key 4096", name)
+		output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+		if err != nil {
+			e2e.Failf("Failed to execute command: %s. Output:\n%s", cmd, output)
+		}
+		defer os.Remove(crtPath)
+		cmd = fmt.Sprintf("openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %s -out %s-ca.crt -subj %s", name, validity, name, caSubj)
+		output, err = exec.Command("bash", "-c", cmd).CombinedOutput()
+		if err != nil {
+			e2e.Failf("Failed to execute command: %s. Output:\n%s", cmd, output)
+		}
+		e2e.Logf("Storing existing ConfigMap content")
+		initalConfigMapContent := getConfigMapData(oc, configmap, "ca\\-bundle\\.crt", namespace)
+		initalConfigMapContent = removeOuterQuotes(initalConfigMapContent)
+		defer func() {
+			configureCertificateToJSONPatch(oc, initalConfigMapContent, configmap, namespace)
+		}()
+
+		e2e.Logf("Appending the new certificate to the existing content")
+
+		newCertificateContent, err := readCertificateContent(fmt.Sprintf("%s-ca.crt", name))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// newCertificateContent = removeOuterQuotes(newCertificateContent)
+		// Combine the ConfigMap content and new certificate content
+		combinedContent := fmt.Sprintf("%s\n%s", initalConfigMapContent, newCertificateContent)
+		configureCertificateToJSONPatch(oc, combinedContent, configmap, namespace)
+
+		g.By("Verify that user certificate installed on each Windows worker")
+		checkUserCertificatesOnWindowsWorkers(oc, bastionHost, userInstalledCertCommonName, privateKey, 1, iaasPlatform)
+
+		g.By("Creating certificate rotation")
+		rotationValidity := "1"
+
+		cmd = fmt.Sprintf("openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %s -out %s-ca.crt -subj %s", name, rotationValidity, name, caSubj)
+		output, err = exec.Command("bash", "-c", cmd).CombinedOutput()
+		if err != nil {
+			e2e.Failf("Failed to execute command: %s. Output:\n%s", cmd, output)
+		}
+		e2e.Logf("Storing existing ConfigMap content")
+		newCertificateContent, err = readCertificateContent(fmt.Sprintf("%s-ca.crt", name))
+		if err != nil {
+			e2e.Failf("Failed to read certificate")
+		}
+		// newCertificateContent = removeOuterQuotes(newCertificateContent)
+		combinedContent = fmt.Sprintf("%s\n%s", initalConfigMapContent, newCertificateContent)
+		configureCertificateToJSONPatch(oc, combinedContent, configmap, namespace)
+
+		g.By("Verify that after certificate rotation certificates installed on each Windows worker")
+		checkUserCertificatesOnWindowsWorkers(oc, bastionHost, userInstalledCertCommonName, privateKey, 1, iaasPlatform)
+
+		g.By("Verify that added self signed certificate has been removed from each Windows node")
+
+		configureCertificateToJSONPatch(oc, initalConfigMapContent, configmap, namespace)
+
+		checkUserCertificatesOnWindowsWorkers(oc, bastionHost, userSelfSignedCommonName, privateKey, 0, iaasPlatform)
+	})
 })

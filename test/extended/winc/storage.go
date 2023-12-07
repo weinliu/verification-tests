@@ -16,7 +16,6 @@ import (
 
 var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 	defer g.GinkgoRecover()
-
 	var oc = exutil.NewCLIWithoutNamespace("default")
 
 	g.BeforeEach(func() {
@@ -97,7 +96,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 			if iaasPlatform == "vsphere" {
 				nodeSelector = "nodepvc: " + pvc
 			}
-			createWindowsWorkload(oc, namespace, "windows_web_server_pvc.yaml", map[string]string{"<id>": pvc, "<pvc-name>": pvc, "<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image"), "<node-selector>": nodeSelector}, false)
+			createWindowsWorkload(oc, namespace, "windows_web_server_pvc.yaml", map[string]string{"<id>": pvc, "<pvc-name>": pvc, "<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace), "<node-selector>": nodeSelector}, false)
 			// Wait for the workloads to be created. Not using the logic in createWindowsWokrload
 			// because the deployment name is different than win-webserver, as well as the number
 			// of replicas
