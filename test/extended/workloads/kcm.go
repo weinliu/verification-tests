@@ -701,6 +701,23 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(podStatusOutput).NotTo(o.ContainSubstring("NodeAffinity"))
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-69211-Validate no deployer sa when baselineCapabilitySet to None [Serial]", func() {
+		// Skip the test if baselinecaps is set to v4.13 or v4.14
+		if isBaselineCapsSet(oc, "None") && !isEnabledCapability(oc, "Build") && !isEnabledCapability(oc, "DeploymentConfig") {
+			// Verify deployer sa is not present
+			saOutput, saErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "-A").Output()
+			o.Expect(saErr).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(saOutput, "deployer")).To(o.BeFalse())
+			g.By("Create a new project & verify that there is no builder and deployer sa's present")
+			oc.SetupProject()
+			projectSAOutput, projectSAError := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "-n", oc.Namespace()).Output()
+			o.Expect(projectSAError).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(projectSAOutput, "deployer")).To(o.BeFalse())
+			o.Expect(strings.Contains(projectSAOutput, "builder")).To(o.BeFalse())
+		}
+	})
+
 })
 
 var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
