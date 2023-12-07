@@ -2,7 +2,9 @@ package clusterinfrastructure
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -99,11 +101,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		platform := exutil.CheckPlatform(oc)
 		switch platform {
 		case "aws", "alibabacloud":
-			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"instanceType":"invalid"}}}}}}`
+			patchstr = `{"spec":{"replicas":5,"template":{"spec":{"providerSpec":{"value":{"instanceType":"invalid"}}}}}}`
 		case "gcp":
-			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"invalid"}}}}}}`
+			patchstr = `{"spec":{"replicas":5,"template":{"spec":{"providerSpec":{"value":{"machineType":"invalid"}}}}}}`
 		case "azure":
-			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"invalid"}}}}}}`
+			patchstr = `{"spec":{"replicas":5,"template":{"spec":{"providerSpec":{"value":{"vmSize":"invalid"}}}}}}`
 		/*
 			there is a bug(https://bugzilla.redhat.com/show_bug.cgi?id=1900538) for openstack
 			case "openstack":
@@ -134,6 +136,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Check metrics mapi_instance_create_failed is shown")
 		checkMetricsShown(oc, "mapi_instance_create_failed", machineName)
+
+		g.By("Investigate cluster with excessive number of samples for the machine-api-controllers job - case-OCP63167")
+		metricsName := "mapi_instance_create_failed"
+		timestampRegex := regexp.MustCompile(`\b(?:[0-1]?[0-9]|2[0-3]):[0-5]?[0-9]:[0-5]?[0-9]\b`)
+		token := getPrometheusSAToken(oc)
+		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		metricsCMD := fmt.Sprintf("curl -X GET --header \"Authorization: Bearer %s\" https://%s/api/v1/query?query=%s --insecure", token, url, metricsName)
+		metricsOutput, cmdErr := exec.Command("bash", "-c", metricsCMD).Output()
+
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+
+		o.Expect(timestampRegex.MatchString(string(metricsOutput))).NotTo(o.BeTrue())
+
 	})
 
 	// author: huliu@redhat.com
