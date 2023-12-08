@@ -1390,6 +1390,23 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, "prometheus-user-workload-trusted-ca-bundle", true)
 			}
 		})
+
+		//author: tagao@redhat.com
+		g.It("Author:tagao-Medium-69084-user workLoad components failures leading to CMO degradation/unavailability should be easy to identify [Slow] [Disruptive]", func() {
+			var (
+				UserWorkloadTasksFailed = filepath.Join(monitoringBaseDir, "UserWorkloadTasksFailed.yaml")
+			)
+			g.By("delete uwm-config/cm-config at the end of a serial case")
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+			g.By("trigger UserWorkloadTasksFailed")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", UserWorkloadTasksFailed)
+
+			g.By("check logs in CMO should see UserWorkloadTasksFailed")
+			CMOPodName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=cluster-monitoring-operator", "-ojsonpath={.items[].metadata.name}").Output()
+			exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "cluster-monitoring-operator", CMOPodName, "UserWorkloadTasksFailed")
+		})
 	})
 
 	//author: tagao@redhat.com
