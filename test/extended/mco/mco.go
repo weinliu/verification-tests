@@ -344,34 +344,20 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.ContainSubstring("realtime")))
 
 		exutil.By("Check kernel arguments, kernel type and extension on the rhel worker node")
-		rhelRpmOut, err := rhelOs.DebugNodeWithChroot("rpm", "-qa")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(rhelRpmOut).Should(o.And(
-			o.MatchRegexp(".*kernel-tools-[0-9-.]+el[0-9]+.x86_64.*"),
-			o.MatchRegexp(".*kernel-tools-libs-[0-9-.]+el[0-9]+.x86_64.*"),
-			o.MatchRegexp(".*kernel-[0-9-.]+el[0-9]+.x86_64.*")))
-		rhelUnameOut, err := rhelOs.DebugNodeWithChroot("uname", "-a")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(rhelUnameOut).Should(o.Not(o.ContainSubstring("PREEMPT_RT")))
-		rhelCmdlineOut, err := rhelOs.DebugNodeWithChroot("cat", "/proc/cmdline")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(rhelCmdlineOut).Should(o.Not(o.ContainSubstring("z=10")))
+		o.Expect(rhelOs.RpmIsInstalled("kernel-tools", "kernel")).Should(o.BeTrue(), "cannot find package kernel-tools or kernel")
+		o.Expect(rhelOs.IsKernelArgEnabled("PREEMPT_RT")).Should(o.BeFalse(), "kernel arg PREEMPT_RT found in output of uname -a, it is not expected")
+		o.Expect(rhelOs.IsKernelArgEnabled("z=10")).Should(o.BeFalse(), "kernel arg z=10 found in /proc/cmdline, it is not expected")
 
 		exutil.By("Check kernel arguments, kernel type and extension on the rhcos worker node")
-		coreOsRpmOut, err := coreOs.DebugNodeWithChroot("rpm", "-qa")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(coreOsRpmOut).Should(o.And(
-			o.MatchRegexp(".*kernel-rt-kvm-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*"),
-			o.MatchRegexp(".*kernel-rt-core-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*"),
-			o.MatchRegexp(".*kernel-rt-modules-core-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*"),
-			o.MatchRegexp(".*kernel-rt-modules-extra-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*"),
-			o.MatchRegexp(".*kernel-rt-modules-[0-9-.]+rt[0-9.]+el[0-9_]+.x86_64.*")))
-		coreOsUnameOut, err := coreOs.DebugNodeWithChroot("uname", "-a")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(coreOsUnameOut).Should(o.ContainSubstring("PREEMPT_RT"))
-		coreOsCmdlineOut, err := coreOs.DebugNodeWithChroot("cat", "/proc/cmdline")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(coreOsCmdlineOut).Should(o.ContainSubstring("z=10"))
+		o.Expect(coreOs.RpmIsInstalled(
+			"kernel-rt-kvm",
+			"kernel-rt-core",
+			"kernel-rt-modules-core",
+			"kernel-rt-modules-extra",
+			"kernel-rt-modules")).Should(o.BeTrue(), "cannot find package kernel-rt-core/kernel-rt-modules.*")
+		o.Expect(coreOs.IsKernelArgEnabled("PREEMPT_RT")).Should(o.BeTrue(), "kernel arg PREEMPT_RT not found in output of uname -a")
+		o.Expect(coreOs.IsKernelArgEnabled("z=10")).Should(o.BeTrue(), "kernel arg z=10 not found in /proc/cmdline")
+
 		logger.Infof("Kernel argument, kernel type and extension changes are verified on both rhcos and rhel worker nodes!")
 	})
 

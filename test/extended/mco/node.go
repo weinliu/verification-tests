@@ -646,7 +646,7 @@ func (n *Node) RemoveFile(filePathToRemove string) error {
 // RpmIsInstalled returns true if the package is installed
 func (n *Node) RpmIsInstalled(rpmNames ...string) bool {
 	rpmOutput, err := n.DebugNodeWithChroot(append([]string{"rpm", "-q"}, rpmNames...)...)
-	logger.Debugf(rpmOutput)
+	logger.Infof(rpmOutput)
 	return err == nil
 }
 
