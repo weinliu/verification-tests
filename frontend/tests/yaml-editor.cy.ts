@@ -2,17 +2,14 @@ import * as yamlEditor from '../upstream/views/yaml-editor';
 import { guidedTour } from '../upstream/views/guided-tour';
 import { testName } from "../upstream/support";
 import { importYamlPage, yamlOptions } from "../views/yaml-page"
+import { Pages } from 'views/pages';
 
 describe("yaml editor tests", () => {
   before(() => {
-    cy.login(
-      Cypress.env("LOGIN_IDP"),
-      Cypress.env("LOGIN_USERNAME"),
-      Cypress.env("LOGIN_PASSWORD")
-    );
-    guidedTour.close();
     cy.cliLogin();
-    cy.createProject(testName);
+    cy.exec(`oc new-project ${testName}`);
+    cy.login(Cypress.env("LOGIN_IDP"),Cypress.env("LOGIN_USERNAME"),Cypress.env("LOGIN_PASSWORD"));
+    guidedTour.close();
   });
 
   after(() => {
@@ -90,5 +87,17 @@ describe("yaml editor tests", () => {
       yamlEditor.clickSaveCreateButton();
     });
     cy.contains('successfully created').should('exist');
+  });
+
+  it("(OCP-68746,xiyuzhao) Yaml editor can handle a line of data longer than 78 characters", {tags: ['e2e','@osd-ccs','@rosa']}, () => {
+    cy.exec(`oc create -f ./fixtures/configmap_with_multiple_characters.yaml -n ${testName}`);
+    Pages.gotoConfigMapDetailsYamlTab(testName, "test-68746");
+    cy.contains('span', 'eeee')
+      .parents('.view-line')
+      .next('.view-line')
+      .should(($span) => {
+        const text = $span.text().trim();
+        expect(text).not.to.be.empty;
+      })
   });
 });

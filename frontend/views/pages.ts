@@ -73,5 +73,8 @@ export const Pages = {
   },
   gotoOneNetworkPolicyDetails: (namespace: string, npname: string) => {
     cy.visit(`/k8s/ns/${namespace}/networkpolicies/${npname}`);
+  },
+  gotoConfigMapDetailsYamlTab:(namespace: string, cmname: string) => {
+    cy.visit(`/k8s/ns/${namespace}/configmaps/${cmname}/yaml`);
   }
 }

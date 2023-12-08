@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: 'test-68746'
+data:
+  test: |
+    ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt
+    eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+    sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss
+    ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt
