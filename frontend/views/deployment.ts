@@ -6,5 +6,16 @@ export const Deployment = {
       .should('include.text', 'Learn more about Deployments')
       .should('have.attr', 'href')
       .and('include', '/deployments')
+  },
+  checkDeploymentFilesystem: (deploymentName, nameSpace, containerIndex, readOnlyValue) => {
+    cy.exec(`oc get deployment ${deploymentName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -n ${nameSpace} -ojsonpath="{.spec.template.spec.containers[${containerIndex}].securityContext}"`, {failOnNonZeroExit: false}).then(result => {
+      expect(result.stdout).contains(`"readOnlyRootFilesystem":${readOnlyValue}`)
+      });
+  },
+  checkPodStatus: (nameSpace, label, podStatus) => {
+    cy.exec(`oc get pods -n ${nameSpace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -l ${label}`, {failOnNonZeroExit: false}).then(result => {
+      expect(result.stdout).contains(`${podStatus}`)
+    });
   }
+
 }
