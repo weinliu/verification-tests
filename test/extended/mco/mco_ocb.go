@@ -19,6 +19,11 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 
 	g.JustBeforeEach(func() {
 		preChecks(oc)
+		// According to https://issues.redhat.com/browse/MCO-831, featureSet:TechPreviewNoUpgrade is required
+		// xref: featureGate: OnClusterBuild
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
+		}
 	})
 
 	g.It("Author:sregidor-NonPreRelease-High-66567-OCB Wiring up Productionalized Build Controller [Disruptive]", func() {
