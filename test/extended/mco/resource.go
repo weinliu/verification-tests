@@ -201,6 +201,10 @@ func (r *Resource) GetConditionByType(ctype string) string {
 	return r.GetOrFail(`{.status.conditions[?(@.type=="` + ctype + `")]}`)
 }
 
+func (r *Resource) GetConditionStatusByType(ctype string) string {
+	return r.GetOrFail(`{.status.conditions[?(@.type=="` + ctype + `")].status}`)
+}
+
 // AddLabel adds a label to the resource
 func (r *Resource) AddLabel(label, value string) error {
 	params := r.getCommonParams()

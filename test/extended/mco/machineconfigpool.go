@@ -187,6 +187,11 @@ func (mcp *MachineConfigPool) GetUpdatedStatus() (string, error) {
 	return mcp.Get(`{.status.conditions[?(@.type=="Updated")].status}`)
 }
 
+// GetUpdatingStatus returns the value of 'Updating' condition in the MCP
+func (mcp *MachineConfigPool) GetUpdatingStatus() (string, error) {
+	return mcp.Get(`{.status.conditions[?(@.type=="Updating")].status}`)
+}
+
 func (mcp *MachineConfigPool) pollUpdatedStatus() func() string {
 	return mcp.Poll(`{.status.conditions[?(@.type=="Updated")].status}`)
 }
@@ -361,7 +366,7 @@ func (mcp *MachineConfigPool) GetNodesByLabel(labels string) ([]Node, error) {
 	return returnNodes, nil
 }
 
-// GetNodes returns a list with the nodes that belong to the machine config pool
+// GetNodes returns a list with the nodes that belong to the machine config pool, by default, windows nodes will be excluded
 func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
 	return mcp.GetNodesByLabel("")
 }
@@ -502,6 +507,37 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 	return updatedNodes
 }
 
+// GetCordonedNodes get cordoned nodes (if maxUnavailable > 1 ) otherwise return the 1st cordoned node
+func (mcp *MachineConfigPool) GetCordonedNodes() []Node {
+
+	// requirement is: when pool is in updating state, get the updating node list
+	o.Expect(mcp.WaitForUpdatingStatus()).NotTo(o.HaveOccurred(), "Waiting for Updating status change failed")
+	// polling all nodes in this pool and check whether all cordoned nodes (SchedulingDisabled)
+	var allUpdatingNodes []Node
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		nodes, nerr := mcp.GetNodes()
+		if nerr != nil {
+			return false, fmt.Errorf("Get all linux node failed, will try again in next run %v", nerr)
+		}
+		for _, node := range nodes {
+			schedulable, serr := node.IsSchedulable()
+			if serr != nil {
+				logger.Errorf("Checking node is schedulable failed %v", serr)
+				continue
+			}
+			if !schedulable {
+				allUpdatingNodes = append(allUpdatingNodes, node)
+			}
+		}
+
+		return len(allUpdatingNodes) > 0, nil
+	})
+
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Could not get the list of updating nodes on mcp %s", mcp.GetName()))
+
+	return allUpdatingNodes
+}
+
 // WaitForNotDegradedStatus waits until MCP is not degraded, if the condition times out the returned error is != nil
 func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
@@ -530,28 +566,37 @@ func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
 
 // WaitForUpdatedStatus waits until MCP is rerpoting updated status, if the condition times out the returned error is != nil
 func (mcp MachineConfigPool) WaitForUpdatedStatus() error {
-	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
-	logger.Infof("Waiting %s for MCP %s status to be updated.", timeToWait, mcp.name)
+	return mcp.waitForConditionStatus("Updated", "True", time.Duration(mcp.estimateWaitTimeInMinutes())*time.Minute, 1*time.Minute, false)
+}
 
-	immediate := false
-	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
-		stdout, err := mcp.GetUpdatedStatus()
+// WaitForUpdatingStatus waits until MCP is rerpoting updating status, if the condition times out the returned error is != nil
+func (mcp MachineConfigPool) WaitForUpdatingStatus() error {
+	return mcp.waitForConditionStatus("Updating", "True", 5*time.Minute, 5*time.Second, true)
+}
+
+func (mcp MachineConfigPool) waitForConditionStatus(condition, status string, timeout, interval time.Duration, immediate bool) error {
+
+	logger.Infof("Waiting %s for MCP %s condition %s to be %s", timeout, mcp.GetName(), condition, status)
+
+	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, immediate, func(ctx context.Context) (bool, error) {
+		stdout, err := mcp.Get(`{.status.conditions[?(@.type=="` + condition + `")].status}`)
 		if err != nil {
 			logger.Errorf("the err:%v, and try next round", err)
 			return false, nil
 		}
-		if strings.Contains(stdout, "True") {
-			logger.Infof("MCP Updated status is True %s", mcp.name)
+		if strings.Contains(stdout, status) {
+			logger.Infof("MCP %s condition %s status is %s", mcp.GetName(), condition, stdout)
 			return true, nil
 		}
 		return false, nil
 	})
 
 	if err != nil {
-		logger.Errorf("MCP: %s .Error waiting for updated status: %s", mcp.GetName(), err)
+		logger.Errorf("MCP: %s .Error waiting for %s status: %s", mcp.GetName(), condition, err)
 	}
 
 	return err
+
 }
 
 // WaitForMachineCount waits until MCP is rerpoting the desired number of machineCount in the status, if the condition times out the returned error is != nil

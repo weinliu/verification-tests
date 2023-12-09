@@ -50,6 +50,14 @@ func (mc *MachineConfig) SetMCOTemplate(templateName string) *MachineConfig {
 	return mc
 }
 
+// SetParams set parameters defined in template
+func (mc *MachineConfig) SetParams(params ...string) *MachineConfig {
+	if len(params) > 0 {
+		mc.parameters = append(mc.parameters, params...)
+	}
+	return mc
+}
+
 func (mc *MachineConfig) create() {
 	mc.name = mc.name + "-" + exutil.GetRandomString()
 	params := []string{"-p", "NAME=" + mc.name, "POOL=" + mc.pool}
