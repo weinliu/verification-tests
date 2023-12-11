@@ -441,6 +441,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-52347 - [AWS-EFS-CSI-Driver][Dynamic PV][Filesystem] is provisioned successfully with storageclass parameter gidRangeStart and gidRangeEnd [Disruptive]
+	// This tc fails from 4.15 bug: https://issues.redhat.com/browse/OCPBUGS-24492
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-52347-[AWS-EFS-CSI-Driver][Dynamic PV][Filesystem] is provisioned successfully with storageclass parameter gidRangeStart and gidRangeEnd [Disruptive]", func() {
 
 		// Set the resource template for the scenario
@@ -458,10 +459,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		exutil.By("# Reboot the EFS driver controller pods")
-		//TODO: No need of hardreset after the fix of bug https://bugzilla.redhat.com/show_bug.cgi?id=2102008
-		efsDriverController.hardRestart(oc.AsAdmin())
-
 		exutil.By("****** AWS EFS test phase start ******")
 
 		// Set the resource definition
@@ -475,7 +472,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		for i := 0; i < 2; i++ {
 			// Set the resource definition
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
 			exutil.By("# Create a pvc with the csi storageclass")
@@ -504,7 +501,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-52346 - [AWS-EFS-CSI-Driver][Dynamic PV][Filesystem] provisioning should not happen if there are no free gidRanges [Disruptive]
-	// https://bugzilla.redhat.com/show_bug.cgi?id=2102008
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-52346-[AWS-EFS-CSI-Driver][Dynamic PV][Filesystem] provisioning should not happen if there are no free gidRanges [Disruptive]", func() {
 
 		// Set the resource template for the scenario
@@ -522,10 +518,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		exutil.By("# Reboot the EFS driver controller pods")
-		//TODO: No need of hardreset after the fix of bug https://bugzilla.redhat.com/show_bug.cgi?id=2102008
-		efsDriverController.hardRestart(oc.AsAdmin())
-
 		exutil.By("****** AWS EFS test phase start ******")
 
 		// Set the resource definition
@@ -539,7 +531,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		for i := 0; i < 3; i++ {
 			// Set the resource definition
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
 			exutil.By("# Create a pvc with the csi storageclass")
@@ -558,15 +550,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				}, 60*time.Second, 5*time.Second).Should(o.Equal("Pending"))
 
 				output, _ := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
-				o.Expect(output).Should(o.ContainSubstring("Failed to locate a free GID for given the file system: " + fsid))
-
+				o.Expect(output).Should(o.ContainSubstring("Failed to locate a free GID for given file system: " + fsid))
 				break
 			}
 			dep.waitReady(oc)
 		}
-
-		exutil.By("# Reboot the EFS driver controller pods")
-		efsDriverController.hardRestart(oc.AsAdmin())
 
 		exutil.By("****** AWS EFS test phase finished ******")
 	})
@@ -576,7 +564,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("StagerunOnly-Author:ropatil-Critical-60580-[AWS-EFS-CSI-Driver][Dynamic PV][Filesystem][Stage] EFS csi operator is installed and provision volume successfully", func() {
 
 		// Set the resource definition
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
 		exutil.By("Create new project for the scenario")
@@ -600,6 +588,202 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dep.checkPodMountedVolumeHaveExecRight(oc)
 
 		exutil.By("****** AWS EFS test phase finished ******")
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-68925 - [AWS-EFS-CSI Driver][Dynamic PV][Filesystem] Volume fstype is not supported
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-68925-[AWS-EFS-CSI Driver][Dynamic PV][Filesystem] Volume fstype is not supported", func() {
+
+		// Set the resource template for the scenario
+		var (
+			storageClassParameters = map[string]string{
+				"provisioningMode":          "efs-ap",
+				"fileSystemId":              fsid,
+				"directoryPerms":            "700",
+				"basePath":                  "/dynamic_provisioning",
+				"csi.storage.k8s.io/fstype": "ext4",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": false,
+			}
+		)
+
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		exutil.By("****** AWS EFS test phase start ******")
+
+		// Set the resource definition for raw block volume
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("efs.csi.aws.com"), setStorageClassVolumeBindingMode("Immediate"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
+
+		exutil.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc)
+
+		exutil.By("# Create a pvc with the csi storageclass")
+		pvc.scname = storageClass.name
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("# The pvc should stuck at Pending")
+		o.Consistently(func() string {
+			pvcState, _ := pvc.getStatus(oc)
+			return pvcState
+		}, 60*time.Second, 5*time.Second).Should(o.Equal("Pending"))
+
+		o.Eventually(func() bool {
+			pvcDescription, _ := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+			return strings.Contains(pvcDescription, "Volume fstype not supported: invalid fstype: ext4")
+		}, 120*time.Second, 10*time.Second).Should(o.BeTrue())
+
+		exutil.By("****** AWS EFS test phase finished ******")
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-68823 - [AWS-EFS-CSI Driver][Dynamic PV][Filesystem] is provisioned successfully with repetative subPathPattern in storageclass
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-68823-[AWS-EFS-CSI Driver][Dynamic PV][Filesystem] is provisioned successfully with repetative subPathPattern in storageclass", func() {
+
+		if exutil.IsSTSCluster(oc) {
+			g.Skip("Skipped: AWS STS clusters are not satisfied the testsuit")
+		}
+
+		// Set the resource template for the scenario
+		// Will set ensureUniqueDirectory as true by default
+		var (
+			storageClassParameters = map[string]string{
+				"provisioningMode": "efs-ap",
+				"fileSystemId":     fsid,
+				"directoryPerms":   "777",
+				"basePath":         "/basepath",
+				"subPathPattern":   "${.PVC.namespace}/${.PVC.name}/${.PVC.name}",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": false,
+			}
+		)
+
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		exutil.By("****** AWS EFS test phase start ******")
+
+		// Set the resource definition
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("efs.csi.aws.com"))
+		exutil.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc)
+
+		// Set the resource definition
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimAccessmode("ReadWriteMany"), setPersistentVolumeClaimName("mypvc"))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+		exutil.By("# Create a pvc with the csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("# Create deployment with the created pvc and wait ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		exutil.By("# Check the RootDirectoryPath")
+		volumeID := pvc.getVolumeID(oc)
+		getAwsCredentialFromSpecifiedSecret(oc, "openshift-cluster-csi-drivers", "aws-efs-cloud-credentials")
+		rootDirPath := getEFSVolumeAccessPointRootDirectoryPath(oc, volumeID)
+		o.Expect(rootDirPath).Should(o.ContainSubstring("/basepath/" + pvc.namespace + "/" + pvc.name + "/" + pvc.name + "-"))
+
+		exutil.By("# Check the pod volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		exutil.By("# Check the pod volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		exutil.By("****** AWS EFS test phase finished ******")
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-68822 - [AWS-EFS-CSI Driver][Dynamic PV][Filesystem] the provisioning directory should respect the ensureUniqueDirectory parameter setting
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-68822-[AWS-EFS-CSI Driver][Dynamic PV][Filesystem] the provisioning directory should respect the ensureUniqueDirectory parameter setting", func() {
+
+		if exutil.IsSTSCluster(oc) {
+			g.Skip("Skipped: AWS STS clusters are not satisfied the testsuit")
+		}
+
+		namespaceA := oc.Namespace()
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		namespaceB := oc.Namespace()
+
+		for _, ensureUniqueDirectoryValue := range []string{"true", "false"} {
+
+			// Set the resource template for the scenario
+			var (
+				storageClassParameters = map[string]string{
+					"provisioningMode":      "efs-ap",
+					"fileSystemId":          fsid,
+					"directoryPerms":        "777",
+					"basePath":              "/basepath",
+					"subPathPattern":        "subPath/${.PVC.name}",
+					"ensureUniqueDirectory": ensureUniqueDirectoryValue,
+				}
+				extraParameters = map[string]interface{}{
+					"parameters":           storageClassParameters,
+					"allowVolumeExpansion": false,
+				}
+			)
+
+			exutil.By("****** AWS EFS test phase start for ensureUniqueDirectoryValue:" + ensureUniqueDirectoryValue + " ******")
+
+			// Set the resource definition
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("efs.csi.aws.com"))
+			exutil.By("# Create csi storageclass")
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
+
+			// Set the resource definition
+			samePvcName := "mypvc-68822-" + ensureUniqueDirectoryValue
+			pvcA := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimAccessmode("ReadWriteMany"), setPersistentVolumeClaimName(samePvcName), setPersistentVolumeClaimNamespace(namespaceA))
+			pvcB := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimAccessmode("ReadWriteMany"), setPersistentVolumeClaimName(samePvcName), setPersistentVolumeClaimNamespace(namespaceB))
+			depA := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvcA.name), setDeploymentNamespace(pvcA.namespace))
+			depB := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvcB.name), setDeploymentNamespace(pvcB.namespace))
+
+			exutil.By("# Create a pvc with the csi storageclass")
+			pvcA.create(oc.AsAdmin())
+			defer pvcA.deleteAsAdmin(oc)
+			pvcB.create(oc.AsAdmin())
+			defer pvcB.deleteAsAdmin(oc)
+
+			exutil.By("# Create deployments with the created pvc and wait ready")
+			depA.create(oc.AsAdmin())
+			defer depA.deleteAsAdmin(oc)
+			depB.create(oc.AsAdmin())
+			defer depB.deleteAsAdmin(oc)
+			depA.waitReady(oc.AsAdmin())
+			depB.waitReady(oc.AsAdmin())
+
+			exutil.By("# Check the RootDirectoryPath")
+			volumeIDA := pvcA.getVolumeID(oc.AsAdmin())
+			volumeIDB := pvcB.getVolumeID(oc.AsAdmin())
+			getAwsCredentialFromSpecifiedSecret(oc, "openshift-cluster-csi-drivers", "aws-efs-cloud-credentials")
+			rootDirPathA := getEFSVolumeAccessPointRootDirectoryPath(oc.AsAdmin(), volumeIDA)
+			rootDirPathB := getEFSVolumeAccessPointRootDirectoryPath(oc.AsAdmin(), volumeIDB)
+			if ensureUniqueDirectoryValue == "true" {
+				o.Expect(rootDirPathA).ShouldNot(o.Equal(rootDirPathB))
+			} else {
+				o.Expect(rootDirPathA).Should(o.Equal(rootDirPathB))
+			}
+
+			exutil.By("# Check the pod volume can be read and write")
+			depA.checkPodMountedVolumeCouldRW(oc.AsAdmin())
+
+			exutil.By("# Check the pod volume have the exec right")
+			depA.checkPodMountedVolumeHaveExecRight(oc.AsAdmin())
+
+			exutil.By("****** AWS EFS test phase finished for ensureUniqueDirectoryValue:" + ensureUniqueDirectoryValue + " ******")
+		}
 	})
 })
 

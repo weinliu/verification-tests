@@ -1024,3 +1024,25 @@ func NewVim25Client(ctx context.Context, oc *exutil.CLI) *vim25.Client {
 	o.Expect(err).ShouldNot(o.HaveOccurred(), "Failed to init the vim25 client")
 	return govmomiClient.Client
 }
+
+// Get the root directory path of EFS access point
+func getEFSVolumeAccessPointRootDirectoryPath(oc *exutil.CLI, volumeID string) string {
+	accessPointsInfo, err := describeEFSVolumeAccessPoints(oc, volumeID)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	path := gjson.Get(accessPointsInfo, `AccessPoints.0.RootDirectory.Path`).String()
+	e2e.Logf("RootDirectoryPath is %v", path)
+	return path
+}
+
+// Describe the AccessPoints info from accesspointID
+func describeEFSVolumeAccessPoints(oc *exutil.CLI, volumeID string) (string, error) {
+	volumeID = strings.Split(volumeID, "::")[1]
+	mySession := session.Must(session.NewSession())
+	svc := efs.New(mySession)
+	describeAccessPointID := &efs.DescribeAccessPointsInput{
+		AccessPointId: aws.String(volumeID),
+	}
+
+	accessPointsInfo, err := svc.DescribeAccessPoints(describeAccessPointID)
+	return interfaceToString(accessPointsInfo), err
+}
