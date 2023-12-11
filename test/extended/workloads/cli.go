@@ -1451,7 +1451,7 @@ var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
 	)
 
 	// author: knarra@redhat.com
-	g.It("MicroShiftOnly-Author:knarra-Critical-60924-Critical-60929-Verify sos report -l lists enabled microshift plugins and Verify running sos report -p microshift collects microshift related information [Serial]", func() {
+	g.It("MicroShiftOnly-Author:knarra-Critical-60924-Critical-60929-High-68257-Verify sos report -l lists enabled microshift plugins and Verify running sos report -p microshift collects microshift and microshift config related information [Serial]", func() {
 
 		g.By("Get microshift node")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
@@ -1468,11 +1468,17 @@ var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
 		o.Expect(strings.Contains(pluginList, "microshift")).To(o.BeTrue())
 		o.Expect(strings.Contains(pluginList, "microshift_ovn")).To(o.BeTrue())
 
+		// Create a directory in /tmp folder to collect microshift sos report
+		g.By("Create a folder in tmp to collect sos report")
+		defer exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "rm -rf /tmp/test60929")
+		_, creationErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "mkdir /tmp/test60929")
+		o.Expect(creationErr).NotTo(o.HaveOccurred())
+
 		g.By("Verify running sos report -p works fine")
-		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch --clean --all-logs --profile microshift")
+		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch --clean --all-logs --profile microshift --tmp-dir=/tmp/test60929")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
-		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport")).To(o.BeTrue())
+		o.Expect(strings.Contains(sosreportStatus, "/tmp/test60929/sosreport")).To(o.BeTrue())
 
 		// Code to extract the sosreport & it's name
 		extractSosReportName := strings.Split(sosreportStatus, "Your sosreport has been generated and saved in")
@@ -1483,10 +1489,8 @@ var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
 		if err != nil {
 			e2e.Failf("Error occured running with microshift profile: %v", err.Error())
 		}
-		defer exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "rm -rf /tmp/test60929")
 		extrattarCmd := fmt.Sprintf(`
 cat > /tmp/extracttarfile.sh << EOF
-mkdir /tmp/test60929
 sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 
 		g.By("Execute the /tmp/extracttarfile.sh to extract the generated sosreport")
@@ -1502,6 +1506,41 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(outputFromExtractedSosText, "oc adm inspect")).To(o.BeTrue())
 		o.Expect(strings.Contains(outputFromExtractedSosText, "ovs-appctl -t /var/run/ovn/ovn-controller.*.ctl ct-zone-list")).To(o.BeTrue())
+
+		g.By("Verify microshift config files are collected in sos report")
+		mConfigFileStatus, mConfigFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo ls -l  /etc/microshift | awk '{print $NF}' | tail -n+2")
+		o.Expect(mConfigFileErr).NotTo(o.HaveOccurred())
+		e2e.Logf("mConfigFileStatus is \n %s", mConfigFileStatus)
+
+		readMConfigCmd := fmt.Sprintf(`ls -l /tmp/test60929/%v/etc/microshift | awk '{print $NF}' | tail -n+2`, sosreportnameaExtraction[0])
+		extractedMConfigOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", readMConfigCmd)
+		e2e.Logf("ExtractedMicroshiftConfigOutput is \n %v", extractedMConfigOut)
+		if extractedMConfigOut != mConfigFileStatus {
+			e2e.Failf("Not all microshift config files are collected in sosreport")
+		}
+
+		manifestList, manifestListErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo ls -l  /etc/microshift/manifests")
+		o.Expect(manifestListErr).NotTo(o.HaveOccurred())
+		e2e.Logf("manifestList is \n %s", manifestList)
+
+		readManifestsCmd := fmt.Sprintf(`ls -l /tmp/test60929/%v/etc/microshift/manifests`, sosreportnameaExtraction[0])
+		extractedManifestsOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", readManifestsCmd)
+		e2e.Logf("ExtractedManifestOut is \n %v", extractedManifestsOut)
+		if extractedManifestsOut != manifestList {
+			e2e.Failf("Files inside /etc/microshift/manifest directory does not match system and sosreport")
+		}
+
+		manifestListD, manifestListErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo ls -l  /etc/microshift/manifests.d/")
+		o.Expect(manifestListErr).NotTo(o.HaveOccurred())
+		e2e.Logf("manifestListerror is \n %s", manifestListD)
+
+		readManifestsDCmd := fmt.Sprintf(`ls -l /tmp/test60929/%v/etc/microshift/manifests.d/`, sosreportnameaExtraction[0])
+		extractedManifestsDOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", readManifestsDCmd)
+		e2e.Logf("ExtractedManifestOut is \n %v", extractedManifestsDOut)
+		if extractedManifestsDOut != manifestListD {
+			e2e.Failf("Files inside /etc/microshift/manifests.d directory does not match between system and sosreport")
+		}
+
 	})
 
 	// author: knarra@redhat.com
@@ -1521,6 +1560,58 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 			e2e.Failf("Error occured running with sos report: %v", err.Error())
 		}
 
+	})
+
+	// author: knarra@redhat.com
+	g.It("MicroShiftOnly-Author:knarra-High-68256-Verify greenboot logs reside in a separate directory and easy to access [Serial]", func() {
+		g.By("Get microshift node")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("Verify running sos report -p system collects greenbot logs")
+		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch --clean --all-logs --profile system")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
+		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport")).To(o.BeTrue())
+
+		// Code to extract the sosreport & it's name
+		extractSosReportName := strings.Split(sosreportStatus, "Your sosreport has been generated and saved in")
+		sosreportNames := strings.Split(extractSosReportName[1], "\n")
+		sosreportName := strings.Split(sosreportNames[1], "/")
+		sosreportnameaExtraction := strings.Split(sosreportName[3], "-obfuscated")
+		e2e.Logf("sosreportnameaExtraction is %v", sosreportnameaExtraction)
+		if err != nil {
+			e2e.Failf("Error occured running with microshift profile: %v", err.Error())
+		}
+		defer exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "rm -rf /tmp/test68256")
+		extrattarCmd := fmt.Sprintf(`
+cat > /tmp/extracttarfile.sh << EOF
+mkdir /tmp/test68256
+sudo tar -xvf %v -C /tmp/test68256`, sosreportNames[1])
+
+		g.By("Execute the /tmp/extracttarfile.sh to extract the generated sosreport")
+		_, executeConfigErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", extrattarCmd)
+		o.Expect(executeConfigErr).NotTo(o.HaveOccurred())
+		_, err = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sh -x /tmp/extracttarfile.sh")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check if greenbot direcorty and it's related files are present in the extracted sos report")
+		checkGreenBootFilesCmd := fmt.Sprintf(`ls -l /tmp/test68256/%v/sos_commands/greenboot`, sosreportnameaExtraction[0])
+		greenbootFilesOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", checkGreenBootFilesCmd)
+		e2e.Logf("outputfromgreenbot dir is %v", greenbootFilesOut)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		greenBotFileList := []string{"journalctl_--no-pager_--unit_greenboot-healthcheck", "journalctl_--no-pager_--unit_greenboot-task-runner", "journalctl_--no-pager_--unit_redboot-task-runner", "systemctl_status_greenboot-healthcheck", "systemctl_status_greenboot-task-runner", "systemctl_status_redboot-task-runner"}
+		for _, gbFile := range greenBotFileList {
+			o.Expect(strings.Contains(greenbootFilesOut, gbFile)).To(o.BeTrue())
+		}
+
+		g.By("Check if greenbot.conf file is present in the extracted sos report")
+		greenBootConfFileCmd := fmt.Sprintf(`ls -l /tmp/test68256/%v/etc/greenboot`, sosreportnameaExtraction[0])
+		greenbootConfFileOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", greenBootConfFileCmd)
+		e2e.Logf("outputfrometcgreenboot dir is %v", greenbootConfFileOut)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(greenbootConfFileOut, "greenboot.conf")).To(o.BeTrue())
 	})
 
 })
