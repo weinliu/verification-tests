@@ -454,7 +454,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-54233-Add the PO/rukpak components to the OCP payload", func() {
+	g.It("ConnectedOnly-Author:jiazha-High-54233-Add the PO/rukpak components to the OCP payload", func() {
 		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the featureSet: %s, error:%v", featureSet, err)
