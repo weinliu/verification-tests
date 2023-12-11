@@ -122,6 +122,32 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cluster-machine-approver", "-i", "--", "curl", url_https).Output()
 		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-High-60147-[clusterInfra] check machineapi and clusterautoscaler as optional operator", func() {
+		g.By("Check capability shows operator is optional")
+		capability, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(capability).To(o.ContainSubstring("MachineAPI"))
+
+		//This condition is for clusters installed with baseline capabilties set to NONE
+		if strings.Contains(capability, "enabledCapabilities") {
+			g.By("Check cluster-autoscaler has annotation to confirm optional status")
+			annotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cluster-autoscaler", "-o=jsonpath={.metadata.annotations}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(annotation).To(o.ContainSubstring("\"capability.openshift.io/name\":\"MachineAPI\""))
+
+			g.By("Check control-plane-machine-set has annotation to confirm optional status")
+			annotation, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "control-plane-machine-set", "-o=jsonpath={.metadata.annotations}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(annotation).To(o.ContainSubstring("\"capability.openshift.io/name\":\"MachineAPI\""))
+
+			g.By("Check machine-api has annotation to confirm optional status")
+			annotation, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "machine-api", "-o=jsonpath={.metadata.annotations}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(annotation).To(o.ContainSubstring("\"capability.openshift.io/name\":\"MachineAPI\""))
+		}
+
+	})
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-69871-Cloud Controller Manager Operator metrics should only be available via https", func() {
