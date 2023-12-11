@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -16,6 +17,28 @@ import (
 // Get the clusterID env.
 func getClusterIDENVExisted() string {
 	return os.Getenv("CLUSTER_ID")
+}
+
+// Get the cluster config file
+func getClusterConfigFile() string {
+	sharedDir := os.Getenv("SHARED_DIR")
+	return path.Join(sharedDir, "cluster-config")
+}
+
+// Get the cluster config file, for jean chen
+func getClusterIDFile() string {
+	sharedDir := os.Getenv("SHARED_DIR")
+	return path.Join(sharedDir, "cluster-id")
+}
+
+func getClusterID() string {
+	if _, err := os.Stat(getClusterIDFile()); err != nil {
+		return ""
+		//panic("Cluster id file not existing")
+	}
+	fileCont, _ := os.ReadFile(getClusterIDFile())
+
+	return string(fileCont)
 }
 
 // Check if the cluster is hosted-cp cluster
@@ -215,3 +238,5 @@ func generateMultipleHtpasswdPairs(pairNum int) ([]string, error) {
 	}
 	return multipleuserPasswd, nil
 }
+
+var defaultWorkerPool = "worker"
