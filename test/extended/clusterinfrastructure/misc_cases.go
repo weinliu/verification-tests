@@ -112,7 +112,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(podName) == 0 {
 			g.Skip("Skip for no pod!")
-
 		}
 		url_http := "http://127.0.0.0:9191/metrics"
 		url_https := "https://127.0.0.0:9192/metrics"
@@ -122,7 +121,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cluster-machine-approver", "-i", "--", "curl", url_https).Output()
 		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
-
 	})
 
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-69871-Cloud Controller Manager Operator metrics should only be available via https", func() {
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-l", "k8s-app=cloud-manager-operator", "-n", "openshift-cloud-controller-manager-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		url_http := "http://127.0.0.0:9257/metrics"
+		url_https := "https://127.0.0.0:9258/metrics"
+
+		curlOutputHttp, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cloud-controller-manager-operator", "-i", "--", "curl", url_http).Output()
+		o.Expect(curlOutputHttp).To(o.ContainSubstring("Connection refused"))
+
+		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cloud-controller-manager-operator", "-i", "--", "curl", url_https).Output()
+		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
+	})
 })
