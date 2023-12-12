@@ -386,15 +386,18 @@ class SummaryClient:
         self.get_jenkins_case_result()
         spreadsheet_target = self.gclient.open_by_url(self.target_file)
         template = spreadsheet_target.worksheet("template")
-        worksheet_target = spreadsheet_target.duplicate_sheet(template.id,1)
         sheetName = self.version+"-"+date.today().strftime("%Y%m%d")
-        worksheet_target.update_title(sheetName)
         worksheetTitle_list =[sheet.title for sheet in spreadsheet_target.worksheets()]
         self.logger.info(worksheetTitle_list)
         if "Monthly CI Pass Ratio Trend" in worksheetTitle_list:
+            worksheet_target = spreadsheet_target.duplicate_sheet(template.id,1)
             self.logger.info("update Monthly CI Pass Ratio Trend")
             summary = spreadsheet_target.worksheet("Monthly CI Pass Ratio Trend")
             self.update_summary(summary, self.version, sheetName)
+        else:
+            worksheet_target = spreadsheet_target.duplicate_sheet(template.id,0)
+        worksheet_target.update_title(sheetName)
+        
         sheet_update_content = []
         row = 32
         row_start = 33
@@ -506,7 +509,7 @@ class SummaryClient:
             pass_ratio = float(values_list[6].replace("%",""))
             if pass_ratio < 85:
                 self.logger.info("pass ratio is %f", pass_ratio)
-                comments = self.version+": pass ratio is "+pass_ratio+os.linesep+values_list[7]
+                comments = self.version+": pass ratio is "+str(pass_ratio)+"%"+os.linesep+values_list[7]
                 jira_link = self.jiraManager.create_sub_task(self.parent_jira_issue, subtasks, caseid, case_title, author, comments)
                 worksheet.update_acell('J'+str(row_number), "https://issues.redhat.com/browse/"+jira_link)
         
@@ -542,7 +545,8 @@ class JIRAManager:
                     "kuiwang": "rhn-support-kuiwang",
                     "bandrade":"bandrade@redhat.com",
                     "scolange": "rhn-support-xzha",
-                    "tbuskey": "rhn-support-xzha"
+                    "tbuskey": "rhn-support-xzha",
+                    "jitli": "rhn-support-xzha"
         }
         description_str = """
 Hi, @{author}
@@ -551,14 +555,12 @@ Hi, @{author}
 """.format(author=auth_map[author], case=case_id, title=case_title, comments=comments)
         for substask in subtasks.keys():
             if case_id.lower() in subtasks[substask]["summary"].lower():
+                self.logger.info("add comments to %s", substask)
+                self.jira.add_comment(substask, description_str)
+                case_issue = self.jira.issue(substask)
                 if case_issue.fields.status.name in ['Closed']:
-                    #self.jira.transition_issue(case_issue, transition='In Progress')
-                    self.logger.info("the ticket has been closed, create a new one")
-                else:
-                    self.logger.info("add comments to %s", substask)
-                    self.jira.add_comment(substask, description_str)
-                    case_issue = self.jira.issue(substask)
-                    return substask            
+                    self.jira.transition_issue(case_issue, transition='In Progress')
+                return substask 
         self.logger.info("Create sub task for %s", case_id)
         if not case_id:
             return
