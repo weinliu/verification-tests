@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	}
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-21205-Low-36584-Install descheduler operator via a deployment & verify it should not violate PDB [Slow] [Disruptive] [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-21205-Low-36584-Install descheduler operator via a deployment & verify it should not violate PDB [Slow] [Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -322,13 +322,12 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Collect PDB  metrics from prometheus
 		g.By("Checking PDB metrics from prometheus")
-		checkDeschedulerMetrics(oc, `result="error"`, "descheduler_pods_evicted", podName)
-		checkDeschedulerMetrics(oc, "RemoveDuplicates", "descheduler_pods_evicted", podName)
-
+		checkDeschedulerMetrics(oc, regexp.QuoteMeta(`result="error"`)+".*"+regexp.QuoteMeta("RemoveDuplicates"), "descheduler_pods_evicted", podName)
+		checkDeschedulerMetrics(oc, regexp.QuoteMeta(`result="success"`)+".*"+regexp.QuoteMeta("RemoveDuplicates"), "descheduler_pods_evicted", podName)
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-37463-High-40055-Descheduler-Validate AffinityAndTaints and TopologyAndDuplicates profile [Disruptive][Slow] [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-37463-High-40055-Descheduler-Validate AffinityAndTaints and TopologyAndDuplicates profile [Disruptive][Slow]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -1088,7 +1087,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Medium-43277-High-50941-Descheduler-Validate Predictive and Automatic mode for descheduler [Flaky][Slow][Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Medium-43277-High-50941-Descheduler-Validate Predictive and Automatic mode for descheduler [Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -1251,7 +1250,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-50193-High-50191-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow] [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-50193-High-50191-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 

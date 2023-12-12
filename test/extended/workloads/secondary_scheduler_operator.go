@@ -47,7 +47,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			channelName: "stable",
 			opsrcName:   "qe-app-registry",
 			sourceName:  "openshift-marketplace",
-			startingCSV: "secondaryscheduleroperator.v1.1.2",
+			startingCSV: "secondaryscheduleroperator.v1.2.1",
 			template:    ssoSubscriptionT,
 		}
 
@@ -146,7 +146,28 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(ssCsvOutput, "secondaryscheduleroperator.v1.2.1")).To(o.BeTrue())
 
-		// Create test project
+		//Add the k8 dependencies checkpoint for RODO and SSO
+		g.By("Get the latest version of Kubernetes")
+		ocVersion, versionErr := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
+		o.Expect(versionErr).NotTo(o.HaveOccurred())
+		kubenetesVersion := strings.Split(strings.Split(ocVersion, "+")[0], "v")[1]
+		kuberVersion := strings.Split(kubenetesVersion, ".")[0] + "." + strings.Split(kubenetesVersion, ".")[1]
+
+		g.By("Check the minkubeversion for secondary scheduler operator")
+		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			minkuberversion, ssoErr := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", kubeNamespace, "-o=jsonpath={.items[0].spec.minKubeVersion}").Output()
+			if ssoErr != nil {
+				e2e.Logf("Fail to get csv, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString(kuberVersion, minkuberversion); matched {
+				e2e.Logf("Secondary scheduler operator rebased with latest kubernetes")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Secondary scheduler operator not rebased with latest Kubernetes")
+
 		// Create test project
 		g.By("Create a new project test-sso-48916")
 		defer getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("delete").Args("ns", "test-sso-48916").Execute()
