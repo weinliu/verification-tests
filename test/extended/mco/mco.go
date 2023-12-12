@@ -344,7 +344,12 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.ContainSubstring("realtime")))
 
 		exutil.By("Check kernel arguments, kernel type and extension on the rhel worker node")
-		o.Expect(rhelOs.RpmIsInstalled("kernel-tools", "kernel")).Should(o.BeTrue(), "cannot find package kernel-tools or kernel")
+		o.Expect(rhelOs.RpmIsInstalled(
+			"kernel-tools",
+			"kernel-tools-libs",
+			"kernel-core",
+			"kernel-modules",
+			"kernel")).Should(o.BeTrue(), "cannot find package kernel-tools|kernel-tools-libs|kernel-core|kernel-modules|kernel")
 		o.Expect(rhelOs.IsKernelArgEnabled("PREEMPT_RT")).Should(o.BeFalse(), "kernel arg PREEMPT_RT found in output of uname -a, it is not expected")
 		o.Expect(rhelOs.IsKernelArgEnabled("z=10")).Should(o.BeFalse(), "kernel arg z=10 found in /proc/cmdline, it is not expected")
 
@@ -354,7 +359,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			"kernel-rt-core",
 			"kernel-rt-modules-core",
 			"kernel-rt-modules-extra",
-			"kernel-rt-modules")).Should(o.BeTrue(), "cannot find package kernel-rt-core/kernel-rt-modules.*")
+			"kernel-rt-modules")).Should(o.BeTrue(), "cannot find package kernel-rt-kvm|kernel-rt-core|kernel-rt-modules.*")
 		o.Expect(coreOs.IsKernelArgEnabled("PREEMPT_RT")).Should(o.BeTrue(), "kernel arg PREEMPT_RT not found in output of uname -a")
 		o.Expect(coreOs.IsKernelArgEnabled("z=10")).Should(o.BeTrue(), "kernel arg z=10 not found in /proc/cmdline")
 
