@@ -51,7 +51,8 @@ sos -h
 echo "------------------get oc------------------------"
 echo "get latest oc"
 unset http_proxy https_proxy
-curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp/candidate-4.14/openshift-client-linux.tar.gz -o oc-linux.tar.gz
+curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/candidate-4.15/openshift-client-linux.tar.gz -o oc-linux.tar.gz
+
 tar -xzvf oc-linux.tar.gz
 echo "get oc-linux.tar.gz successfully"
 rm -f oc-linux.tar.gz
