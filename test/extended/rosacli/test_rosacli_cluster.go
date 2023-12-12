@@ -13,6 +13,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		clusterID      string
 		rosaClient     *rosacli.Client
 		clusterService rosacli.ClusterService
+		clusterConfig  *ClusterConfig
 	)
 
 	g.BeforeEach(func() {
@@ -23,6 +24,11 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
 		clusterService = rosaClient.Cluster
+
+		g.By("Load the original cluster config")
+		var err error
+		clusterConfig, err = parseProfile(getClusterConfigFile())
+		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
 	g.It("Author:yuwan-High-38850-Restrict master API endpoint to direct, private connectivity or not [Serial]", func() {
@@ -67,5 +73,47 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		CD := clusterService.ReflectClusterDescription(output)
 		o.Expect(CD.Private).To(o.Equal("Yes"))
 
+	})
+
+	// OCM-5231 caused the description parser issue
+	g.It("Author:xueli-High-45159-User can disable workload monitoring on/off via rosa-cli [Serial]", func() {
+		g.By("Check the cluster UWM is in expected status")
+		output, err := clusterService.DescribeCluster(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
+
+		clusterDetail := clusterService.ReflectClusterDescription(output)
+		expectedUWMValue := "Enabled"
+		if clusterConfig.DisableWorkloadMonitoring {
+			expectedUWMValue = "Disabled"
+		}
+		o.Expect(clusterDetail.UserWorkloadMonitoring).To(o.Equal(expectedUWMValue))
+
+		g.By("Disable the UWM")
+		expectedUWMValue = "Disabled"
+		_, err = clusterService.EditCluster(clusterID,
+			"--disable-workload-monitoring",
+			"-y")
+		o.Expect(err).ToNot(o.HaveOccurred())
+
+		g.By("Check the disable result for cluster description")
+		output, err = clusterService.DescribeCluster(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
+
+		clusterDetail = clusterService.ReflectClusterDescription(output)
+		o.Expect(clusterDetail.UserWorkloadMonitoring).To(o.Equal(expectedUWMValue))
+
+		g.By("Enable the UWM again")
+		expectedUWMValue = "Enabled"
+		_, err = clusterService.EditCluster(clusterID,
+			"--disable-workload-monitoring=false",
+			"-y")
+		o.Expect(err).ToNot(o.HaveOccurred())
+
+		g.By("Check the disable result for cluster description")
+		output, err = clusterService.DescribeCluster(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
+
+		clusterDetail = clusterService.ReflectClusterDescription(output)
+		o.Expect(clusterDetail.UserWorkloadMonitoring).To(o.Equal(expectedUWMValue))
 	})
 })

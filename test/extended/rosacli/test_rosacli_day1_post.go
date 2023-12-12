@@ -13,7 +13,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		clusterID          string
 		rosaClient         *rosacli.Client
 		machinePoolService rosacli.MachinePoolService
-		clusterConig       *ClusterConfig
+		clusterConfig      *ClusterConfig
 	)
 
 	g.BeforeEach(func() {
@@ -26,7 +26,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		rosaClient = rosacli.NewClient()
 		machinePoolService = rosaClient.MachinePool
 		var err error
-		clusterConig, err = parseProfile(getClusterConfigFile())
+		clusterConfig, err = parseProfile(getClusterConfigFile())
 		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 	g.It("Author:xueli-Critical-66359-Create rosa cluster with volume size will work via rosacli [Serial]", func() {
@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		}
 
 		g.By("Set expected worker pool size")
-		expectedDiskSize := clusterConig.WorkerDiskSize
+		expectedDiskSize := clusterConfig.WorkerDiskSize
 		if expectedDiskSize == "" {
 			expectedDiskSize = "300GiB" // if no worker disk size set, it will use default value
 		}
@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 
 	g.It("Author:xueli-Critical-57056-Create ROSA cluster with default-mp-labels option will succeed [Serial]", func() {
 		g.By("Check the cluster config")
-		mpLables := strings.Join(strings.Split(clusterConig.DefaultMpLabels, ","), ", ")
+		mpLables := strings.Join(strings.Split(clusterConfig.DefaultMpLabels, ","), ", ")
 
 		g.By("Check the machinepool list")
 		output, err := machinePoolService.ListMachinePool(clusterID)
