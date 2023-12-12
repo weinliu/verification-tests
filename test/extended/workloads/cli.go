@@ -1878,6 +1878,9 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-68405-oc process works well for cross-namespace template", func() {
+		if checkOpenshiftSamples(oc) {
+			g.Skip("Can't find the cluster operator openshift-samples, skip it.")
+		}
 		g.By("Create new namespace")
 		oc.SetupProject()
 		nsName1 := oc.Namespace()
@@ -1890,6 +1893,13 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		oc.SetupProject()
 		g.By("Process the templete in the first namespace")
 		err = oc.AsAdmin().Run("process").Args(nsName1 + "//project-request").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//checkpoint for OCPBUGS-24375, oc process command succeed while running it with a template file cross namespace
+		oc.SetupProject()
+		tmeFile2, err := oc.WithoutNamespace().Run("get").Args("template", "httpd-example", "-n", "openshift", "-o", "yaml").OutputToFile("httpdexampleT.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("process").Args("-f", tmeFile2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 	// author: yinzhou@redhat.com
