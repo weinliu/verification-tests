@@ -14,7 +14,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-networking] SDN", func() {
+var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-ipsec", exutil.KubeConfigPath())
@@ -24,8 +24,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		// Epic https://issues.redhat.com/browse/SDN-2629
 
 		platform := checkPlatform(oc)
+		networkType := checkNetworkType(oc)
+		e2e.Logf("\nThe platform is %v,  networkType is %v\n", platform, networkType)
 		if !strings.Contains(platform, "ibmcloud") {
-			g.Skip("Skip for un-expected platform,not IBMCloud!")
+			g.Skip("Test requires IBMCloud, skip for other platforms!")
+		}
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Test requires OVN, skipping!")
+		}
+		ipsecState := checkIPsec(oc)
+		if ipsecState != "{}" {
+			g.Skip("IPsec not enabled, skiping test!")
 		}
 
 		ns := "openshift-ovn-kubernetes"
