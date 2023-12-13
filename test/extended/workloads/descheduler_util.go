@@ -326,7 +326,7 @@ func (deploydp *deployduplicatepods) createDuplicatePods(oc *exutil.CLI) {
 
 func (deploypts *deploypodtopologyspread) createPodTopologySpread(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploypts.template, "-p", "DNAME="+deploypts.dName, "NAMESPACE="+deploypts.namespace)
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploypts.template, "-p", "DNAME="+deploypts.dName, "NAMESPACE="+deploypts.namespace)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil

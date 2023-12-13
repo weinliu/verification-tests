@@ -3,7 +3,6 @@ package workloads
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -51,7 +50,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	deschu := kubedescheduler{
 		namespace:        kubeNamespace,
 		interSeconds:     60,
-		imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
+		imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
 		logLevel:         "Normal",
 		operatorLogLevel: "Normal",
 		profile1:         "AffinityAndTaints",
@@ -741,6 +740,9 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp40055-zone", "ocp40055zoneB")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "ocp40055-zone")
 
+		g.By("Set namespace privileged")
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+
 		g.By("Uncordon Node1")
 		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -782,22 +784,16 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	// author: knarra@redhat.com
 	g.It("HyperShiftMGMT-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
 		// Check if cluster is hypershift cluster
-		guestClusterName, guestClusterKube, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
-		if guestClusterKube != "" {
-			e2e.Logf("%s, %s", guestClusterName, guestClusterKube)
-			hostedClusterNS = hostedClusterName + "-" + guestClusterName
-			e2e.Logf("hostedClusterNS is %s", hostedClusterNS)
-			oc.SetGuestKubeconf(guestClusterKube)
-		} else {
-			kubeconfigFile := os.Getenv("KUBECONFIG")
-			oc.SetGuestKubeconf(kubeconfigFile)
+		guestClusterName, guestClusterKubeconfig, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
+		if guestClusterKubeconfig != "" {
+			oc.SetGuestKubeconf(guestClusterKubeconfig)
 		}
 
 		// Skip the test if cluster is SNO
-		exutil.SkipForSNOCluster(oc.AsGuestKubeconf())
+		exutil.SkipForSNOCluster(getOCPerKubeConf(oc, guestClusterKubeconfig))
 
 		// Skip the test if no qe-app-registry catalog is present
-		skipMissingCatalogsource(oc.AsGuestKubeconf())
+		skipMissingCatalogsource(getOCPerKubeConf(oc, guestClusterKubeconfig))
 
 		deploysptT := filepath.Join(buildPruningBaseDir, "deploy_softPodTopologySpread.yaml")
 		deploysdT := filepath.Join(buildPruningBaseDir, "deploy_softdemopod.yaml")
@@ -805,7 +801,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -815,36 +811,36 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Create the descheduler namespace")
-		defer oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
-		err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
+		defer getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		patch := `[{"op":"add", "path":"/metadata/labels/openshift.io~1cluster-monitoring", "value":"true"}]`
-		err = oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("patch").Args("ns", kubeNamespace, "--type=json", "-p", patch).Execute()
+		err = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("patch").Args("ns", kubeNamespace, "--type=json", "-p", patch).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the operatorgroup")
-		og.createOperatorGroup(oc.AsGuestKubeconf())
+		og.createOperatorGroup(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer og.deleteOperatorGroup(oc.AsGuestKubeconf())
+		defer og.deleteOperatorGroup(getOCPerKubeConf(oc, guestClusterKubeconfig))
 
 		g.By("Create the subscription")
-		sub.createSubscription(oc.AsGuestKubeconf())
+		sub.createSubscription(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer sub.deleteSubscription(oc.AsGuestKubeconf())
+		defer sub.deleteSubscription(getOCPerKubeConf(oc, guestClusterKubeconfig))
 
 		g.By("Wait for the descheduler operator pod running")
-		if ok := waitForAvailableRsRunning(oc.AsGuestKubeconf(), "deploy", "descheduler-operator", kubeNamespace, "1"); ok {
+		if ok := waitForAvailableRsRunning(getOCPerKubeConf(oc, guestClusterKubeconfig), "deploy", "descheduler-operator", kubeNamespace, "1"); ok {
 			e2e.Logf("Kubedescheduler operator runnnig now\n")
 		}
 
 		g.By("Create descheduler cluster")
-		deschu.createKubeDescheduler(oc.AsGuestKubeconf())
+		deschu.createKubeDescheduler(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
+		defer getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
 
 		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			output, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
 			if err != nil {
 				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
 				return false, nil
@@ -858,30 +854,30 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
 
 		g.By("Check the kubedescheduler run well")
-		checkAvailable(oc.AsGuestKubeconf(), "deploy", "descheduler", kubeNamespace, "1")
+		checkAvailable(getOCPerKubeConf(oc, guestClusterKubeconfig), "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Set descheduler mode to Automatic")
 		patchYamlTraceAll := `[{"op": "replace", "path": "/spec/mode", "value":"Automatic"}]`
-		err = oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
+		err = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
 
 		defer func() {
 			e2e.Logf("Restoring descheduler mode back to Predictive")
-			err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kubedescheduler run well")
-			checkAvailable(oc.AsGuestKubeconf(), "deploy", "descheduler", kubeNamespace, "1")
+			checkAvailable(getOCPerKubeConf(oc, guestClusterKubeconfig), "deploy", "descheduler", kubeNamespace, "1")
 		}()
 
 		g.By("Check the kubedescheduler run well")
-		checkAvailable(oc.AsGuestKubeconf(), "deploy", "descheduler", kubeNamespace, "1")
+		checkAvailable(getOCPerKubeConf(oc, guestClusterKubeconfig), "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
 		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			podName, _ := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			podName, _ := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 			if strings.Contains(podName, " ") {
 				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
 				return false, nil
@@ -891,15 +887,18 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
 
-		podName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		podName, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test for SoftTopologyAndDuplicates
 		// Create test project
 		g.By("Create a new project test-sso-48916")
-		defer oc.AsAdmin().AsGuestKubeconf().Run("delete").Args("ns", "test-42387").Execute()
-		err = oc.AsAdmin().AsGuestKubeconf().Run("create").Args("ns", "test-42387").Execute()
+		defer getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("delete").Args("ns", "test-42387").Execute()
+		err = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("create").Args("ns", "test-42387").Execute()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		exutil.SetNamespacePrivileged(getOCPerKubeConf(oc, guestClusterKubeconfig), "test-42387")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		testspt := deploypodtopologyspread{
 			dName:     "d432831",
@@ -926,71 +925,71 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Cordon all nodes in the cluster")
-		nodeName, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		nodeName, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("\nNode Names are %v", nodeName)
 		node := strings.Fields(nodeName)
 
 		defer func() {
 			for _, v := range node {
-				oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", v)).Execute()
+				getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", v)).Execute()
 			}
 		}()
 
 		for _, v := range node {
-			_ = oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("adm").Args("cordon", fmt.Sprintf("%s", v)).Execute()
+			_ = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("adm").Args("cordon", fmt.Sprintf("%s", v)).Execute()
 			//o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
 		g.By("Label Node1 & Node2")
-		addLabelToNode(oc.AsGuestKubeconf(), "ocp43283-zone=ocp43283zoneA", node[0], "nodes")
-		defer removeLabelFromNode(oc.AsGuestKubeconf(), "ocp43283-zone-", node[0], "nodes")
-		addLabelToNode(oc.AsGuestKubeconf(), "ocp43283-zone=ocp43283zoneB", node[1], "nodes")
-		defer removeLabelFromNode(oc.AsGuestKubeconf(), "ocp43283-zone-", node[1], "nodes")
+		addLabelToNode(getOCPerKubeConf(oc, guestClusterKubeconfig), "ocp43283-zone=ocp43283zoneA", node[0], "nodes")
+		defer removeLabelFromNode(getOCPerKubeConf(oc, guestClusterKubeconfig), "ocp43283-zone-", node[0], "nodes")
+		addLabelToNode(getOCPerKubeConf(oc, guestClusterKubeconfig), "ocp43283-zone=ocp43283zoneB", node[1], "nodes")
+		defer removeLabelFromNode(getOCPerKubeConf(oc, guestClusterKubeconfig), "ocp43283-zone-", node[1], "nodes")
 
 		g.By("Uncordon Node1")
-		err = oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("adm").Args("uncordon", node[0]).Execute()
+		err = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", node[0]).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create three pods on node1")
-		testspt.createPodTopologySpread(oc.AsGuestKubeconf())
+		testspt.createPodTopologySpread(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Creating first demo pod")
-		testspt1.createPodTopologySpread(oc.AsGuestKubeconf())
+		testspt1.createPodTopologySpread(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Creating second demo pod")
-		testspt2.createPodTopologySpread(oc.AsGuestKubeconf())
+		testspt2.createPodTopologySpread(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("cordon Node1, uncordon Node2")
-		err = oc.AsAdmin().AsGuestKubeconf().Run("adm").Args("cordon", node[0]).Execute()
+		err = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("adm").Args("cordon", node[0]).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().AsGuestKubeconf().Run("adm").Args("uncordon", node[1]).Execute()
+		err = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("adm").Args("uncordon", node[1]).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("create one pod on node2")
-		testspt3.createPodTopologySpread(oc.AsGuestKubeconf())
+		testspt3.createPodTopologySpread(getOCPerKubeConf(oc, guestClusterKubeconfig))
 
 		g.By("uncordon Node1")
-		err = oc.AsAdmin().AsGuestKubeconf().Run("adm").Args("uncordon", node[0]).Execute()
+		err = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("adm").Args("uncordon", node[0]).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see evict logs")
-		checkLogsFromRs(oc.AsGuestKubeconf(), kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(`reason=""`)+".*"+regexp.QuoteMeta(`strategy="RemovePodsViolatingTopologySpreadConstraint"`))
+		checkLogsFromRs(getOCPerKubeConf(oc, guestClusterKubeconfig), kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(`reason=""`)+".*"+regexp.QuoteMeta(`strategy="RemovePodsViolatingTopologySpreadConstraint"`))
 
 		// Collect SoftTopologyAndDuplicate metrics from prometheus
 		g.By("Checking SoftTopologyAndDuplicate metrics from prometheus")
-		checkDeschedulerMetrics(oc.AsGuestKubeconf(), "RemovePodsViolatingTopologySpreadConstraint", "descheduler_pods_evicted", podName)
+		checkDeschedulerMetrics(getOCPerKubeConf(oc, guestClusterKubeconfig), "RemovePodsViolatingTopologySpreadConstraint", "descheduler_pods_evicted", podName)
 
-		if guestClusterKube == "" || guestClusterKube == "null" {
+		if guestClusterKubeconfig == "" || guestClusterKubeconfig == "null" {
 			defer func() {
 				patch = `[{"op":"remove", "path":"/spec/profile"}]`
-				oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patch).Execute()
+				getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patch).Execute()
 				g.By("Check the kube-scheduler operator should be in Progressing")
 				err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-					output, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("co", "kube-scheduler").Output()
+					output, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("get").Args("co", "kube-scheduler").Output()
 					if err != nil {
 						e2e.Logf("clusteroperator kube-scheduler not start new progress, error: %s. Trying again", err)
 						return false, nil
@@ -1005,7 +1004,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 				g.By("Wait for the KubeScheduler operator to recover")
 				err = wait.Poll(30*time.Second, 400*time.Second, func() (bool, error) {
-					output, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("co", "kube-scheduler").Output()
+					output, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("get").Args("co", "kube-scheduler").Output()
 					if err != nil {
 						e2e.Logf("Fail to get clusteroperator kube-scheduler, error: %s. Trying again", err)
 						return false, nil
@@ -1023,12 +1022,12 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			// Test for config does not conflict with scheduler
 			g.By("Set HighNodeUtilization profile on scheduler")
 			patch = `[{"op":"add", "path":"/spec/profile", "value":"HighNodeUtilization"}]`
-			err = oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patch).Execute()
+			err = getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patch).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the kube-scheduler operator should be in Progressing")
 			err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-				output, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("co", "kube-scheduler").Output()
+				output, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("get").Args("co", "kube-scheduler").Output()
 				if err != nil {
 					e2e.Logf("clusteroperator kube-scheduler not start new progress, error: %s. Trying again", err)
 					return false, nil
@@ -1043,7 +1042,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 			g.By("Wait for the KubeScheduler operator to recover")
 			err = wait.Poll(30*time.Second, 400*time.Second, func() (bool, error) {
-				output, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("co", "kube-scheduler").Output()
+				output, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("get").Args("co", "kube-scheduler").Output()
 				if err != nil {
 					e2e.Logf("Fail to get clusteroperator kube-scheduler, error: %s. Trying again", err)
 					return false, nil
@@ -1060,29 +1059,29 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 			defer func() {
 				e2e.Logf("Restoring the scheduler cluster's logLevel")
-				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlToRestore).Execute()
+				err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlToRestore).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 
 				g.By("Check all the kube-scheduler pods in the hosted cluster namespace should be up and running")
-				waitForDeploymentPodsToBeReady(oc, hostedClusterNS, "kube-scheduler")
+				waitForDeploymentPodsToBeReady(getOCPerKubeConf(oc, guestClusterKubeconfig), hostedClusterNS, "kube-scheduler")
 			}()
 
 			g.By("Set profile to HighNodeUtilization")
 			patchYamlHighNodeUtilization := `[{"op": "add", "path": "/spec/configuration", "value":{"scheduler":{"profile":"HighNodeUtilization"}}}]`
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlHighNodeUtilization).Execute()
+			err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlHighNodeUtilization).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Wait for kube-scheduler pods to restart and run fine")
-			waitForDeploymentPodsToBeReady(oc, hostedClusterNS, "kube-scheduler")
+			waitForDeploymentPodsToBeReady(getOCPerKubeConf(oc, guestClusterKubeconfig), hostedClusterNS, "kube-scheduler")
 
 		}
 
 		g.By("Get descheduler operator pod name")
-		operatorPodName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("pods", "-l", "name=descheduler-operator", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		operatorPodName, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("get").Args("pods", "-l", "name=descheduler-operator", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see config error logs")
-		checkLogsFromRs(oc.AsGuestKubeconf(), kubeNamespace, "pod", operatorPodName, regexp.QuoteMeta(`"enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop"`))
+		checkLogsFromRs(getOCPerKubeConf(oc, guestClusterKubeconfig), kubeNamespace, "pod", operatorPodName, regexp.QuoteMeta(`"enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop"`))
 
 	})
 
@@ -1102,7 +1101,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -1266,7 +1265,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "AffinityAndTaints",
@@ -1361,7 +1360,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschuP := kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "AffinityAndTaints",
@@ -1469,7 +1468,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -1526,7 +1525,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschuP := kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "AffinityAndTaints",
@@ -1646,7 +1645,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -1860,7 +1859,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.14.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
