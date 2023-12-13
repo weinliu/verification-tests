@@ -76,5 +76,8 @@ export const Pages = {
   },
   gotoConfigMapDetailsYamlTab:(namespace: string, cmname: string) => {
     cy.visit(`/k8s/ns/${namespace}/configmaps/${cmname}/yaml`);
+  },
+  gotoUsers: () => {
+    cy.visit('/k8s/cluster/user.openshift.io~v1~User');
   }
 }

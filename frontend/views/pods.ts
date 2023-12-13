@@ -28,16 +28,12 @@ export namespace podsPageUtils {
   }
   export const podsPage = {
     goToPodsInAllNamespaces: () => {
-    // go to the page
-    cy.visit('/k8s/all-namespaces/pods');
-    // check for the page to be loaded by checking for the columns in the page to be displayed
-    cy.get('.pf-c-table__text').should('exist')
+      cy.visit('/k8s/all-namespaces/pods');
+      cy.get('.pf-c-table__text').should('exist');
     },
     goToPodsForGivenNamespace: (namespace: String) => {
-    // go to the page
-    cy.visit('/k8s/ns/'+namespace+'/pods');
-    // check for the page to be loaded by checking for the columns in the page to be displayed
-    cy.get('.pf-c-table__text').should('exist')
+      cy.visit('/k8s/ns/'+namespace+'/pods');
+      cy.get('.pf-c-table__text').should('exist');
     },
     // this is to make sure the page is loaded,
     // the pods page is loaded when the columns are displayed hence checking for this condition
@@ -49,6 +45,9 @@ export namespace podsPageUtils {
     },
     goToPodsMetricsTab: (namespace: string, podname: string) => {
       cy.visit(`/k8s/ns/${namespace}/pods/${podname}/metrics`)
+    },
+    goToPodsLogTab: (namespace:string, podname: string) => {
+      cy.visit(`/k8s/ns/${namespace}/pods/${podname}/logs`)
     }
   }
   export const podsMetricsTab ={
