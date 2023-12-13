@@ -717,6 +717,22 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			o.Expect(strings.Contains(projectSAOutput, "builder")).To(o.BeFalse())
 		}
 	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-69870-ClusterResourceQuota should not been stuck in delete state when using foreground deletion cascading strategy", func() {
+		workloadsBaseDir := exutil.FixturePath("testdata", "workloads")
+		templateYaml := filepath.Join(workloadsBaseDir, "clusterresroucequota.yaml")
+
+		g.By("Create the cluster resource quota")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", templateYaml).Execute()
+		_, temOutErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", templateYaml).Output()
+		o.Expect(temOutErr).NotTo(o.HaveOccurred())
+		g.By("Delete the cluster resource quota")
+		temDeleteErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("--cascade=foreground", "clusterresourcequota", "blue").Execute()
+		o.Expect(temDeleteErr).NotTo(o.HaveOccurred())
+		_, temOutput, temOutErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterresourcequota", "blue").Outputs()
+		o.Expect(temOutErr).To(o.HaveOccurred())
+		o.Expect(temOutput).To(o.ContainSubstring("not found"))
+	})
 
 })
 
