@@ -655,6 +655,12 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-44928-oc image mirror support registry which authorization server's url is different from registry url", func() {
+		g.By("Skip if the cluster is AzureStackCloud")
+		azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(azureErr).NotTo(o.HaveOccurred())
+		if azureStackCloud == "AzureStackCloud" {
+			g.Skip("Skip for cluster with AzureStackCloud!")
+		}
 		architecture.SkipArchitectures(oc, architecture.MULTI)
 		dockerauthBaseDir := exutil.FixturePath("testdata", "workloads")
 		dockerConfigDir := filepath.Join(dockerauthBaseDir, "config")
@@ -916,6 +922,12 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-61607-oc image mirror always copy blobs if the target is file", func() {
+		g.By("Skip if the cluster is AzureStackCloud")
+		azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(azureErr).NotTo(o.HaveOccurred())
+		if azureStackCloud == "AzureStackCloud" {
+			g.Skip("Skip for cluster with AzureStackCloud!")
+		}
 		testBaseDir := exutil.FixturePath("testdata", "workloads")
 		mappingFile := filepath.Join(testBaseDir, "testmapping.txt")
 		mirrorFile := filepath.Join(testBaseDir, "mirror-from-filesystem.txt")
@@ -1335,6 +1347,12 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-67013-oc image mirror with multi-arch images and --filter-by-os", func() {
+		g.By("Skip if the cluster is AzureStackCloud")
+		azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(azureErr).NotTo(o.HaveOccurred())
+		if azureStackCloud == "AzureStackCloud" {
+			g.Skip("Skip for cluster with AzureStackCloud!")
+		}
 		g.By("create new namespace")
 		oc.SetupProject()
 		registry := registry{
@@ -1831,6 +1849,12 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-37363-High-38859-Check oc image mirror with multi-arch images", func() {
+		g.By("Skip if the cluster is AzureStackCloud")
+		azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(azureErr).NotTo(o.HaveOccurred())
+		if azureStackCloud == "AzureStackCloud" {
+			g.Skip("Skip for cluster with AzureStackCloud!")
+		}
 		g.By("Create new namespace")
 		oc.SetupProject()
 		registry := registry{
