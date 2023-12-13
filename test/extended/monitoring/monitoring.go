@@ -557,6 +557,54 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_network_info{device=~"cali.*"}'`, token, "\"result\":[]", uwmLoadTime)
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-69087-Replace OAuth-proxy container with kube-rbac-proxy in Thanos-Querier pod", func() {
+		g.By("check role added")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("role", "cluster-monitoring-metrics-api", "-n", "openshift-monitoring").Output()
+		o.Expect(output).NotTo(o.ContainSubstring("NotFound"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check cluster role added")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterRole", "cluster-monitoring-view", "-ojsonpath={.rules}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("monitoring.coreos.com"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterRole", "prometheus-k8s", "-ojsonpath={.rules[?(\"monitoring.coreos.com\")]}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("monitoring.coreos.com"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check thanos-querier deployment")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "thanos-querier", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-rbac-proxy-web\")].args}", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("kube-rbac-proxy/config.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check thanos-querier secret")
+		// should see `thanos-querier-kube-rbac-proxy-web` is added, and `thanos-querier-oauth-cookie` is removed
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "thanos-querier-kube-rbac-proxy-web", "-n", "openshift-monitoring").Output()
+		o.Expect(output).NotTo(o.ContainSubstring("NotFound"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "thanos-querier-oauth-cookie", "-n", "openshift-monitoring").Output()
+		o.Expect(output).To(o.ContainSubstring("NotFound"))
+
+		g.By("Get token of current user")
+		token := oc.UserConfig().BearerToken
+
+		g.By("Get route of thanos-querier")
+		host, hostErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "thanos-querier", "-ojsonpath={.spec.host}", "-n", "openshift-monitoring").Output()
+		o.Expect(hostErr).NotTo(o.HaveOccurred())
+
+		g.By("test role can NOT access to ThanosQuerier")
+		// % curl -H "Authorization: Bearer $token" -k "https://$host/api/v1/query?" --data-urlencode 'query=up{namespace="openshift-monitoring"}'
+		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "Forbidden", 2*platformLoadTime)
+
+		g.By("add role access to ThanosQuerier")
+		admErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "cluster-monitoring-metrics-api", oc.Username()).Execute()
+		o.Expect(admErr).NotTo(o.HaveOccurred())
+
+		g.By("test role access to ThanosQuerier")
+		// % curl -H "Authorization: Bearer $token" -k "https://$host/api/v1/query?" --data-urlencode 'query=up{namespace="openshift-monitoring"}'
+		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "up", 2*platformLoadTime)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
