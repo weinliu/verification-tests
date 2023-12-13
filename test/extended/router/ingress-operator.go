@@ -77,7 +77,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create one custom ingresscontroller")
+		exutil.By("Create one custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
@@ -85,34 +85,30 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
 
-		g.By("check the env variable of the router pod to verify the default log length")
+		exutil.By("check the env variable of the router pod to verify the default log length")
 		newrouterpod := getRouterPod(oc, "ocp46287")
 		logLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(logLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=1024`))
 
-		g.By("check the haproxy config on the router pod to verify the default log length is enabled")
+		exutil.By("check the haproxy config on the router pod to verify the default log length is enabled")
 		checkoutput := readRouterPodData(oc, newrouterpod, "cat haproxy.config", "1024")
 		o.Expect(checkoutput).To(o.ContainSubstring(`log 1.2.3.4:514 len 1024 local1 info`))
 
-		g.By("patch the existing custom ingress controller with minimum log length value")
-		routerpod := getRouterPod(oc, "ocp46287")
+		exutil.By("patch the existing custom ingress controller with minimum log length value")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp46287", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"syslog\":{\"maxLength\":480}}}}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
-		g.By("check the env variable of the router pod to verify the minimum log length")
-		newrouterpod = getRouterPod(oc, "ocp46287")
+		exutil.By("check the env variable of the router pod to verify the minimum log length")
+		newrouterpod = getNewRouterPod(oc, "ocp46287")
 		minimumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(minimumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=480`))
 
-		g.By("patch the existing custom ingress controller with maximum log length value")
-		routerpod = getRouterPod(oc, "ocp46287")
+		exutil.By("patch the existing custom ingress controller with maximum log length value")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp46287", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"syslog\":{\"maxLength\":4096}}}}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
-		g.By("check the env variable of the router pod to verify the maximum log length")
-		newrouterpod = getRouterPod(oc, "ocp46287")
+		exutil.By("check the env variable of the router pod to verify the maximum log length")
+		newrouterpod = getNewRouterPod(oc, "ocp46287")
 		maximumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(maximumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=4096`))
 	})

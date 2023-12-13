@@ -206,6 +206,44 @@ func waitForCustomIngressControllerAvailable(oc *exutil.CLI, icname string) erro
 	})
 }
 
+func getOnePodNameByLabel(oc *exutil.CLI, ns, label string) string {
+	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", label, "-o=jsonpath={.items[0].metadata.name}", "-n", ns).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the one pod with label %v is %v", label, podName)
+	return podName
+}
+
+// getNewRouterPod immediatly after/during deployment rolling update, don't care the previous pod status
+func getNewRouterPod(oc *exutil.CLI, icName string) string {
+	ns := "openshift-ingress"
+	deployName := "deployment/router-" + icName
+	re := regexp.MustCompile(`NewReplicaSet:\s+router-.+-([a-z0-9]+)\s+`)
+
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args(deployName, "-n", ns).Output()
+	rsLabel := "pod-template-hash=" + re.FindStringSubmatch(output)[1]
+	e2e.Logf("the new ReplicaSet labels is %s", rsLabel)
+	err := waitForPodWithLabelReady(oc, ns, rsLabel)
+	exutil.AssertWaitPollNoErr(err, "the new router pod failed to be ready within allowed time!")
+	return getOnePodNameByLabel(oc, ns, rsLabel)
+}
+
+func ensureRouterDeployGenerationIs(oc *exutil.CLI, icName, expectGeneration string) {
+	ns := "openshift-ingress"
+	deployName := "deployment/router-" + icName
+	actualGeneration := "0"
+
+	waitErr := wait.PollImmediate(3*time.Second, 30*time.Second, func() (bool, error) {
+		actualGeneration, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(deployName, "-n", ns, "-o=jsonpath={.metadata.generation}").Output()
+		e2e.Logf("Get the deployment generation is: %v", actualGeneration)
+		if actualGeneration == expectGeneration {
+			e2e.Logf("The router deployment generation is updated to %v", actualGeneration)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached and the expected deployment generation is %v but got %v", expectGeneration, actualGeneration))
+}
+
 func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
@@ -349,6 +387,7 @@ func describePodResource(oc *exutil.CLI, podName, namespace string) string {
 
 // for collecting a single pod name for general use.
 // usage example: podname := getRouterPod(oc, "default/labelname")
+// note: it might get wrong pod which will be terminated during deployment rolling update
 func getRouterPod(oc *exutil.CLI, icname string) string {
 	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+icname, "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-ingress").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
