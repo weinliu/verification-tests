@@ -77,45 +77,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-42657-Enable out-of-tree cloud providers with feature gate [Disruptive]", func() {
-		g.By("Check if ccm on this platform is supported")
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "openstack", "gcp", "vsphere")
-		// There is a bug for GCP private cluster enable TechPreviewNoUpgrade https://issues.redhat.com/browse/OCPBUGS-5755
-		publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if exutil.CheckPlatform(oc) == "gcp" && publicZone == "" {
-			g.Skip("GCP private cluster if enable TechPreviewNoUpgrade will hit https://issues.redhat.com/browse/OCPBUGS-5755, skip this case!!")
-		}
-
-		g.By("Check if ccm is deployed")
-		ccm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(ccm) != 0 {
-			g.Skip("Skip for ccm is already be deployed!")
-		}
-
-		g.By("Enable out-of-tree cloud provider with feature gate")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate/cluster", "-p", `{"spec":{"featureSet": "TechPreviewNoUpgrade"}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check cluster is still healthy")
-		waitForClusterHealthy(oc)
-
-		g.By("Check if appropriate `--cloud-provider=external` set on kubelet, KAPI and KCM")
-		masterkubelet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineconfig/01-master-kubelet", "-o=jsonpath={.spec.config.systemd.units[0].contents}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(masterkubelet).To(o.ContainSubstring("cloud-provider=external"))
-		workerkubelet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineconfig/01-worker-kubelet", "-o=jsonpath={.spec.config.systemd.units[0].contents}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(workerkubelet).To(o.ContainSubstring("cloud-provider=external"))
-		kapi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-apiserver", "-o=jsonpath={.data.config\\.yaml}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(kapi).To(o.ContainSubstring("\"cloud-provider\":[\"external\"]"))
-		kcm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-controller-manager", "-o=jsonpath={.data.config\\.yaml}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(kcm).To(o.ContainSubstring("\"cloud-provider\":[\"external\"]"))
-	})
-
-	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-42879-Cloud-config configmap should be copied and kept in sync within the CCCMO namespace [Disruptive]", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "vsphere")
 
