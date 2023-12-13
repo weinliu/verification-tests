@@ -92,7 +92,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 		o.Eventually(mcn.GetCordoned, "30s", "3s").Should(o.Equal("True"))
 		o.Eventually(mcn.GetDrained, "30s", "2s").Should(o.Equal("Unknown"))
 		o.Eventually(mcn.GetDrained, "1m", "2s").Should(o.Equal("True"))
-		o.Eventually(mcn.GetAppliedFilesAndOS, "1m", "2s").Should(o.Equal("Unknown"))
+		o.Eventually(mcn.GetAppliedFilesAndOS, "1m", "1s").Should(o.Equal("Unknown"))
 		o.Eventually(mcn.GetAppliedFilesAndOS, "3m", "2s").Should(o.Equal("True"))
 		o.Eventually(mcn.GetUpdateExecuted, "20s", "5s").Should(o.Equal("True"))
 		o.Eventually(mcn.GetUpdatePostActionComplete, "30m", "5s").Should(o.Equal("Unknown"))
@@ -100,6 +100,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 		o.Eventually(mcn.GetRebootedNode, "5m", "5s").Should(o.Equal("True"))
 		o.Eventually(mcn.GetResumed, "15s", "5s").Should(o.Equal("True"))
 		o.Eventually(mcn.GetUpdateComplete, "10s", "5s").Should(o.Equal("True"))
+		o.Eventually(mcn.GetUncordoned, "10s", "2s").Should(o.Equal("True"))
 		o.Eventually(mcn.GetUpdated, "1m", "5s").Should(o.Equal("True"))
 
 	})

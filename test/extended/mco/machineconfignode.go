@@ -99,6 +99,11 @@ func (mcn *MachineConfigNode) GetCordoned() string {
 	return mcn.GetConditionStatusByType("Cordoned")
 }
 
+// GetUncordoned get condition status of `Uncordoned`
+func (mcn *MachineConfigNode) GetUncordoned() string {
+	return mcn.GetConditionStatusByType("Uncordoned")
+}
+
 // GetDrained get condition status of `Drained`
 func (mcn *MachineConfigNode) GetDrained() string {
 	return mcn.GetConditionStatusByType("Drained")
