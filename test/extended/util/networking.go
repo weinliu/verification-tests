@@ -1,10 +1,13 @@
 package util
 
 import (
+	"context"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -47,4 +50,23 @@ func GetIPVersionStackType(oc *CLI) (ipvStackType string) {
 	}
 	e2e.Logf("The test cluster IP-version Stack type is :\"%s\".", ipvStackType)
 	return ipvStackType
+}
+func AssertOrCheckMCP(oc *CLI, mcp string, interval, timeout time.Duration, skip bool) error {
+	var machineCount string
+	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, false, func(ctx context.Context) (bool, error) {
+		machineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcp, "-o=jsonpath={.status.machineCount}{\" \"}{.status.readyMachineCount}{\" \"}{.status.unavailableMachineCount}{\" \"}{.status.degradedMachineCount}").Output()
+		indexCount := strings.Fields(machineCount)
+		if strings.Compare(indexCount[0], indexCount[1]) == 0 && strings.Compare(indexCount[2], "0") == 0 && strings.Compare(indexCount[3], "0") == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	e2e.Logf("MachineCount:ReadyMachineCountunavailableMachineCountdegradedMachineCount: %v", machineCount)
+	if err != nil {
+		if skip {
+			g.Skip(fmt.Sprintf("the mcp %v is not correct status, so skip it", machineCount))
+		}
+		return fmt.Errorf("case: %v\nerror: %s", g.CurrentSpecReport().FullText(), fmt.Sprintf("macineconfigpool %v update failed", mcp))
+	}
+	return nil
 }

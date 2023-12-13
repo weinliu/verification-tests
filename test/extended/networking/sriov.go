@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -27,6 +28,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			if apierrors.IsNotFound(err) {
 				g.Skip("the cluster do not install sriov operator")
 			}
+
 		}
 
 	})
@@ -724,5 +726,92 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
 
+	})
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-69134-SR-IOV VFs can be created and do not need to wait all the nodes in the pools are updated [Disruptive]", func() {
+		//bug https://issues.redhat.com/browse/OCPBUGS-10323
+		var (
+			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
+			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
+			hugepageMC                     = filepath.Join(buildPruningBaseDir, "hugepageMC.yaml")
+			sriovNeworkTemplate            = filepath.Join(buildPruningBaseDir, "sriovnetwork-hostlocal-template.yaml")
+			sriovOpNs                      = "openshift-sriov-network-operator"
+			iperfRcTmp                     = filepath.Join(buildPruningBaseDir, "iperf-rc-template.json")
+			sriovNetworkType               = "k8s.v1.cni.cncf.io/networks"
+			sriovNodeLabel                 = "feature.node.kubernetes.io/sriov-capable=true"
+		)
+		sriovPolicy := sriovNetworkNodePolicy{
+			policyName:   "cx5",
+			deviceType:   "netdevice",
+			deviceID:     "1017",
+			pfName:       "ens1f1np1",
+			vondor:       "15b3",
+			numVfs:       3,
+			resourceName: "cx5n",
+			template:     sriovNetworkNodePolicyTemplate,
+			namespace:    sriovOpNs,
+		}
+		exutil.By("check sriov worker is ready in 2 minute, if not skip this case")
+		exutil.AssertOrCheckMCP(oc, "sriov", 20*time.Second, 2*time.Minute, true)
+
+		exutil.By("check the sriov operator is running")
+		chkSriovOperatorStatus(oc, sriovOpNs)
+
+		exutil.By("Check the deviceID if exist on the cluster worker")
+		if !checkDeviceIDExist(oc, sriovOpNs, sriovPolicy.deviceID) {
+			g.Skip("the cluster do not contain the sriov card. skip this testing!")
+		}
+
+		exutil.By("Create sriovnetworkpolicy to create VF and check they are created successfully")
+		defer rmSriovNetworkPolicy(oc, sriovPolicy.policyName, sriovOpNs)
+		sriovPolicy.createPolicy(oc)
+		waitForSriovPolicyReady(oc, sriovOpNs)
+
+		exutil.By("setup one namespace")
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
+		exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+		sriovnetwork := sriovNetwork{
+			name:             sriovPolicy.policyName,
+			resourceName:     sriovPolicy.resourceName,
+			networkNamespace: ns1,
+			template:         sriovNeworkTemplate,
+			namespace:        sriovOpNs,
+		}
+		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+		sriovnetwork.createSriovNetwork(oc)
+
+		exutil.By("Create mc to make sriov worker reboot one by one and check the pods can be running on first ready node")
+
+		defer func() {
+			exutil.By("wait mcp recovered")
+			err := exutil.AssertOrCheckMCP(oc, "sriov", 60*time.Second, 30*time.Minute, false)
+			o.Expect(err).Should(o.BeEmpty())
+		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", hugepageMC).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", hugepageMC).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sriovScheduleDisableNodeName := findSchedulingDisabledNode(oc, 5*time.Second, 2*time.Minute, sriovNodeLabel)
+		e2e.Logf("Currently scheduleDisable worker is %s", sriovScheduleDisableNodeName)
+		checkNodeStatus(oc, sriovScheduleDisableNodeName, "NotReady")
+		checkNodeStatus(oc, sriovScheduleDisableNodeName, "Ready")
+
+		exutil.By("Create test pod on the target namespace")
+		iperfPod := sriovNetResource{
+			name:      "iperf-rc",
+			namespace: ns1,
+			tempfile:  iperfRcTmp,
+			kind:      "rc",
+		}
+		//create iperf server pod on worker0
+		iperfPod.create(oc, "PODNAME="+iperfPod.name, "NAMESPACE="+iperfPod.namespace, "NETNAME="+sriovnetwork.name, "NETTYPE="+sriovNetworkType, "NODENAME="+sriovScheduleDisableNodeName)
+		defer iperfPod.delete(oc)
+		err = waitForPodWithLabelReady(oc, ns1, "name=iperf-rc")
+		exutil.AssertWaitPollNoErr(err, "this pod was not ready with label name=iperf-rc")
+
+		exutil.By("Check another worker still in scheduleDisable")
+		sriovScheduleDisableNodeName2 := findSchedulingDisabledNode(oc, 5*time.Second, 2*time.Minute, sriovNodeLabel)
+		e2e.Logf("Currently scheduleDisable worker is %s", sriovScheduleDisableNodeName2)
+		o.Expect(sriovScheduleDisableNodeName2).NotTo(o.Equal(sriovScheduleDisableNodeName))
 	})
 })

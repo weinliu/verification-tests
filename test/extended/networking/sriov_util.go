@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -344,4 +345,31 @@ func waitForSriovPolicySyncUpStart(oc *exutil.CLI, ns string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "sriovnetworknodestates sync up is in progress")
+}
+
+// find the node name which is in scheduleDisableNode
+func findSchedulingDisabledNode(oc *exutil.CLI, interval, timeout time.Duration, label string) string {
+	scheduleDisableNodeName := ""
+	errNode := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, false, func(ctx context.Context) (bool, error) {
+		nodeNamesAll, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", label, "-ojsonpath={.items..metadata.name}").Output()
+		if err != nil {
+			return false, nil
+		}
+		nodeNames := strings.Split(nodeNamesAll, " ")
+		for _, nodeName := range nodeNames {
+			nodeOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName).Output()
+			if err == nil {
+				if strings.Contains(nodeOutput, "NotReady") || strings.Contains(nodeOutput, "SchedulingDisabled") {
+					scheduleDisableNodeName = nodeName
+					break
+				}
+			}
+		}
+		if scheduleDisableNodeName == "" {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errNode, fmt.Sprintf("no node become SchedulingDisabled or Notready!"))
+	return scheduleDisableNodeName
 }

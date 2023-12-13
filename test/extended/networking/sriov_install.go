@@ -56,7 +56,6 @@ var _ = g.Describe("[sig-networking] SDN sriov installation", func() {
 		operatorInstall(oc, sub, ns, og)
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		g.By("SUCCESS - sriov operator installed")
-
 	})
 
 })
