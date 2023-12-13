@@ -3,6 +3,8 @@ package olmv1util
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
 
 	o "github.com/onsi/gomega"
@@ -118,4 +120,16 @@ func (catalog *CatalogDescription) Delete(oc *exutil.CLI) {
 	e2e.Logf("=========Delete catalog %v=========", catalog.Name)
 	catalog.DeleteWithoutCheck(oc)
 	//add check later
+}
+
+func (catalog *CatalogDescription) GetContent(oc *exutil.CLI) []byte {
+	if catalog.ContentURL == "" {
+		catalog.GetcontentURL(oc)
+	}
+	resp, err := http.Get(catalog.ContentURL)
+	defer resp.Body.Close()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	curlOutput, err := io.ReadAll(resp.Body)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return curlOutput
 }

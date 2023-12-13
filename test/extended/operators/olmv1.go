@@ -340,6 +340,27 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 		}
 	})
 
+	// author: jitli@redhat.com
+	g.It("ConnectedOnly-Author:jitli-High-69123-Catalogd catalog offer the operator content through http server", func() {
+		var (
+			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
+			catalog         = olmv1util.CatalogDescription{
+				Name:     "catalog-69123",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm68821",
+				Template: catalogTemplate,
+			}
+		)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("get the index content through http service on cluster")
+		curlOutput := catalog.GetContent(oc)
+		o.Expect(strings.Contains(string(curlOutput), "\"name\":\"nginx68821\"")).To(o.BeTrue())
+
+	})
+
 	// var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// For now, for 4.15, OLM removes the Package and CatalogMetadata resources,
