@@ -1108,11 +1108,11 @@ func createApplyPeerPodSecrets(oc *exutil.CLI, provider string, ppParam PeerpodP
 	}
 
 	//Read params from peerpods-param-cm and store in ppParam struct
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName).Output()
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n", "default").Output()
 	if err != nil {
 		e2e.Logf("%v Configmap created by QE CI not found: msg %v err: %v", ciCmName, msg, err)
 	} else {
-		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n default", "-o=jsonpath={.data}").Output()
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n", "default", "-o=jsonpath={.data}").Output()
 		if err != nil {
 			e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciCmName, configmapData, err)
 		}
@@ -1228,7 +1228,7 @@ func createAWSPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretName,
 	)
 
 	// Read peerpods-param-secret to fetch the keys
-	secretString, err := oc.AsAdmin().Run("get").Args("secret", ciSecretName, "-n default", "-o=jsonpath={.data.aws}").Output()
+	secretString, err := oc.AsAdmin().Run("get").Args("secret", ciSecretName, "-n", "default", "-o=jsonpath={.data.aws}").Output()
 
 	if err != nil || secretString == "" {
 		e2e.Logf("Error: %v CI provided peer pods secret data empty", err)
@@ -1307,7 +1307,7 @@ func createAzurePeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretNam
 	)
 
 	// Read peerpods-param-secret to fetch the keys
-	secretString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", ciSecretName, "-n default", "-o=jsonpath={.data.azure}").Output()
+	secretString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", ciSecretName, "-n", "default", "-o=jsonpath={.data.azure}").Output()
 
 	if err != nil || secretString == "" {
 		e2e.Logf("Error: %v CI provided peer pods secret data empty", err)
@@ -1463,24 +1463,36 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 	var (
 		ciCmName   = "peerpods-param-cm"
 		configFile string
+		imageID    string
 	)
 
-	// Check if the secrets already exist
-	g.By("Checking if peer-pods-secret exists")
+	g.By("Checking if peer-pods-cm exists")
 	msg, err = checkPeerPodConfigMap(oc, opNamespace, provider, ppConfigMapName)
 	if err == nil {
+		//check for IMAGE ID in the configmap
+
+		msg, err, imageID = CheckPodVMImageID(oc, ppConfigMapName, provider, opNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if imageID == "" {
+			e2e.Logf("peer-pods-cm in the right state - does not have the IMAGE ID before the kataconfig install , msg: %v", msg)
+		} else {
+			e2e.Logf("IMAGE ID: %v", imageID)
+			msgIfErr := fmt.Sprintf("ERROR: peer-pods-cm has the Image ID before the kataconfig is installed, incorrect state: %v %v %v", imageID, msg, err)
+			o.Expect(imageID).NotTo(o.BeEmpty(), msgIfErr)
+		}
 		e2e.Logf("peer-pods-cm exists - skipping creating it")
 		return msg, err
+
 	} else if err != nil {
 		e2e.Logf("**** peer-pods-cm not found on the cluster - proceeding to create it****")
 	}
 
 	//Read params from peerpods-param-cm and store in ppParam struct
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName).Output()
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n", "default").Output()
 	if err != nil {
 		e2e.Logf("%v Configmap created by QE CI not found: msg %v err: %v", ciCmName, msg, err)
 	} else {
-		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-o=jsonpath={.data}").Output()
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n", "default", "-o=jsonpath={.data}").Output()
 		if err != nil {
 			e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciCmName, configmapData, err)
 		}
@@ -1511,6 +1523,17 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 		if err != nil {
 			return fmt.Sprintf("Error: applying peer-pods-cm %v failed: %v %v", configFile, msg, err), err
 		}
+		//check for IMAGE ID in the configmap
+		msg, err, imageID = CheckPodVMImageID(oc, ppConfigMapName, provider, opNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if imageID == "" {
+			e2e.Logf("peer-pods-cm in the right state - does not have the IMAGE ID before the kataconfig install , msg: %v", msg)
+		} else {
+			e2e.Logf("IMAGE ID: %v", imageID)
+			msgIfErr := fmt.Sprintf("ERROR: peer-pods-cm has the Image ID before the kataconfig is installed, incorrect state: %v %v %v", imageID, msg, err)
+			o.Expect(imageID).NotTo(o.BeEmpty(), msgIfErr)
+		}
+
 	}
 
 	return msg, err
@@ -1662,4 +1685,39 @@ func getPeerPodMetadataInstanceType(oc *exutil.CLI, opNamespace, podName, provid
 		"azure": "curl -s -H Metadata:true --noproxy \"*\" \"http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2023-07-01&format=text\"",
 	}
 	return oc.AsAdmin().Run("rsh").Args("-T", "-n", opNamespace, podName, "bash", "-c", metadataCurl[provider]).Output()
+}
+
+func CheckPodVMImageID(oc *exutil.CLI, ppConfigMapName, provider, opNamespace string) (msg string, err error, value string) {
+
+	var (
+		imageIDParam string
+		imageID      string
+	)
+
+	cloudProviderMap := map[string]string{
+		"aws":   "PODVM_AMI_ID",
+		"azure": "AZURE_IMAGE_ID",
+	}
+
+	// Fetch the configmap details
+	msg, err = oc.AsAdmin().Run("get").Args("configmap", ppConfigMapName, "-n", opNamespace, "-o=jsonpath={.data}").Output()
+	if err != nil {
+		return "Error fetching configmap details", err, ""
+	}
+
+	imageIDParam = cloudProviderMap[provider]
+	if gjson.Get(msg, imageIDParam).Exists() {
+		imageID := gjson.Get(msg, imageIDParam).String()
+		if imageID == "" {
+			// Handle the case when imageIDParam is an empty string
+			e2e.Logf("Image ID parameter found in the config map but is an empty string; Image ID :%s", imageIDParam)
+			return fmt.Sprintf("CM created has an empty value for Image ID : %s", imageIDParam), nil, ""
+		}
+	} else {
+		// Handle the case when imageIDParam is not found
+		e2e.Logf("Image ID parameter '%s' not found in the config map", imageIDParam)
+		return fmt.Sprintf("CM created does not have: %s", imageIDParam), nil, ""
+	}
+
+	return "CM does have the Image ID", nil, imageID
 }

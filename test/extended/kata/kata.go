@@ -1655,4 +1655,33 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		g.By("SUCCESS - KATA pod with required VM instance size was launched")
 	})
 
+	g.It("Author:abhbaner-High-66123-podvm Image ID check peer pods", func() {
+
+		var (
+			msg     string
+			err     error
+			imageID string
+		)
+
+		if !kataconfig.enablePeerPods {
+			g.Skip("OCP-66123 is only for peerpods")
+		}
+
+		oc.SetupProject()
+		cloudPlatform := getCloudProvider(oc)
+
+		// check if IMAGE ID exists in peer-pod-cm
+		msg, err, imageID = CheckPodVMImageID(oc, ppConfigMapName, cloudPlatform, opNamespace)
+
+		if imageID == "" {
+			e2e.Logf("IMAGE ID: %v", imageID)
+			msgIfErr := fmt.Sprintf("ERROR: IMAGE ID could not be retrieved from the peer-pods-cm even after kataconfig install: %v %v %v", imageID, msg, err)
+			o.Expect(imageID).NotTo(o.BeEmpty(), msgIfErr)
+			o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+		}
+
+		e2e.Logf("The Image ID present in the peer-pods-cm is: %v , msg: %v", imageID, msg)
+		g.By("SUCCESS - IMAGE ID check complete")
+	})
+
 })
