@@ -6107,7 +6107,8 @@ manifests:
 		for i, u := range urls {
 			exutil.By(fmt.Sprintf("%d.1) Build "+u.Target+" from external source", i+5))
 			imageImportModeOnArmAndMutiArch(oc, u.Target+":mystream1", u.URL, oc.Namespace())
-			appErr := oc.AsAdmin().WithoutNamespace().Run("new-app").Args(u.URL, "-n", projectNs).Execute()
+			//Fix for mix-arch IPSEC profiles
+			appErr := oc.AsAdmin().WithoutNamespace().Run("new-app").Args(u.URL, "-n", projectNs, "--import-mode=PreserveOriginal").Execute()
 			o.Expect(appErr).NotTo(o.HaveOccurred())
 
 			exutil.By(fmt.Sprintf("%d.2) Check if pod is properly running with expected status.", i+5))
