@@ -12,7 +12,6 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 type UPIInstance struct {
@@ -71,63 +70,45 @@ func (upi *UPIInstance) GetInstanceID() (string, error) {
 }
 
 func (upi *UPIInstance) Start() error {
-	errVmstate := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-		instanceState, err := upi.upiObj.GetUPIbaremetalInstanceState()
+	instanceState, err := upi.State()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if _, ok := stopStates[instanceState]; ok {
+		err = upi.upiObj.StartUPIbaremetalInstance()
 		if err != nil {
-			e2e.Logf("Start instance failed with error :: %v.", err)
-			return false, nil
-		} else if instanceState == "poweredOn" {
-			e2e.Logf("VM instance of master node has already started up :: %v", upi.nodeName)
-			return true, nil
-		} else if instanceState == "poweredOff" {
-			err := upi.upiObj.StartUPIbaremetalInstance()
-			if err == nil {
-				e2e.Logf("VM Instance of master node has been started :: %v", upi.nodeName)
-				return true, nil
-			} else {
-				return false, nil
-			}
+			return fmt.Errorf("start instance failed with error :: %v", err)
 		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Not able to start VM instance of master node :: %s", upi.nodeName))
-	return errVmstate
+	} else {
+		return fmt.Errorf("unalbe to start instance %s from status %s", upi.nodeName, instanceState)
+	}
+	return nil
 }
 
 func (upi *UPIInstance) Stop() error {
-	errVmstate := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-		instanceState, err := upi.upiObj.GetUPIbaremetalInstanceState()
+	instanceState, err := upi.State()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if _, ok := startStates[instanceState]; ok {
+		err = upi.upiObj.StopUPIbaremetalInstance()
 		if err != nil {
-			e2e.Logf("Stop instance failed with error :: %v.", err)
-			return false, nil
-		} else if instanceState == "poweredOff" {
-			e2e.Logf("VM Instance of master node has been already down :: %v", upi.nodeName)
-			return true, nil
-		} else if instanceState == "poweredOn" {
-			err := upi.upiObj.StopUPIbaremetalInstance()
-			if err == nil {
-				e2e.Logf("VM Instance of master node has been brought down:: %v", upi.nodeName)
-				return true, nil
-			} else {
-				return false, nil
-			}
+			return fmt.Errorf("stop instance failed with error :: %v", err)
 		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Not able to stop VM instance of master node :: %s", upi.nodeName))
-	return errVmstate
+	} else {
+		return fmt.Errorf("unalbe to stop instance %s from status %s", upi.nodeName, instanceState)
+	}
+	return nil
 }
 
 func (upi *UPIInstance) State() (string, error) {
-	var nodeStatus string
-	var statusErr error
+	var (
+		instanceState string
+		statusErr     error
+	)
 	errVmstate := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-		nodeStatus, statusErr = upi.upiObj.GetUPIbaremetalInstanceState()
+		instanceState, statusErr = upi.upiObj.GetUPIbaremetalInstanceState()
 		if statusErr != nil {
 			return false, nil
 		}
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Failed to get VM instance state for master node: %s, error: %s", upi.nodeName, statusErr))
-	return nodeStatus, statusErr
+	return strings.ToLower(instanceState), statusErr
 }

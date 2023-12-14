@@ -14,6 +14,24 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+var (
+	startStates = map[string]bool{
+		"poweredon": true,
+		"running":   true,
+		"active":    true,
+		"ready":     true,
+	}
+	stopStates = map[string]bool{
+		"poweredoff":  true,
+		"stopped":     true,
+		"shutoff":     true,
+		"terminated":  true,
+		"paused":      true,
+		"deallocated": true,
+		"notready":    true,
+	}
+)
+
 // ClusterSanitycheck do sanity check on cluster.
 func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 	e2e.Logf("Running cluster sanity")
@@ -66,15 +84,29 @@ func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 func ClusterHealthcheck(oc *exutil.CLI, dirname string) error {
 	err := ClusterNodesHealthcheck(oc, 900, dirname)
 	if err != nil {
-		return fmt.Errorf("Cluster nodes health check failed. Abnormality found in nodes.")
+		return fmt.Errorf("%s: %w", "Failed to cluster health check::Abnormal nodes found ", err)
 	}
 	err = ClusterOperatorHealthcheck(oc, 1500, dirname)
 	if err != nil {
-		return fmt.Errorf("Cluster operators health check failed. Abnormality found in cluster operators.")
+		return fmt.Errorf("%s: %w", "Failed to cluster health check::Abnormal cluster operators found", err)
 	}
-	err = ClusterPodsHealthcheck(oc, 600, dirname)
+	// Check the load of cluster nodes
+	err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		_, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes.metrics").Output()
+		if err1 != nil {
+			e2e.Logf("Nodes metrics are not ready!")
+			return false, nil
+		}
+		e2e.Logf("Nodes metrics are ready!")
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Unable to get nodes metrics!")
+	outTop, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "nodes").Output()
+	e2e.Logf("#### Output load of cluster nodes ####\n%s", outTop)
+
+	err = ClusterPodsHealthcheck(oc, 900, dirname)
 	if err != nil {
-		return fmt.Errorf("Cluster pods health check failed. Abnormality found in pods.")
+		return fmt.Errorf("%s: %w", "Failed to cluster health check::Abnormal pods found", err)
 	}
 	return nil
 }

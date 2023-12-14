@@ -2,11 +2,10 @@ package disasterrecovery
 
 import (
 	"fmt"
-	"time"
+	"strings"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -52,39 +51,33 @@ func (nux *nutanixInstance) GetInstanceID() (string, error) {
 func (nux *nutanixInstance) Start() error {
 	instanceID, idErr := nux.client.GetNutanixInstanceID(nux.nodeName)
 	o.Expect(idErr).NotTo(o.HaveOccurred())
-	err := nux.client.SetNutanixInstanceState("ON", instanceID)
+	instanceState, err := nux.State()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	errVmstate := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-		vmState, err := nux.client.GetNutanixInstanceState(nux.nodeName)
+	if _, ok := stopStates[strings.ToLower(instanceState)]; ok {
+		err = nux.client.SetNutanixInstanceState("ON", instanceID)
 		if err != nil {
-			return false, err
-		} else if vmState != "running" {
-			return false, nil
+			return fmt.Errorf("start instance failed with error :: %v", err)
 		}
-		e2e.Logf("%s has been restarted", nux.nodeName)
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Not able to start %s", nux.nodeName))
-	return errVmstate
+	} else {
+		return fmt.Errorf("unalbe to start instance %s from status %s", nux.nodeName, instanceState)
+	}
+	return nil
 }
 
 func (nux *nutanixInstance) Stop() error {
 	instanceID, idErr := nux.client.GetNutanixInstanceID(nux.nodeName)
 	o.Expect(idErr).NotTo(o.HaveOccurred())
-	err := nux.client.SetNutanixInstanceState("OFF", instanceID)
+	instanceState, err := nux.State()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	errVmstate := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-		vmState, err := nux.client.GetNutanixInstanceState(nux.nodeName)
+	if _, ok := startStates[strings.ToLower(instanceState)]; ok {
+		err = nux.client.SetNutanixInstanceState("OFF", instanceID)
 		if err != nil {
-			return false, err
-		} else if vmState != "stopped" {
-			return false, nil
+			return fmt.Errorf("stop instance failed with error :: %v", err)
 		}
-		e2e.Logf("%s has been stopped", nux.nodeName)
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Not able to poweroff %s", nux.nodeName))
-	return errVmstate
+	} else {
+		return fmt.Errorf("unalbe to stop instance %s from status %s", nux.nodeName, instanceState)
+	}
+	return nil
 }
 
 func (nux *nutanixInstance) State() (string, error) {

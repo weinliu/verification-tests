@@ -3,12 +3,10 @@ package disasterrecovery
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -62,43 +60,35 @@ func client(projectID string) *exutil.Gcloud {
 }
 
 func (g *gcpInstance) Start() error {
-	errVmstate := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-		instanceState, err := g.State()
+	instanceState, err := g.State()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if _, ok := stopStates[instanceState]; ok {
+		nodeInstance := strings.Split(g.nodeName, ".")
+		zoneName, err := g.client.GetZone(g.nodeName, nodeInstance[0])
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if instanceState == "terminated" {
-			nodeInstance := strings.Split(g.nodeName, ".")
-			zoneName, err := g.client.GetZone(g.nodeName, nodeInstance[0])
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = g.client.StartInstance(nodeInstance[0], zoneName)
-			if err != nil {
-				e2e.Logf("Start instance failed with error :: %v.", err)
-				return false, nil
-			}
-			return true, nil
-		} else if instanceState == "running" {
-			e2e.Logf("%v already running", g.nodeName)
-			return true, nil
+		err = g.client.StartInstance(nodeInstance[0], zoneName)
+		if err != nil {
+			return fmt.Errorf("start instance failed with error :: %v", err)
 		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Not able to start %s", g.nodeName))
-	return errVmstate
+	} else {
+		return fmt.Errorf("unalbe to start instance %s from status %s", g.nodeName, instanceState)
+	}
+	return nil
 }
 
 func (g *gcpInstance) Stop() error {
-	nodeInstance := strings.Split(g.nodeName, ".")
-	zoneName, err := g.client.GetZone(g.nodeName, nodeInstance[0])
-	o.Expect(err).NotTo(o.HaveOccurred())
 	instanceState, err := g.State()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if instanceState == "terminated" {
-		e2e.Logf("%v already stopped", g.nodeName)
-	} else {
+	if _, ok := startStates[instanceState]; ok {
+		nodeInstance := strings.Split(g.nodeName, ".")
+		zoneName, err := g.client.GetZone(g.nodeName, nodeInstance[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = g.client.StopInstanceAsync(nodeInstance[0], zoneName)
 		if err != nil {
-			e2e.Logf("Stop instance failed with error :: %v.", err)
-			return err
+			return fmt.Errorf("stop instance failed with error :: %v", err)
 		}
+	} else {
+		return fmt.Errorf("unalbe to stop instance %s from status %s", g.nodeName, instanceState)
 	}
 	return nil
 }

@@ -14,9 +14,8 @@ import (
 
 	o "github.com/onsi/gomega"
 
-	"k8s.io/apimachinery/pkg/util/wait"
-
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -102,55 +101,34 @@ func (vs *vsphereInstance) GetInstanceID() (string, error) {
 }
 
 func (vs *vsphereInstance) Start() error {
-	errVmstate := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-		vmState, _ := vs.vspObj.GetVspheresInstanceState(vs.vspClient, vs.nodeName)
-		if vmState == "poweredOff" {
-			err := vs.vspObj.StartVsphereInstance(vs.vspClient, vs.nodeName)
-			if err != nil {
-				e2e.Logf("Start instance failed with error :: %v.", err)
-				return false, nil
-			}
-			return true, nil
-		} else if vmState == "poweredOn" {
-			e2e.Logf("Instnace already running %s", vs.nodeName)
-			return true, nil
+	instanceState, err := vs.State()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if _, ok := stopStates[instanceState]; ok {
+		err = vs.vspObj.StartVsphereInstance(vs.vspClient, vs.nodeName)
+		if err != nil {
+			return fmt.Errorf("start instance failed with error :: %v", err)
 		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Not able to poweron %s", vs.nodeName))
-	return errVmstate
+	} else {
+		return fmt.Errorf("unalbe to start instance %s from status %s", vs.nodeName, instanceState)
+	}
+	return nil
 }
 
 func (vs *vsphereInstance) Stop() error {
-	errVmstate := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-		vmState, _ := vs.vspObj.GetVspheresInstanceState(vs.vspClient, vs.nodeName)
-		if vmState == "poweredOn" {
-			err := vs.vspObj.StopVsphereInstance(vs.vspClient, vs.nodeName)
-			if err != nil {
-				e2e.Logf("Stop instance failed with error :: %v.", err)
-				return false, nil
-			}
-			return true, nil
-		} else if vmState == "poweredOff" {
-			e2e.Logf("Instnace already powerOff %s", vs.nodeName)
-			return true, nil
+	instanceState, err := vs.State()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if _, ok := startStates[instanceState]; ok {
+		err = vs.vspObj.StopVsphereInstance(vs.vspClient, vs.nodeName)
+		if err != nil {
+			return fmt.Errorf("stop instance failed with error :: %v", err)
 		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Not able to powerOff %s", vs.nodeName))
-	return errVmstate
+	} else {
+		return fmt.Errorf("unalbe to stop instance %s from status %s", vs.nodeName, instanceState)
+	}
+	return nil
 }
 
 func (vs *vsphereInstance) State() (string, error) {
-	var nodeStatus string
-	var statusErr error
-	errVmstate := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-		nodeStatus, statusErr = vs.vspObj.GetVspheresInstanceState(vs.vspClient, vs.nodeName)
-		if statusErr != nil {
-			return false, nil
-		}
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Failed to get VM instance state for node: %s, error: %s", vs.nodeName, statusErr))
-	return nodeStatus, statusErr
+	instanceState, statusErr := vs.vspObj.GetVspheresInstanceState(vs.vspClient, vs.nodeName)
+	return strings.ToLower(instanceState), statusErr
 }

@@ -6,11 +6,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
 
 	o "github.com/onsi/gomega"
-
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -104,45 +101,31 @@ func (osp *ospInstance) GetInstanceID() (string, error) {
 }
 
 func (osp *ospInstance) Start() error {
-	errVmstate := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-		instanceState, err := osp.ospObj.GetOspInstanceState(osp.nodeName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.ToLower(instanceState) == "paused" {
-			err := osp.ospObj.GetStartOspInstance(osp.nodeName)
-			if err != nil {
-				e2e.Logf("Start instance failed with error :: %v.", err)
-				return false, nil
-			}
-			return true, nil
-		} else if strings.ToLower(instanceState) == "active" {
-			e2e.Logf("Instnace already running %s", osp.nodeName)
-			return true, nil
+	instanceState, err := osp.State()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if _, ok := stopStates[instanceState]; ok {
+		err = osp.ospObj.GetStartOspInstance(osp.nodeName)
+		if err != nil {
+			return fmt.Errorf("start instance failed with error :: %v", err)
 		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Not able to start %s", osp.nodeName))
-	return errVmstate
+	} else {
+		return fmt.Errorf("unalbe to start instance %s from status %s", osp.nodeName, instanceState)
+	}
+	return nil
 }
 
 func (osp *ospInstance) Stop() error {
-	errVmstate := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-		instanceState, err := osp.ospObj.GetOspInstanceState(osp.nodeName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.ToLower(instanceState) == "active" {
-			err := osp.ospObj.GetStopOspInstance(osp.nodeName)
-			if err != nil {
-				e2e.Logf("Stop instance failed with error :: %v.", err)
-				return false, nil
-			}
-			return true, nil
-		} else if strings.ToLower(instanceState) == "paused" {
-			e2e.Logf("Instance already stopped %v", osp.nodeName)
-			return true, nil
+	instanceState, err := osp.State()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if _, ok := startStates[instanceState]; ok {
+		err = osp.ospObj.GetStopOspInstance(osp.nodeName)
+		if err != nil {
+			return fmt.Errorf("stop instance failed with error :: %v", err)
 		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errVmstate, fmt.Sprintf("Not able to stop %s", osp.nodeName))
-	return errVmstate
+	} else {
+		return fmt.Errorf("unalbe to stop instance %s from status %s", osp.nodeName, instanceState)
+	}
+	return nil
 }
 
 func (osp *ospInstance) State() (string, error) {
