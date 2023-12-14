@@ -375,7 +375,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		autoscalePodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-machine-api", "-l", "cluster-autoscaler=default", "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(30*time.Second, 1200*time.Second, func() (bool, error) {
-			autoscalerLog, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+autoscalePodName, "-n", "openshift-machine-api").Output()
+			autoscalerLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+autoscalePodName, "-n", "openshift-machine-api").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			replicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.replicas}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -424,7 +424,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		machineControllerPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-machine-api", "-l", "api=clusterapi,k8s-app=controller", "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		machineControllerLog, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+machineControllerPodName, "-c", "machine-controller", "-n", "openshift-machine-api").Output()
+		machineControllerLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+machineControllerPodName, "-c", "machine-controller", "-n", "openshift-machine-api").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(machineControllerLog, "unknown instance type") || strings.Contains(machineControllerLog, "Failed to set autoscaling from zero annotations, instance type unknown")).To(o.BeTrue())
 	})

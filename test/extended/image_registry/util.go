@@ -90,7 +90,7 @@ func listPodStartingWith(prefix string, oc *exutil.CLI, namespace string) (pod [
 
 func dePodLogs(pods []corev1.Pod, oc *exutil.CLI, matchlogs string) bool {
 	for _, pod := range pods {
-		depOutput, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+pod.Name, "-n", pod.Namespace).Output()
+		depOutput, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+pod.Name, "-n", pod.Namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(depOutput, matchlogs) {
 			return true
@@ -233,7 +233,7 @@ func imagePruneLog(oc *exutil.CLI, matchLogs, notMatchLogs string) {
 		pod := podsOfImagePrune[len(podsOfImagePrune)-1]
 		e2e.Logf("the pod status is %s", pod.Status.Phase)
 		if pod.Status.Phase != "ContainerCreating" && pod.Status.Phase != "Pending" {
-			depOutput, _ := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+pod.Name, "-n", pod.Namespace).Output()
+			depOutput, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+pod.Name, "-n", pod.Namespace).Output()
 			if strings.Contains(depOutput, matchLogs) && !strings.Contains(depOutput, notMatchLogs) {
 				return true, nil
 			}
