@@ -964,8 +964,14 @@ func sshRunCmd(host string, user string, cmd string) error {
 }
 
 // For Admin to patch a resource in the specified namespace
-func patchResourceAsAdmin(oc *exutil.CLI, resource, patch string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "-p", patch, "--type=merge").Execute()
+func patchResourceAsAdmin(oc *exutil.CLI, resource, patch string, nameSpace ...string) {
+	var cargs []string
+	if len(nameSpace) > 0 {
+		cargs = []string{resource, "-p", patch, "-n", nameSpace[0], "--type=merge"}
+	} else {
+		cargs = []string{resource, "-p", patch, "--type=merge"}
+	}
+	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(cargs...).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

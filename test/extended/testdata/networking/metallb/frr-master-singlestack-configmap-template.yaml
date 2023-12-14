@@ -108,9 +108,17 @@ objects:
       no bgp default ipv4-unicast
       no bgp network import-check
       neighbor ${NODE1_IP} remote-as 64500
+      neighbor ${NODE1_IP} password ${PASSWORD}
+      neighbor ${NODE1_IP} bfd
       neighbor ${NODE2_IP} remote-as 64500
+      neighbor ${NODE2_IP} password ${PASSWORD}
+      neighbor ${NODE2_IP} bfd
       neighbor ${NODE3_IP} remote-as 64500
+      neighbor ${NODE3_IP} password ${PASSWORD}
+      neighbor ${NODE3_IP} bfd
       neighbor ${NODE4_IP} remote-as 64500
+      neighbor ${NODE4_IP} password ${PASSWORD}
+      neighbor ${NODE4_IP} bfd
       !
       address-family ipv4 unicast
         neighbor ${NODE1_IP} activate
@@ -142,3 +150,4 @@ parameters:
 - name: NODE4_IP
 - name: NAME
 - name: NAMESPACE
+- name: PASSWORD
