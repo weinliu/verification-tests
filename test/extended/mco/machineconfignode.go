@@ -39,9 +39,19 @@ func (mcnl *MachineConfigNodeList) GetAll() ([]MachineConfigNode, error) {
 	return allMCNs, nil
 }
 
-// GetDesiredMachineConfig get value of `.spec.configVersion.desired`
-func (mcn *MachineConfigNode) GetDesiredMachineConfig() string {
+// GetDesiredMachineConfigOfSpec get value of `.spec.configVersion.desired`
+func (mcn *MachineConfigNode) GetDesiredMachineConfigOfSpec() string {
 	return mcn.GetOrFail(`{.spec.configVersion.desired}`)
+}
+
+// GetDesiredMachineConfigOfStatus get value of `.status.configVersion.desired`
+func (mcn *MachineConfigNode) GetDesiredMachineConfigOfStatus() string {
+	return mcn.GetOrFail(`{.status.configVersion.desired}`)
+}
+
+// GetCurrentMachineConfigOfStatus get value of `.status.configVersion.current`
+func (mcn *MachineConfigNode) GetCurrentMachineConfigOfStatus() string {
+	return mcn.GetOrFail(`{.status.configVersion.current}`)
 }
 
 // GetPool get value of `.spec.pool.name`

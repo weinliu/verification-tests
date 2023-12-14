@@ -35,27 +35,39 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 		o.Expect(enabled).Should(o.ContainSubstring("MachineConfigNodes"), "featureGate: MachineConfigNodes cannot be found")
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-69187-validate MachineConfigNodes.spec [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-69187-validate MachineConfigNodes properties [Serial]", func() {
 
 		nodes := NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()
 
-		exutil.By("Check field values of MachineConfigNode.spec")
 		for _, node := range nodes {
 			mcn := NewMachineConfigNode(oc.AsAdmin(), node.GetName())
 
-			logger.Infof("Check spec.configVersion.desired for node %s", node.GetName())
+			exutil.By(fmt.Sprintf("Check MachineConfigNode properties for %s", node.GetName()))
+
+			logger.Infof("Check spec.configVersion.desired")
 			desiredOfNode := node.GetDesiredMachineConfig()
-			desiredOfMCN := mcn.GetDesiredMachineConfig()
-			o.Expect(desiredOfNode).Should(o.Equal(desiredOfMCN), "desired config of node is not same as machineconfignode")
+			desiredOfMCNSpec := mcn.GetDesiredMachineConfigOfSpec()
+			o.Expect(desiredOfNode).Should(o.Equal(desiredOfMCNSpec), "desired config of node is not same as machineconfignode.spec")
 
-			logger.Infof("Check spec.pool for node %s", node.GetName())
+			logger.Infof("Check spec.pool")
 			poolOfNode := node.GetPrimaryPoolOrFail().GetName()
-			poolOfMCN := mcn.GetPool()
-			o.Expect(poolOfNode).Should(o.Equal(poolOfMCN), "pool of node is not same as machineconfignode")
+			poolOfMCNSpec := mcn.GetPool()
+			o.Expect(poolOfNode).Should(o.Equal(poolOfMCNSpec), "pool of node is not same as machineconfignode.spec")
 
-			logger.Infof("Check spec.node for node %s", node.GetName())
-			nodeOfMCN := mcn.GetNode()
-			o.Expect(node.GetName()).Should(o.Equal(nodeOfMCN), "node name is not same as machineconfignode")
+			logger.Infof("Check spec.node")
+			nodeOfMCNSpec := mcn.GetNode()
+			o.Expect(node.GetName()).Should(o.Equal(nodeOfMCNSpec), "node name is not same as machineconfignode.spec")
+
+			logger.Infof("Check status.configVersion.current")
+			currentOfNode := node.GetCurrentMachineConfig()
+			currentOfMCNStatus := mcn.GetCurrentMachineConfigOfStatus()
+			o.Expect(currentOfNode).Should(o.Equal(currentOfMCNStatus), "current config of node is not same as machineconfignode.status")
+
+			logger.Infof("Check status.configVersion.desired")
+			desiredOfMCNStatus := mcn.GetDesiredMachineConfigOfStatus()
+			o.Expect(desiredOfNode).Should(o.Equal(desiredOfMCNStatus), "desired config of node is not same as machineconfignode.status")
+
+			logger.Infof("OK\n")
 		}
 
 	})
