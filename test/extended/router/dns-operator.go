@@ -106,37 +106,23 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		resourceName := "dns.operator.openshift.io/default"
 		jsonPatch := "[{\"op\":\"add\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Random\",\"upstreams\":[\"8.8.8.8\"]},\"name\":\"test\",\"zones\":[\"mytest.ocp\"]}]}]"
 
-		g.By("patch the dns.operator/default and add custom zones config")
-		defer restoreDNSOperatorDefault(oc)
-		podList := getAllDNSPodsNames(oc)
-		attrList := getAllCorefilesStat(oc, podList)
-		patchGlobalResourceAsAdmin(oc, resourceName, jsonPatch)
-		attrList = waitAllCorefilesUpdated(oc, attrList)
-		ensureClusterOperatorNormal(oc, "dns", 5, 300)
+		exutil.By("Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		oneDnsPod := forceOnlyOneDnsPodExist(oc)
 
-		g.By("check Corefile and ensure the policy is Random")
-		oneDNSPod := getDNSPodName(oc)
-		policy := readDNSCorefile(oc, oneDNSPod, "8.8.8.8", "-A2")
+		exutil.By("patch the dns.operator/default and add custom zones config, check Corefile and ensure the policy is Random")
+		patchGlobalResourceAsAdmin(oc, resourceName, jsonPatch)
+		policy := pollReadDnsCorefile(oc, oneDnsPod, "8.8.8.8", "-A2", "policy random")
 		o.Expect(policy).To(o.ContainSubstring(`policy random`))
 
-		g.By("updateh the custom zones policy to RoundRobin ")
+		exutil.By("updateh the custom zones policy to RoundRobin, check Corefile and ensure it is updated ")
 		patchGlobalResourceAsAdmin(oc, resourceName, "[{\"op\":\"replace\", \"path\":\"/spec/servers/0/forwardPlugin/policy\", \"value\":\"RoundRobin\"}]")
-		attrList = waitAllCorefilesUpdated(oc, attrList)
-		ensureClusterOperatorNormal(oc, "dns", 5, 300)
-
-		g.By("check Corefile and ensure the policy is round_robin")
-		oneDNSPod = getDNSPodName(oc)
-		policy = readDNSCorefile(oc, oneDNSPod, "8.8.8.8", "-A2")
+		policy = pollReadDnsCorefile(oc, oneDnsPod, "8.8.8.8", "-A2", "policy round_robin")
 		o.Expect(policy).To(o.ContainSubstring(`policy round_robin`))
 
-		g.By("updateh the custom zones policy to Sequential")
+		exutil.By("updateh the custom zones policy to Sequential, check Corefile and ensure it is updated")
 		patchGlobalResourceAsAdmin(oc, resourceName, "[{\"op\":\"replace\", \"path\":\"/spec/servers/0/forwardPlugin/policy\", \"value\":\"Sequential\"}]")
-		waitAllCorefilesUpdated(oc, attrList)
-		ensureClusterOperatorNormal(oc, "dns", 5, 300)
-
-		g.By("check Corefile and ensure the policy is sequential")
-		oneDNSPod = getDNSPodName(oc)
-		policy = readDNSCorefile(oc, oneDNSPod, "8.8.8.8", "-A2")
+		policy = pollReadDnsCorefile(oc, oneDnsPod, "8.8.8.8", "-A2", "policy sequential")
 		o.Expect(policy).To(o.ContainSubstring(`policy sequential`))
 	})
 

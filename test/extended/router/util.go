@@ -661,13 +661,53 @@ func getDNSPodName(oc *exutil.CLI) string {
 // searchString is to locate the specified section since Corefile might has multiple zones
 // that containing same config strings
 // grepOptions can specify the lines of the context, e.g. "-A20" or "-C10"
-func readDNSCorefile(oc *exutil.CLI, DNSPodName, searchString, grepOption string) string {
+func readDNSCorefile(oc *exutil.CLI, dnsPodName, searchString, grepOption string) string {
 	ns := "openshift-dns"
 	cmd := fmt.Sprintf("grep \"%s\" /etc/coredns/Corefile %s", searchString, grepOption)
-	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, DNSPodName, "--", "bash", "-c", cmd).Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, dnsPodName, "--", "bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the part of Corefile that matching \"%s\" is: %v", searchString, output)
 	return output
+}
+
+// coredns introduced reload plugin to update the Corefile without receating dns-default pod
+// similar to readHaproxyConfig(), use wait.Poll to wait the searchString2 to be updated.
+// searchString1 can locate the specified zone section since Corefile might has multiple zones
+// grepOptions can specify the lines of the context, e.g. "-A20" or "-C10"
+// searchString2 is the config to be checked, it might exist in multiple zones so searchString1 is required
+func pollReadDnsCorefile(oc *exutil.CLI, dnsPodName, searchString1, grepOption, searchString2 string) string {
+	e2e.Logf("Polling and search dns Corefile")
+	ns := "openshift-dns"
+	cmd1 := fmt.Sprintf("grep \"%s\" /etc/coredns/Corefile %s | grep \"%s\"", searchString1, grepOption, searchString2)
+	cmd2 := fmt.Sprintf("grep \"%s\" /etc/coredns/Corefile %s", searchString1, grepOption)
+
+	waitErr := wait.PollImmediate(5*time.Second, 120*time.Second, func() (bool, error) {
+		// trigger an immediately refresh configmap by updating pod's annotations
+		hackAnnotatePod(oc, ns, dnsPodName)
+		_, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, dnsPodName, "--", "bash", "-c", cmd1).Output()
+		if err != nil {
+			e2e.Logf("string not found, wait and try again...")
+			return false, nil
+		}
+		return true, nil
+	})
+	// print Corefile for debugging (normally the content is less than 20 lines)
+	if waitErr != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, dnsPodName, "--", "bash", "-c", "cat /etc/coredns/Corefile").Output()
+		e2e.Logf("The existing Corefile is: %v", output)
+	}
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but Corefile is not updated"))
+	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, dnsPodName, "--", "bash", "-c", cmd2).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the part of Corefile that matching \"%s\" is: %v", searchString1, output)
+	return output
+}
+
+// to trigger the configmap refresh immediately
+// see https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#mounted-configmaps-are-updated-automatically
+func hackAnnotatePod(oc *exutil.CLI, ns, podName string) {
+	hackAnnotation := "ne-testing-hack=" + getRandomString()
+	oc.AsAdmin().WithoutNamespace().Run("annotate").Args("pod", podName, "-n", ns, hackAnnotation, "--overwrite").Execute()
 }
 
 // this function get all cluster's operators
@@ -707,7 +747,7 @@ func ensureClusterOperatorNormal(oc *exutil.CLI, coName string, healthyThreshold
 	jsonPath := "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"
 
 	e2e.Logf("waiting for CO %v back to normal status......", coName)
-	waitErr := wait.Poll(6*time.Second, totalWaitTime*time.Second, func() (bool, error) {
+	waitErr := wait.Poll(5*time.Second, totalWaitTime*time.Second, func() (bool, error) {
 		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/"+coName, jsonPath).Output()
 		primary := false
 		printCount++
@@ -723,10 +763,6 @@ func ensureClusterOperatorNormal(oc *exutil.CLI, coName string, healthyThreshold
 			count = 0
 			if printCount%10 == 1 {
 				e2e.Logf("CO status is still abnormal (%v), wait and try again...", status)
-				if coName == "dns" {
-					e2e.Logf("do sync on all dns pods")
-					doSyncOnAllDNSPods(oc)
-				}
 			}
 		}
 		return primary, nil
@@ -769,6 +805,38 @@ func getAllLinuxNodes(oc *exutil.CLI) string {
 	allLinuxNodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=linux", "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return allLinuxNodes
+}
+
+// to speed up the dns/coredns testing, just force only one dns-default pod in the cluster during the test
+// find random linux node and add label "ne-dns-testing=true" to it, then patch spec.nodePlacement.nodeSelector
+// please use func deleteDnsOperatorToRestore() for clear up.
+func forceOnlyOneDnsPodExist(oc *exutil.CLI) string {
+	dnsNodeSelector := "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"ne-dns-testing\":\"true\"}}]"
+	// ensure no node with the label "ne-dns-testing=true"
+	oc.AsAdmin().WithoutNamespace().Run("label").Args("node", "-l", "ne-dns-testing=true", "ne-dns-testing-").Execute()
+	podList := getAllDNSPodsNames(oc)
+	if len(podList) == 1 {
+		e2e.Logf("Found only one dns-default pod and it looks like SNO cluster. Continue the test...")
+	} else {
+		dnsPodName := getRandomDNSPodName(podList)
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", dnsPodName, "-o=jsonpath={.spec.nodeName}", "-n", "openshift-dns").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Find random dns pod '%s' and its node '%s' which will be used for the following testing", dnsPodName, nodeName)
+		// add special label "ne-dns-testing=true" to the node and force only one dns pod running on it
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", nodeName, "ne-dns-testing=true").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchGlobalResourceAsAdmin(oc, "dnses.operator.openshift.io/default", dnsNodeSelector)
+		ensureClusterOperatorNormal(oc, "dns", 1, 90)
+	}
+	return getDNSPodName(oc)
+}
+
+func deleteDnsOperatorToRestore(oc *exutil.CLI) {
+	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("dnses.operator.openshift.io/default").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	ensureClusterOperatorNormal(oc, "dns", 2, 120)
+	// remove special label "ne-dns-testing=true" from the node
+	oc.AsAdmin().WithoutNamespace().Run("label").Args("node", "-l", "ne-dns-testing=true", "ne-dns-testing-").Execute()
 }
 
 // patch the dns.operator/default with the original value
