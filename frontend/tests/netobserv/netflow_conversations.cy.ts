@@ -35,7 +35,7 @@ describe('(OCP-60701 NETOBSERV) Connection tracking test', { tags: ['NETOBSERV']
             cy.byTestID("table-composable").should('exist')
         })
 
-        it("(OCP-60701, aramesha) Update Logtype to CONVERSATIONS and verify Query Summary panel", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-60701, aramesha) Update Logtype to Conversations and verify Query Summary panel", { tags: ['e2e', 'admin'] }, function () {
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
             cy.get('#query-options-dropdown').click();
             cy.get('#recordType-allConnections').click()

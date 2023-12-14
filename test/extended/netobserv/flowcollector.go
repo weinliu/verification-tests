@@ -105,7 +105,7 @@ func (flow Flowcollector) createFlowcollector(oc *exutil.CLI) {
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", flow.Template, "-p"}
 
 	flpSA := "flowlogs-pipeline"
-	if flow.DeploymentModel == "KAFKA" {
+	if flow.DeploymentModel == "Kafka" {
 		flpSA = "flowlogs-pipeline-transformer"
 	}
 

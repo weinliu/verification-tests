@@ -11,7 +11,7 @@ objects:
       namespace: "${Namespace}"
       deploymentModel: "${DeploymentModel}"
       agent:
-        type: EBPF
+        type: eBPF
         ipfix:
           cacheActiveTimeout: 20s
           cacheMaxFlows: 400
@@ -84,7 +84,7 @@ objects:
         mode: Manual
         enable: "${{LokiEnable}}"
         manual:
-          authToken: FORWARD
+          authToken: Forward
           querierUrl: "${LokiURL}"
           ingesterUrl: "${LokiURL}"
           statusUrl: "${LokiStatusURL}"
@@ -149,15 +149,15 @@ parameters:
     description: "namespace where you want flowlogsPipeline and consoleplugin pods to be deployed"
     value: "netobserv"
   - name: DeploymentModel
-    value: "DIRECT"
+    value: "Direct"
   - name: EBPFCacheActiveTimeout
     value: 15s
   - name: EBPFPrivileged
     value: "false"
   - name: MetricServerTLSType
-    value: "AUTO"
+    value: "Auto"
   - name: LogType
-    value: "FLOWS"
+    value: "Flows"
   - name: LokiEnable
     value: "true"
   - name: LokiURL

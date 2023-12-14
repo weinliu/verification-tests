@@ -23,6 +23,30 @@ export const Operator = {
             }
         })
     },
+    enableAllFLPMetrics: () => {
+        cy.get('#root_spec_processor_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_includeList_accordion-toggle').should('exist').click()
+        cy.enableFLPMetrics([
+            "node_flows_total",
+            "node_ingress_bytes_total",
+            "node_egress_bytes_total",
+            "node_ingress_packets_total",
+            "node_egress_packets_total",
+            // enable all namespace metrics
+            "namespace_flows_total",
+            "namespace_ingress_bytes_total",
+            "namespace_egress_bytes_total",
+            "namespace_ingress_packets_total",
+            "namespace_egress_packets_total",
+            // enable all workload metrics
+            "workload_flows_total",
+            "workload_ingress_bytes_total",
+            "workload_egress_bytes_total",
+            "workload_ingress_packets_total",
+            "workload_egress_packets_total",
+          ]);
+    },
     visitFlowcollector: () => {
         // this assumes Loki is already deployed in netobserv NS
         cy.visit('k8s/ns/openshift-netobserv-operator/operators.coreos.com~v1alpha1~ClusterServiceVersion')
@@ -42,7 +66,7 @@ export const Operator = {
         cy.get("#yaml-create").should('exist').then(() => {
             if ((Cypress.$('td[role="gridcell"]').length > 0) && (parameters != null)) {
                 Operator.deleteFlowCollector()
-                //come back to flowcollector tab after deletion
+                // come back to flowcollector tab after deletion
                 Operator.visitFlowcollector()
             }
         })
@@ -63,8 +87,15 @@ export const Operator = {
                 if (parameters == "Conversations") {
                     Operator.enableConversations()
                 }
+                if (parameters == "AllMetrics") {
+                    Operator.enableAllFLPMetrics()
+                }
                 cy.byTestID('create-dynamic-form').click()
-                cy.byTestID('status-text').should('exist').should('have.text', 'Ready')
+                cy.byTestID('status-text').should('exist').should('contain.text', 'Ready')
+                cy.byTestID('status-text').should('exist').should('contain.text', 'FLPMonolithReady')
+                cy.byTestID('status-text').should('exist').should('contain.text', 'FLPParentReady')
+                cy.byTestID('status-text').should('exist').should('contain.text', 'FlowCollectorLegacyReady')
+                cy.byTestID('status-text').should('exist').should('contain.text', 'MonitoringReady')
 
                 cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
                 // for OCP < 4.12 refresh-web-console element doesn't exist, use toast-action instead.
@@ -75,7 +106,11 @@ export const Operator = {
     },
     configureEbpfAgent: () => {
         cy.get('#root_spec_agent_accordion-toggle').click()
-        cy.get('#root_spec_agent_type').should('have.text', 'EBPF')
+        cy.get('#root_spec_agent_type').click().then(agent => {
+            cy.contains("eBPF").should('exist')
+            cy.contains("IPFIX").should('exist')
+            cy.get('#eBPF-link').click()
+        })
         cy.get('#root_spec_agent_ebpf_accordion-toggle').click()
         cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
     },
@@ -103,11 +138,11 @@ export const Operator = {
     enableConversations: () => {
         cy.get('#root_spec_processor_accordion-toggle').click()
         cy.get('#root_spec_processor_logTypes').click().then(moreOpts => {
-            cy.contains("FLOWS").should('exist')
-            cy.contains("ENDED_CONVERSATIONS").should('exist')
-            cy.contains("CONVERSATIONS").should('exist')
-            cy.contains("ALL").should('exist')
-            cy.get('#ALL-link').click()
+            cy.contains("Flows").should('exist')
+            cy.contains("Conversations").should('exist')
+            cy.contains("EndedConversations").should('exist')
+            cy.contains("All").should('exist')
+            cy.get('#All-link').click()
         })
     },
     deleteFlowCollector: () => {
@@ -149,16 +184,21 @@ export const Operator = {
         cy.byTestID('confirm-action').should('exist').click()
     }
 }
-Cypress.Commands.add('enableFLPMetric', (tag: string) => {
-    cy.get(`[value=\"${tag}\"]`).parent().parent().within(tag => {
-        cy.get('.co-dynamic-form__array-field-group-remove > button').should('exist').click()
-    })
+
+Cypress.Commands.add('enableFLPMetrics', (tags: string[]) => {
+    for (let i = 0; i < tags.length; i++) {
+        const tag = tags[i];
+        cy.get('#root_spec_processor_metrics_includeList_add-btn').should('exist').click()
+        cy.get(`#root_spec_processor_metrics_includeList_${i}`).should('exist').click().then(metrics => {
+            cy.get(`#${tag}-link`).should('exist').click()
+        })
+    }
 });
 
 declare global {
     namespace Cypress {
         interface Chainable {
-            enableFLPMetric(tag: string): Chainable<Element>
+            enableFLPMetrics(tag: string[]): Chainable<Element>
         }
     }
 }

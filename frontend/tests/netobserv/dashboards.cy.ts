@@ -1,10 +1,10 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
-import { dashboard, graphSelector } from "views/dashboards-page"
+import { dashboard, graphSelector, appsInfra } from "views/dashboards-page"
 
-const appsInfra = [
-    "applications-chart",
-    "infrastructure-chart"
+const cpuMemory = [
+    "cpu-usage-chart",
+    "memory-usage-chart"
 ]
 
 describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
@@ -31,53 +31,137 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
         Operator.createFlowcollector(project)
     })
 
-    it('(OCP-61893, memodi), should have health dashboards', function () {
+    it('(OCP-61893, memodi), should have default health dashboards', function () {
+        // navigate to 'NetObserv / Health' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-health")
 
-        var panels: string[] = ['rates-chart', 'percentage-of-flows-generated-by-netobserv-own-traffic-chart']
-        cy.checkDashboards(panels)
+        // verify that 'Flows' and 'Flows Overhead' panels exist and are populated
+        // this panel should appear with the default flowcollector metrics
+        var flowPanels: string[] = ['rates-chart', 'percentage-of-flows-generated-by-netobserv-own-traffic-chart']
+        cy.checkDashboards(flowPanels)
 
+        // verify 'Top flow rates per source and destination namespaces' panel exists and is populated
+        // this panel should appear with the default flowcollector metrics
         cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-namespaces').should('exist').within(topflow => {
             cy.checkDashboards(appsInfra)
         })
 
-        // Will be updated in Nathan's PR
-        // cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-workloads').should('exist').within(topflow => {
-        //     cy.checkDashboards(appsInfra)
-        // })
-
-        var cpuMemory: string[] = ['cpu-usage-chart', 'memory-usage-chart']
-
+        // verify 'Agents' CPU and memory usage panels exists and are populated
         cy.byLegacyTestID('panel-agents').should('exist').within(agent => {
             cy.checkDashboards(cpuMemory)
         })
 
+        // verify 'Processor' CPU and memory usage panels exists and are populated
         cy.byLegacyTestID('panel-processor').should('exist').within(processor => {
             cy.checkDashboards(cpuMemory)
         })
 
+        // verify 'Operator' reconciliation rate panel exists and is populated
         cy.get('[data-test="operator-reconciliation-rate-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // check that panels below do NOT appear
+        cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-workloads').should('not.exist')
+        cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-nodes').should('not.exist')
     })
 
-    it("(OCP-63790, memodi), should have flow based dashboards", function () {
+    it('(OCP-61893, nweinber), should have health dashboards from additional metrics', function () {
+        // recreate flowcollector with additional metrics and go back to the dashboard page
+        Operator.deleteFlowCollector()
+        Operator.createFlowcollector(project, "AllMetrics")
+        dashboard.visit()
+        dashboard.visitDashboard("grafana-dashboard-netobserv-health")
+
+        // verify 'Top flow rates per source and destination workloads' panel exists and is populated
+        // this panel should appear with the flowcollector metric 'workload_flows_total'
+        cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-workloads').should('exist').within(topflow => {
+            cy.checkDashboards(appsInfra)
+        })
+
+        // verify 'Top flow rates per source and destination nodes' panel exists and is populated
+        // this panel should appear with the flowcollector metric 'node_flows_total'
+        cy.byTestID("-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+    })
+
+    it("(OCP-63790, memodi), should have default flow-based dashboards", function () {
+        // navigate to 'NetObserv' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
 
-        //Check Byte rate recieved per node panel
+        // verify 'Byte rate received per node' panel exists and is populated
+        // this panel should appear with the default flowcollector metrics
         cy.byTestID("-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        cy.byLegacyTestID('panel-top-byte-rates-received-per-source-and-destination-namespaces').should('exist').within(topBytes => {
+        // verify 'Byte rate received per namespace' panel exists and is populated
+        // this panel should appear with the default flowcollector metrics
+        cy.byLegacyTestID('panel-byte-rate-received-per-namespace').should('exist').within(topBytes => {
             cy.checkDashboards(appsInfra)
         })
-        
-        //Similar to above comment
-        // cy.byLegacyTestID('panel-top-byte-rates-received-per-source-and-destination-workloads').should('exist').within(topBytes => {
-        //     cy.checkDashboards(appsInfra)
-        // })
+
+        // verify 'Byte rate received per workload' panel exists and is populated
+        // this panel should appear with the default flowcollector metrics
+        cy.byLegacyTestID('panel-byte-rate-received-per-workload').should('exist').within(topBytes => {
+            cy.checkDashboards(appsInfra)
+        })
+    })
+
+    it("(OCP-63790, nweinber), should have flow-based dashboards from additional metrics", function () {
+        // note flowcollector with additional metrics should already exist here
+        dashboard.visit()
+        dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
+
+        // verify 'Byte rate sent per node' panel exists and is populated
+        // this panel should appear with the 'node_egress_bytes_total' metric
+        cy.get('[data-test-id="panel-byte-rate-sent-per-node"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // verify 'Packet rate received per node' panel exists and is populated
+        // this panel should appear with the 'node_ingress_packets_total' metric
+        cy.get('[data-test-id="panel-packet-rate-sent-per-node"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // verify 'Packet rate sent per node' panel exists and is populated
+        // this panel should appear with the 'node_egress_packets_total' metric
+        cy.get('[data-test-id="panel-packet-rate-received-per-node"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // verify 'Byte rate send per namespace' panel exists and is populated
+        // this panel should appear with the 'namespace_egress_bytes_total' metric
+        cy.byLegacyTestID('panel-byte-rate-sent-per-namespace').should('exist').within(topBytes => {
+            cy.checkDashboards(appsInfra)
+        })
+
+        // verify 'Packet rate sent per namespace' panel exists and is populated
+        // this panel should appear with the 'namespace_egress_packets_total' metric
+        cy.byLegacyTestID('panel-packet-rate-sent-per-namespace').should('exist').within(topBytes => {
+            cy.checkDashboards(appsInfra)
+        })
+
+        // verify 'Packet rate received per namespace' panel exists and is populated
+        // this panel should appear with the 'namespace_ingress_packets_total' metric
+        cy.byLegacyTestID('panel-packet-rate-received-per-namespace').should('exist').within(topBytes => {
+            cy.checkDashboards(appsInfra)
+        })
+
+        // verify 'Byte rate sent per workload' panel exists and is populated
+        // this panel should appear with the 'workload_egress_bytes_total' metric
+        cy.byLegacyTestID('panel-byte-rate-sent-per-workload').should('exist').within(topBytes => {
+            cy.checkDashboards(appsInfra)
+        })
+
+        // verify 'Packet rate sent per workload' panel exists and is populated
+        // this panel should appear with the 'workload_egress_packets_total' metric
+        cy.byLegacyTestID('panel-packet-rate-sent-per-workload').should('exist').within(topBytes => {
+            cy.checkDashboards(appsInfra)
+        })
+
+        // verify 'Packet rate received per workload' panel exists and is populated
+        // this panel should appear with the 'workload_ingress_packets_total' metric
+        cy.byLegacyTestID('panel-packet-rate-received-per-workload').should('exist').within(topBytes => {
+            cy.checkDashboards(appsInfra)
+        })
+
     })
 
     after("delete flowcollector and NetObs Operator", function () {
+        Operator.deleteFlowCollector()
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.uiLogout()
     })

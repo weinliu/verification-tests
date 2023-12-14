@@ -23,6 +23,10 @@ export const graphSelector = {
     graphBody: '.co-dashboard-card__body--dashboard > div > div'
 }
 
+export const appsInfra = [
+    "applications-chart",
+    "infrastructure-chart"
+]
 
 Cypress.Commands.add('checkDashboards', (names) => {
     for (let i = 0; i < names.length; i++) {
@@ -35,7 +39,6 @@ declare global {
     namespace Cypress {
         interface Chainable {
             checkDashboards(names: string[]): Chainable<Element>
-
         }
     }
 }

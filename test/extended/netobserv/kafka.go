@@ -43,7 +43,7 @@ type KafkaUser struct {
 
 // deploys default Kafka
 func (kafka *Kafka) deployKafka(oc *exutil.CLI) {
-	e2e.Logf("Deploy Default KAFKA")
+	e2e.Logf("Deploy Default Kafka")
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", kafka.Template, "-p", "NAMESPACE=" + kafka.Namespace}
 
 	if kafka.Name != "" {
@@ -59,7 +59,7 @@ func (kafka *Kafka) deployKafka(oc *exutil.CLI) {
 
 // deploys Kafka Metrics
 func (kafkaMetrics *KafkaMetrics) deployKafkaMetrics(oc *exutil.CLI) {
-	e2e.Logf("Deploy KAFKA metrics")
+	e2e.Logf("Deploy Kafka metrics")
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", kafkaMetrics.Template, "-p", "NAMESPACE=" + kafkaMetrics.Namespace}
 
 	exutil.ApplyNsResourceFromTemplate(oc, kafkaMetrics.Namespace, parameters...)
@@ -67,7 +67,7 @@ func (kafkaMetrics *KafkaMetrics) deployKafkaMetrics(oc *exutil.CLI) {
 
 // creates a Kafka topic
 func (kafkaTopic *KafkaTopic) deployKafkaTopic(oc *exutil.CLI) {
-	e2e.Logf("Create KAFKA topic")
+	e2e.Logf("Create Kafka topic")
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", kafkaTopic.Template, "-p", "NAMESPACE=" + kafkaTopic.Namespace}
 
 	if kafkaTopic.Name != "" {
@@ -83,7 +83,7 @@ func (kafkaTopic *KafkaTopic) deployKafkaTopic(oc *exutil.CLI) {
 
 // deploys KafkaUser
 func (kafkaUser *KafkaUser) deployKafkaUser(oc *exutil.CLI) {
-	e2e.Logf("Create KAFKA User")
+	e2e.Logf("Create Kafka User")
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", kafkaUser.Template, "-p", "NAMESPACE=" + kafkaUser.Namespace}
 
 	if kafkaUser.UserName != "" {
@@ -99,7 +99,7 @@ func (kafkaUser *KafkaUser) deployKafkaUser(oc *exutil.CLI) {
 
 // deletes kafkaUser
 func (kafka *KafkaUser) deleteKafkaUser(oc *exutil.CLI) {
-	e2e.Logf("Deleting KAFKA user")
+	e2e.Logf("Deleting Kafka user")
 	command := []string{"kafkauser", kafka.UserName, "-n", kafka.Namespace}
 	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(command...).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -107,7 +107,7 @@ func (kafka *KafkaUser) deleteKafkaUser(oc *exutil.CLI) {
 
 // deletes kafkaTopic
 func (kafkaTopic *KafkaTopic) deleteKafkaTopic(oc *exutil.CLI) {
-	e2e.Logf("Deleting KAFKA topic")
+	e2e.Logf("Deleting Kafka topic")
 	command := []string{"kafkatopic", kafkaTopic.TopicName, "-n", kafkaTopic.Namespace}
 	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(command...).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -115,7 +115,7 @@ func (kafkaTopic *KafkaTopic) deleteKafkaTopic(oc *exutil.CLI) {
 
 // deletes kafka
 func (kafka *Kafka) deleteKafka(oc *exutil.CLI) {
-	e2e.Logf("Deleting KAFKA")
+	e2e.Logf("Deleting Kafka")
 	command := []string{"kafka", kafka.Name, "-n", kafka.Namespace}
 	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(command...).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

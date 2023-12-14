@@ -39,7 +39,7 @@ describe('(OCP-67782 NETOBSERV) Large volume downloads counters test', { tags: [
         })
 
         it("(OCP-67782, aramesha) should verify large volume download counter", function () {
-            //Filter on SrcPort 443, DstNamespace test-client and DstName client
+            // Filter on SrcPort 443, DstNamespace test-client and DstName client
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
             cy.byTestID('src_port').click()
             cy.byTestID('autocomplete-search').type('443' + '{enter}')
