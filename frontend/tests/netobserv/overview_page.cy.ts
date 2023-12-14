@@ -35,7 +35,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             cy.get('.overviewTabButton').should('exist')
 
             cy.checkPanel(overviewSelectors.defaultPanels)
-            cy.checkPanelsNum(4);
+            cy.checkPanelsNum();
         })
 
         it("(OCP-54839, aramesha) should verify show duplicates checkbox is disabled", function () {
@@ -45,7 +45,6 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
         })
 
         it("(OCP-54839, aramesha) should validate overview page features", function () {
-
             cy.byTestID(genSelectors.timeDrop).then(btn => {
                 expect(btn).to.exist
                 cy.wrap(btn).click().then(drop => {
@@ -65,31 +64,45 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             cy.showAdvancedOptions().then(views => {
                 cy.contains('Display options').should('exist').click()
 
-                cy.byTestID(overviewSelectors.typeDrop).then(btn => {
-                    expect(btn).to.exist
-                    cy.wrap(btn).click().then(drop => {
-                        cy.byTestID('packets').should('exist').click()
-                    })
-                    cy.get(querySumSelectors.packetsCount).should('exist').then(packetsCnt => {
-                        cy.checkQuerySummary(packetsCnt)
-                        let metricType = String(packetsCnt.text().split(' ')[3])
-                        expect(metricType).to.contain("packets")
-                    })
-                })
-
+                // validate scope dropdown
                 cy.byTestID(overviewSelectors.scopeDrop).then(btn => {
                     expect(btn).to.exist
                     cy.wrap(btn).click().then(drop => {
+                        cy.byTestID('host').should('exist')
+                        cy.byTestID('namespace').should('exist')
+                        cy.byTestID('owner').should('exist')
                         cy.byTestID('resource').should('exist').click()
                     })
                 })
 
+                // verify truncate labels dropdown
                 cy.byTestID(overviewSelectors.truncateDrop).then(btn => {
                     expect(btn).to.exist
                     cy.wrap(btn).click().then(drop => {
+                        cy.byTestID('0').should('exist')
+                        cy.byTestID('10').should('exist')
+                        cy.byTestID('20').should('exist')
+                        cy.byTestID('30').should('exist')
+                        cy.byTestID('40').should('exist')
                         cy.byTestID('25').should('exist').click()
                     })
                 })
+
+                // verify single focus graph toggle
+                cy.get('#focus-switch').check()
+                // verify 'Top 5 average bytes rates' panel is in focus
+                cy.get('#overview-absolute-graph').contains('Top 5 average bytes rates');
+                cy.get('[data-test-metrics]').its('length').should('gt', 0);
+
+                // verify other panels are scrollable on the right
+                for (let i = 0; i < overviewSelectors.defaultPanels.length; i++) {
+                    cy.get('#overview-graph-list').contains(overviewSelectors.defaultPanels[i])
+                }
+
+                // uncheck single focus toggle and verify panels
+                cy.get('#focus-switch').check()
+                cy.checkPanel(overviewSelectors.defaultPanels)
+                cy.checkPanelsNum();
             })
         })
 
@@ -111,35 +124,35 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
         })
 
         it("(OCP-54839, aramesha) should validate panels", function () {
-            //open panels modal
+            // open panels modal
             cy.openPanelsModal();
 
-            //check if all panels are listed  
+            // verify all panels are listed  
             cy.checkPopupItems(overviewSelectors.panelsModal, overviewSelectors.managePanelsList);
 
-            //select all panels
+            // select all panels
             cy.get(overviewSelectors.panelsModal).contains('Select all').click();
             cy.get(overviewSelectors.panelsModal).contains('Save').click();
             netflowPage.waitForLokiQuery()
-            cy.checkPanelsNum(6);
+            cy.checkPanelsNum(4);
 
-            //check if all panels are rendered
+            // verify all panels are rendered
             netflowPage.waitForLokiQuery()
             cy.checkPanel(overviewSelectors.allPanels)
 
-            //unselect all panels and check if save is disabled
+            // unselect all panels and verify save is disabled
             cy.openPanelsModal();
             cy.get(overviewSelectors.panelsModal).contains('Unselect all').click();
             cy.get(overviewSelectors.panelsModal).contains('Save').should('be.disabled');
 
-            //select 1 panel and check if its visible on console
-            cy.selectPopupItems(overviewSelectors.panelsModal, ['Total rate (line)']);
+            // select 1 panel and verify its visible on console
+            cy.selectPopupItems(overviewSelectors.panelsModal, ['Top X average packets rates (donut)']);
             cy.get(overviewSelectors.panelsModal).contains('Save').click();
             netflowPage.waitForLokiQuery()
-            cy.checkPanel([overviewSelectors.allPanels[3]])
+            cy.checkPanel([overviewSelectors.allPanels[2]])
             cy.checkPanelsNum(1);
 
-            //restore default panels and check if visible on console
+            // restore default panels and verify visible on console
             cy.openPanelsModal();
             cy.get(overviewSelectors.panelsModal).contains('Restore default panels').click();
             cy.get(overviewSelectors.panelsModal).contains('Save').click();

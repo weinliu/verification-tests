@@ -4,6 +4,7 @@ import { catalogSources } from "../../views/catalog-source"
 const metricFunction = [
     "Latest rate",
     "Average rate",
+    "Min rate",
     "Max rate",
     "Total"
 ]
@@ -67,7 +68,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         cy.byTestID(topologySelectors.metricsDrop).should('exist').click().get('#sum').click()
         cy.contains('Display options').should('exist').click()
 
-        // Advance options menu remains visible throughout the test
+        // advance options menu remains visible throughout the test
     })
 
     it("(OCP-53591, aramesha) should verify show duplicates checkbox is disabled", function () {
@@ -81,7 +82,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         cy.contains('Display options').should('exist').click()
 
         cy.byTestID(topologySelectors.metricsDrop).should('exist').click()
-        cy.get(topologySelectors.metricsList).should('have.length', 4).each((item, index) => {
+        cy.get(topologySelectors.metricsList).should('have.length', 5).each((item, index) => {
             cy.wrap(item).should('contain.text', metricFunction[index])
         })
         cy.byTestID('metricType').should('exist').click()
@@ -216,9 +217,9 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         cy.get('g[data-kind="node"] > g').eq(1).parent().should('exist').click()
         cy.get('#elementPanel').should('be.visible')
 
-        // Details tab
+        // details tab
         cy.get('#drawer-tabs > ul > li:nth-child(1)').should('exist')
-        // Metrics tab
+        // metrics tab
         cy.get('#drawer-tabs > ul > li:nth-child(2)').should('exist').click()
         cy.get('div.pf-c-chart').should('exist')
     })

@@ -44,7 +44,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
         })
 
         it("(OCP-50532, aramesha) should verify Query Options dropdown", { tags: ['e2e', 'admin'] }, function () {
-            //Toggle between the page limits
+            // toggle between the page limits
             cy.changeQueryOption('500')
             netflowPage.waitForLokiQuery()
             cy.intercept('GET', getTableLimitURL('500'), {
@@ -63,13 +63,13 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                 fixture: 'netobserv/netflow_table_50.json'
             }).as('matchedUrl')
 
-            //check to show duplicate flows
+            // check to show duplicate flows
             cy.changeQueryOption('Show duplicates')
             cy.intercept('GET', getTableDuplicatesURL('true'), {
                 fixture: 'netobserv/netflow_table_duplicates.json'
             }).as('matchedUrl')
 
-            //uncheck duplicate flows
+            // uncheck duplicate flows
             cy.changeQueryOption('Show duplicates')
         })
 
@@ -98,7 +98,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                 cy.byTestID('size-m').click()
             })
 
-            //expand 
+            // expand 
             cy.byTestID('filters-more-options-button').click().then(moreOpts => {
                 cy.contains('Expand').click()
                 cy.get('#page-sidebar').then(sidenav => {
@@ -165,6 +165,9 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.get('#summaryPanel').should('be.visible')
 
             cy.contains('Results').should('exist')
+            cy.contains('Average time').should('exist')
+            cy.contains('Duration').should('exist')
+            cy.contains('Collection latency').should('exist')
             cy.contains('Cardinality').should('exist')
             cy.contains('Configuration').should('exist')
             cy.contains('Sampling').should('exist')
@@ -184,7 +187,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
 
                 cy.get('#Mac').should('exist').check()
                 cy.get('#FlowDirection').should('exist').check()
-                //ICMP related columns
+                // ICMP related columns
                 cy.get('#IcmpType').should('exist').check()
                 cy.get('#IcmpCode').should('exist').check()
 
@@ -229,18 +232,18 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
 
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
 
-            // Verify Source namespace filter
+            // verify Source namespace filter
             cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
             cy.byTestID('autocomplete-search').type(project + '{enter}')
             cy.get('#filters div.custom-chip > p').should('contain.text', `${project}`)
 
-            // Verify NS column for all rows
+            // verify NS column for all rows
             cy.get('td:nth-child(3) span.co-resource-item__resource-name').should('exist').each(row => {
-                //Can match with openshift-netobserv-operator too
+                // can match with openshift-netobserv-operator too
                 cy.wrap(row).should('contain.text', project)
             })
 
-            //Verify swap button
+            // verify swap button
             cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
                 cy.contains("Swap").should('exist').click()
             })
@@ -249,7 +252,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             netflowPage.clearAllFilters()
             cy.get('div.custom-chip').should('not.exist')
 
-            //Verify NOT filter switch button
+            // verify NOT filter switch button
             cy.get('#filter-compare-switch-button').should('exist').click()
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
             cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
@@ -258,7 +261,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
 
             netflowPage.clearAllFilters()
 
-            //Verify NOT filter toggle
+            // verify NOT filter toggle
             cy.get('#filter-compare-toggle-button').should('exist').click().then(moreOpts => {
                 cy.contains("Not equals").should('exist').click()
             })
@@ -267,7 +270,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.byTestID('autocomplete-search').type(project + '{enter}')
             cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Not Source Namespace')
 
-            //Verify One-way and back-forth button
+            // verify One-way and back-forth button
             cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
                 cy.contains("One way").should('exist').click()
             })
@@ -281,7 +284,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
 
             netflowPage.clearAllFilters()
 
-            // Verify src port filter and port Naming
+            // verify src port filter and port Naming
             cy.byTestID("column-filter-toggle").click()
             cy.byTestID('src_port').click()
             cy.byTestID('autocomplete-search').type('3100{enter}')
@@ -443,9 +446,9 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                 cy.get(colSelectors.DSCP).should('exist')
             })
 
-            //Filter on DSCP values
+            // filter on DSCP values
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-            //Verify drop TCP state filter
+            // verify drop TCP state filter
             cy.byTestID('group-2-toggle').click().should('be.visible')
             cy.byTestID('dscp').click()
             cy.byTestID('autocomplete-search').type('0' + '{enter}')

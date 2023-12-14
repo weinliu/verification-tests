@@ -106,7 +106,7 @@ export namespace querySumSelectors {
     export const flowsCount = "#flowsCount"
     export const bytesCount = "#bytesCount"
     export const packetsCount = "#packetsCount"
-    export const bpsCount = "#bpsCount"
+    export const bpsCount = "#bytesPerSecondsCount"
     export const expandedQuerySummaryPanel = '.pf-c-drawer__panel-main'
 }
 
@@ -135,11 +135,11 @@ export namespace overviewSelectors {
     export const typeDrop = 'type-dropdown'
     export const scopeDrop = 'scope-dropdown'
     export const truncateDrop = 'truncate-dropdown'
-    export const managePanelsList = ['Top X average rates (donut)', 'Top X latest rates (donut)', 'Top X flow rates stacked (bars)', 'Total rate (line)', 'Top X flow rates stacked with total (bars)', 'Top X flow rates (lines)']
+    export const managePanelsList = ['Top X average bytes rates (donut)', 'Top X bytes rates stacked with total (bars and lines)', 'Top X average packets rates (donut)', 'Top X packets rates stacked with total (bars and lines)']
     export const managePacketDropPanelsList = managePanelsList.concat(['Top X flow dropped rates stacked (bars)', 'Total dropped rate (line)', 'Top X dropped state (donut)', 'Top X dropped cause (donut)', 'Top X flow dropped rates stacked with total (bars)'])
-    export const defaultPanels = ['Top 5 average rates', 'Top 5 latest rates', 'Top 5 flow rates stacked with total', 'Top 5 flow rates']
+    export const defaultPanels = ['Top 5 average bytes rates', 'Top 5 bytes rates stacked with total']
     export const defaultPacketDropPanels = defaultPanels.concat(['Top 5 dropped state', 'Top 5 dropped cause', 'Top 5 flow dropped rates stacked with total'])
-    export const allPanels = ['Top 5 average rates', 'Top 5 latest rates', 'Top 5 flow rates stacked', 'Total rate', 'Top 5 flow rates stacked with total', 'Top 5 flow rates']
+    export const allPanels = defaultPanels.concat(['Top 5 average packets rates', 'Top 5 packets rates'])
     export const allPacketDropPanels = allPanels.concat(defaultPacketDropPanels, ['Top 5 flow dropped rates stacked', 'Total dropped rate'])
 }
 
@@ -178,7 +178,7 @@ Cypress.Commands.add('showAdvancedOptions', () => {
         })
 });
 
-Cypress.Commands.add('checkPanelsNum', (panels = 4) => {
+Cypress.Commands.add('checkPanelsNum', (panels = 2) => {
     cy.get('#overview-flex').find('.overview-card').its('length').should('eq', panels);
 });
 
