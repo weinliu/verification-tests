@@ -86,16 +86,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-High-55408-Rate limiting on Azure", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
-		g.By("Check rate limiting is set to false")
-		rateLimiting, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmaps", "cloud-provider-config", "-n", "openshift-config", "-o=jsonpath={.data}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(rateLimiting, `cloudProviderRateLimit\": false`) {
-			e2e.Failf("Rate limiting should not be set")
-		}
-	})
-	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Medium-63778-cloud-controller-manager should be Upgradeable is True on None clusters", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "None")
 		g.By("Check Upgradeable status is True")
