@@ -153,4 +153,26 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cloud-controller-manager-operator", "-i", "--", "curl", url_https).Output()
 		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-High-54053-Implement tag categories cache for MAPI vsphere provider [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "vsphere")
+
+		g.By("Create a new machineset")
+		machinesetName := "machineset-54053"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Scale up machineset")
+		exutil.ScaleMachineSet(oc, machinesetName, 1)
+
+		machineControllerPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-machine-api", "-l", "api=clusterapi,k8s-app=controller", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		machineControllerLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+machineControllerPodName, "-c", "machine-controller", "-n", "openshift-machine-api").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(machineControllerLog, "categories cache miss, trying to find category by name, it might take time") || strings.Contains(machineControllerLog, "found cached category id value")).To(o.BeTrue())
+	})
+
 })
