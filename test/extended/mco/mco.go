@@ -3918,6 +3918,38 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:sregidor-NonPreRelease-Medium-68684-machine-config-controller pod restart should not make nodes unschedulable [Disruptive]", func() {
+		var (
+			controller = NewController(oc.AsAdmin())
+			masterNode = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster).GetNodesOrFail()[0]
+		)
+
+		exutil.By("Check that nodes are not modified when the controller pod is removed")
+		labels, err := masterNode.Get(`{.metadata.labels}`)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the labels in node %s", masterNode.GetName())
+
+		masterNode.oc.NotShowInfo()        // avoid spamming the logs
+		o.Consistently(func(gm o.Gomega) { // Passing o.Gomega as parameter we can use assertions inside the Consistently function without breaking the retries.
+			logger.Infof("Remove controller pod")
+			gm.Expect(controller.RemovePod()).To(o.Succeed(), "Could not remove the controller pod")
+
+			logger.Infof("Check that the node was not modified")
+			gm.Consistently(func(gm o.Gomega) {
+				gm.Expect(masterNode.Get(`{.metadata.labels}`)).To(o.MatchJSON(labels),
+					"Labels in node %s have changed after removing the controller pod, and they should not change", masterNode.GetName())
+				gm.Expect(masterNode.IsCordoned()).To(o.BeFalse(),
+					"The node %s was cordoned after removing the controller pod. Node: \n%s",
+					masterNode.GetName(), masterNode.PrettyString())
+			}, "10s", "0s").
+				Should(o.Succeed(),
+					"The node %s was modified when the controller pod was removed")
+		}, "4m", "1s").
+			Should(o.Succeed(),
+				"When we remove the controller pod the node %s is modified")
+
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
