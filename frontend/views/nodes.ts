@@ -12,5 +12,18 @@ export const nodesPage = {
     cy.get(`[aria-label="View ${chart} metrics in query browser"]`)
       .should('have.attr','href')
       .and('match',chartdetails)
+  },
+  setAdditionalColumn: (columnName) => {
+    cy.get('button[data-test="manage-columns"]').click();
+    cy.get('form[name="form"]').should('be.visible');
+    cy.get('input[name="Created"]').click();
+    cy.get('input[name="Uptime"]').click();  
+    cy.get('[data-test="confirm-action"]').click();
+  },
+  setDefaultColumn: () => {
+    cy.get('button[data-test="manage-columns"]').click();
+    cy.get('form[name="form"]').should('be.visible');
+    cy.contains('button', 'Restore default columns').click();
+    cy.get('[data-test="confirm-action"]').click();
   }
 }
