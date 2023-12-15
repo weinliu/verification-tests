@@ -484,7 +484,7 @@ ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-
 key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
 crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
 ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
-			result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
+			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -519,7 +519,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 key_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.key"
 crt_file = "/var/run/ocp-collector/secrets/vector-kafka/tls.crt"
 ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
-			result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
+			result, err = checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 

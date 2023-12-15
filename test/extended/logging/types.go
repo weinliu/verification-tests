@@ -626,16 +626,24 @@ type lokiQueryResponse struct {
 	Data   struct {
 		ResultType string `json:"resultType"`
 		Result     []struct {
-			Stream struct {
+			Stream *struct {
 				LogType                 string `json:"log_type"`
 				Tag                     string `json:"tag"`
-				FluentdThread           string `json:"fluentd_thread"`
+				FluentdThread           string `json:"fluentd_thread,omitempty"`
 				KubernetesContainerName string `json:"kubernetes_container_name,omitempty"`
-				KubernetesHost          string `json:"kubernetes_host"`
+				KubernetesHost          string `json:"kubernetes_host,omitempty"`
 				KubernetesNamespaceName string `json:"kubernetes_namespace_name,omitempty"`
 				KubernetesPodName       string `json:"kubernetes_pod_name,omitempty"`
-			} `json:"stream"`
-			Values []interface{} `json:"values"`
+			} `json:"stream,omitempty"`
+			Metric *struct {
+				LogType                 string `json:"log_type,omitempty"`
+				KubernetesContainerName string `json:"kubernetes_container_name,omitempty"`
+				KubernetesHost          string `json:"kubernetes_host,omitempty"`
+				KubernetesNamespaceName string `json:"kubernetes_namespace_name,omitempty"`
+				KubernetesPodName       string `json:"kubernetes_pod_name,omitempty"`
+			} `json:"metric,omitempty"`
+			Values []interface{} `json:"values,omitempty"`
+			Value  interface{}   `json:"value,omitempty"`
 		} `json:"result"`
 		Stats struct {
 			Summary struct {

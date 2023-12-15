@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1016,7 +1017,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			searchString := `[sinks.loki_server.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_CCM_SHA256"`
-			result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
+			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -1050,7 +1051,7 @@ ciphersuites = "TLS_AES_128_CCM_SHA256"`
 			searchString = `[sinks.loki_server.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
-			result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
+			result, err = checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -1129,7 +1130,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			searchString := `[sinks.loki_server.tls]
 min_tls_version = "VersionTLS12"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
-			result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
+			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -1165,7 +1166,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			searchString = `[sinks.loki_server.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"`
-			result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
+			result, err = checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -2098,4 +2099,403 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	})
 
+})
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control testing", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                                 = exutil.NewCLI("logging-flow-control", exutil.KubeConfigPath())
+		loggingBaseDir, s, sc, jsonLogFile string
+	)
+
+	g.BeforeEach(func() {
+		s = getStorageType(oc)
+		if len(s) == 0 {
+			g.Skip("Current cluster doesn't have a proper object storage for this test!")
+		}
+		sc, _ = getStorageClassName(oc)
+		if len(sc) == 0 {
+			g.Skip("The cluster doesn't have a proper storage class for this test!")
+		}
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+		jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     cloNS,
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     loNS,
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		exutil.By("deploy CLO and LO")
+		CLO.SubscribeOperator(oc)
+		LO.SubscribeOperator(oc)
+		oc.SetupProject()
+	})
+
+	g.It("CPaasrunOnly-Author:qitang-High-65193-Controlling log flow rates per container from selected containers by containerLimit.[Serial][Slow]", func() {
+		exutil.By("Create 3 pods in one project")
+		multiplePods := oc.Namespace()
+		for i := 0; i < 3; i++ {
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", multiplePods, "-f", jsonLogFile, "-p", "RATE=3000", "-p", "CONFIGMAP=logtest-config-"+strconv.Itoa(i), "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-"+strconv.Itoa(i)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Create 3 projects and create one pod in each project")
+		namespaces := []string{}
+		for i := 0; i < 3; i++ {
+			nsName := "logging-flow-control-" + getRandomString()
+			namespaces = append(namespaces, nsName)
+			oc.CreateSpecifiedNamespaceAsAdmin(nsName)
+			defer oc.DeleteSpecifiedNamespaceAsAdmin(nsName)
+			err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", nsName, "-f", jsonLogFile, "-p", "RATE=3000", "-p", "LABELS={\"logging-flow-control\": \"centos-logtest\"}").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Create a pod with 3 containers")
+		multiContainer := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
+		oc.SetupProject()
+		multipleContainers := oc.Namespace()
+		err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", multipleContainers, "-f", multiContainer, "-p", "RATE=3000", "-p", "LABELS={\"multiple-containers\": \"centos-logtest\"}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("deploy loki stack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-65193",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-65193",
+			storageClass:  sc,
+			bucketName:    "logging-loki-65193-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		exutil.By("Create CLF and set rate limit for different test projects")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    loggingNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "INPUTS=[\"application\"]")
+		patch := fmt.Sprintf(`[{"op": "add", "path": "/spec/inputs", "value": [{"application": {"namespaces": [%s], "containerLimit": {"maxRecordsPerSecond": 10}}, "name": "limited-rates-1"}, {"application": {"selector": {"matchLabels": {"logging-flow-control": "centos-logtest"}}, "containerLimit": {"maxRecordsPerSecond": 20}}, "name": "limited-rates-2"}, {"application": {"selector": {"matchLabels": {"multiple-containers": "centos-logtest"}}, "containerLimit": {"maxRecordsPerSecond": 30}}, "name": "limited-rates-3"}]},{ "op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["limited-rates-1","limited-rates-2","limited-rates-3"]}]`, multiplePods)
+		clf.update(oc, "", patch, "--type=json")
+
+		exutil.By("Create CL")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     loggingNS,
+			logStoreType:  "lokistack",
+			collectorType: "vector",
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			lokistackName: ls.name,
+			waitForReady:  true,
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		// sleep 3 minutes for the log to be collected
+		time.Sleep(3 * time.Minute)
+
+		exutil.By("Check data in lokistack")
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", oc.Namespace())
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(bearerToken).retry(5)
+
+		//ensure logs from each project are collected
+		for _, ns := range namespaces {
+			lc.waitForLogsAppearByProject("application", ns)
+		}
+		lc.waitForLogsAppearByProject("application", multipleContainers)
+		lc.waitForLogsAppearByProject("application", multiplePods)
+
+		exutil.By("for logs in project/" + multiplePods + ", the count of each container in one minute should be ~10*60")
+		re, _ := lc.query("application", "sum by(kubernetes_pod_name)(count_over_time({kubernetes_namespace_name=\""+multiplePods+"\"}[1m]))", 30, false, time.Now())
+		o.Expect(len(re.Data.Result) > 0).Should(o.BeTrue())
+		for _, r := range re.Data.Result {
+			// check the penultimate value
+			v := r.Values[len(r.Values)-2]
+			c := convertInterfaceToArray(v)[1]
+			count, err := strconv.Atoi(c)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(count <= 650).To(o.BeTrue(), fmt.Sprintf("the count is %d, however the expect value is 600", count))
+		}
+
+		exutil.By("for logs in projects logging-flow-control-*, the count of each container in one minute should be ~20*60")
+		// get `400 Bad Request` when querying with `sum by(kubernetes_pod_name)(count_over_time({kubernetes_namespace_name=~\"logging-flow-control-.+\"}[1m]))`
+		for _, ns := range namespaces {
+			res, _ := lc.query("application", "sum by(kubernetes_pod_name)(count_over_time({kubernetes_namespace_name=\""+ns+"\"}[1m]))", 30, false, time.Now())
+			o.Expect(len(res.Data.Result) > 0).Should(o.BeTrue())
+			for _, r := range res.Data.Result {
+				// check the penultimate value
+				v := r.Values[len(r.Values)-2]
+				c := convertInterfaceToArray(v)[1]
+				count, _ := strconv.Atoi(c)
+				o.Expect(count <= 1300).To(o.BeTrue(), fmt.Sprintf("the count is %d, however the expect value is 1200", count))
+			}
+		}
+
+		exutil.By("for logs in project/" + multipleContainers + ", the count of each container in one minute should be ~30*60")
+		r, _ := lc.query("application", "sum by(kubernetes_container_name)(count_over_time({kubernetes_namespace_name=\""+multipleContainers+"\"}[1m]))", 30, false, time.Now())
+		o.Expect(len(r.Data.Result) > 0).Should(o.BeTrue())
+		for _, r := range r.Data.Result {
+			// check the penultimate value
+			v := r.Values[len(r.Values)-2]
+			c := convertInterfaceToArray(v)[1]
+			count, _ := strconv.Atoi(c)
+			o.Expect(count <= 1950).To(o.BeTrue(), fmt.Sprintf("the count is %d, however the expect value is 1800", count))
+		}
+	})
+
+	g.It("CPaasrunOnly-Author:qitang-High-65194-Controlling the flow rate per destination to selected outputs.[Serial][Slow]", func() {
+		exutil.By("Create pod to generate some logs")
+		appProj := oc.Namespace()
+		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile, "-p", "RATE=3000", "-p", "REPLICAS=3").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podNodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", appProj, "-ojsonpath={.items[*].spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeNames := strings.Split(podNodeName, " ")
+
+		exutil.By("deploy loki stack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-65193",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-65193",
+			storageClass:  sc,
+			bucketName:    "logging-loki-65193-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		exutil.By("Deploy non-logging managed log stores")
+		oc.SetupProject()
+		loki := externalLoki{
+			name:      "loki-server",
+			namespace: oc.Namespace(),
+		}
+		defer loki.remove(oc)
+		loki.deployLoki(oc)
+
+		exutil.By("Create ClusterLogForwarder instance in openshift-logging project")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    loggingNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "URL=http://"+loki.name+"."+loki.namespace+".svc:3100", "OUTPUTREFS=[\"default\", \"loki-server\"]")
+		patch := fmt.Sprintf(`{"spec": {"outputs": [{"name":"loki-server","type":"loki","url":"http://%s.%s.svc:3100","limit": {"maxRecordsPerSecond": 10}}]}}`, loki.name, loki.namespace)
+		clf.update(oc, "", patch, "--type=merge")
+
+		exutil.By("Create CL")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     loggingNS,
+			logStoreType:  "lokistack",
+			collectorType: "vector",
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			lokistackName: ls.name,
+			waitForReady:  true,
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		// sleep 3 minutes for the log to be collected
+		time.Sleep(3 * time.Minute)
+
+		exutil.By("check data in user-managed loki, the count of logs from each node in one minute should be ~10*60")
+		route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+		lc := newLokiClient(route)
+		lc.waitForLogsAppearByProject("", appProj)
+		res, _ := lc.query("", "sum by(kubernetes_host)(count_over_time({log_type=~\".+\"}[1m]))", 30, false, time.Now())
+		o.Expect(len(res.Data.Result) > 0).Should(o.BeTrue())
+		for _, r := range res.Data.Result {
+			// check the penultimate value
+			v := r.Values[len(r.Values)-2]
+			c := convertInterfaceToArray(v)[1]
+			count, _ := strconv.Atoi(c)
+			o.Expect(count <= 650).To(o.BeTrue(), fmt.Sprintf("the count is %d, however the expect value is 600", count))
+		}
+
+		exutil.By("check data in lokistack, there should not have rate limitation")
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", oc.Namespace())
+		routeLokiStack := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lokistackClient := newLokiClient(routeLokiStack).withToken(bearerToken).retry(5)
+		for _, nodeName := range nodeNames {
+			// only check app logs, because for infra and audit logs, we don't know how many logs the OCP generates in one minute
+			res, _ := lokistackClient.query("application", "sum by(kubernetes_host)(count_over_time({kubernetes_host=\""+nodeName+"\"}[1m]))", 30, false, time.Now())
+			o.Expect(len(res.Data.Result) > 0).Should(o.BeTrue())
+			for _, r := range res.Data.Result {
+				v := r.Values[len(r.Values)-2]
+				c := convertInterfaceToArray(v)[1]
+				count, _ := strconv.Atoi(c)
+				o.Expect(count >= 2900).Should(o.BeTrue())
+			}
+		}
+
+		exutil.By("set maxRecordsPerSecond to 0")
+		newPatch := `[{"op": "replace", "path": "/spec/outputs/0/limit/maxRecordsPerSecond", "value": 0}]`
+		clf.update(oc, "", newPatch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, loggingNS, "collector")
+		// remove the loki pod to remove logs collected before updating the rate limit
+		_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", loki.namespace, "--all").Execute()
+
+		// sleep 3 minutes for the new configuration to be applied to collector pods
+		time.Sleep(3 * time.Minute)
+
+		exutil.By("check data in user-managed loki, no logs collected")
+		newRes, _ := lc.query("", "sum by(kubernetes_host)(count_over_time({log_type=~\".+\"}[1m]))", 30, false, time.Now())
+		o.Expect(len(newRes.Data.Result) == 0).Should(o.BeTrue())
+
+		exutil.By("check data in lokistack again, there should not have rate limitation")
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, nodeName := range nodeNames {
+			// only check app logs, because for infra and audit logs, we don't know how many logs the OCP generates in one minute
+			res, _ := lokistackClient.query("application", "sum by(kubernetes_host)(count_over_time({kubernetes_host=\""+nodeName+"\"}[1m]))", 30, false, time.Now())
+			o.Expect(len(res.Data.Result) > 0).Should(o.BeTrue())
+			for _, r := range res.Data.Result {
+				v := r.Values[len(r.Values)-2]
+				c := convertInterfaceToArray(v)[1]
+				count, _ := strconv.Atoi(c)
+				o.Expect(count >= 2900).Should(o.BeTrue())
+			}
+		}
+	})
+
+	g.It("CPaasrunOnly-Author:qitang-High-65195-Controlling log flow rates - different output with different rate", func() {
+		exutil.By("Create pod to generate some logs")
+		appProj := oc.Namespace()
+		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile, "-p", "RATE=3000").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Deploy non-logging managed log stores")
+		oc.SetupProject()
+		logStoresNS := oc.Namespace()
+		loki := externalLoki{
+			name:      "loki-server",
+			namespace: logStoresNS,
+		}
+		defer loki.remove(oc)
+		loki.deployLoki(oc)
+
+		es := externalES{
+			namespace:  logStoresNS,
+			version:    "8",
+			serverName: "elasticsearch-8",
+			loggingNS:  logStoresNS,
+		}
+		defer es.remove(oc)
+		es.deploy(oc)
+
+		rsyslog := rsyslog{
+			serverName: "rsyslog",
+			namespace:  logStoresNS,
+			tls:        false,
+			loggingNS:  logStoresNS,
+		}
+		defer rsyslog.remove(oc)
+		rsyslog.deploy(oc)
+
+		exutil.By("Create ClusterLogForwarder")
+		clf := clusterlogforwarder{
+			name:                      "clf-65194",
+			namespace:                 logStoresNS,
+			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml"),
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			serviceAccountName:        "clf-" + getRandomString(),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "URL=http://"+loki.name+"."+loki.namespace+".svc:3100")
+		patch := fmt.Sprintf(`{"spec": {"outputs": [{"name":"loki-server","type":"loki","url":"http://%s.%s.svc:3100","limit": {"maxRecordsPerSecond": 20}}, {"name":"rsyslog-server","type":"syslog","url":"udp://%s.%s.svc:514","limit": {"maxRecordsPerSecond": 30}}, {"name":"elasticsearch-server","type":"elasticsearch","url":"http://%s.%s.svc:9200","limit":{"maxRecordsPerSecond": 10},"elasticsearch":{"version":8}}]}}`, loki.name, loki.namespace, rsyslog.serverName, rsyslog.namespace, es.serverName, es.namespace)
+		clf.update(oc, "", patch, "--type=merge")
+		outputRefs := `[{"op": "replace", "path": "/spec/pipelines/0/outputRefs", "value": ["loki-server", "rsyslog-server", "elasticsearch-server"]}]`
+		clf.update(oc, "", outputRefs, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+		exutil.By("check collector pods' configuration")
+		lokiConfig := `[transforms.sink_throttle_loki-server]
+type = "throttle"
+inputs = ["forward_to_loki_user_defined"]
+window_secs = 1
+threshold = 20`
+		rsyslogConfig := `[transforms.sink_throttle_rsyslog-server]
+type = "throttle"
+inputs = ["forward_to_loki_user_defined"]
+window_secs = 1
+threshold = 30`
+		esConfig := `[transforms.sink_throttle_elasticsearch-server]
+type = "throttle"
+inputs = ["forward_to_loki_user_defined"]
+window_secs = 1
+threshold = 10`
+
+		result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", lokiConfig, rsyslogConfig, esConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).To(o.BeTrue(), "some of the configuration is not in vector.toml")
+
+		// sleep 3 minutes for the log to be collected
+		time.Sleep(3 * time.Minute)
+
+		exutil.By("check data in loki, the count of logs from each node in one minute should be ~20*60")
+		route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+		lc := newLokiClient(route)
+		res, _ := lc.query("", "sum by(kubernetes_host)(count_over_time({log_type=~\".+\"}[1m]))", 30, false, time.Now())
+		o.Expect(len(res.Data.Result) > 0).Should(o.BeTrue())
+		for _, r := range res.Data.Result {
+			// check the penultimate value
+			v := r.Values[len(r.Values)-2]
+			c := convertInterfaceToArray(v)[1]
+			count, _ := strconv.Atoi(c)
+			o.Expect(count <= 1300).To(o.BeTrue(), fmt.Sprintf("the count is %d, however the expect value is 1200", count))
+		}
+
+		//TODO: find a way to check the doc count in rsyslog and es8
+		/*
+			exutil.By("check data in ES, the count of logs from each node in one minute should be ~10*60")
+			for _, node := range nodeNames {
+				query := `{"query": {"bool": {"must": [{"match_phrase": {"hostname.keyword": "` + node + `"}}, {"range": {"@timestamp": {"gte": "now-1m/m", "lte": "now/m"}}}]}}}`
+				count, err := es.getDocCount(oc, "", query)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(count <= 700).Should(o.BeTrue(), fmt.Sprintf("The increased count in %s in 1 minute is: %d", node, count))
+			}
+		*/
+	})
 })

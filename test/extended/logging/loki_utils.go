@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -707,7 +706,6 @@ func (c *lokiClient) getHTTPRequestHeader() (http.Header, error) {
 }
 
 func (c *lokiClient) doRequest(path, query string, out interface{}) error {
-
 	h, err := c.getHTTPRequestHeader()
 	if err != nil {
 		return err
@@ -718,7 +716,6 @@ func (c *lokiClient) doRequest(path, query string, out interface{}) error {
 		return err
 	}
 	return json.Unmarshal(resp, out)
-
 }
 
 func (c *lokiClient) doQuery(path string, query string) (*lokiQueryResponse, error) {
@@ -733,6 +730,7 @@ func (c *lokiClient) doQuery(path string, query string) (*lokiQueryResponse, err
 }
 
 // query uses the /api/v1/query endpoint to execute an instant query
+// lc.query("application", "sum by(kubernetes_namespace_name)(count_over_time({kubernetes_namespace_name=\"multiple-containers\"}[5m]))", 30, false, time.Now())
 func (c *lokiClient) query(logType string, queryStr string, limit int, forward bool, time time.Time) (*lokiQueryResponse, error) {
 	direction := func() string {
 		if forward {
@@ -834,30 +832,11 @@ func (c *lokiClient) waitForLogsAppearByProject(logType, projectName string) {
 // extractLogEntities extract the log entities from loki query response, designed for checking the content of log data in Loki
 func extractLogEntities(lokiQueryResult *lokiQueryResponse) []LogEntity {
 	var lokiLogs []LogEntity
-	// convert interface{} to []string
-	convert := func(t interface{}) []string {
-		var data []string
-		switch reflect.TypeOf(t).Kind() {
-		case reflect.Slice, reflect.Array:
-			s := reflect.ValueOf(t)
-			for i := 0; i < s.Len(); i++ {
-				data = append(data, fmt.Sprintln(s.Index(i)))
-			}
-		}
-		return data
-	}
-	/*
-		value example:
-		  [
-		    timestamp,
-			log data
-		  ]
-	*/
 	for _, res := range lokiQueryResult.Data.Result {
 		for _, value := range res.Values {
 			lokiLog := LogEntity{}
 			// only process log data, drop timestamp
-			json.Unmarshal([]byte(convert(value)[1]), &lokiLog)
+			json.Unmarshal([]byte(convertInterfaceToArray(value)[1]), &lokiLog)
 			lokiLogs = append(lokiLogs, lokiLog)
 		}
 	}

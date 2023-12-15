@@ -2941,7 +2941,7 @@ func checkTLSProfile(oc *exutil.CLI, profile string, algo string, server string,
 	return true
 }
 
-func checkCollectorTLSProfile(oc *exutil.CLI, ns, secretName, searchString string) (bool, error) {
+func checkCollectorConfiguration(oc *exutil.CLI, ns, secretName string, searchString ...string) (bool, error) {
 	if ns == "" {
 		ns = loggingNS
 	}
@@ -2973,7 +2973,12 @@ func checkCollectorTLSProfile(oc *exutil.CLI, ns, secretName, searchString strin
 		return false, err
 	}
 
-	return strings.Contains(string(content), searchString), nil
+	for _, s := range searchString {
+		if !strings.Contains(string(content), s) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func checkOperatorsRunning(oc *exutil.CLI) (bool, error) {
@@ -3098,4 +3103,28 @@ func GetIPVersionStackType(oc *exutil.CLI) (ipvStackType string) {
 	}
 	e2e.Logf("The test cluster IP-version Stack type is :\"%s\".", ipvStackType)
 	return ipvStackType
+}
+
+// convertInterfaceToArray converts interface{} to []string
+/*
+	example of interface{}:
+	  [
+	    timestamp,
+		log data
+	  ],
+	  [
+	    timestamp,
+		count
+	  ]
+*/
+func convertInterfaceToArray(t interface{}) []string {
+	var data []string
+	switch reflect.TypeOf(t).Kind() {
+	case reflect.Slice, reflect.Array:
+		s := reflect.ValueOf(t)
+		for i := 0; i < s.Len(); i++ {
+			data = append(data, fmt.Sprint(s.Index(i)))
+		}
+	}
+	return data
 }

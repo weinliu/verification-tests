@@ -284,7 +284,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			searchString := `[sinks.cw.tls]
 min_tls_version = "VersionTLS12"
 ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"`
-			result, err := checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
+			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
@@ -311,7 +311,7 @@ ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-
 			searchString = `[sinks.cw.tls]
 min_tls_version = "VersionTLS12"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
-			result, err = checkCollectorTLSProfile(oc, clf.namespace, clf.name+"-config", searchString)
+			result, err = checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
 
