@@ -161,37 +161,57 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-NonPreRelease-High-41185-The oc compliance controls command reports the compliance standards and controls that is benchmark fulfil for profiles [Slow]", func() {
-		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
-
 		g.By("Check default profilebundles name and status.. !!!\n")
 		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
 		subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
 
 		g.By("Check default profiles name.. !!!\n")
-		subD.getProfileName(oc, "ocp4-cis")
-		subD.getProfileName(oc, "ocp4-cis-node")
-		subD.getProfileName(oc, "ocp4-e8")
-		subD.getProfileName(oc, "ocp4-high")
-		subD.getProfileName(oc, "ocp4-high-node")
-		subD.getProfileName(oc, "ocp4-moderate")
-		subD.getProfileName(oc, "ocp4-moderate-node")
-		subD.getProfileName(oc, "ocp4-nerc-cip")
-		subD.getProfileName(oc, "ocp4-nerc-cip-node")
-		subD.getProfileName(oc, "ocp4-pci-dss")
-		subD.getProfileName(oc, "ocp4-pci-dss-node")
-		subD.getProfileName(oc, "rhcos4-e8")
-		subD.getProfileName(oc, "rhcos4-high")
-		subD.getProfileName(oc, "rhcos4-moderate")
-		subD.getProfileName(oc, "rhcos4-nerc-cip")
+		arch := architecture.ClusterArchitecture(oc)
+
+		if arch.String() == "ppc64le" {
+			subD.getProfileName(oc, "ocp4-cis")
+			subD.getProfileName(oc, "ocp4-cis-node")
+			subD.getProfileName(oc, "ocp4-moderate")
+			subD.getProfileName(oc, "ocp4-moderate-node")
+			subD.getProfileName(oc, "ocp4-pci-dss")
+			subD.getProfileName(oc, "ocp4-pci-dss-node")
+		} else if arch.String() == "s390x" {
+			subD.getProfileName(oc, "ocp4-cis")
+			subD.getProfileName(oc, "ocp4-cis-node")
+			subD.getProfileName(oc, "ocp4-moderate")
+			subD.getProfileName(oc, "ocp4-moderate-node")
+		} else {
+			subD.getProfileName(oc, "ocp4-cis")
+			subD.getProfileName(oc, "ocp4-cis-node")
+			subD.getProfileName(oc, "ocp4-e8")
+			subD.getProfileName(oc, "ocp4-moderate")
+			subD.getProfileName(oc, "ocp4-moderate-node")
+			subD.getProfileName(oc, "ocp4-nerc-cip")
+			subD.getProfileName(oc, "ocp4-nerc-cip-node")
+			subD.getProfileName(oc, "ocp4-pci-dss")
+			subD.getProfileName(oc, "ocp4-pci-dss-node")
+			subD.getProfileName(oc, "rhcos4-e8")
+			subD.getProfileName(oc, "rhcos4-moderate")
+			subD.getProfileName(oc, "rhcos4-nerc-cip")
+		}
 
 		g.By("Check profile standards and controls.. !!!\n")
-		assertCheckProfileControls(oc, subD.namespace, "ocp4-cis", "CIP-003-8.*R4.1")
-		assertCheckProfileControls(oc, subD.namespace, "ocp4-e8", "NIST-800-53")
-		assertCheckProfileControls(oc, subD.namespace, "ocp4-high-node", "CIP-007-3.*R5.1.1")
-		assertCheckProfileControls(oc, subD.namespace, "ocp4-moderate-node", "AU-12.*c")
-		assertCheckProfileControls(oc, subD.namespace, "ocp4-nerc-cip", "PCI-DSS")
-		assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node", "Req-10.5.3")
-		assertCheckProfileControls(oc, subD.namespace, "rhcos4-high", "CIP-003-8.*R3")
+		if arch.String() == "ppc64le" {
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-cis", "CIP-003-8.*R4.1")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-moderate-node", "AU-12.*c")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node", "Req-10.5.3")
+		} else if arch.String() == "s390x" {
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-cis", "CIP-003-8.*R4.1")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-moderate-node", "AU-12.*c")
+		} else {
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-cis", "CIP-003-8.*R4.1")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-e8", "NIST-800-53")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-high-node", "CIP-007-3.*R5.1.1")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-moderate-node", "AU-12.*c")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-nerc-cip", "PCI-DSS")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node", "Req-10.5.3")
+			assertCheckProfileControls(oc, subD.namespace, "rhcos4-high", "CIP-003-8.*R3")
+		}
 
 		g.By("The ocp-41185 Successfully verify compliance standards and controls for all profiles ... !!!!\n ")
 	})

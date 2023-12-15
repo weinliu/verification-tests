@@ -1656,25 +1656,40 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-32814-High-45729-The compliance operator by default creates ProfileBundles and profiles", func() {
-		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		g.By("Check default profilebundles name and status.. !!!\n")
 		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
 		subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
 
 		g.By("Check default profiles name.. !!!\n")
-		subD.getProfileName(oc, "ocp4-cis")
-		subD.getProfileName(oc, "ocp4-cis-node")
-		subD.getProfileName(oc, "ocp4-e8")
-		subD.getProfileName(oc, "ocp4-moderate")
-		subD.getProfileName(oc, "ocp4-moderate-node")
-		subD.getProfileName(oc, "ocp4-nerc-cip")
-		subD.getProfileName(oc, "ocp4-nerc-cip-node")
-		subD.getProfileName(oc, "ocp4-pci-dss")
-		subD.getProfileName(oc, "ocp4-pci-dss-node")
-		subD.getProfileName(oc, "rhcos4-e8")
-		subD.getProfileName(oc, "rhcos4-moderate")
-		subD.getProfileName(oc, "rhcos4-nerc-cip")
+		arch := architecture.ClusterArchitecture(oc)
+
+		if arch.String() == "ppc64le" {
+			subD.getProfileName(oc, "ocp4-cis")
+			subD.getProfileName(oc, "ocp4-cis-node")
+			subD.getProfileName(oc, "ocp4-moderate")
+			subD.getProfileName(oc, "ocp4-moderate-node")
+			subD.getProfileName(oc, "ocp4-pci-dss")
+			subD.getProfileName(oc, "ocp4-pci-dss-node")
+		} else if arch.String() == "s390x" {
+			subD.getProfileName(oc, "ocp4-cis")
+			subD.getProfileName(oc, "ocp4-cis-node")
+			subD.getProfileName(oc, "ocp4-moderate")
+			subD.getProfileName(oc, "ocp4-moderate-node")
+		} else {
+			subD.getProfileName(oc, "ocp4-cis")
+			subD.getProfileName(oc, "ocp4-cis-node")
+			subD.getProfileName(oc, "ocp4-e8")
+			subD.getProfileName(oc, "ocp4-moderate")
+			subD.getProfileName(oc, "ocp4-moderate-node")
+			subD.getProfileName(oc, "ocp4-nerc-cip")
+			subD.getProfileName(oc, "ocp4-nerc-cip-node")
+			subD.getProfileName(oc, "ocp4-pci-dss")
+			subD.getProfileName(oc, "ocp4-pci-dss-node")
+			subD.getProfileName(oc, "rhcos4-e8")
+			subD.getProfileName(oc, "rhcos4-moderate")
+			subD.getProfileName(oc, "rhcos4-nerc-cip")
+		}
 
 		g.By("The Compliance Operator by default created ProfileBundles and profiles are verified successfully.. !!!\n")
 	})
