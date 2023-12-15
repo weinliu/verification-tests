@@ -3,7 +3,6 @@ package kata
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -766,6 +765,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			deployConfigFile = ""
 			deployName       = "mg-42167-" + getRandomString()
 			deploymentFile   = getRandomString() + "dep-common.json"
+			podNs            = oc.Namespace()
 			err              error
 			fails            = 0
 			kcLogLevel       = "{\"spec\":{\"logLevel\":\"debug\"}}"
@@ -774,11 +774,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			mustgatherName   = "mustgather" + getRandomString()
 			mustgatherDir    = "/tmp/" + mustgatherName
 			mustgatherLog    = mustgatherName + ".log"
-			mustgatherTopdir string
 			msg              string
 			nodeControlCount int
 			nodeWorkerCount  int
-			podNs            = oc.Namespace()
 			singleNode       = false
 			isWorker         = false
 		)
@@ -796,11 +794,13 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		nodeControlList, err := exutil.GetClusterNodesBy(oc, "master")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		msgIfErr := fmt.Sprintf("getClusterNodesBy master %v %v", nodeControlList, err)
+		o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
 		nodeControlCount = len(nodeControlList)
 
 		nodeWorkerList, err := exutil.GetClusterNodesBy(oc, "worker")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		msgIfErr = fmt.Sprintf("getClusterNodesBy worker %v %v", nodeWorkerList, err)
+		o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
 		nodeWorkerCount = len(nodeWorkerList)
 
 		mustgatherExpected := counts{
@@ -821,24 +821,17 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			mustgatherExpected.crio = nodeWorkerCount
 		}
 
-		g.By("Patch kataconfig to put worker nodes into debug mode")
-		// oc patch kataconfig example-kataconfig --type merge --patch '{"spec":{"logLevel":"debug"}}'
-
-		msg, err = oc.AsAdmin().Run("patch").Args("kataconfig", kataconfig.name, "-n", subscription.namespace, "--type", "merge", "--patch", kcLogLevel).Output()
-		e2e.Logf("kcLogLevel patched: %v %v", msg, err)
-
-		g.By("Wait for worker nodes to be in crio debug mode")
+		// patch kataconfig for debug
+		_, _ = oc.AsAdmin().Run("patch").Args("kataconfig", kataconfig.name, "-n", subscription.namespace, "--type", "merge", "--patch", kcLogLevel).Output()
 		msg, err = waitForNodesInDebug(oc, subscription.namespace)
 		e2e.Logf("%v", msg)
 
-		g.By("Create a deployment file from template")
-		// This creates N replicas where N=worker node
-		// It does not ensure that there is a replica on each worker node.
-		/* Loop because on 4.12 SNO, nodes might not respond at 1st
-		error: unable to process template
-		service unavailable
-		exit status 1
-		*/
+		/* Create a deployment file from template with N replicas where N=worker nodes
+		 It does not ensure that there is a replica on each worker node.
+		 Loop because on 4.12 SNO, nodes might not respond at 1st
+			error: unable to process template
+			service unavailable
+			exit status 1 */
 		errCheck := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
 			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(deploymentFile)
 			if strings.Contains(deployConfigFile, deploymentFile) {
@@ -847,37 +840,25 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: Unable to create deployment file from template: %v %v", deployConfigFile, err))
-		o.Expect(deployConfigFile).NotTo(o.BeEmpty())
+		o.Expect(deployConfigFile).NotTo(o.BeEmpty(), "empty deploy file error %v", err)
 
-		g.By("Apply deployment " + deployConfigFile)
-		msg, err = oc.AsAdmin().Run("apply").Args("-f", deployConfigFile, "-n", podNs).Output()
-		e2e.Logf("Applied deployment %v: %v %v", deployName, msg, err)
-
-		g.By("Wait for deployment to be ready")
+		_, err = oc.AsAdmin().Run("apply").Args("-f", deployConfigFile, "-n", podNs).Output()
 		defer oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
 		msg, err = waitForDeployment(oc, podNs, deployName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).NotTo(o.BeEmpty())
+		msgIfErr = fmt.Sprintf("ERROR: waitForDeployment %v: %v %v", deployName, msg, err)
+		o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+		o.Expect(msg).NotTo(o.BeEmpty(), msgIfErr)
 
-		g.By("run must-gather")
 		defer os.RemoveAll(mustgatherDir)
 		logFile, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", subscription.namespace, "must-gather", "--image="+testrunInitial.mustgatherImage, "--dest-dir="+mustgatherDir).OutputToFile(mustgatherLog)
-		e2e.Logf("created mustgather from image %v in %v logged to %v,%v %v", testrunInitial.mustgatherImage, mustgatherDir, mustgatherLog, logFile, err)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: mustgather %v has an error %v %v", mustgatherLog, logFile, err))
 
-		g.By("look in " + mustgatherDir)
-		files, err := ioutil.ReadDir(mustgatherDir)
-		e2e.Logf("%v contents %v\n", mustgatherDir, err)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		for _, file := range files {
-			if strings.Contains(file.Name(), "sha256") {
-				mustgatherTopdir = mustgatherDir + "/" + file.Name()
-				break
-			}
-		}
+		files, err := os.ReadDir(mustgatherDir)
+		msgIfErr = fmt.Sprintf("ERROR %v contents %v\n%v", mustgatherDir, err, files)
+		o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+		o.Expect(files).NotTo(o.BeEmpty(), msgIfErr)
 
-		g.By("Walk through " + mustgatherTopdir)
-		err = filepath.Walk(mustgatherTopdir, func(path string, info os.FileInfo, err error) error {
+		err = filepath.Walk(mustgatherDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				e2e.Logf("Error on %v: %v", path, err)
 				return err
@@ -891,27 +872,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				}
 			}
 
-			// qemu will create a directory but might not create files
-			if info.IsDir() {
+			if info.IsDir() { // qemu will create a directory but might not create files
 				if isWorker == true && strings.Contains(path, "/run/vc/crio/fifo") && !strings.Contains(path, "/run/vc/crio/fifo/io") {
 					mustgatherChecks.qemuLogs++
 				}
-				if strings.Contains(path, "audit") {
-					e2e.Logf("AUDIT directory %v", path)
-				}
-			} else {
-				mustgatherFiles = append(mustgatherFiles, path)
-				if strings.Contains(path, "audit") {
-					if strings.Contains(path, "audit.log") {
-						e2e.Logf("AUDIT file %v", path)
-					}
-					if strings.Contains(path, "audit_logs_listing") {
-						output, _ := ioutil.ReadFile(path)
-						e2e.Logf("AUDIT logs listing\n%v", string(output))
-						e2e.Logf("nodeWorkerList %v", nodeWorkerList)
-					}
-				}
+			}
 
+			if !info.IsDir() {
+				mustgatherFiles = append(mustgatherFiles, path)
 				if strings.Contains(path, "audit.log") {
 					mustgatherChecks.audits++
 				}
@@ -923,7 +891,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 					// in SNO, no worker, just master
 					if (isWorker == true || (singleNode == true && isWorker != true)) && strings.Contains(path, "/version") {
 						mustgatherChecks.qemuVersion++
-						// read file to extract kata-containers-* and qemu-kvm-core-* ?
 					}
 				}
 
@@ -947,10 +914,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			}
 			return nil
 		})
-		e2e.Logf("%v files in must-gather dir %v", len(mustgatherFiles), mustgatherTopdir)
-		e2e.Logf("counts %v, expected %v", mustgatherChecks, mustgatherExpected)
-
-		g.By("Compare walkthrough counts to expected from " + mustgatherTopdir)
+		e2e.Logf("%v files in must-gather dir %v", len(mustgatherFiles), mustgatherDir)
+		e2e.Logf("expected: %v", mustgatherExpected)
+		e2e.Logf("actual  : %v", mustgatherChecks)
 
 		e2e.Logf("mustgatherChecks.audits : %v", mustgatherChecks.audits)
 		if mustgatherChecks.audits < mustgatherExpected.audits {
@@ -1005,17 +971,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			e2e.Logf("describeVwebhook (%v) did not exist", mustgatherChecks.describeVwebhook)
 			fails++
 		}
+		o.Expect(fails).To(o.Equal(0), fmt.Sprintf("%v logs did not match expectd results\n%v", fails, mustgatherExpected))
 
-		if fails != 0 {
-			e2e.Logf("%v logs did not match expectd results", fails)
-		}
-		o.Expect(fails).To(o.Equal(0))
-
-		g.By("Tear down pod")
-		oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName).Execute()
-		os.RemoveAll(mustgatherDir)
-
-		g.By("SUCCESS")
+		e2e.Logf("STEP: SUCCESS")
 	})
 
 	// author: tbuskey@redhat.com

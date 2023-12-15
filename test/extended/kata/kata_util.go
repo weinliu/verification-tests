@@ -163,7 +163,7 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 		configFile string
 	)
 
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "--no-headers", "-n", sub.namespace).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "--no-headers", "-n", sub.namespace).Output()
 	if err == nil {
 		// kataconfig exists. Is it finished?
 		kataconfigStatusQuery, kataconfigStatusQueryChanged, err := kataconfigStatusInUse(oc, sub.namespace, kataconf.name)
@@ -209,7 +209,7 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 	// If it is already applied by a parallel test there will be an err
 
 	g.By("(3.3) Check kataconfig creation has started")
-	msg, err = checkResourceExists(oc, "kataconfig", kataconf.name, sub.namespace, snooze*time.Second, 10*time.Second)
+	_, _ = checkResourceExists(oc, "kataconfig", kataconf.name, sub.namespace, snooze*time.Second, 10*time.Second)
 
 	g.By("(3.4) Wait for kataconfig to finish install")
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
@@ -354,7 +354,7 @@ func subscriptionIsFinished(oc *exutil.CLI, sub SubscriptionDescription) (msg st
 		controlPod string
 	)
 	g.By("(2) Subscription checking")
-	msg, err = checkResourceJsonpath(oc, "sub", sub.subName, sub.namespace, "-o=jsonpath={.status.state}", "AtLatestKnown", snooze*time.Second, 10*time.Second)
+	msg, _ = checkResourceJsonpath(oc, "sub", sub.subName, sub.namespace, "-o=jsonpath={.status.state}", "AtLatestKnown", snooze*time.Second, 10*time.Second)
 
 	csvName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
 	if err != nil || csvName == "" {
@@ -859,8 +859,6 @@ func checkPeerPodSecrets(oc *exutil.CLI, opNamespace, provider string, ppSecretN
 }
 
 func decodeSecret(input string) (msg string, err error) {
-	msg = ""
-
 	debase64, err := base64.StdEncoding.DecodeString(input)
 	if err != nil {
 		msg = fmt.Sprintf("Was not able to decode %v.  %v %v", input, debase64, err)
@@ -1617,7 +1615,7 @@ func checkResourceJsonpathMatch(oc *exutil.CLI, resType, resName, resNs, jsonPat
 		interval time.Duration = 10
 	)
 
-	msg, err = checkResourceExists(oc, resType, resName, resNs, duration, interval)
+	_, _ = checkResourceExists(oc, resType, resName, resNs, duration, interval)
 
 	expectedMatch, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resType, resName, "-n", resNs, jsonPath1).Output()
 	if err != nil || expectedMatch == "" {
