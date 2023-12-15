@@ -13,6 +13,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit kubeletconfig", fun
 		clusterID      string
 		rosaClient     *rosacli.Client
 		kubeletService rosacli.KubeletConfigService
+		isHosted       bool
 	)
 
 	g.BeforeEach(func() {
@@ -23,6 +24,11 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit kubeletconfig", fun
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
 		kubeletService = rosaClient.KubeletConfig
+
+		g.By("Check cluster is hosted")
+		var err error
+		isHosted, err = isHostedCPCluster(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
 	g.AfterEach(func() {
@@ -33,6 +39,10 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit kubeletconfig", fun
 		g.By("Run the command to create a kubeletconfig to the cluster")
 		output, _ := rosaClient.KubeletConfig.CreateKubeletConfig(clusterID,
 			"--pod-pids-limit", "12345")
+		if isHosted {
+			o.Expect(output.String()).To(o.ContainSubstring("Hosted Control Plane clusters do not support custom KubeletConfig configuration."))
+			return
+		}
 		o.Expect(output.String()).To(o.ContainSubstring("Creating the custom KubeletConfig for cluster '%s' "+
 			"will cause all non-Control Plane nodes to reboot. "+
 			"This may cause outages to your applications. Do you wish to continue", clusterID))
@@ -65,6 +75,10 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit kubeletconfig", fun
 		g.By("Edit the kubeletconfig to the cluster before it is created")
 		output, _ := rosaClient.KubeletConfig.EditKubeletConfig(clusterID,
 			"--pod-pids-limit", "12345")
+		if isHosted {
+			o.Expect(output.String()).To(o.ContainSubstring("Hosted Control Plane clusters do not support KubeletConfig configuration"))
+			return
+		}
 		o.Expect(output.String()).To(o.ContainSubstring("No KubeletConfig for cluster '%s' has been found."+
 			" You should first create it via 'rosa create kubeletconfig'",
 			clusterID))
@@ -107,6 +121,9 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit kubeletconfig", fun
 	})
 
 	g.It("Author:xueli-Critical-68836-Delete podPidLimit via rosacli will work well [Serial]", func() {
+		if isHosted {
+			g.Skip("Hosted control plane cluster doesn't support the kubeleconfig for now")
+		}
 		g.By("Delete the kubeletconfig from the cluster before it is created")
 		output, _ := rosaClient.KubeletConfig.DeleteKubeletConfig(clusterID, "-y")
 		o.Expect(output.String()).To(o.ContainSubstring("Failed to delete custom KubeletConfig for cluster '%s'",
