@@ -3097,3 +3097,33 @@ func getProxyIPandPortOnHostedCluster(oc *exutil.CLI, hostedClusterName, namespa
 		return "", ""
 	}
 }
+
+// GetMachineNamesFromMachineSetOnROSA gets all Machines in a Machinepool on a classic ROSA cluster by label
+// This function only appliable to classic ROSA, as there is no "machine" resource on ROSA hosted cluster
+func getMachineNamesFromMachinePoolOnROSA(oc *exutil.CLI, machineSetName string, machineAPINamespace string) []string {
+	e2e.Logf("Getting all Machines in a Machineset by specific label ...")
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machine-type="+machineSetName, "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if machineNames != "" {
+		return strings.Split(machineNames, " ")
+	} else {
+		return nil
+	}
+}
+
+// Wait for machine on a classic ROSA to be ready - this function only appliable to classic ROSA, as there is no "machine" resource on ROSA hosted cluster
+func waitMachineOnROSAReady(oc *exutil.CLI, machineName string, namespace string) error {
+	return wait.Poll(15*time.Second, 10*time.Minute, func() (bool, error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", machineName, "-n", namespace, "-o=jsonpath={.status.phase}").Output()
+		e2e.Logf("Machine %v status is %v", machineName, status)
+		if err != nil || status == "" {
+			e2e.Logf("Failed to get machine status: %v, retrying...", err)
+			return false, nil
+		}
+		if !strings.Contains(status, "Running") {
+			e2e.Logf("Machine %v is in %v, not in Running state, retrying...", status)
+			return false, nil
+		}
+		return true, nil
+	})
+}

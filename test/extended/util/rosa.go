@@ -2,10 +2,11 @@ package util
 
 import (
 	"fmt"
-	g "github.com/onsi/ginkgo/v2"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"os"
 	"os/exec"
+
+	g "github.com/onsi/ginkgo/v2"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // IsROSA Determine whether it is a ROSA env, now only support prow
@@ -30,4 +31,9 @@ func ROSALogin() {
 	if err != nil {
 		e2e.Failf("rosa cli login error" + err.Error())
 	}
+}
+
+// Get cluster ID for ROSA created cluster
+func GetROSAClusterID() string {
+	return os.Getenv("CLUSTER_ID")
 }

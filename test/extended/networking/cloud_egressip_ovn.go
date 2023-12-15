@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
 	"github.com/vmware/govmomi"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -4162,6 +4164,222 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC Basic", func() {
 			}, "300s", "10s").Should(o.BeTrue(), "egressIP was not migrated to second egress node after unlabel first egress node!!")
 
 		}
+	})
+
+})
+
+var _ = g.Describe("[sig-networking] OVN EgressIP on rosa", func() {
+
+	defer g.GinkgoRecover()
+
+	var (
+		clusterID       string
+		rosaClient      *rosacli.Client
+		oc              = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+		egressNodeLabel = "k8s.ovn.org/egress-assignable"
+	)
+
+	g.BeforeEach(func() {
+
+		if !exutil.IsROSA() {
+			g.Skip("The test cluster is not ROSA cluster.")
+		}
+
+		g.By("Get the cluster")
+		clusterID = exutil.GetROSAClusterID()
+		e2e.Logf("ClusterID is: %v", clusterID)
+
+		// Initiate rosa client
+		rosaClient = rosacli.NewClient()
+	})
+
+	// author: jechen@redhat.com
+	g.It("ROSA-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-61582-High-66112-New node with label can join ROSA cluster, EgressIP can be assigned to egress node that is labelled during ROSA machinepool creation and egressIP works. [Disruptive]", func() {
+
+		exutil.By("This is for OCPBUGS-15731 and OCPBUGS-4969")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		machinePoolName := "mp-61582"
+		replicasNum := 2
+
+		var origNodesName []string
+
+		// Get original node list for ROSA hosted cluster for future use, do not need to do this for classic ROSA cluster
+		if exutil.IsHypershiftHostedCluster(oc) {
+			e2e.Logf("The test is running on ROSA Hypershift hosted cluster\n")
+
+			// get existing nodes on the hosted cluster
+			nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, node := range nodeList.Items {
+				origNodesName = append(origNodesName, node.Name)
+			}
+			e2e.Logf("\n Original scheduleable nodes on the hosted cluster are: %v\n", origNodesName)
+		}
+
+		exutil.By("1. Create a new machinepool with egress-assignable label and set replicas.\n")
+		machinePoolService := rosaClient.MachinePool
+
+		output, err := machinePoolService.CreateMachinePool(clusterID, "--name="+machinePoolName, "--labels="+egressNodeLabel+"=true", "--replicas="+strconv.Itoa(replicasNum))
+		o.Expect(err).To(o.BeNil())
+
+		if exutil.IsHypershiftHostedCluster(oc) {
+			o.Expect(output.String()).To(o.ContainSubstring("Machine pool '%s' created successfully on hosted cluster '%s'", machinePoolName, clusterID))
+		} else {
+			o.Expect(output.String()).To(o.ContainSubstring("Machine pool '%s' created successfully on cluster '%s'", machinePoolName, clusterID))
+		}
+		output, err = machinePoolService.ListMachinePool(clusterID)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(output.String()).To(o.ContainSubstring(machinePoolName))
+
+		// On ROSA hosted cluster, defer unlabel machinepool, defer deleting machinepool, defer checking nodes from the machinepool disappear
+		// On classic ROSA cluster, defer unlabel machinepool, defer deleting machinepool, defer deleting machines from the machinepool
+		if exutil.IsHypershiftHostedCluster(oc) {
+			defer func() {
+				machinePoolService.EditMachinePool(clusterID, machinePoolName, "--labels=")
+				machinePoolService.DeleteMachinePool(clusterID, machinePoolName)
+
+				// Make sure all nodes created from the machinepool disappear eventually after machinepool is deleted so the final node list is same as original node list
+				o.Eventually(func() bool {
+					finalNodesName, err := exutil.GetAllNodes(oc)
+					o.Expect(err).NotTo(o.HaveOccurred())
+					return len(finalNodesName) == len(origNodesName) && reflect.DeepEqual(finalNodesName, origNodesName)
+				}, "600s", "10s").Should(o.BeTrue(), "Not all nodes created are deleted")
+			}()
+		} else {
+			defer func() {
+				machinePoolService.EditMachinePool(clusterID, machinePoolName, "--labels=")
+				machinePoolService.DeleteMachinePool(clusterID, machinePoolName)
+
+				// Make sure all machines created from the machinepool are deleted
+				o.Eventually(func() bool {
+					machineNames := getMachineNamesFromMachinePoolOnROSA(oc, machinePoolName, "openshift-machine-api")
+					return len(machineNames) == 0
+				}, "600s", "10s").Should(o.BeTrue(), "Machines from the machinepool %s are not all deleted", machinePoolName)
+			}()
+		}
+
+		exutil.By("2. New nodes are created from the new machinepool, Verify they have egress-assignable label.\n")
+		var newNodesName []string
+		if exutil.IsHypershiftHostedCluster(oc) {
+			e2e.Logf("The test is running on ROSA Hypershift hosted cluster\n")
+
+			// Because there is no machine on ROSA hosted cluster to check, check if new nodes are created, need some wait time here before checking
+			time.Sleep(60 * time.Second)
+			o.Eventually(func() bool {
+				newNodesName, err = exutil.GetAllNodes(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return len(newNodesName) == len(origNodesName)+replicasNum
+			}, "600s", "10s").Should(o.BeTrue(), "Expected %d new nodes are not all created", replicasNum)
+			e2e.Logf("\n Current nodes list on the ROSA hosted cluster are: %v\n", newNodesName)
+
+			// Filter out existing nodes, only get new nodes created from the machineppol
+			for _, oldNode := range origNodesName {
+				for i, node := range newNodesName {
+					if node == oldNode {
+						newNodesName = append(newNodesName[:i], newNodesName[i+1:]...)
+						break
+					}
+				}
+			}
+		} else {
+			e2e.Logf("The test is running on classic ROSA (non-HCP) cluster\n")
+			e2e.Logf("Check all machines are created from the machinepool and running\n")
+			var machineNames []string
+			o.Eventually(func() bool {
+				machineNames = getMachineNamesFromMachinePoolOnROSA(oc, machinePoolName, "openshift-machine-api")
+				return len(machineNames) == replicasNum
+			}, "600s", "10s").Should(o.BeTrue(), fmt.Sprintf("Did not get expected %d of machines are created", replicasNum))
+			e2e.Logf("\n machineNames created from the machinepool: %v\n", machineNames)
+
+			for _, machineName := range machineNames {
+				err := waitMachineOnROSAReady(oc, machineName, "openshift-machine-api")
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Machine %s is not in running state", machineName))
+			}
+
+			e2e.Logf("Get new nodes created from the machinepool\n")
+			for _, machineName := range machineNames {
+				newNode := exutil.GetNodeNameFromMachine(oc, machineName)
+				newNodesName = append(newNodesName, newNode)
+			}
+		}
+		e2e.Logf("\n New nodes created from the machinepool on the classic ROSA or ROSA hosted cluster are: %v\n", newNodesName)
+
+		exutil.By("3. Check and wait for new nodes to be ready, verify new nodes can join the cluster.\n")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("node", newNodesName[0], "--ignore-not-found=true").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("node", newNodesName[1], "--ignore-not-found=true").Execute()
+		checkNodeStatus(oc, newNodesName[0], "Ready")
+		checkNodeStatus(oc, newNodesName[1], "Ready")
+
+		// Check all nodes created have egress-assignable label
+		nodeList := exutil.GetNodeListByLabel(oc, egressNodeLabel)
+		o.Expect(len(nodeList)).NotTo(o.And((o.Equal(0)), o.BeNumerically("<", 2)))
+		o.Expect(contains(nodeList, newNodesName[0])).To(o.BeTrue())
+		o.Expect(contains(nodeList, newNodesName[1])).To(o.BeTrue())
+
+		exutil.By("Verify egressIP can be assigned to new nodes and egressIP works.\n")
+		exutil.By("4. Create an egressip object\n")
+		freeIPs := findFreeIPs(oc, newNodesName[0], 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
+		egressip1 := egressIPResource1{
+			name:      "egressip-61582",
+			template:  egressIPTemplate,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject1(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(2))
+		e2e.Logf("egressIPMaps1: %v", egressIPMaps1)
+
+		exutil.By("5. Get a namespace, label the namespace\n")
+		ns1 := oc.Namespace()
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6. Create a test pod in the namespace. \n")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("7. Check source IP from the test pod is one of the two egressIP.\n")
+		exutil.By("7.1 Use tcpdump to verify egressIP, add additional label tcpdump=true to the machinepool first.\n")
+		defer machinePoolService.EditMachinePool(clusterID, machinePoolName, "--labels=")
+		_, err = machinePoolService.EditMachinePool(clusterID, machinePoolName, "--labels=k8s.ovn.org/egress-assignable=true,tcpdump=true")
+		o.Expect(err).To(o.BeNil())
+		output, err = machinePoolService.ListMachinePool(clusterID)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(output.String()).To(o.And(o.ContainSubstring("k8s.ovn.org/egress-assignable=true"), o.ContainSubstring("tcpdump=true")))
+
+		exutil.By("7.2 Create tcpdump sniffer Daemonset.\n")
+		primaryInf, infErr := getSnifPhyInf(oc, newNodesName[0])
+		o.Expect(infErr).NotTo(o.HaveOccurred())
+		dstHost := nslookDomainName("ifconfig.me")
+		defer deleteTcpdumpDS(oc, "tcpdump-61582", ns1)
+		tcpdumpDS, snifErr := createSnifferDaemonset(oc, ns1, "tcpdump-61582", "tcpdump", "true", dstHost, primaryInf, 80)
+		o.Expect(snifErr).NotTo(o.HaveOccurred())
+
+		exutil.By("7.3 Check source IP from the test pod is randomly one of egress ips.\n")
+		egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			randomStr, url := getRequestURL(dstHost)
+			_, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..10}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIPs[0], true) != nil || checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIPs[1], true) != nil || err != nil {
+				e2e.Logf("No matched egressIPs in tcpdump log, try next round.")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get either EgressIP %s or %s in tcpdump", freeIPs[0], freeIPs[1]))
 	})
 
 })
