@@ -2499,3 +2499,396 @@ threshold = 10`
 		*/
 	})
 })
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy Testing", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                    = exutil.NewCLI("logging-audit-policy", exutil.KubeConfigPath())
+		loggingBaseDir, s, sc string
+	)
+
+	g.BeforeEach(func() {
+		s = getStorageType(oc)
+		if len(s) == 0 {
+			g.Skip("Current cluster doesn't have a proper object storage for this test!")
+		}
+		sc, _ = getStorageClassName(oc)
+		if len(sc) == 0 {
+			g.Skip("The cluster doesn't have a storage class for this test!")
+		}
+		if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
+			g.Skip("Current platform not supported/resources not available for this test!")
+		}
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     cloNS,
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     loNS,
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		exutil.By("deploy CLO and LO")
+		CLO.SubscribeOperator(oc)
+		LO.SubscribeOperator(oc)
+		oc.SetupProject()
+	})
+
+	g.It("CPaasrunOnly-Author:qitang-Critical-67386-Filter audit logs and forward to log store.[Serial]", func() {
+		exutil.By("Deploying LokiStack")
+		ls := lokiStack{
+			name:          "loki-67386",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-67386",
+			storageClass:  sc,
+			bucketName:    "logging-loki-67386-" + getInfrastructureName(oc),
+			template:      filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml"),
+		}
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+		e2e.Logf("LokiStack deployed")
+
+		exutil.By("Create CLF")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    loggingNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-audit-policy.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc)
+
+		exutil.By("Create ClusterLogging instance with Loki as logstore")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     loggingNS,
+			logStoreType:  "lokistack",
+			collectorType: "vector",
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			lokistackName: ls.name,
+			waitForReady:  true,
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		exutil.By("wait for audit logs to be collected")
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", oc.Namespace())
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(bearerToken).retry(5)
+		// sleep 3 minutes for logs to be collected
+		time.Sleep(3 * time.Minute)
+		lc.waitForLogsAppearByKey("audit", "log_type", "audit")
+		exutil.By("check if the audit policy is applied to audit logs or not")
+		//404,409,422,429
+		e2e.Logf("should not find logs with responseStatus.code: 404/409/422/429")
+		for _, code := range []string{"404", "409", "422", "429"} {
+			log, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\" } | json | responseStatus_code=\""+code+"\"")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue(), "Find audit logs with responseStatus_code="+code)
+		}
+
+		e2e.Logf("logs with stage=\"RequestReceived\" should not be collected")
+		log, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\" } | json | stage=\"RequestReceived\"")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf("log pod changes as RequestResponse level")
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level="RequestResponse", objectRef_subresource!~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level!="RequestResponse", objectRef_subresource!~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf(`Log "pods/log", "pods/status" as Request level`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level="Request", objectRef_subresource="status"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level!="Request", objectRef_subresource="status"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level="Request", objectRef_subresource="binding"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level!="Request", objectRef_subresource="binding"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-config-managed", "cm/merged-trusted-image-registry-ca")
+		e2e.Logf(`Don't log requests to a configmap called "merged-trusted-image-registry-ca"`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="configmaps", objectRef_name="merged-trusted-image-registry-ca"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf(`Log the request body of configmap changes in "openshift-multus"`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | level="Request", objectRef_resource="configmaps", objectRef_namespace="openshift-multus"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | level!="Request", objectRef_resource="configmaps", objectRef_namespace="openshift-multus"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf(`Log configmap and secret changes in all other namespaces at the RequestResponse level.`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | level="RequestResponse", objectRef_resource="configmaps", objectRef_namespace!="openshift-multus"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | level!="RequestResponse", objectRef_resource="configmaps", objectRef_namespace!="openshift-multus"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | level="RequestResponse", objectRef_resource="secrets"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | level!="RequestResponse", objectRef_resource="secrets"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf(`Don't log watch requests by the "system:serviceaccount:openshift-monitoring:prometheus-k8s" on endpoints, services or pods`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | verb="watch", user_username="system:serviceaccount:openshift-monitoring:prometheus-k8s", objectRef_resource="endpoints"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | verb="watch", user_username="system:serviceaccount:openshift-monitoring:prometheus-k8s", objectRef_resource="services"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+		//log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | verb="watch", user_username="system:serviceaccount:openshift-monitoring:prometheus-k8s", objectRef_resource="pods"`)
+		//o.Expect(err).NotTo(o.HaveOccurred())
+		//o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf(`Don't log authenticated requests to certain non-resource URL paths.`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | requestURI="/metrics"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf(`Log all other resources in core, operators.coreos.com and rbac.authorization.k8s.io at the Request level.`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_apiGroup="operators.coreos.com", level="Request"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_apiGroup="operators.coreos.com", level!="Request"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_apiGroup="rbac.authorization.k8s.io", level="Request"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_apiGroup="rbac.authorization.k8s.io", level!="Request"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_apiGroup="", level="Request", objectRef_resource!="secrets", objectRef_resource!="configmaps", objectRef_resource!="pods", stage=~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_apiGroup="", level!="Request", objectRef_resource!="secrets", objectRef_resource!="configmaps", objectRef_resource!="pods", stage=~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf(`A catch-all rule to log all other requests at the Metadata level.`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | level="Metadata"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+	})
+
+	g.It("CPaasrunOnly-Author:qitang-High-67421-Separate policies can be applied on separate pipelines.[Serial]", func() {
+		exutil.By("Deploying an external log store")
+		es := externalES{
+			namespace:  oc.Namespace(),
+			loggingNS:  loggingNS,
+			version:    "8",
+			serverName: "external-es",
+			httpSSL:    false,
+		}
+		defer es.remove(oc)
+		es.deploy(oc)
+
+		exutil.By("Deploying LokiStack")
+		ls := lokiStack{
+			name:          "loki-67421",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-67421",
+			storageClass:  sc,
+			bucketName:    "logging-loki-67421-" + getInfrastructureName(oc),
+			template:      filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml"),
+		}
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+		e2e.Logf("LokiStack deployed")
+
+		exutil.By("Create CLF")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    loggingNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "67421.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "ES_VERSION="+es.version, "ES_URL=http://"+es.serverName+"."+es.namespace+".svc:9200")
+
+		exutil.By("Create ClusterLogging instance with Loki as logstore")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     loggingNS,
+			logStoreType:  "lokistack",
+			collectorType: "vector",
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			lokistackName: ls.name,
+			waitForReady:  true,
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		// sleep 3 minutes for logs to be collected
+		time.Sleep(3 * time.Minute)
+		es.waitForIndexAppear(oc, "audit")
+
+		exutil.By("check data in logs stores")
+		count, err := es.getDocCount(oc, "audit", `{"query": {"term": {"stage": "RequestReceived"}}}`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(count == 0).Should(o.BeTrue())
+		count, err = es.getDocCount(oc, "audit", `{"query": {"bool": {"must": [{"term": {"objectRef.resource": "pods"}},{"match": {"level": "RequestResponse"}}]}}}`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(count > 0).Should(o.BeTrue())
+		count, err = es.getDocCount(oc, "audit", `{"query": {"bool": {"must": [{"term": {"objectRef.resource": "pods"}}, {"terms": {"objectRef.subresource": ["status", "binding"]}}, {"match": {"level": "Request"}}]}}}`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(count == 0).Should(o.BeTrue())
+
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", oc.Namespace())
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(bearerToken).retry(5)
+		lc.waitForLogsAppearByKey("audit", "log_type", "audit")
+
+		log, err := lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level="Request", objectRef_subresource!~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level!="Request", objectRef_subresource!~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level="Request", objectRef_subresource="status"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level!="Request", objectRef_subresource="status"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level="Request", objectRef_subresource="binding"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level!="Request", objectRef_subresource="binding"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+	})
+
+	g.It("CPaasrunOnly-Author:qitang-Medium-68318-Multiple policies can be applied to one pipeline.[Serial]", func() {
+		exutil.By("Deploying LokiStack")
+		ls := lokiStack{
+			name:          "loki-68318",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-68318",
+			storageClass:  sc,
+			bucketName:    "logging-loki-68318-" + getInfrastructureName(oc),
+			template:      filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml"),
+		}
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+		e2e.Logf("LokiStack deployed")
+
+		exutil.By("Create CLF")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    loggingNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "68318.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc)
+
+		exutil.By("Create ClusterLogging instance with Loki as logstore")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     loggingNS,
+			logStoreType:  "lokistack",
+			collectorType: "vector",
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			lokistackName: ls.name,
+			waitForReady:  true,
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		// sleep 3 minutes for logs to be collected
+		time.Sleep(3 * time.Minute)
+		exutil.By("generate some audit logs")
+		pod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", cloNS, "-l", "name=cluster-logging-operator", "-ojsonpath={.items[0].metadata.name}").Output()
+		oc.AsAdmin().NotShowInfo().WithoutNamespace().Run("logs").Args("-n", cloNS, pod).Execute()
+
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", oc.Namespace())
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(bearerToken).retry(5)
+		lc.waitForLogsAppearByKey("audit", "log_type", "audit")
+
+		e2e.Logf("logs with stage=\"RequestReceived\" should not be collected")
+		log, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\" } | json | stage=\"RequestReceived\"")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf("log pod changes as Request level")
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level="Request", objectRef_subresource!~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level!="Request", objectRef_subresource!~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		e2e.Logf(`Log secret changes in all namespaces at the Request level.`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | level="Request", objectRef_resource="secrets"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | level!="Request", objectRef_resource="secrets"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
+
+		exutil.By("Update the order of filters in filterRefs")
+		clf.update(oc, "", `[{"op": "replace", "path": "/spec/pipelines/0/filterRefs", "value": ["my-policy-1", "my-policy-0"]}]`, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+		// sleep 3 minutes for logs to be collected
+		time.Sleep(3 * time.Minute)
+
+		e2e.Logf("log pod changes as RequestResponse level")
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level="RequestResponse", objectRef_subresource!~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
+
+	})
+
+})

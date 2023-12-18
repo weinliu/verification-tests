@@ -615,7 +615,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			upgraded = true
 		}
 		if preLoCSV != currentLoCSV {
-			g.By(fmt.Sprintf("upgrade EO to %s", currentLoCSV))
+			g.By(fmt.Sprintf("upgrade LO to %s", currentLoCSV))
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preLO.Namespace, "sub/"+preLO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkResource(oc, true, true, currentLoCSV, []string{"sub", preLO.PackageName, "-n", preLO.Namespace, "-ojsonpath={.status.currentCSV}"})
@@ -863,25 +863,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 			Subscription:  subTemplate,
 			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 		}
-		EO := SubscriptionObjects{
-			OperatorName:  "elasticsearch-operator",
-			Namespace:     eoNS,
-			PackageName:   "elasticsearch-operator",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-		}
 		g.By("deploy CLO and LO")
 		CLO.SubscribeOperator(oc)
-		EO.SubscribeOperator(oc)
 		LO.SubscribeOperator(oc)
 		oc.SetupProject()
 	})
 
 	// author: qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Medium-64147-Deploy Logfilesmetricexporter as an independent pod.[Serial]", func() {
-		if isFipsEnabled(oc) {
-			g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-		}
 		template := filepath.Join(loggingBaseDir, "logfilemetricexporter", "lfme.yaml")
 		lfme := logFileMetricExporter{
 			name:          "instance",
@@ -896,15 +885,38 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		g.By("check metrics exposed by logfilemetricexporter")
 		checkMetric(oc, token, "{job=\"logfilesmetricexporter\"}", 5)
 
-		g.By("Deploy clusterlogging")
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Deploying LokiStack CR")
+		ls := lokiStack{
+			name:          "loki-61435",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   getStorageType(oc),
+			storageSecret: "storage-61435",
+			storageClass:  sc,
+			bucketName:    "logging-loki-61435-" + getInfrastructureName(oc),
+			template:      filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml"),
+		}
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+		e2e.Logf("LokiStack deployed")
+
+		g.By("Create ClusterLogging instance with Loki as logstore")
 		cl := clusterlogging{
 			name:          "instance",
 			namespace:     loggingNS,
-			collectorType: "fluentd",
-			logStoreType:  "elasticsearch",
+			logStoreType:  "lokistack",
+			collectorType: "vector",
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			lokistackName: ls.name,
 			waitForReady:  true,
-			esNodeCount:   1,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
 		}
 		defer cl.delete(oc)
 		cl.create(oc)
@@ -925,7 +937,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 			namespace: loggingNS,
 		}
 		defer lfmeInvalidName.clear(oc)
-		err := lfmeInvalidName.applyFromTemplate(oc, "-f", template, "-p", "NAME="+lfmeInvalidName.name, "-p", "NAMESPACE="+lfmeInvalidName.namespace)
+		err = lfmeInvalidName.applyFromTemplate(oc, "-f", template, "-p", "NAME="+lfmeInvalidName.name, "-p", "NAMESPACE="+lfmeInvalidName.namespace)
 		o.Expect(strings.Contains(err.Error(), "metadata.name: Unsupported value: \""+lfmeInvalidName.name+"\": supported values: \"instance\"")).Should(o.BeTrue())
 
 		g.By("Create LFME with invalid namespace")
