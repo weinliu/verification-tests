@@ -146,25 +146,24 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("create project and a pod")
+		exutil.By("create project and a pod")
 		baseDomain := getBaseDomain(oc)
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
 		podName := getPodName(oc, oc.Namespace(), "name=web-server-rc")
 
-		g.By("create custom ingresscontroller")
+		exutil.By("create custom ingresscontroller")
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		custContPod := getRouterPod(oc, "ocp50842")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		custContPod := getNewRouterPod(oc, "ocp50842")
 
-		g.By("create a secret with destination CA Opaque certificate")
+		exutil.By("create a secret with destination CA Opaque certificate")
 		createGenericSecret(oc, oc.Namespace(), "service-secret", "tls.crt", caCert)
 
-		g.By("create ingress and get the details")
+		exutil.By("create ingress and get the details")
 		ing.domain = ingctrl.name + "." + baseDomain
 		ing.namespace = oc.Namespace()
 		ing.create(oc)
@@ -172,12 +171,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getRoutes(oc, oc.Namespace())
 		routeNames := getResourceName(oc, oc.Namespace(), "route")
 
-		g.By("check whether route details are present in custom controller domain")
+		exutil.By("check whether route details are present in custom controller domain")
 		waitForOutput(oc, oc.Namespace(), "route/"+routeNames[0], ".metadata.annotations", `"route.openshift.io/destination-ca-certificate-secret":"service-secret"`)
 		cmd := fmt.Sprintf(`service-secure-%s.ocp50842.%s`, oc.Namespace(), baseDomain)
 		waitForOutput(oc, oc.Namespace(), "route/"+routeNames[0], ".spec.host", cmd)
 
-		g.By("check the reachability of the host in custom controller")
+		exutil.By("check the reachability of the host in custom controller")
 		controlerIP := getPodv4Address(oc, custContPod, "openshift-ingress")
 		curlCmd := fmt.Sprintf(
 			"curl --resolve  service-secure-%s.ocp50842.%s:443:%s https://service-secure-%s.ocp50842.%s:443 -I -k",
@@ -186,7 +185,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
 
-		g.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
+		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
 		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", "ingress-dca-opq")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + oc.Namespace() + ":" + routeNames[0]))
 	})
@@ -213,22 +212,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("create project and a pod")
+		exutil.By("create project and a pod")
 		baseDomain := getBaseDomain(oc)
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
 		podName := getPodName(oc, oc.Namespace(), "name=web-server-rc")
 
-		g.By("create custom ingresscontroller")
+		exutil.By("create custom ingresscontroller")
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		custContPod := getRouterPod(oc, "ocp51980")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		custContPod := getNewRouterPod(oc, "ocp51980")
 
-		g.By("create ingress and get the details")
+		exutil.By("create ingress and get the details")
 		ing.domain = ingctrl.name + "." + baseDomain
 		ing.namespace = oc.Namespace()
 		ing.create(oc)
@@ -236,17 +234,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getRoutes(oc, oc.Namespace())
 		routeNames := getResourceName(oc, oc.Namespace(), "route")
 
-		g.By("check whether route details are present in custom controller domain")
+		exutil.By("check whether route details are present in custom controller domain")
 		output := fetchJSONPathValue(oc, oc.Namespace(), "route/"+routeNames[0], ".metadata.annotations")
 		o.Expect(output).Should(o.ContainSubstring(`"route.openshift.io/destination-ca-certificate-secret":"service-secret"`))
 		output = fetchJSONPathValue(oc, oc.Namespace(), "route/"+routeNames[0], ".spec.host")
 		o.Expect(output).Should(o.ContainSubstring(`service-secure1-%s.ocp51980.%s`, oc.Namespace(), baseDomain))
 
-		g.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
+		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
 		searchOutput := pollReadPodData(oc, "openshift-ingress", custContPod, "cat haproxy.config", "ingress-dca-tls")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + oc.Namespace() + ":" + routeNames[0]))
 
-		g.By("check the reachability of the host in custom controller")
+		exutil.By("check the reachability of the host in custom controller")
 		controlerIP := getPodv4Address(oc, custContPod, "openshift-ingress")
 		curlCmd := fmt.Sprintf(
 			"curl --resolve  service-secure1-%s.ocp51980.%s:443:%s https://service-secure1-%s.ocp51980.%s:443 -I -k",
