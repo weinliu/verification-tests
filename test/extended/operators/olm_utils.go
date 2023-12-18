@@ -68,6 +68,7 @@ type subscriptionDescription struct {
 	template               string
 	singleNamespace        bool
 	ipCsv                  string
+	clusterType            string
 }
 
 // PrometheusQueryResult the prometheus query result
@@ -191,7 +192,11 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 	}
 
 	e2e.Logf("create sub %s", sub.subName)
-	err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
+	applyFn := applyResourceFromTemplate
+	if strings.Compare(sub.clusterType, "microshift") == 0 {
+		applyFn = applyResourceFromTemplateOnMicroshift
+	}
+	err = applyFn(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
 		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace, "STARTINGCSV="+sub.startingCSV)
 
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -459,6 +464,7 @@ type catalogSourceDescription struct {
 	secret        string
 	interval      string
 	imageTemplate string
+	clusterType   string
 }
 
 // the method is to create catalogsource with template, and save it to dr.
@@ -467,12 +473,18 @@ func (catsrc *catalogSourceDescription) create(oc *exutil.CLI, itName string, dr
 		catsrc.interval = "10m0s"
 		e2e.Logf("set interval to be 10m0s")
 	}
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", catsrc.template,
+	applyFn := applyResourceFromTemplate
+	if strings.Compare(catsrc.clusterType, "microshift") == 0 {
+		applyFn = applyResourceFromTemplateOnMicroshift
+	}
+	err := applyFn(oc, "--ignore-unknown-parameters=true", "-f", catsrc.template,
 		"-p", "NAME="+catsrc.name, "NAMESPACE="+catsrc.namespace, "ADDRESS="+catsrc.address, "SECRET="+catsrc.secret,
 		"DISPLAYNAME="+"\""+catsrc.displayName+"\"", "PUBLISHER="+"\""+catsrc.publisher+"\"", "SOURCETYPE="+catsrc.sourceType,
 		"INTERVAL="+catsrc.interval, "IMAGETEMPLATE="+catsrc.imageTemplate)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	catsrc.setSCCRestricted(oc)
+	if strings.Compare(catsrc.clusterType, "microshift") != 0 {
+		catsrc.setSCCRestricted(oc)
+	}
 	dr.getIr(itName).add(newResource(oc, "catsrc", catsrc.name, requireNS, catsrc.namespace))
 	e2e.Logf("create catsrc %s SUCCESS", catsrc.name)
 }
@@ -572,6 +584,7 @@ type operatorGroupDescription struct {
 	template           string
 	serviceAccountName string
 	upgradeStrategy    string
+	clusterType        string
 }
 
 // the method is to check if og exist. if not existing, create it with template and save it to dr.
@@ -593,16 +606,21 @@ func (og *operatorGroupDescription) createwithCheck(oc *exutil.CLI, itName strin
 // if og.multinslabel is set, it will create og with multinamespace.
 func (og *operatorGroupDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
 	var err error
+	applyFn := applyResourceFromTemplate
+	if strings.Compare(og.clusterType, "microshift") == 0 {
+		applyFn = applyResourceFromTemplateOnMicroshift
+	}
+
 	if strings.Compare(og.multinslabel, "") != 0 && strings.Compare(og.serviceAccountName, "") != 0 {
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "MULTINSLABEL="+og.multinslabel, "SERVICE_ACCOUNT_NAME="+og.serviceAccountName)
+		err = applyFn(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "MULTINSLABEL="+og.multinslabel, "SERVICE_ACCOUNT_NAME="+og.serviceAccountName)
 	} else if strings.Compare(og.multinslabel, "") == 0 && strings.Compare(og.serviceAccountName, "") == 0 && strings.Compare(og.upgradeStrategy, "") == 0 {
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace)
+		err = applyFn(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace)
 	} else if strings.Compare(og.multinslabel, "") != 0 {
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "MULTINSLABEL="+og.multinslabel)
+		err = applyFn(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "MULTINSLABEL="+og.multinslabel)
 	} else if strings.Compare(og.upgradeStrategy, "") != 0 {
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "UPGRADESTRATEGY="+og.upgradeStrategy)
+		err = applyFn(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "UPGRADESTRATEGY="+og.upgradeStrategy)
 	} else {
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "SERVICE_ACCOUNT_NAME="+og.serviceAccountName)
+		err = applyFn(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "SERVICE_ACCOUNT_NAME="+og.serviceAccountName)
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	dr.getIr(itName).add(newResource(oc, "og", og.name, requireNS, og.namespace))
@@ -1634,4 +1652,11 @@ func getCertRotation(oc *exutil.CLI, secretName, namespace string) (certsLastUpd
 		e2e.Failf("the certsRotateAt beyond 3s than expected, certsLastUpdated:%v, certsRotateAt:%v", certsLastUpdated, certsRotateAt)
 	}
 	return certsLastUpdated, certsRotateAt
+}
+
+// Common user use oc client apply yaml template
+func applyResourceFromTemplateOnMicroshift(oc *exutil.CLI, parameters ...string) error {
+	configFile := exutil.ParameterizedTemplateByReplaceToFile(oc, parameters...)
+	e2e.Logf("the file of resource is %s", configFile)
+	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }

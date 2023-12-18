@@ -3,8 +3,15 @@ package util
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	o "github.com/onsi/gomega"
+
+	"github.com/ghodss/yaml"
+	"github.com/tidwall/pretty"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -127,5 +134,29 @@ func ProcessTemplate(oc *CLI, parameters ...string) string {
 
 	AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
 	e2e.Logf("the file of resource is %s", configFile)
+	return configFile
+}
+
+// ParameterizedTemplateByReplaceToFile parameterize template to new file
+func ParameterizedTemplateByReplaceToFile(oc *CLI, parameters ...string) string {
+	isParameterExist, pIndex := StringsSliceElementsHasPrefix(parameters, "-f", true)
+	o.Expect(isParameterExist).Should(o.BeTrue())
+	templateFileName := parameters[pIndex+1]
+	templateContentByte, readFileErr := os.ReadFile(templateFileName)
+	o.Expect(readFileErr).ShouldNot(o.HaveOccurred())
+	templateContentStr := string(templateContentByte)
+	isParameterExist, pIndex = StringsSliceElementsHasPrefix(parameters, "-p", true)
+	o.Expect(isParameterExist).Should(o.BeTrue())
+	for i := pIndex + 1; i < len(parameters); i++ {
+		if strings.Contains(parameters[i], "=") {
+			tempSlice := strings.Split(parameters[i], "=")
+			o.Expect(tempSlice).Should(o.HaveLen(2))
+			templateContentStr = strings.ReplaceAll(templateContentStr, "${"+tempSlice[0]+"}", tempSlice[1])
+		}
+	}
+	templateContentJSON, convertErr := yaml.YAMLToJSON([]byte(templateContentStr))
+	o.Expect(convertErr).NotTo(o.HaveOccurred())
+	configFile := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-"+getRandomString()+"config.json")
+	o.Expect(os.WriteFile(configFile, pretty.Pretty(templateContentJSON), 0644)).ShouldNot(o.HaveOccurred())
 	return configFile
 }
