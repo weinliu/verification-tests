@@ -117,4 +117,45 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 
 	})
 
+	g.It("Author:rioliu-NonPreRelease-Medium-69216-MachineConfigNode UpdateCompatible is Unknown when MC contains kernel argument in ignition section [Disruptive]", func() {
+
+		var (
+			mcName            = "mco-tc-66376-reject-ignition-kernel-arguments"
+			mcTemplate        = "add-ignition-kernel-arguments.yaml"
+			mcp               = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			expectedMessage   = "ignition kargs section contains changes"
+			expectedMCNStatus = "Unknown"
+		)
+
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate(mcTemplate)
+		mc.skipWaitForMcp = true
+
+		exutil.By("Create invalid MC")
+		defer func() {
+			mc.deleteNoWait()
+			o.Expect(mcp.WaitForNotDegradedStatus()).NotTo(o.HaveOccurred(), "mcp worker is not recovered from degraded sate")
+		}()
+		mc.create()
+
+		exutil.By("Check condition NodeDegraded of worker pool")
+		o.Eventually(mcp, "2m", "5s").Should(HaveConditionField("NodeDegraded", "status", o.Equal("True")))
+		o.Expect(mcp).Should(HaveNodeDegradedMessage(o.MatchRegexp(expectedMessage)))
+		logger.Infof("OK\n")
+
+		exutil.By("Get Unreconcilable node")
+		allUnreconcilableNodes := mcp.GetUnreconcilableNodesOrFail()
+		o.Expect(allUnreconcilableNodes).NotTo(o.BeEmpty(), "Can not find any unreconcilable node from mcp %s", mcp.GetName())
+		unreconcilableNode := allUnreconcilableNodes[0]
+		logger.Infof("Unreconcilable node is %s", unreconcilableNode.GetName())
+		logger.Infof("OK\n")
+
+		exutil.By("Check machineconfignode conditions [UpdatePrepared/UpdateCompatible]")
+		mcn := NewMachineConfigNode(oc.AsAdmin(), unreconcilableNode.GetName())
+		o.Expect(mcn.GetUpdatePrepared()).Should(o.Equal(expectedMCNStatus))
+		o.Expect(mcn.GetUpdateCompatible()).Should(o.Equal(expectedMCNStatus))
+		o.Expect(mcn).Should(HaveConditionField("UpdateCompatible", "message", o.MatchRegexp(expectedMessage)))
+		logger.Infof("OK\n")
+
+	})
+
 })

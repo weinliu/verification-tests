@@ -538,6 +538,35 @@ func (mcp *MachineConfigPool) GetCordonedNodes() []Node {
 	return allUpdatingNodes
 }
 
+// GetUnreconcilableNodes get all nodes that value of annotation machineconfiguration.openshift.io/state is Unreconcilable
+func (mcp *MachineConfigPool) GetUnreconcilableNodes() ([]Node, error) {
+
+	allUnreconcilableNodes := []Node{}
+	allNodes, err := mcp.GetNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, n := range allNodes {
+		state := n.GetAnnotationOrFail(NodeAnnotationState)
+		if state == "Unreconcilable" {
+			allUnreconcilableNodes = append(allUnreconcilableNodes, n)
+		}
+	}
+
+	return allUnreconcilableNodes, nil
+}
+
+// GetUnreconcilableNodesOrFail get all nodes that value of annotation machineconfiguration.openshift.io/state is Unreconcilable
+// fail the test if any error occurred
+func (mcp *MachineConfigPool) GetUnreconcilableNodesOrFail() []Node {
+
+	allUnreconcilableNodes, err := mcp.GetUnreconcilableNodes()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Cannot get the unreconcilable nodes in %s MCP", mcp.GetName())
+
+	return allUnreconcilableNodes
+}
+
 // WaitForNotDegradedStatus waits until MCP is not degraded, if the condition times out the returned error is != nil
 func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
