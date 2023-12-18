@@ -12,6 +12,7 @@ type ClusterService interface {
 	List() (bytes.Buffer, error)
 	CreateDryRun(clusterName string, flags ...string) (bytes.Buffer, error)
 	EditCluster(clusterID string, flags ...string) (bytes.Buffer, error)
+	DeleteUpgrade(flags ...string) (bytes.Buffer, error)
 }
 
 var _ ClusterService = &clusterService{}
@@ -103,4 +104,11 @@ func (c *clusterService) EditCluster(clusterID string, flags ...string) (bytes.B
 		Cmd("edit", "cluster").
 		CmdFlags(combflags...)
 	return editCluster.Run()
+}
+
+func (c *clusterService) DeleteUpgrade(flags ...string) (bytes.Buffer, error) {
+	DeleteUpgrade := c.Client.Runner.
+		Cmd("delete", "upgrade").
+		CmdFlags(flags...)
+	return DeleteUpgrade.Run()
 }

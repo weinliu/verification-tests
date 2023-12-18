@@ -116,4 +116,25 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		clusterDetail = clusterService.ReflectClusterDescription(output)
 		o.Expect(clusterDetail.UserWorkloadMonitoring).To(o.Equal(expectedUWMValue))
 	})
+
+	g.It("Author:mgahagan-Medium-38787-Validation for deletion of upgrade policy of rosa cluster via rosa-cli [Serial]", func() {
+		g.By("Validate that deletion of upgrade policy for rosa cluster will work via rosacli")
+		output, err := clusterService.DeleteUpgrade("")
+		o.Expect(err).To(o.HaveOccurred())
+		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring(`required flag(s) "cluster" not set`))
+
+		g.By("Delete an non-existant upgrade when cluster has no scheduled policy")
+		output, err = clusterService.DeleteUpgrade("-c", clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring(`There are no scheduled upgrades on cluster '%s'`, clusterID))
+
+		g.By("Delete with unknown flag --interactive")
+		output, err = clusterService.DeleteUpgrade("-c", clusterID, "--interactive")
+		o.Expect(err).To(o.HaveOccurred())
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Error: unknown flag: --interactive"))
+
+	})
 })
