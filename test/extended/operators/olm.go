@@ -10026,6 +10026,164 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	//author:xzha@redhat.com
+	g.It("ConnectedOnly-Author:xzha-Medium-69986-OLM emits alert events for operators installed from a deprecated channel", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		oc.SetupProject()
+		namespaceName := oc.Namespace()
+		var (
+			og = operatorGroupDescription{
+				name:      "test-og",
+				namespace: namespaceName,
+				template:  ogSingleTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-69986",
+				namespace:   namespaceName,
+				displayName: "Test 69986",
+				publisher:   "OLM QE",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olmtest-operator-index:nginx69986",
+				template:    catsrcImageTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "sub-69986",
+				namespace:              namespaceName,
+				catalogSourceName:      "",
+				catalogSourceNamespace: "",
+				channel:                "",
+				ipApproval:             "Automatic",
+				operatorPackage:        "nginx69986",
+				singleNamespace:        true,
+				template:               subTemplate,
+			}
+		)
+		sub.catalogSourceNamespace = catsrc.namespace
+		sub.catalogSourceName = catsrc.name
+		itName := g.CurrentSpecReport().FullText()
+
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
+		defer catsrc.delete(itName, dr)
+		catsrc.createWithCheck(oc, itName, dr)
+
+		exutil.By("2) packagemanifests")
+		message := getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "nginx69986", "-n", catsrc.namespace, `-o=jsonpath='{.status.channels[?(@.name=="candidate-v0.0")].deprecation}`)
+		o.Expect(string(message)).To(o.ContainSubstring(`has been deprecated`))
+		message = getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "nginx69986", "-n", catsrc.namespace, `-o=jsonpath={.status.channels[?(@.name=="candidate-v1.0")].entries[?(@.name=="nginx69986.v1.0.3")].deprecation}`)
+		o.Expect(string(message)).To(o.ContainSubstring(`has been deprecated`))
+
+		exutil.By("3) install og")
+		og.createwithCheck(oc, itName, dr)
+
+		exutil.By("4) install sub with channel candidate-v0.0")
+		sub.channel = "candidate-v0.0"
+		sub.create(oc, itName, dr)
+
+		exutil.By("4.1 check csv")
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			status := getResource(oc, asAdmin, withoutNamespace, "csv", "nginx69986.v0.0.1", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
+			if strings.Compare(status, "Succeeded") != 0 {
+				e2e.Logf("csv nginx69986.v0.0.1 status is not Succeeded, go next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", namespaceName, "-o=jsonpath-as-json={.status}")
+		}
+		exutil.AssertWaitPollNoErr(err, "csv nginx69986.v0.0.1 is not Succeeded")
+
+		exutil.By("4.2 check sub status")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			conditions := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].type}")
+			if !strings.Contains(conditions, "ChannelDeprecated") || !strings.Contains(conditions, "Deprecated") {
+				return false, nil
+			}
+			messages := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].message}")
+			if !strings.Contains(messages, "has been deprecated. Please switch to a different one") {
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", namespaceName, "-o=jsonpath-as-json={.status.conditions}")
+		}
+		exutil.AssertWaitPollNoErr(err, "the conditions of sub is not correct")
+
+		exutil.By("4.3) delete sub and csv")
+		sub.findInstalledCSV(oc, itName, dr)
+		sub.delete(itName, dr)
+		sub.deleteCSV(itName, dr)
+
+		exutil.By("5) install sub with channel candidate-v1.0")
+		sub.channel = "candidate-v1.0"
+		sub.startingCSV = "nginx69986.v1.0.2"
+		sub.createWithoutCheck(oc, itName, dr)
+
+		exutil.By("5.1 check csv is updated to nginx69986.v1.0.3")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			status := getResource(oc, asAdmin, withoutNamespace, "csv", "nginx69986.v1.0.3", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
+			if strings.Compare(status, "Succeeded") != 0 {
+				e2e.Logf("csv nginx69986.v1.0.3 status is not Succeeded, go next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", namespaceName, "-o=jsonpath-as-json={.status}")
+		}
+		exutil.AssertWaitPollNoErr(err, "csv nginx69986.v1.0.3 is not Succeeded")
+
+		exutil.By("5.2 check sub status")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			conditions := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].type}")
+			if !strings.Contains(conditions, "BundleDeprecated") || !strings.Contains(conditions, "Deprecated") {
+				return false, nil
+			}
+			messages := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].message}")
+			if !strings.Contains(messages, "has been deprecated") {
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", namespaceName, "-o=jsonpath-as-json={.status.conditions}")
+		}
+		exutil.AssertWaitPollNoErr(err, "the conditions of sub is not correct")
+
+		exutil.By("6) update sub to channel candidate-v1.1")
+		sub.patch(oc, `{"spec": {"channel": "candidate-v1.1"}}`)
+		exutil.By("6.1 check csv is updated to nginx69986.v1.1.1")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			status := getResource(oc, asAdmin, withoutNamespace, "csv", "nginx69986.v1.1.1", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
+			if strings.Compare(status, "Succeeded") != 0 {
+				e2e.Logf("csv nginx69986.v1.1.1 status is not Succeeded, go next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", namespaceName, "-o=jsonpath-as-json={.status}")
+		}
+		exutil.AssertWaitPollNoErr(err, "csv nginx69986.v1.1.1 is not Succeeded")
+
+		exutil.By("6.2 check sub status")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			conditions := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].type}")
+			if strings.Contains(conditions, "BundleDeprecated") || strings.Contains(conditions, "Deprecated") {
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", namespaceName, "-o=jsonpath-as-json={.status.conditions}")
+		}
+		exutil.AssertWaitPollNoErr(err, "the conditions of sub is not correct, still has BundleDeprecated or Deprecated")
+	})
+
+	//author:xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-70050-OLM emits alert events for operators installed from a deprecated channel if catalog in different ns", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
