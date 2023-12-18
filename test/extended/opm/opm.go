@@ -492,6 +492,29 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		exutil.By("47335 SUCCESS")
 	})
 
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-Author:xzha-Medium-70013-opm support deprecated channel", func() {
+		opmBaseDir := exutil.FixturePath("testdata", "opm", "70013")
+		opmCLI.ExecCommandPath = opmBaseDir
+
+		exutil.By("opm validate catalog")
+		output, err := opmCLI.Run("validate").Args("catalog-valid").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.BeEmpty())
+
+		exutil.By("opm validate catalog")
+		output, err = opmCLI.Run("validate").Args("catalog-invalid").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("message must be set"))
+
+		exutil.By("opm render")
+		output, err = opmCLI.Run("render").Args("quay.io/olmqe/olmtest-operator-index:nginx70050", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), "schema: olm.deprecations")).To(o.BeTrue())
+
+		exutil.By("70013 SUCCESS")
+	})
+
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-Medium-34016-opm can prune operators from catalog", func() {
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
