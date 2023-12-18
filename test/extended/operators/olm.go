@@ -10025,6 +10025,95 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	})
 
+	//author:xzha@redhat.com
+	g.It("ConnectedOnly-Author:xzha-Medium-70050-OLM emits alert events for operators installed from a deprecated channel if catalog in different ns", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		oc.SetupProject()
+		namespaceName := oc.Namespace()
+		var (
+			og = operatorGroupDescription{
+				name:      "test-og",
+				namespace: namespaceName,
+				template:  ogSingleTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-70050",
+				namespace:   namespaceName,
+				displayName: "Test 70050",
+				publisher:   "OLM QE",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olmtest-operator-index:nginx70050",
+				template:    catsrcImageTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "sub-70050",
+				namespace:              namespaceName,
+				catalogSourceName:      "",
+				catalogSourceNamespace: "",
+				channel:                "candidate-v1.0",
+				ipApproval:             "Automatic",
+				operatorPackage:        "nginx70050",
+				singleNamespace:        true,
+				template:               subTemplate,
+			}
+		)
+		sub.catalogSourceNamespace = catsrc.namespace
+		sub.catalogSourceName = catsrc.name
+		itName := g.CurrentSpecReport().FullText()
+
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
+		defer catsrc.delete(itName, dr)
+		catsrc.createWithCheck(oc, itName, dr)
+
+		exutil.By("2) packagemanifests")
+		message := getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "nginx70050", "-n", catsrc.namespace, `-o=jsonpath='{.status.deprecation}`)
+		o.Expect(string(message)).To(o.ContainSubstring(`has been deprecated`))
+		message = getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "nginx70050", "-n", catsrc.namespace, `-o=jsonpath='{.status.channels[?(@.name=="candidate-v1.0")].deprecation}`)
+		o.Expect(string(message)).To(o.ContainSubstring(`has been deprecated`))
+		message = getResource(oc, asAdmin, withoutNamespace, "packagemanifests", "nginx70050", "-n", catsrc.namespace, `-o=jsonpath={.status.channels[?(@.name=="candidate-v1.0")].entries[?(@.name=="nginx70050.v1.0.1")].deprecation}`)
+		o.Expect(string(message)).To(o.ContainSubstring(`has been deprecated`))
+
+		exutil.By("3) install og")
+		og.createwithCheck(oc, itName, dr)
+
+		exutil.By("4) install sub with channel candidate-v1.0")
+		sub.create(oc, itName, dr)
+
+		exutil.By("4.1 check csv")
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			status := getResource(oc, asAdmin, withoutNamespace, "csv", "nginx70050.v1.0.1", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
+			if strings.Compare(status, "Succeeded") != 0 {
+				e2e.Logf("csv nginx70050.v1.0.1 status is not Succeeded, go next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", namespaceName, "-o=jsonpath-as-json={.status}")
+		}
+		exutil.AssertWaitPollNoErr(err, "csv nginx70050.v1.0.1 is not Succeeded")
+
+		exutil.By("4.2 check sub status")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			conditions := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].type}")
+			if !strings.Contains(conditions, "Deprecated") || !strings.Contains(conditions, "ChannelDeprecated") || !strings.Contains(conditions, "PackageDeprecated") || !strings.Contains(conditions, "BundleDeprecated") {
+				return false, nil
+			}
+			messages := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].message}")
+			if !strings.Contains(messages, "has been deprecated") {
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", namespaceName, "-o=jsonpath-as-json={.status.conditions}")
+		}
+		exutil.AssertWaitPollNoErr(err, "the conditions of sub is not correct")
+	})
+
 	// author: tbuskey@redhat.com, test case OCP-43114
 	g.It("ConnectedOnly-Author:xzha-High-43114-Subscription status should show the message for InstallPlan failure conditions", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
