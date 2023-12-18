@@ -841,32 +841,8 @@ func deleteDnsOperatorToRestore(oc *exutil.CLI) {
 
 // patch the dns.operator/default with the original value
 func restoreDNSOperatorDefault(oc *exutil.CLI) {
-	podList := getAllDNSPodsNames(oc)
-	// add isDnsPodOnAllLinuxNodes check for the node selector cases: OCP-41049 and OCP-41050, if a linux node hasn't a dns pod, need remove all dns pods immediately after patch the dns operator to default
-	linuxNodes := getAllLinuxNodes(oc)
-	isDnsPodOnAllLinuxNodes := true
-	if len(podList) < len(strings.Split(linuxNodes, " ")) {
-		isDnsPodOnAllLinuxNodes = false
-	}
-	// the json value might be different in different version
-	jsonPatch := "[{\"op\":\"replace\", \"path\":\"/spec\", \"value\":{\"cache\":{\"negativeTTL\":\"0s\",\"positiveTTL\":\"0s\"},\"logLevel\":\"Normal\",\"nodePlacement\":{},\"operatorLogLevel\":\"Normal\",\"upstreamResolvers\":{\"policy\":\"Sequential\",\"protocolStrategy\": \"\",\"transportConfig\":{},\"upstreams\":[{\"port\":53,\"type\":\"SystemResolvConf\"}]}}}]"
-	e2e.Logf("restore(patch) dns.operator/default with original settings.")
-	output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("dns.operator/default", "-p", jsonPatch, "--type=json").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// if a linux node hasn't a dns pod, need remove all dns pods immediately after patch the dns operator to default
-	// patched but got "no change" that means no DNS rolling update, shouldn't goto Progressing
-	if !isDnsPodOnAllLinuxNodes {
-		delAllDNSPods(oc)
-		waitAllDNSPodsAppear(oc)
-		ensureClusterOperatorNormal(oc, "dns", 2, 120)
-	} else if strings.Contains(output, "no change") {
-		e2e.Logf("skip the Progressing check step.")
-	} else {
-		attrList := getAllCorefilesStat(oc, podList)
-		waitAllCorefilesUpdated(oc, attrList)
-		ensureClusterOperatorNormal(oc, "dns", 5, 300)
-	}
+	//temporarily call deleteDnsOperatorToRestore() until all cases are updated
+	deleteDnsOperatorToRestore(oc)
 }
 
 func waitAllDNSPodsAppear(oc *exutil.CLI) {
@@ -920,14 +896,6 @@ func delAllDNSPods(oc *exutil.CLI) {
 // this function is to delete all dns pods without wait
 func delAllDNSPodsNoWait(oc *exutil.CLI) {
 	oc.AsAdmin().Run("delete").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-n", "openshift-dns", "--wait=false").Execute()
-}
-
-// this function is to do sync on all dns pods
-func doSyncOnAllDNSPods(oc *exutil.CLI) {
-	for _, podName := range getAllDNSPodsNames(oc) {
-		err := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", podName, "-c", "dns", "--", "bash", "-c", "sync").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	}
 }
 
 // this function is to check whether the given resource pod's are deleted or not
@@ -1017,17 +985,17 @@ func getAllCorefilesStat(oc *exutil.CLI, podList []string) [][]string {
 // this function is to make sure all Corefiles(or one Corefile) of the dns pods are updated
 // the value of parameter attrList should be from the getOneCorefileStat or getAllCorefilesStat function, it is related to the time before patching something to the dns operator
 func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
+	ns := "openshift-dns"
 	cmd := "stat /etc/coredns/..data/Corefile | grep Modify"
 	updatedAttrList := [][]string{}
 	for _, dnspod := range attrList {
 		dnspodname := dnspod[0]
 		dnspodattr := dnspod[1]
 		count := 0
-		// flush the cache to disk
-		err := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", "sync").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		// fresh configmap by updating pod annotation
+		hackAnnotatePod(oc, ns, dnspodname)
 		waitErr := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
-			output, _ := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
+			output, _ := oc.AsAdmin().Run("exec").Args("-n", ns, dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
 			count++
 			primary := false
 			if dnspodattr != output {
@@ -1035,11 +1003,10 @@ func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 				updatedAttrList = append(updatedAttrList, []string{dnspodname, output})
 				primary = true
 			} else {
-				// reduce the logs and run sync command on the dns pod again
+				// reduce the logs and refresh configmap to pod again
 				if count%10 == 1 {
 					e2e.Logf(dnspodname + " Corefile isn't updated , wait and try again...")
-					err = oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", "sync").Execute()
-					o.Expect(err).NotTo(o.HaveOccurred())
+					hackAnnotatePod(oc, ns, dnspodname)
 				}
 			}
 			return primary, nil

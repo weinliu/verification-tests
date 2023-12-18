@@ -14,7 +14,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("coredns-upstream-resolvers-log", exutil.KubeConfigPath())
 	// author: shudili@redhat.com
-	g.It("Author:shudili-NonPreRelease-Longduration-Critical-46868-Configure forward policy for CoreDNS flag [Disruptive]", func() {
+	g.It("Author:shudili-Critical-46868-Configure forward policy for CoreDNS flag [Disruptive]", func() {
 		var (
 			resourceName        = "dns.operator.openshift.io/default"
 			cfgMulIPv4Upstreams = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[" +
@@ -114,7 +114,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(logOutput).To(o.ContainSubstring("class all"))
 	})
 
-	g.It("Author:shudili-NonPreRelease-Longduration-Critical-46867-Configure upstream resolvers for CoreDNS flag [Disruptive]", func() {
+	g.It("Author:shudili-Critical-46867-Configure upstream resolvers for CoreDNS flag [Disruptive]", func() {
 		var (
 			resourceName        = "dns.operator.openshift.io/default"
 			cfgMulIPv4Upstreams = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[" +

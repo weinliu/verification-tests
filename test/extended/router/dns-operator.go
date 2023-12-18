@@ -65,7 +65,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	// no master nodes on HyperShift guest cluster so this case is not available
-	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-Longduration-Critical-41050-DNS controll pod placement by tolerations [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-Critical-41050-DNS controll pod placement by tolerations [Disruptive]", func() {
 		var (
 			dnsMasterToleration = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement\", \"value\":{\"tolerations\":[" +
 				"{\"effect\":\"NoExecute\",\"key\":\"my-dns-test\", \"operators\":\"Equal\", \"value\":\"abc\"}]}}]"
@@ -128,7 +128,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: shudili@redhat.com
 	// no dns operator namespace on HyperShift guest cluster so this case is not available
-	g.It("NonHyperShiftHOST-Author:shudili-NonPreRelease-Longduration-Medium-46873-Configure operatorLogLevel under the default dns operator and check the logs flag [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:shudili-Medium-46873-Configure operatorLogLevel under the default dns operator and check the logs flag [Disruptive]", func() {
 		var (
 			resourceName        = "dns.operator.openshift.io/default"
 			cfgOploglevelDebug  = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"Debug\"}]"
