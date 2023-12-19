@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("NonPreRelease-Longduration-ConnectedOnly-Author:jiazha-Medium-53771-The certificate relating to operator-lifecycle-manager-packageserver isn't rotated after expired [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:jiazha-Medium-53771-The certificate relating to operator-lifecycle-manager-packageserver isn't rotated after expired [Disruptive]", func() {
 		var image string
 		customOLMImage := "quay.io/olmqe/operator-framework-olm:cert-rotation-auto"
 		defer func() {
