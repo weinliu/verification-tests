@@ -10,7 +10,8 @@ objects:
     namespace: "${NAMESPACE}"
   spec:
     inherit:
-      - name: net_container
+      - name: "${INHERITNAME}"
+        kind: "${INHERITKIND}"
     allow:
       var_run_t:
         sock_file:
@@ -19,3 +20,5 @@ objects:
 parameters:
 - name: NAME
 - name: NAMESPACE
+- name: INHERITNAME
+- name: INHERITKIND

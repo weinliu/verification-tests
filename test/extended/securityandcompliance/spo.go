@@ -1136,7 +1136,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofile", selinuxProfileName, "-n", ns, "--ignore-not-found").Execute()
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxProfileCustomTemplate, "-p", "NAME="+selinuxProfileName, "NAMESPACE="+ns)
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxProfileCustomTemplate, "-p", "NAME="+selinuxProfileName, "NAMESPACE="+ns, "INHERITKIND="+"System",
+			"INHERITNAME="+"net_container")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		assertKeywordsExists(oc, 300, "Error", "selinuxprofiles", selinuxProfileName, "-o=jsonpath={.status.status}", "-n", ns)
 
@@ -1155,7 +1156,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		g.By("Recreate the selinux profile !!!\n")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofile", selinuxProfileName, "-n", ns, "--ignore-not-found").Execute()
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"selinuxprofile", "-n", ns}).check(oc)
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxProfileCustomTemplate, "-p", "NAME="+selinuxProfileName, "NAMESPACE="+ns)
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxProfileCustomTemplate, "-p", "NAME="+selinuxProfileName, "NAMESPACE="+ns, "INHERITKIND="+"System",
+			"INHERITNAME="+"net_container")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxProfileName, "-o=jsonpath={.status.status}", "-n", ns)
 		usage := selinuxProfileName + "_" + ns + ".process"
@@ -1164,6 +1166,41 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		fileName := selinuxProfileName + "_" + ns + ".cil"
 		assertKeywordsExistsInSelinuxFile(oc, "blockinherit net_container", "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "cat", "/etc/selinux.d/"+fileName)
 		assertKeywordsExistsInSelinuxFile(oc, selinuxProfileName+"_"+ns, "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "semodule", "-l")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-62986-Verify selinuxprofiles could inherit the custom selinuxprofiles from the same namespace", func() {
+		ns := "nginx-deploy" + getRandomString()
+		selinuxProfileName := "nginx-secure"
+		selinuxProfileInheritName := "nginx-secure-inherit"
+
+		g.By("Create selinuxprofile !!!")
+		defer deleteNamespace(oc, ns)
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofile", selinuxProfileName, "-n", ns, "--ignore-not-found").Execute()
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxProfileNginxTemplate, "-p", "NAME="+selinuxProfileName, "NAMESPACE="+ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxProfileName, "-o=jsonpath={.status.status}", "-n", ns)
+		usage := selinuxProfileName + "_" + ns + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, usage, ok, []string{"selinuxprofiles", selinuxProfileName, "-n",
+			ns, "-o=jsonpath={.status.usage}"}).check(oc)
+		fileName := selinuxProfileName + "_" + ns + ".cil"
+		assertKeywordsExistsInSelinuxFile(oc, usage, "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "cat", "/etc/selinux.d/"+fileName)
+		assertKeywordsExistsInSelinuxFile(oc, selinuxProfileName+"_"+ns, "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "semodule", "-l")
+
+		g.By("Create another selinuxprofile based on the first selinuxprofile !!!\n")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofile", selinuxProfileInheritName, "-n", ns, "--ignore-not-found").Execute()
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxProfileCustomTemplate, "-p", "NAME="+selinuxProfileInheritName, "NAMESPACE="+ns, "INHERITKIND=SelinuxProfile",
+			"INHERITNAME="+selinuxProfileName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxProfileInheritName, "-o=jsonpath={.status.status}", "-n", ns)
+		usageInherit := selinuxProfileInheritName + "_" + ns + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, usageInherit, ok, []string{"selinuxprofiles", selinuxProfileInheritName, "-n",
+			ns, "-o=jsonpath={.status.usage}"}).check(oc)
+		fileNameInherit := selinuxProfileInheritName + "_" + ns + ".cil"
+		assertKeywordsExistsInSelinuxFile(oc, "sock_file", "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "cat", "/etc/selinux.d/"+fileNameInherit)
+		assertKeywordsExistsInSelinuxFile(oc, selinuxProfileInheritName+"_"+ns, "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "semodule", "-l")
 	})
 
 	// author: xiyuan@redhat.com
