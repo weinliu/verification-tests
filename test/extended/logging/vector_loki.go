@@ -2892,3 +2892,198 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 	})
 
 })
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grained logs access testing", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                    = exutil.NewCLI("loki-logs-access", exutil.KubeConfigPath())
+		loggingBaseDir, s, sc string
+	)
+
+	g.BeforeEach(func() {
+		s = getStorageType(oc)
+		if len(s) == 0 {
+			g.Skip("Current cluster doesn't have a proper object storage for this test!")
+		}
+		sc, _ = getStorageClassName(oc)
+		if len(sc) == 0 {
+			g.Skip("The cluster doesn't have a storage class for this test!")
+		}
+
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     cloNS,
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     loNS,
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		g.By("deploy CLO and LO")
+		CLO.SubscribeOperator(oc)
+		LO.SubscribeOperator(oc)
+	})
+
+	g.It("CPaasrunOnly-Author:kbharti-Critical-67565-Verify that non-admin/regular user can access logs as per rolebindings assigned to the user[Serial][Slow]", func() {
+
+		var (
+			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		)
+
+		exutil.By("deploy loki stack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-67565",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-67565",
+			storageClass:  sc,
+			bucketName:    "logging-loki-67565-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    loggingNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc)
+
+		g.By("Create ClusterLogging instance with Loki as logstore")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     loggingNS,
+			collectorType: "vector",
+			logStoreType:  "lokistack",
+			lokistackName: ls.name,
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		g.By("Create app project with non-admin/regular user")
+		oc.SetupProject()
+		userName := oc.Username()
+		appProj := oc.Namespace()
+		token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Validate that user cannot access logs of owned namespace without RBAC")
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(token).retry(5)
+		_, err = lc.searchByNamespace("application", appProj)
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("Create Role-binding to access logs of owned project")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "cluster-logging-application-view", userName, "-n", appProj).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Validate user can access logs of owned namaspace after RBAC is created")
+		lc.waitForLogsAppearByProject("application", appProj)
+	})
+
+	g.It("CPaasrunOnly-Author:kbharti-Critical-67643-Verify logs access for LokiStack adminGroups[Serial][Slow]", func() {
+
+		g.By("Create Groups with users")
+		oc.SetupProject()
+		user1 := oc.Username()
+		user1Token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "infra-admin-group-67643").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().Run("delete").Args("group", "infra-admin-group-67643").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "infra-admin-group-67643", user1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		oc.SetupProject()
+		user2 := oc.Username()
+		user2Token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "audit-admin-group-67643").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().Run("delete").Args("group", "audit-admin-group-67643").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "audit-admin-group-67643", user2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Deploying LokiStack with adminGroups")
+		exutil.By("deploy loki stack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-67643",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-67643",
+			storageClass:  sc,
+			bucketName:    "logging-loki-67643-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc, "-p", "ADMIN_GROUPS=[\"audit-admin-group-67643\",\"infra-admin-group-67643\"]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    loggingNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc)
+
+		g.By("Create ClusterLogging instance with Loki as logstore")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     loggingNS,
+			collectorType: "vector",
+			logStoreType:  "lokistack",
+			lokistackName: ls.name,
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		g.By("Create RBAC for groups to access infra/audit logs")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-infrastructure-view", "infra-admin-group-67643").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-infrastructure-view", "infra-admin-group-67643").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-audit-view", "audit-admin-group-67643").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-audit-view", "audit-admin-group-67643").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check Logs Access with users from AdminGroups")
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(user1Token).retry(5)
+		lc.waitForLogsAppearByKey("infrastructure", "log_type", "infrastructure")
+		lc = newLokiClient(route).withToken(user2Token).retry(5)
+		lc.waitForLogsAppearByKey("audit", "log_type", "audit")
+	})
+})

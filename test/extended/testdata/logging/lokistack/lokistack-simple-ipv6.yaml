@@ -22,6 +22,8 @@ objects:
     storageClassName: ${STORAGE_CLASS}
     tenants:
       mode: "openshift-logging"
+      openshift:
+        adminGroups: ${{ADMIN_GROUPS}}
     rules:
       enabled: true
       selector:
@@ -43,3 +45,6 @@ parameters:
   value: "s3"
 - name: STORAGE_CLASS
   value: "gp2"
+- name: "ADMIN_GROUPS"
+  value: "[]"
+
