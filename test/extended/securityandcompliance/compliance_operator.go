@@ -5127,6 +5127,35 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		result, _ := oc.AsAdmin().Run("get").Args("ccr", "-n", subD.namespace, "-l", "compliance.openshift.io/automated-remediation=,compliance.openshift.io/check-status=FAIL").Output()
 		o.Expect(result).Should(o.ContainSubstring("No resources found"), "output is not expected")
 	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-Author:xiyuan-Longduration-CPaasrunOnly-NonPreRelease-High-69602-Check http version for compliance operator's service endpoints [Serial]", func() {
+		g.By("Check http version for metric serive")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		url := fmt.Sprintf("https://metrics.%v.svc:8585/metrics-co", subD.namespace)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-i", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), `HTTP/1.1 200 OK`)).To(o.BeTrue())
+
+		g.By("Create scansettingbinding... !!!\n")
+		ocp4ProfileparserPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subD.namespace, "-l", "profile-bundle=ocp4,workload=profileparser", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ssbName := "ocp4-cis-" + getRandomString()
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbName})
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbName, "profile/ocp4-cis", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check http version for result server endpoint")
+		label := "compliance.openshift.io/scan-name=ocp4-cis,workload=resultserver"
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"pod", "-l", label, "-n", subD.namespace}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+		podIp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[0].status.podIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The result of podIp: %s", podIp)
+		url = fmt.Sprintf("https://" + podIp + ":8443")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", subD.namespace, "-c", "pauser", ocp4ProfileparserPodName, "curl", "-Iksv", url).Output()
+		o.Expect(strings.Contains(string(output), `HEAD / HTTP/1.1`)).To(o.BeTrue())
+	})
 })
 
 var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on hypershift hosted cluster", func() {
